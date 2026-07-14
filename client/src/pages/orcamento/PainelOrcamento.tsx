@@ -229,15 +229,15 @@ export default function PainelOrcamento() {
           </div>
           <div className="col-span-2 lg:col-span-4">
             <KpiCard
-              title="Lucro Médio Mensal — Previsto" icon={CalendarDays}
+              title="Result. Bruto Mensal — Previsto" icon={CalendarDays}
               value={isLoading ? "..." : lucroMensalPrev > 0 ? fBRL(lucroMensalPrev) : "—"}
-              sub={lucroMensalPrev > 0 ? "lucro ÷ duração do cronograma" : "nenhum projeto com cronograma vinculado"}
+              sub={lucroMensalPrev > 0 ? "(venda − custo direto) ÷ meses" : "nenhum projeto com cronograma vinculado"}
               iconBg="bg-amber-50" iconColor="text-amber-600"
             />
           </div>
           <div className="col-span-2 lg:col-span-4">
             <KpiCard
-              title="Lucro Médio Mensal — Realizado" icon={CalendarDays}
+              title="Result. Bruto Mensal — Realizado" icon={CalendarDays}
               value={isLoading ? "..." : lucroMensalReal > 0 ? fBRL(lucroMensalReal) : "—"}
               sub={lucroMensalReal > 0 ? "conforme avanço físico registrado" : "sem avanço registrado nos projetos"}
               iconBg="bg-emerald-50" iconColor="text-emerald-600"

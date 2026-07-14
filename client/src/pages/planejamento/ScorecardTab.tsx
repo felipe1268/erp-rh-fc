@@ -547,9 +547,10 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                     <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2.5 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />Previsto (orçamento aprovado)
                     </p>
+                    {/* Linha 1 — sempre: Receita - Custo Direto = Lucro Bruto */}
                     <div className="grid grid-cols-3 gap-2">
                       <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-center shadow-sm">
-                        <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-1.5">Contrato</p>
+                        <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-1.5">Receita (Contrato)</p>
                         <p className="text-lg font-black text-gray-800 leading-tight">{fmt(financeiro.valorContrato)}</p>
                       </div>
                       <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-3 text-center shadow-sm">
@@ -557,31 +558,48 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                         <p className="text-lg font-black text-red-600 leading-tight">{fmt(financeiro.custoPrevisto)}</p>
                         <p className="text-[9px] text-red-400 mt-0.5">{fPct(financeiro.custoPrevisto / financeiro.valorContrato * 100)}</p>
                       </div>
-                      <div className={`rounded-xl border px-3 py-3 text-center shadow-sm ${financeiro.lucroLiquidoPrevisto >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
-                        <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-1.5">= Lucro LL Previsto</p>
-                        <p className={`text-lg font-black leading-tight ${financeiro.lucroLiquidoPrevisto >= 0 ? "text-green-700" : "text-red-600"}`}>
-                          {fmt(financeiro.lucroLiquidoPrevisto)}
+                      <div className={`rounded-xl border px-3 py-3 text-center shadow-sm ${(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) ? "border-amber-200 bg-amber-50" : (financeiro.lucroBrutoPrevisto >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50")}`}>
+                        <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-1.5">= Lucro Bruto</p>
+                        <p className={`text-lg font-black leading-tight ${(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) ? "text-amber-700" : (financeiro.lucroBrutoPrevisto >= 0 ? "text-green-700" : "text-red-600")}`}>
+                          {fmt(financeiro.lucroBrutoPrevisto ?? (financeiro.valorContrato - financeiro.custoPrevisto))}
                         </p>
-                        <p className={`text-[9px] mt-0.5 font-semibold ${financeiro.lucroLiquidoPrevisto >= 0 ? "text-green-500" : "text-red-500"}`}>
-                          {financeiro.margemPrevista.toFixed(1)}% margem
+                        <p className={`text-[9px] mt-0.5 font-semibold ${(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) ? "text-amber-500" : "text-green-500"}`}>
+                          {financeiro.valorContrato > 0 ? (((financeiro.lucroBrutoPrevisto ?? (financeiro.valorContrato - financeiro.custoPrevisto)) / financeiro.valorContrato) * 100).toFixed(1) : "0.0"}% bruto
                         </p>
                       </div>
                     </div>
-                    {(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) && (
-                      <div className="flex gap-4 mt-2 px-0.5 text-[10px] text-gray-400 flex-wrap">
-                        {financeiro.aliquotaImpostos > 0 && (
-                          <span>Impostos: <strong className="text-orange-600">{fmt(financeiro.impostosPrevistos)}</strong> ({financeiro.aliquotaImpostos}%)</span>
-                        )}
-                        {financeiro.pctCustosFixos > 0 && (
-                          <span>Overhead: <strong className="text-orange-600">{fmt(financeiro.custosFixosPrevistos)}</strong> ({financeiro.pctCustosFixos}%)</span>
-                        )}
+                    {/* Linha 2 — se há deduções: mostra impostos + overhead → Lucro Líquido */}
+                    {(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) ? (
+                      <div className="mt-2 ml-1 border-l-2 border-amber-200 pl-3">
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {financeiro.aliquotaImpostos > 0 && (
+                            <span className="text-[10px] bg-orange-50 border border-orange-200 rounded-lg px-2 py-1 text-gray-600">
+                              (−) Impostos <strong className="text-orange-600">{financeiro.aliquotaImpostos}%</strong> = <strong className="text-orange-700">{fmt(financeiro.impostosPrevistos)}</strong>
+                            </span>
+                          )}
+                          {financeiro.pctCustosFixos > 0 && (
+                            <span className="text-[10px] bg-orange-50 border border-orange-200 rounded-lg px-2 py-1 text-gray-600">
+                              (−) Overhead <strong className="text-orange-600">{financeiro.pctCustosFixos}%</strong> = <strong className="text-orange-700">{fmt(financeiro.custosFixosPrevistos)}</strong>
+                            </span>
+                          )}
+                        </div>
+                        <div className={`rounded-xl border px-3 py-2.5 flex items-center justify-between shadow-sm ${financeiro.lucroLiquidoPrevisto >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+                          <p className="text-[9px] text-gray-400 uppercase tracking-wide font-bold">= Lucro Líquido Previsto</p>
+                          <div className="text-right">
+                            <p className={`text-lg font-black leading-tight ${financeiro.lucroLiquidoPrevisto >= 0 ? "text-green-700" : "text-red-600"}`}>
+                              {fmt(financeiro.lucroLiquidoPrevisto)}
+                            </p>
+                            <p className={`text-[9px] font-semibold ${financeiro.margemPrevista >= 0 ? "text-green-500" : "text-red-500"}`}>
+                              {financeiro.margemPrevista.toFixed(1)}% margem líquida
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    {financeiro.aliquotaImpostos === 0 && financeiro.pctCustosFixos === 0 && (
+                    ) : (
                       <p className="text-[10px] text-amber-500 mt-1.5 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3 shrink-0" />
-                        Sem impostos/overhead configurados — lucro previsto = lucro bruto.
-                        {isAdmin && <button onClick={() => setShowConfig(true)} className="underline text-blue-500 ml-1">Configurar</button>}
+                        Sem impostos/overhead configurados — Lucro Bruto = Lucro Líquido.
+                        {isAdmin && <button onClick={() => setShowConfig(true)} className="underline text-blue-500 ml-1">Configurar deduções</button>}
                       </p>
                     )}
                   </div>
@@ -617,16 +635,44 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                               {fPct(financeiro.custoRealizado / financeiro.custoPrevisto * 100)} do previsto
                             </p>
                           </div>
-                          <div className={`rounded-xl border px-3 py-3 text-center shadow-sm ${financeiro.lucroLiquidoRealizado >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
-                            <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-1.5">= Lucro LL Real</p>
-                            <p className={`text-lg font-black leading-tight ${financeiro.lucroLiquidoRealizado >= 0 ? "text-green-700" : "text-red-600"}`}>
-                              {fmt(financeiro.lucroLiquidoRealizado)}
+                          <div className={`rounded-xl border px-3 py-3 text-center shadow-sm ${(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) ? "border-amber-200 bg-amber-50" : (financeiro.lucroBrutoRealizado >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50")}`}>
+                            <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-1.5">= Lucro Bruto</p>
+                            <p className={`text-lg font-black leading-tight ${(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) ? "text-amber-700" : (financeiro.lucroBrutoRealizado >= 0 ? "text-green-700" : "text-red-600")}`}>
+                              {fmt(financeiro.lucroBrutoRealizado ?? (financeiro.valorContrato - financeiro.custoRealizado))}
                             </p>
-                            <p className={`text-[9px] mt-0.5 font-semibold ${financeiro.margemRealizada >= 0 ? "text-green-500" : "text-red-500"}`}>
-                              {financeiro.margemRealizada.toFixed(1)}% margem
+                            <p className={`text-[9px] mt-0.5 font-semibold ${(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) ? "text-amber-500" : "text-green-500"}`}>
+                              {financeiro.valorContrato > 0 ? (((financeiro.lucroBrutoRealizado ?? (financeiro.valorContrato - financeiro.custoRealizado)) / financeiro.valorContrato) * 100).toFixed(1) : "0.0"}% bruto
                             </p>
                           </div>
                         </div>
+                        {/* Linha 2 — deduções → Lucro Líquido Real */}
+                        {(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) && (
+                          <div className="ml-1 border-l-2 border-amber-200 pl-3">
+                            <div className="flex flex-wrap gap-2 mb-2">
+                              {financeiro.aliquotaImpostos > 0 && (
+                                <span className="text-[10px] bg-orange-50 border border-orange-200 rounded-lg px-2 py-1 text-gray-600">
+                                  (−) Impostos <strong className="text-orange-600">{financeiro.aliquotaImpostos}%</strong> = <strong className="text-orange-700">{fmt(financeiro.impostosRealizados)}</strong>
+                                </span>
+                              )}
+                              {financeiro.pctCustosFixos > 0 && (
+                                <span className="text-[10px] bg-orange-50 border border-orange-200 rounded-lg px-2 py-1 text-gray-600">
+                                  (−) Overhead <strong className="text-orange-600">{financeiro.pctCustosFixos}%</strong> = <strong className="text-orange-700">{fmt(financeiro.custosFixosRealizados)}</strong>
+                                </span>
+                              )}
+                            </div>
+                            <div className={`rounded-xl border px-3 py-2.5 flex items-center justify-between shadow-sm ${financeiro.lucroLiquidoRealizado >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+                              <p className="text-[9px] text-gray-400 uppercase tracking-wide font-bold">= Lucro Líquido Real</p>
+                              <div className="text-right">
+                                <p className={`text-lg font-black leading-tight ${financeiro.lucroLiquidoRealizado >= 0 ? "text-green-700" : "text-red-600"}`}>
+                                  {fmt(financeiro.lucroLiquidoRealizado)}
+                                </p>
+                                <p className={`text-[9px] font-semibold ${financeiro.margemRealizada >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                  {financeiro.margemRealizada.toFixed(1)}% margem líquida
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         {/* Progress bar */}
                         <div>
                           <div className="flex justify-between text-[10px] text-gray-400 mb-1">

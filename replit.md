@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Fórmula: Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível (Lucro Bruto); Linha 2 condicional quando deduções configuradas. Sem deduções: Lucro Bruto em verde com CTA. PainelOrcamento: "Lucro Médio Mensal" renomeado para "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4236** — **SCORECARD SST: LIGHTBOX NO TOP 5 MAIS ATESTADOS.** Estende o lightbox de foto (Rev. 4234) para o bloco "Top 5 — Mais Atestados" — clicar na foto/avatar abre Dialog de ampliação. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4235** — **SCORECARD SST: CUSTO PROPORCIONAL PARA ATESTADOS EM HORAS.** Atestados com `horas_afastamento>0` e `diasAfastamento=0` agora calculam custo: `(salário×1,33 + benef) ÷ dias_mês ÷ 8h × horas`. Backend: `custo_horas` adicionado ao Q12. Frontend: badge teal "Xh" + label "proporcional" na coluna Dias; custo em teal com "Xh × valor/h" na coluna Total. ZERO DELETE · ZERO ALTER destrutivo.

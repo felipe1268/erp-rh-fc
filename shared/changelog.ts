@@ -1,4 +1,33 @@
 /**
+ * Rev. 4237 - RESULTADO FINANCEIRO DA OBRA: WATERFALL CORRETO (BRUTO → LÍQUIDO).
+ *
+ * PROBLEMA: A tela "Resultado Financeiro da Obra" exibia apenas 3 colunas
+ * (Contrato | Custo Direto | Lucro LL), pulando as etapas intermediárias.
+ * Quando impostos/overhead eram 0, o "Lucro LL" era na verdade Lucro Bruto —
+ * erro conceitual segundo a literatura de gestão financeira de obras.
+ *
+ * FÓRMULA CORRETA (IAS/IFRS e literatura brasileira de gestão de obras):
+ *   Receita (Contrato)
+ *   (−) Custo Direto      → mão de obra, materiais, equipamentos
+ *   = Lucro Bruto         ← etapa 1 — sempre visível
+ *   (−) Impostos (%)      ← ISS, PIS, COFINS, etc.
+ *   (−) Overhead (%)      ← custos indiretos, administração central
+ *   = Lucro Líquido       ← etapa 2 — só quando deduções configuradas
+ *
+ * MUDANÇAS:
+ *   ScorecardTab.tsx (PREVISTO e REALIZADO):
+ *     - Linha 1: Receita | (-) Custo Direto | = Lucro Bruto (âmbar quando há deduções)
+ *     - Linha 2 (condicional): badges de deduções + card "= Lucro Líquido" em verde
+ *     - Sem deduções: Lucro Bruto em verde com CTA claro "Configurar deduções"
+ *
+ *   PainelOrcamento.tsx:
+ *     - "Lucro Médio Mensal — Previsto/Realizado" → "Result. Bruto Mensal — Previsto/Realizado"
+ *     - Sub: "(venda − custo direto) ÷ meses" — transparência sobre o que é calculado
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4236 - SCORECARD SST: LIGHTBOX NO TOP 5 MAIS ATESTADOS.
  *
  * Estende o lightbox de foto (Rev. 4234) para o bloco "Top 5 — Mais Atestados".
