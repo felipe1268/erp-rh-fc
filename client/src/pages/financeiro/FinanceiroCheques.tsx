@@ -503,20 +503,32 @@ export default function FinanceiroCheques() {
   // Rev. 4257 — quando qualquer filtro client-side está ativo (fornecedor, data,
   // status "outros"/extrato), os cards derivam do chequesFiltrados em vez do resumo
   // backend — "o que a tabela mostra é o que os cards mostram".
+  // IIFE (sem useMemo) para evitar qualquer problema de stale-closure com deps.
   const anyFiltroAtivo = !!(fFornecedor || fVencDe || fVencAte || fStatus !== "todos");
-  const cardTotais = useMemo(() => {
+  // valor é NUMERIC(15,2) — Drizzle retorna como string EN "3558.75"
+  // Também suporta string BR "3.558,75" caso venha de importação legada
+  const parseValor = (v: unknown): number => {
+    if (typeof v === "number") return isNaN(v) ? 0 : v;
+    if (!v) return 0;
+    const s = String(v).trim();
+    // Se tem vírgula → formato BR: remove pontos de milhar, troca vírgula por ponto
+    if (s.includes(",")) return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+    // Formato EN padrão (Postgres NUMERIC)
+    return parseFloat(s) || 0;
+  };
+  const cardTotais = (() => {
     if (!anyFiltroAtivo) return cardTotaisBackend;
     const map: Record<string, { qtd: number; total: number }> = {};
     for (const c of chequesFiltrados as any[]) {
       const s = String(c.status || "indefinido");
       if (!map[s]) map[s] = { qtd: 0, total: 0 };
       map[s].qtd++;
-      map[s].total += Number(c.valor) || 0;
+      map[s].total += parseValor(c.valor);
     }
     const qtd = (chequesFiltrados as any[]).length;
-    const total = (chequesFiltrados as any[]).reduce((s: number, c: any) => s + (Number(c.valor) || 0), 0);
+    const total = (chequesFiltrados as any[]).reduce((acc: number, c: any) => acc + parseValor(c.valor), 0);
     return { qtd, total, map };
-  }, [anyFiltroAtivo, chequesFiltrados, cardTotaisBackend]);
+  })();
 
   // Lista única de fornecedores dos cheques carregados (p/ select de filtro).
   const fornecedorFiltroOpts = useMemo((): SearchableSelectOption[] => {
