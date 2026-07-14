@@ -6363,6 +6363,86 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       return { cotacao: cot, tipoEfetivo, incluirEquipamentos: incluirEquipamentosMapa, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor, itensJaEmOC };
     }),
 
+  // Rev. 4245 — Editar, excluir e incluir itens diretamente na cotação
+  editarItemCotacao: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      descricao: z.string().min(1),
+      unidade: z.string().optional(),
+      quantidade: z.string(),
+      somenteMo: z.boolean().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [item] = await db.select({ cotacaoId: comprasCotacoesItens.cotacaoId }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, input.id));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      const [cot] = await db.select({ companyId: comprasCotacoes.companyId, status: comprasCotacoes.status }).from(comprasCotacoes).where(eq(comprasCotacoes.id, item.cotacaoId));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, cot.companyId);
+      if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação aprovada não pode ser editada." });
+      const qtd = parseFloat(input.quantidade.replace(",", ".")) || 1;
+      await db.update(comprasCotacoesItens).set({
+        descricao: input.descricao.trim(),
+        unidade: input.unidade?.trim() || "un",
+        quantidade: String(qtd),
+        somenteMo: input.somenteMo ?? false,
+      }).where(eq(comprasCotacoesItens.id, input.id));
+      return { ok: true };
+    }),
+
+  excluirItemCotacao: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [item] = await db.select({ cotacaoId: comprasCotacoesItens.cotacaoId }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, input.id));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      const [cot] = await db.select({ companyId: comprasCotacoes.companyId, status: comprasCotacoes.status }).from(comprasCotacoes).where(eq(comprasCotacoes.id, item.cotacaoId));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, cot.companyId);
+      if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação aprovada não pode ser editada." });
+      // Verificar se o item já está em alguma OC ativa
+      try {
+        const ocItens = await db.select({ id: comprasOrdensItens.id })
+          .from(comprasOrdensItens)
+          .innerJoin(comprasOrdens, and(eq(comprasOrdens.id, comprasOrdensItens.ordemId), sql`${comprasOrdens.status} != 'cancelada'`))
+          .where(eq(comprasOrdensItens.cotacaoItemId, input.id));
+        if (ocItens.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Este item já está em uma Ordem de Compra ativa e não pode ser excluído." });
+      } catch (err: any) { if (err?.code === "BAD_REQUEST") throw err; }
+      // Remover respostas do item antes de excluir
+      await db.delete(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.itemId, input.id));
+      await db.delete(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, input.id));
+      return { ok: true };
+    }),
+
+  adicionarItemCotacao: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      descricao: z.string().min(1),
+      unidade: z.string().optional(),
+      quantidade: z.string(),
+      somenteMo: z.boolean().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [cot] = await db.select({ companyId: comprasCotacoes.companyId, status: comprasCotacoes.status }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, cot.companyId);
+      if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação aprovada não pode ser editada." });
+      const qtd = parseFloat(input.quantidade.replace(",", ".")) || 1;
+      const [novoItem] = await db.insert(comprasCotacoesItens).values({
+        cotacaoId: input.cotacaoId,
+        descricao: input.descricao.trim(),
+        unidade: input.unidade?.trim() || "un",
+        quantidade: String(qtd),
+        somenteMo: input.somenteMo ?? false,
+        semVerba: true,
+        motivoSemVerba: "avulso",
+        precoUnitario: "0",
+        total: "0",
+      }).returning();
+      return { ok: true, id: novoItem.id };
+    }),
+
   adicionarFornecedorMapa: protectedProcedure
     .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number() }))
     .mutation(async ({ input, ctx }) => {

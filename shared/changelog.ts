@@ -1,4 +1,36 @@
 /**
+ * Rev. 4245 - EDITAR, EXCLUIR E INCLUIR ITENS NA COTAÇÃO.
+ *
+ * ESCOPO: Agora é possível editar, excluir ou incluir itens diretamente no
+ * painel fullscreen de cotação (Compras → Cotações), sem precisar voltar
+ * para a Solicitação de Compra. Disponível apenas para cotações em status
+ * "pendente".
+ *
+ * MUDANÇAS:
+ *   - server/routers/compras.ts: 3 novas procedures protectedProcedure:
+ *       · editarItemCotacao(id, descricao, unidade, quantidade, somenteMo)
+ *         → atualiza os campos do item na compras_cotacoes_itens.
+ *       · excluirItemCotacao(id)
+ *         → remove respostas e o item; bloqueia se item já está em OC ativa.
+ *       · adicionarItemCotacao(cotacaoId, descricao, unidade, quantidade, somenteMo)
+ *         → insere item avulso com semVerba=true, motivoSemVerba='avulso'.
+ *     Todas validam: companyAccess + status≠'aprovada'.
+ *   - client/src/pages/compras/Cotacoes.tsx:
+ *       · Estados editItemDialog / addItemDialog / addItemForm.
+ *       · Mutations editarItemCotacao / excluirItemCotacao / adicionarItemCotacao.
+ *       · Linha de item ganha classe `group` para hover; botões Pencil + Trash
+ *         aparecem no hover (opacity-0→opacity-100), visíveis só em pendente
+ *         e somente para itens não agrupados (não pacote).
+ *       · Linha "+ Incluir item" com borda tracejada ao final do tbody,
+ *         visível só em pendente.
+ *       · Dialog "Editar Item": campos descricao/unidade/quantidade/somenteMo.
+ *       · Dialog "Incluir Item": mesmos campos; item criado como avulso.
+ *       · Ambos os dialogs via createPortal (z-[99998]).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4244 - DIALOGS DESCONTO/ACRÉSCIMO COMERCIAL: SOMENTE VALOR NEGOCIADO FINAL.
  *
  * ESCOPO: Simplificação dos dialogs "Desconto Comercial" e "Acréscimo Comercial"

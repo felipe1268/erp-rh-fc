@@ -1014,6 +1014,10 @@ export default function Cotacoes() {
   const [acrescimoModal, setAcrescimoModal] = useState<{ fornecedorId: number } | null>(null);
   const [acrescimoValor, setAcrescimoValor] = useState("");
   const [acrescimoPreviewing, setAcrescimoPreviewing] = useState(false);
+  // Rev. 4245 — editar/excluir/incluir item na cotação
+  const [editItemDialog, setEditItemDialog] = useState<{ id: number; descricao: string; unidade: string; quantidade: string; somenteMo: boolean } | null>(null);
+  const [addItemDialog, setAddItemDialog] = useState(false);
+  const [addItemForm, setAddItemForm] = useState({ descricao: "", unidade: "un", quantidade: "1", somenteMo: false });
   const [showGerenciarCond, setShowGerenciarCond] = useState(false);
   const [novaCondicao, setNovaCondicao] = useState("");
   const [anexoUrl, setAnexoUrl] = useState<Record<number, string>>({});
@@ -1413,6 +1417,19 @@ export default function Cotacoes() {
   };
   const removerForn = trpc.compras.removerFornecedorMapa.useMutation({
     onSuccess: () => { toast.success("Fornecedor removido!"); mapaQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  // Rev. 4245 — Editar / excluir / incluir item na cotação
+  const editarItemCotacao = trpc.compras.editarItemCotacao.useMutation({
+    onSuccess: () => { toast.success("Item atualizado!"); mapaQ.refetch(); setEditItemDialog(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirItemCotacao = trpc.compras.excluirItemCotacao.useMutation({
+    onSuccess: () => { toast.success("Item excluído!"); mapaQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const adicionarItemCotacao = trpc.compras.adicionarItemCotacao.useMutation({
+    onSuccess: () => { toast.success("Item incluído!"); mapaQ.refetch(); setAddItemDialog(false); setAddItemForm({ descricao: "", unidade: "un", quantidade: "1", somenteMo: false }); },
     onError: (e) => toast.error(e.message),
   });
   const adicionarEstoque = trpc.compras.adicionarEstoqueAoMapa.useMutation({
@@ -5538,7 +5555,7 @@ export default function Cotacoes() {
                               const numFornCols = (mapa?.participantes ?? []).length * 4; // Rev. 1991: +1 col Saldo por fornecedor
                               return (
                                 <React.Fragment key={it.id}>
-                                <tr className={`border-b border-gray-100 hover:bg-gray-50/60 ${it._isPacoteGroup ? "bg-indigo-50/30" : ""} ${mapaItemsChecked.has(it.id) ? "bg-blue-50/40" : ""}`}>
+                                <tr className={`group border-b border-gray-100 hover:bg-gray-50/60 ${it._isPacoteGroup ? "bg-indigo-50/30" : ""} ${mapaItemsChecked.has(it.id) ? "bg-blue-50/40" : ""}`}>
                                   {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && (
                                     <td className={`px-2 py-1 border-r border-gray-100 w-9 align-middle ${it._isPacoteGroup ? "bg-indigo-50/30" : mapaItemsChecked.has(it.id) ? "bg-blue-50" : "bg-white"}`}>
                                       <div className="flex flex-col items-center gap-1">
@@ -5624,6 +5641,26 @@ export default function Cotacoes() {
                                         })()}
                                       </div>
                                       <HistoricoPrecoPopover companyId={companyId} descricao={it.descricao} />
+                                      {/* Rev. 4245 — botões editar/excluir visíveis no hover, só em pendente */}
+                                      {detalheFullscreen?.status === "pendente" && !it._grouped && (
+                                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0">
+                                          <button
+                                            title="Editar item"
+                                            onClick={() => setEditItemDialog({ id: it.id, descricao: it.descricao ?? "", unidade: it.unidade ?? "un", quantidade: it.quantidade ?? "1", somenteMo: !!(it as any).somenteMo })}
+                                            className="p-0.5 rounded hover:bg-blue-100 text-gray-300 hover:text-blue-600 transition-colors"
+                                          >
+                                            <Pencil className="h-3 w-3" />
+                                          </button>
+                                          <button
+                                            title="Excluir item"
+                                            disabled={excluirItemCotacao.isPending}
+                                            onClick={() => { if (confirm(`Excluir "${it.descricao}"?`)) excluirItemCotacao.mutate({ id: it.id }); }}
+                                            className="p-0.5 rounded hover:bg-red-100 text-gray-300 hover:text-red-600 transition-colors disabled:opacity-40"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
                                   </td>
                                   <td className="px-3 py-2 text-gray-500 text-xs text-center border-r border-gray-100">{it.unidade || "un"}</td>
@@ -5926,6 +5963,20 @@ export default function Cotacoes() {
                                 </React.Fragment>
                               );
                             })}
+                            {/* Rev. 4245 — Botão incluir item avulso */}
+                            {detalheFullscreen?.status === "pendente" && (
+                              <tr>
+                                <td colSpan={99} className="px-4 py-2 border-t border-dashed border-gray-200">
+                                  <button
+                                    onClick={() => setAddItemDialog(true)}
+                                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    Incluir item
+                                  </button>
+                                </td>
+                              </tr>
+                            )}
                           </tbody>
                           <tfoot>
                             {/* Totais */}
@@ -6628,6 +6679,93 @@ export default function Cotacoes() {
           document.body
         )}
 
+
+    {/* Rev. 4245 — Dialog editar item da cotação */}
+    {editItemDialog && createPortal(
+      <div className="fixed inset-0 z-[99998] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
+        <div className="absolute inset-0 bg-black/40" onClick={() => setEditItemDialog(null)} />
+        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200 px-5 py-3 rounded-t-xl flex items-center justify-between">
+            <h2 className="text-base font-bold text-blue-900 flex items-center gap-2"><Pencil className="h-4 w-4" /> Editar Item</h2>
+            <button onClick={() => setEditItemDialog(null)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            <div>
+              <Label className="text-[11px] text-gray-600">Descrição *</Label>
+              <Input value={editItemDialog.descricao} onChange={e => setEditItemDialog(p => p ? { ...p, descricao: e.target.value } : null)} className="mt-1 text-sm" />
+            </div>
+            <div className="flex gap-3">
+              <div className="w-28">
+                <Label className="text-[11px] text-gray-600">Unidade</Label>
+                <Input value={editItemDialog.unidade} onChange={e => setEditItemDialog(p => p ? { ...p, unidade: e.target.value } : null)} className="mt-1 text-sm" />
+              </div>
+              <div className="flex-1">
+                <Label className="text-[11px] text-gray-600">Quantidade</Label>
+                <Input type="text" inputMode="decimal" value={editItemDialog.quantidade} onChange={e => setEditItemDialog(p => p ? { ...p, quantidade: e.target.value } : null)} className="mt-1 text-sm" />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
+              <input type="checkbox" checked={editItemDialog.somenteMo} onChange={e => setEditItemDialog(p => p ? { ...p, somenteMo: e.target.checked } : null)} className="rounded" />
+              🔨 Somente MO (mão de obra)
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100">
+            <Button size="sm" variant="outline" onClick={() => setEditItemDialog(null)} className="h-8 text-xs">Cancelar</Button>
+            <Button size="sm" disabled={!editItemDialog.descricao.trim() || editarItemCotacao.isPending}
+              onClick={() => editarItemCotacao.mutate({ id: editItemDialog.id, descricao: editItemDialog.descricao, unidade: editItemDialog.unidade, quantidade: editItemDialog.quantidade, somenteMo: editItemDialog.somenteMo })}
+              className="h-8 bg-blue-600 hover:bg-blue-700 text-white gap-1.5 text-xs">
+              {editarItemCotacao.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Salvar
+            </Button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Rev. 4245 — Dialog incluir item na cotação */}
+    {addItemDialog && showDetalhe && createPortal(
+      <div className="fixed inset-0 z-[99998] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
+        <div className="absolute inset-0 bg-black/40" onClick={() => setAddItemDialog(false)} />
+        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200 px-5 py-3 rounded-t-xl flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-emerald-900 flex items-center gap-2"><Plus className="h-4 w-4" /> Incluir Item</h2>
+              <p className="text-[11px] text-emerald-600">Item avulso — marcado como "Fora do orçamento"</p>
+            </div>
+            <button onClick={() => setAddItemDialog(false)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            <div>
+              <Label className="text-[11px] text-gray-600">Descrição *</Label>
+              <Input value={addItemForm.descricao} onChange={e => setAddItemForm(p => ({ ...p, descricao: e.target.value }))} className="mt-1 text-sm" placeholder="Ex.: Mão de obra de alvenaria" />
+            </div>
+            <div className="flex gap-3">
+              <div className="w-28">
+                <Label className="text-[11px] text-gray-600">Unidade</Label>
+                <Input value={addItemForm.unidade} onChange={e => setAddItemForm(p => ({ ...p, unidade: e.target.value }))} className="mt-1 text-sm" placeholder="un" />
+              </div>
+              <div className="flex-1">
+                <Label className="text-[11px] text-gray-600">Quantidade</Label>
+                <Input type="text" inputMode="decimal" value={addItemForm.quantidade} onChange={e => setAddItemForm(p => ({ ...p, quantidade: e.target.value }))} className="mt-1 text-sm" />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
+              <input type="checkbox" checked={addItemForm.somenteMo} onChange={e => setAddItemForm(p => ({ ...p, somenteMo: e.target.checked }))} className="rounded" />
+              🔨 Somente MO (mão de obra)
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100">
+            <Button size="sm" variant="outline" onClick={() => setAddItemDialog(false)} className="h-8 text-xs">Cancelar</Button>
+            <Button size="sm" disabled={!addItemForm.descricao.trim() || adicionarItemCotacao.isPending}
+              onClick={() => adicionarItemCotacao.mutate({ cotacaoId: showDetalhe, descricao: addItemForm.descricao, unidade: addItemForm.unidade, quantidade: addItemForm.quantidade, somenteMo: addItemForm.somenteMo })}
+              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs">
+              {adicionarItemCotacao.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Incluir
+            </Button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
 
     {/* Dialog — Confirmar tipo: Parcial ou Total */}
     <Dialog open={showConfirmarTipoCotDialog} onOpenChange={v => { if (!v) setShowConfirmarTipoCotDialog(false); }}>
