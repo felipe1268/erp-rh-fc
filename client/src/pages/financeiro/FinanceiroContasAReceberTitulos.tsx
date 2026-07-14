@@ -1464,102 +1464,150 @@ function EditarTituloDialog({ titulo, companyId, clientesOpts, onClose, onSubmit
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-xl p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col">
-        <DialogHeader className="bg-gradient-to-r from-slate-600 to-slate-700 px-6 py-5 text-left space-y-1">
+      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden max-h-[95vh] flex flex-col">
+
+        {/* ── Header gradiente ── */}
+        <DialogHeader className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 text-left shrink-0">
           <DialogTitle className="flex items-center gap-3 text-white">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/20 ring-1 ring-white/30">
-              <Pencil className="h-5 w-5" />
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/20 ring-1 ring-white/30 shrink-0">
+              <Pencil className="h-4 w-4" />
             </span>
-            <span className="text-lg font-semibold">Editar título a receber</span>
+            <div className="min-w-0">
+              <div className="text-base font-semibold leading-tight">Editar título a receber</div>
+              <div className="text-[11px] text-emerald-100/80 font-normal truncate mt-0.5">{titulo.descricao || titulo.origemDescricao || "Título"}</div>
+            </div>
           </DialogTitle>
-          <p className="text-[13px] text-slate-200/90 pl-12 break-words">{titulo.descricao || titulo.origemDescricao || "Título"}</p>
         </DialogHeader>
 
-        <div className="overflow-y-auto px-6 py-4 space-y-4">
-          {/* Cliente */}
-          <div>
-            <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-slate-500" /> Cliente</Label>
-            <Combobox
-              value={clienteId}
-              onChange={setClienteId}
-              options={clientesOpts.map((c: any) => ({ value: String(c.id), label: c.nome }))}
-              placeholder="Selecione o cliente"
-              searchPlaceholder="Buscar cliente..."
-              emptyText="Nenhum cliente encontrado."
-            />
-          </div>
-
-          {/* Descrição */}
-          <div>
-            <Label className="text-xs font-medium text-slate-600">Descrição</Label>
-            <Input className="mt-1" value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Descrição do título" />
-          </div>
-
-          {/* Valor */}
-          <div>
-            <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Wallet className="h-3.5 w-3.5 text-slate-500" /> Valor</Label>
+        {/* ── Valor em destaque ── */}
+        <div className="bg-emerald-50 border-b border-emerald-100 px-6 py-3 flex items-center gap-4 shrink-0">
+          <div className="flex-1">
+            <div className="text-[10px] text-emerald-700 font-semibold uppercase tracking-wider mb-0.5 flex items-center gap-1">
+              <Wallet className="h-3 w-3" /> Valor do título
+            </div>
             <Input
-              className="mt-1 tabular-nums"
+              className="h-10 text-lg font-bold tabular-nums text-emerald-800 bg-white border-emerald-200 focus-visible:ring-emerald-400 w-48"
               inputMode="numeric"
               value={valor}
               onChange={(e) => setValor(maskBRL(e.target.value))}
               placeholder="R$ 0,00"
             />
           </div>
-
-          {/* Competência + Vencimento */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2 flex-1">
             <div>
-              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-slate-500" /> Competência</Label>
-              <Input type="date" className="mt-1" value={comp} onChange={(e) => setComp(e.target.value)} />
+              <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">Competência</div>
+              <Input type="date" className="h-9 text-sm" value={comp} onChange={(e) => setComp(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-slate-500" /> Vencimento</Label>
-              <Input type="date" className="mt-1" value={venc} onChange={(e) => setVenc(e.target.value)} />
+              <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                <span className={venc && new Date(venc) < new Date() ? "text-red-500" : ""}>Vencimento</span>
+                {venc && new Date(venc) < new Date() && <span className="text-[9px] text-red-500 font-bold">(vencido)</span>}
+              </div>
+              <Input type="date" className={`h-9 text-sm ${venc && new Date(venc) < new Date() ? "border-red-300 text-red-700" : ""}`} value={venc} onChange={(e) => setVenc(e.target.value)} />
             </div>
-          </div>
-
-          {/* Categoria + Obra */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Tag className="h-3.5 w-3.5 text-slate-500" /> Categoria</Label>
-              <Select value={contaNome} onValueChange={setContaNome}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIAS_RECEBER.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-slate-500" /> Obra</Label>
-              {obrasDoCliente.length > 0 ? (
-                <Combobox
-                  value={obraNome}
-                  onChange={setObraNome}
-                  options={obrasDoCliente}
-                  placeholder="Selecione a obra"
-                  searchPlaceholder="Buscar obra..."
-                  emptyText="Nenhuma obra ativa."
-                />
-              ) : (
-                <Input className="mt-1" value={obraNome} onChange={(e) => setObraNome(e.target.value)} placeholder="Nome da obra (opcional)" />
-              )}
-            </div>
-          </div>
-
-          {/* Observações */}
-          <div>
-            <Label className="text-xs font-medium text-slate-600">Observações</Label>
-            <Textarea className="mt-1" value={obs} onChange={(e) => setObs(e.target.value)} rows={2} placeholder="Detalhes adicionais (opcional)" />
           </div>
         </div>
 
-        <DialogFooter className="border-t border-slate-100 px-6 py-3 bg-slate-50/50">
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} disabled={pending} className="bg-slate-700 hover:bg-slate-800">
-            {pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Salvar alterações
+        <div className="overflow-y-auto flex-1">
+          {/* ── Seção: Identificação ── */}
+          <div className="px-6 pt-4 pb-3 space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="h-px flex-1 bg-slate-100" />
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Identificação</span>
+              <div className="h-px flex-1 bg-slate-100" />
+            </div>
+
+            {/* Cliente */}
+            <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+              <div>
+                <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5 mb-1">
+                  <Users className="h-3.5 w-3.5 text-emerald-500" /> Cliente
+                  {!clienteId && <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1">sem cliente</span>}
+                </Label>
+                <Combobox
+                  value={clienteId}
+                  onChange={setClienteId}
+                  options={clientesOpts.map((c: any) => ({ value: String(c.id), label: c.nome }))}
+                  placeholder="Selecione o cliente..."
+                  searchPlaceholder="Buscar cliente..."
+                  emptyText="Nenhum cliente encontrado."
+                />
+              </div>
+              {clienteId && (
+                <Button variant="ghost" size="sm" className="h-9 text-slate-400 hover:text-slate-600 text-xs" onClick={() => setClienteId("")}>
+                  <X className="h-3.5 w-3.5 mr-1" /> Limpar
+                </Button>
+              )}
+            </div>
+
+            {/* Descrição */}
+            <div>
+              <Label className="text-xs font-medium text-slate-600 mb-1 block">Descrição</Label>
+              <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Descrição do título" className="text-sm" />
+            </div>
+          </div>
+
+          {/* ── Seção: Classificação ── */}
+          <div className="px-6 pt-2 pb-4 space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="h-px flex-1 bg-slate-100" />
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Classificação</span>
+              <div className="h-px flex-1 bg-slate-100" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Categoria */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5 mb-1">
+                  <Tag className="h-3.5 w-3.5 text-slate-400" /> Categoria
+                </Label>
+                <Select value={contaNome} onValueChange={setContaNome}>
+                  <SelectTrigger className="text-sm h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIAS_RECEBER.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Obra */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5 mb-1">
+                  <Building2 className="h-3.5 w-3.5 text-slate-400" /> Obra
+                </Label>
+                {obrasDoCliente.length > 0 ? (
+                  <Combobox
+                    value={obraNome}
+                    onChange={setObraNome}
+                    options={obrasDoCliente}
+                    placeholder="Selecione a obra"
+                    searchPlaceholder="Buscar obra..."
+                    emptyText="Nenhuma obra ativa."
+                  />
+                ) : (
+                  <Input className="text-sm h-9" value={obraNome} onChange={(e) => setObraNome(e.target.value)} placeholder="Nome da obra (opcional)" />
+                )}
+              </div>
+            </div>
+
+            {/* Observações */}
+            <div>
+              <Label className="text-xs font-medium text-slate-600 mb-1 block">Observações</Label>
+              <Textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} placeholder="Detalhes adicionais (opcional)" className="text-sm resize-none" />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Footer ── */}
+        <div className="border-t border-slate-100 px-6 py-3 bg-slate-50 flex items-center justify-between shrink-0">
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-slate-500">
+            <X className="h-3.5 w-3.5 mr-1.5" /> Cancelar
           </Button>
-        </DialogFooter>
+          <Button onClick={submit} disabled={pending} className="bg-emerald-600 hover:bg-emerald-700 gap-2 px-6">
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Salvar alterações
+          </Button>
+        </div>
+
       </DialogContent>
     </Dialog>
   );
