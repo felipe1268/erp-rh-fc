@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4230** — **SMO: FIX SALÁRIO DE REFERÊNCIA — MEDIANA COM FILTRO DE OUTLIERS.** `salarioRef` era MÉDIA (vulnerável a 1 funcionário com salário errado no cadastro → R$ 270.786 p/ pedreiro). Fix: `calcSalarioMediana()` — mediana + filtra valores >5× mediana bruta. 4 ocorrências corrigidas em smo.ts. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4229** — **SCORECARD SST: NOVA FÓRMULA CUSTO ATESTADOS — CUSTO REAL MENSAL.** `(salário_bruto×1,33 + VA/VR_mensal) ÷ dias_do_mês × dias_afastados`. Q12: 2 LATERAL JOINs em payroll_payments + vr_benefits. Q13 ates CTE: subconsultas correlacionadas. Frontend: labels atualizados. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4228** — **SCORECARD SST: FOTO DE CADASTRO EM ACIDENTES, ADVERTÊNCIAS E TOP 5 EPI.** Backend: Q4/Q5/Q6/Q8 passam a retornar `foto_url` (CLT via `fotoUrl`, terceiros via `ft.foto_url`). Frontend: avatar circular com foto real (ou iniciais coloridas como fallback) adicionado aos cards de Acidentes e rows de Advertências. Top 5 EPI já tinha código mas dependia do Q6 retornar a foto. ZERO DELETE · ZERO ALTER destrutivo.

@@ -1,4 +1,32 @@
 /**
+ * Rev. 4230 - SMO: FIX SALÁRIO DE REFERÊNCIA — MEDIANA COM FILTRO DE OUTLIERS (era MÉDIA).
+ *
+ * CAUSA-RAIZ — Em smo.ts, o `salarioRef` (base para cálculo de impacto financeiro da SMO)
+ * era calculado como MÉDIA aritmética de todos os funcionários ativos com aquela função.
+ * Se QUALQUER funcionário tem salário errado no cadastro (ex.: R$ 270.786 em vez de R$ 2.708,
+ * ou salário anual no lugar de mensal), a média explode e distorce todos os valores:
+ *   - 2 pedrei­ros × 4 meses → R$ 4,2 milhões (deveria ser ~R$ 40-60 mil)
+ *   - "Salário Base" exibido: R$ 270.786,14 (pedreiro)
+ *
+ * FIX — Substituída MÉDIA por MEDIANA com filtro de outliers grosseiros:
+ *   1. Ordenar salários
+ *   2. Calcular mediana bruta
+ *   3. Filtrar valores > 5× a mediana bruta (remove outliers como dados errados)
+ *   4. Calcular mediana final do conjunto filtrado
+ *
+ * FUNÇÃO — `calcSalarioMediana(sals: number[]): number` adicionada logo após `parseBRL`.
+ * Chamada nos 4 lugares do arquivo onde antes havia `sals.reduce(...) / sals.length`:
+ *   1. `computeCustoSMO` (helper genérico)
+ *   2. `calcularImpactoFinanceiro` (procedure de consulta)
+ *   3. Loop de análise bulk (analise por itens)
+ *   4. Loop de criação em batch (create itens)
+ *
+ * Também atualizou o label `baseSalarialOrigem` de "Média de N" → "Mediana de N".
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4229 - SCORECARD SST: NOVA FÓRMULA CUSTO ATESTADOS — CUSTO REAL MENSAL DO FUNCIONÁRIO.
  *
  * OBJETIVO — Calcular o custo do afastamento com base no custo total mensal real do funcionário,

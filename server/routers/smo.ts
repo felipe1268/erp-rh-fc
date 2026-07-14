@@ -22,6 +22,20 @@ function companyFilter(col: any, input: { companyId: number; companyIds?: number
 
 const parseBRL = (v: any) => parseFloat(String(v || "0").replace(/\./g, "").replace(",", ".")) || 0;
 
+// Calcula a mediana de uma lista de salários, filtrando outliers grosseiros (> 5× a mediana bruta).
+// Usa mediana (não média) para ser robusto a valores incorretos no cadastro.
+function calcSalarioMediana(sals: number[]): number {
+  if (sals.length === 0) return 0;
+  const sorted = [...sals].sort((a, b) => a - b);
+  const rawMid = Math.floor(sorted.length / 2);
+  const rawMediana = sorted.length % 2 !== 0 ? sorted[rawMid] : (sorted[rawMid - 1] + sorted[rawMid]) / 2;
+  // Remove outliers: valores > 5× a mediana bruta (ex: dados cadastrados errados)
+  const filtered = sorted.filter(s => s <= rawMediana * 5);
+  const arr = filtered.length > 0 ? filtered : sorted;
+  const mid = Math.floor(arr.length / 2);
+  return arr.length % 2 !== 0 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Rev. 1357 — Encargos por regime (Experiência 45+45 vs Indeterminado)
 // CLT Art. 443/445: contrato de experiência até 90 dias (3 meses).
@@ -85,8 +99,8 @@ async function computeCustoSMO(
 
   let salarioRef = 0;
   if (emps.length > 0) {
-    const sals = emps.map((e: any) => parseFloat(String(e.salarioBase || "0").replace(/\./g, "").replace(",", ".")) || 0).filter((s: number) => s > 0);
-    salarioRef = sals.length > 0 ? sals.reduce((a: number, b: number) => a + b, 0) / sals.length : 0;
+    const sals = emps.map((e: any) => parseBRL(e.salarioBase)).filter((s: number) => s > 0);
+    salarioRef = calcSalarioMediana(sals);
   }
   if (salarioRef === 0) salarioRef = pisoFallback;
 
@@ -573,8 +587,8 @@ export const smoRouter = router({
 
       let salarioRef = 0;
       if (emps.length > 0) {
-        const sals = emps.map(e => parseFloat(String(e.salarioBase || "0").replace(/\./g, "").replace(",", ".")) || 0).filter(s => s > 0);
-        salarioRef = sals.length > 0 ? sals.reduce((a, b) => a + b, 0) / sals.length : 0;
+        const sals = emps.map(e => parseBRL(e.salarioBase)).filter(s => s > 0);
+        salarioRef = calcSalarioMediana(sals);
       }
       if (salarioRef === 0) {
         const [conv] = await db.select().from(convencaoColetiva)
@@ -728,13 +742,13 @@ export const smoRouter = router({
         let salarioRef = 0;
         let baseSalarialOrigem = "Piso salarial (padrão)";
         if (emps.length > 0) {
-          const sals = emps.map(e => parseFloat(String(e.salarioBase || "0").replace(/\./g, "").replace(",", ".")) || 0).filter(s => s > 0);
-          salarioRef = sals.length > 0 ? sals.reduce((a, b) => a + b, 0) / sals.length : 0;
+          const sals = emps.map(e => parseBRL(e.salarioBase)).filter(s => s > 0);
+          salarioRef = calcSalarioMediana(sals);
           if (salarioRef > 0) {
             const funcRef = emps[0].funcao || item.funcao;
             baseSalarialOrigem = emps.length === 1
               ? `Salário real (${funcRef})`
-              : `Média de ${emps.length} profissionais (${funcRef})`;
+              : `Mediana de ${emps.length} profissionais (${funcRef})`;
           }
         }
         if (salarioRef === 0) salarioRef = parseFloat(conv?.pisoSalarial || "2500");
@@ -1135,8 +1149,8 @@ export const smoRouter = router({
 
         let salarioRef = 0;
         if (emps.length > 0) {
-          const sals = emps.map(e => parseFloat(String(e.salarioBase || "0").replace(/\./g, "").replace(",", ".")) || 0).filter(s => s > 0);
-          salarioRef = sals.length > 0 ? sals.reduce((a, b) => a + b, 0) / sals.length : 0;
+          const sals = emps.map(e => parseBRL(e.salarioBase)).filter(s => s > 0);
+          salarioRef = calcSalarioMediana(sals);
         }
         if (salarioRef === 0) salarioRef = pisoFallback;
 
