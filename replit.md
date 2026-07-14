@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4228** — **SCORECARD SST: FOTO DE CADASTRO EM ACIDENTES, ADVERTÊNCIAS E TOP 5 EPI.** Backend: Q4/Q5/Q6/Q8 passam a retornar `foto_url` (CLT via `fotoUrl`, terceiros via `ft.foto_url`). Frontend: avatar circular com foto real (ou iniciais coloridas como fallback) adicionado aos cards de Acidentes e rows de Advertências. Top 5 EPI já tinha código mas dependia do Q6 retornar a foto. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4227** — **SCORECARD SST: FIX BOLINHAS + GRÁFICOS HISTÓRICO — salarioBase com ponto de milhar.** Causa raiz real: `"2.774,20"` após REPLACE(',','.') vira `"2.774.20"` (dois pontos) → crash silencioso. Fix: REPLACE duplo — remover ponto de milhar ANTES de converter vírgula decimal. Q12 (4 ocorrências) + Q13 ates CTE (1 ocorrência). Validado direto no Neon: Q13 retorna 12 linhas com dds/atestados/epi por mês. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4226** — **SCORECARD SST: FIX CAST TIPOS — valor_produto NUMERIC + salarioBase VARCHAR.** REPLACE(numeric_col) quebra silenciosamente; epis.valor_produto é NUMERIC → COALESCE(ep.valor_produto,0); employees.salarioBase é VARCHAR → REPLACE(COALESCE,'0'),',','.'). Q6/Q7/Q12/Q13 corrigidos. Atestados e gráficos voltam. ZERO DELETE · ZERO ALTER destrutivo.

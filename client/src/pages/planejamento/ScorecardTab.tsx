@@ -1868,19 +1868,26 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                           <div className="p-4 space-y-2">
                             {d.acidentes.map((a:any,i:number)=>{
                               const grave=a.gravidade==="Grave"||a.gravidade==="Com Afastamento";
+                              const acNome=String(a.funcionario_nome??"?");
+                              const acInitials=acNome.split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
                               return (
                                 <div key={i} className={`rounded-xl border px-3 py-2.5 text-[10px] ${grave?"border-red-300 bg-red-50":"border-orange-200 bg-orange-50"}`}>
                                   <div className="flex items-start justify-between gap-2">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className={`font-bold text-sm ${grave?"text-red-600":"text-orange-600"}`}>{a.gravidade}</span>
-                                        {parseInt(String(a.diasAfastamento??0))>0&&<span className="bg-red-100 text-red-700 text-[9px] font-bold px-1.5 rounded">{a.diasAfastamento}d afastamento</span>}
-                                      </div>
-                                      <p className="font-semibold text-gray-800 mt-0.5 text-[11px]">{a.funcionario_nome??"—"}</p>
-                                      <div className="flex gap-2 text-gray-500 mt-0.5 flex-wrap text-[9px]">
-                                        {a.tipoAcidente&&<span>{a.tipoAcidente}</span>}
-                                        {a.localAcidente&&<span>· {a.localAcidente}</span>}
-                                        <span className={a.status_acao==="Concluída"?"text-green-600":"text-amber-600"}>· Ação: {a.status_acao??"Pendente"}</span>
+                                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                      {a.foto_url
+                                        ?<img src={a.foto_url} alt={acNome} className="w-8 h-8 rounded-full object-cover shrink-0 ring-2 ring-white shadow-sm mt-0.5"/>
+                                        :<div className={`w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5 ${grave?"bg-red-200 text-red-700":"bg-orange-200 text-orange-700"}`}>{acInitials}</div>}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className={`font-bold text-sm ${grave?"text-red-600":"text-orange-600"}`}>{a.gravidade}</span>
+                                          {parseInt(String(a.diasAfastamento??0))>0&&<span className="bg-red-100 text-red-700 text-[9px] font-bold px-1.5 rounded">{a.diasAfastamento}d afastamento</span>}
+                                        </div>
+                                        <p className="font-semibold text-gray-800 mt-0.5 text-[11px]">{acNome}</p>
+                                        <div className="flex gap-2 text-gray-500 mt-0.5 flex-wrap text-[9px]">
+                                          {a.tipoAcidente&&<span>{a.tipoAcidente}</span>}
+                                          {a.localAcidente&&<span>· {a.localAcidente}</span>}
+                                          <span className={a.status_acao==="Concluída"?"text-green-600":"text-amber-600"}>· Ação: {a.status_acao??"Pendente"}</span>
+                                        </div>
                                       </div>
                                     </div>
                                     <span className="text-gray-400 shrink-0 text-[9px]">{fDate(a.dataAcidente)}</span>
@@ -2029,6 +2036,13 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                               .sort((a:any,b:any)=>(b.data_ocorrencia??"").localeCompare(a.data_ocorrencia??""))
                               .map((w:any,i:number)=>(
                                 <div key={i} className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-[10px]">
+                                  {(() => {
+                                    const wNome=String(w.funcionario_nome??"?");
+                                    const wInit=wNome.split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
+                                    return w.foto_url
+                                      ?<img src={w.foto_url} alt={wNome} className="w-7 h-7 rounded-full object-cover shrink-0 ring-1 ring-red-200 mt-0.5"/>
+                                      :<div className="w-7 h-7 rounded-full bg-red-200 text-red-700 text-[8px] font-bold flex items-center justify-center shrink-0 mt-0.5">{wInit}</div>;
+                                  })()}
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                       <span className="font-bold text-red-700">{w.tipo_advertencia}</span>

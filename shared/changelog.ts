@@ -1,4 +1,23 @@
 /**
+ * Rev. 4228 - SCORECARD SST: FOTO DE CADASTRO EM ACIDENTES, ADVERTÊNCIAS E TOP 5 EPI.
+ *
+ * OBJETIVO — Exibir foto do funcionário (fotoUrl) em todas as seções do dashboard SST.
+ *
+ * BACKEND — 4 queries sem foto_url:
+ *   • Q4 advertências CLT: adicionado `e."fotoUrl" AS foto_url`
+ *   • Q5 advertências terceiros: adicionado `ft.foto_url` (funcionarios_terceiros.foto_url já existe)
+ *   • Q6 epiPorFuncionario: adicionado `e."fotoUrl" AS foto_url` + incluído no GROUP BY
+ *   • Q8 acidentes: adicionado `e."fotoUrl" AS foto_url`
+ *
+ * FRONTEND — 2 seções sem avatar:
+ *   • Cards de Acidentes: avatar circular (foto real ou iniciais coloridas por gravidade) antes do nome
+ *   • Rows de Advertências: avatar 28px com foto ou iniciais vermelho antes do tipo
+ *   • Top 5 EPI (já tinha código): passa a mostrar foto real (antes ficava só iniciais por falta de foto_url no Q6)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4227 - SCORECARD SST: FIX BOLINHAS + GRÁFICOS HISTÓRICO — salarioBase com ponto de milhar.
  *
  * CAUSA-RAIZ REAL — diagnóstico via query direta no Neon:

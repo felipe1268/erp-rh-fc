@@ -744,7 +744,7 @@ export const scorecardRouter = router({
           const r = await db.execute(sql`
             SELECT
               w.id, w."tipoAdvertencia" AS tipo_advertencia, w."dataOcorrencia" AS data_ocorrencia, w.motivo,
-              e."nomeCompleto" AS funcionario_nome, e.cargo
+              e."nomeCompleto" AS funcionario_nome, e.cargo, e."fotoUrl" AS foto_url
             FROM warnings w
             JOIN employees e ON e.id = w."employeeId"
             WHERE w."companyId" = ${input.companyId}
@@ -767,7 +767,8 @@ export const scorecardRouter = router({
               wt.id, wt.tipo_advertencia, wt.data_ocorrencia, wt.motivo,
               COALESCE(ft.nome, wt.funcionario_nome_manual)     AS funcionario_nome,
               COALESCE(ft.funcao, wt.funcionario_funcao_manual) AS funcao,
-              COALESCE(et.nome_fantasia, et.razao_social)       AS empresa_nome
+              COALESCE(et.nome_fantasia, et.razao_social)       AS empresa_nome,
+              ft.foto_url
             FROM warnings_terceiros wt
             LEFT JOIN funcionarios_terceiros ft ON ft.id = wt.funcionario_terceiro_id
             LEFT JOIN empresas_terceiras et ON et.id = wt.empresa_terceira_id
@@ -786,6 +787,7 @@ export const scorecardRouter = router({
           const r = await db.execute(sql`
             SELECT
               e.id AS employee_id, e."nomeCompleto" AS funcionario_nome, e.cargo,
+              e."fotoUrl" AS foto_url,
               COUNT(ed.id)                                                                                          AS total_entregas,
               SUM(ed.quantidade)                                                                                    AS total_unidades,
               SUM(COALESCE(ep.valor_produto, 0) * ed.quantidade)                                                    AS custo_total,
@@ -797,7 +799,7 @@ export const scorecardRouter = router({
               AND ed."companyId" = ${input.companyId}
               AND ed."deletedAt" IS NULL
               AND (${mr}::text IS NULL OR TO_CHAR(ed."dataEntrega"::date, 'YYYY-MM') = ${mr})
-            GROUP BY e.id, e."nomeCompleto", e.cargo
+            GROUP BY e.id, e."nomeCompleto", e.cargo, e."fotoUrl"
             ORDER BY custo_total DESC
             LIMIT 30
           `);
@@ -853,7 +855,7 @@ export const scorecardRouter = router({
               a."diasAfastamento", a."localAcidente", a."descricao",
               a.status_acao_corretiva AS status_acao,
               a.houve_cat,
-              e."nomeCompleto"       AS funcionario_nome, e.cargo
+              e."nomeCompleto" AS funcionario_nome, e.cargo, e."fotoUrl" AS foto_url
             FROM accidents a
             LEFT JOIN employees e ON e.id = a."employeeId"
             WHERE a."companyId" = ${input.companyId}
