@@ -1,4 +1,27 @@
 /**
+ * Rev. 4254 - MAPA COTAÇÃO PACOTE: COLUNAS SEPARADAS MAT | MDO | TOTAL GERAL.
+ *
+ * OBJETIVO: no Mapa de Cotação para tipo "pacote", exibir Material, Mão de Obra
+ * e Total Geral em colunas SEPARADAS (não empilhadas) — tanto no bloco META
+ * (orçamento) quanto no bloco de cada fornecedor. Sequência: QTD | Material |
+ * Mão de Obra | Total Geral.
+ *
+ * FRONTEND Cotacoes.tsx:
+ *   Header linha 2 — pacote: QTD | Material | Mão de Obra | Total Geral (4 th);
+ *     não-pacote: Preço Unit. | QTD | Total Meta (3 th, sem alteração).
+ *   Item rows META — pacote: 4 <td> separados (QTD, MAT, MDO, Total Geral = MAT+MDO);
+ *     não-pacote: Preço Unit. | QTD | Total (sem alteração).
+ *   Fornecedor sub-header — pacote: colSpan=5, 5 flex divs (QTD | Material |
+ *     Mão de Obra | Total Geral | Saldo); não-pacote: colSpan=4 (sem alteração).
+ *   Fornecedor item rows — pacote: 5 <td> (QTD | mat | mdo | Total Geral | Saldo);
+ *     MAT/MDO do fornecedor: para _isPacoteGroup soma por bucket via _childItems;
+ *     para item individual classifica via metaUnitarioMat/metaUnitarioMdo.
+ *     Não-pacote: layout anterior (QTD | Preço Unit. | Total | Saldo), sem alteração.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4253 - MAT/MDO EXATO NA PIPELINE COTAÇÃO → CONTRATO → MEDIÇÃO.
  *
  * OBJETIVO: valores exatos de Material (MAT) e Mão-de-Obra (MDO) informados

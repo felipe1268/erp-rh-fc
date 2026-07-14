@@ -1,3 +1,4 @@
+- **Rev. 4243** — **FLAG "SOMENTE MO" POR ITEM EM SC E COTAÇÕES.** Toggle por item; propagação automática nas cotações vinculadas; schema `somente_mo` via SyncSchema+; badge 🔨 SOMENTE MO. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4242** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `EXTRACT(days FROM integer)` NÃO EXISTE NO POSTGRES.** Fix: removido `EXTRACT(days FROM ...)` nas 2 ocorrências — subtração de datas já é integer. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4241** — **SCORECARD COMPRAS: FIX LOCAÇÕES — TYPE MISMATCH VARCHAR vs DATE NA UNION ALL.** `COALESCE(el.data_inicio [VARCHAR], ai.criado_em::date [DATE])` quebra silenciosamente; fix: `to_char` (TEXT) + cast explícito na aritmética. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4240** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `origem='alugado'` + ícone 🔑.** Ramo A ampliado com `OR ai.origem='alugado'`; ferramentasAlmox exclui alugado; 🚜 → 🔑. ZERO DELETE · ZERO ALTER destrutivo.

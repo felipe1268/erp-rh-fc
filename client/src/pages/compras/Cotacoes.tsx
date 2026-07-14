@@ -5519,26 +5519,41 @@ export default function Cotacoes() {
                             </tr>
                             {/* Linha 2: sub-headers */}
                             <tr className="border-b border-gray-300 bg-gray-50">
-                              <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28">Preço Unit.</th>
-                              <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-20">QTD</th>
                               {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote' ? (
                                 <>
-                                  <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28">Total MAT</th>
-                                  <th className="text-right text-xs font-medium text-orange-500 px-3 py-2 bg-orange-50/40 w-28 border-r border-blue-100">Total MDO</th>
+                                  <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-20">QTD</th>
+                                  <th className="text-right text-xs font-medium text-blue-600 px-3 py-2 bg-blue-50/60 w-28">Material</th>
+                                  <th className="text-right text-xs font-medium text-orange-500 px-3 py-2 bg-orange-50/40 w-28">Mão de Obra</th>
+                                  <th className="text-right text-xs font-medium text-blue-700 px-3 py-2 bg-blue-50/60 w-28 border-r border-blue-100">Total Geral</th>
                                 </>
                               ) : (
-                                <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28 border-r border-blue-100">Total Meta</th>
+                                <>
+                                  <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28">Preço Unit.</th>
+                                  <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-20">QTD</th>
+                                  <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28 border-r border-blue-100">Total Meta</th>
+                                </>
                               )}
                               {(mapa?.participantes ?? []).map((p: any) => {
                                 const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
                                 const baseCls = isMelhor ? "text-emerald-600 bg-emerald-50/40" : "text-gray-500";
+                                const isPacoteH = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
                                 return (
-                                  <th key={p.fornecedorId} colSpan={4} className="p-0">
+                                  <th key={p.fornecedorId} colSpan={isPacoteH ? 5 : 4} className="p-0">
                                     {/* Prazo/cond sub-row inside header · Rev. 1991: +1 col "Saldo" */}
                                     <div className={`flex border-r border-gray-200 ${isMelhor ? "bg-emerald-50/40" : ""}`}>
                                       <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>QTD</div>
-                                      <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>Preço Unit.</div>
-                                      <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>Total</div>
+                                      {isPacoteH ? (
+                                        <>
+                                          <div className={`flex-1 text-right text-xs font-medium px-2 py-2 text-blue-600 border-r border-gray-100 ${isMelhor ? "bg-emerald-50/20" : ""}`}>Material</div>
+                                          <div className={`flex-1 text-right text-xs font-medium px-2 py-2 text-orange-500 border-r border-gray-100 ${isMelhor ? "bg-emerald-50/20" : ""}`}>Mão de Obra</div>
+                                          <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>Total Geral</div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>Preço Unit.</div>
+                                          <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>Total</div>
+                                        </>
+                                      )}
                                       <div className={`flex-1 text-center text-xs font-semibold px-2 py-2 ${isMelhor ? "text-emerald-700 bg-emerald-50/60" : "text-emerald-600 bg-emerald-50/30"}`} title="Saldo deste fornecedor vs. Meta (Orçamento)">Saldo</div>
                                     </div>
                                     {/* Prazo/cond/frete row */}
@@ -5797,35 +5812,44 @@ export default function Cotacoes() {
                                   </td>
                                   <td className="px-3 py-2 text-gray-500 text-xs text-center border-r border-gray-100">{it.unidade || "un"}</td>
                                   {/* Meta cols */}
-                                  <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-medium">
-                                    <div className="flex items-center justify-end gap-1">
-                                      {(it as any).incluirAjudante === false && (it as any).metaMdoProfissional > 0 && (
-                                        <span className="px-1 py-0 text-[8px] font-bold rounded bg-purple-100 text-purple-700 border border-purple-200 whitespace-nowrap" title="Cotação sem ajudante — meta apenas do profissional">Só prof.</span>
-                                      )}
-                                      {metaUnit > 0 ? metaUnit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
-                                    </div>
-                                  </td>
-                                  <td className="px-3 py-2 text-blue-600 text-xs text-right bg-blue-50/30">
-                                    {metaQtdVal > 0 ? metaQtdVal.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
-                                  </td>
                                   {isPacoteTipoMapa ? (() => {
-                                    // Para pacote: 2 colunas separadas MAT | MDO
+                                    // Pacote: QTD | Material | Mão de Obra | Total Geral
                                     const matVal = showPacoteMatMdo ? pacoteMetaMat : Math.round(parseFloat(it.metaUnitarioMat ?? "0") * metaQtdVal * 100) / 100;
                                     const mdoVal = showPacoteMatMdo ? pacoteMetaMdo : Math.round(parseFloat(it.metaUnitarioMdo ?? "0") * metaQtdVal * 100) / 100;
+                                    const totalGeral = Math.round((matVal + mdoVal) * 100) / 100;
                                     return (
                                       <>
+                                        <td className="px-3 py-2 text-blue-600 text-xs text-right bg-blue-50/30">
+                                          {metaQtdVal > 0 ? metaQtdVal.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
+                                        </td>
                                         <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold">
                                           {matVal > 0 ? matVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
                                         </td>
-                                        <td className="px-3 py-2 text-orange-700 text-xs text-right bg-orange-50/20 font-semibold border-r border-blue-100">
+                                        <td className="px-3 py-2 text-orange-700 text-xs text-right bg-orange-50/20 font-semibold">
                                           {mdoVal > 0 ? mdoVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-blue-800 text-xs text-right bg-blue-50/30 font-bold border-r border-blue-100">
+                                          {totalGeral > 0 ? totalGeral.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
                                         </td>
                                       </>
                                     );
                                   })() : (
-                                    <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold border-r border-blue-100">
-                                      {metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
-                                    </td>
+                                    <>
+                                      <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-medium">
+                                        <div className="flex items-center justify-end gap-1">
+                                          {(it as any).incluirAjudante === false && (it as any).metaMdoProfissional > 0 && (
+                                            <span className="px-1 py-0 text-[8px] font-bold rounded bg-purple-100 text-purple-700 border border-purple-200 whitespace-nowrap" title="Cotação sem ajudante — meta apenas do profissional">Só prof.</span>
+                                          )}
+                                          {metaUnit > 0 ? metaUnit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                        </div>
+                                      </td>
+                                      <td className="px-3 py-2 text-blue-600 text-xs text-right bg-blue-50/30">
+                                        {metaQtdVal > 0 ? metaQtdVal.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
+                                      </td>
+                                      <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold border-r border-blue-100">
+                                        {metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                      </td>
+                                    </>
                                   )}
                                   {/* Saldo Orçamentário — coluna única condensada */}
                                   {(() => {
@@ -5919,112 +5943,116 @@ export default function Cotacoes() {
                                             <span className="text-xs text-gray-600">{displayQty > 0 ? displayQty.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}</span>
                                           )}
                                         </td>
-                                        <td key={`preco_${p.fornecedorId}`} className={`px-1 py-1 text-right border-r border-gray-100 ${rowCls} ${isBest ? "bg-emerald-50" : ""}`}>
-                                          {(() => {
-                                            const isServico = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === "servico";
-                                            const canMatMdo = isServico && !it._isPacoteGroup && !it._grouped;
-                                            const savedMat = parseFloat((mapa?.respostaMap?.[key] as any)?.totalMat ?? "0");
-                                            const savedMdo = parseFloat((mapa?.respostaMap?.[key] as any)?.totalMdo ?? "0");
-                                            if (isEditing && canMatMdo) {
-                                              return (
-                                                <div className="flex flex-col gap-0.5 items-end">
-                                                  <div className="flex items-center gap-1">
-                                                    <span className="text-[9px] text-blue-600 font-bold w-7 text-right">MAT</span>
-                                                    <Input type="number" step="0.01" min="0"
-                                                      value={editMatMdo[key]?.mat ?? ""}
-                                                      onChange={e => {
-                                                        const mat = parseFloat(e.target.value) || 0;
-                                                        const mdo = parseFloat(editMatMdo[key]?.mdo ?? "0") || 0;
-                                                        setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: "0", mdo: "0" }), mat: e.target.value } }));
-                                                        setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
-                                                      }}
-                                                      className="h-6 text-xs text-right border-blue-300 bg-white text-gray-900 w-24" placeholder="0,00" />
-                                                  </div>
-                                                  <div className="flex items-center gap-1">
-                                                    <span className="text-[9px] text-orange-600 font-bold w-7 text-right">MDO</span>
-                                                    <Input type="number" step="0.01" min="0"
-                                                      value={editMatMdo[key]?.mdo ?? ""}
-                                                      onChange={e => {
-                                                        const mdo = parseFloat(e.target.value) || 0;
-                                                        const mat = parseFloat(editMatMdo[key]?.mat ?? "0") || 0;
-                                                        setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: "0", mdo: "0" }), mdo: e.target.value } }));
-                                                        setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
-                                                      }}
-                                                      className="h-6 text-xs text-right border-orange-300 bg-white text-gray-900 w-24" placeholder="0,00" />
-                                                  </div>
-                                                </div>
-                                              );
+                                        {isPacoteTipoMapa ? (() => {
+                                          // Pacote: calcular MAT e MDO do fornecedor para este item
+                                          let matF = 0, mdoF = 0;
+                                          if (it._isPacoteGroup) {
+                                            for (const c of (it._childItems as any[])) {
+                                              const rr = mapa?.respostaMap?.[`${c.id}_${p.fornecedorId}`];
+                                              const price = parseFloat((rr as any)?.precoUnitario ?? "0");
+                                              const qty = parseFloat((rr as any)?.quantidade ?? c.quantidade ?? "1");
+                                              const tot = price * qty;
+                                              if (tot <= 0) continue;
+                                              const cMat = parseFloat(c.metaUnitarioMat ?? "0");
+                                              const cMdo = parseFloat(c.metaUnitarioMdo ?? "0");
+                                              if (cMdo > 0 && cMat === 0) mdoF += tot;
+                                              else matF += tot;
                                             }
-                                            if (isEditing) {
-                                              return (
-                                                <Input type="number" step="0.01" min="0"
-                                                  value={editPrecos[key] ?? ""}
-                                                  onChange={e => handleGroupedPrecoChange(e.target.value)}
-                                                  className={`h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-32 ml-auto ${isBest ? "border-emerald-400" : ""}`}
-                                                  placeholder="0,00" />
-                                              );
-                                            }
-                                            if (canMatMdo && (savedMat > 0 || savedMdo > 0)) {
-                                              return (
-                                                <div className="flex flex-col items-end gap-0">
-                                                  <div className="flex items-center gap-1">
-                                                    <span className="text-[9px] text-blue-500 font-bold">MAT</span>
-                                                    <span className="text-xs text-gray-700">{savedMat > 0 ? savedMat.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}</span>
+                                          } else {
+                                            const cMat = parseFloat(it.metaUnitarioMat ?? "0");
+                                            const cMdo = parseFloat(it.metaUnitarioMdo ?? "0");
+                                            if (cMdo > 0 && cMat === 0) mdoF = displayTotal;
+                                            else matF = displayTotal;
+                                          }
+                                          matF = Math.round(matF * 100) / 100;
+                                          mdoF = Math.round(mdoF * 100) / 100;
+                                          return (
+                                            <>
+                                              <td key={`forn_mat_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-100 ${rowCls}`}>
+                                                <span className="text-xs font-semibold text-blue-700">
+                                                  {matF > 0 ? matF.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                                </span>
+                                              </td>
+                                              <td key={`forn_mdo_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-100 ${rowCls}`}>
+                                                <span className="text-xs font-semibold text-orange-700">
+                                                  {mdoF > 0 ? mdoF.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                                </span>
+                                              </td>
+                                            </>
+                                          );
+                                        })() : (
+                                          <td key={`preco_${p.fornecedorId}`} className={`px-1 py-1 text-right border-r border-gray-100 ${rowCls} ${isBest ? "bg-emerald-50" : ""}`}>
+                                            {(() => {
+                                              const isServico = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === "servico";
+                                              const canMatMdo = isServico && !it._isPacoteGroup && !it._grouped;
+                                              const savedMat = parseFloat((mapa?.respostaMap?.[key] as any)?.totalMat ?? "0");
+                                              const savedMdo = parseFloat((mapa?.respostaMap?.[key] as any)?.totalMdo ?? "0");
+                                              if (isEditing && canMatMdo) {
+                                                return (
+                                                  <div className="flex flex-col gap-0.5 items-end">
+                                                    <div className="flex items-center gap-1">
+                                                      <span className="text-[9px] text-blue-600 font-bold w-7 text-right">MAT</span>
+                                                      <Input type="number" step="0.01" min="0"
+                                                        value={editMatMdo[key]?.mat ?? ""}
+                                                        onChange={e => {
+                                                          const mat = parseFloat(e.target.value) || 0;
+                                                          const mdo = parseFloat(editMatMdo[key]?.mdo ?? "0") || 0;
+                                                          setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: "0", mdo: "0" }), mat: e.target.value } }));
+                                                          setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
+                                                        }}
+                                                        className="h-6 text-xs text-right border-blue-300 bg-white text-gray-900 w-24" placeholder="0,00" />
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                      <span className="text-[9px] text-orange-600 font-bold w-7 text-right">MDO</span>
+                                                      <Input type="number" step="0.01" min="0"
+                                                        value={editMatMdo[key]?.mdo ?? ""}
+                                                        onChange={e => {
+                                                          const mdo = parseFloat(e.target.value) || 0;
+                                                          const mat = parseFloat(editMatMdo[key]?.mat ?? "0") || 0;
+                                                          setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: "0", mdo: "0" }), mdo: e.target.value } }));
+                                                          setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
+                                                        }}
+                                                        className="h-6 text-xs text-right border-orange-300 bg-white text-gray-900 w-24" placeholder="0,00" />
+                                                    </div>
                                                   </div>
-                                                  <div className="flex items-center gap-1">
-                                                    <span className="text-[9px] text-orange-500 font-bold">MDO</span>
-                                                    <span className="text-xs text-gray-700">{savedMdo > 0 ? savedMdo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}</span>
+                                                );
+                                              }
+                                              if (isEditing) {
+                                                return (
+                                                  <Input type="number" step="0.01" min="0"
+                                                    value={editPrecos[key] ?? ""}
+                                                    onChange={e => handleGroupedPrecoChange(e.target.value)}
+                                                    className={`h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-32 ml-auto ${isBest ? "border-emerald-400" : ""}`}
+                                                    placeholder="0,00" />
+                                                );
+                                              }
+                                              if (canMatMdo && (savedMat > 0 || savedMdo > 0)) {
+                                                return (
+                                                  <div className="flex flex-col items-end gap-0">
+                                                    <div className="flex items-center gap-1">
+                                                      <span className="text-[9px] text-blue-500 font-bold">MAT</span>
+                                                      <span className="text-xs text-gray-700">{savedMat > 0 ? savedMat.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                      <span className="text-[9px] text-orange-500 font-bold">MDO</span>
+                                                      <span className="text-xs text-gray-700">{savedMdo > 0 ? savedMdo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}</span>
+                                                    </div>
                                                   </div>
-                                                </div>
+                                                );
+                                              }
+                                              return (
+                                                <span className={`text-xs font-medium ${isBest ? "text-emerald-700 font-bold" : "text-gray-700"}`}>
+                                                  {displayPreco > 0 ? displayPreco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                                </span>
                                               );
-                                            }
-                                            return (
-                                              <span className={`text-xs font-medium ${isBest ? "text-emerald-700 font-bold" : "text-gray-700"}`}>
-                                                {displayPreco > 0 ? displayPreco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
-                                              </span>
-                                            );
-                                          })()}
-                                        </td>
+                                            })()}
+                                          </td>
+                                        )}
                                         <td key={`tot_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-100 ${rowCls} ${isBest ? "bg-emerald-50" : ""} ${vencedorPorItem[it.id] === p.fornecedorId ? "ring-1 ring-inset ring-emerald-400" : ""}`}>
                                           <div className="flex items-center justify-end gap-1">
-                                            {it._isPacoteGroup && isPacoteTipoMapa ? (() => {
-                                              const childItems = it._childItems as any[];
-                                              let matT = 0, mdoT = 0;
-                                              for (const c of childItems) {
-                                                const rr = mapa?.respostaMap?.[`${c.id}_${p.fornecedorId}`];
-                                                const price = parseFloat((rr as any)?.precoUnitario ?? "0");
-                                                const qty = parseFloat((rr as any)?.quantidade ?? c.quantidade ?? "1");
-                                                const tot = price * qty;
-                                                if (tot <= 0) continue;
-                                                const cMat = parseFloat(c.metaUnitarioMat ?? "0");
-                                                const cMdo = parseFloat(c.metaUnitarioMdo ?? "0");
-                                                if (cMdo > 0 && cMat === 0) mdoT += tot;
-                                                else matT += tot;
-                                              }
-                                              matT = Math.round(matT * 100) / 100;
-                                              mdoT = Math.round(mdoT * 100) / 100;
-                                              if (matT <= 0 && mdoT <= 0) return <span className="text-gray-300 text-xs">—</span>;
-                                              return (
-                                                <div className="flex flex-col items-end gap-0.5">
-                                                  {matT > 0 && (
-                                                    <div className="flex items-center justify-end gap-1">
-                                                      <span className="text-[9px] text-blue-500 font-bold">MAT</span>
-                                                      <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-700" : "text-gray-700"}`}>{matT.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                                                    </div>
-                                                  )}
-                                                  {mdoT > 0 && (
-                                                    <div className="flex items-center justify-end gap-1">
-                                                      <span className="text-[9px] text-orange-500 font-bold">MDO</span>
-                                                      <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-600" : "text-orange-700"}`}>{mdoT.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              );
-                                            })() : (
                                             <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-700" : "text-gray-700"}`}>
                                               {displayTotal > 0 ? displayTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
                                             </span>
-                                            )}
                                             {displayPreco > 0 && detalheFullscreen?.status !== "aprovada" && (
                                               <button
                                                 type="button"
