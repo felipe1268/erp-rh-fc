@@ -17,7 +17,7 @@ import {
   ChevronLeft, ChevronRight, Search, Building2, CheckCircle, Clock,
   AlertTriangle, TrendingUp, Plus, Paperclip, Trash2, RotateCcw, Loader2,
   HandCoins, Users, Wallet, CalendarDays, ChevronsUpDown, Check, Tag,
-  X, CheckSquare, SlidersHorizontal, Landmark, Upload, FileText,
+  X, CheckSquare, SlidersHorizontal, Landmark, Upload, FileText, Pencil,
 } from "lucide-react";
 
 // Rev. 3007 — categorias de Contas a Receber (literatura de gestão de contratos
@@ -182,6 +182,7 @@ export default function FinanceiroContasAReceberTitulos() {
   const [showBaixa, setShowBaixa] = useState<any>(null);
   const [showNovo, setShowNovo] = useState(false);
   const [showAnexo, setShowAnexo] = useState<any>(null);
+  const [showEditar, setShowEditar] = useState<any>(null);
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showBulkAjustar, setShowBulkAjustar] = useState(false);
@@ -342,6 +343,10 @@ export default function FinanceiroContasAReceberTitulos() {
   const criarMut = (trpc as any).financial.criarTituloReceber.useMutation({
     onSuccess: () => { toast({ title: "Título a receber criado!" }); setShowNovo(false); refetch(); },
     onError: (e: any) => toast({ title: "Erro ao criar", description: e.message, variant: "destructive" }),
+  });
+  const editarMut = (trpc as any).financial.updateEntry.useMutation({
+    onSuccess: () => { toast({ title: "Título atualizado!" }); setShowEditar(null); refetch(); },
+    onError: (e: any) => toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" }),
   });
   const anexarMut = (trpc as any).financial.anexarDocumento.useMutation({
     onSuccess: () => { toast({ title: "Documento anexado!" }); setShowAnexo(null); refetch(); },
@@ -680,6 +685,11 @@ export default function FinanceiroContasAReceberTitulos() {
                                   <RotateCcw className="h-3.5 w-3.5" /> Estornar
                                 </Button>
                               )}
+                              {t.status !== "recebido" && (
+                                <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar pagamento" onClick={() => setShowEditar(t)}>
+                                  <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                                </Button>
+                              )}
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar documento" onClick={() => setShowAnexo(t)}>
                                 <Paperclip className={`h-3.5 w-3.5 ${t.anexoUrl ? "text-emerald-600" : "text-slate-400"}`} />
                               </Button>
@@ -703,6 +713,7 @@ export default function FinanceiroContasAReceberTitulos() {
 
       {showBaixa && <BaixaDialog titulo={showBaixa} companyId={companyId} contasBancarias={contasBancarias} onClose={() => setShowBaixa(null)} onSubmit={(p: any) => baixaMut.mutate(p)} pending={baixaMut.isPending} onRefetch={refetch} />}
       {showNovo && <NovoTituloDialog companyId={companyId} clientesOpts={clientesOpts} contasBancarias={contasBancarias} onClose={() => setShowNovo(false)} onSubmit={(p: any) => criarMut.mutate(p)} pending={criarMut.isPending} />}
+      {showEditar && <EditarTituloDialog titulo={showEditar} companyId={companyId} clientesOpts={clientesOpts} onClose={() => setShowEditar(null)} onSubmit={(p: any) => editarMut.mutate(p)} pending={editarMut.isPending} />}
       {showAnexo && <AnexoDialog titulo={showAnexo} companyId={companyId} onClose={() => setShowAnexo(null)} onSubmit={(p: any) => anexarMut.mutate(p)} pending={anexarMut.isPending} />}
       {showBulkAjustar && (
         <BulkAjustarDialog
@@ -1394,6 +1405,160 @@ function NovoTituloDialog({ companyId, clientesOpts, contasBancarias, onClose, o
         <DialogFooter className="border-t border-slate-100 px-6 py-3 bg-slate-50/50">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={submit} disabled={pending} className="bg-emerald-600 hover:bg-emerald-700">{pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Criar título</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─────────────────────────── EDITAR TÍTULO ───────────────────────────
+function EditarTituloDialog({ titulo, companyId, clientesOpts, onClose, onSubmit, pending }: any) {
+  const { toast } = useToast();
+  const [descricao, setDescricao] = useState(titulo.descricao || "");
+  const [valor, setValor] = useState(maskBRL(String(Math.round((Number(titulo.valorPrevisto) || 0) * 100))));
+  const [comp, setComp] = useState((titulo.dataCompetencia || "").slice(0, 10));
+  const [venc, setVenc] = useState((titulo.dataVencimento || "").slice(0, 10));
+  const [contaNome, setContaNome] = useState(titulo.contaNome || "");
+  const [obraNome, setObraNome] = useState(titulo.obraNome || "");
+  const [obs, setObs] = useState(titulo.observacoes || "");
+  const [clienteId, setClienteId] = useState(titulo.clienteId ? String(titulo.clienteId) : "");
+
+  const cliSel = useMemo(
+    () => clientesOpts.find((c: any) => String(c.id) === clienteId),
+    [clientesOpts, clienteId],
+  );
+
+  // obras ativas do cliente selecionado
+  const { data: obrasList } = (trpc as any).obras.listActive.useQuery(
+    { companyId },
+    { enabled: !!companyId },
+  );
+  const obrasDoCliente = useMemo(() => {
+    const list: any[] = Array.isArray(obrasList) ? obrasList : [];
+    if (!cliSel) return [] as { value: string; label: string }[];
+    const names = new Set<string>(cliSel.matchNames || []);
+    return list
+      .filter((o) => o.cliente && names.has(normName(o.cliente)))
+      .map((o) => ({ value: String(o.nome), label: String(o.nome) }));
+  }, [obrasList, cliSel]);
+
+  const valorNum = parseMaskBRL(valor);
+
+  function submit() {
+    if (!descricao.trim()) { toast({ title: "Informe a descrição", variant: "destructive" }); return; }
+    if (valorNum <= 0) { toast({ title: "Valor inválido", variant: "destructive" }); return; }
+    onSubmit({
+      id: titulo.id,
+      companyId,
+      descricao: descricao.trim(),
+      valorPrevisto: valorNum,
+      dataCompetencia: comp || undefined,
+      dataVencimento: venc || undefined,
+      contaNome: contaNome.trim() || undefined,
+      obraNome: obraNome.trim() || undefined,
+      observacoes: obs.trim() || undefined,
+      clienteId: cliSel ? cliSel.id : null,
+      clienteNome: cliSel ? cliSel.nome : null,
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-xl p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col">
+        <DialogHeader className="bg-gradient-to-r from-slate-600 to-slate-700 px-6 py-5 text-left space-y-1">
+          <DialogTitle className="flex items-center gap-3 text-white">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/20 ring-1 ring-white/30">
+              <Pencil className="h-5 w-5" />
+            </span>
+            <span className="text-lg font-semibold">Editar título a receber</span>
+          </DialogTitle>
+          <p className="text-[13px] text-slate-200/90 pl-12 break-words">{titulo.descricao || titulo.origemDescricao || "Título"}</p>
+        </DialogHeader>
+
+        <div className="overflow-y-auto px-6 py-4 space-y-4">
+          {/* Cliente */}
+          <div>
+            <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-slate-500" /> Cliente</Label>
+            <Combobox
+              value={clienteId}
+              onChange={setClienteId}
+              options={clientesOpts.map((c: any) => ({ value: String(c.id), label: c.nome }))}
+              placeholder="Selecione o cliente"
+              searchPlaceholder="Buscar cliente..."
+              emptyText="Nenhum cliente encontrado."
+            />
+          </div>
+
+          {/* Descrição */}
+          <div>
+            <Label className="text-xs font-medium text-slate-600">Descrição</Label>
+            <Input className="mt-1" value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Descrição do título" />
+          </div>
+
+          {/* Valor */}
+          <div>
+            <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Wallet className="h-3.5 w-3.5 text-slate-500" /> Valor</Label>
+            <Input
+              className="mt-1 tabular-nums"
+              inputMode="numeric"
+              value={valor}
+              onChange={(e) => setValor(maskBRL(e.target.value))}
+              placeholder="R$ 0,00"
+            />
+          </div>
+
+          {/* Competência + Vencimento */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-slate-500" /> Competência</Label>
+              <Input type="date" className="mt-1" value={comp} onChange={(e) => setComp(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-slate-500" /> Vencimento</Label>
+              <Input type="date" className="mt-1" value={venc} onChange={(e) => setVenc(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Categoria + Obra */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Tag className="h-3.5 w-3.5 text-slate-500" /> Categoria</Label>
+              <Select value={contaNome} onValueChange={setContaNome}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIAS_RECEBER.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-slate-500" /> Obra</Label>
+              {obrasDoCliente.length > 0 ? (
+                <Combobox
+                  value={obraNome}
+                  onChange={setObraNome}
+                  options={obrasDoCliente}
+                  placeholder="Selecione a obra"
+                  searchPlaceholder="Buscar obra..."
+                  emptyText="Nenhuma obra ativa."
+                />
+              ) : (
+                <Input className="mt-1" value={obraNome} onChange={(e) => setObraNome(e.target.value)} placeholder="Nome da obra (opcional)" />
+              )}
+            </div>
+          </div>
+
+          {/* Observações */}
+          <div>
+            <Label className="text-xs font-medium text-slate-600">Observações</Label>
+            <Textarea className="mt-1" value={obs} onChange={(e) => setObs(e.target.value)} rows={2} placeholder="Detalhes adicionais (opcional)" />
+          </div>
+        </div>
+
+        <DialogFooter className="border-t border-slate-100 px-6 py-3 bg-slate-50/50">
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={submit} disabled={pending} className="bg-slate-700 hover:bg-slate-800">
+            {pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Salvar alterações
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

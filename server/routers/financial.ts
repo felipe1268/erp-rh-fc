@@ -4375,6 +4375,8 @@ export const financialRouter = router({
     observacoes: z.string().optional(),
     natureza: z.string().optional(),
     tipo: z.string().optional(),
+    clienteId: z.number().nullable().optional(),
+    clienteNome: z.string().nullable().optional(),
   })).mutation(async ({ input, ctx }) => {
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
@@ -4420,6 +4422,8 @@ export const financialRouter = router({
     if (input.observacoes !== undefined) push("observacoes", input.observacoes || null);
     if (input.natureza !== undefined) push("natureza", input.natureza);
     if (input.tipo !== undefined) push("tipo", input.tipo);
+    if (input.clienteId !== undefined) push("cliente_id", input.clienteId ?? null);
+    if (input.clienteNome !== undefined) push("cliente_nome", input.clienteNome?.trim() || null);
     if (sets.length === 0) return { ok: true, changed: false };
     // Rev. 2661 — registra QUEM editou e QUANDO no próprio título.
     push("editado_por_id", ctx.user?.id ?? null);
