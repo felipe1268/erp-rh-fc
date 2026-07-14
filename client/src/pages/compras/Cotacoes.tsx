@@ -5170,7 +5170,7 @@ export default function Cotacoes() {
                                 </div>
                               </th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-2 py-2 w-12 border-r border-gray-200 bg-gray-50">Un.</th>
-                              <th colSpan={3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">
+                              <th colSpan={((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote' ? 4 : 3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">
                                 {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'servico'
                                   ? "Meta MDO (Orçamento)"
                                   : ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote'
@@ -5521,7 +5521,14 @@ export default function Cotacoes() {
                             <tr className="border-b border-gray-300 bg-gray-50">
                               <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28">Preço Unit.</th>
                               <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-20">QTD</th>
-                              <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28 border-r border-blue-100">Total Meta</th>
+                              {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote' ? (
+                                <>
+                                  <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28">Total MAT</th>
+                                  <th className="text-right text-xs font-medium text-orange-500 px-3 py-2 bg-orange-50/40 w-28 border-r border-blue-100">Total MDO</th>
+                                </>
+                              ) : (
+                                <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28 border-r border-blue-100">Total Meta</th>
+                              )}
                               {(mapa?.participantes ?? []).map((p: any) => {
                                 const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
                                 const baseCls = isMelhor ? "text-emerald-600 bg-emerald-50/40" : "text-gray-500";
@@ -5801,24 +5808,25 @@ export default function Cotacoes() {
                                   <td className="px-3 py-2 text-blue-600 text-xs text-right bg-blue-50/30">
                                     {metaQtdVal > 0 ? metaQtdVal.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
                                   </td>
-                                  <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold border-r border-blue-100">
-                                    {showPacoteMatMdo ? (
-                                      <div className="flex flex-col items-end gap-0.5">
-                                        {pacoteMetaMat > 0 && (
-                                          <div className="flex items-center justify-end gap-1">
-                                            <span className="text-[9px] text-blue-500 font-bold">MAT</span>
-                                            <span className="text-blue-700">{pacoteMetaMat.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                                          </div>
-                                        )}
-                                        {pacoteMetaMdo > 0 && (
-                                          <div className="flex items-center justify-end gap-1">
-                                            <span className="text-[9px] text-orange-500 font-bold">MDO</span>
-                                            <span className="text-orange-700">{pacoteMetaMdo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
-                                  </td>
+                                  {isPacoteTipoMapa ? (() => {
+                                    // Para pacote: 2 colunas separadas MAT | MDO
+                                    const matVal = showPacoteMatMdo ? pacoteMetaMat : Math.round(parseFloat(it.metaUnitarioMat ?? "0") * metaQtdVal * 100) / 100;
+                                    const mdoVal = showPacoteMatMdo ? pacoteMetaMdo : Math.round(parseFloat(it.metaUnitarioMdo ?? "0") * metaQtdVal * 100) / 100;
+                                    return (
+                                      <>
+                                        <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold">
+                                          {matVal > 0 ? matVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-orange-700 text-xs text-right bg-orange-50/20 font-semibold border-r border-blue-100">
+                                          {mdoVal > 0 ? mdoVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                        </td>
+                                      </>
+                                    );
+                                  })() : (
+                                    <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold border-r border-blue-100">
+                                      {metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                    </td>
+                                  )}
                                   {/* Saldo Orçamentário — coluna única condensada */}
                                   {(() => {
                                     const orcada = (it as any).qtdOrcada ?? 0;
