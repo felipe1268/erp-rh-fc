@@ -50,11 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4239** — **ALMOXARIFADO: FIX VISUAL "QTD NÃO PERSISTE" — AVISO DE AGRUPAMENTO.** Causa raiz: card exibe SOMA de todos os sub-items agrupados por nome+unidade; o dialog editava apenas `_subItems[0]`. Fix: novo estado `editandoSubItems`; painel azul no campo "Corrigir Estoque Atual" mostra lista de cada sub-item (código + qtd), destaca o que está sendo editado e exibe o total que aparece no card. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4238** — **SCORECARD COMPRAS: SEPARAÇÃO LOCAÇÕES × EQUIP. PRÓPRIOS.** Query de locações reescrita: fonte primária = `almoxarifado_itens tipo='locado'` + LEFT JOIN `equipamentos_locados`; ferramentasAlmox exclui `tipo='locado'`; tab renomeada "Equip. Próprios". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Fórmula: Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível (Lucro Bruto); Linha 2 condicional quando deduções configuradas. Sem deduções: Lucro Bruto em verde com CTA. PainelOrcamento: "Lucro Médio Mensal" renomeado para "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4236** — **SCORECARD SST: LIGHTBOX NO TOP 5 MAIS ATESTADOS.** Estende o lightbox de foto (Rev. 4234) para o bloco "Top 5 — Mais Atestados" — clicar na foto/avatar abre Dialog de ampliação. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4235** — **SCORECARD SST: CUSTO PROPORCIONAL PARA ATESTADOS EM HORAS.** Atestados com `horas_afastamento>0` e `diasAfastamento=0` agora calculam custo: `(salário×1,33 + benef) ÷ dias_mês ÷ 8h × horas`. Backend: `custo_horas` adicionado ao Q12. Frontend: badge teal "Xh" + label "proporcional" na coluna Dias; custo em teal com "Xh × valor/h" na coluna Total. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -76,6 +76,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
+- **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível; Linha 2 condicional. PainelOrcamento: "Lucro Médio Mensal" → "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4226** — **SCORECARD SST: FIX CAST TIPOS — valor_produto NUMERIC + salarioBase VARCHAR.** REPLACE(numeric_col) quebra silenciosamente; epis.valor_produto é NUMERIC → COALESCE(ep.valor_produto,0); employees.salarioBase é VARCHAR → REPLACE(COALESCE,'0'),',','.'). Q6/Q7/Q12/Q13 corrigidos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4225** — **SCORECARD SST: FIX FILTRO PERÍODO + CUSTO EPI + GRÁFICOS HISTÓRICO.** 5 bugs cirúrgicos: Q4/Q5 sem filtro de data, Q6 custo_estimado vs custo_total, Q6+Q7 sem período, Q13 valor_produto::numeric sem REPLACE. ZERO DELETE · ZERO ALTER destrutivo.
@@ -83,8 +85,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4224** — **SCORECARD SST: REDESIGN COMPLETO — DASHBOARD RICO COM 12 BLOCOS INTERATIVOS.** 2×4 KPI Hero Cards, Gauge ASO, Treinamentos, Custo Atestados, 6 mini-gráficos, EPI Curva ABC. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4223** — **SCORECARD SST: FIX COLUNAS CAMELCASE + NOVA PÁGINA "GESTOR SST POR OBRA".** Corrigidas Q1/Q3/Q4/Q6/Q7/Q8/Q13. Nova página `/sst/gestor-por-obra`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4221** — **SCORECARD SST: REDESIGN COMPLETO — ABA "SEGURANÇA" → "🦺 SST".** Fix bolinhas PeriodSelectorCard. Q14 backend estoque EPI. Dashboard EPI: gráficos, Curva ABC, Top 5 maior/menor uso c/ foto. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

@@ -1072,6 +1072,7 @@ export default function AlmoxarifadoPage() {
   // ── Modal Item ──────────────────────────────────────────────────
   const [modalItem, setModalItem] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [editandoSubItems, setEditandoSubItems] = useState<any[] | null>(null);
   const [editandoMeta, setEditandoMeta] = useState<{
     criadoPorNome?: string | null; criadoEm?: string | null;
     atualizadoPorNome?: string | null; atualizadoEm?: string | null;
@@ -1084,13 +1085,15 @@ export default function AlmoxarifadoPage() {
   const [categoriaAutoSugerida, setCategoriaAutoSugerida] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
-  function abrirNovo() { setFormItem({ ...EMPTY_ITEM }); setEditandoId(null); setEditandoMeta(null); setCamposPreenchidosIA(false); setCategoriaManualment(false); setCategoriaAutoSugerida(false); setModalItem(true); }
+  function abrirNovo() { setFormItem({ ...EMPTY_ITEM }); setEditandoId(null); setEditandoSubItems(null); setEditandoMeta(null); setCamposPreenchidosIA(false); setCategoriaManualment(false); setCategoriaAutoSugerida(false); setModalItem(true); }
   function resolveRealItem(i: any) {
     return i._subItems && i._subItems.length > 1 ? i._subItems[0] : i;
   }
 
   function abrirEditar(i: any) {
     const real = resolveRealItem(i);
+    const subs = i._subItems && i._subItems.length > 1 ? i._subItems : null;
+    setEditandoSubItems(subs);
     setFormItem({
       nome: real.nome, unidade: real.unidade, categoria: real.categoria ?? "", codigoInterno: real.codigoInterno ?? "",
       quantidadeAtual: n(real.quantidadeAtual) ? String(n(real.quantidadeAtual)) : "",
@@ -3157,6 +3160,31 @@ export default function AlmoxarifadoPage() {
                         placeholder="0"
                         onChange={e => setFormItem(p => ({ ...p, quantidadeAtual: e.target.value }))}
                       />
+                      {editandoId && editandoSubItems && editandoSubItems.length > 1 && (
+                        <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5">
+                          <p className="text-[11px] font-semibold text-blue-700 mb-1.5">
+                            ℹ️ Este item aparece em {editandoSubItems.length} registros distintos — o card exibe a SOMA de todos.
+                          </p>
+                          <p className="text-[10px] text-blue-600 mb-1.5 leading-snug">
+                            Você está editando apenas <strong>{formItem.codigoInterno || "este registro"}</strong>. Os demais permanecem inalterados.
+                          </p>
+                          <div className="space-y-0.5">
+                            {editandoSubItems.map((s: any, idx: number) => {
+                              const isEste = s.id === editandoId;
+                              return (
+                                <div key={s.id} className={`flex items-center justify-between text-[10px] rounded px-1.5 py-0.5 ${isEste ? "bg-blue-200 font-semibold text-blue-900" : "text-blue-700"}`}>
+                                  <span className="truncate max-w-[60%]">{s.codigoInterno || `Registro ${idx + 1}`}</span>
+                                  <span className="font-mono ml-1 shrink-0">{n(s.quantidadeAtual)} {s.unidade}</span>
+                                </div>
+                              );
+                            })}
+                            <div className="flex items-center justify-between text-[10px] border-t border-blue-300 mt-1 pt-1 font-semibold text-blue-800">
+                              <span>Total (exibido no card)</span>
+                              <span className="font-mono">{editandoSubItems.reduce((acc: number, s: any) => acc + n(s.quantidadeAtual), 0)} {editandoSubItems[0]?.unidade}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

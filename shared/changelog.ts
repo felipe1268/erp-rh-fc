@@ -1,4 +1,33 @@
 /**
+ * Rev. 4239 - ALMOXARIFADO: FIX VISUAL "QTD NÃO PERSISTE" — AVISO DE AGRUPAMENTO NO DIALOG DE EDIÇÃO.
+ *
+ * PROBLEMA: O usuário salvava qty=4 mas o card continuava exibindo um número maior. A correção
+ * era persistida corretamente no banco, mas o card mostra a SOMA de todos os sub-items agrupados
+ * pelo mesmo nome+unidade (ex: "Martelete 02,5kg" em 4 obras → total 13 un). Ao editar, o dialog
+ * abre com _subItems[0].quantidadeAtual (4 un) e salva corretamente esse registro — porém o total
+ * do card só cai de N para N-diferença, jamais para 4, porque os outros sub-items permanecem.
+ *
+ * CAUSA RAIZ: Grouping logic (linha ~1017) agrupa por normNomeItem()+unidade, independente de
+ * codigoInterno. O card exibe qtdTotal = arr.reduce(sum). resolveRealItem() retorna _subItems[0].
+ * O usuário não sabia que o valor no dialog era o da entrada específica, não o total.
+ *
+ * CORREÇÃO: Quando abrirEditar() é chamado em um item agrupado (_subItems.length > 1):
+ *   1. Grava o array completo em estado `editandoSubItems`.
+ *   2. No campo "Corrigir Estoque Atual" do dialog, exibe painel azul explicando:
+ *      - Quantos registros distintos existem
+ *      - Lista de cada sub-item (código + qtd individual), destacando o que está sendo editado
+ *      - Total exibido no card (soma de todos)
+ *
+ * MUDANÇAS: client/src/pages/almoxarifado/index.tsx
+ *   - Estado `editandoSubItems: any[] | null` adicionado
+ *   - abrirNovo() limpa editandoSubItems
+ *   - abrirEditar() grava _subItems (ou null se não agrupado)
+ *   - Dialog: painel informativo azul sob o input de qty quando editandoSubItems != null
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4238 - SCORECARD COMPRAS: SEPARAÇÃO LOCAÇÕES × EQUIP. PRÓPRIOS.
  *
  * PROBLEMA: A aba "Ferramentas Almox" listava itens com badge "Locado" misturados

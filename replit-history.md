@@ -1,3 +1,4 @@
+- **Rev. 4221** — **SCORECARD SST: REDESIGN COMPLETO — ABA "SEGURANÇA" → "🦺 SST".** Fix bolinhas PeriodSelectorCard. Q14 backend estoque EPI. Dashboard EPI: gráficos, Curva ABC, Top 5 maior/menor uso c/ foto. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4216** — **SCORECARD: SEGURANÇA — GRADE CLT COM STATUS, DESLIGADOS VISÍVEIS, CIPA, PERÍODO EXPERIÊNCIA.** Q1 sem filtro status. Badges: Status · Exp. 1º/2º · CIPA · ASO · Advertências. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4214** — **SCORECARD: ABA SEGURANÇA — APR, PT, DDS, ACIDENTES E ATESTADOS.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4213** — **SCORECARD + EQUIPE: FIX RAMO A + BADGE "VEIO DA OBRA X".** ZERO DELETE · ZERO ALTER destrutivo.
