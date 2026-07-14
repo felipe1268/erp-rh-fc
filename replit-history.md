@@ -1,3 +1,4 @@
+- **Rev. 4242** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `EXTRACT(days FROM integer)` NÃO EXISTE NO POSTGRES.** Fix: removido `EXTRACT(days FROM ...)` nas 2 ocorrências — subtração de datas já é integer. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4241** — **SCORECARD COMPRAS: FIX LOCAÇÕES — TYPE MISMATCH VARCHAR vs DATE NA UNION ALL.** `COALESCE(el.data_inicio [VARCHAR], ai.criado_em::date [DATE])` quebra silenciosamente; fix: `to_char` (TEXT) + cast explícito na aritmética. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4240** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `origem='alugado'` + ícone 🔑.** Ramo A ampliado com `OR ai.origem='alugado'`; ferramentasAlmox exclui alugado; 🚜 → 🔑. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4224** — **SCORECARD SST: REDESIGN COMPLETO — DASHBOARD RICO COM 12 BLOCOS INTERATIVOS.** 2×4 KPI Hero Cards, Gauge ASO, Treinamentos, Custo Atestados, 6 mini-gráficos, EPI Curva ABC. ZERO DELETE · ZERO ALTER destrutivo.

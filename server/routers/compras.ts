@@ -6326,10 +6326,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, metaQtd, eapPath, parentEapDescricao, parentEapCodigo, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: avulsoStaleCot ? false : ((it as any).semVerba ?? false), motivoSemVerba: avulsoStaleCot ? null : ((it as any).motivoSemVerba ?? null), incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: compCode, composicaoDescricao: compInfo?.descricao ?? "", composicaoUnidade: compInfo?.unidade ?? "", composicaoQtdOrcada: compInfo?.qtdOrcada ?? 0, composicaoMetaTotal: compInfo?.metaTotal ?? 0, composicaoEapCodigo: compInfo?.eapCodigo ?? "" };
       });
 
-      const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};
+      const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string; totalMat: string | null; totalMdo: string | null }> = {};
       for (const r of respostas) respostaMap[`${r.itemId}_${r.fornecedorId}`] = {
         precoUnitario: r.precoUnitario ?? "0", descontoPct: r.descontoPct ?? "0", total: r.total ?? "0",
         quantidade: r.quantidade ?? "0",
+        totalMat: (r as any).totalMat ?? null, totalMdo: (r as any).totalMdo ?? null,
       };
       const totaisPorFornecedor: Record<number, number> = {};
       for (const p of participantes) {
@@ -6808,6 +6809,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         descontoPct: z.number().optional(),
         quantidade: z.number().optional(),
         totalOverride: z.number().optional(), // Rev. 4252 — total exato negociado (evita drift de arredondamento)
+        totalMat: z.number().optional(),      // Rev. 4253 — split MAT exato para cotações tipo serviço
+        totalMdo: z.number().optional(),      // Rev. 4253 — split MDO exato para cotações tipo serviço
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -6832,14 +6835,18 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const totalCalc = qty * r.precoUnitario * (1 - desc / 100);
         const total = (r.totalOverride !== undefined && r.totalOverride > 0) ? r.totalOverride : totalCalc;
         totalForn += total;
+        const totalMatStr = r.totalMat != null ? String(r.totalMat.toFixed(2)) : null;
+        const totalMdoStr = r.totalMdo != null ? String(r.totalMdo.toFixed(2)) : null;
         await db.insert(comprasCotacaoRespostas).values({
           cotacaoId: input.cotacaoId, fornecedorId: input.fornecedorId, itemId: r.itemId,
           propostaId: input.propostaId ?? null,
           quantidade: String(qty), precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
-        }).onConflictDoUpdate({ target: [comprasCotacaoRespostas.cotacaoId, comprasCotacaoRespostas.fornecedorId, comprasCotacaoRespostas.itemId], set: {
+          totalMat: totalMatStr, totalMdo: totalMdoStr,
+        } as any).onConflictDoUpdate({ target: [comprasCotacaoRespostas.cotacaoId, comprasCotacaoRespostas.fornecedorId, comprasCotacaoRespostas.itemId], set: {
           quantidade: String(qty), precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
           propostaId: input.propostaId ?? null,
-        }});
+          totalMat: totalMatStr, totalMdo: totalMdoStr,
+        } as any});
       }
       const valorFrete = n(input.valorFrete);
       const isFob = (input.freteTipo ?? "cif") === "fob";

@@ -5308,6 +5308,18 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4243: somente_mo garantida em compras_solicitacoes_itens + compras_cotacoes_itens.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4243 somente_mo:", e?.message || e); }
 
+        try {
+          await db.execute(sql`ALTER TABLE compras_cotacao_respostas ADD COLUMN IF NOT EXISTS total_mat NUMERIC(18,2)`);
+          await db.execute(sql`ALTER TABLE compras_cotacao_respostas ADD COLUMN IF NOT EXISTS total_mdo NUMERIC(18,2)`);
+          await db.execute(sql`ALTER TABLE terceiro_contrato_itens ADD COLUMN IF NOT EXISTS vlr_mat NUMERIC(18,2)`);
+          await db.execute(sql`ALTER TABLE terceiro_contrato_itens ADD COLUMN IF NOT EXISTS vlr_mdo NUMERIC(18,2)`);
+          await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS valor_mat_periodo NUMERIC(18,2) DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS valor_mdo_periodo NUMERIC(18,2) DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS valor_mat_acumulado NUMERIC(18,2) DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS valor_mdo_acumulado NUMERIC(18,2) DEFAULT 0`);
+          console.log("[SyncSchema+] Rev. 4253: colunas MAT/MDO garantidas em cotacao_respostas + contrato_itens + medicao_itens.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4253 MAT/MDO:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

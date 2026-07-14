@@ -2416,8 +2416,22 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                                   {BRL(item.valorMedidoPeriodo)}
                                 </span>
                               )}
+                              {(parseFloat((item as any).valorMatPeriodo ?? "0") > 0 || parseFloat((item as any).valorMdoPeriodo ?? "0") > 0) && (
+                                <div className="flex flex-col items-end gap-0 mt-0.5">
+                                  <span className="text-[9px] text-blue-500 font-medium">MAT {BRL((item as any).valorMatPeriodo)}</span>
+                                  <span className="text-[9px] text-orange-500 font-medium">MDO {BRL((item as any).valorMdoPeriodo)}</span>
+                                </div>
+                              )}
                             </td>
-                            <td className="px-2 py-2 text-right font-semibold text-gray-900">{BRL(item.valorAcumulado)}</td>
+                            <td className="px-2 py-2 text-right font-semibold text-gray-900">
+                              {BRL(item.valorAcumulado)}
+                              {(parseFloat((item as any).valorMatAcumulado ?? "0") > 0 || parseFloat((item as any).valorMdoAcumulado ?? "0") > 0) && (
+                                <div className="flex flex-col items-end gap-0 mt-0.5">
+                                  <span className="text-[9px] text-blue-500 font-medium">MAT {BRL((item as any).valorMatAcumulado)}</span>
+                                  <span className="text-[9px] text-orange-500 font-medium">MDO {BRL((item as any).valorMdoAcumulado)}</span>
+                                </div>
+                              )}
+                            </td>
                             {mostrarRemover && (
                               <td className="px-2 py-2 text-center">
                                 <button onClick={() => { if (confirm("Remover este item da medição?")) removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id }); }}

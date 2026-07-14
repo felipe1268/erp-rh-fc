@@ -983,6 +983,7 @@ export default function Cotacoes() {
   const [buscandoCnpjForn, setBuscandoCnpjForn] = useState(false);
   const [cnpjFornErro, setCnpjFornErro] = useState<string | null>(null);
   const [editPrecos, setEditPrecos] = useState<Record<string, string>>({});
+  const [editMatMdo, setEditMatMdo] = useState<Record<string, { mat: string; mdo: string }>>({});
   const [editTotaisOverride, setEditTotaisOverride] = useState<Record<string, number>>({});
   const [editQtds, setEditQtds] = useState<Record<string, string>>({});
   const [editPrazo, setEditPrazo] = useState<Record<number, string>>({});
@@ -1635,12 +1636,19 @@ export default function Cotacoes() {
       }
 
       // Sobrescrever com respostas já salvas (têm prioridade)
+      const inicialMatMdo: Record<string, { mat: string; mdo: string }> = {};
       for (const [key, val] of Object.entries(mapaQ.data.respostaMap)) {
         if ((val as any).precoUnitario != null) {
           inicialPrecos[key] = (val as any).precoUnitario ?? "0";
           inicialQtds[key] = (val as any).quantidade ?? inicialQtds[key] ?? "0";
         }
+        const tm = (val as any).totalMat;
+        const td = (val as any).totalMdo;
+        if (tm != null || td != null) {
+          inicialMatMdo[key] = { mat: tm != null ? String(parseFloat(tm)) : "0", mdo: td != null ? String(parseFloat(td)) : "0" };
+        }
       }
+      setEditMatMdo(inicialMatMdo);
 
       const tipoPagInicial: Record<number, string> = {};
       const formaPagInicial: Record<number, string> = {};
@@ -3442,16 +3450,22 @@ export default function Cotacoes() {
           respostas.push({ itemId: it.id, precoUnitario: parseFloat(editPrecos[key] ?? "0") || 0, descontoPct: 0, quantidade: qty, totalOverride: editTotaisOverride[key] });
         }
       } else {
+        const tipoEfetivoSalvar = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo);
         respostas = mapa.itens.map((it: any) => {
           const key = `${it.id}_${fornecedorId}`;
           const qtyStr = editQtds[key];
           const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
+          const matVal = tipoEfetivoSalvar === "servico" ? (parseFloat(editMatMdo[key]?.mat ?? "0") || 0) : 0;
+          const mdoVal = tipoEfetivoSalvar === "servico" ? (parseFloat(editMatMdo[key]?.mdo ?? "0") || 0) : 0;
+          const matMdoTotal = matVal + mdoVal;
           return {
             itemId: it.id,
-            precoUnitario: parseFloat(editPrecos[key] ?? "0") || 0,
+            precoUnitario: matMdoTotal > 0 && qty > 0 ? matMdoTotal / qty : parseFloat(editPrecos[key] ?? "0") || 0,
             descontoPct: 0,
             quantidade: qty,
-            totalOverride: editTotaisOverride[key], // Rev. 4252 — valor exato negociado
+            totalOverride: matMdoTotal > 0 ? matMdoTotal : editTotaisOverride[key],
+            totalMat: matVal > 0 ? matVal : undefined,
+            totalMdo: mdoVal > 0 ? mdoVal : undefined,
           };
         });
       }
@@ -5874,17 +5888,70 @@ export default function Cotacoes() {
                                           )}
                                         </td>
                                         <td key={`preco_${p.fornecedorId}`} className={`px-1 py-1 text-right border-r border-gray-100 ${rowCls} ${isBest ? "bg-emerald-50" : ""}`}>
-                                          {isEditing ? (
-                                            <Input type="number" step="0.01" min="0"
-                                              value={editPrecos[key] ?? ""}
-                                              onChange={e => handleGroupedPrecoChange(e.target.value)}
-                                              className={`h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-32 ml-auto ${isBest ? "border-emerald-400" : ""}`}
-                                              placeholder="0,00" />
-                                          ) : (
-                                            <span className={`text-xs font-medium ${isBest ? "text-emerald-700 font-bold" : "text-gray-700"}`}>
-                                              {displayPreco > 0 ? displayPreco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
-                                            </span>
-                                          )}
+                                          {(() => {
+                                            const isServico = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === "servico";
+                                            const canMatMdo = isServico && !it._isPacoteGroup && !it._grouped;
+                                            const savedMat = parseFloat((mapa?.respostaMap?.[key] as any)?.totalMat ?? "0");
+                                            const savedMdo = parseFloat((mapa?.respostaMap?.[key] as any)?.totalMdo ?? "0");
+                                            if (isEditing && canMatMdo) {
+                                              return (
+                                                <div className="flex flex-col gap-0.5 items-end">
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-[9px] text-blue-600 font-bold w-7 text-right">MAT</span>
+                                                    <Input type="number" step="0.01" min="0"
+                                                      value={editMatMdo[key]?.mat ?? ""}
+                                                      onChange={e => {
+                                                        const mat = parseFloat(e.target.value) || 0;
+                                                        const mdo = parseFloat(editMatMdo[key]?.mdo ?? "0") || 0;
+                                                        setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: "0", mdo: "0" }), mat: e.target.value } }));
+                                                        setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
+                                                      }}
+                                                      className="h-6 text-xs text-right border-blue-300 bg-white text-gray-900 w-24" placeholder="0,00" />
+                                                  </div>
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-[9px] text-orange-600 font-bold w-7 text-right">MDO</span>
+                                                    <Input type="number" step="0.01" min="0"
+                                                      value={editMatMdo[key]?.mdo ?? ""}
+                                                      onChange={e => {
+                                                        const mdo = parseFloat(e.target.value) || 0;
+                                                        const mat = parseFloat(editMatMdo[key]?.mat ?? "0") || 0;
+                                                        setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: "0", mdo: "0" }), mdo: e.target.value } }));
+                                                        setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
+                                                      }}
+                                                      className="h-6 text-xs text-right border-orange-300 bg-white text-gray-900 w-24" placeholder="0,00" />
+                                                  </div>
+                                                </div>
+                                              );
+                                            }
+                                            if (isEditing) {
+                                              return (
+                                                <Input type="number" step="0.01" min="0"
+                                                  value={editPrecos[key] ?? ""}
+                                                  onChange={e => handleGroupedPrecoChange(e.target.value)}
+                                                  className={`h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-32 ml-auto ${isBest ? "border-emerald-400" : ""}`}
+                                                  placeholder="0,00" />
+                                              );
+                                            }
+                                            if (canMatMdo && (savedMat > 0 || savedMdo > 0)) {
+                                              return (
+                                                <div className="flex flex-col items-end gap-0">
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-[9px] text-blue-500 font-bold">MAT</span>
+                                                    <span className="text-xs text-gray-700">{savedMat > 0 ? savedMat.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}</span>
+                                                  </div>
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-[9px] text-orange-500 font-bold">MDO</span>
+                                                    <span className="text-xs text-gray-700">{savedMdo > 0 ? savedMdo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}</span>
+                                                  </div>
+                                                </div>
+                                              );
+                                            }
+                                            return (
+                                              <span className={`text-xs font-medium ${isBest ? "text-emerald-700 font-bold" : "text-gray-700"}`}>
+                                                {displayPreco > 0 ? displayPreco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                              </span>
+                                            );
+                                          })()}
                                         </td>
                                         <td key={`tot_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-100 ${rowCls} ${isBest ? "bg-emerald-50" : ""} ${vencedorPorItem[it.id] === p.fornecedorId ? "ring-1 ring-inset ring-emerald-400" : ""}`}>
                                           <div className="flex items-center justify-end gap-1">

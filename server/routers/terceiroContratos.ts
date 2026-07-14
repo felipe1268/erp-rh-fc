@@ -1628,6 +1628,8 @@ export const terceiroContratosRouter = router({
         const percentualPeriodo = Math.max(0, percentualFisico - percentualAnterior);
         const valorPeriodo = (percentualPeriodo / 100) * n(item.valorTotal);
         const valorAcumuladoItem = (percentualFisico / 100) * n(item.valorTotal);
+        const vlrMatItem = n((item as any).vlrMat ?? "0");
+        const vlrMdoItem = n((item as any).vlrMdo ?? "0");
 
         valorMedidoPeriodo += valorPeriodo;
 
@@ -1640,6 +1642,10 @@ export const terceiroContratosRouter = router({
           percentualMedidoPeriodo: String(percentualPeriodo),
           valorMedidoPeriodo: String(valorPeriodo),
           valorAcumulado: String(valorAcumuladoItem),
+          valorMatPeriodo: String((percentualPeriodo / 100) * vlrMatItem),
+          valorMdoPeriodo: String((percentualPeriodo / 100) * vlrMdoItem),
+          valorMatAcumulado: String((percentualFisico / 100) * vlrMatItem),
+          valorMdoAcumulado: String((percentualFisico / 100) * vlrMdoItem),
         });
       }
 
@@ -1770,6 +1776,10 @@ export const terceiroContratosRouter = router({
           percentualMedidoPeriodo: "0",
           valorMedidoPeriodo: "0",
           valorAcumulado: String((percentualAnterior / 100) * n(item.valorTotal)),
+          valorMatPeriodo: "0",
+          valorMdoPeriodo: "0",
+          valorMatAcumulado: String((percentualAnterior / 100) * n((item as any).vlrMat ?? "0")),
+          valorMdoAcumulado: String((percentualAnterior / 100) * n((item as any).vlrMdo ?? "0")),
         } as any);
       }
 
@@ -2865,6 +2875,10 @@ export const terceiroContratosRouter = router({
       const novoPercentualFisico = percentualAnterior + novoPercentualPeriodo;
       const novoValorPeriodo = (novoPercentualPeriodo / 100) * n(contratoItem.valorTotal);
       const novoValorAcumulado = (novoPercentualFisico / 100) * n(contratoItem.valorTotal);
+      const novoValorMatPeriodo = (novoPercentualPeriodo / 100) * n((contratoItem as any).vlrMat ?? "0");
+      const novoValorMdoPeriodo = (novoPercentualPeriodo / 100) * n((contratoItem as any).vlrMdo ?? "0");
+      const novoValorMatAcumulado = (novoPercentualFisico / 100) * n((contratoItem as any).vlrMat ?? "0");
+      const novoValorMdoAcumulado = (novoPercentualFisico / 100) * n((contratoItem as any).vlrMdo ?? "0");
 
       const percentualFisicoRealAntes = n(item.percentualFisicoReal ?? item.percentualAvancoFisico);
       const fisicoRealPeriodo = Math.max(0, percentualFisicoRealAntes - percentualAnterior);
@@ -2875,6 +2889,10 @@ export const terceiroContratosRouter = router({
         percentualAvancoFisico: String(novoPercentualFisico),
         valorMedidoPeriodo: String(novoValorPeriodo),
         valorAcumulado: String(novoValorAcumulado),
+        valorMatPeriodo: String(novoValorMatPeriodo),
+        valorMdoPeriodo: String(novoValorMdoPeriodo),
+        valorMatAcumulado: String(novoValorMatAcumulado),
+        valorMdoAcumulado: String(novoValorMdoAcumulado),
         editadoManualmente: editadoManualmente,
         percentualFisicoReal: item.percentualFisicoReal ?? String(n(item.percentualAvancoFisico)),
       } as any).where(eq(terceiroMedicaoItens.id, input.medicaoItemId));
@@ -3658,15 +3676,19 @@ export const terceiroContratosRouter = router({
           precoUnitario: comprasCotacaoRespostas.precoUnitario,
           total: comprasCotacaoRespostas.total,
           quantidade: comprasCotacaoRespostas.quantidade,
+          totalMat: (comprasCotacaoRespostas as any).totalMat,
+          totalMdo: (comprasCotacaoRespostas as any).totalMdo,
         }).from(comprasCotacaoRespostas).where(
           and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId!))
         );
-        const respostaMap: Record<number, { precoUnitario: number; total: number; quantidade: number | null }> = {};
+        const respostaMap: Record<number, { precoUnitario: number; total: number; quantidade: number | null; totalMat: number; totalMdo: number }> = {};
         for (const r of respostas) {
           respostaMap[r.itemId] = {
             precoUnitario: parseFloat(String(r.precoUnitario || "0")),
             total: parseFloat(String(r.total || "0")),
             quantidade: r.quantidade ? parseFloat(String(r.quantidade)) : null,
+            totalMat: parseFloat(String((r as any).totalMat || "0")),
+            totalMdo: parseFloat(String((r as any).totalMdo || "0")),
           };
         }
 
@@ -3726,6 +3748,8 @@ export const terceiroContratosRouter = router({
               quantidade: String(qty),
               valorUnitario: String(precoUnit),
               valorTotal: String(totalItem),
+              vlrMat: resp?.totalMat ? String(resp.totalMat.toFixed(2)) : null,
+              vlrMdo: resp?.totalMdo ? String(resp.totalMdo.toFixed(2)) : null,
               eapCodigo: eap,
               orcamentoItemId: scInfo?.orcamentoItemId ?? null,
               planejamentoAtividadeId: eap && eapToAtividadeId[eap] ? eapToAtividadeId[eap] : (it.descricao && nomeToAtividadeIdLocal[it.descricao.trim().toLowerCase()] ? nomeToAtividadeIdLocal[it.descricao.trim().toLowerCase()] : null),

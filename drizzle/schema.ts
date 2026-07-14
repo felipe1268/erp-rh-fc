@@ -4319,6 +4319,8 @@ export const terceiroContratoItens = pgTable("terceiro_contrato_itens", {
   quantidade:          numeric({ precision: 18, scale: 4 }).default("1"),
   valorUnitario:       numeric("valor_unitario", { precision: 18, scale: 4 }).default("0"),
   valorTotal:          numeric("valor_total", { precision: 18, scale: 2 }).default("0"),
+  vlrMat:              numeric("vlr_mat", { precision: 18, scale: 2 }),
+  vlrMdo:              numeric("vlr_mdo", { precision: 18, scale: 2 }),
   percentualMedidoAcumulado: numeric("percentual_medido_acumulado", { precision: 8, scale: 4 }).default("0"),
   valorMedidoAcumulado: numeric("valor_medido_acumulado", { precision: 18, scale: 2 }).default("0"),
   ordem:               integer().default(0),
@@ -4443,6 +4445,10 @@ export const terceiroMedicaoItens = pgTable("terceiro_medicao_itens", {
   editadoManualmente:      boolean("editado_manualmente").default(false),
   valorMedidoPeriodo:       numeric("valor_medido_periodo", { precision: 18, scale: 2 }).default("0"),
   valorAcumulado:           numeric("valor_acumulado", { precision: 18, scale: 2 }).default("0"),
+  valorMatPeriodo:          numeric("valor_mat_periodo", { precision: 18, scale: 2 }).default("0"),
+  valorMdoPeriodo:          numeric("valor_mdo_periodo", { precision: 18, scale: 2 }).default("0"),
+  valorMatAcumulado:        numeric("valor_mat_acumulado", { precision: 18, scale: 2 }).default("0"),
+  valorMdoAcumulado:        numeric("valor_mdo_acumulado", { precision: 18, scale: 2 }).default("0"),
   observacoes:       text(),
   criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 });
@@ -6862,6 +6868,8 @@ export const comprasCotacaoRespostas = pgTable("compras_cotacao_respostas", {
   precoUnitario: numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
   descontoPct:   numeric("desconto_pct", { precision: 5, scale: 2 }).default("0"),
   total:         numeric({ precision: 14, scale: 2 }).default("0"),
+  totalMat:      numeric("total_mat", { precision: 18, scale: 2 }),
+  totalMdo:      numeric("total_mdo", { precision: 18, scale: 2 }),
   observacoes:   text(),
 });
 

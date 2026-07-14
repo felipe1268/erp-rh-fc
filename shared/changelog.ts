@@ -1,4 +1,49 @@
 /**
+ * Rev. 4253 - MAT/MDO EXATO NA PIPELINE COTAÇÃO → CONTRATO → MEDIÇÃO.
+ *
+ * OBJETIVO: valores exatos de Material (MAT) e Mão-de-Obra (MDO) informados
+ * no Mapa de Cotação devem fluir sem alteração até o Contrato de Terceiros e
+ * de lá propagar-se proporcionalmente nas Medições — sem perda, sem recálculo.
+ *
+ * SCHEMA (drizzle/schema.ts):
+ *   - `compras_cotacao_respostas`: + `total_mat numeric(18,2)` + `total_mdo numeric(18,2)`
+ *   - `terceiro_contrato_itens`: + `vlr_mat numeric(18,2)` + `vlr_mdo numeric(18,2)`
+ *   - `terceiro_medicao_itens`: + `valor_mat_periodo numeric(18,2)` + `valor_mdo_periodo`
+ *                               + `valor_mat_acumulado` + `valor_mdo_acumulado`
+ *   Todas as novas colunas são nullable/default 0 — ZERO ALTER destrutivo.
+ *
+ * BACKEND compras.ts (salvarRespostasLote):
+ *   Input z.schema ganha `totalMat?` e `totalMdo?` por resposta.
+ *   INSERT/onConflictDoUpdate persiste `total_mat` e `total_mdo`.
+ *   getMapaCotacao.respostaMap retorna `totalMat`/`totalMdo` para o front.
+ *
+ * BACKEND terceiroContratos.ts (gerarContratoFromCotacao):
+ *   SELECT de respostas inclui `totalMat`/`totalMdo`; respostaMap os carrega.
+ *   INSERT de `terceiro_contrato_itens` seta `vlrMat`/`vlrMdo` = valores da cotação.
+ *
+ * BACKEND terceiroContratos.ts (gerarMedicao, editarMedicaoItem, criarMedicaoManual):
+ *   Cada INSERT/UPDATE de `terceiro_medicao_itens` calcula:
+ *     valorMatPeriodo  = (percPeriodo / 100) × vlrMat do contrato
+ *     valorMdoPeriodo  = (percPeriodo / 100) × vlrMdo do contrato
+ *     valorMatAcumulado = (percFísico / 100) × vlrMat
+ *     valorMdoAcumulado = (percFísico / 100) × vlrMdo
+ *
+ * FRONTEND Cotacoes.tsx (mapa de cotação tipo "servico"):
+ *   Novo estado `editMatMdo: Record<string, {mat:string;mdo:string}>`.
+ *   Célula de preço: para cotações tipo "servico" mostra dois inputs empilhados
+ *   (MAT em azul, MDO em laranja) em vez do único campo de preço unitário.
+ *   `editPrecos[key]` é atualizado como mat+mdo para manter getFornTotal correto.
+ *   handleSalvarPrecos não-pacote: passa `totalMat`/`totalMdo` nas respostas.
+ *   Visualização não-edição: mostra MAT/MDO separados quando disponíveis.
+ *
+ * FRONTEND ContratoDetalhe.tsx (MedicoesTab):
+ *   Células "V.Período" e "V.Acum." exibem sub-linhas MAT (azul) e MDO (laranja)
+ *   quando `valorMatPeriodo > 0` — aparece automaticamente em contratos tipo servico.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4252 - FIX: VALOR NEGOCIADO EXATO — SEM QUEBRADOS POR ARREDONDAMENTO.
  *
  * BUG: ao aplicar "Valor Negociado" (Desconto/Acréscimo) no mapa de cotação,
