@@ -6414,6 +6414,33 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       return { ok: true };
     }),
 
+  excluirItensCotacao: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const items = await db.select({ cotacaoId: comprasCotacoesItens.cotacaoId })
+        .from(comprasCotacoesItens).where(inArray(comprasCotacoesItens.id, input.ids));
+      if (items.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
+      const cotacaoIds = [...new Set(items.map(i => i.cotacaoId))];
+      for (const cotId of cotacaoIds) {
+        const [cot] = await db.select({ companyId: comprasCotacoes.companyId, status: comprasCotacoes.status })
+          .from(comprasCotacoes).where(eq(comprasCotacoes.id, cotId));
+        if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+        await _assertCompanyAccess(ctx.user, cot.companyId);
+        if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação aprovada não pode ser editada." });
+      }
+      try {
+        const ocItens = await db.select({ id: comprasOrdensItens.id })
+          .from(comprasOrdensItens)
+          .innerJoin(comprasOrdens, and(eq(comprasOrdens.id, comprasOrdensItens.ordemId), sql`${comprasOrdens.status} != 'cancelada'`))
+          .where(inArray(comprasOrdensItens.cotacaoItemId, input.ids));
+        if (ocItens.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Um ou mais itens já estão em Ordens de Compra ativas e não podem ser excluídos." });
+      } catch (err: any) { if (err?.code === "BAD_REQUEST") throw err; }
+      await db.delete(comprasCotacaoRespostas).where(inArray(comprasCotacaoRespostas.itemId, input.ids));
+      await db.delete(comprasCotacoesItens).where(inArray(comprasCotacoesItens.id, input.ids));
+      return { ok: true, deleted: input.ids.length };
+    }),
+
   adicionarItemCotacao: protectedProcedure
     .input(z.object({
       cotacaoId: z.number(),

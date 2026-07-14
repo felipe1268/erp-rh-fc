@@ -1428,6 +1428,10 @@ export default function Cotacoes() {
     onSuccess: () => { toast.success("Item excluído!"); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const excluirItensCotacao = trpc.compras.excluirItensCotacao.useMutation({
+    onSuccess: (r) => { toast.success(`${r.deleted} ${r.deleted === 1 ? "item excluído" : "itens excluídos"}!`); mapaQ.refetch(); setMapaItemsChecked(new Set()); },
+    onError: (e) => toast.error(e.message),
+  });
   const adicionarItemCotacao = trpc.compras.adicionarItemCotacao.useMutation({
     onSuccess: () => { toast.success("Item incluído!"); mapaQ.refetch(); setAddItemDialog(false); setAddItemForm({ descricao: "", unidade: "un", quantidade: "1", somenteMo: false }); },
     onError: (e) => toast.error(e.message),
@@ -4942,40 +4946,57 @@ export default function Cotacoes() {
                     <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
                   ) : (mapa?.participantes ?? []).length === 0 ? null : (
                     <div className="space-y-2">
-                      {/* Toolbar de seleção de itens para cotação parcial */}
-                      {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && mapaItemsChecked.size > 0 && (
-                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-300 rounded-lg px-3 py-2">
+                      {/* Toolbar de seleção múltipla de itens */}
+                      {detalheFullscreen?.status === "pendente" && mapaItemsChecked.size > 0 && (
+                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-300 rounded-lg px-3 py-2 flex-wrap">
                           <span className="text-xs font-semibold text-blue-800">{mapaItemsChecked.size} {mapaItemsChecked.size === 1 ? "item selecionado" : "itens selecionados"}</span>
                           <div className="flex-1" />
-                          <select
-                            value={atribuirFornId}
-                            onChange={e => setAtribuirFornId(e.target.value)}
-                            className="text-xs border border-blue-300 rounded px-2 py-1 bg-white text-gray-800 focus:outline-none focus:border-blue-500"
-                          >
-                            <option value="">Selecionar fornecedor...</option>
-                            {(mapa?.participantes ?? []).map((p: any) => (
-                              <option key={p.fornecedorId} value={p.fornecedorId}>
-                                {p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`}
-                              </option>
-                            ))}
-                          </select>
+                          {/* Distribuir por fornecedor — só com ≥2 participantes */}
+                          {(mapa?.participantes ?? []).length >= 2 && (
+                            <>
+                              <select
+                                value={atribuirFornId}
+                                onChange={e => setAtribuirFornId(e.target.value)}
+                                className="text-xs border border-blue-300 rounded px-2 py-1 bg-white text-gray-800 focus:outline-none focus:border-blue-500"
+                              >
+                                <option value="">Selecionar fornecedor...</option>
+                                {(mapa?.participantes ?? []).map((p: any) => (
+                                  <option key={p.fornecedorId} value={p.fornecedorId}>
+                                    {p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                disabled={!atribuirFornId}
+                                onClick={() => {
+                                  if (!atribuirFornId) return;
+                                  const fornId = parseInt(atribuirFornId);
+                                  setVencedorPorItem(prev => {
+                                    const next = { ...prev };
+                                    mapaItemsChecked.forEach(id => { next[id] = fornId; });
+                                    return next;
+                                  });
+                                  setMapaItemsChecked(new Set());
+                                  setAtribuirFornId("");
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                              >
+                                <Check className="h-3.5 w-3.5" /> Fechar para fornecedor
+                              </button>
+                            </>
+                          )}
+                          {/* Excluir em lote — sempre disponível */}
                           <button
                             type="button"
-                            disabled={!atribuirFornId}
+                            disabled={excluirItensCotacao.isPending}
                             onClick={() => {
-                              if (!atribuirFornId) return;
-                              const fornId = parseInt(atribuirFornId);
-                              setVencedorPorItem(prev => {
-                                const next = { ...prev };
-                                mapaItemsChecked.forEach(id => { next[id] = fornId; });
-                                return next;
-                              });
-                              setMapaItemsChecked(new Set());
-                              setAtribuirFornId("");
+                              if (!confirm(`Excluir ${mapaItemsChecked.size} ${mapaItemsChecked.size === 1 ? "item" : "itens"} da cotação?`)) return;
+                              excluirItensCotacao.mutate({ ids: [...mapaItemsChecked] });
                             }}
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 transition-colors"
                           >
-                            <Check className="h-3.5 w-3.5" /> Fechar para fornecedor
+                            <Trash2 className="h-3.5 w-3.5" /> Excluir {mapaItemsChecked.size > 1 ? `${mapaItemsChecked.size} itens` : "item"}
                           </button>
                           <button
                             type="button"
@@ -5041,7 +5062,7 @@ export default function Cotacoes() {
                           <thead className="sticky top-0 z-20">
                             {/* Linha 1: nomes dos grupos de colunas */}
                             <tr className="border-b border-gray-200 bg-gray-50">
-                              {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && (() => {
+                              {detalheFullscreen?.status === "pendente" && (() => {
                                 const allItemIds = (mapa?.itens ?? []).map((it: any) => it.id) as number[];
                                 const allChecked = allItemIds.length > 0 && allItemIds.every(id => mapaItemsChecked.has(id));
                                 return (
@@ -5567,7 +5588,7 @@ export default function Cotacoes() {
                               return (
                                 <React.Fragment key={it.id}>
                                 <tr className={`group border-b border-gray-100 hover:bg-gray-50/60 ${it._isPacoteGroup ? "bg-indigo-50/30" : ""} ${mapaItemsChecked.has(it.id) ? "bg-blue-50/40" : ""}`}>
-                                  {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && (
+                                  {detalheFullscreen?.status === "pendente" && (
                                     <td className={`px-2 py-1 border-r border-gray-100 w-9 align-middle ${it._isPacoteGroup ? "bg-indigo-50/30" : mapaItemsChecked.has(it.id) ? "bg-blue-50" : "bg-white"}`}>
                                       <div className="flex flex-col items-center gap-1">
                                         <input

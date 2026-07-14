@@ -1,4 +1,30 @@
 /**
+ * Rev. 4248 - SELEÇÃO MÚLTIPLA PARA EXCLUSÃO EM LOTE NO MAPA DE COTAÇÃO.
+ *
+ * ESCOPO: Checkboxes de multi-seleção agora aparecem para TODAS as cotações
+ * pendentes (antes só com ≥2 fornecedores). Permite selecionar vários itens
+ * de uma vez e excluir em lote via um único clique.
+ *
+ * MUDANÇAS:
+ *   Backend (compras.ts):
+ *     - Nova procedure `excluirItensCotacao`: aceita array de IDs, valida
+ *       acesso por empresa, bloqueia itens em OC ativa, deleta respostas e
+ *       itens atomicamente.
+ *
+ *   Frontend (Cotacoes.tsx):
+ *     - `<th>` e `<td>` do checkbox: condição `>= 2 fornecedores` removida;
+ *       exibidos sempre que status = "pendente".
+ *     - Toolbar (antes gated em >= 2): agora aparece com qualquer seleção.
+ *       - Botão "Excluir N itens" (vermelho) sempre disponível.
+ *       - Distribuição por fornecedor ("Fechar para fornecedor") mantida
+ *         dentro de guard >= 2 (sem regressão).
+ *     - Mutation `excluirItensCotacao` com toast de confirmação e limpeza
+ *       da seleção no onSuccess.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4247 - FIX: EXCLUIR/EDITAR ITENS EM COTAÇÕES TIPO PACOTE.
  *
  * CAUSA RAIZ: A guard `!it._grouped` bloqueava os botões de Pencil + Trash tanto
