@@ -996,7 +996,10 @@ export const scorecardRouter = router({
             JOIN employees e ON e.id = a."employeeId"
             -- Salário bruto do mês via folha (payroll_payments), se disponível
             LEFT JOIN LATERAL (
-              SELECT REPLACE(NULLIF(TRIM(pp2."salarioBrutoMes"),''),',','.')::numeric AS salario_bruto
+              SELECT CASE WHEN pp2."salarioBrutoMes" LIKE '%,%'
+                THEN REPLACE(REPLACE(COALESCE(pp2."salarioBrutoMes",'0'),'.',''),',','.')::numeric
+                ELSE COALESCE(NULLIF(TRIM(pp2."salarioBrutoMes"),''),'0')::numeric
+              END AS salario_bruto
               FROM payroll_payments pp2
               WHERE pp2."employeeId"   = a."employeeId"
                 AND pp2."mesReferencia" = TO_CHAR(a."dataEmissao"::date, 'YYYY-MM')
@@ -1041,7 +1044,10 @@ export const scorecardRouter = router({
                      ROUND(SUM(
                        (
                          COALESCE(
-                           (SELECT REPLACE(NULLIF(TRIM(pp."salarioBrutoMes"),''),',','.')::numeric
+                           (SELECT CASE WHEN pp."salarioBrutoMes" LIKE '%,%'
+                             THEN REPLACE(REPLACE(COALESCE(pp."salarioBrutoMes",'0'),'.',''),',','.')::numeric
+                             ELSE COALESCE(NULLIF(TRIM(pp."salarioBrutoMes"),''),'0')::numeric
+                             END
                             FROM payroll_payments pp
                             WHERE pp."employeeId"    = a."employeeId"
                               AND pp."mesReferencia" = TO_CHAR(a."dataEmissao"::date, 'YYYY-MM')

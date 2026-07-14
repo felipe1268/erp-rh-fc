@@ -1,4 +1,37 @@
 /**
+ * Rev. 4232 - NORMALIZAÇÃO 100% DO BANCO — COLUNAS MONETÁRIAS VARCHAR: FORMATO MISTO EN→BR.
+ *
+ * CONTEXTO: Rev. 4231 corrigiu os PARSERS SQL para lidar com formato misto, mas os dados em si
+ * continuavam inconsistentes no Neon (parte em EN "2301.73", parte em BR "2.301,73").
+ * Essa revisão normaliza 100% dos dados — toda coluna monetária VARCHAR passa a usar
+ * exclusivamente o formato BR padrão ("2.301,73").
+ *
+ * AUDITORIA COMPLETA (8 tabelas, 17 colunas):
+ *   employees:            salarioBase (102 EN→BR), valorHora (97), valorComplemento (2)
+ *   employee_contracts:   salarioBase (1)
+ *   dissidio_funcionarios: salarioAnterior (97), salarioNovo (97), valorRetroativo (97) — 100% EN
+ *   termination_notices:  salarioBase (85), valorEstimadoTotal (84) — 100% EN
+ *   vacation_periods:     valorFerias (96), valorTotal (96), valorTercoConstitucional (96), valorAbono (12)
+ *   payroll_payments:     salarioBrutoMes (512), totalProventos (512), totalDescontos (512),
+ *                         salarioLiquido (512), + 11 colunas desconto/adicional
+ *
+ * COLUNAS JÁ OK (zero EN, não tocadas):
+ *   vr_benefits (valorTotal/valorDiario/valorCafe etc.), advances, employees.vaValor,
+ *   employees.pensaoValor, employees.auxFarmaciaValor, employee_contracts.valorHora,
+ *   vacation_periods.valor_liquido (já era BR)
+ *
+ * FÓRMULA DE CONVERSÃO (testada no Neon C.UTF-8):
+ *   translate(to_char(NULLIF(TRIM(col),'')::numeric, 'FM999G999G990.00'), '.,', ',.')
+ *   → C locale: G=',', ponto literal → to_char dá "2,301.73" → translate inverte → "2.301,73" ✓
+ *   WHERE col NOT LIKE '%,%' AND TRIM(COALESCE(col,'')) NOT IN ('','0')
+ *
+ * PÓS-FIX: scorecard.ts Q12/Q13 — parsers de payroll revertidos para smart CASE WHEN LIKE '%,%'
+ * (robusto para ambos os formatos, defensivo para qualquer dado futuro).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4231 - SCORECARD SST: FIX CUSTO ATESTADOS — PARSER MISTO salarioBase + salarioBrutoMes.
  *
  * CAUSA-RAIZ — Rev. 4229 introduziu dois bugs encadeados em Q12 e Q13 (scorecard.ts):
