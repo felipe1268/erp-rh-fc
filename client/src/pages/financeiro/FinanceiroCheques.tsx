@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect, lazy, Suspense } from "react";
+import { cn } from "@/lib/utils";
 const FinanceiroChequesRecebidos = lazy(() => import("./FinanceiroChequesRecebidos"));
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
