@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import RichTextEditor, { stripHtml, sanitizeHtml, isHtmlContent } from "@/components/RichTextEditor";
 import { renderTemplate } from "@shared/documentTemplates";
-import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock, X, Maximize2, Minimize2, ClipboardSignature, Eraser, MonitorSmartphone, Users, Signature, Building2, Filter, Send, Mail, UserCheck } from "lucide-react";
+import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock, X, Maximize2, Minimize2, ClipboardSignature, Eraser, MonitorSmartphone, Users, Signature, Building2, Filter, Send, Mail, UserCheck, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { formatCPF } from "@/lib/formatters";
@@ -246,6 +246,14 @@ export default function ComunicadosInternos() {
     if (viewComunicadoId === null) return null;
     return comunicados.find((c: any) => c.id === viewComunicadoId) || null;
   }, [comunicados, viewComunicadoId]);
+
+  function getStatusEfetivo(c: any): "concluido" | "pendente_assinatura" | "rascunho" {
+    if (c.status === "concluido") return "concluido";
+    const total = Number(c.totalDestinatarios ?? 0);
+    const assinados = Number(c.totalAssinados ?? 0);
+    if (total > 0 && assinados < total) return "pendente_assinatura";
+    return "rascunho";
+  }
 
   const anos = useMemo(() => {
     const set = new Set<number>(comunicados.map((c: any) => c.ano));
@@ -570,6 +578,10 @@ export default function ComunicadosInternos() {
   if (viewComunicado) {
     const c = viewComunicado;
     const isConcluido = c.status === "concluido";
+    const _totalDestView = Number((c as any).totalDestinatarios ?? 0);
+    const _totalAssView = Number((c as any).totalAssinados ?? 0);
+    const _pctView = _totalDestView > 0 ? Math.round((_totalAssView / _totalDestView) * 100) : 0;
+    const _signPending = !isConcluido && _totalDestView > 0 && _totalAssView < _totalDestView;
     const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "FC ENGENHARIA PROJETOS E CONSULTORIA LTDA";
     const cnpj = selectedCompany?.cnpj || "";
     const logoUrl = selectedCompany?.logoUrl;
@@ -596,11 +608,22 @@ export default function ComunicadosInternos() {
             ) : null}
             <div className="flex-1" />
             {!isConcluido && (
-              <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={concluirMut.isPending}
-                onClick={() => { if (confirm("Concluir este comunicado? Após concluído, ele não poderá ser editado ou excluído.")) concluirMut.mutate({ id: c.id, companyId }); }}>
-                {concluirMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-                Concluir
-              </Button>
+              <>
+                {_totalDestView > 0 && (
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${_signPending ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200"}`}>
+                    {_signPending ? <Clock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+                    {_totalAssView}/{_totalDestView} assinaram ({_pctView}%)
+                  </span>
+                )}
+                <Button size="sm"
+                  className={_signPending ? "bg-slate-200 text-slate-500 cursor-not-allowed hover:bg-slate-200" : "bg-green-600 hover:bg-green-700"}
+                  disabled={concluirMut.isPending || _signPending}
+                  title={_signPending ? `Aguardando assinaturas: ${_totalAssView} de ${_totalDestView} assinaram` : ""}
+                  onClick={() => { if (confirm("Concluir este comunicado? Após concluído, ele não poderá ser editado ou excluído.")) concluirMut.mutate({ id: c.id, companyId }); }}>
+                  {concluirMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                  {_signPending ? "Aguardando Assinaturas" : "Concluir"}
+                </Button>
+              </>
             )}
             {!c.fcsignEnvelopeId && (
               <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50"
@@ -816,7 +839,7 @@ export default function ComunicadosInternos() {
                   <tr>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600 w-28">Nº</th>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600">Título</th>
-                    <th className="text-left px-4 py-3 font-semibold text-slate-600 w-24">Status</th>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 w-48">Status / Assinaturas</th>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600 w-28">Data</th>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600 w-36">Documento</th>
                     <th className="text-right px-4 py-3 font-semibold text-slate-600 w-36">Ações</th>
@@ -825,8 +848,12 @@ export default function ComunicadosInternos() {
                 <tbody>
                   {filtrados.map((c: any) => {
                     const isConcluido = c.status === "concluido";
+                    const statusEf = getStatusEfetivo(c);
+                    const totalDest = Number(c.totalDestinatarios ?? 0);
+                    const totalAss = Number(c.totalAssinados ?? 0);
+                    const pct = totalDest > 0 ? Math.round((totalAss / totalDest) * 100) : 0;
                     return (
-                      <tr key={c.id} className={`border-b hover:bg-slate-50 ${isConcluido ? "bg-green-50/30" : ""}`}>
+                      <tr key={c.id} className={`border-b hover:bg-slate-50 ${statusEf === "concluido" ? "bg-green-50/30" : statusEf === "pendente_assinatura" ? "bg-amber-50/20" : ""}`}>
                         <td className="px-4 py-3 font-mono font-bold text-blue-700">{c.numero}</td>
                         <td className="px-4 py-3 overflow-hidden max-w-0">
                           <div className="font-medium text-slate-800 truncate">{c.titulo}</div>
@@ -836,15 +863,32 @@ export default function ComunicadosInternos() {
                           })()}
                         </td>
                         <td className="px-4 py-3">
-                          {isConcluido ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
-                              <Lock className="h-2.5 w-2.5" /> Concluído
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
-                              Rascunho
-                            </span>
-                          )}
+                          <div className="flex flex-col gap-1">
+                            {statusEf === "concluido" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 w-fit">
+                                <Lock className="h-2.5 w-2.5" /> Concluído
+                              </span>
+                            ) : statusEf === "pendente_assinatura" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 w-fit">
+                                <Clock className="h-2.5 w-2.5" /> Pendente por Assinatura
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 w-fit">
+                                Rascunho
+                              </span>
+                            )}
+                            {totalDest > 0 && (
+                              <div>
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className="text-[10px] text-slate-500">{totalAss}/{totalDest} assinaram</span>
+                                  <span className="text-[10px] font-bold" style={{ color: pct === 100 ? "#16a34a" : pct >= 50 ? "#d97706" : "#dc2626" }}>{pct}%</span>
+                                </div>
+                                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden w-32">
+                                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? "#16a34a" : pct >= 50 ? "#d97706" : "#ef4444" }} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-slate-600">{new Date(c.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}</td>
                         <td className="px-4 py-3">

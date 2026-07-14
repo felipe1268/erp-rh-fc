@@ -1,4 +1,34 @@
 /**
+ * Rev. 4265 - COMUNICADOS INTERNOS: PROGRESSO DE ASSINATURAS + BLOQUEIO DE CONCLUSÃO ATÉ TODOS ASSINAREM.
+ *
+ * PROBLEMA:
+ *   A lista de Comunicados Internos não mostrava quantas pessoas já tinham assinado o documento.
+ *   Não havia impedimento para "Concluir" um comunicado antes de todos os destinatários assinarem.
+ *   O status exibido era apenas "Rascunho" ou "Concluído", sem refletir a situação de assinaturas.
+ *
+ * SOLUÇÃO:
+ *
+ * Backend — `server/routers/comunicadosInternos.ts`:
+ *   - `listar`: enriquecido com `totalDestinatarios` (parse do destinatariosJson) e `totalAssinados`
+ *     (COUNT em comunicado_assinaturas) por comunicado — batch único agrupado por ID.
+ *   - `ensureOwnership`: passa a retornar também `destinatariosJson` (necessário para o guard do concluir).
+ *   - `concluir`: novo guard — se destinatariosJson tem destinatários e faltam assinaturas, lança
+ *     TRPCError BAD_REQUEST com mensagem explicativa ("Aguardando assinaturas: X de Y assinaram").
+ *
+ * Frontend — `client/src/pages/ComunicadosInternos.tsx`:
+ *   - `getStatusEfetivo(c)`: helper que computa "concluido" | "pendente_assinatura" | "rascunho"
+ *     a partir de status + totalDestinatarios + totalAssinados.
+ *   - Coluna "Status / Assinaturas" (w-48): badge de status renomeado + barra de progresso X/Y (NN%)
+ *     visível quando há destinatários — cor: verde=100%, âmbar≥50%, vermelho<50%.
+ *   - Linha da tabela: fundo âmbar claro quando status = "pendente_assinatura".
+ *   - Toolbar de visualização: badge "X/Y assinaram (NN%)" aparece quando há destinatários;
+ *     botão "Concluir" desabilitado com cursor-not-allowed e label "Aguardando Assinaturas" quando
+ *     ainda faltam assinaturas — tooltip exibe o motivo completo.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4264 - COMUNICADOS INTERNOS: SETOR/DEPARTAMENTO, EMISSOR RESPONSÁVEL, DESTINATÁRIOS PARA ASSINATURA E BOTÃO FCSIGN.
  *
  * PROBLEMA:

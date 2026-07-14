@@ -1,3 +1,4 @@
+- **Rev. 4257** — **CONTROLE DE CHEQUES: CARDS DO TOPO REFLETEM FILTROS ATIVOS.** Cards derivam totais de `chequesFiltrados` quando filtros client-side ativos. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4255** — **TOGGLE PAUSAR/REATIVAR ITEM NO MAPA DE COTAÇÃO.** Item pausado fica visível com opacidade reduzida; botão Pause/Play no hover (âmbar pausado). Schema: `+pausado BOOLEAN DEFAULT false` via SyncSchema+. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4253** — **MAT/MDO EXATO NA PIPELINE COTAÇÃO → CONTRATO → MEDIÇÃO.** Schema: +`total_mat`/`total_mdo` em `compras_cotacao_respostas`; +`vlr_mat`/`vlr_mdo` em `terceiro_contrato_itens`; +4 colunas MAT/MDO em `terceiro_medicao_itens`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4252** — **FIX: VALOR NEGOCIADO EXATO — SEM QUEBRADOS POR ARREDONDAMENTO.** `editTotaisOverride` preserva `novoTotal` exato; backend usa `totalOverride` quando presente. ZERO DELETE · ZERO ALTER destrutivo.

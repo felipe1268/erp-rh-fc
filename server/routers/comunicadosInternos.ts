@@ -2,7 +2,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { comunicadosInternos, comunicadoAssinaturas, employees, obraFuncionarios, obras, integrasignEnvelopes, integrasignSignatarios, jobFunctions } from "../../drizzle/schema";
-import { eq, and, sql, desc, isNull, asc, inArray } from "drizzle-orm";
+import { eq, and, sql, desc, isNull, asc, inArray, count } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
@@ -48,6 +48,7 @@ async function ensureOwnership(db: any, id: number, companyId: number) {
     emissorCargo: comunicadosInternos.emissorCargo,
     criadoPor: comunicadosInternos.criadoPor,
     fcsignEnvelopeId: comunicadosInternos.fcsignEnvelopeId,
+    destinatariosJson: comunicadosInternos.destinatariosJson,
   })
     .from(comunicadosInternos).where(eq(comunicadosInternos.id, id));
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Comunicado não encontrado" });
@@ -62,9 +63,27 @@ export const comunicadosInternosRouter = router({
       const db = (await getDb())!;
       const conds = [eq(comunicadosInternos.companyId, input.companyId), isNull(comunicadosInternos.deletedAt)];
       if (input.ano) conds.push(eq(comunicadosInternos.ano, input.ano));
-      return await db.select().from(comunicadosInternos)
+      const rows = await db.select().from(comunicadosInternos)
         .where(and(...conds))
         .orderBy(desc(comunicadosInternos.ano), desc(comunicadosInternos.sequencia));
+      if (rows.length === 0) return [];
+      const ids = rows.map(r => r.id);
+      const assinCounts = await db
+        .select({ comunicadoId: comunicadoAssinaturas.comunicadoId, total: count(comunicadoAssinaturas.id) })
+        .from(comunicadoAssinaturas)
+        .where(inArray(comunicadoAssinaturas.comunicadoId, ids))
+        .groupBy(comunicadoAssinaturas.comunicadoId);
+      const assinMap = new Map(assinCounts.map(a => [a.comunicadoId, Number(a.total)]));
+      return rows.map(r => {
+        let totalDestinatarios = 0;
+        if (r.destinatariosJson) {
+          try {
+            const d = JSON.parse(r.destinatariosJson as string);
+            if (Array.isArray(d)) totalDestinatarios = d.length;
+          } catch {}
+        }
+        return { ...r, totalDestinatarios, totalAssinados: assinMap.get(r.id) ?? 0 };
+      });
     }),
 
   // Rev. 4264 — lista todos os funcionários ativos com sua categoriaMO.
@@ -204,6 +223,25 @@ export const comunicadosInternosRouter = router({
       const row = await ensureOwnership(db, input.id, input.companyId);
       if (row.status === "concluido") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Comunicado já está concluído" });
+      }
+      if (row.destinatariosJson) {
+        try {
+          const destArr = JSON.parse(row.destinatariosJson as string);
+          if (Array.isArray(destArr) && destArr.length > 0) {
+            const [{ assinados }] = await db
+              .select({ assinados: count(comunicadoAssinaturas.id) })
+              .from(comunicadoAssinaturas)
+              .where(eq(comunicadoAssinaturas.comunicadoId, input.id));
+            if (Number(assinados) < destArr.length) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Aguardando assinaturas: ${Number(assinados)} de ${destArr.length} destinatário(s) assinaram. Todos devem assinar antes de concluir.`,
+              });
+            }
+          }
+        } catch (e: any) {
+          if (e.code === "BAD_REQUEST") throw e;
+        }
       }
       await db.update(comunicadosInternos).set({
         status: "concluido",
