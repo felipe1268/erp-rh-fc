@@ -1,4 +1,24 @@
 /**
+ * Rev. 4234 - SCORECARD SST: LIGHTBOX DE FOTO + TOOLTIP "—" SEM DIAS.
+ *
+ * Feat: clicar na foto/avatar do funcionário na tabela de atestados abre um Dialog lightbox
+ * com a foto em tamanho grande. Para funcionários sem foto cadastrada, exibe as iniciais
+ * ampliadas em fundo âmbar.
+ *
+ * UX: coluna "Dias" com "—" agora tem tooltip explicativo ao passar o mouse:
+ * "Atestado em horas — dias não informados no registro" — responde a dúvida frequente
+ * de por que alguns atestados não têm custo calculado.
+ *
+ * Arquivos: client/src/pages/planejamento/ScorecardTab.tsx
+ *   - Estado: sstPhotoLightbox {url, nome, initials}
+ *   - Avatar/botão clicável com hover ring âmbar
+ *   - Dialog lightbox: foto square ou iniciais 7xl, nome embaixo
+ *   - <span title="..."> no "—" de dias
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4233 - SCORECARD SST: REGRA INSS 15 DIAS — CUSTO ATESTADOS PELA LEI 8.213/91.
  *
  * REGRA LEGAL: Art. 59 da Lei 8.213/91 — os primeiros 15 dias de afastamento por doença

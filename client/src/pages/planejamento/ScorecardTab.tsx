@@ -242,6 +242,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [segMes,        setSegMes]        = useState<number | null>(new Date().getMonth() + 1);
   const [sstExpandChart,setSstExpandChart]= useState<string | null>(null);
   const [sstOpenSections,setSstOpenSections] = useState<Set<string>>(new Set());
+  const [sstPhotoLightbox,setSstPhotoLightbox] = useState<{url:string|null,nome:string,initials:string}|null>(null);
 
   const enabled = !!obraId;
 
@@ -1726,6 +1727,27 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                       </Dialog>
                     )}
 
+                    {/* Dialog — foto ampliada do funcionário */}
+                    {sstPhotoLightbox && (
+                      <Dialog open onOpenChange={()=>setSstPhotoLightbox(null)}>
+                        <DialogContent className="max-w-xs p-0 overflow-hidden rounded-2xl">
+                          <div className="flex flex-col items-center">
+                            {sstPhotoLightbox.url
+                              ? <img src={sstPhotoLightbox.url} alt={sstPhotoLightbox.nome} className="w-full aspect-square object-cover"/>
+                              : <div className="w-full aspect-square bg-amber-100 flex items-center justify-center">
+                                  <span className="text-7xl font-black text-amber-500">{sstPhotoLightbox.initials}</span>
+                                </div>}
+                            <div className="px-4 py-3 w-full bg-white">
+                              <p className="text-sm font-bold text-gray-800 text-center">{sstPhotoLightbox.nome}</p>
+                              {!sstPhotoLightbox.url && (
+                                <p className="text-[10px] text-gray-400 text-center mt-1">Foto não cadastrada</p>
+                              )}
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+
                     {/* ═══ BLOCO 4: COMPARATIVO MÊS ATUAL × MÊS ANTERIOR ══════════ */}
                     {curH && (
                       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -1993,8 +2015,16 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                       <tr key={i} className={`border-t border-amber-100 hover:bg-amber-50/40${isInss?" bg-blue-50/30":""}`}>
                                         <td className="px-2 py-1.5">
                                           <div className="flex items-center gap-1.5">
-                                            {a.foto_url?(<img src={a.foto_url} alt={nome} className="w-5 h-5 rounded-full object-cover shrink-0"/>)
-                                              :(<div className="w-5 h-5 rounded-full bg-amber-200 text-amber-700 text-[8px] font-bold flex items-center justify-center shrink-0">{initials}</div>)}
+                                            <button
+                                              type="button"
+                                              title="Clique para ampliar a foto"
+                                              onClick={()=>setSstPhotoLightbox({url:a.foto_url??null,nome:String(a.funcionario_nome??""),initials})}
+                                              className="shrink-0 focus:outline-none hover:ring-2 hover:ring-amber-300 rounded-full transition-all"
+                                            >
+                                              {a.foto_url
+                                                ?<img src={a.foto_url} alt={nome} className="w-6 h-6 rounded-full object-cover"/>
+                                                :<div className="w-6 h-6 rounded-full bg-amber-200 text-amber-700 text-[8px] font-bold flex items-center justify-center">{initials}</div>}
+                                            </button>
                                             <div className="flex items-center gap-1 min-w-0">
                                               <p className="font-medium text-gray-800 truncate">{nome}</p>
                                               {isInss&&<span className="shrink-0 text-[7px] font-bold text-blue-700 bg-blue-100 border border-blue-200 px-1 py-0.5 rounded" title="A partir do 16º dia o custo passa ao INSS (art. 59 Lei 8.213/91)">INSS</span>}
@@ -2014,7 +2044,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                                 </div>
                                               )}
                                             </div>
-                                          ):<span className="text-gray-300">—</span>}
+                                          ):<span className="text-gray-300 cursor-help" title="Atestado em horas — dias não informados no registro">—</span>}
                                         </td>
                                         <td className="px-1.5 py-1.5 text-right">
                                           {cTotal>0?(
