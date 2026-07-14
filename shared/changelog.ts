@@ -1,4 +1,27 @@
 /**
+ * Rev. 4226 - SCORECARD SST: FIX CAST TIPOS — valor_produto NUMERIC + salarioBase VARCHAR.
+ *
+ * OBJETIVO — Corrigir regressão introduzida na Rev. 4225: REPLACE() só aceita `text`; aplicar
+ * REPLACE em coluna NUMERIC quebra Q6/Q7/Q13 silenciosamente (safe() retorna []).
+ *
+ * DIAGNÓSTICO DEFINITIVO (via schema Drizzle):
+ *  • epis.valorProduto  → numeric("valor_produto", precision 10, scale 2)  → NUMERIC no PG
+ *    Cast correto: COALESCE(ep.valor_produto, 0)  — sem REPLACE, sem ::numeric.
+ *  • employees.salarioBase → varchar({ length: 20 })  → VARCHAR no PG (pode ter "2.500,00")
+ *    Cast correto: REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric
+ *
+ * QUERIES CORRIGIDAS:
+ *  • Q6 (epiPorFuncionario): custo_total usa COALESCE(ep.valor_produto, 0) * quantidade
+ *  • Q7 (epiPorTipo / Curva ABC): valor_unit + custo_total = COALESCE(ep.valor_produto, 0)
+ *  • Q12 (atestados): salario_base/custo_salario/encargos/custo_total → REPLACE(salarioBase)
+ *  • Q13 epi_agg: COALESCE(ep.valor_produto, 0)
+ *  • Q13 ates CTE: custo_ates → REPLACE(salarioBase)
+ *
+ * EFEITO: atestados voltam a aparecer; 6 gráficos histórico voltam a ter dados; custo EPI correto.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4225 - SCORECARD SST: FIX FILTRO PERÍODO + CUSTO EPI + GRÁFICOS HISTÓRICO.
  *
  * OBJETIVO — Corrigir 5 bugs críticos no dashboard SST introduzidos na Rev. 4224.

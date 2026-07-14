@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4226** — **SCORECARD SST: FIX CAST TIPOS — valor_produto NUMERIC + salarioBase VARCHAR.** REPLACE(numeric_col) quebra silenciosamente; epis.valor_produto é NUMERIC → COALESCE(ep.valor_produto,0); employees.salarioBase é VARCHAR → REPLACE(COALESCE,'0'),',','.'). Q6/Q7/Q12/Q13 corrigidos. Atestados e gráficos voltam. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4225** — **SCORECARD SST: FIX FILTRO PERÍODO + CUSTO EPI + GRÁFICOS HISTÓRICO.** 5 bugs cirúrgicos corrigidos no backend: Q4 (advertências CLT) e Q5 (terceiros) sem filtro de data → Darcy aparecia em qualquer mês; Q6 (`custo_estimado` vs `custo_total`) → R$ 0,00 no Top 5 EPI; Q6+Q7 sem filtro de período → EPI ignorava mês selecionado; Q13 epi_agg com `valor_produto::numeric` sem REPLACE → crash silencioso no safe() zerava todos os gráficos histórico e bolinhas do PeriodSelectorCard. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4224** — **SCORECARD SST: REDESIGN COMPLETO — DASHBOARD RICO COM 12 BLOCOS INTERATIVOS.** Substituída toda a aba "🦺 SST" no ScorecardTab.tsx por dashboard moderno: 2×4 KPI Hero Cards, Gauge ASO SVG + Treinamentos progress bars + Custo Atestados breakdown (BLOCO 2), 6 mini-gráficos expandíveis via Dialog (BLOCO 3), comparativo mês atual×anterior (BLOCO 4), EPI Curva ABC horizontal + Top 5 + estoque (BLOCO 5), 7 seções colapsáveis (acidentes/atestados/advertências/DDS/APR+PT/equipe CLT/terceiros). ZERO DELETE · ZERO ALTER destrutivo.

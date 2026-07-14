@@ -788,7 +788,7 @@ export const scorecardRouter = router({
               e.id AS employee_id, e."nomeCompleto" AS funcionario_nome, e.cargo,
               COUNT(ed.id)                                                                                          AS total_entregas,
               SUM(ed.quantidade)                                                                                    AS total_unidades,
-              SUM(COALESCE(REPLACE(COALESCE(ep.valor_produto,'0'),',','.')::numeric, 0) * ed.quantidade)           AS custo_total,
+              SUM(COALESCE(ep.valor_produto, 0) * ed.quantidade)                                                    AS custo_total,
               MAX(ed."dataEntrega")                                                                                 AS ultima_entrega
             FROM epi_deliveries ed
             JOIN employees e  ON e.id  = ed."employeeId"
@@ -811,9 +811,9 @@ export const scorecardRouter = router({
               SELECT
                 ep.nome        AS epi_nome,
                 ep.categoria,
-                REPLACE(COALESCE(ep.valor_produto,'0'),',','.')::numeric AS valor_unit,
-                SUM(ed.quantidade)                                                                           AS total_unidades,
-                SUM(COALESCE(REPLACE(COALESCE(ep.valor_produto,'0'),',','.')::numeric, 0) * ed.quantidade)  AS custo_total,
+                COALESCE(ep.valor_produto, 0)                          AS valor_unit,
+                SUM(ed.quantidade)                                     AS total_unidades,
+                SUM(COALESCE(ep.valor_produto, 0) * ed.quantidade)    AS custo_total,
                 COUNT(DISTINCT ed."employeeId")                                                              AS num_funcionarios,
                 COUNT(ed.id)                                                                                 AS total_entregas
               FROM epi_deliveries ed
@@ -926,19 +926,19 @@ export const scorecardRouter = router({
               a."horas_afastamento", a.cid, a.motivo, a."dataRetorno",
               e."nomeCompleto" AS funcionario_nome, e.cargo,
               e."fotoUrl"      AS foto_url,
-              COALESCE(e."salarioBase"::numeric, 0) AS salario_base,
+              REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric AS salario_base,
               -- Custo proporcional do salário (salário/30 × dias)
-              ROUND(COALESCE(e."salarioBase"::numeric, 0) / 30
+              ROUND(REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric / 30
                     * COALESCE(a."diasAfastamento", 0), 2)            AS custo_salario,
               -- Encargos trabalhistas: FGTS 8% + INSS patronal 20% + RAT+Terceiros 5% = 33%
-              ROUND(COALESCE(e."salarioBase"::numeric, 0) / 30
+              ROUND(REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric / 30
                     * COALESCE(a."diasAfastamento", 0) * 0.33, 2)     AS custo_encargos,
               -- VR proporcional (valorDiario × dias)
               ROUND(COALESCE(vr.valor_diario, 0)
                     * COALESCE(a."diasAfastamento", 0), 2)            AS custo_vr,
               -- Custo total do dia pago sem produção
               ROUND(
-                (COALESCE(e."salarioBase"::numeric, 0) / 30 * 1.33)
+                (REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric / 30 * 1.33)
                 * COALESCE(a."diasAfastamento", 0)
                 + COALESCE(vr.valor_diario, 0) * COALESCE(a."diasAfastamento", 0),
               2) AS custo_total
@@ -979,7 +979,7 @@ export const scorecardRouter = router({
                      COUNT(*) AS atestados,
                      SUM(COALESCE(a."diasAfastamento", 0)) AS dias_ates,
                      ROUND(SUM(
-                       (COALESCE(e."salarioBase"::numeric, 0) / 30 * 1.33)
+                       (REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric / 30 * 1.33)
                        * COALESCE(a."diasAfastamento", 0)
                      ), 2) AS custo_ates
               FROM atestados a
@@ -1010,7 +1010,7 @@ export const scorecardRouter = router({
               SELECT TO_CHAR(ed."dataEntrega"::date, 'YYYY-MM') AS mes,
                      COUNT(ed.id) AS epi_entregas,
                      SUM(ed.quantidade) AS epi_unidades,
-                     ROUND(SUM(COALESCE(REPLACE(COALESCE(ep.valor_produto,'0'),',','.')::numeric, 0) * ed.quantidade), 2) AS epi_custo
+                     ROUND(SUM(COALESCE(ep.valor_produto, 0) * ed.quantidade), 2) AS epi_custo
               FROM epi_deliveries ed
               JOIN epis ep ON ep.id = ed."epiId"
               WHERE ed."companyId" = ${input.companyId}
