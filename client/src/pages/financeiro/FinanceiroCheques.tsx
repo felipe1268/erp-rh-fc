@@ -218,6 +218,10 @@ export default function FinanceiroCheques() {
   const [ano, setAno] = useState<number>(ANO_ATUAL);
   const [mesSel, setMesSel] = useState<number | null>(new Date().getMonth() + 1);
   const [fBusca, setFBusca] = useState<string>("");
+  // Rev. 4256 — filtros extras client-side: data de vencimento + fornecedor
+  const [fVencDe, setFVencDe] = useState<string>("");
+  const [fVencAte, setFVencAte] = useState<string>("");
+  const [fFornecedor, setFFornecedor] = useState<string>("");
 
   // ── Importação ──
   // Dois modos: "xlsx" (planilha mensal) e "pdf" (vários PDFs/imagens de cheque
@@ -462,18 +466,60 @@ export default function FinanceiroCheques() {
     return m;
   }, [resumoMensal]);
 
-  // Lista exibida — aplica o filtro client-side de "Outros" (agregado de status).
+  // Lista exibida — aplica o filtro client-side de "Outros" (agregado de status) + data vencimento.
   const chequesFiltrados = useMemo(() => {
-    const arr = cheques as any[];
-    if (fStatus === "outros") return arr.filter((c) => OUTROS_SET.includes(c.status));
+    let arr = cheques as any[];
+    if (fStatus === "outros") arr = arr.filter((c) => OUTROS_SET.includes(c.status));
     // Rev. 3242 — filtros de EXTRATO (flags derivadas que o `listar` já anexa).
     // `conciliado` vem da coluna integer (1/0) — comparar com Number, NÃO `=== true`
     // (espelha o backend `Number(c.conciliado)===1`); `extratoConfirmado/Divergente` já são boolean.
-    if (fStatus === "conferido") return arr.filter((c) => Number(c.conciliado) === 1);
-    if (fStatus === "confere") return arr.filter((c) => c.extratoConfirmado && Number(c.conciliado) !== 1);
-    if (fStatus === "divergente") return arr.filter((c) => c.extratoDivergente === true);
+    else if (fStatus === "conferido") arr = arr.filter((c) => Number(c.conciliado) === 1);
+    else if (fStatus === "confere") arr = arr.filter((c) => c.extratoConfirmado && Number(c.conciliado) !== 1);
+    else if (fStatus === "divergente") arr = arr.filter((c) => c.extratoDivergente === true);
+    // Rev. 4256 — filtro por data de vencimento (De / Até), client-side.
+    if (fVencDe) {
+      const de = fVencDe; // "YYYY-MM-DD"
+      arr = arr.filter((c) => {
+        if (!c.dataVencimento) return false;
+        const d = String(c.dataVencimento).slice(0, 10);
+        return d >= de;
+      });
+    }
+    if (fVencAte) {
+      const ate = fVencAte; // "YYYY-MM-DD"
+      arr = arr.filter((c) => {
+        if (!c.dataVencimento) return false;
+        const d = String(c.dataVencimento).slice(0, 10);
+        return d <= ate;
+      });
+    }
+    // Filtro por fornecedor (nome exato, derivado do campo do cheque)
+    if (fFornecedor) {
+      arr = arr.filter((c) => (c.fornecedorNome || "") === fFornecedor);
+    }
     return arr;
-  }, [cheques, fStatus]);
+  }, [cheques, fStatus, fVencDe, fVencAte, fFornecedor]);
+
+  // Lista única de fornecedores dos cheques carregados (p/ select de filtro).
+  const fornecedoresNosСheques = useMemo(() => {
+    const nomes = new Set<string>();
+    for (const c of cheques as any[]) {
+      const n = String(c.fornecedorNome || "").trim();
+      if (n) nomes.add(n);
+    }
+    return Array.from(nomes).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [cheques]);
+
+  // Somatório dos cheques filtrados por data de vencimento (quando o filtro está ativo).
+  const vencFiltroAtivo = !!(fVencDe || fVencAte);
+  const vencSomatorio = useMemo(() => {
+    if (!vencFiltroAtivo) return null;
+    const total = chequesFiltrados.reduce((s: number, c: any) => s + (Number(c.valor) || 0), 0);
+    const qtd = chequesFiltrados.length;
+    const pendentes = chequesFiltrados.filter((c: any) => c.status === "pendente");
+    const totalPendentes = pendentes.reduce((s: number, c: any) => s + (Number(c.valor) || 0), 0);
+    return { total, qtd, qtdPendentes: pendentes.length, totalPendentes };
+  }, [chequesFiltrados, vencFiltroAtivo]);
 
   // Rev. 3245 — múltipla seleção. IDs visíveis (a seleção só age sobre o que está
   // na tela); estado derivado p/ o "selecionar todos" do cabeçalho.
@@ -496,7 +542,7 @@ export default function FinanceiroCheques() {
 
   // Ao trocar filtro/mês/ano/busca a lista muda — limpa a seleção p/ não agir
   // sobre cheques que saíram da tela.
-  useEffect(() => { setSelectedIds(new Set()); setBulkStatus(""); }, [fStatus, mesSel, ano, fBusca]);
+  useEffect(() => { setSelectedIds(new Set()); setBulkStatus(""); }, [fStatus, mesSel, ano, fBusca, fVencDe, fVencAte, fFornecedor]);
 
   async function aplicarBulkStatus() {
     const ids = Array.from(selectedIds);
@@ -974,9 +1020,69 @@ export default function FinanceiroCheques() {
                   <SelectItem value="divergente">⚠ Divergências</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Filtro por fornecedor — Rev. 4256 */}
+              <div className="relative min-w-[200px] flex-1">
+                <User className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <select
+                  className="w-full h-9 pl-8 pr-8 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
+                  value={fFornecedor}
+                  onChange={(e) => setFFornecedor(e.target.value)}
+                >
+                  <option value="">Todos os fornecedores</option>
+                  {fornecedoresNosСheques.map((nome) => (
+                    <option key={nome} value={nome}>{nome}</option>
+                  ))}
+                </select>
+                {fFornecedor && (
+                  <button
+                    type="button"
+                    onClick={() => setFFornecedor("")}
+                    className="absolute right-2 top-2.5 text-muted-foreground hover:text-red-500"
+                    title="Limpar filtro de fornecedor"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Linha 2: navegação ano + pills mês com bolinhas */}
+            {/* Linha 2: filtro por data de vencimento — Rev. 4256 */}
+            <div className="flex flex-wrap items-end gap-3">
+              <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0 self-center" />
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground whitespace-nowrap">Vencimento de</Label>
+                <Input
+                  type="date"
+                  className="h-8 w-[150px] text-xs"
+                  value={fVencDe}
+                  onChange={(e) => setFVencDe(e.target.value)}
+                  max={fVencAte || undefined}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground whitespace-nowrap">até</Label>
+                <Input
+                  type="date"
+                  className="h-8 w-[150px] text-xs"
+                  value={fVencAte}
+                  onChange={(e) => setFVencAte(e.target.value)}
+                  min={fVencDe || undefined}
+                />
+              </div>
+              {vencFiltroAtivo && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-red-600"
+                  onClick={() => { setFVencDe(""); setFVencAte(""); }}
+                >
+                  <X className="h-3.5 w-3.5" /> Limpar datas
+                </Button>
+              )}
+            </div>
+
+            {/* Linha 3: navegação ano + pills mês com bolinhas */}
             <div>
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <div className="flex items-center gap-1.5">
@@ -1020,18 +1126,56 @@ export default function FinanceiroCheques() {
         {/* Tabela */}
         <Card>
           <CardHeader className="space-y-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              Cheques ({chequesFiltrados.length})
-              {fStatus !== "todos" && (
-                <button
-                  type="button"
-                  onClick={() => setFStatus("todos")}
-                  className="text-[11px] font-normal text-blue-600 hover:underline"
-                >
-                  filtrando por “{({ conferido: "Conferidos no extrato", confere: "Confere — falta marcar", divergente: "Divergências", outros: "Outros" } as Record<string, string>)[fStatus] || fStatus}” · limpar
-                </button>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                Cheques ({chequesFiltrados.length})
+                {fStatus !== "todos" && (
+                  <button
+                    type="button"
+                    onClick={() => setFStatus("todos")}
+                    className="text-[11px] font-normal text-blue-600 hover:underline"
+                  >
+                    filtrando por “{({ conferido: "Conferidos no extrato", confere: "Confere — falta marcar", divergente: "Divergências", outros: "Outros" } as Record<string, string>)[fStatus] || fStatus}” · limpar
+                  </button>
+                )}
+              </CardTitle>
+              {/* Rev. 4256 — somatório do período de vencimento filtrado */}
+              {vencSomatorio && (
+                <div className="flex flex-wrap items-center gap-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm">
+                  <div className="flex items-center gap-1.5 text-blue-800">
+                    <CalendarDays className="h-4 w-4 shrink-0" />
+                    <span className="font-medium">
+                      {fVencDe && fVencAte
+                        ? `Vencimento: ${fmtData(fVencDe + "T00:00:00")} → ${fmtData(fVencAte + "T00:00:00")}`
+                        : fVencDe
+                        ? `Vencimento a partir de ${fmtData(fVencDe + "T00:00:00")}`
+                        : `Vencimento até ${fmtData(fVencAte + "T00:00:00")}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 border-l border-blue-200 pl-4">
+                    <div className="text-center">
+                      <div className="text-[11px] text-blue-600 font-medium uppercase tracking-wide">Total geral</div>
+                      <div className="text-base font-bold text-blue-900 tabular-nums">{formatBRL(vencSomatorio.total)}</div>
+                      <div className="text-[11px] text-blue-600">{vencSomatorio.qtd} cheque(s)</div>
+                    </div>
+                    {vencSomatorio.qtdPendentes > 0 && (
+                      <div className="text-center border-l border-blue-200 pl-3">
+                        <div className="text-[11px] text-amber-600 font-medium uppercase tracking-wide">Pendentes</div>
+                        <div className="text-base font-bold text-amber-700 tabular-nums">{formatBRL(vencSomatorio.totalPendentes)}</div>
+                        <div className="text-[11px] text-amber-600">{vencSomatorio.qtdPendentes} cheque(s)</div>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setFVencDe(""); setFVencAte(""); }}
+                    className="ml-auto text-[11px] text-blue-500 hover:text-red-600 hover:underline"
+                  >
+                    limpar
+                  </button>
+                </div>
               )}
-            </CardTitle>
+            </div>
             {/* Legenda de status — p/ rastreio de cada cheque */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
               <span className="font-medium uppercase tracking-wide">Legenda:</span>

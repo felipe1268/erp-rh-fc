@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4255** — **TOGGLE PAUSAR/REATIVAR ITEM NO MAPA DE COTAÇÃO.** Item pausado fica visível no mapa com opacidade reduzida (cinza) sem ser apagado. Botão Pause/Play no hover da linha (âmbar quando pausado). Schema: `+pausado BOOLEAN DEFAULT false` em `compras_cotacoes_itens` via SyncSchema+. Backend: `togglePausarItemCotacao` mutation com guards. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4256** — **CONTROLE DE CHEQUES: FILTRO POR DATA DE VENCIMENTO + FORNECEDOR + SOMATÓRIO.** Novos filtros client-side em `FinanceiroCheques.tsx`: (1) campo De/Até por `dataVencimento`; (2) dropdown de fornecedor derivado dos cheques carregados. Banner azul aparece quando filtro de data está ativo mostrando Total Geral + Pendentes (quantidade e valor) com link "limpar". ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4254** — **MAPA COTAÇÃO PACOTE: COLUNAS SEPARADAS MAT | MDO | TOTAL GERAL.** Header linha 2 (pacote): QTD | Material | Mão de Obra | Total Geral (4 th). Linhas META (pacote): 4 `<td>` separados — QTD, Material, Mão de Obra, Total Geral (MAT+MDO). Sub-header fornecedor (pacote): `colSpan=5`, 5 flex divs (QTD | Material | Mão de Obra | Total Geral | Saldo). Linhas fornecedor (pacote): 5 `<td>` — QTD, MAT (azul), MDO (laranja), Total Geral, Saldo. Não-pacote: sem alteração. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4255** — **TOGGLE PAUSAR/REATIVAR ITEM NO MAPA DE COTAÇÃO.** Item pausado fica visível no mapa com opacidade reduzida (cinza) sem ser apagado. Botão Pause/Play no hover da linha (âmbar quando pausado). Schema: `+pausado BOOLEAN DEFAULT false` em `compras_cotacoes_itens` via SyncSchema+. Backend: `togglePausarItemCotacao` mutation com guards. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Fórmula: Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível (Lucro Bruto); Linha 2 condicional quando deduções configuradas. Sem deduções: Lucro Bruto em verde com CTA. PainelOrcamento: "Lucro Médio Mensal" renomeado para "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -76,6 +76,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
+- **Rev. 4254** — **MAPA COTAÇÃO PACOTE: COLUNAS SEPARADAS MAT | MDO | TOTAL GERAL.** Header linha 2 (pacote): QTD | Material | Mão de Obra | Total Geral (4 th). Sub-header fornecedor: `colSpan=5`, 5 flex divs. Linhas fornecedor: QTD, MAT (azul), MDO (laranja), Total Geral, Saldo. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4253** — **MAT/MDO EXATO NA PIPELINE COTAÇÃO → CONTRATO → MEDIÇÃO.** Schema: +`total_mat`/`total_mdo` em `compras_cotacao_respostas`; +`vlr_mat`/`vlr_mdo` em `terceiro_contrato_itens`; +4 colunas MAT/MDO em `terceiro_medicao_itens`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4252** — **FIX: VALOR NEGOCIADO EXATO — SEM QUEBRADOS POR ARREDONDAMENTO.** `editTotaisOverride` preserva `novoTotal` exato; backend usa `totalOverride` quando presente. ZERO DELETE · ZERO ALTER destrutivo.
@@ -83,8 +85,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4251** — **ESPELHAMENTO AUTOMÁTICO DE ITENS DA COTAÇÃO NA SC VINCULADA.** SC vinculada à cotação recebe item espelhado automaticamente ao adicionar avulso/EAP; rastreabilidade bidirecional via `solicitacaoItemId`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4249** — **FIX: EXCLUSÃO EM LOTE NÃO APAGAVA GRUPOS PACOTE.** Ao deletar linha de grupo pacote, só o `first.id` era enviado; demais irmãos (mesmo `composicaoCodigo`) sobreviviam. Fix: expandir IDs via `mapa.itens` brutos antes de chamar a mutation. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4248** — **SELEÇÃO MÚLTIPLA PARA EXCLUSÃO EM LOTE NO MAPA DE COTAÇÃO.** Checkboxes sempre visíveis em cotação pendente; toolbar "Excluir N itens"; backend `excluirItensCotacao` com array de IDs, guard OC ativa, delete atômico. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

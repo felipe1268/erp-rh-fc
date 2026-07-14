@@ -1,4 +1,37 @@
 /**
+ * Rev. 4256 - CONTROLE DE CHEQUES: FILTRO POR DATA DE VENCIMENTO + FORNECEDOR + SOMATÓRIO.
+ *
+ * OBJETIVO: facilitar a consulta de cheques emitidos por período de vencimento
+ * e por fornecedor — com um somatório imediato do total a compensar no intervalo.
+ *
+ * FILTROS ADICIONADOS (client-side, FinanceiroCheques.tsx):
+ *   1. Data de vencimento (De / Até): dois inputs date HTML nativos na Linha 2
+ *      do card de filtros. Filtro aplica `.slice(0,10)` no campo dataVencimento
+ *      e compara strings ISO (YYYY-MM-DD) — sem conversão Date (robusto a fuso).
+ *      O input "De" tem max=fVencAte; o input "Até" tem min=fVencDe (evita range inválido).
+ *   2. Fornecedor: dropdown nativo `<select>` com ícone User (Linha 1, ao lado do
+ *      status). Opções derivadas via useMemo dos cheques já carregados — lista
+ *      exata dos fornecedores presentes no período/ano selecionado.
+ *      X no canto direito limpa a seleção.
+ *
+ * SOMATÓRIO (banner azul — Rev. 4256):
+ *   Aparece somente quando filtro De/Até está ativo. Exibe:
+ *     - Total Geral (azul): soma de todos os cheques no intervalo (qualquer status)
+ *     - Pendentes (âmbar, condicional): soma e contagem dos cheques status=pendente
+ *   Botão "limpar" no banner reseta De e Até ao mesmo tempo.
+ *
+ * ESTADO:
+ *   fVencDe: string ("YYYY-MM-DD" | "")
+ *   fVencAte: string ("YYYY-MM-DD" | "")
+ *   fFornecedor: string (fornecedorNome exato | "")
+ *   vencFiltroAtivo: boolean derivado de fVencDe || fVencAte
+ *   fornecedoresNosCheques: useMemo — nomes únicos ordenados dos cheques carregados
+ *   vencSomatorio: useMemo — {total, qtd, qtdPendentes, totalPendentes} | null
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4255 - TOGGLE PAUSAR/REATIVAR ITEM NO MAPA DE COTAÇÃO.
  *
  * OBJETIVO: permitir ao usuário pausar qualquer item do mapa de cotação —
