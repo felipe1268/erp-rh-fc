@@ -1009,12 +1009,9 @@ export default function Cotacoes() {
   const [editTransportadora, setEditTransportadora] = useState<Record<number, string>>({});
   const [editModuloMedicao, setEditModuloMedicao] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
-  const [descontoModal, setDescontoModal] = useState<{ fornecedorId: number } | null>(null);
-  const [descontoValor, setDescontoValor] = useState("");
-  const [descontoPreviewing, setDescontoPreviewing] = useState(false);
-  const [acrescimoModal, setAcrescimoModal] = useState<{ fornecedorId: number } | null>(null);
-  const [acrescimoValor, setAcrescimoValor] = useState("");
-  const [acrescimoPreviewing, setAcrescimoPreviewing] = useState(false);
+  const [negociadoModal, setNegociadoModal] = useState<{ fornecedorId: number } | null>(null);
+  const [negociadoValor, setNegociadoValor] = useState("");
+  const [negociadoPreviewing, setNegociadoPreviewing] = useState(false);
   // Rev. 4245 — editar/excluir/incluir item na cotação
   const [editItemDialog, setEditItemDialog] = useState<{ id: number; descricao: string; unidade: string; quantidade: string; somenteMo: boolean } | null>(null);
   const [addItemDialog, setAddItemDialog] = useState(false);
@@ -3393,39 +3390,21 @@ export default function Cotacoes() {
       return result;
     }
 
-    function aplicarDesconto() {
-      if (!descontoModal) return;
-      const preview = calcNegociadoPreview(descontoModal.fornecedorId, descontoValor);
+    function aplicarNegociado() {
+      if (!negociadoModal) return;
+      const preview = calcNegociadoPreview(negociadoModal.fornecedorId, negociadoValor);
       if (!preview.length) return;
       const updates: Record<string, string> = {};
       const totaisUpdates: Record<string, number> = {};
       for (const it of preview) {
         updates[it.key] = it.novoPreco.toFixed(2);
-        totaisUpdates[it.key] = it.novoTotal; // Rev. 4252 — guardar total exato
+        totaisUpdates[it.key] = it.novoTotal;
       }
       setEditPrecos(prev => ({ ...prev, ...updates }));
       setEditTotaisOverride(prev => ({ ...prev, ...totaisUpdates }));
-      setDescontoModal(null);
-      setDescontoValor("");
-      setDescontoPreviewing(false);
-      toast.success("Valor negociado aplicado! Clique 'Salvar' para gravar.");
-    }
-
-    function aplicarAcrescimo() {
-      if (!acrescimoModal) return;
-      const preview = calcNegociadoPreview(acrescimoModal.fornecedorId, acrescimoValor);
-      if (!preview.length) return;
-      const updates: Record<string, string> = {};
-      const totaisUpdates: Record<string, number> = {};
-      for (const it of preview) {
-        updates[it.key] = it.novoPreco.toFixed(2);
-        totaisUpdates[it.key] = it.novoTotal; // Rev. 4252 — guardar total exato
-      }
-      setEditPrecos(prev => ({ ...prev, ...updates }));
-      setEditTotaisOverride(prev => ({ ...prev, ...totaisUpdates }));
-      setAcrescimoModal(null);
-      setAcrescimoValor("");
-      setAcrescimoPreviewing(false);
+      setNegociadoModal(null);
+      setNegociadoValor("");
+      setNegociadoPreviewing(false);
       toast.success("Valor negociado aplicado! Clique 'Salvar' para gravar.");
     }
 
@@ -5467,14 +5446,9 @@ export default function Cotacoes() {
                                                 {salvarRespostas.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} {salvarRespostas.isPending ? `${Math.round(salvarProgress ?? 0)}%` : "Salvar"}
                                               </Button>
                                               <Button size="sm" variant="outline"
-                                                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setDescontoModal({ fornecedorId: p.fornecedorId }); setDescontoValor(""); setDescontoPreviewing(false); }}
-                                                className="h-6 text-[10px] border-amber-200 text-amber-700 hover:bg-amber-50 gap-1 px-2">
-                                                <TrendingDown className="h-3 w-3" /> Desconto
-                                              </Button>
-                                              <Button size="sm" variant="outline"
-                                                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setAcrescimoModal({ fornecedorId: p.fornecedorId }); setAcrescimoValor(""); setAcrescimoPreviewing(false); }}
-                                                className="h-6 text-[10px] border-indigo-200 text-indigo-700 hover:bg-indigo-50 gap-1 px-2">
-                                                <TrendingUp className="h-3 w-3" /> Acréscimo
+                                                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setNegociadoModal({ fornecedorId: p.fornecedorId }); setNegociadoValor(""); setNegociadoPreviewing(false); }}
+                                                className="h-6 text-[10px] border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-1 px-2">
+                                                <BarChart3 className="h-3 w-3" /> Valor Negociado
                                               </Button>
                                               <Button size="sm" variant="outline" onClick={() => setEditingFornId(null)} className="h-6 text-[10px] border-gray-300 text-gray-600 px-2">
                                                 Cancelar
@@ -6593,42 +6567,42 @@ export default function Cotacoes() {
           </DialogContent>
         </Dialog>
 
-        {descontoModal && createPortal(
+        {negociadoModal && createPortal(
           <div className="fixed inset-0 z-[99998] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
-            <div className="absolute inset-0 bg-black/40" onClick={() => { setDescontoModal(null); setDescontoPreviewing(false); }} />
+            <div className="absolute inset-0 bg-black/40" onClick={() => { setNegociadoModal(null); setNegociadoPreviewing(false); }} />
             <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-5 py-3 rounded-t-xl flex items-center justify-between">
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200 px-5 py-3 rounded-t-xl flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-bold text-amber-800 flex items-center gap-2"><TrendingDown className="h-4 w-4" /> Desconto Comercial</h2>
-                  <p className="text-[11px] text-amber-600">Digite o valor final negociado — distribui proporcionalmente entre os itens</p>
+                  <h2 className="text-base font-bold text-emerald-800 flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Valor Negociado</h2>
+                  <p className="text-[11px] text-emerald-600">Digite o valor total fechado — distribui proporcionalmente entre os itens</p>
                 </div>
-                <button onClick={() => { setDescontoModal(null); setDescontoPreviewing(false); }} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+                <button onClick={() => { setNegociadoModal(null); setNegociadoPreviewing(false); }} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
               </div>
 
               <div className="px-5 py-4 space-y-3">
                 <div className="flex items-end gap-3">
                   <div className="flex-1">
                     <Label className="text-[11px] text-gray-600">Valor Negociado Total (R$)</Label>
-                    <Input type="text" inputMode="decimal" value={descontoValor}
+                    <Input type="text" inputMode="decimal" value={negociadoValor}
                       onChange={e => {
                         const raw = e.target.value.replace(/[^\d,]/g, "");
                         const parts = raw.split(",");
                         const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
                         const formatted = parts.length > 1 ? `${intPart},${parts[1].slice(0, 2)}` : intPart;
-                        setDescontoValor(formatted);
-                        setDescontoPreviewing(false);
+                        setNegociadoValor(formatted);
+                        setNegociadoPreviewing(false);
                       }}
-                      placeholder="Ex: 48.500,00" className="mt-1 h-8 text-sm font-mono" autoFocus />
+                      placeholder="Ex: 2.100.000,00" className="mt-1 h-8 text-sm font-mono" autoFocus />
                   </div>
-                  <Button size="sm" onClick={() => setDescontoPreviewing(true)} disabled={!descontoValor || (() => { const v = parseFloat(descontoValor.replace(/\./g, "").replace(",", ".")); return isNaN(v) || v <= 0; })()}
-                    className="h-8 bg-amber-600 hover:bg-amber-700 text-white gap-1 text-xs">
+                  <Button size="sm" onClick={() => setNegociadoPreviewing(true)} disabled={!negociadoValor || (() => { const v = parseFloat(negociadoValor.replace(/\./g, "").replace(",", ".")); return isNaN(v) || v <= 0; })()}
+                    className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1 text-xs">
                     <BarChart3 className="h-3.5 w-3.5" /> Calcular
                   </Button>
                 </div>
 
                 {(() => {
-                  if (!descontoPreviewing) return null;
-                  const preview = calcNegociadoPreview(descontoModal.fornecedorId, descontoValor);
+                  if (!negociadoPreviewing) return null;
+                  const preview = calcNegociadoPreview(negociadoModal.fornecedorId, negociadoValor);
                   if (!preview.length) return (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
                       <p className="text-xs text-red-600 font-medium">Valor inválido — deve ser diferente do total atual e maior que zero</p>
@@ -6683,114 +6657,11 @@ export default function Cotacoes() {
               </div>
 
               <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-end gap-2 rounded-b-xl">
-                <Button size="sm" variant="outline" onClick={() => { setDescontoModal(null); setDescontoPreviewing(false); }} className="h-8 text-xs">Cancelar</Button>
+                <Button size="sm" variant="outline" onClick={() => { setNegociadoModal(null); setNegociadoPreviewing(false); }} className="h-8 text-xs">Cancelar</Button>
                 <Button size="sm"
-                  disabled={!descontoPreviewing || calcNegociadoPreview(descontoModal.fornecedorId, descontoValor).length === 0}
-                  onClick={() => aplicarDesconto()}
-                  className="h-8 bg-amber-600 hover:bg-amber-700 text-white gap-1.5 text-xs">
-                  <CheckCircle className="h-3.5 w-3.5" /> Aplicar
-                </Button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {acrescimoModal && createPortal(
-          <div className="fixed inset-0 z-[99998] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
-            <div className="absolute inset-0 bg-black/40" onClick={() => { setAcrescimoModal(null); setAcrescimoPreviewing(false); }} />
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
-              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-200 px-5 py-3 rounded-t-xl flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-bold text-indigo-800 flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Acréscimo Comercial</h2>
-                  <p className="text-[11px] text-indigo-600">Digite o valor final negociado — distribui proporcionalmente entre os itens</p>
-                </div>
-                <button onClick={() => { setAcrescimoModal(null); setAcrescimoPreviewing(false); }} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
-              </div>
-
-              <div className="px-5 py-4 space-y-3">
-                <div className="flex items-end gap-3">
-                  <div className="flex-1">
-                    <Label className="text-[11px] text-gray-600">Valor Negociado Total (R$)</Label>
-                    <Input type="text" inputMode="decimal" value={acrescimoValor}
-                      onChange={e => {
-                        const raw = e.target.value.replace(/[^\d,]/g, "");
-                        const parts = raw.split(",");
-                        const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-                        const formatted = parts.length > 1 ? `${intPart},${parts[1].slice(0, 2)}` : intPart;
-                        setAcrescimoValor(formatted);
-                        setAcrescimoPreviewing(false);
-                      }}
-                      placeholder="Ex: 62.000,00" className="mt-1 h-8 text-sm font-mono" autoFocus />
-                  </div>
-                  <Button size="sm" onClick={() => setAcrescimoPreviewing(true)} disabled={!acrescimoValor || (() => { const v = parseFloat(acrescimoValor.replace(/\./g, "").replace(",", ".")); return isNaN(v) || v <= 0; })()}
-                    className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white gap-1 text-xs">
-                    <BarChart3 className="h-3.5 w-3.5" /> Calcular
-                  </Button>
-                </div>
-
-                {(() => {
-                  if (!acrescimoPreviewing) return null;
-                  const preview = calcNegociadoPreview(acrescimoModal.fornecedorId, acrescimoValor);
-                  if (!preview.length) return (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-                      <p className="text-xs text-red-600 font-medium">Valor inválido — deve ser diferente do total atual e maior que zero</p>
-                    </div>
-                  );
-                  const totalOriginal = preview.reduce((s, i) => s + i.total, 0);
-                  const totalNovo = preview.reduce((s, i) => s + i.novoTotal, 0);
-                  const diferenca = totalNovo - totalOriginal;
-                  const isAcr = diferenca > 0;
-                  return (
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <div className="flex-1 bg-gray-50 rounded-lg border border-gray-200 p-2 text-center">
-                          <p className="text-[9px] text-gray-500 uppercase font-semibold">Original</p>
-                          <p className="text-sm font-bold text-gray-700">{totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-                        </div>
-                        <div className={`flex-1 rounded-lg border p-2 text-center ${isAcr ? "bg-indigo-50 border-indigo-200" : "bg-amber-50 border-amber-200"}`}>
-                          <p className={`text-[9px] uppercase font-semibold ${isAcr ? "text-indigo-600" : "text-amber-600"}`}>{isAcr ? "Acréscimo" : "Desconto"} ({(Math.abs(diferenca) / totalOriginal * 100).toFixed(1)}%)</p>
-                          <p className={`text-sm font-bold ${isAcr ? "text-indigo-700" : "text-amber-700"}`}>{isAcr ? "+" : "−"} {Math.abs(diferenca).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-                        </div>
-                        <div className="flex-1 bg-purple-50 rounded-lg border border-purple-200 p-2 text-center">
-                          <p className="text-[9px] text-purple-600 uppercase font-semibold">Novo Total</p>
-                          <p className="text-sm font-bold text-purple-700">{totalNovo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-                        </div>
-                      </div>
-
-                      <div className="border border-gray-200 rounded-lg overflow-hidden max-h-[30vh] overflow-y-auto">
-                        <table className="w-full text-[11px]">
-                          <thead className="bg-gray-50 sticky top-0">
-                            <tr>
-                              <th className="text-left px-2 py-1.5 font-semibold text-gray-600">Item</th>
-                              <th className="text-right px-2 py-1.5 font-semibold text-gray-600">Atual</th>
-                              <th className="text-right px-2 py-1.5 font-semibold text-indigo-600">Novo</th>
-                              <th className="text-right px-2 py-1.5 font-semibold text-indigo-600">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {preview.map(it => (
-                              <tr key={it.id}>
-                                <td className="px-2 py-1 text-gray-700 max-w-[160px] truncate" title={it.descricao}>{it.descricao}</td>
-                                <td className="px-2 py-1 text-right text-gray-400">{it.precoAtual.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                                <td className="px-2 py-1 text-right text-indigo-700 font-bold">{it.novoPreco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                                <td className="px-2 py-1 text-right text-indigo-600">{it.novoTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-end gap-2 rounded-b-xl">
-                <Button size="sm" variant="outline" onClick={() => { setAcrescimoModal(null); setAcrescimoPreviewing(false); }} className="h-8 text-xs">Cancelar</Button>
-                <Button size="sm"
-                  disabled={!acrescimoPreviewing || calcNegociadoPreview(acrescimoModal.fornecedorId, acrescimoValor).length === 0}
-                  onClick={() => aplicarAcrescimo()}
-                  className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 text-xs">
+                  disabled={!negociadoPreviewing || calcNegociadoPreview(negociadoModal.fornecedorId, negociadoValor).length === 0}
+                  onClick={() => aplicarNegociado()}
+                  className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs">
                   <CheckCircle className="h-3.5 w-3.5" /> Aplicar
                 </Button>
               </div>
