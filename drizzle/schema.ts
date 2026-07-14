@@ -6828,6 +6828,8 @@ export const comprasCotacoesItens = pgTable("compras_cotacoes_itens", {
   motivoSemVerba:   varchar("motivo_sem_verba", { length: 50 }),
   // Rev. 4243 — propagado do item de SC: só mão de obra cotada para este item.
   somenteMo:        boolean("somente_mo").default(false),
+  // Rev. 4255 — item pausado: não entra na cotação dos fornecedores mas permanece no mapa para referência.
+  pausado:          boolean("pausado").default(false),
 });
 
 export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores", {

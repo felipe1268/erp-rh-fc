@@ -6415,6 +6415,22 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       return { ok: true };
     }),
 
+  togglePausarItemCotacao: protectedProcedure
+    .input(z.object({ id: z.number(), pausado: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [item] = await db.select({ cotacaoId: comprasCotacoesItens.cotacaoId })
+        .from(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, input.id));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      const [cot] = await db.select({ companyId: comprasCotacoes.companyId, status: comprasCotacoes.status })
+        .from(comprasCotacoes).where(eq(comprasCotacoes.id, item.cotacaoId));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, cot.companyId);
+      if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação aprovada não pode ser editada." });
+      await db.execute(sql`UPDATE compras_cotacoes_itens SET pausado = ${input.pausado} WHERE id = ${input.id}`);
+      return { ok: true };
+    }),
+
   excluirItensCotacao: protectedProcedure
     .input(z.object({ ids: z.array(z.number()).min(1) }))
     .mutation(async ({ input, ctx }) => {

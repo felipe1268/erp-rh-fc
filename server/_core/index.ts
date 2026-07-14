@@ -5320,6 +5320,11 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4253: colunas MAT/MDO garantidas em cotacao_respostas + contrato_itens + medicao_itens.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4253 MAT/MDO:", e?.message || e); }
 
+        try {
+          await db.execute(sql`ALTER TABLE compras_cotacoes_itens ADD COLUMN IF NOT EXISTS pausado BOOLEAN DEFAULT false`);
+          console.log("[SyncSchema+] Rev. 4255: coluna pausado garantida em compras_cotacoes_itens.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4255 pausado:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

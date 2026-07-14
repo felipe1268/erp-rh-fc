@@ -22,7 +22,7 @@ import { formatNumeroScDisplay } from "@shared/numeroSc";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, Lock, type LucideIcon } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, Lock, Pause, Play, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import * as XLSX from "xlsx";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
@@ -1434,6 +1434,10 @@ export default function Cotacoes() {
   });
   const excluirItensCotacao = trpc.compras.excluirItensCotacao.useMutation({
     onSuccess: (r) => { toast.success(`${r.deleted} ${r.deleted === 1 ? "item excluído" : "itens excluídos"}!`); mapaQ.refetch(); setMapaItemsChecked(new Set()); },
+    onError: (e) => toast.error(e.message),
+  });
+  const togglePausarItem = trpc.compras.togglePausarItemCotacao.useMutation({
+    onSuccess: (_, vars) => { mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
   const adicionarItemCotacao = trpc.compras.adicionarItemCotacao.useMutation({
@@ -5699,9 +5703,10 @@ export default function Cotacoes() {
                                 ? Math.round((it._childItems ?? []).reduce((s: number, c: any) => s + parseFloat(c.metaUnitarioMdo ?? "0") * parseFloat(c.quantidade ?? "0"), 0) * 100) / 100
                                 : 0;
                               const showPacoteMatMdo = pacoteMetaMat > 0 || pacoteMetaMdo > 0; // Rev. 1991: +1 col Saldo por fornecedor
+                              const itPausado = !!(it as any).pausado;
                               return (
                                 <React.Fragment key={it.id}>
-                                <tr className={`group border-b border-gray-100 hover:bg-gray-50/60 ${it._isPacoteGroup ? "bg-indigo-50/30" : ""} ${mapaItemsChecked.has(it.id) ? "bg-blue-50/40" : ""}`}>
+                                <tr className={`group border-b border-gray-100 hover:bg-gray-50/60 ${itPausado ? "opacity-50 bg-gray-50" : ""} ${it._isPacoteGroup && !itPausado ? "bg-indigo-50/30" : ""} ${mapaItemsChecked.has(it.id) && !itPausado ? "bg-blue-50/40" : ""}`}>
                                   {detalheFullscreen?.status === "pendente" && (
                                     <td className={`px-2 py-1 border-r border-gray-100 w-9 align-middle ${it._isPacoteGroup ? "bg-indigo-50/30" : mapaItemsChecked.has(it.id) ? "bg-blue-50" : "bg-white"}`}>
                                       <div className="flex flex-col items-center gap-1">
@@ -5791,6 +5796,15 @@ export default function Cotacoes() {
                                       {/* _grouped bloqueia filhos de pacote mas não o item-pai (isPacoteGroup) */}
                                       {detalheFullscreen?.status === "pendente" && (!it._grouped || it._isPacoteGroup) && (
                                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0">
+                                          {/* Rev. 4255 — botão pausa/reativar item */}
+                                          <button
+                                            title={itPausado ? "Reativar item (incluir na cotação)" : "Pausar item (excluir da cotação sem apagar)"}
+                                            disabled={togglePausarItem.isPending}
+                                            onClick={() => togglePausarItem.mutate({ id: it.id, pausado: !itPausado })}
+                                            className={`p-0.5 rounded transition-colors disabled:opacity-40 ${itPausado ? "text-amber-500 hover:bg-amber-100 hover:text-amber-700 opacity-100" : "text-gray-300 hover:bg-amber-100 hover:text-amber-600"}`}
+                                          >
+                                            {itPausado ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+                                          </button>
                                           <button
                                             title="Editar item"
                                             onClick={() => setEditItemDialog({ id: it.id, descricao: it.descricao ?? "", unidade: it.unidade ?? "un", quantidade: it.quantidade ?? "1", somenteMo: !!(it as any).somenteMo })}

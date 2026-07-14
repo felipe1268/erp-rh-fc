@@ -1,4 +1,29 @@
 /**
+ * Rev. 4255 - TOGGLE PAUSAR/REATIVAR ITEM NO MAPA DE COTAÇÃO.
+ *
+ * OBJETIVO: permitir ao usuário pausar qualquer item do mapa de cotação —
+ * desativando-o sem apagá-lo — para controlar quais itens serão enviados
+ * aos fornecedores para cotação. Item pausado fica visível no mapa com
+ * opacidade reduzida; um clique em Play o reativa.
+ *
+ * SCHEMA (SyncSchema+):
+ *   compras_cotacoes_itens: +pausado BOOLEAN DEFAULT false
+ *
+ * BACKEND (compras.ts):
+ *   togglePausarItemCotacao: mutation com guards de companyId + status.
+ *   Usa UPDATE SQL direto (comprasCotacoesItens ainda sem col no Drizzle).
+ *
+ * FRONTEND (Cotacoes.tsx):
+ *   togglePausarItem mutation hook.
+ *   <tr> com opacity-50 bg-gray-50 quando itPausado=true.
+ *   Botão Pause/Play no grupo de ações (hover), visível permanentemente
+ *   quando pausado (cor âmbar), aparece no hover quando ativo.
+ *   Ícones Pause + Play importados do lucide-react.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4254 - MAPA COTAÇÃO PACOTE: COLUNAS SEPARADAS MAT | MDO | TOTAL GERAL.
  *
  * OBJETIVO: no Mapa de Cotação para tipo "pacote", exibir Material, Mão de Obra
