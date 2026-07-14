@@ -1,3 +1,4 @@
+- **Rev. 4240** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `origem='alugado'` + ícone 🔑.** Ramo A ampliado com `OR ai.origem='alugado'`; ferramentasAlmox exclui alugado; 🚜 → 🔑. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4224** — **SCORECARD SST: REDESIGN COMPLETO — DASHBOARD RICO COM 12 BLOCOS INTERATIVOS.** 2×4 KPI Hero Cards, Gauge ASO, Treinamentos, Custo Atestados, 6 mini-gráficos, EPI Curva ABC. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4223** — **SCORECARD SST: FIX COLUNAS CAMELCASE + NOVA PÁGINA "GESTOR SST POR OBRA".** Corrigidas Q1/Q3/Q4/Q6/Q7/Q8/Q13. Nova página `/sst/gestor-por-obra`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4221** — **SCORECARD SST: REDESIGN COMPLETO — ABA "SEGURANÇA" → "🦺 SST".** Fix bolinhas PeriodSelectorCard. Q14 backend estoque EPI. Dashboard EPI: gráficos, Curva ABC, Top 5 maior/menor uso c/ foto. ZERO DELETE · ZERO ALTER destrutivo.

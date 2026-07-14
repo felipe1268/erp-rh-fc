@@ -1,4 +1,33 @@
 /**
+ * Rev. 4250 - FILTRO DE BUSCA + INCLUIR ITENS DA EAP NO MAPA DE COTAÇÃO.
+ *
+ * FEATURE 1 — Filtro de busca no mapa:
+ * Campo de texto "Filtrar itens por descrição…" acima da tabela do mapa
+ * fullscreen. Filtra `rawItens` por `descricao` (case-insensitive) antes de
+ * construir `itensParaRenderizar`. Contador "N/Total itens" exibido ao lado
+ * quando o filtro está ativo. Botão ×  limpa o filtro. Estado: `mapaFiltro`.
+ *
+ * FEATURE 2 — Incluir itens diretamente da EAP (orçamento):
+ * Botão "Incluir da EAP" ao lado de "Incluir item avulso" na linha de rodapé
+ * da tabela (só em cotação pendente). Abre dialog picker fullscreen com:
+ * - Lista de orcamentoItens com servicoCodigo (itens folha) do orçamento
+ *   vinculado à obra da cotação.
+ * - Campo de busca por descrição ou código EAP dentro do picker.
+ * - Seleção múltipla com checkbox (incluindo "selecionar todos visíveis").
+ * - Botão "Adicionar N itens" confirma e insere em lote.
+ *
+ * BACKEND:
+ * - `getItensEAPParaCotacao`: query via cotacaoId → obraId → orcamentos →
+ *   orcamentoItens WHERE servicoCodigo IS NOT NULL. Retorna eapCodigo,
+ *   descricao, unidade, quantidade, metaUnitTotal.
+ * - `adicionarItensEAPCotacao`: mutation bulk — insere todos os itens
+ *   selecionados com semVerba=false (têm verba no EAP), precoUnitario="0".
+ *
+ * ARQUIVOS: client/src/pages/compras/Cotacoes.tsx, server/routers/compras.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4249 - FIX: EXCLUSÃO EM LOTE NÃO APAGAVA GRUPOS PACOTE.
  *
  * CAUSA RAIZ: Em cotações tipo Pacote, cada linha do mapa agrupa N itens do

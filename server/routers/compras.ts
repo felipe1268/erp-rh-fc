@@ -6470,6 +6470,76 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       return { ok: true, id: novoItem.id };
     }),
 
+  // Rev. 4250 — Itens da EAP disponíveis para incluir na cotação
+  getItensEAPParaCotacao: protectedProcedure
+    .input(z.object({ cotacaoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [cot] = await db.select({
+        companyId: comprasCotacoes.companyId,
+        obraId: comprasCotacoes.obraId,
+      }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, cot.companyId);
+      if (!cot.obraId) return [];
+      const orcs = await db.select({ id: orcamentos.id })
+        .from(orcamentos)
+        .where(and(
+          eq(orcamentos.companyId, cot.companyId),
+          eq(orcamentos.obraId, cot.obraId),
+          isNull(orcamentos.deletedAt)
+        ));
+      if (orcs.length === 0) return [];
+      const orcIds = orcs.map((o: any) => o.id);
+      const itens = await db.select({
+        id: orcamentoItens.id,
+        eapCodigo: orcamentoItens.eapCodigo,
+        descricao: orcamentoItens.descricao,
+        unidade: orcamentoItens.unidade,
+        quantidade: orcamentoItens.quantidade,
+        metaUnitTotal: orcamentoItens.metaUnitTotal,
+        servicoCodigo: orcamentoItens.servicoCodigo,
+      }).from(orcamentoItens)
+        .where(and(
+          inArray(orcamentoItens.orcamentoId, orcIds),
+          sql`${orcamentoItens.servicoCodigo} IS NOT NULL`
+        ))
+        .orderBy(orcamentoItens.eapCodigo);
+      return itens;
+    }),
+
+  // Rev. 4250 — Adiciona em lote itens selecionados da EAP à cotação
+  adicionarItensEAPCotacao: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      itens: z.array(z.object({
+        descricao: z.string(),
+        unidade: z.string().optional(),
+        quantidade: z.string(),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [cot] = await db.select({ companyId: comprasCotacoes.companyId, status: comprasCotacoes.status })
+        .from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, cot.companyId);
+      if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação aprovada não pode ser editada." });
+      if (input.itens.length === 0) return { ok: true, count: 0 };
+      await db.insert(comprasCotacoesItens).values(
+        input.itens.map(it => ({
+          cotacaoId: input.cotacaoId,
+          descricao: it.descricao.trim(),
+          unidade: it.unidade?.trim() || "un",
+          quantidade: String(parseFloat(it.quantidade.replace(",", ".")) || 1),
+          semVerba: false,
+          precoUnitario: "0",
+          total: "0",
+        }))
+      );
+      return { ok: true, count: input.itens.length };
+    }),
+
   adicionarFornecedorMapa: protectedProcedure
     .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number() }))
     .mutation(async ({ input, ctx }) => {

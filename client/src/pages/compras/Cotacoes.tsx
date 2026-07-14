@@ -1018,6 +1018,11 @@ export default function Cotacoes() {
   const [editItemDialog, setEditItemDialog] = useState<{ id: number; descricao: string; unidade: string; quantidade: string; somenteMo: boolean } | null>(null);
   const [addItemDialog, setAddItemDialog] = useState(false);
   const [addItemForm, setAddItemForm] = useState({ descricao: "", unidade: "un", quantidade: "1", somenteMo: false });
+  // Rev. 4250 — busca/filtro no mapa + picker de itens da EAP
+  const [mapaFiltro, setMapaFiltro] = useState("");
+  const [eapPickerOpen, setEapPickerOpen] = useState(false);
+  const [eapPickerSearch, setEapPickerSearch] = useState("");
+  const [eapPickerSelected, setEapPickerSelected] = useState<Set<number>>(new Set());
   const [showGerenciarCond, setShowGerenciarCond] = useState(false);
   const [novaCondicao, setNovaCondicao] = useState("");
   const [anexoUrl, setAnexoUrl] = useState<Record<number, string>>({});
@@ -1434,6 +1439,21 @@ export default function Cotacoes() {
   });
   const adicionarItemCotacao = trpc.compras.adicionarItemCotacao.useMutation({
     onSuccess: () => { toast.success("Item incluído!"); mapaQ.refetch(); setAddItemDialog(false); setAddItemForm({ descricao: "", unidade: "un", quantidade: "1", somenteMo: false }); },
+    onError: (e) => toast.error(e.message),
+  });
+  // Rev. 4250 — EAP picker
+  const eapItensQ = trpc.compras.getItensEAPParaCotacao.useQuery(
+    { cotacaoId: showDetalhe ?? 0 },
+    { enabled: eapPickerOpen && !!showDetalhe }
+  );
+  const adicionarItensEAP = trpc.compras.adicionarItensEAPCotacao.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`${data.count} ${data.count === 1 ? "item adicionado" : "itens adicionados"} da EAP!`);
+      mapaQ.refetch();
+      setEapPickerOpen(false);
+      setEapPickerSearch("");
+      setEapPickerSelected(new Set());
+    },
     onError: (e) => toast.error(e.message),
   });
   const adicionarEstoque = trpc.compras.adicionarEstoqueAoMapa.useMutation({
@@ -5045,6 +5065,33 @@ export default function Cotacoes() {
                           </button>
                         </div>
                       )}
+                      {/* Rev. 4250 — Campo de busca de itens no mapa */}
+                      <div className="flex items-center gap-2 px-1 pb-1">
+                        <div className="relative flex-1 max-w-sm">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                          <input
+                            type="text"
+                            placeholder="Filtrar itens por descrição…"
+                            value={mapaFiltro}
+                            onChange={e => setMapaFiltro(e.target.value)}
+                            className="w-full pl-8 pr-8 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white placeholder-gray-400"
+                          />
+                          {mapaFiltro && (
+                            <button onClick={() => setMapaFiltro("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                        {mapaFiltro && (
+                          <span className="text-xs text-gray-400 shrink-0">
+                            {(() => {
+                              const tot = (mapa?.itens ?? []).length;
+                              const vis = (mapa?.itens ?? []).filter((it: any) => (it.descricao ?? "").toLowerCase().includes(mapaFiltro.toLowerCase())).length;
+                              return `${vis}/${tot} item${tot !== 1 ? "s" : ""}`;
+                            })()}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center justify-between gap-2 px-1">
                         <div className="flex items-center gap-2">
                           {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && mapaItemsChecked.size === 0 && Object.keys(vencedorPorItem).length === 0 && (
@@ -5509,7 +5556,10 @@ export default function Cotacoes() {
                           </thead>
                           <tbody>
                             {(() => {
-                              const rawItens = mapa?.itens ?? [];
+                              // Rev. 4250 — filtra por texto de busca antes de renderizar
+                              const rawItens = mapaFiltro
+                                ? (mapa?.itens ?? []).filter((it: any) => (it.descricao ?? "").toLowerCase().includes(mapaFiltro.toLowerCase()))
+                                : (mapa?.itens ?? []);
                               const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
                               const itensParaRenderizar: any[] = isPacote ? (() => {
                                 const compGroups: Record<string, any[]> = {};
@@ -6008,17 +6058,26 @@ export default function Cotacoes() {
                                 </React.Fragment>
                               );
                             })}
-                            {/* Rev. 4245 — Botão incluir item avulso */}
+                            {/* Rev. 4245/4250 — Botões incluir item avulso + da EAP */}
                             {detalheFullscreen?.status === "pendente" && (
                               <tr>
                                 <td colSpan={99} className="px-4 py-2 border-t border-dashed border-gray-200">
-                                  <button
-                                    onClick={() => setAddItemDialog(true)}
-                                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                                  >
-                                    <Plus className="h-3.5 w-3.5" />
-                                    Incluir item
-                                  </button>
+                                  <div className="flex items-center gap-4">
+                                    <button
+                                      onClick={() => setAddItemDialog(true)}
+                                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                                    >
+                                      <Plus className="h-3.5 w-3.5" />
+                                      Incluir item avulso
+                                    </button>
+                                    <button
+                                      onClick={() => { setEapPickerOpen(true); setEapPickerSearch(""); setEapPickerSelected(new Set()); }}
+                                      className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors"
+                                    >
+                                      <ClipboardList className="h-3.5 w-3.5" />
+                                      Incluir da EAP
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             )}
@@ -6805,6 +6864,136 @@ export default function Cotacoes() {
               onClick={() => adicionarItemCotacao.mutate({ cotacaoId: showDetalhe, descricao: addItemForm.descricao, unidade: addItemForm.unidade, quantidade: addItemForm.quantidade, somenteMo: addItemForm.somenteMo })}
               className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs">
               {adicionarItemCotacao.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Incluir
+            </Button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Rev. 4250 — Dialog picker: Incluir itens da EAP na cotação */}
+    {eapPickerOpen && showDetalhe && createPortal(
+      <div className="fixed inset-0 z-[99998] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
+        <div className="absolute inset-0 bg-black/40" onClick={() => setEapPickerOpen(false)} />
+        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col" style={{ maxHeight: "80vh" }} onClick={e => e.stopPropagation()}>
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200 px-5 py-3 rounded-t-xl flex items-center justify-between shrink-0">
+            <div>
+              <h2 className="text-base font-bold text-emerald-900 flex items-center gap-2"><ClipboardList className="h-4 w-4" /> Incluir da EAP</h2>
+              <p className="text-[11px] text-emerald-600">Selecione os itens do orçamento desta obra para adicionar à cotação</p>
+            </div>
+            <button onClick={() => setEapPickerOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="px-4 py-3 border-b border-gray-100 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar por descrição ou código EAP…"
+                value={eapPickerSearch}
+                onChange={e => setEapPickerSearch(e.target.value)}
+                autoFocus
+                className="w-full pl-8 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              />
+            </div>
+            {eapPickerSelected.size > 0 && (
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-xs text-emerald-700 font-medium">{eapPickerSelected.size} {eapPickerSelected.size === 1 ? "item selecionado" : "itens selecionados"}</span>
+                <button onClick={() => setEapPickerSelected(new Set())} className="text-xs text-gray-400 hover:text-red-500 underline">Limpar seleção</button>
+              </div>
+            )}
+          </div>
+          <div className="overflow-y-auto flex-1 px-2 py-2">
+            {eapItensQ.isLoading && (
+              <div className="flex items-center justify-center py-10 text-gray-400">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando EAP…
+              </div>
+            )}
+            {!eapItensQ.isLoading && (eapItensQ.data ?? []).length === 0 && (
+              <div className="text-center py-10 text-gray-400 text-sm">
+                {eapItensQ.error ? "Erro ao carregar — esta cotação não tem obra vinculada ou sem orçamento." : "Nenhum item de EAP encontrado para esta obra."}
+              </div>
+            )}
+            {!eapItensQ.isLoading && (eapItensQ.data ?? []).length > 0 && (() => {
+              const term = eapPickerSearch.toLowerCase();
+              const filtrados = (eapItensQ.data ?? []).filter((it: any) =>
+                !term || (it.descricao ?? "").toLowerCase().includes(term) || (it.eapCodigo ?? "").toLowerCase().includes(term)
+              );
+              if (filtrados.length === 0) return (
+                <div className="text-center py-10 text-gray-400 text-sm">Nenhum item encontrado para "{eapPickerSearch}"</div>
+              );
+              return (
+                <table className="w-full text-xs border-collapse">
+                  <thead className="sticky top-0 bg-gray-50 z-10">
+                    <tr className="border-b border-gray-200">
+                      <th className="w-8 px-2 py-2">
+                        <input
+                          type="checkbox"
+                          checked={filtrados.length > 0 && filtrados.every((it: any) => eapPickerSelected.has(it.id))}
+                          onChange={e => {
+                            setEapPickerSelected(prev => {
+                              const next = new Set(prev);
+                              if (e.target.checked) filtrados.forEach((it: any) => next.add(it.id));
+                              else filtrados.forEach((it: any) => next.delete(it.id));
+                              return next;
+                            });
+                          }}
+                          className="rounded border-gray-400 text-emerald-600 h-3.5 w-3.5 cursor-pointer"
+                        />
+                      </th>
+                      <th className="text-left px-2 py-2 text-gray-500 font-semibold uppercase">Cód. EAP</th>
+                      <th className="text-left px-2 py-2 text-gray-500 font-semibold uppercase">Descrição</th>
+                      <th className="text-center px-2 py-2 text-gray-500 font-semibold uppercase">Un.</th>
+                      <th className="text-right px-2 py-2 text-gray-500 font-semibold uppercase">Qtd.</th>
+                      <th className="text-right px-2 py-2 text-gray-500 font-semibold uppercase">Meta Unit.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtrados.map((it: any) => {
+                      const sel = eapPickerSelected.has(it.id);
+                      return (
+                        <tr
+                          key={it.id}
+                          onClick={() => setEapPickerSelected(prev => { const n = new Set(prev); sel ? n.delete(it.id) : n.add(it.id); return n; })}
+                          className={`border-b border-gray-100 cursor-pointer hover:bg-emerald-50/60 transition-colors ${sel ? "bg-emerald-50" : ""}`}
+                        >
+                          <td className="px-2 py-1.5 text-center">
+                            <input type="checkbox" checked={sel} readOnly className="rounded border-gray-400 text-emerald-600 h-3.5 w-3.5 pointer-events-none" />
+                          </td>
+                          <td className="px-2 py-1.5 font-mono text-gray-500 whitespace-nowrap">{it.eapCodigo}</td>
+                          <td className="px-2 py-1.5 text-gray-800 break-words max-w-xs">{it.descricao}</td>
+                          <td className="px-2 py-1.5 text-center text-gray-500">{it.unidade ?? "—"}</td>
+                          <td className="px-2 py-1.5 text-right text-gray-700">{it.quantidade ? parseFloat(it.quantidade).toLocaleString("pt-BR", { maximumFractionDigits: 3 }) : "—"}</td>
+                          <td className="px-2 py-1.5 text-right text-blue-700">
+                            {it.metaUnitTotal ? `R$ ${parseFloat(it.metaUnitTotal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </div>
+          <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 shrink-0">
+            <Button size="sm" variant="outline" onClick={() => setEapPickerOpen(false)} className="h-8 text-xs">Cancelar</Button>
+            <Button
+              size="sm"
+              disabled={eapPickerSelected.size === 0 || adicionarItensEAP.isPending}
+              onClick={() => {
+                const selecionados = (eapItensQ.data ?? []).filter((it: any) => eapPickerSelected.has(it.id));
+                adicionarItensEAP.mutate({
+                  cotacaoId: showDetalhe!,
+                  itens: selecionados.map((it: any) => ({
+                    descricao: it.descricao ?? "",
+                    unidade: it.unidade ?? "un",
+                    quantidade: it.quantidade ?? "1",
+                  })),
+                });
+              }}
+              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs"
+            >
+              {adicionarItensEAP.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              Adicionar {eapPickerSelected.size > 0 ? `${eapPickerSelected.size} ` : ""}itens
             </Button>
           </div>
         </div>

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4249** — **FIX: EXCLUSÃO EM LOTE NÃO APAGAVA GRUPOS PACOTE.** Ao deletar linha de grupo pacote, só o `first.id` era enviado; demais irmãos (mesmo `composicaoCodigo`) sobreviviam e o grupo reaparecia. Fix: expandir IDs no onClick usando `mapa.itens` brutos antes de chamar a mutation. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4250** — **FILTRO DE BUSCA + INCLUIR ITENS DA EAP NO MAPA DE COTAÇÃO.** Campo "Filtrar itens por descrição…" acima da tabela filtra `rawItens` em tempo real (contador N/Total ao lado). Botão "Incluir da EAP" abre dialog picker com lista de `orcamentoItens` da obra (servicoCodigo IS NOT NULL = folhas), busca por descrição/código EAP, seleção múltipla, bulk insert via `adicionarItensEAPCotacao`. Backend: `getItensEAPParaCotacao` + `adicionarItensEAPCotacao`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4248** — **SELEÇÃO MÚLTIPLA PARA EXCLUSÃO EM LOTE NO MAPA DE COTAÇÃO.** Checkboxes agora aparecem em toda cotação pendente (antes só com ≥2 fornecedores). Toolbar com botão "Excluir N itens" (vermelho). Backend: `excluirItensCotacao` com array de IDs, guard OC ativa, delete atômico de respostas+itens. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4249** — **FIX: EXCLUSÃO EM LOTE NÃO APAGAVA GRUPOS PACOTE.** Ao deletar linha de grupo pacote, só o `first.id` era enviado; demais irmãos (mesmo `composicaoCodigo`) sobreviviam e o grupo reaparecia. Fix: expandir IDs no onClick usando `mapa.itens` brutos antes de chamar a mutation. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Fórmula: Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível (Lucro Bruto); Linha 2 condicional quando deduções configuradas. Sem deduções: Lucro Bruto em verde com CTA. PainelOrcamento: "Lucro Médio Mensal" renomeado para "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -76,6 +76,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
+- **Rev. 4248** — **SELEÇÃO MÚLTIPLA PARA EXCLUSÃO EM LOTE NO MAPA DE COTAÇÃO.** Checkboxes sempre visíveis em cotação pendente; toolbar "Excluir N itens"; backend `excluirItensCotacao` com array de IDs, guard OC ativa, delete atômico. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4244** — **DIALOGS DESCONTO/ACRÉSCIMO: SOMENTE VALOR NEGOCIADO FINAL.** Input único "Valor Negociado Total (R$)"; `calcNegociadoPreview` unificado; badge dinâmico Acréscimo/Desconto. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4243** — **FLAG "SOMENTE MO" POR ITEM EM SC E COTAÇÕES.** Toggle por item; propagação automática nas cotações vinculadas; schema `somente_mo` via SyncSchema+; badge 🔨 SOMENTE MO. ZERO DELETE · ZERO ALTER destrutivo.
@@ -83,8 +85,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4242** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `EXTRACT(days FROM integer)` NÃO EXISTE NO POSTGRES.** Fix: removido `EXTRACT(days FROM ...)` nas 2 ocorrências — subtração de datas já é integer. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4241** — **SCORECARD COMPRAS: FIX LOCAÇÕES — TYPE MISMATCH VARCHAR vs DATE NA UNION ALL.** `COALESCE(el.data_inicio [VARCHAR], ai.criado_em::date [DATE])` quebra silenciosamente; fix: `to_char` (TEXT) + cast explícito na aritmética. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4240** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `origem='alugado'` + ícone 🔑.** Ramo A ampliado com `OR ai.origem='alugado'`; ferramentasAlmox exclui alugado; 🚜 → 🔑. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
