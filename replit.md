@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4240** — **SCORECARD COMPRAS: FIX LOCAÇÕES — itens `origem='alugado'` + ícone 🔑.** Dois tipos de "locado": `equipamento_vinculado_tipo='locado'` (sync equip.) e `origem='alugado'` (form almox). ferramentasAlmox também exclui `origem='alugado'`; locações Ramo A ampliado com `OR ai.origem='alugado'`; 🚜 → 🔑. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4241** — **SCORECARD COMPRAS: FIX LOCAÇÕES — TYPE MISMATCH VARCHAR vs DATE NA UNION ALL.** Causa raiz real: `COALESCE(el.data_inicio [VARCHAR], ai.criado_em::date [DATE])` na UNION ALL quebra silenciosamente; `safe()` captura e retorna `[]`. Fix: SELECT usa `to_char(ai.criado_em,'YYYY-MM-DD')` (ambos TEXT); aritmética de data usa `COALESCE(el.data_inicio::date, ai.criado_em::date)` com cast explícito. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4239** — **ALMOXARIFADO: FIX VISUAL "QTD NÃO PERSISTE" — AVISO DE AGRUPAMENTO.** Causa raiz: card exibe SOMA de todos os sub-items agrupados por nome+unidade; o dialog editava apenas `_subItems[0]`. Fix: novo estado `editandoSubItems`; painel azul no campo "Corrigir Estoque Atual" mostra lista de cada sub-item (código + qtd), destaca o que está sendo editado e exibe o total que aparece no card. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4240** — **SCORECARD COMPRAS: FIX LOCAÇÕES — itens `origem='alugado'` + ícone 🔑.** Dois tipos de "locado": `equipamento_vinculado_tipo='locado'` (sync equip.) e `origem='alugado'` (form almox). ferramentasAlmox também exclui `origem='alugado'`; locações Ramo A ampliado com `OR ai.origem='alugado'`; 🚜 → 🔑. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Fórmula: Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível (Lucro Bruto); Linha 2 condicional quando deduções configuradas. Sem deduções: Lucro Bruto em verde com CTA. PainelOrcamento: "Lucro Médio Mensal" renomeado para "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -76,6 +76,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
+- **Rev. 4239** — **ALMOXARIFADO: FIX VISUAL "QTD NÃO PERSISTE" — AVISO DE AGRUPAMENTO.** Card exibe SOMA de sub-items agrupados; dialog editava só `_subItems[0]`. Fix: `editandoSubItems` + painel azul mostrando cada sub-item, total e destaque do editado. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível; Linha 2 condicional. PainelOrcamento: "Lucro Médio Mensal" → "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4226** — **SCORECARD SST: FIX CAST TIPOS — valor_produto NUMERIC + salarioBase VARCHAR.** REPLACE(numeric_col) quebra silenciosamente; epis.valor_produto é NUMERIC → COALESCE(ep.valor_produto,0); employees.salarioBase é VARCHAR → REPLACE(COALESCE,'0'),',','.'). Q6/Q7/Q12/Q13 corrigidos. ZERO DELETE · ZERO ALTER destrutivo.
@@ -83,8 +85,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4225** — **SCORECARD SST: FIX FILTRO PERÍODO + CUSTO EPI + GRÁFICOS HISTÓRICO.** 5 bugs cirúrgicos: Q4/Q5 sem filtro de data, Q6 custo_estimado vs custo_total, Q6+Q7 sem período, Q13 valor_produto::numeric sem REPLACE. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4224** — **SCORECARD SST: REDESIGN COMPLETO — DASHBOARD RICO COM 12 BLOCOS INTERATIVOS.** 2×4 KPI Hero Cards, Gauge ASO, Treinamentos, Custo Atestados, 6 mini-gráficos, EPI Curva ABC. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4223** — **SCORECARD SST: FIX COLUNAS CAMELCASE + NOVA PÁGINA "GESTOR SST POR OBRA".** Corrigidas Q1/Q3/Q4/Q6/Q7/Q8/Q13. Nova página `/sst/gestor-por-obra`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

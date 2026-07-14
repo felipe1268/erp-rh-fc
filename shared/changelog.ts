@@ -1,4 +1,23 @@
 /**
+ * Rev. 4241 - SCORECARD COMPRAS: FIX LOCAÇÕES — TYPE MISMATCH VARCHAR vs DATE NA UNION ALL.
+ *
+ * CAUSA RAIZ REAL: O UNION ALL na query de locações tinha type mismatch em `data_inicio`:
+ *   Ramo A: COALESCE(el.data_inicio [VARCHAR], ai.criado_em::date [DATE]) → tipo ambíguo.
+ *   Dentro das expressões de aritmética de data, `CURRENT_DATE - COALESCE(varchar, date)`
+ *   falha com type error silencioso no PostgreSQL; o safe() captura e retorna [] sem log
+ *   visível (o servidor tinha sido reiniciado após o teste do usuário).
+ *
+ * CORREÇÃO (server/routers/scorecard.ts):
+ *   data_inicio SELECT: COALESCE(el.data_inicio, to_char(ai.criado_em,'YYYY-MM-DD')) — ambos TEXT.
+ *   dias_locado aritmética: COALESCE(el.data_inicio::date, ai.criado_em::date) — cast explícito.
+ *   custo_estimado aritmética: idem.
+ *   Removido debug temporário que havia sido adicionado para diagnóstico.
+ *
+ * RAIZ ANTERIOR (Rev. 4240): OR ai.origem = 'alugado' já correto — mantido.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4240 - SCORECARD COMPRAS: FIX LOCAÇÕES — ITENS origem='alugado' + ÍCONE 🔑.
  *
  * PROBLEMA: Após Rev. 4238, itens com origem='alugado' saíram de "Equip. Próprios" mas

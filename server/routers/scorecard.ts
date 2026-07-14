@@ -1478,33 +1478,18 @@ export const scorecardRouter = router({
         // ── 6. EQUIPAMENTOS LOCADOS ───────────────────────────────────────────
         // Busca tanto pelo obra_id direto quanto via vínculo em almoxarifado_itens
         safe("locacoes", async () => {
-          // DEBUG: ver o que existe no banco para diagnóstico
-          const dbg = await db.execute(sql`
-            SELECT
-              ai.id, ai.nome, ai.obra_id, ai.company_id, ai.ativo,
-              ai.origem, ai.equipamento_vinculado_tipo, ai.equipamento_vinculado_id
-            FROM almoxarifado_itens ai
-            WHERE ai.company_id = ${input.companyId}
-              AND ai.ativo = true
-              AND (
-                ai.equipamento_vinculado_tipo = 'locado'
-                OR ai.origem = 'alugado'
-              )
-            LIMIT 20
-          `);
-          console.log(`[DEBUG locacoes] obraId=${input.obraId} companyId=${input.companyId} — itens locados/alugados na empresa:`, JSON.stringify(dbg.rows));
-
           // Fonte primária: almoxarifado_itens com tipo = 'locado' para esta obra.
           // Isso garante que qualquer item marcado como locado no almox apareça aqui,
           // independentemente do obra_id em equipamentos_locados.
           const r = await db.execute(sql`
             SELECT
               ai.id,
-              ai.nome                             AS descricao,
+              ai.nome                                                   AS descricao,
               ai.categoria,
-              COALESCE(el.status, 'em_uso')       AS status,
-              COALESCE(el.foto_url, ai.foto_url)  AS foto_url,
-              COALESCE(el.data_inicio, ai.criado_em::date)  AS data_inicio,
+              COALESCE(el.status, 'em_uso')                             AS status,
+              COALESCE(el.foto_url, ai.foto_url)                        AS foto_url,
+              -- Retorna TEXT para manter consistência com Ramo B (VARCHAR)
+              COALESCE(el.data_inicio, to_char(ai.criado_em, 'YYYY-MM-DD')) AS data_inicio,
               el.data_fim_prevista,
               el.data_fim_real,
               el.valor_mensal,
@@ -1515,8 +1500,8 @@ export const scorecardRouter = router({
               ai.quantidade_atual,
               CASE
                 WHEN el.data_fim_real IS NOT NULL
-                THEN (el.data_fim_real::date - COALESCE(el.data_inicio, ai.criado_em::date))
-                ELSE (CURRENT_DATE - COALESCE(el.data_inicio, ai.criado_em::date))
+                THEN (el.data_fim_real::date - COALESCE(el.data_inicio::date, ai.criado_em::date))
+                ELSE (CURRENT_DATE - COALESCE(el.data_inicio::date, ai.criado_em::date))
               END AS dias_locado,
               CASE
                 WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
@@ -1524,7 +1509,7 @@ export const scorecardRouter = router({
                   el.valor_mensal *
                   EXTRACT(days FROM (
                     COALESCE(el.data_fim_real::date, CURRENT_DATE)
-                    - COALESCE(el.data_inicio, ai.criado_em::date)
+                    - COALESCE(el.data_inicio::date, ai.criado_em::date)
                   )) / 30.0, 2)
                 ELSE NULL
               END AS custo_estimado,
