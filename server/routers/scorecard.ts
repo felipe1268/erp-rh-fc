@@ -1507,10 +1507,10 @@ export const scorecardRouter = router({
                 WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
                 THEN ROUND(
                   el.valor_mensal *
-                  EXTRACT(days FROM (
+                  (
                     COALESCE(el.data_fim_real::date, CURRENT_DATE)
                     - COALESCE(el.data_inicio::date, ai.criado_em::date)
-                  )) / 30.0, 2)
+                  ) / 30.0, 2)
                 ELSE NULL
               END AS custo_estimado,
               'locado' AS tipo_vinculo
@@ -1554,9 +1554,9 @@ export const scorecardRouter = router({
                 WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
                 THEN ROUND(
                   el.valor_mensal *
-                  EXTRACT(days FROM (
+                  (
                     COALESCE(el.data_fim_real::date, CURRENT_DATE) - el.data_inicio::date
-                  )) / 30.0, 2)
+                  ) / 30.0, 2)
                 ELSE NULL
               END AS custo_estimado,
               'locado' AS tipo_vinculo

@@ -1,4 +1,25 @@
 /**
+ * Rev. 4242 - SCORECARD COMPRAS: FIX LOCAÇÕES — EXTRACT(days FROM integer) NÃO EXISTE NO POSTGRES.
+ *
+ * CAUSA RAIZ REAL (diagnóstico direto no Neon):
+ *   No PostgreSQL, (date - date) retorna INTEGER (número de dias), NÃO um interval.
+ *   A query usava EXTRACT(days FROM (date1 - date2)) — mas EXTRACT espera interval,
+ *   não integer → pg_catalog.extract(unknown, integer) does not exist.
+ *   O safe() capturava o erro silenciosamente e retornava [].
+ *
+ * Os dados ESTAVAM corretos no banco desde o início: 11 equipamentos em obra_id=90001
+ * (companyId=60002), a query completa validada via Node direto no Neon retorna 11 linhas.
+ *
+ * FIX (2 ocorrências em scorecard.ts, Ramo A e Ramo B da UNION ALL):
+ *   ANTES: EXTRACT(days FROM (COALESCE(fim::date, CURRENT_DATE) - inicio::date)) / 30.0
+ *   DEPOIS: (COALESCE(fim::date, CURRENT_DATE) - inicio::date) / 30.0
+ *   date - date já é integer em Postgres — sem EXTRACT necessário.
+ *
+ * Arquivos: server/routers/scorecard.ts, shared/version.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4241 - SCORECARD COMPRAS: FIX LOCAÇÕES — TYPE MISMATCH VARCHAR vs DATE NA UNION ALL.
  *
  * CAUSA RAIZ REAL: O UNION ALL na query de locações tinha type mismatch em `data_inicio`:
