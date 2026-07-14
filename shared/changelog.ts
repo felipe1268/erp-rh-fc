@@ -1,4 +1,47 @@
 /**
+ * Rev. 4224 - SCORECARD SST: REDESIGN COMPLETO — DASHBOARD RICO COM 12 BLOCOS INTERATIVOS.
+ *
+ * OBJETIVO — Substituir a aba "🦺 SST" no ScorecardTab.tsx por um dashboard moderno e
+ * informação-densa com gráficos clicáveis e seções expansíveis.
+ *
+ * BLOCOS IMPLEMENTADOS:
+ *  • BLOCO 1 + 1b: 2 linhas de 4 KPI Hero Cards com ícone, número grande e sub-texto.
+ *    Linha 1: Efetivo CLT, Acidentes, DDS Realizados, APR/PT.
+ *    Linha 2: Atestados, Custo Atestados, EPIs Entregues, Advertências.
+ *  • BLOCO 2: 3 cards de compliance — Gauge ASO SVG com donut colorido (verde/âmbar/vermelho)
+ *    + Treinamentos por norma com barras de progresso + Custo Est. Atestados breakdown.
+ *  • BLOCO 3: 6 mini-gráficos expandíveis (BarChart) em grid 3×2 — DDS, Atestados, Acidentes,
+ *    Dias Afastamento, EPIs Entregues, Custo EPI. Cada card tem hover effect e ícone Maximize2.
+ *    Clique abre Dialog fullscreen (renderBigChart helper).
+ *  • BLOCO 4: Comparativo Mês Atual × Mês Anterior — 6 métricas side-by-side com seta ▲/▼
+ *    colorida (verde=melhorou, vermelho=piorou).
+ *  • BLOCO 5: EPI Dashboard — Curva ABC horizontal BarChart (layout="vertical", Cell colorido
+ *    por classe A/B/C) + Top 5 maior custo com foto/avatar e barra proporcional + tabela de
+ *    estoque da obra com badge vermelho para itens zerados.
+ *  • BLOCO 6: Acidentes colapsável — cards com gradiente por gravidade, dias afastamento, ação.
+ *  • BLOCO 7: Atestados colapsável — Top 5 com foto, CID breakdown com barras, tabela completa
+ *    com código CID badge + tooltip de descrição.
+ *  • BLOCO 8: Advertências colapsável — CLT + terceiros, ordenado por data.
+ *  • BLOCO 9: DDS colapsável — tabela com tema/instrutor/data/status.
+ *  • BLOCO 10: APR + PT colapsável — tabelas separadas com status colorido.
+ *  • BLOCO 11: Equipe CLT colapsável — grade 3 colunas com foto/avatar, badges status/ASO/
+ *    adv/CIPA/experiência, grayscale para desligados.
+ *  • BLOCO 12: Terceiros colapsável — linha por terceiro com ASO badge + docs + adv.
+ *
+ * ESTADO ADICIONADO:
+ *  • sstExpandChart: string|null — controla qual gráfico está aberto no Dialog expandido.
+ *  • sstOpenSections: Set<string> — controla quais seções colapsáveis estão abertas
+ *    (keys: "acidentes","atestados","adv","dds","apr","equipe","terceiros").
+ *
+ * DADOS COMPUTADOS:
+ *  • epiBarData: array top-10 EPIs por tipo com classe_abc para coloração Curva ABC.
+ *  • asoOkQty/asoPct: compliance ASO para o gauge SVG.
+ *  • renderBigChart(key, height): helper que renderiza BarChart com Cell por cor de barra.
+ *
+ * ARQUIVOS TOCADOS: client/src/pages/planejamento/ScorecardTab.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+/**
  * Rev. 4223 - SCORECARD SST: FIX COLUNAS CAMELCASE + NOVA PÁGINA "GESTOR SST POR OBRA".
  *
  * CAUSA-RAIZ DAS QUERIES FALHANDO — todas as tabelas SST (trainings, warnings, asos,

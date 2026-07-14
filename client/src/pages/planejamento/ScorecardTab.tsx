@@ -13,10 +13,11 @@ import {
   Settings, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle,
   CheckCircle2, ChevronDown, ChevronUp, DollarSign, Loader2, Wrench,
   Users, HardHat, RefreshCw, Info, Calendar, Activity, FileText,
-  ClipboardCheck, Heart, Shield, UserCheck,
+  ClipboardCheck, Heart, Shield, UserCheck, Maximize2,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RcTooltip, ResponsiveContainer, Cell,
+  LineChart, Line, CartesianGrid, Legend,
 } from "recharts";
 
 const fmt  = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -239,6 +240,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [rhMes,         setRhMes]         = useState<string>("all");
   const [segAno,        setSegAno]        = useState(new Date().getFullYear());
   const [segMes,        setSegMes]        = useState<number | null>(new Date().getMonth() + 1);
+  const [sstExpandChart,setSstExpandChart]= useState<string | null>(null);
+  const [sstOpenSections,setSstOpenSections] = useState<Set<string>>(new Set());
 
   const enabled = !!obraId;
 
@@ -1426,23 +1429,21 @@ export default function ScorecardTab({ proj }: { proj: any }) {
           ) : !analiseSeguranca.data ? (
             <p className="text-xs text-gray-400 py-8 text-center">Sem dados disponíveis.</p>
           ) : (
-            <div className="space-y-4">
-              {/* ── Conteúdo principal da aba SST ────────────────────────────── */}
+            <div className="space-y-3">
               {(() => {
-                const d      = analiseSeguranca.data!;
-                const r      = d.resumo;
+                const d = analiseSeguranca.data!;
+                const r = d.resumo;
 
                 // ── CID lookup ──────────────────────────────────────────────────
                 const CID_LOOKUP: Record<string, string> = {
-                  "J00":"Resfriado comum","J06":"Inf. resp. superior aguda","J11":"Influenza / gripe",
+                  "J00":"Resfriado comum","J06":"Inf. resp. superior","J11":"Influenza/gripe",
                   "J20":"Bronquite aguda","J22":"Inf. resp. inferior","J45":"Asma","J40":"Bronquite",
-                  "R51":"Cefaleia / enxaqueca","M54":"Dorsalgia / dor lombar","M79":"Transt. musculares",
-                  "M75":"Lesão ombro","M77":"Tendinite / epicondilite","M50":"Lesão cervical",
-                  "K30":"Dispepsia","K59":"Alt. intestinal funcional","K21":"Refluxo","K29":"Gastrite",
-                  "A09":"Diarreia / gastroenterite","F32":"Episódio depressivo","F41":"Ansiedade",
-                  "I10":"Hipertensão","L30":"Dermatose / alergia pele",
-                  "R10":"Dor abdominal","R53":"Mal-estar / fadiga",
-                  "S":"Lesão / traumatismo","Z":"Consulta preventiva",
+                  "R51":"Cefaleia/enxaqueca","M54":"Dorsalgia/lombar","M79":"Transt. musculares",
+                  "M75":"Lesão ombro","M77":"Tendinite","M50":"Lesão cervical",
+                  "K30":"Dispepsia","K59":"Alt. intestinal","K21":"Refluxo","K29":"Gastrite",
+                  "A09":"Diarreia/gastroenterite","F32":"Episódio depressivo","F41":"Ansiedade",
+                  "I10":"Hipertensão","L30":"Dermatose/alergia","R10":"Dor abdominal","R53":"Fadiga",
+                  "S":"Lesão/traumatismo","Z":"Consulta preventiva",
                 };
                 const getCidDesc = (cid: string | null): string => {
                   if (!cid) return "";
@@ -1454,848 +1455,812 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                 const chartData = (d.historico ?? []).map((h: any) => {
                   const [y, mm] = String(h.mes ?? "").split("-");
                   return {
-                    mesKey    : String(h.mes ?? ""),
-                    mes       : `${MESES_BR[parseInt(mm ?? "1") - 1]}/${String(y ?? "").slice(2)}`,
-                    atestados : parseInt(String(h.atestados ?? 0)),
-                    dds       : parseInt(String(h.dds ?? 0)),
-                    acidentes : parseInt(String(h.acidentes ?? 0)),
-                    dias_ates : parseInt(String(h.dias_ates ?? 0)),
-                    custo_ates: parseFloat(String(h.custo_ates ?? 0)),
+                    mesKey      : String(h.mes ?? ""),
+                    mes         : `${MESES_BR[parseInt(mm ?? "1") - 1]}/${String(y ?? "").slice(2)}`,
+                    atestados   : parseInt(String(h.atestados ?? 0)),
+                    dds         : parseInt(String(h.dds ?? 0)),
+                    acidentes   : parseInt(String(h.acidentes ?? 0)),
+                    dias_ates   : parseInt(String(h.dias_ates ?? 0)),
+                    custo_ates  : parseFloat(String(h.custo_ates ?? 0)),
                     epi_unidades: parseInt(String(h.epi_unidades ?? 0)),
                     epi_custo   : parseFloat(String(h.epi_custo ?? 0)),
                   };
                 });
-                const hasData = chartData.some(h => h.atestados > 0 || h.dds > 0 || h.acidentes > 0 || h.epi_unidades > 0);
 
-                // ── Top atestados por funcionário ───────────────────────────────
+                // ── Atestados aggregation ────────────────────────────────────────
                 const atEstMap: Record<string, {nome:string;foto:string|null;cargo:string|null;count:number;dias:number;cids:string[]}> = {};
                 (d.atestados ?? []).forEach((a: any) => {
                   const k = String(a.funcionario_nome ?? a.funcionarioNome ?? "?");
-                  if (!atEstMap[k]) atEstMap[k] = { nome: k, foto: a.foto_url ?? null, cargo: a.cargo ?? null, count: 0, dias: 0, cids: [] };
+                  if (!atEstMap[k]) atEstMap[k] = { nome:k, foto:a.foto_url??null, cargo:a.cargo??null, count:0, dias:0, cids:[] };
                   atEstMap[k].count++;
                   atEstMap[k].dias += parseInt(String(a.diasAfastamento ?? 0));
                   if (a.cid) atEstMap[k].cids.push(String(a.cid));
                 });
-                const topAtestados = Object.values(atEstMap).sort((a,b) => b.count - a.count).slice(0, 5);
-
-                // ── CID breakdown ───────────────────────────────────────────────
+                const topAtestados = Object.values(atEstMap).sort((a,b) => b.count - a.count).slice(0,5);
                 const cidMap: Record<string, {cid:string;count:number;dias:number}> = {};
                 (d.atestados ?? []).forEach((a: any) => {
                   const c = a.cid ? String(a.cid).toUpperCase().trim().slice(0,3) : "S/CID";
-                  if (!cidMap[c]) cidMap[c] = { cid: c, count: 0, dias: 0 };
+                  if (!cidMap[c]) cidMap[c] = { cid:c, count:0, dias:0 };
                   cidMap[c].count++;
                   cidMap[c].dias += parseInt(String(a.diasAfastamento ?? 0));
                 });
-                const cidList = Object.values(cidMap).sort((a,b) => b.count - a.count).slice(0, 6);
-                // ── Comparativo mês atual × mês anterior ──
-                const curMesKey  = segMes !== null ? `${segAno}-${String(segMes).padStart(2, "0")}` : null;
+                const cidList = Object.values(cidMap).sort((a,b) => b.count - a.count).slice(0,6);
+
+                // ── Comparativo ──────────────────────────────────────────────────
+                const curMesKey  = segMes !== null ? `${segAno}-${String(segMes).padStart(2,"0")}` : null;
                 const prevDate   = segMes !== null ? new Date(segAno, segMes - 2, 1) : null;
-                const prevMesKey = prevDate ? `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}` : null;
+                const prevMesKey = prevDate ? `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,"0")}` : null;
                 const curH  = curMesKey  ? chartData.find(c => c.mesKey === curMesKey)  : null;
                 const prevH = prevMesKey ? chartData.find(c => c.mesKey === prevMesKey) : null;
-                const prevLabel = prevMesKey ? `${MESES_BR[parseInt(prevMesKey.split("-")[1]) - 1]}/${prevMesKey.split("-")[0].slice(2)}` : "—";
-                const curLabel  = curMesKey  ? `${MESES_BR[parseInt(curMesKey.split("-")[1])  - 1]}/${curMesKey.split("-")[0].slice(2)}`  : "—";
-                type CompRow = { label: string; prev: number | string; cur: number | string; higherIsBetter: boolean; isMonetary?: boolean };
-                const compRows: CompRow[] = curH ? [
-                  { label: "DDS Realizados",      prev: prevH?.dds ?? 0,         cur: curH.dds,           higherIsBetter: true  },
-                  { label: "Atestados",            prev: prevH?.atestados ?? 0,   cur: curH.atestados,     higherIsBetter: false },
-                  { label: "Dias Afastamento",     prev: prevH?.dias_ates ?? 0,   cur: curH.dias_ates,     higherIsBetter: false },
-                  { label: "Acidentes",            prev: prevH?.acidentes ?? 0,   cur: curH.acidentes,     higherIsBetter: false },
-                  { label: "EPIs Entregues",       prev: prevH?.epi_unidades ?? 0,cur: curH.epi_unidades,  higherIsBetter: true  },
-                  { label: "Custo Atestados (R$)", prev: prevH?.custo_ates ?? 0,  cur: curH.custo_ates,    higherIsBetter: false, isMonetary: true },
-                ] : [];
+                const prevLabel = prevMesKey ? `${MESES_BR[parseInt(prevMesKey.split("-")[1])-1]}/${prevMesKey.split("-")[0].slice(2)}` : "—";
+                const curLabel  = curMesKey  ? `${MESES_BR[parseInt(curMesKey.split("-")[1])-1]}/${curMesKey.split("-")[0].slice(2)}`  : "—";
 
-                // ── Top 5 EPIs por funcionário ──────────────────────────────────
-                const topEpiFunc  = [...(d.epiPorFuncionario ?? [])].sort((a:any,b:any) => parseFloat(String(b.custo_total??0)) - parseFloat(String(a.custo_total??0))).slice(0,5);
-                const leastEpiFunc= [...(d.epiPorFuncionario ?? [])].sort((a:any,b:any) => parseFloat(String(a.custo_total??0)) - parseFloat(String(b.custo_total??0))).slice(0,5);
-                // Max custo para barra
-                const maxEpiCusto = Math.max(1, ...topEpiFunc.map((e:any) => parseFloat(String(e.custo_total??0))));
-                // Estoque EPI desta obra
+                // ── EPI ──────────────────────────────────────────────────────────
+                const topEpiFunc  = [...(d.epiPorFuncionario ?? [])].sort((a:any,b:any) => parseFloat(String(b.custo_total??0))-parseFloat(String(a.custo_total??0))).slice(0,5);
+                const maxEpiCusto = Math.max(1, ...topEpiFunc.map((e:any)=>parseFloat(String(e.custo_total??0))));
                 const epiEstoque  = d.epiEstoque ?? [];
                 const estoqueTotal= epiEstoque.reduce((s:number,e:any)=>s+parseInt(String(e.estoque_obra??0)),0);
                 const epiCriticos = epiEstoque.filter((e:any)=>parseInt(String(e.estoque_obra??0))===0).length;
+                const epiBarData  = (d.epiPorTipo ?? []).slice(0,10).map((ep:any) => ({
+                  nome  : String(ep.epi_nome ?? "").slice(0,20),
+                  custo : parseFloat(String(ep.custo_total ?? 0)),
+                  un    : parseInt(String(ep.total_unidades ?? 0)),
+                  classe: ep.classe_abc ?? "C",
+                }));
+
+                // ── Compliance ASO ───────────────────────────────────────────────
+                const totalClt = r.totalClt ?? 0;
+                const asoOkQty = Math.max(0, totalClt - (r.cltSemAso??0) - (r.cltAsoVencido??0));
+                const asoPct   = totalClt > 0 ? Math.round((asoOkQty / totalClt) * 100) : 0;
+
+                // ── Expanded chart renderer ───────────────────────────────────────
+                const renderBigChart = (key: string, height = 260) => {
+                  const configs: Record<string,{label:string;color:string;dataKey:string;isR$?:boolean}> = {
+                    dds       : { label:"DDS Realizados",     color:"#16a34a", dataKey:"dds"          },
+                    atestados : { label:"Atestados",          color:"#f59e0b", dataKey:"atestados"    },
+                    acidentes : { label:"Acidentes",          color:"#dc2626", dataKey:"acidentes"    },
+                    dias_ates : { label:"Dias Afastamento",   color:"#9333ea", dataKey:"dias_ates"    },
+                    epi_un    : { label:"EPIs Entregues",     color:"#6366f1", dataKey:"epi_unidades" },
+                    epi_custo : { label:"Custo EPI",          color:"#a855f7", dataKey:"epi_custo", isR$:true },
+                    custo_ates: { label:"Custo Atestados",    color:"#f97316", dataKey:"custo_ates", isR$:true },
+                  };
+                  const cfg = configs[key]; if (!cfg) return null;
+                  return (
+                    <ResponsiveContainer width="100%" height={height}>
+                      <BarChart data={chartData} barSize={26} margin={{top:8,right:16,left:-4,bottom:20}}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false}/>
+                        <XAxis dataKey="mes" tick={{fontSize:10,fill:"#9ca3af"}} axisLine={false} tickLine={false}/>
+                        <YAxis tick={{fontSize:10,fill:"#9ca3af"}} axisLine={false} tickLine={false} allowDecimals={false}
+                          tickFormatter={(v:number)=>v>999?`${(v/1000).toFixed(0)}k`:String(v)}/>
+                        <RcTooltip contentStyle={{fontSize:12,borderRadius:8}} formatter={(v:any)=>[cfg.isR$?fmt(Number(v)):v, cfg.label]}/>
+                        <Bar dataKey={cfg.dataKey} radius={[5,5,0,0]}>
+                          {chartData.map((cd:any,i:number)=><Cell key={i} fill={(cd[cfg.dataKey] as number)>0?cfg.color:"#e5e7eb"}/>)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  );
+                };
 
                 return (
                   <>
-                    {/* ── LINHA 1: KPIs SST ──────────────────────────────────── */}
-                    <div className="grid grid-cols-5 gap-1.5">
-                      {[
-                        { label: "Efetivo CLT",  v: r.totalClt ?? 0,       sub: `+${r.totalTerceiros ?? 0} terc.`,         color: "text-gray-800",   bg: "bg-white border-gray-200" },
-                        { label: "Acidentes",    v: r.totalAcidentes ?? 0,  sub: `${r.totalGraves ?? 0} grave(s)`,          color: (r.totalAcidentes ?? 0) > 0 ? "text-red-600"   : "text-gray-400", bg: (r.totalAcidentes ?? 0) > 0  ? "bg-red-50 border-red-200"    : "bg-gray-50 border-gray-100" },
-                        { label: "DDS",          v: r.totalDds ?? 0,        sub: "realizados",                              color: (r.totalDds ?? 0) > 0      ? "text-green-700" : "text-gray-400", bg: (r.totalDds ?? 0) > 0        ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-100" },
-                        { label: "APR / PT",     v: `${r.totalApr ?? 0}/${r.totalPt ?? 0}`, sub: `${(r.aprAbertas ?? 0) + (r.ptAbertas ?? 0)} ativ.`, color: "text-blue-700", bg: "bg-blue-50 border-blue-100" },
-                        { label: "Atestados",    v: r.totalAtestados ?? 0,  sub: `${r.totalDiasAtestado ?? 0}d afas.`,      color: (r.totalAtestados ?? 0) > 0  ? "text-amber-600" : "text-gray-400", bg: (r.totalAtestados ?? 0) > 0  ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-100" },
-                      ].map((k, i) => (
-                        <div key={i} className={`rounded-xl border px-1.5 py-2.5 text-center ${k.bg}`}>
-                          <p className={`text-base font-bold leading-none ${k.color}`}>{k.v}</p>
-                          <p className="text-[8px] text-gray-400 mt-0.5 leading-tight">{k.sub}</p>
-                          <p className="text-[9px] font-semibold text-gray-500 mt-1 leading-tight">{k.label}</p>
+                    {/* ═══ BLOCO 1: KPI HERO 2×4 ════════════════════════════════ */}
+                    <div className="grid grid-cols-4 gap-2">
+                      {([
+                        { label:"Efetivo CLT",   v: r.totalClt??0,          sub:`+${r.totalTerceiros??0} terceiros`,                      icon:"👷",  vc:"text-gray-800",   bc:"bg-white border-gray-200"                                                                  },
+                        { label:"Acidentes",     v: r.totalAcidentes??0,    sub:`${r.totalGraves??0} grave(s)`,                           icon:"⚠️", vc:(r.totalAcidentes??0)>0?"text-red-600":"text-gray-400",   bc:(r.totalAcidentes??0)>0?"bg-red-50 border-red-200":"bg-gray-50 border-gray-100"   },
+                        { label:"DDS Realizados",v: r.totalDds??0,          sub:"diálogos diários de segurança",                          icon:"📋",  vc:(r.totalDds??0)>0?"text-green-700":"text-gray-400",       bc:(r.totalDds??0)>0?"bg-green-50 border-green-200":"bg-gray-50 border-gray-100"     },
+                        { label:"APR / PT",      v:`${r.totalApr??0} / ${r.totalPt??0}`, sub:`${(r.aprAbertas??0)+(r.ptAbertas??0)} ativas`, icon:"🛡️", vc:"text-blue-700",  bc:"bg-blue-50 border-blue-100"                                                                },
+                      ] as const).map((k,i) => (
+                        <div key={i} className={`rounded-2xl border px-4 py-3 ${k.bc}`}>
+                          <div className="flex items-start gap-2.5">
+                            <span className="text-2xl mt-0.5">{k.icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-3xl font-black leading-none ${k.vc}`}>{k.v}</p>
+                              <p className="text-[8px] text-gray-400 mt-1 leading-tight">{k.sub}</p>
+                              <p className="text-[10px] font-bold text-gray-500 mt-1">{k.label}</p>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
 
-                    {/* ── LINHA 2: Compliance + EPI KPIs ─────────────────────── */}
-                    <div className="grid grid-cols-6 gap-1.5">
-                      {[
-                        { label: "Sem ASO",        v: r.cltSemAso ?? 0,             color: (r.cltSemAso ?? 0) > 0       ? "text-amber-600"  : "text-gray-400", bg: (r.cltSemAso ?? 0) > 0       ? "bg-amber-50 border-amber-100"  : "bg-gray-50 border-gray-100" },
-                        { label: "ASO Vencido",    v: r.cltAsoVencido ?? 0,          color: (r.cltAsoVencido ?? 0) > 0   ? "text-red-600"    : "text-gray-400", bg: (r.cltAsoVencido ?? 0) > 0   ? "bg-red-50 border-red-100"      : "bg-gray-50 border-gray-100" },
-                        { label: "Advertências",   v: r.totalAdvertencias ?? 0,      color: (r.totalAdvertencias ?? 0) > 0 ? "text-red-600"  : "text-gray-400", bg: (r.totalAdvertencias ?? 0) > 0 ? "bg-red-50 border-red-100"    : "bg-gray-50 border-gray-100" },
-                        { label: "EPIs Entregues", v: r.totalEntregasEpi ?? 0,       color: "text-indigo-700",              bg: "bg-indigo-50 border-indigo-100"  },
-                        { label: "Unidades EPI",   v: r.totalUnidadesEpi ?? 0,       color: "text-indigo-600",              bg: "bg-indigo-50 border-indigo-100"  },
-                        { label: "Custo EPI",      v: fmt(r.totalCustoEpi ?? 0),     color: "text-purple-700",              bg: "bg-purple-50 border-purple-100"  },
-                      ].map((k, i) => (
-                        <div key={i} className={`rounded-lg border px-1.5 py-2 text-center ${k.bg}`}>
-                          <p className={`text-xs font-bold leading-none ${k.color}`}>{k.v}</p>
-                          <p className="text-[8px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
+                    {/* ═══ BLOCO 1b: KPI HERO ROW 2 ═════════════════════════════ */}
+                    <div className="grid grid-cols-4 gap-2">
+                      {([
+                        { label:"Atestados",      v: r.totalAtestados??0,         sub:`${r.totalDiasAtestado??0} dias afastamento`,             icon:"🏥",  vc:(r.totalAtestados??0)>0?"text-amber-600":"text-gray-400",   bc:(r.totalAtestados??0)>0?"bg-amber-50 border-amber-200":"bg-gray-50 border-gray-100"   },
+                        { label:"Custo Atestados",v: fmt(r.custoTotalAtestados??0),sub:"salário + encargos + VR",                                icon:"💰",  vc:"text-orange-700",  bc:"bg-orange-50 border-orange-100"  },
+                        { label:"EPIs Entregues", v: r.totalEntregasEpi??0,        sub:`${r.totalUnidadesEpi??0} unidades — ${fmt(r.totalCustoEpi??0)}`, icon:"🦺", vc:"text-indigo-700",  bc:"bg-indigo-50 border-indigo-100"  },
+                        { label:"Advertências",   v: r.totalAdvertencias??0,       sub:`${r.terceirosSemDoc??0} terceiros sem documentação`,      icon:"🚨",  vc:(r.totalAdvertencias??0)>0?"text-red-700":"text-gray-400",   bc:(r.totalAdvertencias??0)>0?"bg-red-50 border-red-200":"bg-gray-50 border-gray-100"   },
+                      ] as const).map((k,i) => (
+                        <div key={i} className={`rounded-2xl border px-4 py-3 ${k.bc}`}>
+                          <div className="flex items-start gap-2.5">
+                            <span className="text-2xl mt-0.5">{k.icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-2xl font-black leading-none ${k.vc}`}>{k.v}</p>
+                              <p className="text-[8px] text-gray-400 mt-1 leading-tight">{k.sub}</p>
+                              <p className="text-[10px] font-bold text-gray-500 mt-1">{k.label}</p>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
 
-                    {/* ── CUSTO ATESTADOS ─────────────────────────────────────── */}
-                    {(r.totalAtestados ?? 0) > 0 && (
-                      <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5">
-                        <p className="text-[9px] font-bold uppercase tracking-wide text-amber-700 mb-1.5">Custo estimado de atestados</p>
-                        <div className="grid grid-cols-4 gap-1 text-center">
-                          {[
-                            { label: "Salário",       v: fmt(r.custoSalarioAtestados ?? 0),  color: "text-amber-700" },
-                            { label: "+ Encargos 33%",v: fmt(r.custoEncargosAtestados ?? 0), color: "text-orange-700" },
-                            { label: "+ VR/VA",        v: fmt(r.custoVrAtestados ?? 0),       color: "text-yellow-700" },
-                            { label: "TOTAL",          v: fmt(r.custoTotalAtestados ?? 0),    color: "text-red-700 font-bold text-sm" },
-                          ].map((k, i) => (
-                            <div key={i} className="bg-white/70 rounded-lg px-1 py-1.5">
-                              <p className={`text-xs font-bold leading-tight ${k.color}`}>{k.v}</p>
-                              <p className="text-[8px] text-gray-500 leading-tight mt-0.5">{k.label}</p>
-                            </div>
-                          ))}
+                    {/* ═══ BLOCO 2: COMPLIANCE + TREINAMENTOS + CUSTO ══════════════ */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {/* ── 2a: Compliance ASO ── */}
+                      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-3">Compliance ASO</p>
+                        <div className="flex items-center gap-3">
+                          {(() => {
+                            const r2=40, cx=50, cy=50, circ=2*Math.PI*r2;
+                            const clr=asoPct>=80?"#16a34a":asoPct>=60?"#f59e0b":"#dc2626";
+                            const dash=(asoPct/100)*circ;
+                            return (
+                              <svg width={100} height={100} viewBox="0 0 100 100" className="shrink-0">
+                                <circle cx={cx} cy={cy} r={r2} fill="none" stroke="#f3f4f6" strokeWidth={11}/>
+                                <circle cx={cx} cy={cy} r={r2} fill="none" stroke={clr} strokeWidth={11}
+                                  strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+                                  transform={`rotate(-90 ${cx} ${cy})`}/>
+                                <text x={cx} y={cy-4} textAnchor="middle" fontSize="20" fontWeight="900" fill={clr}>{asoPct}%</text>
+                                <text x={cx} y={cy+12} textAnchor="middle" fontSize="9" fill="#9ca3af">compliance</text>
+                              </svg>
+                            );
+                          })()}
+                          <div className="flex-1 space-y-2">
+                            {([
+                              { label:"ASO Válido",  v:asoOkQty,            clr:"text-green-700", bg:"bg-green-100" },
+                              { label:"ASO Vencido", v:r.cltAsoVencido??0,  clr:"text-red-600",   bg:"bg-red-100"   },
+                              { label:"Sem ASO",     v:r.cltSemAso??0,      clr:"text-amber-600", bg:"bg-amber-100" },
+                            ] as const).map((x,i)=>(
+                              <div key={i} className="flex items-center justify-between">
+                                <span className="text-[9px] text-gray-500">{x.label}</span>
+                                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${x.bg} ${x.clr}`}>{x.v}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <p className="text-[8px] text-amber-600 mt-1.5">* Salário proporcional (÷30×dias) + encargos (FGTS 8%+INSS 20%+outros 5%) + VR diário</p>
                       </div>
-                    )}
 
-                    {/* ══ DASHBOARD EPI ══════════════════════════════════════════ */}
-                    {(d.epiPorTipo?.length > 0 || epiEstoque.length > 0) && (
-                      <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 p-3 space-y-3">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 flex items-center gap-1.5">
-                          🦺 Dashboard de EPI — Equipamento de Proteção Individual
-                        </p>
-
-                        {/* EPI: gráfico mensal */}
-                        {chartData.some(c => c.epi_unidades > 0) && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-white border border-indigo-100 rounded-xl px-2 pt-2 pb-1">
-                              <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wide mb-1">Unidades EPI / Mês</p>
-                              <ResponsiveContainer width="100%" height={75}>
-                                <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
-                                  <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                                  <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                                  <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "Unidades"]} />
-                                  <Bar dataKey="epi_unidades" radius={[2,2,0,0]}>
-                                    {chartData.map((_: any, i: number) => <Cell key={i} fill="#6366f1" />)}
-                                  </Bar>
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                            <div className="bg-white border border-purple-100 rounded-xl px-2 pt-2 pb-1">
-                              <p className="text-[9px] font-bold text-purple-600 uppercase tracking-wide mb-1">Custo EPI / Mês (R$)</p>
-                              <ResponsiveContainer width="100%" height={75}>
-                                <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
-                                  <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                                  <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} tickFormatter={(v: number) => v > 999 ? `${(v/1000).toFixed(0)}k` : String(v)} />
-                                  <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [fmt(Number(v)), "Custo"]} />
-                                  <Bar dataKey="epi_custo" radius={[2,2,0,0]}>
-                                    {chartData.map((_: any, i: number) => <Cell key={i} fill="#a855f7" />)}
-                                  </Bar>
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* EPI: Curva ABC */}
-                        {d.epiPorTipo?.length > 0 && (
-                          <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden">
-                            <div className="px-3 py-1.5 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
-                              <p className="text-[9px] font-bold uppercase tracking-wide text-indigo-700">Curva ABC de EPI</p>
-                              <p className="text-[8px] text-gray-400">{r.itemMaisTrocado && <span>↑ mais: <b className="text-indigo-600">{r.itemMaisTrocado}</b></span>}{r.itemMenosTrocado && <span className="ml-2">↓ menos: <b className="text-gray-500">{r.itemMenosTrocado}</b></span>}</p>
-                            </div>
-                            <table className="w-full text-[10px]">
-                              <thead className="bg-gray-50/80">
-                                <tr>
-                                  <th className="text-left px-2 py-1 text-gray-500 font-semibold w-5">Cl.</th>
-                                  <th className="text-left px-2 py-1 text-gray-500 font-semibold">EPI</th>
-                                  <th className="text-right px-2 py-1 text-gray-500 font-semibold w-8">Un.</th>
-                                  <th className="text-right px-2 py-1 text-gray-500 font-semibold w-8">Entrg.</th>
-                                  <th className="text-right px-2 py-1 text-gray-500 font-semibold w-20">Custo</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {d.epiPorTipo.slice(0, 10).map((ep: any, i: number) => (
-                                  <tr key={i} className={`border-t border-gray-50 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
-                                    <td className="px-2 py-1">
-                                      <span className={`font-bold text-[9px] px-1 py-0.5 rounded ${ep.classe_abc === "A" ? "bg-green-100 text-green-700" : ep.classe_abc === "B" ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}>{ep.classe_abc}</span>
-                                    </td>
-                                    <td className="px-2 py-1 text-gray-700 truncate max-w-[110px]">{ep.epi_nome}</td>
-                                    <td className="px-2 py-1 text-right text-gray-600">{ep.total_unidades}</td>
-                                    <td className="px-2 py-1 text-right text-gray-400">{ep.total_entregas}</td>
-                                    <td className="px-2 py-1 text-right font-semibold text-indigo-700">{fmt(parseFloat(String(ep.custo_total ?? 0)))}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-
-                        {/* EPI: top 5 mais e menos usam */}
-                        {d.epiPorFuncionario?.length > 0 && (
-                          <div className="grid grid-cols-2 gap-2">
-                            {/* Top 5 mais */}
-                            <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden">
-                              <div className="px-2.5 py-1.5 bg-indigo-50 border-b border-indigo-100">
-                                <p className="text-[9px] font-bold text-indigo-700 uppercase tracking-wide">🏆 Top 5 — Maior uso EPI</p>
-                              </div>
-                              <div className="divide-y divide-gray-50">
-                                {topEpiFunc.map((e: any, i: number) => {
-                                  const nome = String(e.funcionario_nome ?? e.nome ?? "?");
-                                  const initials = nome.split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
-                                  const custo = parseFloat(String(e.custo_total ?? 0));
-                                  const pct = maxEpiCusto > 0 ? (custo / maxEpiCusto) * 100 : 0;
-                                  return (
-                                    <div key={i} className="flex items-center gap-2 px-2.5 py-1.5">
-                                      {e.foto_url ? (
-                                        <img src={e.foto_url} alt={nome} className="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-indigo-200" />
-                                      ) : (
-                                        <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-[8px] font-bold flex items-center justify-center shrink-0">{initials}</div>
-                                      )}
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-[9px] font-semibold text-gray-800 truncate">{nome.split(" ").slice(0,2).join(" ")}</p>
-                                        <div className="h-1 bg-gray-100 rounded-full mt-0.5">
-                                          <div className="h-1 bg-indigo-400 rounded-full" style={{ width: `${pct}%` }} />
-                                        </div>
-                                      </div>
-                                      <span className="text-[9px] font-bold text-indigo-700 shrink-0">{fmt(custo)}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                            {/* Top 5 menos */}
-                            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-                              <div className="px-2.5 py-1.5 bg-gray-50 border-b border-gray-100">
-                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">📉 Top 5 — Menor uso EPI</p>
-                              </div>
-                              <div className="divide-y divide-gray-50">
-                                {leastEpiFunc.map((e: any, i: number) => {
-                                  const nome = String(e.funcionario_nome ?? e.nome ?? "?");
-                                  const initials = nome.split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
-                                  const custo = parseFloat(String(e.custo_total ?? 0));
-                                  return (
-                                    <div key={i} className="flex items-center gap-2 px-2.5 py-1.5">
-                                      {e.foto_url ? (
-                                        <img src={e.foto_url} alt={nome} className="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-gray-200" />
-                                      ) : (
-                                        <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 text-[8px] font-bold flex items-center justify-center shrink-0">{initials}</div>
-                                      )}
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-[9px] font-semibold text-gray-700 truncate">{nome.split(" ").slice(0,2).join(" ")}</p>
-                                        <p className="text-[8px] text-gray-400">{e.cargo ?? ""}</p>
-                                      </div>
-                                      <span className="text-[9px] font-bold text-gray-500 shrink-0">{fmt(custo)}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* EPI: estoque desta obra */}
-                        {epiEstoque.length > 0 && (
-                          <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden">
-                            <div className="px-3 py-1.5 bg-indigo-50/50 border-b border-indigo-100 flex items-center justify-between">
-                              <p className="text-[9px] font-bold text-indigo-700 uppercase tracking-wide">Estoque nesta Obra</p>
-                              <div className="flex items-center gap-2 text-[8px]">
-                                <span className="text-gray-500">{estoqueTotal} un. disponíveis</span>
-                                {epiCriticos > 0 && <span className="bg-red-100 text-red-700 font-bold px-1 py-0.5 rounded">{epiCriticos} sem estoque</span>}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-0 divide-y divide-gray-50 max-h-44 overflow-y-auto">
-                              {epiEstoque.map((ep: any, i: number) => {
-                                const qtd = parseInt(String(ep.estoque_obra ?? 0));
-                                const central = parseInt(String(ep.estoque_central ?? 0));
-                                const vazio = qtd === 0;
-                                return (
-                                  <div key={i} className={`flex items-center gap-2 px-2.5 py-1.5 border-l ${i%2===1?"border-l-gray-100":""} ${vazio ? "bg-red-50/50" : ""}`}>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-[9px] font-medium text-gray-700 truncate">{ep.nome}</p>
-                                      {ep.categoria && <p className="text-[7px] text-gray-400">{ep.categoria}</p>}
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                      <p className={`text-[9px] font-bold ${vazio ? "text-red-600" : "text-indigo-700"}`}>{qtd} un.</p>
-                                      {central > 0 && <p className="text-[7px] text-gray-400">{central} central</p>}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* ── COMPARATIVO: mês atual × mês anterior ───────────────── */}
-                    {compRows.length > 0 && (
-                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-                        <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center gap-1.5">
-                          <Activity className="w-3 h-3 text-gray-400" />
-                          <p className="text-[9px] font-bold uppercase tracking-wide text-gray-500">Comparativo: {prevLabel} → {curLabel}</p>
-                        </div>
-                        <table className="w-full text-[9px]">
-                          <thead>
-                            <tr className="text-gray-400 border-b border-gray-100">
-                              <th className="text-left px-3 py-1 font-semibold">Indicador</th>
-                              <th className="text-center px-2 py-1 font-semibold">{prevLabel}</th>
-                              <th className="text-center px-2 py-1 font-semibold">{curLabel}</th>
-                              <th className="text-center px-2 py-1 font-semibold">Δ</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {compRows.map((row, ri) => {
-                              const pv  = typeof row.prev === "number" ? row.prev : 0;
-                              const cv  = typeof row.cur  === "number" ? row.cur  : 0;
-                              const delta = cv - pv;
-                              const up  = delta > 0;
-                              const eq  = delta === 0;
-                              const good = eq ? null : (up === row.higherIsBetter);
-                              const deltaColor = eq ? "text-gray-400" : good ? "text-green-600" : "text-red-600";
-                              const fmtV = (v: number) => row.isMonetary ? fmt(v) : String(v);
+                      {/* ── 2b: Treinamentos por norma ── */}
+                      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-3">Treinamentos por Norma</p>
+                        {(d.treinamentosNorma?.length ?? 0) === 0 ? (
+                          <p className="text-xs text-gray-300 text-center py-6">Sem dados de treinamentos</p>
+                        ) : (
+                          <div className="space-y-2.5">
+                            {(d.treinamentosNorma ?? []).slice(0,5).map((n:any, i:number) => {
+                              const tot = parseInt(String(n.total_funcionarios ?? 0));
+                              const val = parseInt(String(n.validos ?? 0));
+                              const pct = tot > 0 ? Math.round((val/tot)*100) : 0;
+                              const clr = pct>=80?"bg-green-500":pct>=50?"bg-amber-500":"bg-red-500";
                               return (
-                                <tr key={ri} className={`border-b border-gray-50 ${ri % 2 === 0 ? "" : "bg-gray-50/50"}`}>
-                                  <td className="px-3 py-1.5 font-semibold text-gray-700">{row.label}</td>
-                                  <td className="px-2 py-1.5 text-center text-gray-500">{fmtV(pv)}</td>
-                                  <td className="px-2 py-1.5 text-center font-bold text-gray-800">{fmtV(cv)}</td>
-                                  <td className={`px-2 py-1.5 text-center font-bold ${deltaColor}`}>
-                                    {eq ? "—" : <span className="flex items-center justify-center gap-0.5">{up ? "▲" : "▼"} {fmtV(Math.abs(delta))}</span>}
-                                  </td>
-                                </tr>
+                                <div key={i}>
+                                  <div className="flex items-center justify-between mb-0.5">
+                                    <span className="text-[9px] text-gray-700 font-medium truncate max-w-[115px]">{n.norma}</span>
+                                    <span className="text-[9px] font-bold text-gray-600 shrink-0 ml-1">{val}/{tot}</span>
+                                  </div>
+                                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                    <div className={`h-2 rounded-full transition-all ${clr}`} style={{width:`${pct}%`}}/>
+                                  </div>
+                                </div>
                               );
                             })}
-                          </tbody>
-                        </table>
-                        <p className="text-[8px] text-gray-300 px-3 py-1">▲ verde = melhora · ▲ vermelho = piora (conforme direção esperada do indicador)</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── 2c: Custo estimado atestados ── */}
+                      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-3">Custo Est. Atestados</p>
+                        {(r.totalAtestados??0)===0 ? (
+                          <p className="text-xs text-gray-300 text-center py-6">Nenhum atestado no período</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {([
+                              { label:"Salário proporcional", v:r.custoSalarioAtestados??0,  clr:"text-amber-700",  bg:"bg-amber-50"  },
+                              { label:"+ Encargos (33%)",     v:r.custoEncargosAtestados??0,  clr:"text-orange-700", bg:"bg-orange-50" },
+                              { label:"+ VR/VA diário",       v:r.custoVrAtestados??0,        clr:"text-yellow-700", bg:"bg-yellow-50" },
+                            ] as const).map((x,i)=>(
+                              <div key={i} className={`flex items-center justify-between rounded-lg px-2 py-1.5 ${x.bg}`}>
+                                <span className="text-[8px] text-gray-500">{x.label}</span>
+                                <span className={`text-[10px] font-bold ${x.clr}`}>{fmt(x.v)}</span>
+                              </div>
+                            ))}
+                            <div className="border-t-2 border-red-200 pt-2 flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-red-700 uppercase">TOTAL</span>
+                              <span className="text-base font-black text-red-700">{fmt(r.custoTotalAtestados??0)}</span>
+                            </div>
+                            <p className="text-[7px] text-gray-400">* sal. proporcional + FGTS/INSS/outros + VR diário</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ═══ BLOCO 3: 6 GRÁFICOS EXPANDÍVEIS ════════════════════════ */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {([
+                        { key:"dds",       label:"DDS Realizados",     color:"#16a34a", title:"text-green-700",  head:"bg-green-50",  dataKey:"dds"          },
+                        { key:"atestados", label:"Atestados",           color:"#f59e0b", title:"text-amber-700",  head:"bg-amber-50",  dataKey:"atestados"    },
+                        { key:"acidentes", label:"Acidentes",           color:"#dc2626", title:"text-red-600",    head:"bg-red-50",    dataKey:"acidentes"    },
+                        { key:"dias_ates", label:"Dias Afastamento",    color:"#9333ea", title:"text-purple-700", head:"bg-purple-50", dataKey:"dias_ates"    },
+                        { key:"epi_un",    label:"EPIs Entregues/Mês",  color:"#6366f1", title:"text-indigo-700", head:"bg-indigo-50", dataKey:"epi_unidades" },
+                        { key:"epi_custo", label:"Custo EPI/Mês (R$)", color:"#a855f7", title:"text-purple-700", head:"bg-purple-50", dataKey:"epi_custo",  isR$:true },
+                      ] as const).map(g => (
+                        <div key={g.key}
+                             className="bg-white border border-gray-100 rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg hover:border-gray-200 transition-all group"
+                             onClick={()=>setSstExpandChart(g.key)}>
+                          <div className={`flex items-center justify-between px-3 py-2.5 ${g.head}`}>
+                            <p className={`text-[10px] font-bold uppercase tracking-wide ${g.title}`}>{g.label}</p>
+                            <Maximize2 className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-500 transition-colors" />
+                          </div>
+                          <div className="px-1 pt-1 pb-0.5">
+                            <ResponsiveContainer width="100%" height={90}>
+                              <BarChart data={chartData} barSize={14} margin={{top:4,right:4,left:-22,bottom:0}}>
+                                <XAxis dataKey="mes" tick={{fontSize:7,fill:"#9ca3af"}} axisLine={false} tickLine={false}/>
+                                <YAxis tick={{fontSize:7,fill:"#9ca3af"}} axisLine={false} tickLine={false} allowDecimals={false}
+                                  tickFormatter={(v:number)=>v>999?`${(v/1000).toFixed(0)}k`:String(v)}/>
+                                <RcTooltip contentStyle={{fontSize:10}} formatter={(v:any)=>[(g as any).isR$?fmt(Number(v)):v, g.label]}/>
+                                <Bar dataKey={g.dataKey} radius={[3,3,0,0]}>
+                                  {chartData.map((cd:any,i:number)=><Cell key={i} fill={(cd[g.dataKey] as number)>0?g.color:"#e5e7eb"}/>)}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <p className="text-[8px] text-gray-300 px-3 pb-1.5 text-center">clique para expandir</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Dialog — gráfico expandido */}
+                    {sstExpandChart && (
+                      <Dialog open onOpenChange={()=>setSstExpandChart(null)}>
+                        <DialogContent className="max-w-3xl">
+                          <DialogHeader>
+                            <DialogTitle>
+                              {({dds:"DDS Realizados / Mês",atestados:"Atestados / Mês",acidentes:"Acidentes / Mês",dias_ates:"Dias de Afastamento / Mês",epi_un:"EPIs Entregues / Mês",epi_custo:"Custo EPI / Mês (R$)",custo_ates:"Custo Atestados / Mês"} as Record<string,string>)[sstExpandChart] ?? sstExpandChart}
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="pt-2">{renderBigChart(sstExpandChart, 300)}</div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+
+                    {/* ═══ BLOCO 4: COMPARATIVO MÊS ATUAL × MÊS ANTERIOR ══════════ */}
+                    {curH && (
+                      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                        <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-gray-400"/>
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Comparativo: {prevLabel} → {curLabel}</p>
+                        </div>
+                        <div className="grid grid-cols-3 divide-x divide-gray-50">
+                          {([
+                            { label:"DDS",          prev:prevH?.dds??0,          cur:curH.dds,          better:true,  isR$:false },
+                            { label:"Atestados",    prev:prevH?.atestados??0,    cur:curH.atestados,    better:false, isR$:false },
+                            { label:"Acidentes",    prev:prevH?.acidentes??0,    cur:curH.acidentes,    better:false, isR$:false },
+                            { label:"Dias Afast.",  prev:prevH?.dias_ates??0,    cur:curH.dias_ates,    better:false, isR$:false, unit:"d" },
+                            { label:"EPIs",         prev:prevH?.epi_unidades??0, cur:curH.epi_unidades, better:true,  isR$:false },
+                            { label:"Custo Ates.",  prev:prevH?.custo_ates??0,   cur:curH.custo_ates,   better:false, isR$:true  },
+                          ] as const).map((row,i)=>{
+                            const diff = (row.cur as number)-(row.prev as number);
+                            const up=diff>0, eq=diff===0;
+                            const good=eq?null:(up===row.better);
+                            const clr=eq?"text-gray-300":good?"text-green-600":"text-red-600";
+                            const fv=(v:number)=>row.isR$?fmt(v):`${v}${(row as any).unit??""}`; 
+                            return (
+                              <div key={i} className="px-3 py-3 text-center">
+                                <p className="text-[8px] text-gray-400 uppercase tracking-wide">{row.label}</p>
+                                <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                                  <span className="text-[9px] text-gray-400">{fv(row.prev as number)}</span>
+                                  <span className="text-[9px] text-gray-300">→</span>
+                                  <span className="text-[13px] font-black text-gray-800">{fv(row.cur as number)}</span>
+                                </div>
+                                {!eq && <p className={`text-[9px] font-bold mt-0.5 ${clr}`}>{up?"▲":"▼"} {fv(Math.abs(diff))}</p>}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 
-                    {/* ── GRÁFICOS DE TENDÊNCIA (2×2) ─────────────────────────── */}
-                    {hasData && (
-                      <div className="grid grid-cols-2 gap-2">
-                        {([
-                          { key: "dds",       label: "DDS Realizados / Mês",   color: "#16a34a", unit: "DDS"       },
-                          { key: "atestados", label: "Atestados / Mês",        color: "#f59e0b", unit: "Atestados" },
-                          { key: "acidentes", label: "Acidentes / Mês",        color: "#dc2626", unit: "Acidentes" },
-                          { key: "dias_ates", label: "Dias Afastamento / Mês", color: "#9333ea", unit: "Dias"      },
-                        ] as const).map((g) => (
-                          <div key={g.key} className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
-                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">{g.label}</p>
-                            <ResponsiveContainer width="100%" height={75}>
-                              <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
-                                <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                                <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, g.unit]} />
-                                <Bar dataKey={g.key} radius={[2, 2, 0, 0]}>
-                                  {chartData.map((cd: any, i: number) => (
-                                    <Cell key={i} fill={(cd[g.key] as number) > 0 ? g.color : "#e5e7eb"} />
+                    {/* ═══ BLOCO 5: EPI DASHBOARD ══════════════════════════════════ */}
+                    {(epiBarData.length>0||epiEstoque.length>0) && (
+                      <div className="bg-white rounded-2xl border border-indigo-100 overflow-hidden">
+                        <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
+                          <p className="text-[11px] font-bold text-indigo-700 uppercase tracking-wide">🦺 EPI — Dashboard Completo</p>
+                          <div className="flex items-center gap-2 text-[9px]">
+                            {epiCriticos>0 && <span className="bg-red-100 text-red-700 font-bold px-2 py-0.5 rounded-full">{epiCriticos} sem estoque</span>}
+                            <span className="text-gray-400">{estoqueTotal} un. no estoque</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-0 divide-x divide-gray-100">
+                          {/* Curva ABC horizontal */}
+                          <div className="p-4">
+                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-2">Curva ABC — Custo por Tipo (Top 10)</p>
+                            <div className="flex items-center gap-2 mb-2">
+                              {[{c:"A",bg:"bg-indigo-500"},{c:"B",bg:"bg-blue-400"},{c:"C",bg:"bg-slate-400"}].map(x=>(
+                                <div key={x.c} className="flex items-center gap-1">
+                                  <div className={`w-2 h-2 rounded-sm ${x.bg}`}/>
+                                  <span className="text-[8px] text-gray-500">Classe {x.c}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <ResponsiveContainer width="100%" height={220}>
+                              <BarChart data={epiBarData} layout="vertical" barSize={12} margin={{top:0,right:40,left:0,bottom:0}}>
+                                <XAxis type="number" tick={{fontSize:7,fill:"#9ca3af"}} axisLine={false} tickLine={false}
+                                  tickFormatter={(v:number)=>v>999?`R$${(v/1000).toFixed(0)}k`:`R$${v}`}/>
+                                <YAxis type="category" dataKey="nome" tick={{fontSize:8,fill:"#6b7280"}} axisLine={false} tickLine={false} width={95}/>
+                                <RcTooltip contentStyle={{fontSize:10,borderRadius:8}} formatter={(v:any,_:any,p:any)=>[`${fmt(Number(v))} — ${p.payload.un} un.`,"Custo"]}/>
+                                <Bar dataKey="custo" radius={[0,4,4,0]}>
+                                  {epiBarData.map((ep,i)=>(
+                                    <Cell key={i} fill={ep.classe==="A"?"#6366f1":ep.classe==="B"?"#60a5fa":"#94a3b8"}/>
                                   ))}
                                 </Bar>
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* ── ACIDENTES ───────────────────────────────────────────── */}
-                    {d.acidentes.length > 0 && (
-                      <div className="rounded-xl border-2 border-red-300 bg-red-50 p-3">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-red-600 mb-2 flex items-center gap-1.5">
-                          <AlertTriangle className="w-3.5 h-3.5" />Acidentes / Incidentes — {d.acidentes.length} ocorrência(s)
-                        </p>
-                        <div className="space-y-2">
-                          {d.acidentes.map((a: any, i: number) => {
-                            const grave = a.gravidade === "Grave" || a.gravidade === "Com Afastamento";
-                            return (
-                              <div key={i} className={`rounded-lg border px-2.5 py-2 text-[10px] ${grave ? "border-red-300 bg-white" : "border-orange-200 bg-orange-50"}`}>
-                                <div className="flex items-start gap-2">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className={`font-bold ${grave ? "text-red-600" : "text-orange-600"}`}>{a.gravidade}</span>
-                                      {parseInt(String(a.diasAfastamento ?? 0)) > 0 && (
-                                        <span className="bg-red-100 text-red-700 text-[9px] font-bold px-1 rounded">{a.diasAfastamento}d afastamento</span>
-                                      )}
-                                    </div>
-                                    <p className="font-semibold text-gray-800 mt-0.5">{a.funcionario_nome ?? "—"}</p>
-                                    <div className="flex gap-2 text-gray-500 mt-0.5 flex-wrap">
-                                      {a.tipoAcidente && <span>{a.tipoAcidente}</span>}
-                                      {a.localAcidente && <span>· {a.localAcidente}</span>}
-                                      <span className={a.status_acao === "Concluída" ? "text-green-600" : "text-amber-600"}>· Ação: {a.status_acao ?? "Pendente"}</span>
-                                    </div>
-                                  </div>
-                                  <span className="text-gray-400 shrink-0 text-[9px]">{fDate(a.dataAcidente)}</span>
+                          {/* Top 5 maior uso + estoque */}
+                          <div className="p-4 space-y-4">
+                            {topEpiFunc.length>0 && (
+                              <div>
+                                <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wide mb-2">🏆 Top 5 — Maior Custo EPI</p>
+                                <div className="space-y-2">
+                                  {topEpiFunc.map((e:any,i:number)=>{
+                                    const nome=String(e.funcionario_nome??e.nome??"?");
+                                    const initials=nome.split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
+                                    const custo=parseFloat(String(e.custo_total??0));
+                                    const pct=maxEpiCusto>0?(custo/maxEpiCusto)*100:0;
+                                    return (
+                                      <div key={i} className="flex items-center gap-2">
+                                        {e.foto_url?(<img src={e.foto_url} alt={nome} className="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-indigo-200"/>)
+                                          :(<div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-[7px] font-bold flex items-center justify-center shrink-0">{initials}</div>)}
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-[9px] font-semibold text-gray-700 truncate">{nome.split(" ").slice(0,2).join(" ")}</p>
+                                          <div className="h-1.5 bg-gray-100 rounded-full mt-0.5">
+                                            <div className="h-1.5 bg-indigo-400 rounded-full" style={{width:`${pct}%`}}/>
+                                          </div>
+                                        </div>
+                                        <span className="text-[9px] font-bold text-indigo-700 shrink-0">{fmt(custo)}</span>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── ATESTADOS + CID + TOP 5 ─────────────────────────────── */}
-                    {d.atestados.length > 0 && (
-                      <div className="space-y-3">
-                        {/* Top 5 mais atestados */}
-                        {topAtestados.length > 0 && (
-                          <div className="rounded-xl border border-amber-200 bg-amber-50/40 overflow-hidden">
-                            <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-100">
-                              <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">🏥 Top 5 — Mais Atestados</p>
-                            </div>
-                            <div className="divide-y divide-amber-50">
-                              {topAtestados.map((p, i) => {
-                                const initials = p.nome.split(" ").filter(Boolean).slice(0,2).map(n=>n[0]).join("");
-                                const uniqueCids = [...new Set(p.cids)].slice(0,3);
-                                return (
-                                  <div key={i} className="flex items-center gap-2.5 px-3 py-2">
-                                    <span className="text-[9px] font-bold text-amber-400 w-4 shrink-0">#{i+1}</span>
-                                    {p.foto ? (
-                                      <img src={p.foto} alt={p.nome} className="w-8 h-8 rounded-full object-cover shrink-0 ring-2 ring-amber-200" />
-                                    ) : (
-                                      <div className="w-8 h-8 rounded-full bg-amber-200 text-amber-700 text-[9px] font-bold flex items-center justify-center shrink-0">{initials}</div>
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-[10px] font-bold text-gray-800 truncate">{p.nome.split(" ").slice(0,2).join(" ")}</p>
-                                      <div className="flex flex-wrap gap-1 mt-0.5">
-                                        {p.cargo && <span className="text-[7px] text-indigo-600 font-medium">{p.cargo}</span>}
-                                        {uniqueCids.map((cid, ci) => (
-                                          <span key={ci} className="text-[7px] bg-amber-100 text-amber-700 px-1 rounded font-mono" title={getCidDesc(cid)}>{cid}</span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                      <p className="text-[11px] font-bold text-amber-700">{p.count}×</p>
-                                      {p.dias > 0 && <p className="text-[8px] text-gray-400">{p.dias}d</p>}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* CID breakdown */}
-                        {cidList.length > 0 && (
-                          <div className="rounded-xl border border-amber-100 bg-white overflow-hidden">
-                            <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-100">
-                              <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">CID — Causas de Afastamento</p>
-                            </div>
-                            <div className="grid grid-cols-2 divide-x divide-y divide-amber-50">
-                              {cidList.map((c, i) => {
-                                const desc = getCidDesc(c.cid);
-                                const maxCount = Math.max(1, ...cidList.map(cc=>cc.count));
-                                const pct = (c.count / maxCount) * 100;
-                                return (
-                                  <div key={i} className="px-3 py-2">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[9px] font-bold font-mono text-amber-700 shrink-0 w-10">{c.cid}</span>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-[8px] text-gray-600 truncate">{desc || "Sem descrição"}</p>
-                                        <div className="h-1 bg-amber-100 rounded-full mt-0.5">
-                                          <div className="h-1 bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
+                            )}
+                            {epiEstoque.length>0 && (
+                              <div>
+                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">Estoque nesta Obra</p>
+                                <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                                  {epiEstoque.map((ep:any,i:number)=>{
+                                    const qtd=parseInt(String(ep.estoque_obra??0));
+                                    const central=parseInt(String(ep.estoque_central??0));
+                                    return (
+                                      <div key={i} className={`flex items-center justify-between text-[9px] px-2 py-1 rounded-lg ${qtd===0?"bg-red-50":"bg-gray-50"}`}>
+                                        <span className={`truncate max-w-[120px] font-medium ${qtd===0?"text-red-700":"text-gray-700"}`}>{ep.nome}</span>
+                                        <div className="text-right shrink-0 ml-1">
+                                          <span className={`font-bold ${qtd===0?"text-red-600":"text-indigo-700"}`}>{qtd} un.</span>
+                                          {central>0&&<span className="text-gray-400 ml-1">+{central}C</span>}
                                         </div>
                                       </div>
-                                      <span className="text-[9px] font-bold text-amber-700 shrink-0">{c.count}</span>
-                                    </div>
-                                    {c.dias > 0 && <p className="text-[7px] text-gray-400 mt-0.5 pl-12">{c.dias}d afastamento</p>}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Tabela detalhada de atestados */}
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 mb-1.5 flex items-center gap-1">
-                            <Heart className="w-3 h-3" />Atestados Médicos ({d.atestados.length}) — custo estimado
-                          </p>
-                          <div className="rounded-xl border border-amber-200 overflow-hidden">
-                            <table className="w-full text-[10px]">
-                              <thead className="bg-amber-50">
-                                <tr>
-                                  <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Funcionário</th>
-                                  <th className="text-left px-1.5 py-1.5 text-gray-500 font-semibold w-18">CID</th>
-                                  <th className="text-center px-1.5 py-1.5 text-gray-500 font-semibold w-14">Data</th>
-                                  <th className="text-center px-1.5 py-1.5 text-gray-500 font-semibold w-8">Dias</th>
-                                  <th className="text-right px-1.5 py-1.5 text-amber-700 font-bold w-18">Total</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {d.atestados.map((a: any, i: number) => {
-                                  const dias   = parseInt(String(a.diasAfastamento ?? 0));
-                                  const cTotal = parseFloat(String(a.custo_total ?? 0));
-                                  const nome   = String(a.funcionario_nome ?? "").split(" ").slice(0, 2).join(" ");
-                                  const initials = String(a.funcionario_nome ?? "?").split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
-                                  const cidDesc = getCidDesc(a.cid);
-                                  return (
-                                    <tr key={i} className="border-t border-amber-100 hover:bg-amber-50/40">
-                                      <td className="px-2 py-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                          {a.foto_url ? (
-                                            <img src={a.foto_url} alt={nome} className="w-5 h-5 rounded-full object-cover shrink-0" />
-                                          ) : (
-                                            <div className="w-5 h-5 rounded-full bg-amber-200 text-amber-700 text-[8px] font-bold flex items-center justify-center shrink-0">{initials}</div>
-                                          )}
-                                          <p className="font-medium text-gray-800 leading-tight truncate">{nome}</p>
-                                        </div>
-                                      </td>
-                                      <td className="px-1.5 py-1.5">
-                                        {a.cid ? (
-                                          <span className="font-mono text-[8px] text-amber-700 bg-amber-100 px-1 py-0.5 rounded" title={cidDesc}>{String(a.cid).toUpperCase()}</span>
-                                        ) : <span className="text-gray-300">—</span>}
-                                      </td>
-                                      <td className="px-1.5 py-1.5 text-center text-gray-400">{fDate(a.dataEmissao ?? a.dataemissao)}</td>
-                                      <td className="px-1.5 py-1.5 text-center">
-                                        {dias > 0 ? <span className="text-amber-600 font-bold">{dias}</span> : <span className="text-gray-300">—</span>}
-                                      </td>
-                                      <td className="px-1.5 py-1.5 text-right font-bold text-amber-700">{cTotal > 0 ? fmt(cTotal) : <span className="text-gray-300">—</span>}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                              {d.atestados.length > 1 && (
-                                <tfoot className="bg-amber-100">
-                                  <tr>
-                                    <td colSpan={3} className="px-2 py-1.5 font-bold text-amber-800 text-[9px] uppercase">
-                                      Total {d.atestados.length} atestados · {r.totalDiasAtestado ?? 0} dias afastamento
-                                    </td>
-                                    <td></td>
-                                    <td className="px-1.5 py-1.5 text-right font-bold text-amber-800">{fmt(r.custoTotalAtestados ?? 0)}</td>
-                                  </tr>
-                                </tfoot>
-                              )}
-                            </table>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {/* ── EQUIPE CLT: Fotos + status completo ────────────────── */}
-                    {d.clt.length > 0 && (() => {
-                      // helpers de status
-                      const statusInfo = (st: string) => {
-                        switch (st) {
-                          case "Ativo":       return { label: "Ativo",        bg: "bg-green-100",  text: "text-green-700",  cardBg: "bg-white border-gray-100",          opacity: "" };
-                          case "Ferias":
-                          case "Férias":      return { label: "De Férias",    bg: "bg-blue-100",   text: "text-blue-700",   cardBg: "bg-blue-50 border-blue-200",        opacity: "" };
-                          case "Afastado":    return { label: "Afastado",     bg: "bg-purple-100", text: "text-purple-700", cardBg: "bg-purple-50 border-purple-200",    opacity: "" };
-                          case "Aviso":       return { label: "Aviso Prévio", bg: "bg-orange-100", text: "text-orange-700", cardBg: "bg-orange-50 border-orange-200",    opacity: "" };
-                          case "Desligado":   return { label: "Desligado",    bg: "bg-red-100",    text: "text-red-600",    cardBg: "bg-gray-50 border-gray-200",        opacity: "opacity-60" };
-                          case "Inativo":     return { label: "Inativo",      bg: "bg-gray-100",   text: "text-gray-500",   cardBg: "bg-gray-50 border-gray-100",        opacity: "opacity-50" };
-                          case "Lista_Negra": return { label: "Lista Negra",  bg: "bg-red-200",    text: "text-red-800",    cardBg: "bg-red-50 border-red-200",          opacity: "opacity-50" };
-                          default:            return { label: st,             bg: "bg-gray-100",   text: "text-gray-500",   cardBg: "bg-white border-gray-100",          opacity: "" };
-                        }
-                      };
-                      const ativoCount     = d.clt.filter((x: any) => x.status === "Ativo").length;
-                      const feriasCount    = d.clt.filter((x: any) => x.status === "Ferias" || x.status === "Férias").length;
-                      const desligadoCount = d.clt.filter((x: any) => x.status === "Desligado" || x.status === "Inativo" || x.status === "Lista_Negra").length;
-                      return (
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1 flex items-center gap-1.5">
-                            <UserCheck className="w-3 h-3" />Equipe CLT — Histórico da Obra ({d.clt.length})
-                          </p>
-                          <p className="text-[9px] text-gray-400 mb-2">
-                            {ativoCount > 0 && <span className="text-green-600 font-semibold">{ativoCount} ativos</span>}
-                            {feriasCount > 0 && <span className="text-blue-600 font-semibold ml-1.5">{feriasCount} de férias</span>}
-                            {desligadoCount > 0 && <span className="text-red-500 font-semibold ml-1.5">{desligadoCount} desligados</span>}
-                          </p>
-                          <div className="grid grid-cols-3 gap-1.5">
-                            {d.clt.map((e: any, i: number) => {
-                              const st      = statusInfo(e.status ?? "Ativo");
-                              const asoOk   = e.aso_status === "valido";
-                              const asoVenc = e.aso_status === "vencido";
-                              const adv     = parseInt(String(e.num_advertencias ?? 0));
-                              const prNome  = String(e.nome ?? "").split(" ").slice(0, 2).join(" ");
-                              const sobrenome = String(e.nome ?? "").split(" ").slice(2).join(" ");
-                              const initials = String(e.nome ?? "?").split(" ").filter(Boolean).slice(0, 2).map((n: string) => n[0]).join("");
-                              const isDesligado = ["Desligado","Inativo","Lista_Negra"].includes(e.status ?? "");
+                    {/* ═══ BLOCO 6: ACIDENTES ══════════════════════════════════════ */}
+                    {d.acidentes.length>0 && (
+                      <div className="rounded-2xl border-2 border-red-200 bg-white overflow-hidden">
+                        <button className="w-full flex items-center justify-between px-4 py-3.5 bg-red-50 hover:bg-red-100 transition-colors"
+                          onClick={()=>setSstOpenSections(s=>{const n=new Set(s);n.has("acidentes")?n.delete("acidentes"):n.add("acidentes");return n;})}>
+                          <div className="flex items-center gap-2.5">
+                            <AlertTriangle className="w-4 h-4 text-red-600"/>
+                            <p className="text-[11px] font-bold text-red-700 uppercase tracking-wide">Acidentes / Incidentes</p>
+                            <span className="bg-red-600 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full">{d.acidentes.length}</span>
+                            {(r.totalGraves??0)>0&&<span className="bg-red-100 text-red-700 text-[9px] font-bold px-2 py-0.5 rounded-full">{r.totalGraves} grave(s)</span>}
+                          </div>
+                          {sstOpenSections.has("acidentes")?<ChevronUp className="w-4 h-4 text-red-500"/>:<ChevronDown className="w-4 h-4 text-red-400"/>}
+                        </button>
+                        {sstOpenSections.has("acidentes")&&(
+                          <div className="p-4 space-y-2">
+                            {d.acidentes.map((a:any,i:number)=>{
+                              const grave=a.gravidade==="Grave"||a.gravidade==="Com Afastamento";
                               return (
-                                <div key={i} className={`flex items-start gap-2 rounded-xl border px-2 py-2 ${st.cardBg} ${st.opacity}`}>
-                                  {/* Foto */}
-                                  <div className="shrink-0">
-                                    {e.foto_url ? (
-                                      <img src={e.foto_url} alt={prNome}
-                                        className={`w-9 h-9 rounded-full object-cover ring-2 ${isDesligado ? "ring-red-300 grayscale" : asoOk ? "ring-green-300" : asoVenc ? "ring-amber-300" : "ring-gray-200"}`} />
-                                    ) : (
-                                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-bold ring-2 ${isDesligado ? "bg-gray-300 text-gray-500 ring-red-200 grayscale" : adv > 0 ? "bg-red-200 text-red-700 ring-red-300" : !asoOk ? "bg-amber-200 text-amber-700 ring-amber-300" : "bg-indigo-100 text-indigo-700 ring-indigo-200"}`}>
-                                        {initials}
+                                <div key={i} className={`rounded-xl border px-3 py-2.5 text-[10px] ${grave?"border-red-300 bg-red-50":"border-orange-200 bg-orange-50"}`}>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className={`font-bold text-sm ${grave?"text-red-600":"text-orange-600"}`}>{a.gravidade}</span>
+                                        {parseInt(String(a.diasAfastamento??0))>0&&<span className="bg-red-100 text-red-700 text-[9px] font-bold px-1.5 rounded">{a.diasAfastamento}d afastamento</span>}
                                       </div>
-                                    )}
-                                  </div>
-                                  {/* Info */}
-                                  <div className="flex-1 min-w-0">
-                                    <p className={`text-[10px] font-bold leading-tight truncate ${isDesligado ? "text-gray-400 line-through" : "text-gray-800"}`}>{prNome}</p>
-                                    {sobrenome && <p className={`text-[8px] leading-tight truncate ${isDesligado ? "text-gray-300" : "text-gray-400"}`}>{sobrenome}</p>}
-                                    {e.cargo && <p className="text-[8px] text-gray-400 leading-tight truncate">{e.cargo}</p>}
-                                    {/* Badges */}
-                                    <div className="flex flex-wrap gap-0.5 mt-0.5">
-                                      {/* Status */}
-                                      <span className={`text-[7px] px-1 py-0.5 rounded font-bold leading-tight ${st.bg} ${st.text}`}>{st.label}</span>
-                                      {/* Período de experiência */}
-                                      {e.periodo_experiencia === "exp1" && (
-                                        <span className="text-[7px] px-1 py-0.5 rounded font-bold bg-yellow-100 text-yellow-700 leading-tight">Exp. 1º Per.</span>
-                                      )}
-                                      {e.periodo_experiencia === "exp2" && (
-                                        <span className="text-[7px] px-1 py-0.5 rounded font-bold bg-amber-100 text-amber-700 leading-tight">Exp. 2º Per.</span>
-                                      )}
-                                      {/* CIPA */}
-                                      {e.cargo_cipa && (
-                                        <span className="text-[7px] px-1 py-0.5 rounded font-bold bg-indigo-100 text-indigo-700 leading-tight" title={e.cargo_cipa}>CIPA</span>
-                                      )}
-                                      {/* ASO */}
-                                      <span className={`text-[7px] px-1 py-0.5 rounded font-bold leading-tight ${asoOk ? "bg-green-100 text-green-700" : asoVenc ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-400"}`}>
-                                        {asoOk ? "ASO ✓" : asoVenc ? "ASO !" : "Sem ASO"}
-                                      </span>
-                                      {/* Advertências */}
-                                      {adv > 0 && (
-                                        <span className="text-[7px] px-1 py-0.5 rounded font-bold bg-red-100 text-red-700 leading-tight">{adv} adv.</span>
-                                      )}
+                                      <p className="font-semibold text-gray-800 mt-0.5 text-[11px]">{a.funcionario_nome??"—"}</p>
+                                      <div className="flex gap-2 text-gray-500 mt-0.5 flex-wrap text-[9px]">
+                                        {a.tipoAcidente&&<span>{a.tipoAcidente}</span>}
+                                        {a.localAcidente&&<span>· {a.localAcidente}</span>}
+                                        <span className={a.status_acao==="Concluída"?"text-green-600":"text-amber-600"}>· Ação: {a.status_acao??"Pendente"}</span>
+                                      </div>
                                     </div>
+                                    <span className="text-gray-400 shrink-0 text-[9px]">{fDate(a.dataAcidente)}</span>
                                   </div>
                                 </div>
                               );
                             })}
                           </div>
-                        </div>
-                      );
-                    })()}
+                        )}
+                      </div>
+                    )}
 
-                    {/* ── DDS ────────────────────────────────────────────────── */}
-                    {d.dds.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-green-700 mb-1.5 flex items-center gap-1.5">
-                          <ClipboardCheck className="w-3 h-3" />DDS — Diálogo Diário de Segurança ({d.dds.length})
-                        </p>
-                        <div className="rounded-xl border border-green-200 overflow-hidden">
+                    {/* ═══ BLOCO 7: ATESTADOS ══════════════════════════════════════ */}
+                    {d.atestados.length>0 && (
+                      <div className="rounded-2xl border border-amber-200 bg-white overflow-hidden">
+                        <button className="w-full flex items-center justify-between px-4 py-3.5 bg-amber-50 hover:bg-amber-100 transition-colors"
+                          onClick={()=>setSstOpenSections(s=>{const n=new Set(s);n.has("atestados")?n.delete("atestados"):n.add("atestados");return n;})}>
+                          <div className="flex items-center gap-2.5">
+                            <Heart className="w-4 h-4 text-amber-600"/>
+                            <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wide">Atestados Médicos</p>
+                            <span className="bg-amber-500 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full">{d.atestados.length}</span>
+                            <span className="text-[9px] text-amber-600 font-medium">{r.totalDiasAtestado??0}d afastamento · {fmt(r.custoTotalAtestados??0)}</span>
+                          </div>
+                          {sstOpenSections.has("atestados")?<ChevronUp className="w-4 h-4 text-amber-500"/>:<ChevronDown className="w-4 h-4 text-amber-400"/>}
+                        </button>
+                        {sstOpenSections.has("atestados")&&(
+                          <div className="p-4 space-y-3">
+                            {topAtestados.length>0&&(
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide mb-2">🏥 Top 5 — Mais Atestados</p>
+                                  <div className="space-y-2">
+                                    {topAtestados.map((p,i)=>{
+                                      const initials=p.nome.split(" ").filter(Boolean).slice(0,2).map(n=>n[0]).join("");
+                                      return (
+                                        <div key={i} className="flex items-center gap-2">
+                                          <span className="text-[8px] font-bold text-amber-300 w-3 shrink-0">{i+1}</span>
+                                          {p.foto?(<img src={p.foto} alt={p.nome} className="w-7 h-7 rounded-full object-cover shrink-0 ring-2 ring-amber-200"/>)
+                                            :(<div className="w-7 h-7 rounded-full bg-amber-200 text-amber-700 text-[9px] font-bold flex items-center justify-center shrink-0">{initials}</div>)}
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-[9px] font-semibold text-gray-800 truncate">{p.nome.split(" ").slice(0,2).join(" ")}</p>
+                                            <div className="flex gap-0.5 flex-wrap">
+                                              {[...new Set(p.cids)].slice(0,2).map((cid,ci)=>(
+                                                <span key={ci} className="text-[7px] bg-amber-100 text-amber-700 px-1 rounded font-mono" title={getCidDesc(cid)}>{cid}</span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                          <div className="text-right shrink-0">
+                                            <p className="text-[11px] font-bold text-amber-700">{p.count}×</p>
+                                            {p.dias>0&&<p className="text-[8px] text-gray-400">{p.dias}d</p>}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide mb-2">CID — Causas de Afastamento</p>
+                                  <div className="space-y-1.5">
+                                    {cidList.map((c,i)=>{
+                                      const desc=getCidDesc(c.cid);
+                                      const maxC=Math.max(1,...cidList.map(cc=>cc.count));
+                                      const pct=(c.count/maxC)*100;
+                                      return (
+                                        <div key={i} className="flex items-center gap-2">
+                                          <span className="text-[8px] font-bold font-mono text-amber-700 w-9 shrink-0">{c.cid}</span>
+                                          <div className="flex-1">
+                                            <p className="text-[7px] text-gray-500 truncate">{desc||"—"}</p>
+                                            <div className="h-1.5 bg-amber-100 rounded-full">
+                                              <div className="h-1.5 bg-amber-400 rounded-full" style={{width:`${pct}%`}}/>
+                                            </div>
+                                          </div>
+                                          <span className="text-[9px] font-bold text-amber-700 shrink-0">{c.count}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            <div className="rounded-xl border border-amber-100 overflow-hidden">
+                              <table className="w-full text-[10px]">
+                                <thead className="bg-amber-50">
+                                  <tr>
+                                    <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Funcionário</th>
+                                    <th className="text-left px-1.5 py-1.5 text-gray-500 font-semibold w-14">CID</th>
+                                    <th className="text-center px-1.5 py-1.5 text-gray-500 font-semibold w-16">Data</th>
+                                    <th className="text-center px-1.5 py-1.5 text-gray-500 font-semibold w-10">Dias</th>
+                                    <th className="text-right px-1.5 py-1.5 text-amber-700 font-bold w-22">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {d.atestados.map((a:any,i:number)=>{
+                                    const dias=parseInt(String(a.diasAfastamento??0));
+                                    const cTotal=parseFloat(String(a.custo_total??0));
+                                    const nome=String(a.funcionario_nome??"").split(" ").slice(0,2).join(" ");
+                                    const initials=String(a.funcionario_nome??"?").split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
+                                    return (
+                                      <tr key={i} className="border-t border-amber-100 hover:bg-amber-50/40">
+                                        <td className="px-2 py-1.5">
+                                          <div className="flex items-center gap-1.5">
+                                            {a.foto_url?(<img src={a.foto_url} alt={nome} className="w-5 h-5 rounded-full object-cover shrink-0"/>)
+                                              :(<div className="w-5 h-5 rounded-full bg-amber-200 text-amber-700 text-[8px] font-bold flex items-center justify-center shrink-0">{initials}</div>)}
+                                            <p className="font-medium text-gray-800 truncate">{nome}</p>
+                                          </div>
+                                        </td>
+                                        <td className="px-1.5 py-1.5">{a.cid?<span className="font-mono text-[8px] text-amber-700 bg-amber-100 px-1 py-0.5 rounded" title={getCidDesc(a.cid)}>{String(a.cid).toUpperCase()}</span>:<span className="text-gray-300">—</span>}</td>
+                                        <td className="px-1.5 py-1.5 text-center text-gray-400">{fDate(a.dataEmissao??a.dataemissao)}</td>
+                                        <td className="px-1.5 py-1.5 text-center">{dias>0?<span className="text-amber-600 font-bold">{dias}</span>:<span className="text-gray-300">—</span>}</td>
+                                        <td className="px-1.5 py-1.5 text-right font-bold text-amber-700">{cTotal>0?fmt(cTotal):<span className="text-gray-300">—</span>}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                                {d.atestados.length>1&&(
+                                  <tfoot className="bg-amber-100">
+                                    <tr>
+                                      <td colSpan={3} className="px-2 py-1.5 font-bold text-amber-800 text-[9px] uppercase">Total {d.atestados.length} atestados · {r.totalDiasAtestado??0}d</td>
+                                      <td></td>
+                                      <td className="px-1.5 py-1.5 text-right font-bold text-amber-800">{fmt(r.custoTotalAtestados??0)}</td>
+                                    </tr>
+                                  </tfoot>
+                                )}
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ═══ BLOCO 8: ADVERTÊNCIAS ═══════════════════════════════════ */}
+                    {(d.advertencias.length+d.advertenciasTerceiros.length)>0&&(
+                      <div className="rounded-2xl border border-red-200 bg-white overflow-hidden">
+                        <button className="w-full flex items-center justify-between px-4 py-3.5 bg-red-50 hover:bg-red-100 transition-colors"
+                          onClick={()=>setSstOpenSections(s=>{const n=new Set(s);n.has("adv")?n.delete("adv"):n.add("adv");return n;})}>
+                          <div className="flex items-center gap-2.5">
+                            <AlertTriangle className="w-4 h-4 text-red-500"/>
+                            <p className="text-[11px] font-bold text-red-700 uppercase tracking-wide">Advertências</p>
+                            <span className="bg-red-500 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full">{r.totalAdvertencias??0}</span>
+                          </div>
+                          {sstOpenSections.has("adv")?<ChevronUp className="w-4 h-4 text-red-400"/>:<ChevronDown className="w-4 h-4 text-red-300"/>}
+                        </button>
+                        {sstOpenSections.has("adv")&&(
+                          <div className="p-4 space-y-1.5 max-h-72 overflow-y-auto">
+                            {[...d.advertencias.map((w:any)=>({...w,_tipo:"clt"})),...d.advertenciasTerceiros.map((w:any)=>({...w,_tipo:"terceiro"}))]
+                              .sort((a:any,b:any)=>(b.data_ocorrencia??"").localeCompare(a.data_ocorrencia??""))
+                              .map((w:any,i:number)=>(
+                                <div key={i} className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-[10px]">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-bold text-red-700">{w.tipo_advertencia}</span>
+                                      <span className="text-gray-700 break-words">· {w.funcionario_nome}</span>
+                                      {w._tipo==="terceiro"&&w.empresa_nome&&<span className="text-gray-400">({w.empresa_nome})</span>}
+                                    </div>
+                                    {w.motivo&&<p className="text-gray-500 mt-0.5 break-words">{w.motivo}</p>}
+                                  </div>
+                                  <span className="text-gray-400 shrink-0">{fDate(w.data_ocorrencia)}</span>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ═══ BLOCO 9: DDS ════════════════════════════════════════════ */}
+                    {d.dds.length>0&&(
+                      <div className="rounded-2xl border border-green-200 bg-white overflow-hidden">
+                        <button className="w-full flex items-center justify-between px-4 py-3.5 bg-green-50 hover:bg-green-100 transition-colors"
+                          onClick={()=>setSstOpenSections(s=>{const n=new Set(s);n.has("dds")?n.delete("dds"):n.add("dds");return n;})}>
+                          <div className="flex items-center gap-2.5">
+                            <ClipboardCheck className="w-4 h-4 text-green-600"/>
+                            <p className="text-[11px] font-bold text-green-700 uppercase tracking-wide">DDS — Diálogo Diário de Segurança</p>
+                            <span className="bg-green-500 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full">{d.dds.length}</span>
+                          </div>
+                          {sstOpenSections.has("dds")?<ChevronUp className="w-4 h-4 text-green-500"/>:<ChevronDown className="w-4 h-4 text-green-400"/>}
+                        </button>
+                        {sstOpenSections.has("dds")&&(
                           <table className="w-full text-[10px]">
-                            <thead className="bg-green-50">
+                            <thead className="bg-green-50 border-t border-green-100">
                               <tr>
-                                <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Tema</th>
-                                <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-20">Instrutor</th>
-                                <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-18">Data</th>
-                                <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-14">Status</th>
+                                <th className="text-left px-3 py-1.5 text-gray-500 font-semibold">Tema</th>
+                                <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-24">Instrutor</th>
+                                <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-20">Data</th>
+                                <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-18">Status</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {d.dds.slice(0, 15).map((dd: any, i: number) => (
+                              {d.dds.slice(0,20).map((dd:any,i:number)=>(
                                 <tr key={i} className="border-t border-green-50">
-                                  <td className="px-2 py-1.5 text-gray-700 truncate max-w-[130px]">{dd.titulo_tema ?? "—"}</td>
-                                  <td className="px-2 py-1.5 text-gray-400 truncate">{dd.instrutor ?? "—"}</td>
+                                  <td className="px-3 py-1.5 text-gray-700 truncate max-w-[160px]">{dd.titulo_tema??"—"}</td>
+                                  <td className="px-2 py-1.5 text-gray-400 truncate">{dd.instrutor??"—"}</td>
                                   <td className="px-2 py-1.5 text-center text-gray-400">{fDate(dd.data)}</td>
                                   <td className="px-2 py-1.5 text-center">
-                                    <span className={`font-semibold ${dd.status === "finalizada" ? "text-green-600" : "text-amber-600"}`}>{dd.status === "finalizada" ? "✓" : dd.status}</span>
+                                    <span className={`font-semibold ${dd.status==="finalizada"?"text-green-600":"text-amber-600"}`}>{dd.status==="finalizada"?"✓ Final.":dd.status}</span>
                                   </td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── APR + PT (lado a lado se ambos existem) ─────────────── */}
-                    {(d.apr.length > 0 || d.pt.length > 0) && (
-                      <div className="grid grid-cols-1 gap-2">
-                        {d.apr.length > 0 && (
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-blue-700 mb-1.5 flex items-center gap-1.5">
-                              <Shield className="w-3 h-3" />APR — Análise de Risco ({d.apr.length})
-                              {(r.aprAbertas ?? 0) > 0 && <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-semibold">{r.aprAbertas} ativas</span>}
-                            </p>
-                            <div className="rounded-xl border border-blue-100 overflow-hidden">
-                              <table className="w-full text-[10px]">
-                                <thead className="bg-blue-50">
-                                  <tr>
-                                    <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Atividade</th>
-                                    <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-22">Responsável</th>
-                                    <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-18">Data</th>
-                                    <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-14">Status</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {d.apr.slice(0, 12).map((a: any, i: number) => (
-                                    <tr key={i} className="border-t border-blue-50">
-                                      <td className="px-2 py-1.5 text-gray-700 truncate max-w-[120px]">{a.atividade ?? a.numero ?? "—"}</td>
-                                      <td className="px-2 py-1.5 text-gray-400 truncate">{a.responsavel_nome ?? "—"}</td>
-                                      <td className="px-2 py-1.5 text-center text-gray-400">{fDate(a.data_emissao)}</td>
-                                      <td className="px-2 py-1.5 text-center">
-                                        <span className={`font-semibold capitalize ${a.status === "aprovada" || a.status === "aberta" ? "text-blue-600" : a.status === "fechada" ? "text-green-600" : "text-gray-400"}`}>{a.status}</span>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        )}
-                        {d.pt.length > 0 && (
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-purple-700 mb-1.5 flex items-center gap-1.5">
-                              <FileText className="w-3 h-3" />PT — Permissão de Trabalho ({d.pt.length})
-                              {(r.ptAbertas ?? 0) > 0 && <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-semibold">{r.ptAbertas} ativas</span>}
-                            </p>
-                            <div className="rounded-xl border border-purple-100 overflow-hidden">
-                              <table className="w-full text-[10px]">
-                                <thead className="bg-purple-50">
-                                  <tr>
-                                    <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Descrição</th>
-                                    <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-22">Responsável</th>
-                                    <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-18">Data</th>
-                                    <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-14">Status</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {d.pt.slice(0, 12).map((p: any, i: number) => (
-                                    <tr key={i} className="border-t border-purple-50">
-                                      <td className="px-2 py-1.5 text-gray-700 truncate max-w-[120px]">{p.descricao_trabalho ?? p.numero ?? "—"}</td>
-                                      <td className="px-2 py-1.5 text-gray-400 truncate">{p.responsavel_nome ?? "—"}</td>
-                                      <td className="px-2 py-1.5 text-center text-gray-400">{fDate(p.data_emissao)}</td>
-                                      <td className="px-2 py-1.5 text-center">
-                                        <span className={`font-semibold capitalize ${p.status === "aprovada" || p.status === "aberta" ? "text-purple-600" : p.status === "fechada" ? "text-green-600" : "text-gray-400"}`}>{p.status}</span>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
                         )}
                       </div>
                     )}
 
-                    {/* ── ADVERTÊNCIAS ────────────────────────────────────────── */}
-                    {(d.advertencias.length + d.advertenciasTerceiros.length) > 0 && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-red-600 mb-1.5 flex items-center gap-1.5">
-                          <AlertTriangle className="w-3 h-3" />Advertências ({r.totalAdvertencias ?? 0})
-                        </p>
-                        <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
-                          {[...d.advertencias.map((w: any) => ({ ...w, _tipo: "clt" })),
-                            ...d.advertenciasTerceiros.map((w: any) => ({ ...w, _tipo: "terceiro" }))]
-                            .sort((a: any, b: any) => (b.data_ocorrencia ?? "").localeCompare(a.data_ocorrencia ?? ""))
-                            .map((w: any, i: number) => (
-                              <div key={i} className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-2.5 py-1.5 text-[10px]">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1 flex-wrap">
-                                    <span className="font-bold text-red-700">{w.tipo_advertencia}</span>
-                                    <span className="text-gray-700 truncate">· {w.funcionario_nome}</span>
-                                    {w._tipo === "terceiro" && w.empresa_nome && <span className="text-gray-400">({w.empresa_nome})</span>}
-                                  </div>
-                                  {w.motivo && <p className="text-gray-500 mt-0.5 truncate">{w.motivo}</p>}
+                    {/* ═══ BLOCO 10: APR + PT ══════════════════════════════════════ */}
+                    {(d.apr.length>0||d.pt.length>0)&&(
+                      <div className="rounded-2xl border border-blue-200 bg-white overflow-hidden">
+                        <button className="w-full flex items-center justify-between px-4 py-3.5 bg-blue-50 hover:bg-blue-100 transition-colors"
+                          onClick={()=>setSstOpenSections(s=>{const n=new Set(s);n.has("apr")?n.delete("apr"):n.add("apr");return n;})}>
+                          <div className="flex items-center gap-2.5">
+                            <Shield className="w-4 h-4 text-blue-600"/>
+                            <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">APR / PT — Análise de Risco e Permissão de Trabalho</p>
+                            <span className="bg-blue-500 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full">{d.apr.length+d.pt.length}</span>
+                            {((r.aprAbertas??0)+(r.ptAbertas??0))>0&&<span className="bg-blue-100 text-blue-700 text-[9px] font-semibold px-2 py-0.5 rounded-full">{(r.aprAbertas??0)+(r.ptAbertas??0)} ativas</span>}
+                          </div>
+                          {sstOpenSections.has("apr")?<ChevronUp className="w-4 h-4 text-blue-500"/>:<ChevronDown className="w-4 h-4 text-blue-400"/>}
+                        </button>
+                        {sstOpenSections.has("apr")&&(
+                          <div className="p-4 space-y-3">
+                            {d.apr.length>0&&(
+                              <>
+                                <p className="text-[9px] font-bold text-blue-700 uppercase tracking-wide">APR — {d.apr.length} registros</p>
+                                <div className="rounded-xl border border-blue-100 overflow-hidden">
+                                  <table className="w-full text-[10px]">
+                                    <thead className="bg-blue-50"><tr>
+                                      <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Atividade</th>
+                                      <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-24">Responsável</th>
+                                      <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-20">Data</th>
+                                      <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Status</th>
+                                    </tr></thead>
+                                    <tbody>
+                                      {d.apr.slice(0,12).map((a:any,i:number)=>(
+                                        <tr key={i} className="border-t border-blue-50">
+                                          <td className="px-2 py-1.5 text-gray-700 truncate max-w-[140px]">{a.atividade??a.numero??"—"}</td>
+                                          <td className="px-2 py-1.5 text-gray-400 truncate">{a.responsavel_nome??"—"}</td>
+                                          <td className="px-2 py-1.5 text-center text-gray-400">{fDate(a.data_emissao)}</td>
+                                          <td className="px-2 py-1.5 text-center"><span className={`font-semibold capitalize ${a.status==="aprovada"||a.status==="aberta"?"text-blue-600":a.status==="fechada"?"text-green-600":"text-gray-400"}`}>{a.status}</span></td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
                                 </div>
-                                <span className="text-gray-400 shrink-0">{fDate(w.data_ocorrencia)}</span>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── TERCEIROS (condensado) ──────────────────────────────── */}
-                    {d.terceiros.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5 flex items-center gap-1.5">
-                          <HardHat className="w-3 h-3" />Terceiros ({d.terceiros.length})
-                          {(r.terceirosSemDoc ?? 0) > 0 && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold">{r.terceirosSemDoc} sem doc</span>}
-                        </p>
-                        <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
-                          {d.terceiros.map((t: any, i: number) => {
-                            const docs   = parseInt(String(t.docs_preenchidos ?? 0));
-                            const adv    = parseInt(String(t.num_advertencias ?? 0));
-                            const semDoc = docs === 0;
-                            return (
-                              <div key={i} className={`rounded-lg border px-2 py-1.5 text-[10px] flex items-center gap-2 ${semDoc ? "border-amber-200 bg-amber-50" : adv > 0 ? "border-red-200 bg-red-50" : "border-gray-100 bg-gray-50"}`}>
-                                <div className="flex-1 min-w-0">
-                                  <span className="font-medium text-gray-800">{t.nome}</span>
-                                  {t.empresa_nome && <span className="text-gray-400 ml-1">· {t.empresa_nome}</span>}
+                              </>
+                            )}
+                            {d.pt.length>0&&(
+                              <>
+                                <p className="text-[9px] font-bold text-purple-700 uppercase tracking-wide">PT — {d.pt.length} registros</p>
+                                <div className="rounded-xl border border-purple-100 overflow-hidden">
+                                  <table className="w-full text-[10px]">
+                                    <thead className="bg-purple-50"><tr>
+                                      <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Descrição</th>
+                                      <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-24">Responsável</th>
+                                      <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-20">Data</th>
+                                      <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Status</th>
+                                    </tr></thead>
+                                    <tbody>
+                                      {d.pt.slice(0,12).map((p:any,i:number)=>(
+                                        <tr key={i} className="border-t border-purple-50">
+                                          <td className="px-2 py-1.5 text-gray-700 truncate max-w-[140px]">{p.descricao_trabalho??p.numero??"—"}</td>
+                                          <td className="px-2 py-1.5 text-gray-400 truncate">{p.responsavel_nome??"—"}</td>
+                                          <td className="px-2 py-1.5 text-center text-gray-400">{fDate(p.data_emissao)}</td>
+                                          <td className="px-2 py-1.5 text-center"><span className={`font-semibold capitalize ${p.status==="aprovada"||p.status==="aberta"?"text-purple-600":p.status==="fechada"?"text-green-600":"text-gray-400"}`}>{p.status}</span></td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
                                 </div>
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ${t.aso_status === "valido" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>ASO {t.aso_status === "valido" ? "✓" : "!"}</span>
-                                {semDoc ? <span className="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded shrink-0">Sem docs</span> : <span className="text-[9px] bg-green-100 text-green-700 px-1 py-0.5 rounded shrink-0">{docs}doc</span>}
-                                {adv > 0 && <span className="text-[9px] bg-red-100 text-red-700 px-1 py-0.5 rounded shrink-0">{adv}adv</span>}
-                              </div>
-                            );
-                          })}
-                        </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    {/* ── EPI Curva ABC (condensado) ──────────────────────────── */}
-                    {d.epiPorTipo.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">EPI — Curva ABC de Consumo</p>
-                        <div className="rounded-xl border border-gray-100 overflow-hidden">
-                          <table className="w-full text-[10px]">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="text-left px-2 py-1 text-gray-500 font-semibold w-5">Cl.</th>
-                                <th className="text-left px-2 py-1 text-gray-500 font-semibold">EPI</th>
-                                <th className="text-right px-2 py-1 text-gray-500 font-semibold w-20">Custo</th>
-                                <th className="text-right px-2 py-1 text-gray-500 font-semibold w-8">Un.</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {d.epiPorTipo.map((ep: any, i: number) => (
-                                <tr key={i} className="border-t border-gray-50">
-                                  <td className="px-2 py-1"><span className={`font-bold ${ep.classe_abc === "A" ? "text-green-600" : ep.classe_abc === "B" ? "text-blue-600" : "text-gray-400"}`}>{ep.classe_abc}</span></td>
-                                  <td className="px-2 py-1 text-gray-700 truncate max-w-[130px]">{ep.epi_nome}</td>
-                                  <td className="px-2 py-1 text-right font-semibold text-gray-700">{fmt(parseFloat(String(ep.custo_total ?? 0)))}</td>
-                                  <td className="px-2 py-1 text-right text-gray-400">{ep.total_unidades}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── Treinamentos por norma (condensado) ────────────────── */}
-                    {(d.treinamentosNorma?.length ?? 0) > 0 && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Treinamentos por Norma</p>
-                        <div className="rounded-xl border border-gray-100 overflow-hidden">
-                          <table className="w-full text-[10px]">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="text-left px-2 py-1 text-gray-500 font-semibold">Norma</th>
-                                <th className="text-right px-2 py-1 text-gray-500 font-semibold w-12">Total</th>
-                                <th className="text-right px-2 py-1 text-gray-500 font-semibold w-12">Válidos</th>
-                                <th className="text-right px-2 py-1 text-gray-500 font-semibold w-12">Venc.</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {d.treinamentosNorma.map((n: any, i: number) => {
-                                const venc = parseInt(String(n.total_funcionarios ?? 0)) - parseInt(String(n.validos ?? 0));
+                    {/* ═══ BLOCO 11: EQUIPE CLT ════════════════════════════════════ */}
+                    {d.clt.length>0&&(()=>{
+                      const statusInfo=(st:string)=>{
+                        switch(st){
+                          case "Ativo":       return {label:"Ativo",        bg:"bg-green-100",  text:"text-green-700",  cardBg:"bg-white border-gray-100",      opacity:""};
+                          case "Ferias":
+                          case "Férias":      return {label:"De Férias",    bg:"bg-blue-100",   text:"text-blue-700",   cardBg:"bg-blue-50 border-blue-200",    opacity:""};
+                          case "Afastado":    return {label:"Afastado",     bg:"bg-purple-100", text:"text-purple-700", cardBg:"bg-purple-50 border-purple-200",opacity:""};
+                          case "Aviso":       return {label:"Aviso Prévio", bg:"bg-orange-100", text:"text-orange-700", cardBg:"bg-orange-50 border-orange-200",opacity:""};
+                          case "Desligado":   return {label:"Desligado",    bg:"bg-red-100",    text:"text-red-600",    cardBg:"bg-gray-50 border-gray-200",    opacity:"opacity-60"};
+                          case "Inativo":     return {label:"Inativo",      bg:"bg-gray-100",   text:"text-gray-500",   cardBg:"bg-gray-50 border-gray-100",    opacity:"opacity-50"};
+                          case "Lista_Negra": return {label:"Lista Negra",  bg:"bg-red-200",    text:"text-red-800",    cardBg:"bg-red-50 border-red-200",      opacity:"opacity-50"};
+                          default:            return {label:st,             bg:"bg-gray-100",   text:"text-gray-500",   cardBg:"bg-white border-gray-100",      opacity:""};
+                        }
+                      };
+                      const ativoC    =d.clt.filter((x:any)=>x.status==="Ativo").length;
+                      const feriasC   =d.clt.filter((x:any)=>x.status==="Ferias"||x.status==="Férias").length;
+                      const desligC   =d.clt.filter((x:any)=>["Desligado","Inativo","Lista_Negra"].includes(x.status??"")).length;
+                      return (
+                        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                          <button className="w-full flex items-center justify-between px-4 py-3.5 bg-gray-50 hover:bg-gray-100 transition-colors"
+                            onClick={()=>setSstOpenSections(s=>{const n=new Set(s);n.has("equipe")?n.delete("equipe"):n.add("equipe");return n;})}>
+                            <div className="flex items-center gap-2.5">
+                              <UserCheck className="w-4 h-4 text-gray-500"/>
+                              <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">Equipe CLT — Histórico da Obra</p>
+                              <span className="bg-gray-600 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full">{d.clt.length}</span>
+                              {ativoC>0&&<span className="text-[9px] text-green-600 font-semibold">{ativoC} ativos</span>}
+                              {feriasC>0&&<span className="text-[9px] text-blue-600 font-semibold">{feriasC} férias</span>}
+                              {desligC>0&&<span className="text-[9px] text-red-500 font-semibold">{desligC} deslig.</span>}
+                            </div>
+                            {sstOpenSections.has("equipe")?<ChevronUp className="w-4 h-4 text-gray-400"/>:<ChevronDown className="w-4 h-4 text-gray-400"/>}
+                          </button>
+                          {sstOpenSections.has("equipe")&&(
+                            <div className="p-3 grid grid-cols-3 gap-1.5">
+                              {d.clt.map((e:any,i:number)=>{
+                                const st=statusInfo(e.status??"Ativo");
+                                const asoOk2=e.aso_status==="valido";
+                                const asoVenc2=e.aso_status==="vencido";
+                                const adv2=parseInt(String(e.num_advertencias??0));
+                                const prNome=String(e.nome??"").split(" ").slice(0,2).join(" ");
+                                const sobrenome=String(e.nome??"").split(" ").slice(2).join(" ");
+                                const initials=String(e.nome??"?").split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
+                                const isDes=["Desligado","Inativo","Lista_Negra"].includes(e.status??"");
                                 return (
-                                  <tr key={i} className={`border-t border-gray-50 ${venc > 0 ? "bg-red-50/40" : ""}`}>
-                                    <td className="px-2 py-1 text-gray-700 font-medium truncate">{n.norma}</td>
-                                    <td className="px-2 py-1 text-right text-gray-500">{n.total_funcionarios}</td>
-                                    <td className="px-2 py-1 text-right text-green-600 font-semibold">{n.validos}</td>
-                                    <td className={`px-2 py-1 text-right font-semibold ${venc > 0 ? "text-red-600" : "text-gray-300"}`}>{venc > 0 ? venc : "—"}</td>
-                                  </tr>
+                                  <div key={i} className={`flex items-start gap-2 rounded-xl border px-2 py-2 ${st.cardBg} ${st.opacity}`}>
+                                    <div className="shrink-0">
+                                      {e.foto_url?(<img src={e.foto_url} alt={prNome} className={`w-8 h-8 rounded-full object-cover ring-2 ${isDes?"ring-red-300 grayscale":asoOk2?"ring-green-300":asoVenc2?"ring-amber-300":"ring-gray-200"}`}/>)
+                                        :(<div className={`w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-bold ring-2 ${isDes?"bg-gray-300 text-gray-500 ring-red-200 grayscale":adv2>0?"bg-red-200 text-red-700 ring-red-300":!asoOk2?"bg-amber-200 text-amber-700 ring-amber-300":"bg-indigo-100 text-indigo-700 ring-indigo-200"}`}>{initials}</div>)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`text-[9px] font-bold leading-tight truncate ${isDes?"text-gray-400 line-through":"text-gray-800"}`}>{prNome}</p>
+                                      {sobrenome&&<p className={`text-[7px] leading-tight truncate ${isDes?"text-gray-300":"text-gray-400"}`}>{sobrenome}</p>}
+                                      {e.cargo&&<p className="text-[7px] text-gray-400 leading-tight truncate">{e.cargo}</p>}
+                                      <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                        <span className={`text-[6px] px-1 py-0.5 rounded font-bold ${st.bg} ${st.text}`}>{st.label}</span>
+                                        {e.periodo_experiencia==="exp1"&&<span className="text-[6px] px-1 py-0.5 rounded font-bold bg-yellow-100 text-yellow-700">Exp.1º</span>}
+                                        {e.periodo_experiencia==="exp2"&&<span className="text-[6px] px-1 py-0.5 rounded font-bold bg-amber-100 text-amber-700">Exp.2º</span>}
+                                        {e.cargo_cipa&&<span className="text-[6px] px-1 py-0.5 rounded font-bold bg-indigo-100 text-indigo-700">CIPA</span>}
+                                        <span className={`text-[6px] px-1 py-0.5 rounded font-bold ${asoOk2?"bg-green-100 text-green-700":asoVenc2?"bg-red-100 text-red-600":"bg-gray-100 text-gray-400"}`}>{asoOk2?"ASO✓":asoVenc2?"ASO!":"S/ASO"}</span>
+                                        {adv2>0&&<span className="text-[6px] px-1 py-0.5 rounded font-bold bg-red-100 text-red-700">{adv2}adv</span>}
+                                      </div>
+                                    </div>
+                                  </div>
                                 );
                               })}
-                            </tbody>
-                          </table>
+                            </div>
+                          )}
                         </div>
+                      );
+                    })()}
+
+                    {/* ═══ BLOCO 12: TERCEIROS ═════════════════════════════════════ */}
+                    {d.terceiros.length>0&&(
+                      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                        <button className="w-full flex items-center justify-between px-4 py-3.5 bg-gray-50 hover:bg-gray-100 transition-colors"
+                          onClick={()=>setSstOpenSections(s=>{const n=new Set(s);n.has("terceiros")?n.delete("terceiros"):n.add("terceiros");return n;})}>
+                          <div className="flex items-center gap-2.5">
+                            <HardHat className="w-4 h-4 text-gray-500"/>
+                            <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">Terceiros</p>
+                            <span className="bg-gray-500 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full">{d.terceiros.length}</span>
+                            {(r.terceirosSemDoc??0)>0&&<span className="bg-amber-100 text-amber-700 text-[9px] font-semibold px-2 py-0.5 rounded-full">{r.terceirosSemDoc} sem doc</span>}
+                          </div>
+                          {sstOpenSections.has("terceiros")?<ChevronUp className="w-4 h-4 text-gray-400"/>:<ChevronDown className="w-4 h-4 text-gray-400"/>}
+                        </button>
+                        {sstOpenSections.has("terceiros")&&(
+                          <div className="p-3 space-y-1.5">
+                            {d.terceiros.map((t:any,i:number)=>{
+                              const docs=parseInt(String(t.docs_preenchidos??0));
+                              const adv=parseInt(String(t.num_advertencias??0));
+                              return (
+                                <div key={i} className={`rounded-xl border px-3 py-2 text-[10px] flex items-center gap-2 ${docs===0?"border-amber-200 bg-amber-50":adv>0?"border-red-200 bg-red-50":"border-gray-100 bg-gray-50"}`}>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="font-medium text-gray-800">{t.nome}</span>
+                                    {t.empresa_nome&&<span className="text-gray-400 ml-1.5">· {t.empresa_nome}</span>}
+                                  </div>
+                                  <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${t.aso_status==="valido"?"bg-green-100 text-green-700":"bg-amber-100 text-amber-700"}`}>ASO {t.aso_status==="valido"?"✓":"!"}</span>
+                                  {docs===0?<span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">Sem docs</span>:<span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full shrink-0">{docs} doc</span>}
+                                  {adv>0&&<span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0">{adv} adv</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    {d.clt.length === 0 && d.terceiros.length === 0 && (
+                    {d.clt.length===0&&d.terceiros.length===0&&(
                       <p className="text-xs text-gray-400 text-center py-8">Nenhum colaborador cadastrado nesta obra.</p>
                     )}
                   </>
