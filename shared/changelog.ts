@@ -1,4 +1,40 @@
 /**
+ * Rev. 4258 - MAPA DE COTAÇÃO: 3 OTIMIZAÇÕES DE PERFORMANCE (812 ITENS).
+ *
+ * OBJETIVO: eliminar os principais gargalos de renderização identificados no
+ * Mapa de Cotação com 812 itens — reduzindo re-renders desnecessários e
+ * operações O(n×m) repetidas a cada mudança de estado.
+ *
+ * PROBLEMAS IDENTIFICADOS:
+ *   1. `mapaDescricoes`, `mapaInsumoCodigos`, `mapaFornIds` eram arrays novos
+ *      a cada render → chaves de useQuery instáveis → triggers de refetch
+ *      desnecessários (sugestoesRecompraQ + scoresQ chamados toda vez).
+ *   2. IIFE de ~80 linhas inline no JSX da <tbody>: filtrava e agrupava 812
+ *      itens TODA vez que qualquer estado do componente mudava (ex: hover,
+ *      checkbox, dialog aberto/fechado).
+ *   3. `getMelhorPrecoItem(itemId)` chamado per-row na renderização: para cada
+ *      um dos 812 itens, iterava todos os participantes (O(n×m)) para achar
+ *      o menor preço.
+ *
+ * CORREÇÕES (Cotacoes.tsx):
+ *   1. `mapaDescricoes` e `mapaInsumoCodigos` → React.useMemo([mapaQ.data?.itens])
+ *      `mapaFornIds` → React.useMemo([mapaQ.data?.participantes])
+ *      Resultado: queries de sugestões/scores só disparam quando os dados do
+ *      mapa realmente mudam.
+ *   2. `itensParaRenderizarMemo` = React.useMemo([mapaQ.data, mapaFiltro, agruparItens])
+ *      — contém toda a lógica de filtro + agrupamento pacote/agrupar.
+ *      A IIFE de 80 linhas na tbody foi substituída por `itensParaRenderizarMemo.map(...)`.
+ *   3. `melhorPrecoMap` = React.useMemo([mapaQ.data])
+ *      — Map<itemId, number> construído uma única vez quando os dados do mapa
+ *      chegam do servidor. `getMelhorPrecoItem(it.id)` no loop principal
+ *      substituído por `melhorPrecoMap.get(it.id) ?? null` (O(1) por item).
+ *      A função `getMelhorPrecoItem` foi preservada pois ainda é usada no
+ *      bloco de expand de pacotes.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4257 - CONTROLE DE CHEQUES: CARDS DO TOPO REFLETEM FILTROS ATIVOS.
  *
  * OBJETIVO: quando qualquer filtro client-side está ativo (fornecedor, data de

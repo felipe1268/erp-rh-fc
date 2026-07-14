@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4258** — **MAPA DE COTAÇÃO: 3 OTIMIZAÇÕES DE PERFORMANCE (812 ITENS).** (1) `mapaDescricoes`/`mapaInsumoCodigos`/`mapaFornIds` → `useMemo` para estabilizar chaves de query (evita refetch storm em `sugestoesRecompraQ`/`scoresQ`). (2) IIFE de ~80 linhas na `<tbody>` (filtro + agrupamento pacote/agrupar) substituída por `itensParaRenderizarMemo` (`useMemo([mapaQ.data, mapaFiltro, agruparItens])`). (3) `getMelhorPrecoItem()` O(n×m) no loop principal substituído por `melhorPrecoMap` (`Map<itemId,number>`, `useMemo([mapaQ.data])`). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4257** — **CONTROLE DE CHEQUES: CARDS DO TOPO REFLETEM FILTROS ATIVOS.** Quando qualquer filtro client-side está ativo (fornecedor, data de vencimento, status), os 4 cards (Pendentes/Compensados/Devolvidos/Outros) derivam seus totais de `chequesFiltrados` em vez do `resumo` backend. `anyFiltroAtivo` booleano; `cardTotais` useMemo movido para após `chequesFiltrados` (evita TDZ). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4256** — **CONTROLE DE CHEQUES: FILTRO POR DATA DE VENCIMENTO + FORNECEDOR + SOMATÓRIO.** Novos filtros client-side em `FinanceiroCheques.tsx`: (1) campo De/Até por `dataVencimento`; (2) SearchableSelect de fornecedor com busca por digitação. Banner azul quando filtro de data ativo mostrando Total Geral + Pendentes com link "limpar". ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4256** — **CONTROLE DE CHEQUES: FILTRO POR DATA DE VENCIMENTO + FORNECEDOR + SOMATÓRIO.** Filtros client-side De/Até por `dataVencimento` + SearchableSelect fornecedor; banner azul com somatório. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4255** — **TOGGLE PAUSAR/REATIVAR ITEM NO MAPA DE COTAÇÃO.** Item pausado fica visível com opacidade reduzida; botão Pause/Play no hover (âmbar pausado). Schema: `+pausado BOOLEAN DEFAULT false` via SyncSchema+. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4252** — **FIX: VALOR NEGOCIADO EXATO — SEM QUEBRADOS POR ARREDONDAMENTO.** `editTotaisOverride` preserva `novoTotal` exato; backend usa `totalOverride` quando presente. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4251** — **ESPELHAMENTO AUTOMÁTICO DE ITENS DA COTAÇÃO NA SC VINCULADA.** SC vinculada à cotação recebe item espelhado automaticamente ao adicionar avulso/EAP; rastreabilidade bidirecional via `solicitacaoItemId`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4249 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4251 e anteriores.
 
 ## User preferences
 

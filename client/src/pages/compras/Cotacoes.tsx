@@ -1190,8 +1190,15 @@ export default function Cotacoes() {
   }, [coberturaAutoQ.data?.cobertoPorRisco, coberturaAutoQ.data?.totalDebitadoEstaCotacao]);
   const mapaQ = trpc.compras.getMapaCotacao.useQuery({ cotacaoId: showDetalhe! }, { enabled: showDetalhe !== null });
   const mapaItens = mapaQ.data?.itens ?? [];
-  const mapaDescricoes = mapaItens.map((it: any) => it.descricao as string).filter(Boolean);
-  const mapaInsumoCodigos = mapaItens.map((it: any) => it.insumoCodigo as string).filter(Boolean);
+  // Rev. 4258 — memoizar arrays para evitar chave de query instável a cada render
+  const mapaDescricoes = React.useMemo(
+    () => (mapaQ.data?.itens ?? []).map((it: any) => it.descricao as string).filter(Boolean),
+    [mapaQ.data?.itens]
+  );
+  const mapaInsumoCodigos = React.useMemo(
+    () => (mapaQ.data?.itens ?? []).map((it: any) => it.insumoCodigo as string).filter(Boolean),
+    [mapaQ.data?.itens]
+  );
   const sugestoesRecompraQ = trpc.compras.getSugestoesFornecedoresRecompra.useQuery(
     { companyId, descricoes: mapaDescricoes, insumoCodigos: mapaInsumoCodigos.length > 0 ? mapaInsumoCodigos : undefined },
     { enabled: companyId > 0 && (mapaDescricoes.length > 0 || mapaInsumoCodigos.length > 0) && showDetalhe !== null && abaAtiva === "mapa" }
@@ -1201,11 +1208,114 @@ export default function Cotacoes() {
     { companyId, descricoes: novaDescricoes },
     { enabled: companyId > 0 && novaDescricoes.length > 0 && showNova }
   );
-  const mapaFornIds = (mapaQ.data?.participantes ?? []).map((p: any) => p.fornecedorId);
+  const mapaFornIds = React.useMemo(
+    () => (mapaQ.data?.participantes ?? []).map((p: any) => p.fornecedorId),
+    [mapaQ.data?.participantes]
+  );
   const scoresQ = trpc.compras.scoresFornecedoresLote.useQuery(
     { fornecedorIds: mapaFornIds, companyId },
     { enabled: mapaFornIds.length > 0 && abaAtiva === "mapa" }
   );
+  // Rev. 4258 — pré-computar melhor preço por item (evita O(n×m) no loop de render)
+  const melhorPrecoMap = React.useMemo(() => {
+    const map = new Map<number, number>();
+    const data = mapaQ.data;
+    if (!data || data.participantes.length === 0) return map;
+    for (const it of (data.itens ?? [])) {
+      const precos: number[] = [];
+      for (const p of data.participantes) {
+        const r = data.respostaMap[`${it.id}_${p.fornecedorId}`];
+        if (r) {
+          const v = parseFloat((r as any).precoUnitario ?? "0");
+          if (v > 0) precos.push(v);
+        }
+      }
+      if (precos.length > 0) map.set(it.id, Math.min(...precos));
+    }
+    return map;
+  }, [mapaQ.data]);
+  // Rev. 4258 — filtrar e agrupar itens do mapa UMA vez (useMemo); evita IIFE de 812 itens a cada render
+  const itensParaRenderizarMemo = React.useMemo(() => {
+    const data = mapaQ.data;
+    const rawItens = mapaFiltro
+      ? (data?.itens ?? []).filter((it: any) => (it.descricao ?? "").toLowerCase().includes(mapaFiltro.toLowerCase()))
+      : (data?.itens ?? []);
+    const isPacote = ((data as any)?.tipoEfetivo ?? data?.cotacao?.tipo) === "pacote";
+    if (isPacote) {
+      const compGroups: Record<string, any[]> = {};
+      const noComp: any[] = [];
+      for (const it of rawItens) {
+        const cc = (it as any).composicaoCodigo ?? "";
+        if (cc) {
+          if (!compGroups[cc]) compGroups[cc] = [];
+          compGroups[cc].push(it);
+        } else {
+          noComp.push(it);
+        }
+      }
+      const grouped = Object.entries(compGroups).map(([cc, items]) => {
+        const first = items[0];
+        const compDesc = (first as any).composicaoDescricao || first.descricao;
+        const compUn = (first as any).composicaoUnidade || first.unidade;
+        const compQtd = (first as any).composicaoQtdOrcada || 0;
+        const compMeta = (first as any).composicaoMetaTotal || 0;
+        const compEstaSC = compQtd;
+        return {
+          ...first,
+          id: first.id,
+          descricao: compDesc,
+          unidade: compUn,
+          quantidade: String(compQtd),
+          metaUnitario: compMeta,
+          metaQtd: compQtd,
+          qtdOrcada: compQtd,
+          qtdTotalSolicitada: compEstaSC,
+          qtdComprada: 0,
+          qtdEstaSC: compEstaSC,
+          qtdSaldo: 0,
+          fonteVinculo: "item",
+          eapPath: first.eapPath,
+          _grouped: true,
+          _isPacoteGroup: true,
+          _childIds: items.map((i: any) => i.id),
+          _childItems: items,
+          _groupCount: items.length,
+          _composicaoCodigo: cc,
+        };
+      });
+      return [...grouped, ...noComp];
+    }
+    if (agruparItens) {
+      const groups: Record<string, any[]> = {};
+      for (const it of rawItens) {
+        const key = (it.descricao ?? "") + "|" + (it.unidade ?? "un");
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(it);
+      }
+      return Object.values(groups).map(items => {
+        if (items.length === 1) return items[0];
+        const first = items[0];
+        const totalQtd = items.reduce((s: number, i: any) => s + parseFloat(i.quantidade ?? "0"), 0);
+        const totalOrcada = items.reduce((s: number, i: any) => s + ((i as any).qtdOrcada ?? 0), 0);
+        const totalComprada = items.reduce((s: number, i: any) => s + ((i as any).qtdComprada ?? 0), 0);
+        const totalSolic = items.reduce((s: number, i: any) => s + ((i as any).qtdTotalSolicitada ?? 0), 0);
+        return {
+          ...first,
+          id: first.id,
+          quantidade: String(totalQtd),
+          qtdOrcada: totalOrcada,
+          qtdComprada: totalComprada,
+          qtdTotalSolicitada: totalSolic,
+          qtdSaldo: totalOrcada - totalComprada,
+          _grouped: true,
+          _childIds: items.map((i: any) => i.id),
+          _childItems: items,
+          _groupCount: items.length,
+        };
+      });
+    }
+    return rawItens;
+  }, [mapaQ.data, mapaFiltro, agruparItens]);
   const scsQ = trpc.compras.listarSolicitacoes.useQuery({ companyId }, { enabled: companyId > 0 });
   const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: companyId > 0 });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
@@ -5602,89 +5712,9 @@ export default function Cotacoes() {
                             </tr>
                           </thead>
                           <tbody>
-                            {(() => {
-                              // Rev. 4250 — filtra por texto de busca antes de renderizar
-                              const rawItens = mapaFiltro
-                                ? (mapa?.itens ?? []).filter((it: any) => (it.descricao ?? "").toLowerCase().includes(mapaFiltro.toLowerCase()))
-                                : (mapa?.itens ?? []);
-                              const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
-                              const itensParaRenderizar: any[] = isPacote ? (() => {
-                                const compGroups: Record<string, any[]> = {};
-                                const noComp: any[] = [];
-                                for (const it of rawItens) {
-                                  const cc = (it as any).composicaoCodigo ?? "";
-                                  if (cc) {
-                                    if (!compGroups[cc]) compGroups[cc] = [];
-                                    compGroups[cc].push(it);
-                                  } else {
-                                    noComp.push(it);
-                                  }
-                                }
-                                const grouped = Object.entries(compGroups).map(([cc, items]) => {
-                                  const first = items[0];
-                                  const compDesc = (first as any).composicaoDescricao || first.descricao;
-                                  const compUn = (first as any).composicaoUnidade || first.unidade;
-                                  const compQtd = (first as any).composicaoQtdOrcada || 0;
-                                  const compMeta = (first as any).composicaoMetaTotal || 0;
-                                  const compEap = (first as any).composicaoEapCodigo || "";
-                                  const compEstaSC = compQtd;
-                                  return {
-                                    ...first,
-                                    id: first.id,
-                                    descricao: compDesc,
-                                    unidade: compUn,
-                                    quantidade: String(compQtd),
-                                    metaUnitario: compMeta,
-                                    metaQtd: compQtd,
-                                    qtdOrcada: compQtd,
-                                    qtdTotalSolicitada: compEstaSC,
-                                    qtdComprada: 0,
-                                    qtdEstaSC: compEstaSC,
-                                    qtdSaldo: 0,
-                                    fonteVinculo: "item",
-                                    eapPath: first.eapPath,
-                                    _grouped: true,
-                                    _isPacoteGroup: true,
-                                    _childIds: items.map((i: any) => i.id),
-                                    _childItems: items,
-                                    _groupCount: items.length,
-                                    _composicaoCodigo: cc,
-                                  };
-                                });
-                                return [...grouped, ...noComp];
-                              })() : agruparItens ? (() => {
-                                const groups: Record<string, any[]> = {};
-                                for (const it of rawItens) {
-                                  const key = (it.descricao ?? "") + "|" + (it.unidade ?? "un");
-                                  if (!groups[key]) groups[key] = [];
-                                  groups[key].push(it);
-                                }
-                                return Object.values(groups).map(items => {
-                                  if (items.length === 1) return items[0];
-                                  const first = items[0];
-                                  const totalQtd = items.reduce((s: number, i: any) => s + parseFloat(i.quantidade ?? "0"), 0);
-                                  const metaU = parseFloat(first.metaUnitario ?? "0");
-                                  const totalOrcada = items.reduce((s: number, i: any) => s + ((i as any).qtdOrcada ?? 0), 0);
-                                  const totalComprada = items.reduce((s: number, i: any) => s + ((i as any).qtdComprada ?? 0), 0);
-                                  const totalSolic = items.reduce((s: number, i: any) => s + ((i as any).qtdTotalSolicitada ?? 0), 0);
-                                  return {
-                                    ...first,
-                                    id: first.id,
-                                    quantidade: String(totalQtd),
-                                    qtdOrcada: totalOrcada,
-                                    qtdComprada: totalComprada,
-                                    qtdTotalSolicitada: totalSolic,
-                                    qtdSaldo: totalOrcada - totalComprada,
-                                    _grouped: true,
-                                    _childIds: items.map((i: any) => i.id),
-                                    _childItems: items,
-                                    _groupCount: items.length,
-                                  };
-                                });
-                              })() : rawItens;
-                              return itensParaRenderizar;
-                            })().map((it: any) => {
-                              const melhorPreco = getMelhorPrecoItem(it.id);
+                            {/* Rev. 4258 — itensParaRenderizarMemo pré-computado (useMemo) substitui IIFE de 80 linhas */}
+                            {itensParaRenderizarMemo.map((it: any) => {
+                              const melhorPreco = melhorPrecoMap.get(it.id) ?? null;
                               const metaUnitRaw = parseFloat(it.metaUnitario ?? "0");
                               const metaUnit = Math.round(metaUnitRaw * 100) / 100;
                               const metaQtdVal = parseFloat(it.metaQtd ?? it.quantidade ?? "0");
