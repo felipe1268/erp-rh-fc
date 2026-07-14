@@ -926,19 +926,19 @@ export const scorecardRouter = router({
               a."horas_afastamento", a.cid, a.motivo, a."dataRetorno",
               e."nomeCompleto" AS funcionario_nome, e.cargo,
               e."fotoUrl"      AS foto_url,
-              REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric AS salario_base,
+              REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric AS salario_base,
               -- Custo proporcional do salário (salário/30 × dias)
-              ROUND(REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric / 30
+              ROUND(REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric / 30
                     * COALESCE(a."diasAfastamento", 0), 2)            AS custo_salario,
               -- Encargos trabalhistas: FGTS 8% + INSS patronal 20% + RAT+Terceiros 5% = 33%
-              ROUND(REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric / 30
+              ROUND(REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric / 30
                     * COALESCE(a."diasAfastamento", 0) * 0.33, 2)     AS custo_encargos,
               -- VR proporcional (valorDiario × dias)
               ROUND(COALESCE(vr.valor_diario, 0)
                     * COALESCE(a."diasAfastamento", 0), 2)            AS custo_vr,
               -- Custo total do dia pago sem produção
               ROUND(
-                (REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric / 30 * 1.33)
+                (REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric / 30 * 1.33)
                 * COALESCE(a."diasAfastamento", 0)
                 + COALESCE(vr.valor_diario, 0) * COALESCE(a."diasAfastamento", 0),
               2) AS custo_total
@@ -979,7 +979,7 @@ export const scorecardRouter = router({
                      COUNT(*) AS atestados,
                      SUM(COALESCE(a."diasAfastamento", 0)) AS dias_ates,
                      ROUND(SUM(
-                       (REPLACE(COALESCE(e."salarioBase",'0'),',','.')::numeric / 30 * 1.33)
+                       (REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric / 30 * 1.33)
                        * COALESCE(a."diasAfastamento", 0)
                      ), 2) AS custo_ates
               FROM atestados a

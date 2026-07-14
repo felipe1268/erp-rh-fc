@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4227** — **SCORECARD SST: FIX BOLINHAS + GRÁFICOS HISTÓRICO — salarioBase com ponto de milhar.** Causa raiz real: `"2.774,20"` após REPLACE(',','.') vira `"2.774.20"` (dois pontos) → crash silencioso. Fix: REPLACE duplo — remover ponto de milhar ANTES de converter vírgula decimal. Q12 (4 ocorrências) + Q13 ates CTE (1 ocorrência). Validado direto no Neon: Q13 retorna 12 linhas com dds/atestados/epi por mês. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4226** — **SCORECARD SST: FIX CAST TIPOS — valor_produto NUMERIC + salarioBase VARCHAR.** REPLACE(numeric_col) quebra silenciosamente; epis.valor_produto é NUMERIC → COALESCE(ep.valor_produto,0); employees.salarioBase é VARCHAR → REPLACE(COALESCE,'0'),',','.'). Q6/Q7/Q12/Q13 corrigidos. Atestados e gráficos voltam. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4225** — **SCORECARD SST: FIX FILTRO PERÍODO + CUSTO EPI + GRÁFICOS HISTÓRICO.** 5 bugs cirúrgicos corrigidos no backend: Q4 (advertências CLT) e Q5 (terceiros) sem filtro de data → Darcy aparecia em qualquer mês; Q6 (`custo_estimado` vs `custo_total`) → R$ 0,00 no Top 5 EPI; Q6+Q7 sem filtro de período → EPI ignorava mês selecionado; Q13 epi_agg com `valor_produto::numeric` sem REPLACE → crash silencioso no safe() zerava todos os gráficos histórico e bolinhas do PeriodSelectorCard. ZERO DELETE · ZERO ALTER destrutivo.

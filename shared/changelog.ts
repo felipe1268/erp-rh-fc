@@ -1,4 +1,26 @@
 /**
+ * Rev. 4227 - SCORECARD SST: FIX BOLINHAS + GRÁFICOS HISTÓRICO — salarioBase com ponto de milhar.
+ *
+ * CAUSA-RAIZ REAL — diagnóstico via query direta no Neon:
+ *   `invalid input syntax for type numeric: "2.774.20"`
+ *   salarioBase armazena "2.774,20" (BR: ponto=milhar, vírgula=decimal).
+ *   Rev.4226 usou REPLACE(col, ',', '.') → "2.774,20" vira "2.774.20" (dois pontos) → erro.
+ *   Solução: remover TODOS os pontos primeiro (milhar), depois trocar vírgula por ponto (decimal):
+ *     REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+ *
+ * QUERIES CORRIGIDAS (5 ocorrências):
+ *   • Q12 (atestados): salario_base / custo_salario / custo_encargos / custo_total
+ *   • Q13 ates CTE (historico): custo_ates
+ *
+ * VALIDAÇÃO DIRETA NO NEON: Q13 retorna 12 linhas com dados reais
+ *   (Fev-Jul/2026 com atestados, Mai-Jun com DDS, Mar-Jul com EPI).
+ *
+ * EFEITO: bolinhas do PeriodSelectorCard ficam coloridas nos meses com dados;
+ *   6 mini-gráficos histórico passam a renderizar barras; custo atestados correto.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4226 - SCORECARD SST: FIX CAST TIPOS — valor_produto NUMERIC + salarioBase VARCHAR.
  *
  * OBJETIVO — Corrigir regressão introduzida na Rev. 4225: REPLACE() só aceita `text`; aplicar

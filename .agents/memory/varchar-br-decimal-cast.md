@@ -20,31 +20,41 @@ Quando isso ocorre dentro de um `Promise.all`, a Promise inteira rejeita → o e
 
 Colunas VARCHAR que deveriam ser numéricas podem conter:
 - Valores com vírgula BR: `"680,75"` → falha em `::numeric`
+- Valores com ponto de milhar BR: `"2.774,20"` — REPLACE(',','.') sozinho vira `"2.774.20"` (dois pontos) → ainda falha!
 - Valores não-numéricos: `"sim"` → falha em `::numeric` mesmo com REPLACE
 
-O padrão seguro definitivo é `CASE WHEN`:
+**REGRA DEFINITIVA para salários BR com ponto de milhar:**
+```sql
+REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+```
+1. Remove TODOS os pontos (separador de milhar): `"2.774,20"` → `"2774,20"`
+2. Troca vírgula por ponto (decimal): `"2774,20"` → `"2774.20"` ✓
 
-Sempre usar ao fazer cast de colunas VARCHAR para numeric:
+O padrão com `CASE WHEN` é mais seguro para colunas com valores mistos texto:
 
 ```sql
 -- Errado (falha com "680,75" ou "sim")
 COALESCE(pp."salarioBrutoMes"::numeric, 0)
 
--- Errado (falha com "sim")
-COALESCE(REPLACE(pp."salarioBrutoMes", ',', '.')::numeric, 0)
+-- Errado para "2.774,20" — produz "2.774.20" (dois pontos) → crash
+REPLACE(col, ',', '.')::numeric
+
+-- CORRETO para salários BR (ponto milhar + vírgula decimal)
+REPLACE(REPLACE(COALESCE(col,'0'),'.',''),',','.')::numeric
 
 -- CORRETO — seguro contra vírgula BR E valores texto livres
 COALESCE(
   CASE WHEN pp."salarioBrutoMes" ~ '^-?[0-9]'
-    THEN REPLACE(pp."salarioBrutoMes", ',', '.')::numeric
+    THEN REPLACE(REPLACE(pp."salarioBrutoMes",'.',''),',','.')::numeric
     ELSE NULL END,
   0
 )
 ```
 
-Compatível com ambos os formatos:
-- `"680,75"` → `"680.75"` → `680.75` ✓
-- `"2723.76"` → `"2723.76"` → `2723.76` ✓
+Compatível com todos os formatos BR:
+- `"2.774,20"` → remove pontos → `"2774,20"` → troca vírgula → `2774.20` ✓
+- `"680,75"` → remove pontos → `"680,75"` → troca vírgula → `680.75` ✓
+- `"2774.20"` → remove pontos → `"277420"` → sem vírgula → `277420` ⚠ (improvável em dados BR)
 - `NULL` → COALESCE → `0` ✓
 
 ## Tabelas afetadas (confirmado)
