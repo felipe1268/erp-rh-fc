@@ -1,4 +1,34 @@
 /**
+ * Rev. 4233 - SCORECARD SST: REGRA INSS 15 DIAS — CUSTO ATESTADOS PELA LEI 8.213/91.
+ *
+ * REGRA LEGAL: Art. 59 da Lei 8.213/91 — os primeiros 15 dias de afastamento por doença
+ * são custeados pelo empregador; do 16º dia em diante o trabalhador recebe auxílio-doença
+ * do INSS e o custo sai da empresa.
+ *
+ * PROBLEMA: Carlos Alberto, 90 dias CID K40 → sistema exibia R$ 8.452,36 (custo de 90 dias).
+ * Custo correto da empresa: apenas os primeiros 15 dias. INSS assume os outros 75 dias.
+ *
+ * BACKEND (server/routers/scorecard.ts):
+ *   Q12 (atestados individuais):
+ *     - Adicionado ao SELECT: `dias_empresa = LEAST(dias_afastamento, 15)`
+ *                             `dias_inss    = GREATEST(dias_afastamento - 15, 0)`
+ *     - Todas as 4 fórmulas de custo (custo_salario, custo_encargos, custo_vr, custo_total)
+ *       agora usam `LEAST(diasAfastamento, 15)` em vez de `diasAfastamento`
+ *   Q13 (histórico mensal — ates CTE):
+ *     - `dias_ates` continua como TOTAL real (para gráficos/monitoramento)
+ *     - `custo_ates` usa `LEAST(dias, 15)` — apenas custo empresa
+ *
+ * FRONTEND (client/src/pages/planejamento/ScorecardTab.tsx):
+ *   - Coluna "Dias": quando > 15, mostra split "90 / 15d emp. / 75d INSS"
+ *   - Badge "INSS" azul no nome do funcionário para afastamentos longos
+ *   - Linha INSS tem fundo azul suave
+ *   - Coluna "Total": exibe "só empresa" abaixo do valor quando houver INSS
+ *   - Legenda no bloco "Custo Est. Atestados": informa a regra da Lei 8.213/91
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4232 - NORMALIZAÇÃO 100% DO BANCO — COLUNAS MONETÁRIAS VARCHAR: FORMATO MISTO EN→BR.
  *
  * CONTEXTO: Rev. 4231 corrigiu os PARSERS SQL para lidar com formato misto, mas os dados em si

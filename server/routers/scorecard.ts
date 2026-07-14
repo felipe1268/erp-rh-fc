@@ -931,6 +931,9 @@ export const scorecardRouter = router({
             SELECT
               a.id, a."dataEmissao", a.tipo, a."diasAfastamento",
               a."horas_afastamento", a.cid, a.motivo, a."dataRetorno",
+              -- Dias de responsabilidade: 1-15 = empresa; 16+ = INSS (art. 59 Lei 8.213/91)
+              LEAST(COALESCE(a."diasAfastamento", 0), 15)              AS dias_empresa,
+              GREATEST(COALESCE(a."diasAfastamento", 0) - 15, 0)       AS dias_inss,
               e."nomeCompleto" AS funcionario_nome, e.cargo,
               e."fotoUrl"      AS foto_url,
               -- Salário efetivo: payroll_payments do mês, senão salarioBase do cadastro
@@ -956,7 +959,7 @@ export const scorecardRouter = router({
                 / NULLIF(EXTRACT(DAY FROM (
                     date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
                   )), 0)
-                * COALESCE(a."diasAfastamento", 0)
+                * LEAST(COALESCE(a."diasAfastamento", 0), 15)
               , 2) AS custo_salario,
               -- Custo: encargos patronais (33% do salário proporcional)
               ROUND(
@@ -969,17 +972,18 @@ export const scorecardRouter = router({
                 / NULLIF(EXTRACT(DAY FROM (
                     date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
                   )), 0)
-                * COALESCE(a."diasAfastamento", 0)
+                * LEAST(COALESCE(a."diasAfastamento", 0), 15)
               , 2) AS custo_encargos,
-              -- Custo: benefícios proporcional (VA/VR total ÷ dias mês × dias afastado)
+              -- Custo: benefícios proporcional — apenas dias empresa (1-15)
               ROUND(
                 COALESCE(vr.beneficio_total, 0)
                 / NULLIF(EXTRACT(DAY FROM (
                     date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
                   )), 0)
-                * COALESCE(a."diasAfastamento", 0)
+                * LEAST(COALESCE(a."diasAfastamento", 0), 15)
               , 2) AS custo_vr,
-              -- Custo total = (salário×1,33 + benefícios) / dias_mês × dias_afastado
+              -- Custo total = (salário×1,33 + benefícios) / dias_mês × LEAST(dias, 15)
+              -- Lei 8.213/91 art.59: do 16º dia o custo passa ao INSS
               ROUND(
                 (COALESCE(pp.salario_bruto,
                   CASE WHEN e."salarioBase" LIKE '%,%'
@@ -990,7 +994,7 @@ export const scorecardRouter = router({
                 / NULLIF(EXTRACT(DAY FROM (
                     date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
                   )), 0)
-                * COALESCE(a."diasAfastamento", 0)
+                * LEAST(COALESCE(a."diasAfastamento", 0), 15)
               , 2) AS custo_total
             FROM atestados a
             JOIN employees e ON e.id = a."employeeId"
@@ -1070,7 +1074,7 @@ export const scorecardRouter = router({
                        / NULLIF(EXTRACT(DAY FROM (
                            date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
                          )), 0)
-                       * COALESCE(a."diasAfastamento", 0)
+                       * LEAST(COALESCE(a."diasAfastamento", 0), 15)
                      ), 2) AS custo_ates
               FROM atestados a
               JOIN employees e ON e.id = a."employeeId"

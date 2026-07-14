@@ -1670,7 +1670,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                               <span className="text-[10px] font-bold text-red-700 uppercase">TOTAL</span>
                               <span className="text-base font-black text-red-700">{fmt(r.custoTotalAtestados??0)}</span>
                             </div>
-                            <p className="text-[7px] text-gray-400">* (sal.bruto×1,33 + benefícios) ÷ dias do mês × dias afastado</p>
+                            <p className="text-[7px] text-gray-400">* (sal.bruto×1,33 + benefícios) ÷ dias do mês × dias empresa (máx. 15)</p>
+                            <p className="text-[7px] text-blue-400 font-medium">Lei 8.213/91 art.59 — do 16º dia o custo passa ao INSS</p>
                           </div>
                         )}
                       </div>
@@ -1982,22 +1983,47 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                 <tbody>
                                   {d.atestados.map((a:any,i:number)=>{
                                     const dias=parseInt(String(a.diasAfastamento??0));
+                                    const diasInss=parseInt(String(a.dias_inss??0));
+                                    const diasEmpresa=parseInt(String(a.dias_empresa??Math.min(dias,15)));
                                     const cTotal=parseFloat(String(a.custo_total??0));
                                     const nome=String(a.funcionario_nome??"").split(" ").slice(0,2).join(" ");
                                     const initials=String(a.funcionario_nome??"?").split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
+                                    const isInss=diasInss>0;
                                     return (
-                                      <tr key={i} className="border-t border-amber-100 hover:bg-amber-50/40">
+                                      <tr key={i} className={`border-t border-amber-100 hover:bg-amber-50/40${isInss?" bg-blue-50/30":""}`}>
                                         <td className="px-2 py-1.5">
                                           <div className="flex items-center gap-1.5">
                                             {a.foto_url?(<img src={a.foto_url} alt={nome} className="w-5 h-5 rounded-full object-cover shrink-0"/>)
                                               :(<div className="w-5 h-5 rounded-full bg-amber-200 text-amber-700 text-[8px] font-bold flex items-center justify-center shrink-0">{initials}</div>)}
-                                            <p className="font-medium text-gray-800 truncate">{nome}</p>
+                                            <div className="flex items-center gap-1 min-w-0">
+                                              <p className="font-medium text-gray-800 truncate">{nome}</p>
+                                              {isInss&&<span className="shrink-0 text-[7px] font-bold text-blue-700 bg-blue-100 border border-blue-200 px-1 py-0.5 rounded" title="A partir do 16º dia o custo passa ao INSS (art. 59 Lei 8.213/91)">INSS</span>}
+                                            </div>
                                           </div>
                                         </td>
                                         <td className="px-1.5 py-1.5">{a.cid?<span className="font-mono text-[8px] text-amber-700 bg-amber-100 px-1 py-0.5 rounded" title={getCidDesc(a.cid)}>{String(a.cid).toUpperCase()}</span>:<span className="text-gray-300">—</span>}</td>
                                         <td className="px-1.5 py-1.5 text-center text-gray-400">{fDate(a.dataEmissao??a.dataemissao)}</td>
-                                        <td className="px-1.5 py-1.5 text-center">{dias>0?<span className="text-amber-600 font-bold">{dias}</span>:<span className="text-gray-300">—</span>}</td>
-                                        <td className="px-1.5 py-1.5 text-right font-bold text-amber-700">{cTotal>0?fmt(cTotal):<span className="text-gray-300">—</span>}</td>
+                                        <td className="px-1.5 py-1.5 text-center">
+                                          {dias>0?(
+                                            <div className="flex flex-col items-center gap-0.5">
+                                              <span className="text-amber-600 font-bold">{dias}</span>
+                                              {isInss&&(
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                  <span className="text-[7px] text-amber-600 leading-none">{diasEmpresa}d emp.</span>
+                                                  <span className="text-[7px] font-bold text-blue-600 bg-blue-50 px-1 rounded leading-none">{diasInss}d INSS</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          ):<span className="text-gray-300">—</span>}
+                                        </td>
+                                        <td className="px-1.5 py-1.5 text-right">
+                                          {cTotal>0?(
+                                            <div className="flex flex-col items-end gap-0.5">
+                                              <span className="font-bold text-amber-700">{fmt(cTotal)}</span>
+                                              {isInss&&<span className="text-[7px] text-blue-500 leading-none">só empresa</span>}
+                                            </div>
+                                          ):<span className="text-gray-300">—</span>}
+                                        </td>
                                       </tr>
                                     );
                                   })}
