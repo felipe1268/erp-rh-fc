@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4239** — **ALMOXARIFADO: FIX VISUAL "QTD NÃO PERSISTE" — AVISO DE AGRUPAMENTO.** Causa raiz: card exibe SOMA de todos os sub-items agrupados por nome+unidade; o dialog editava apenas `_subItems[0]`. Fix: novo estado `editandoSubItems`; painel azul no campo "Corrigir Estoque Atual" mostra lista de cada sub-item (código + qtd), destaca o que está sendo editado e exibe o total que aparece no card. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4240** — **SCORECARD COMPRAS: FIX LOCAÇÕES — itens `origem='alugado'` + ícone 🔑.** Dois tipos de "locado": `equipamento_vinculado_tipo='locado'` (sync equip.) e `origem='alugado'` (form almox). ferramentasAlmox também exclui `origem='alugado'`; locações Ramo A ampliado com `OR ai.origem='alugado'`; 🚜 → 🔑. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4238** — **SCORECARD COMPRAS: SEPARAÇÃO LOCAÇÕES × EQUIP. PRÓPRIOS.** Query de locações reescrita: fonte primária = `almoxarifado_itens tipo='locado'` + LEFT JOIN `equipamentos_locados`; ferramentasAlmox exclui `tipo='locado'`; tab renomeada "Equip. Próprios". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4239** — **ALMOXARIFADO: FIX VISUAL "QTD NÃO PERSISTE" — AVISO DE AGRUPAMENTO.** Causa raiz: card exibe SOMA de todos os sub-items agrupados por nome+unidade; o dialog editava apenas `_subItems[0]`. Fix: novo estado `editandoSubItems`; painel azul no campo "Corrigir Estoque Atual" mostra lista de cada sub-item (código + qtd), destaca o que está sendo editado e exibe o total que aparece no card. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Fórmula: Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível (Lucro Bruto); Linha 2 condicional quando deduções configuradas. Sem deduções: Lucro Bruto em verde com CTA. PainelOrcamento: "Lucro Médio Mensal" renomeado para "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
 

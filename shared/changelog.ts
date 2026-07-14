@@ -1,4 +1,29 @@
 /**
+ * Rev. 4240 - SCORECARD COMPRAS: FIX LOCAÇÕES — ITENS origem='alugado' + ÍCONE 🔑.
+ *
+ * PROBLEMA: Após Rev. 4238, itens com origem='alugado' saíram de "Equip. Próprios" mas
+ * NÃO apareceram na aba "Locações". A query de locações só filtrava por
+ * `equipamento_vinculado_tipo = 'locado'` (vínculo via módulo Equipamentos Locados),
+ * ignorando itens criados diretamente no almox com origem='alugado'.
+ *
+ * CAUSA RAIZ: Existem DUAS formas de marcar um item como locado:
+ *   1. origem = 'alugado' → via form do almoxarifado (coluna principal, mais comum)
+ *   2. equipamento_vinculado_tipo = 'locado' → via sync com tabela equipamentos_locados
+ * A exclusão em ferramentasAlmox (Rev. 4238) só cobria o caso 2.
+ * A query de locações Ramo A também só buscava o caso 2.
+ *
+ * CORREÇÃO (server/routers/scorecard.ts):
+ *   ferramentasAlmox WHERE: adicionado `AND (ai.origem IS NULL OR ai.origem != 'alugado')`
+ *   locacoes Ramo A WHERE: `equipamento_vinculado_tipo = 'locado'` → `OR ai.origem = 'alugado'`
+ *   Ambos os casos agora cobertos em ambas as queries.
+ *
+ * ÍCONE (client/src/pages/planejamento/ScorecardTab.tsx):
+ *   Tab "🚜 Locações" → "🔑 Locações" (retroescavadeira não tem relação com locação de equipamentos).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4239 - ALMOXARIFADO: FIX VISUAL "QTD NÃO PERSISTE" — AVISO DE AGRUPAMENTO NO DIALOG DE EDIÇÃO.
  *
  * PROBLEMA: O usuário salvava qty=4 mas o card continuava exibindo um número maior. A correção

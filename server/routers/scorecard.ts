@@ -1443,6 +1443,7 @@ export const scorecardRouter = router({
                 OR ai.equipamento_vinculado_tipo IS NOT NULL
               )
               AND (ai.equipamento_vinculado_tipo IS NULL OR ai.equipamento_vinculado_tipo != 'locado')
+              AND (ai.origem IS NULL OR ai.origem != 'alugado')
             ORDER BY ai.nome
           `);
           return r.rows as any[];
@@ -1519,7 +1520,10 @@ export const scorecardRouter = router({
             WHERE ai.obra_id    = ${input.obraId}
               AND ai.company_id = ${input.companyId}
               AND ai.ativo      = true
-              AND ai.equipamento_vinculado_tipo = 'locado'
+              AND (
+                ai.equipamento_vinculado_tipo = 'locado'
+                OR ai.origem = 'alugado'
+              )
 
             UNION ALL
 

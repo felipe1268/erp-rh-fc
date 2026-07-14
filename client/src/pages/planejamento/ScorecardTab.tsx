@@ -2416,7 +2416,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
             {(["compras", "ferramentas", "locacoes"] as const).map(aba => (
               <button key={aba} onClick={() => setAbaAnalise(aba)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-b-2 transition-colors ${abaAnalise === aba ? "border-violet-500 text-violet-700 bg-violet-50" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-                {aba === "compras" ? "📦 Compras" : aba === "ferramentas" ? "🔧 Equip. Próprios" : "🚜 Locações"}
+                {aba === "compras" ? "📦 Compras" : aba === "ferramentas" ? "🔧 Equip. Próprios" : "🔑 Locações"}
               </button>
             ))}
           </div>
