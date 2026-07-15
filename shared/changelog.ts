@@ -1,4 +1,35 @@
 /**
+ * Rev. 4276 - FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).
+ *
+ * PROBLEMA:
+ *   O painel "Quitar cheques devolvidos" no dialog de lançamento sempre mostrava
+ *   "Nenhum cheque devolvido pendente encontrado" apesar de existirem 9+ cheques devolvidos
+ *   visíveis na tela de conciliação.
+ *
+ * BUG 1 (Rev. 4275 original): `bank_statement_lines.status = 'devolvido'`
+ *   Esse campo NUNCA é gravado no extrato. `autoMarcarChequesDevolvidos` atualiza
+ *   `financial_cheques`, não `bank_statement_lines`. Query retornava sempre vazia.
+ *   FIX: substituir por JOIN com regex (pareceCompensacaoCheque + pareceDevolucaoCheque).
+ *
+ * BUG 2: `AND deb.desconsiderado_em IS NULL` excluía todos os cheques confirmados.
+ *   `desconsiderarChequeDevolvido` seta exatamente esse campo quando o usuário confirma
+ *   um par como "cheque devolvido / saldo zero" — a query bloqueava o que devia mostrar.
+ *   FIX: remover filtro + adicionar Ramo C (desconsiderado_em IS NOT NULL AND valor < 0).
+ *
+ * BUG 3 (causa raiz da persistência): dbExecute liga params por ORDEM DE APARIÇÃO.
+ *   O CTE com 3 UNION usava `$1` em 3 lugares com array de 1 elemento:
+ *     - 1ª ocorrência → params[0] = companyId ✓
+ *     - 2ª ocorrência → params[1] = undefined → Ramo B filtrava company_id = NULL ✗
+ *     - 3ª ocorrência → params[2] = undefined → Ramo C filtrava company_id = NULL ✗
+ *   FIX: renomear para $1/$2/$3 e passar [companyId, companyId, companyId].
+ *
+ * ARQUIVOS:
+ *   server/routers/financial.ts — listPendingChequesDevolvidos (CTE 3 ramos corrigida)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4275 - CONCILIAÇÃO BANCÁRIA — "QUITAR CHEQUES DEVOLVIDOS" NO DIALOG DE LANÇAMENTO.
  *
  * PROBLEMA:

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4275** — **CONCILIAÇÃO BANCÁRIA: BOTÃO "QUITAR CHEQUES DEVOLVIDOS" NO DIALOG DE LANÇAMENTO.** Backend: `listPendingChequesDevolvidos` retorna todos os cheques devolvidos pendentes/parciais de TODAS as contas (status='devolvido' + vinculos ativos + HAVING saldo_livre>0.01). Frontend: painel colapsável laranja no dialog de lançamento — só para débitos; multi-select com valor editável por cheque; badge "Parcialmente quitado · livre R$ X"; chama `registrarVinculoChequeDevolvido` em loop e fecha o dialog. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4276** — **FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).** Bug 1: `bank_statement_lines.status='devolvido'` nunca é gravado → JOIN com regex. Bug 2: `AND deb.desconsiderado_em IS NULL` bloqueava exatamente os cheques confirmados → removido + Ramo C. Bug 3: dbExecute param-binding por ordem de aparição — CTE com $1×3 e array[1] → renomear $1/$2/$3 e passar companyId 3×. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4274** — **CONCILIAÇÃO BANCÁRIA: 1 PIX → N CHEQUES DEVOLVIDOS.** Backend: `searchPixTedGlobal` e `getChequeDevolvidoVinculacao` passam de `jaVinculado: boolean` para `valorAlocado + saldoLivre` por linha (SUM/GROUP BY). Frontend: label "já vinculado a outro cheque" → "usado R$ X · livre R$ Y"; `selecionar()` pré-preenche com `min(saldoCheque, saldoLivre)`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4275** — **CONCILIAÇÃO BANCÁRIA: BOTÃO "QUITAR CHEQUES DEVOLVIDOS" NO DIALOG DE LANÇAMENTO.** Backend: `listPendingChequesDevolvidos` retorna todos os cheques devolvidos pendentes/parciais de TODAS as contas. Frontend: painel colapsável laranja no dialog de lançamento — multi-select com valor editável; chama `registrarVinculoChequeDevolvido` em loop. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4274** — **CONCILIAÇÃO BANCÁRIA: 1 PIX → N CHEQUES DEVOLVIDOS.** `searchPixTedGlobal`/`getChequeDevolvidoVinculacao` passam de `jaVinculado: boolean` para `valorAlocado + saldoLivre`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4273** — **FIX: COTAÇÕES — DIFERENÇA DE CENTAVOS NO TOTAL DO DIALOG "CONDIÇÕES DE PAGAMENTO".** Erro de ponto flutuante — `Math.round(...*100)/100` por item e no total. ZERO DELETE · ZERO ALTER destrutivo.
 
