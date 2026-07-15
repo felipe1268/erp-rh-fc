@@ -6332,15 +6332,17 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         quantidade: r.quantidade ?? "0",
         totalMat: (r as any).totalMat ?? null, totalMdo: (r as any).totalMdo ?? null,
       };
+      // Rev. 4285 — acumular em centavos inteiros para evitar drift de ponto flutuante
+      // ao somar N itens (comportamento idêntico ao salvarRespostasLote).
       const totaisPorFornecedor: Record<number, number> = {};
       for (const p of participantes) {
-        const totalItens = itensComMeta.reduce((acc, it) => {
+        const totalItensCents = itensComMeta.reduce((acc, it) => {
           const r = respostaMap[`${it.id}_${p.fornecedorId}`];
-          return acc + n(r?.total ?? 0);
+          return acc + Math.round(n(r?.total ?? 0) * 100);
         }, 0);
         const pFreteTipo = (p as any).freteTipo ?? "cif";
-        const pValorFrete = pFreteTipo === "fob" ? n((p as any).valorFrete) : 0;
-        totaisPorFornecedor[p.fornecedorId] = totalItens + pValorFrete;
+        const pFreteCents = pFreteTipo === "fob" ? Math.round(n((p as any).valorFrete) * 100) : 0;
+        totaisPorFornecedor[p.fornecedorId] = (totalItensCents + pFreteCents) / 100;
       }
       // Quais itens da cotação já têm OC gerada (exceto canceladas)
       const itensJaEmOC: number[] = [];
