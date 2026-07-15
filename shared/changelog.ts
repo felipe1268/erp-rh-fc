@@ -1,4 +1,29 @@
 /**
+ * Rev. 4290 - FIX: CONCILIAÇÃO — parseChequeNumero SUPORTA "Nº NNN" SOLTO + CHEQUE 393 REGISTRADO COMO DEVOLVIDO.
+ *
+ * CONTEXTO:
+ *   O cheque 393 (R$15.000, Santander FC Aparecida) foi emitido sem identificação do beneficiário
+ *   (Motivo 48 — "Cheque acima do limite legal sem identificação do beneficiário"). O banco gerou
+ *   a BSL de débito com descrição "CHEQUE EMITIDO/DEBITADO" (sem Nº) e a BSL de crédito (devolução)
+ *   com "CHEQUE DEVOLVIDO MOTIVO 48-SEM FAVORECIDO Nº 393". O painel "Cheques devolvidos no banco"
+ *   não detectava o par porque:
+ *   (a) parseChequeNumero não capturava "Nº NNN" solto no final da descrição (não imediatamente após
+ *       "CHEQUE" nem com ≥4 dígitos após "MOTIVO");
+ *   (b) a BSL de débito não tinha número na descrição, impedindo o match por chequeNumero.
+ *
+ * FIX:
+ *   — shared/chequeMotivos.ts parseChequeNumero: adicionado terceiro padrão `/(?:^|\s)n[ºo°.]\s*0*(\d{1,12})/i`
+ *     que captura "Nº NNN" precedido de espaço em qualquer posição. Cobre também "DEBITADO Nº 347" etc.
+ *   — bank_statement_lines id=20565: descrição corrigida de "CHEQUE EMITIDO/DEBITADO" para
+ *     "CHEQUE EMITIDO/DEBITADO Nº 393" (banco omitiu o número; cheque identificado via Controle de Cheques).
+ *   — financial_cheques id=352 (cheque 393): conta_bancaria_id=4, lancamento_id=890793,
+ *     data_compensacao='2026-06-05', devolvido_em='2026-06-05', motivo_devolucao_codigo=48.
+ *
+ * ARQUIVOS: shared/chequeMotivos.ts, [DB] bank_statement_lines, financial_cheques.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4289 - FIX: MAPA DE COTAÇÃO — INPUTS MAT/MO COM FORMATO BR (R$ + SEPARADOR DE MILHAR).
  *
  * CONTEXTO:
