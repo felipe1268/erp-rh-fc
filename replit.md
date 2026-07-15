@@ -50,7 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4292** — **FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ CONCILIADO.** Motor de conciliação rodava `detectarParesEstorno` em 2 passagens separadas (pendRes e concRes). Par com débito em concRes + crédito em pendRes (cavalo) não era detectado por nenhuma delas. Fix: 3ª passagem híbrida (bloco 2f) combina `concMin + linhasMin`, roda `detectarParesEstorno` e descarta pares já encontrados via dedup `debitoId:creditoId`. Caso real: cheque 393 Santander FC Aparecida R$ 15.000, motivo 48. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4292** — **FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ CONCILIADO + CRÉDITO VAZAVA PARA "SEM LANÇAMENTO".** Motor de conciliação rodava `detectarParesEstorno` em 2 passagens separadas (pendRes e concRes). Par com débito em concRes + crédito em pendRes (cavalo) não era detectado. Fix (A): 3ª passagem híbrida combina `concMin + linhasMin` e dedup por `debitoId:creditoId`. Fix (B): perna em pendRes recebe `.reversal` para sair de "No extrato, sem lançamento". Caso real: cheque 393 Santander FC Aparecida R$ 15.000, motivo 48. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4291** — **FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS DO GRUPO.** No modo multi-empresa ("Construtoras"), o mesmo funcionário físico tinha 2 `employees.id` distintos → `searchBySkill` retornava 2 linhas e `skillSummaryGlobal` contava 2. Fix: dedup por `${cpfLimpo}:${skillId}` no retorno de `searchBySkill`; `skillSummaryGlobal` trocou `COUNT(DISTINCT employeeId)` por `COUNT(DISTINCT regexp_replace(cpf,...))`. ZERO DELETE · ZERO ALTER destrutivo.
 

@@ -2038,8 +2038,15 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
           const cred: any = allLinesById.get(p.creditoId);
           const cMatch = deb ? matchChequeLinha(deb) : null;
           const debConciliado = concById.has(p.debitoId);
+          const grupoIdH = `devh-${idx}`;
+          // Marca a(s) perna(s) que estão em pendRes/linhaById com .reversal para que o
+          // frontend as exclua de "No extrato, sem lançamento" (filtro: !r.reversal).
+          const pendDebLeg = linhaById.get(p.debitoId);
+          const pendCredLeg = linhaById.get(p.creditoId);
+          if (pendDebLeg) pendDebLeg.reversal = { papel: "debito", grupoId: grupoIdH, doc: p.doc, motivoCodigo: p.motivo?.codigo ?? null };
+          if (pendCredLeg) pendCredLeg.reversal = { papel: "credito", grupoId: grupoIdH, doc: p.doc, motivoCodigo: p.motivo?.codigo ?? null };
           return {
-            grupoId: `devh-${idx}`,
+            grupoId: grupoIdH,
             doc: p.doc,
             chequeNumero: p.chequeNumero,
             valor: deb?.valor ?? cred?.valor ?? null,

@@ -21,6 +21,11 @@
  *   anteriores são descartados via Set de dedup por `"debitoId:creditoId"`. Pares novos
  *   são adicionados a `chequesDevolvidos` com `resolucao.tipo="pendente"` e
  *   `jaConciliado=false` — ficam visíveis no painel para o usuário tratar. READ-ONLY.
+ *   Além disso, a perna em pendRes (ex: crédito da devolução BSL 20569) recebe
+ *   `.reversal = { papel, grupoId, ... }` — o mesmo marcador que a 1ª passagem usa —
+ *   para que o frontend a exclua de "No extrato, sem lançamento" (filtro !r.reversal,
+ *   linha 1460 do FinanceiroConciliacao.tsx). Sem essa marca, a linha aparecia como
+ *   entrada pendente mesmo depois de detectada como par de cheque devolvido.
  *
  * ARQUIVOS TOCADOS:
  *   - server/routers/financial.ts (bloco 2f após linha 2013)
