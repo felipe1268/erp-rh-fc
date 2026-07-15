@@ -1,4 +1,51 @@
 /**
+ * Rev. 4284 - COTAÇÕES/COMPRAS: ADIANTAMENTO (SINAL) E RETENÇÃO DE GARANTIA NO DIALOG "CONDIÇÕES DE PAGAMENTO".
+ *
+ * CONTEXTO:
+ *   Contratos de medição (MDO / Pacote) frequentemente preveem: (1) um sinal pago antes do início
+ *   da obra ("adiantamento"), amortizado em cada medição; (2) uma retenção de garantia retida em
+ *   cada medição e liberada ao encerramento do contrato. Essas condições não tinham campo no ERP —
+ *   precisavam ser controladas fora do sistema.
+ *
+ * SOLUÇÃO:
+ *   Nova seção "Adiantamento & Retenção" visível NO DIALOG de Condições de Pagamento, exclusivamente
+ *   quando o fornecedor tem módulo de medição ativo (MDO, Pacote). Dois toggles independentes:
+ *
+ *   ADIANTAMENTO (sinal):
+ *   - Checkbox ativa. Tipo: percentual (% do total) ou valor fixo (R$). Default: 5%.
+ *   - Prazo: DDL após assinatura (default: 7 dias).
+ *   - Amortização: proporcional por medição (cada medição desconta %adiant/%total) ou
+ *     parcelas fixas (valor ÷ N medições). Preview ao vivo do valor.
+ *
+ *   RETENÇÃO DE GARANTIA:
+ *   - Checkbox ativa. Percentual por medição (default: 5% do bruto).
+ *   - Liberação: encerramento do contrato ou em etapas.
+ *
+ * PERSISTÊNCIA:
+ *   10 novas colunas em `compras_cotacao_fornecedores` (config editável na cotação).
+ *   10 novas colunas em `compras_ordens` (propagadas automaticamente ao gerar a OC).
+ *   3 novas colunas em `terceiro_medicoes`: adiantamento_amortizacao_valor,
+ *   retencao_garantia_valor, valor_liquido_pagamento (computed no bridge).
+ *
+ * BRIDGE FINANCEIRO:
+ *   `importTerceirosToFinancial` agora lê os parâmetros da OC ao criar o lançamento da
+ *   medição: calcula amortização (proporcional ou parcelas fixas) verificando saldo já
+ *   amortizado em medições anteriores do mesmo contrato, calcula retenção, grava breakdown
+ *   nas 3 colunas novas e cria o lançamento com `valor_liquido_pagamento` (bruto − amort − ret).
+ *   Backward-compatible: medições sem parâmetros usam valor_medido integralmente.
+ *
+ * ARQUIVOS:
+ *   drizzle/schema.ts — 10+10+3 colunas
+ *   server/_core/index.ts — [SyncSchema+] Rev. 4284
+ *   server/routers/compras.ts — salvarCondicoesComerciais input+update; OC insert propagação
+ *   server/services/financialIntegrationBridge.ts — importTerceirosToFinancial deduções
+ *   client/src/pages/compras/Cotacoes.tsx — 10 state vars, init, seed, UI section, mutate
+ *   shared/version.ts — bumped Rev. 4284
+ *
+ * CONVENÇÃO: ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4283 - FIX: COTAÇÕES — DRIFT DE CENTAVOS NO DIALOG "CONDIÇÕES DE PAGAMENTO".
  *
  * PROBLEMA:

@@ -1009,6 +1009,17 @@ export default function Cotacoes() {
   const [editValorFrete, setEditValorFrete] = useState<Record<number, string>>({});
   const [editTransportadora, setEditTransportadora] = useState<Record<number, string>>({});
   const [editModuloMedicao, setEditModuloMedicao] = useState<Record<number, string>>({});
+  // Rev. 4284 — Adiantamento e Retenção de Garantia
+  const [editAdiantamentoAtivo, setEditAdiantamentoAtivo] = useState<Record<number, boolean>>({});
+  const [editAdiantamentoTipo, setEditAdiantamentoTipo] = useState<Record<number, string>>({});
+  const [editAdiantamentoPct, setEditAdiantamentoPct] = useState<Record<number, string>>({});
+  const [editAdiantamentoValorFixo, setEditAdiantamentoValorFixo] = useState<Record<number, string>>({});
+  const [editAdiantamentoPrazoDias, setEditAdiantamentoPrazoDias] = useState<Record<number, string>>({});
+  const [editAdiantamentoAmortizacao, setEditAdiantamentoAmortizacao] = useState<Record<number, string>>({});
+  const [editAdiantamentoParcelasN, setEditAdiantamentoParcelasN] = useState<Record<number, string>>({});
+  const [editRetencaoAtiva, setEditRetencaoAtiva] = useState<Record<number, boolean>>({});
+  const [editRetencaoPct, setEditRetencaoPct] = useState<Record<number, string>>({});
+  const [editRetencaoLiberacao, setEditRetencaoLiberacao] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
   const [negociadoModal, setNegociadoModal] = useState<{ fornecedorId: number } | null>(null);
   const [negociadoValor, setNegociadoValor] = useState("");
@@ -1785,6 +1796,39 @@ export default function Cotacoes() {
         excecaoManualInicial[p.fornecedorId] = !!(p as any).excecaoManual;
         if ((p as any).arquivoUrl) anexoInicial[p.fornecedorId] = (p as any).arquivoUrl;
       }
+      // Rev. 4284 — inicializar adiantamento e retenção
+      const adiantAtivoIni: Record<number, boolean> = {};
+      const adiantTipoIni: Record<number, string> = {};
+      const adiantPctIni: Record<number, string> = {};
+      const adiantVfIni: Record<number, string> = {};
+      const adiantPrazoIni: Record<number, string> = {};
+      const adiantAmortIni: Record<number, string> = {};
+      const adiantNIni: Record<number, string> = {};
+      const retAtivaIni: Record<number, boolean> = {};
+      const retPctIni: Record<number, string> = {};
+      const retLibIni: Record<number, string> = {};
+      for (const p of mapaQ.data.participantes) {
+        adiantAtivoIni[p.fornecedorId] = !!(p as any).adiantamentoAtivo;
+        adiantTipoIni[p.fornecedorId] = (p as any).adiantamentoTipo ?? "pct";
+        adiantPctIni[p.fornecedorId] = (p as any).adiantamentoPct ? String(parseFloat((p as any).adiantamentoPct)) : "5";
+        adiantVfIni[p.fornecedorId] = (p as any).adiantamentoValorFixo ? String(parseFloat((p as any).adiantamentoValorFixo)) : "";
+        adiantPrazoIni[p.fornecedorId] = (p as any).adiantamentoPrazoDias ? String((p as any).adiantamentoPrazoDias) : "7";
+        adiantAmortIni[p.fornecedorId] = (p as any).adiantamentoAmortizacao ?? "proporcional";
+        adiantNIni[p.fornecedorId] = (p as any).adiantamentoParcelasN ? String((p as any).adiantamentoParcelasN) : "1";
+        retAtivaIni[p.fornecedorId] = !!(p as any).retencaoAtiva;
+        retPctIni[p.fornecedorId] = (p as any).retencaoPct ? String(parseFloat((p as any).retencaoPct)) : "5";
+        retLibIni[p.fornecedorId] = (p as any).retencaoLiberacao ?? "final";
+      }
+      setEditAdiantamentoAtivo(adiantAtivoIni);
+      setEditAdiantamentoTipo(adiantTipoIni);
+      setEditAdiantamentoPct(adiantPctIni);
+      setEditAdiantamentoValorFixo(adiantVfIni);
+      setEditAdiantamentoPrazoDias(adiantPrazoIni);
+      setEditAdiantamentoAmortizacao(adiantAmortIni);
+      setEditAdiantamentoParcelasN(adiantNIni);
+      setEditRetencaoAtiva(retAtivaIni);
+      setEditRetencaoPct(retPctIni);
+      setEditRetencaoLiberacao(retLibIni);
       setEditPrecos(inicialPrecos);
       setEditQtds(inicialQtds);
       setEditPrazo(prazoInicial);
@@ -1839,6 +1883,17 @@ export default function Cotacoes() {
     setEditTransportadora(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedTransp });
     setEditModuloMedicao(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedModulo });
     setEditExcecaoManual(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedExcecao });
+    // Rev. 4284 — seed adiantamento e retenção
+    setEditAdiantamentoAtivo(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: !!(p as any).adiantamentoAtivo });
+    setEditAdiantamentoTipo(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: (p as any).adiantamentoTipo ?? "pct" });
+    setEditAdiantamentoPct(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: (p as any).adiantamentoPct ? String(parseFloat((p as any).adiantamentoPct)) : "5" });
+    setEditAdiantamentoValorFixo(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: (p as any).adiantamentoValorFixo ? String(parseFloat((p as any).adiantamentoValorFixo)) : "" });
+    setEditAdiantamentoPrazoDias(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: (p as any).adiantamentoPrazoDias ? String((p as any).adiantamentoPrazoDias) : "7" });
+    setEditAdiantamentoAmortizacao(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: (p as any).adiantamentoAmortizacao ?? "proporcional" });
+    setEditAdiantamentoParcelasN(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: (p as any).adiantamentoParcelasN ? String((p as any).adiantamentoParcelasN) : "1" });
+    setEditRetencaoAtiva(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: !!(p as any).retencaoAtiva });
+    setEditRetencaoPct(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: (p as any).retencaoPct ? String(parseFloat((p as any).retencaoPct)) : "5" });
+    setEditRetencaoLiberacao(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: (p as any).retencaoLiberacao ?? "final" });
 
     // Inferência de modo "custom": só dispara quando há indício real de parcelamento custom —
     // numeroParcelas > 1 SEM tipoPagamento persistido (porque tipoPagamento define um plano
@@ -2506,6 +2561,17 @@ export default function Cotacoes() {
         moduloMedicao: editModuloMedicao[fId] || undefined,
         cartaoId: formaPagamentoFinal === "cartao" ? (editCartaoId[fId] ?? null) : null,
         excecaoManual: excecaoAtiva,
+        // Rev. 4284 — adiantamento e retenção
+        adiantamentoAtivo: editAdiantamentoAtivo[fId] ?? false,
+        adiantamentoTipo: (editAdiantamentoTipo[fId] ?? "pct") as "pct" | "valor",
+        adiantamentoPct: parseFloat(editAdiantamentoPct[fId] ?? "5") || 5,
+        adiantamentoValorFixo: editAdiantamentoTipo[fId] === "valor" ? (parseFloat(editAdiantamentoValorFixo[fId] ?? "0") || 0) : null,
+        adiantamentoPrazoDias: parseInt(editAdiantamentoPrazoDias[fId] ?? "7") || 7,
+        adiantamentoAmortizacao: (editAdiantamentoAmortizacao[fId] ?? "proporcional") as "proporcional" | "parcelas_fixas",
+        adiantamentoParcelasN: parseInt(editAdiantamentoParcelasN[fId] ?? "1") || 1,
+        retencaoAtiva: editRetencaoAtiva[fId] ?? false,
+        retencaoPct: parseFloat(editRetencaoPct[fId] ?? "5") || 5,
+        retencaoLiberacao: (editRetencaoLiberacao[fId] ?? "final") as "final" | "etapas",
       }, {
         onSuccess: () => {
           setCondModalFornId(null);
@@ -3148,6 +3214,155 @@ export default function Cotacoes() {
                           </p>
                         </div>
                       )}
+                    </section>
+                  );
+                })()}
+
+                {/* Rev. 4284 — Adiantamento e Retenção de Garantia */}
+                {showModuloMedicao && (() => {
+                  const adiantAtivo = editAdiantamentoAtivo[fId] ?? false;
+                  const adiantTipo = editAdiantamentoTipo[fId] ?? "pct";
+                  const adiantPct = parseFloat(editAdiantamentoPct[fId] ?? "5") || 5;
+                  const adiantVf = parseFloat(editAdiantamentoValorFixo[fId] ?? "0") || 0;
+                  const adiantPrazo = editAdiantamentoPrazoDias[fId] ?? "7";
+                  const adiantAmort = editAdiantamentoAmortizacao[fId] ?? "proporcional";
+                  const adiantN = editAdiantamentoParcelasN[fId] ?? "1";
+                  const retAtivo = editRetencaoAtiva[fId] ?? false;
+                  const retLiberacao = editRetencaoLiberacao[fId] ?? "final";
+                  const valorAdiant = adiantTipo === "pct"
+                    ? Math.round(fornTotal * adiantPct) / 100
+                    : adiantVf;
+                  const pctCalculado = fornTotal > 0 && adiantTipo === "valor" && adiantVf > 0
+                    ? (adiantVf / fornTotal * 100).toFixed(2)
+                    : null;
+                  const formatC = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                  const Toggle = ({ on, setOn, color }: { on: boolean; setOn: (v: boolean) => void; color: string }) => (
+                    <button type="button" onClick={() => setOn(!on)}
+                      className={`w-10 h-5 rounded-full relative transition-colors flex-shrink-0 ${on ? color : "bg-gray-300"}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 shadow transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`} />
+                    </button>
+                  );
+                  return (
+                    <section className="rounded-xl border border-gray-200 bg-white p-5 lg:p-6 shadow-sm space-y-4">
+                      <SectionHeader Icon={Banknote} color="bg-emerald-100 text-emerald-700" title="Adiantamento & Retenção" hint="Opcional" />
+
+                      {/* ADIANTAMENTO */}
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                        <div className="flex items-center gap-2.5">
+                          <Toggle on={adiantAtivo} setOn={v => setEditAdiantamentoAtivo(prev => ({ ...prev, [fId]: v }))} color="bg-emerald-500" />
+                          <span className="text-sm font-semibold text-gray-700">Adiantamento (sinal)</span>
+                          {adiantAtivo && valorAdiant > 0 && (
+                            <span className="ml-auto text-sm font-bold text-emerald-700 tabular-nums">{formatC(valorAdiant)}</span>
+                          )}
+                        </div>
+                        {adiantAtivo && (
+                          <>
+                            <div className="flex gap-2 pt-1">
+                              {(["pct", "valor"] as const).map(t => (
+                                <button key={t} type="button"
+                                  onClick={() => setEditAdiantamentoTipo(prev => ({ ...prev, [fId]: t }))}
+                                  className={`flex-1 h-9 text-sm rounded-lg border-2 font-medium transition-all ${adiantTipo === t ? "bg-emerald-50 border-emerald-400 text-emerald-700" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"}`}>
+                                  {t === "pct" ? "% do total" : "Valor fixo"}
+                                </button>
+                              ))}
+                            </div>
+                            {adiantTipo === "pct" ? (
+                              <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Percentual do sinal</label>
+                                <div className="flex items-center gap-2">
+                                  <input type="number" step="0.1" min="0" max="100"
+                                    value={editAdiantamentoPct[fId] ?? "5"}
+                                    onChange={e => setEditAdiantamentoPct(prev => ({ ...prev, [fId]: e.target.value }))}
+                                    className="w-24 h-10 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 outline-none tabular-nums" />
+                                  <span className="text-sm text-gray-500">% → {formatC(valorAdiant)}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Valor do sinal (R$)</label>
+                                <div className="flex items-center gap-2">
+                                  <input type="number" step="0.01" min="0"
+                                    placeholder="0,00"
+                                    value={editAdiantamentoValorFixo[fId] ?? ""}
+                                    onChange={e => setEditAdiantamentoValorFixo(prev => ({ ...prev, [fId]: e.target.value }))}
+                                    className="w-40 h-10 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 outline-none tabular-nums" />
+                                  {pctCalculado && <span className="text-sm text-gray-500">({pctCalculado}% do total)</span>}
+                                </div>
+                              </div>
+                            )}
+                            <div>
+                              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Prazo após assinatura</label>
+                              <div className="flex items-center gap-2">
+                                <input type="number" step="1" min="0"
+                                  value={adiantPrazo}
+                                  onChange={e => setEditAdiantamentoPrazoDias(prev => ({ ...prev, [fId]: e.target.value }))}
+                                  className="w-20 h-10 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 outline-none tabular-nums" />
+                                <span className="text-sm text-gray-500">DDL</span>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Amortização</label>
+                              <div className="flex gap-2">
+                                {(["proporcional", "parcelas_fixas"] as const).map(a => (
+                                  <button key={a} type="button"
+                                    onClick={() => setEditAdiantamentoAmortizacao(prev => ({ ...prev, [fId]: a }))}
+                                    className={`flex-1 h-9 text-xs rounded-lg border-2 font-medium transition-all ${adiantAmort === a ? "bg-emerald-50 border-emerald-400 text-emerald-700" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"}`}>
+                                    {a === "proporcional" ? "Proporcional" : "Parcelas fixas"}
+                                  </button>
+                                ))}
+                              </div>
+                              {adiantAmort === "parcelas_fixas" && (
+                                <div className="mt-2 flex items-center gap-2">
+                                  <input type="number" step="1" min="1"
+                                    value={adiantN}
+                                    onChange={e => setEditAdiantamentoParcelasN(prev => ({ ...prev, [fId]: e.target.value }))}
+                                    className="w-20 h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 outline-none tabular-nums" />
+                                  <span className="text-sm text-gray-500">medições ≈ {formatC(valorAdiant / Math.max(1, parseInt(adiantN || "1")))}/medição</span>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* RETENÇÃO */}
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                        <div className="flex items-center gap-2.5">
+                          <Toggle on={retAtivo} setOn={v => setEditRetencaoAtiva(prev => ({ ...prev, [fId]: v }))} color="bg-amber-500" />
+                          <span className="text-sm font-semibold text-gray-700">Retenção de Garantia</span>
+                          {retAtivo && (
+                            <span className="ml-auto text-xs text-amber-700 font-medium">
+                              {editRetencaoPct[fId] ?? "5"}% / medição
+                            </span>
+                          )}
+                        </div>
+                        {retAtivo && (
+                          <>
+                            <div>
+                              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Reter por medição</label>
+                              <div className="flex items-center gap-2">
+                                <input type="number" step="0.1" min="0" max="100"
+                                  value={editRetencaoPct[fId] ?? "5"}
+                                  onChange={e => setEditRetencaoPct(prev => ({ ...prev, [fId]: e.target.value }))}
+                                  className="w-24 h-10 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 outline-none tabular-nums" />
+                                <span className="text-sm text-gray-500">% do bruto de cada medição</span>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Liberação</label>
+                              <div className="flex gap-2">
+                                {(["final", "etapas"] as const).map(l => (
+                                  <button key={l} type="button"
+                                    onClick={() => setEditRetencaoLiberacao(prev => ({ ...prev, [fId]: l }))}
+                                    className={`flex-1 h-9 text-xs rounded-lg border-2 font-medium transition-all ${retLiberacao === l ? "bg-amber-50 border-amber-400 text-amber-700" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"}`}>
+                                    {l === "final" ? "Encerramento do contrato" : "Em etapas"}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </section>
                   );
                 })()}

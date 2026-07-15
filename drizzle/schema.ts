@@ -4405,6 +4405,10 @@ export const terceiroMedicoes = pgTable("terceiro_medicoes", {
   percentualDivergencia: numeric("percentual_divergencia", { precision: 8, scale: 4 }),
   // Rev. 3078 — Total de FD (auto OCs + manual) abatido nesta medição.
   fdTotalAbatido:    numeric("fd_total_abatido", { precision: 18, scale: 2 }).default("0").notNull(),
+  // Rev. 4284 — Breakdown de descontos calculados na liquidação do boletim.
+  adiantamentoAmortizacaoValor: numeric("adiantamento_amortizacao_valor", { precision: 18, scale: 2 }).default("0"),
+  retencaoGarantiaValor:        numeric("retencao_garantia_valor", { precision: 18, scale: 2 }).default("0"),
+  valorLiquidoPagamento:        numeric("valor_liquido_pagamento", { precision: 18, scale: 2 }).default("0"),
   criadoPor:         varchar("criado_por", { length: 255 }),
   criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
@@ -6857,6 +6861,17 @@ export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores"
   // definida manualmente pelo comprador, fugindo do ciclo de fechamento cadastrado
   // (ou da regra especial por produto) do fornecedor. Fica visível/rastreável.
   excecaoManual:    boolean("excecao_manual").default(false),
+  // Rev. 4284 — Adiantamento (sinal) e Retenção de Garantia por contrato de medição.
+  adiantamentoAtivo:      boolean("adiantamento_ativo").default(false),
+  adiantamentoTipo:       varchar("adiantamento_tipo", { length: 10 }).default("pct"),
+  adiantamentoPct:        numeric("adiantamento_pct", { precision: 5, scale: 2 }).default("5.00"),
+  adiantamentoValorFixo:  numeric("adiantamento_valor_fixo", { precision: 14, scale: 2 }),
+  adiantamentoPrazoDias:  integer("adiantamento_prazo_dias").default(7),
+  adiantamentoAmortizacao: varchar("adiantamento_amortizacao", { length: 20 }).default("proporcional"),
+  adiantamentoParcelasN:  integer("adiantamento_parcelas_n").default(1),
+  retencaoAtiva:          boolean("retencao_ativa").default(false),
+  retencaoPct:            numeric("retencao_pct", { precision: 5, scale: 2 }).default("5.00"),
+  retencaoLiberacao:      varchar("retencao_liberacao", { length: 10 }).default("final"),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
@@ -6918,6 +6933,17 @@ export const comprasOrdens = pgTable("compras_ordens", {
   formaPagamento:     varchar("forma_pagamento", { length: 30 }),
   // Rev. 4019 — cartão de crédito escolhido/sugerido quando formaPagamento='cartao'.
   cartaoId:           integer("cartao_id"),
+  // Rev. 4284 — Adiantamento e Retenção de Garantia herdados da cotação vencedora.
+  adiantamentoAtivo:      boolean("adiantamento_ativo").default(false),
+  adiantamentoTipo:       varchar("adiantamento_tipo", { length: 10 }).default("pct"),
+  adiantamentoPct:        numeric("adiantamento_pct", { precision: 5, scale: 2 }).default("5.00"),
+  adiantamentoValorFixo:  numeric("adiantamento_valor_fixo", { precision: 14, scale: 2 }),
+  adiantamentoPrazoDias:  integer("adiantamento_prazo_dias").default(7),
+  adiantamentoAmortizacao: varchar("adiantamento_amortizacao", { length: 20 }).default("proporcional"),
+  adiantamentoParcelasN:  integer("adiantamento_parcelas_n").default(1),
+  retencaoAtiva:          boolean("retencao_ativa").default(false),
+  retencaoPct:            numeric("retencao_pct", { precision: 5, scale: 2 }).default("5.00"),
+  retencaoLiberacao:      varchar("retencao_liberacao", { length: 10 }).default("final"),
   numeroParcelas:     integer("numero_parcelas").default(1),
   parcelasJson:       jsonb("parcelas_json"),
   contaBancariaId:    integer("conta_bancaria_id"),

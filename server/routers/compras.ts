@@ -6950,6 +6950,17 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       cartaoId: z.number().nullable().optional(),
       // Rev. 4073 — marca que o comprador optou por fugir do ciclo/regra cadastrada do fornecedor.
       excecaoManual: z.boolean().optional(),
+      // Rev. 4284 — Adiantamento e Retenção de Garantia
+      adiantamentoAtivo: z.boolean().optional(),
+      adiantamentoTipo: z.enum(["pct", "valor"]).optional(),
+      adiantamentoPct: z.number().min(0).max(100).optional(),
+      adiantamentoValorFixo: z.number().min(0).nullable().optional(),
+      adiantamentoPrazoDias: z.number().int().min(0).optional(),
+      adiantamentoAmortizacao: z.enum(["proporcional", "parcelas_fixas"]).optional(),
+      adiantamentoParcelasN: z.number().int().min(1).optional(),
+      retencaoAtiva: z.boolean().optional(),
+      retencaoPct: z.number().min(0).max(100).optional(),
+      retencaoLiberacao: z.enum(["final", "etapas"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
@@ -6966,6 +6977,17 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (input.moduloMedicao !== undefined) updateData.moduloMedicao = input.moduloMedicao || null;
       if (input.cartaoId !== undefined) updateData.cartaoId = input.cartaoId;
       if (input.excecaoManual !== undefined) updateData.excecaoManual = input.excecaoManual;
+      // Rev. 4284 — adiantamento e retenção
+      if (input.adiantamentoAtivo !== undefined) updateData.adiantamentoAtivo = input.adiantamentoAtivo;
+      if (input.adiantamentoTipo !== undefined) updateData.adiantamentoTipo = input.adiantamentoTipo;
+      if (input.adiantamentoPct !== undefined) updateData.adiantamentoPct = String(input.adiantamentoPct.toFixed(2));
+      if (input.adiantamentoValorFixo !== undefined) updateData.adiantamentoValorFixo = input.adiantamentoValorFixo != null ? String(input.adiantamentoValorFixo.toFixed(2)) : null;
+      if (input.adiantamentoPrazoDias !== undefined) updateData.adiantamentoPrazoDias = input.adiantamentoPrazoDias;
+      if (input.adiantamentoAmortizacao !== undefined) updateData.adiantamentoAmortizacao = input.adiantamentoAmortizacao;
+      if (input.adiantamentoParcelasN !== undefined) updateData.adiantamentoParcelasN = input.adiantamentoParcelasN;
+      if (input.retencaoAtiva !== undefined) updateData.retencaoAtiva = input.retencaoAtiva;
+      if (input.retencaoPct !== undefined) updateData.retencaoPct = String(input.retencaoPct.toFixed(2));
+      if (input.retencaoLiberacao !== undefined) updateData.retencaoLiberacao = input.retencaoLiberacao;
       if (Object.keys(updateData).length > 0) {
         if (input.fornecedorId === 0) {
           await db.update(comprasCotacoes)
@@ -8899,6 +8921,17 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         // Rev. 4019 — herda o cartão FC escolhido na Cotação, pra permitir o match
         // automático item-da-fatura↔OC na conciliação do cartão.
         cartaoId: (fornInfo as any)?.cartaoId ?? (cot as any).cartaoId ?? null,
+        // Rev. 4284 — herda adiantamento e retenção de garantia da cotação vencedora.
+        adiantamentoAtivo: !!(fornInfo as any)?.adiantamentoAtivo,
+        adiantamentoTipo: (fornInfo as any)?.adiantamentoTipo ?? "pct",
+        adiantamentoPct: (fornInfo as any)?.adiantamentoPct ?? "5.00",
+        adiantamentoValorFixo: (fornInfo as any)?.adiantamentoValorFixo ?? null,
+        adiantamentoPrazoDias: (fornInfo as any)?.adiantamentoPrazoDias ?? 7,
+        adiantamentoAmortizacao: (fornInfo as any)?.adiantamentoAmortizacao ?? "proporcional",
+        adiantamentoParcelasN: (fornInfo as any)?.adiantamentoParcelasN ?? 1,
+        retencaoAtiva: !!(fornInfo as any)?.retencaoAtiva,
+        retencaoPct: (fornInfo as any)?.retencaoPct ?? "5.00",
+        retencaoLiberacao: (fornInfo as any)?.retencaoLiberacao ?? "final",
         numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
         // Rev. 4016 — Item 9: OC gerada a partir de cotação herda o anexo
         // da proposta do fornecedor vencedor (arquivoUrl/arquivoNome já

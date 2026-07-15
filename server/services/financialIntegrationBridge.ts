@@ -181,7 +181,9 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
 
   try {
     const { rows } = await dbExecute(db,
-      `SELECT tm.id, tm.valor_medido, tm.data_referencia, tm.status, tm.periodo, tm.obra_id,
+      `SELECT tm.id, tm.contrato_id,
+              tm.valor_medido, COALESCE(tm.valor_liquido_pagamento::numeric, 0) AS valor_liquido_pagamento,
+              tm.data_referencia, tm.status, tm.periodo, tm.obra_id,
               COALESCE(et.nome_fantasia, et.razao_social) AS nome_empresa,
               tc.descricao AS tipo_servico, tc.valor_total AS valor_contrato,
               o.nome AS obra_nome
@@ -197,8 +199,70 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "terceiro_medicao", r.id)) continue;
-      const valor = parseFloat(r.valor_medido ?? "0");
-      if (valor <= 0) continue;
+      const valorBruto = parseFloat(r.valor_medido ?? "0");
+      if (valorBruto <= 0) continue;
+
+      // Rev. 4284 — usar valor_liquido_pagamento se já calculado; senão derivar da OC.
+      let valorLiquido = parseFloat(r.valor_liquido_pagamento ?? "0");
+      if (valorLiquido <= 0) {
+        try {
+          const ocRes = await dbExecute(db,
+            `SELECT adiantamento_ativo, adiantamento_tipo,
+                    adiantamento_pct::numeric AS adiantamento_pct,
+                    adiantamento_valor_fixo::numeric AS adiantamento_valor_fixo,
+                    adiantamento_amortizacao, adiantamento_parcelas_n,
+                    retencao_ativa, retencao_pct::numeric AS retencao_pct,
+                    total::numeric AS oc_total
+             FROM compras_ordens
+             WHERE contrato_id=$1 AND status NOT IN ('cancelada','rascunho')
+             ORDER BY id DESC LIMIT 1`,
+            [r.contrato_id]
+          );
+          const oc = ocRes.rows?.[0];
+          let amortValor = 0;
+          let retValor = 0;
+          if (oc) {
+            const baseContrato = parseFloat(oc.oc_total ?? r.valor_contrato ?? "0");
+            if (oc.retencao_ativa && parseFloat(oc.retencao_pct ?? "0") > 0) {
+              retValor = Math.round(valorBruto * parseFloat(oc.retencao_pct) / 100 * 100) / 100;
+            }
+            if (oc.adiantamento_ativo && baseContrato > 0) {
+              const adiantTotal = oc.adiantamento_tipo === "valor"
+                ? parseFloat(oc.adiantamento_valor_fixo ?? "0")
+                : Math.round(baseContrato * parseFloat(oc.adiantamento_pct ?? "5") / 100 * 100) / 100;
+              if (adiantTotal > 0) {
+                if (oc.adiantamento_amortizacao === "parcelas_fixas") {
+                  const nParc = Math.max(1, parseInt(String(oc.adiantamento_parcelas_n ?? "1")));
+                  amortValor = Math.round(adiantTotal / nParc * 100) / 100;
+                } else {
+                  amortValor = Math.round(valorBruto * adiantTotal / baseContrato * 100) / 100;
+                }
+                const saldoRes = await dbExecute(db,
+                  `SELECT COALESCE(SUM(adiantamento_amortizacao_valor::numeric), 0) AS total_amort
+                   FROM terceiro_medicoes
+                   WHERE contrato_id=$1 AND id!=$2 AND status IN ('aprovada','faturada','paga')`,
+                  [r.contrato_id, r.id]
+                );
+                const jaAmortizado = parseFloat(saldoRes.rows?.[0]?.total_amort ?? "0");
+                amortValor = Math.min(amortValor, Math.max(0, adiantTotal - jaAmortizado));
+              }
+            }
+          }
+          valorLiquido = Math.max(0, Math.round((valorBruto - amortValor - retValor) * 100) / 100);
+          if (amortValor > 0 || retValor > 0) {
+            await dbExecute(db,
+              `UPDATE terceiro_medicoes SET adiantamento_amortizacao_valor=$1, retencao_garantia_valor=$2, valor_liquido_pagamento=$3 WHERE id=$4`,
+              [String(amortValor.toFixed(2)), String(retValor.toFixed(2)), String(valorLiquido.toFixed(2)), r.id]
+            ).catch((e: any) => console.warn("[Bridge][terceiros] UPDATE deduções falhou:", e?.message));
+          } else {
+            valorLiquido = valorBruto;
+          }
+        } catch (e: any) {
+          console.warn("[FinancialBridge][terceiros] Erro ao calcular deduções:", e?.message);
+          valorLiquido = valorBruto;
+        }
+      }
+
       const dataVenc = r.data_referencia
         ? r.data_referencia.toString().substring(0, 7) + "-25"
         : targetMes + "-25";
@@ -209,8 +273,8 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
         contaNome: "Serviços de Terceiros",
         tipo: "despesa",
         natureza: "variavel",
-        valorPrevisto: valor,
-        valorRealizado: r.status === "paga" ? valor : null,
+        valorPrevisto: valorLiquido,
+        valorRealizado: r.status === "paga" ? valorLiquido : null,
         dataCompetencia: targetMes + "-01",
         dataVencimento: dataVenc,
         dataPagamento: r.status === "paga" ? dataVenc : null,

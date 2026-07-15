@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4284** — **COTAÇÕES/COMPRAS: ADIANTAMENTO (SINAL) E RETENÇÃO DE GARANTIA NO DIALOG "CONDIÇÕES DE PAGAMENTO".** Nova seção "Adiantamento & Retenção" no dialog de Condições de Pagamento (visível apenas em contratos de medição MDO/Pacote). Adiantamento: checkbox, tipo %/valor, prazo DDL, amortização proporcional ou parcelas fixas. Retenção: checkbox, % do bruto por medição, liberação no encerramento ou etapas. 10 colunas novas em `compras_cotacao_fornecedores`, 10 em `compras_ordens`, 3 em `terceiro_medicoes`. Bridge financeiro calcula deduções automaticamente ao criar lançamento. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4283** — **FIX: COTAÇÕES — DRIFT DE CENTAVOS NO DIALOG "CONDIÇÕES DE PAGAMENTO".** `salvarRespostas` acumulava floats brutos → `totalOrcado` com drift (ex: "2100000.05" vs "2100000.00"). Fix backend: acumula em centavos inteiros (`Math.round(total*100)`). Fix frontend: dialog recalcula `fornTotal` do `respostaMap` (valores arredondados por item) em centavos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4282** — **CONTROLE DE CHEQUES: "VER PAGAMENTO" EXIBE VALOR TOTAL DO PIX QUANDO ALOCAÇÃO É PARCIAL.** PIX R$ 5.800,00 → 2 cheques de R$ 2.900,00: popover mostra o alocado + linha âmbar "Valor total do PIX: R$ 5.800,00 · alocado a este cheque: R$ 2.900,00". Backend: `getVinculosPorChequeNumero` retorna `valorLinhaPix`; frontend: `isParcial` + riscado. ZERO DELETE · ZERO ALTER destrutivo.
@@ -60,9 +62,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4279** — **CONCILIAÇÃO: STATUS DO CHEQUE DEVOLVIDO SINCRONIZA AUTOMATICAMENTE COM O CONTROLE DE CHEQUES (bidirecional).** 3 bugs em camadas: (1) painel "Quitar cheques devolvidos" não passava `chequeNumero` → guard `if(input.chequeNumero)` nunca disparava; (2) INSERT em `bank_cheque_vinculos` gravava `cheque_numero=NULL`; (3) `desconciliarLinha` não desfazia vínculos. Fix: `chequeNumParaGravar = input.chequeNumero ?? covAntes.chq` (parseChequeNumero da descrição); `desconciliarLinha` ganha step 4 na transaction que estorna vínculos + desfaz `desconsiderado_em` + reverte `financial_cheques.status → devolvido`; `[SyncSchema+]` Rev. 4279 audita e corrige retroativamente todos os cheques em estado inconsistente. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4278** — **FIX: CONCILIAÇÃO — 1 PIX → N CHEQUES DEVOLVIDOS SÓ MOSTRAVA O PRIMEIRO.** `vincByPix` era `Map<id,one>` — `set()` sobrescreve. Alterado para `Map<id,many[]>` com push. `_enrichVinc` popula `substituiChequesDevolvidos[]` (novo) + `substituiChequeDevolvido` (alias legado). Frontend itera o array — cada vínculo aparece com 🔗 próprio. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4278** — **FIX: CONCILIAÇÃO — 1 PIX → N CHEQUES DEVOLVIDOS SÓ MOSTRAVA O PRIMEIRO.** `vincByPix` era `Map<id,one>` — `set()` sobrescreve. Alterado para `Map<id,many[]>` com push. `_enrichVinc` popula `substituiChequesDevolvidos[]` (novo) + `substituiChequeDevolvido` (alias legado). Frontend itera o array — cada vínculo aparece com 🔗 próprio. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4277** — **CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.** Backend: nova procedure `listVinculosByPixLine`; frontend: header do painel laranja mostra count + lista com ✓. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -71,8 +73,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4275** — **CONCILIAÇÃO BANCÁRIA: BOTÃO "QUITAR CHEQUES DEVOLVIDOS" NO DIALOG DE LANÇAMENTO.** Backend: `listPendingChequesDevolvidos` retorna todos os cheques devolvidos pendentes/parciais de TODAS as contas. Frontend: painel colapsável laranja no dialog de lançamento — multi-select com valor editável. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4274** — **CONCILIAÇÃO BANCÁRIA: 1 PIX → N CHEQUES DEVOLVIDOS.** `searchPixTedGlobal`/`getChequeDevolvidoVinculacao` passam de `jaVinculado: boolean` para `valorAlocado + saldoLivre`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4273** — **FIX: COTAÇÕES — DIFERENÇA DE CENTAVOS NO TOTAL DO DIALOG "CONDIÇÕES DE PAGAMENTO".** Erro de ponto flutuante — `Math.round(...*100)/100` por item e no total. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

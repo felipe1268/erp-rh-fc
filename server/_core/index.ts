@@ -5401,6 +5401,40 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4279: ${bfCount} vínculo(s) com cheque_numero backfilled; ${fixed} cheque(s) devolvidos → compensado_pix.`);
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4279 audit cheques devolvidos:", e?.message || e); }
 
+        // Rev. 4284 — Adiantamento e Retenção de Garantia em Cotações/OC/Medição
+        try {
+          await db.execute(sql.raw(`
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS adiantamento_ativo BOOLEAN DEFAULT false;
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS adiantamento_tipo VARCHAR(10) DEFAULT 'pct';
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS adiantamento_pct NUMERIC(5,2) DEFAULT 5.00;
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS adiantamento_valor_fixo NUMERIC(14,2);
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS adiantamento_prazo_dias INTEGER DEFAULT 7;
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS adiantamento_amortizacao VARCHAR(20) DEFAULT 'proporcional';
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS adiantamento_parcelas_n INTEGER DEFAULT 1;
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS retencao_ativa BOOLEAN DEFAULT false;
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS retencao_pct NUMERIC(5,2) DEFAULT 5.00;
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS retencao_liberacao VARCHAR(10) DEFAULT 'final';
+          `));
+          await db.execute(sql.raw(`
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS adiantamento_ativo BOOLEAN DEFAULT false;
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS adiantamento_tipo VARCHAR(10) DEFAULT 'pct';
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS adiantamento_pct NUMERIC(5,2) DEFAULT 5.00;
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS adiantamento_valor_fixo NUMERIC(14,2);
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS adiantamento_prazo_dias INTEGER DEFAULT 7;
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS adiantamento_amortizacao VARCHAR(20) DEFAULT 'proporcional';
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS adiantamento_parcelas_n INTEGER DEFAULT 1;
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS retencao_ativa BOOLEAN DEFAULT false;
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS retencao_pct NUMERIC(5,2) DEFAULT 5.00;
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS retencao_liberacao VARCHAR(10) DEFAULT 'final';
+          `));
+          await db.execute(sql.raw(`
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS adiantamento_amortizacao_valor NUMERIC(18,2) DEFAULT 0;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_garantia_valor NUMERIC(18,2) DEFAULT 0;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS valor_liquido_pagamento NUMERIC(18,2) DEFAULT 0;
+          `));
+          console.log("[SyncSchema+] Rev. 4284: adiantamento+retenção garantidos em cotacao_fornecedores, compras_ordens e terceiro_medicoes.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4284 adiantamento/retencao:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
