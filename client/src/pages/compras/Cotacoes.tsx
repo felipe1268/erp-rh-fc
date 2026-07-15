@@ -2374,21 +2374,23 @@ export default function Cotacoes() {
     const fornP = (mapaQ.data?.participantes ?? []).find((p: any) => p.fornecedorId === fId);
     const fornNome = fornP?.fornecedor?.nomeFantasia || fornP?.fornecedor?.razaoSocial || `Fornecedor #${fId}`;
     const fornTotal = editingFornId === fId ? (() => {
-      const totalItens = (mapaQ.data?.itens ?? []).reduce((acc: number, it: any) => {
+      // Rev. 4285 — acumular em CENTAVOS INTEIROS para evitar drift de float.
+      // `acc + Math.round(preco*qty*100)/100` soma valores N/100 que não são exatos
+      // em IEEE 754 → drift acumulado em 812 itens. Fix: acumular apenas inteiros.
+      const totalItensCents = (mapaQ.data?.itens ?? []).reduce((acc: number, it: any) => {
         const key = `${it.id}_${fId}`;
         const preco = parseFloat(editPrecos[key] ?? "0") || 0;
         const qtyStr = editQtds[key];
         const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
-        return acc + Math.round(preco * qty * 100) / 100;
+        return acc + Math.round(preco * qty * 100);
       }, 0);
       const isFob = (editFreteTipo[fId] ?? "cif") === "fob";
-      const frete = isFob ? (parseFloat(editValorFrete[fId] ?? "0") || 0) : 0;
-      return Math.round((totalItens + frete) * 100) / 100;
+      const freteCents = isFob ? Math.round((parseFloat(editValorFrete[fId] ?? "0") || 0) * 100) : 0;
+      return (totalItensCents + freteCents) / 100;
     })() : (() => {
       // Rev. 4285 — usar totalOrcado diretamente (fonte autoritativa do backend).
-      // Rev. 4283 acumulava resp.total individuais (toFixed(2) por item) que pode divergir
-      // do totalOrcado (acumulado em centavos inteiros pelo backend). O totalOrcado é a
-      // verdade; re-somar os itens só reintroduz drift.
+      // Re-somar os resp.total individuais reintroduz drift de float. totalOrcado é
+      // acumulado em centavos inteiros no backend (salvarRespostasLote) — é a verdade.
       return parseFloat(fornP?.totalOrcado ?? "0");
     })();
 
