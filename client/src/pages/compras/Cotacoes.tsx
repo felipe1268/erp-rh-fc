@@ -2385,17 +2385,11 @@ export default function Cotacoes() {
       const frete = isFob ? (parseFloat(editValorFrete[fId] ?? "0") || 0) : 0;
       return Math.round((totalItens + frete) * 100) / 100;
     })() : (() => {
-      // Rev. 4283 — recalcular do respostaMap (valores individualmente arredondados) em vez
-      // de totalOrcado (que pode ter drift de ponto flutuante da acumulação de floats brutos).
-      // Usa centavos inteiros para garantir exatidão.
-      const totalCents = (mapaQ.data?.itens ?? []).reduce((acc: number, it: any) => {
-        const key = `${it.id}_${fId}`;
-        const resp = (mapaQ.data?.respostaMap ?? {})[key];
-        return acc + Math.round(parseFloat(resp?.total ?? "0") * 100);
-      }, 0);
-      const isFob = (fornP?.freteTipo ?? "cif") === "fob";
-      const freteCents = isFob ? Math.round(parseFloat(String(fornP?.valorFrete ?? "0")) * 100) : 0;
-      return (totalCents + freteCents) / 100;
+      // Rev. 4285 — usar totalOrcado diretamente (fonte autoritativa do backend).
+      // Rev. 4283 acumulava resp.total individuais (toFixed(2) por item) que pode divergir
+      // do totalOrcado (acumulado em centavos inteiros pelo backend). O totalOrcado é a
+      // verdade; re-somar os itens só reintroduz drift.
+      return parseFloat(fornP?.totalOrcado ?? "0");
     })();
 
     // Rev. 4073 — Condição de pagamento efetiva do fornecedor: prioridade

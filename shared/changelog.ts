@@ -1,4 +1,27 @@
 /**
+ * Rev. 4285 - FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (totalOrcado vs soma de resp.total).
+ *
+ * CONTEXTO:
+ *   Ao abrir o dialog de Condições de Pagamento, `fornTotal` era re-calculado somando
+ *   os `resp.total` individuais de cada item do respostaMap (cada um arredondado com
+ *   `.toFixed(2)` no momento do salvamento). A soma desses valores arredondados individualmente
+ *   pode divergir do `totalOrcado` (que o backend acumula em centavos inteiros via
+ *   `Math.round(total * 100)` e só converte no final). Resultado: tela de cotação mostrava
+ *   R$ 2.100.000,00 (totalOrcado) mas o dialog abria com R$ 2.100.000,05 (soma dos itens).
+ *
+ * FIX (Rev. 4285):
+ *   Branch não-edição de `fornTotal` no dialog passa a usar diretamente
+ *   `parseFloat(fornP.totalOrcado)` — a fonte autoritativa gravada pelo backend
+ *   (já corretamente acumulada em centavos desde Rev. 4283). Elimina a re-soma de
+ *   itens individuais que reintroduzia o drift.
+ *
+ * ARQUIVOS:
+ *   client/src/pages/compras/Cotacoes.tsx (~linha 2390)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4284 - COTAÇÕES/COMPRAS: ADIANTAMENTO (SINAL) E RETENÇÃO DE GARANTIA NO DIALOG "CONDIÇÕES DE PAGAMENTO".
  *
  * CONTEXTO:
