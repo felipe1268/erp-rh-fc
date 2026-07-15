@@ -6988,14 +6988,21 @@ export default function FinanceiroConciliacao() {
                 {lancStatement?.id != null && Number(lancStatement.valor) < 0 && (() => {
                   const pixVal = Math.abs(Number(lancStatement.valor));
                   const pendCheques: any[] = pendingChequesData?.cheques ?? [];
+                  // Rev. 4276 — Filtro temporal: só mostra cheques devolvidos cujo débito
+                  // ocorreu no mesmo mês ou antes do mês do lançamento atual. Um PIX de
+                  // abril não pode quitar um cheque devolvido de maio (ainda não aconteceu).
+                  const _mesAtual = String(lancStatement.data ?? "").slice(0, 7); // "YYYY-MM"
                   const _busca = quitarChequesBusca.trim().toLowerCase();
-                  const filtradosCheques: any[] = _busca
-                    ? pendCheques.filter((chq: any) =>
-                        String(chq.descricao ?? "").toLowerCase().includes(_busca) ||
-                        String(chq.contaApelido ?? "").toLowerCase().includes(_busca) ||
-                        String(chq.valor ?? "").replace(".", ",").includes(_busca)
-                      )
-                    : pendCheques;
+                  const filtradosCheques: any[] = pendCheques
+                    .filter((chq: any) =>
+                      !_mesAtual || String(chq.dataDebito ?? "").slice(0, 7) <= _mesAtual
+                    )
+                    .filter((chq: any) =>
+                      !_busca ||
+                      String(chq.descricao ?? "").toLowerCase().includes(_busca) ||
+                      String(chq.contaApelido ?? "").toLowerCase().includes(_busca) ||
+                      String(chq.valor ?? "").replace(".", ",").includes(_busca)
+                    );
                   const totalSel = Array.from(quitarChequesSel.values()).reduce((s, v) => s + (parseFloat(v) || 0), 0);
                   const totalSelCents = Math.round(totalSel * 100);
                   const pixCents = Math.round(pixVal * 100);
