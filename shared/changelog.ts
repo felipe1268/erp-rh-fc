@@ -1,4 +1,36 @@
 /**
+ * Rev. 4269 - COMUNICADOS INTERNOS: PADRONIZAÇÃO TOTAL DO PROGRESSO DE ASSINATURAS.
+ *
+ * PROBLEMA:
+ *   Comunicados sem `destinatariosJson` não tinham denominador para o progresso de assinaturas —
+ *   exibiam apenas "N assinaram" sem total/percentual, e podiam ser concluídos sem que todos os
+ *   funcionários ativos tivessem assinado.
+ *
+ * SOLUÇÃO:
+ *
+ * Backend — `listar`:
+ *   - Nova query: `COUNT(*) FROM employees WHERE companyId = ? AND status = 'Ativo'` → `totalAtivosEmpresa`.
+ *   - Para comunicados SEM `destinatariosJson`: `totalDestinatarios = totalAtivosEmpresa` (todos os ativos).
+ *   - Para comunicados COM `destinatariosJson`: comportamento anterior (ativos do JSON).
+ *   - Resultado: todos os comunicados sempre retornam `totalDestinatarios > 0`.
+ *
+ * Backend — `concluir`:
+ *   - Guard unificado: determina `activeIds` a partir do `destinatariosJson` (se presente) OU busca
+ *     TODOS os funcionários ativos da empresa (se sem lista específica).
+ *   - Lança `BAD_REQUEST` se `assinados < activeIds.length` — independente de ter lista ou não.
+ *
+ * Frontend — lista:
+ *   - Removida a branch especial "N assinaram" (sem denominador).
+ *   - Sempre exibe barra de progresso X/Y + percentual (pois `totalDest` sempre > 0).
+ *
+ * Frontend — view mode:
+ *   - Badge de assinaturas sempre visível (removido o guard `_totalDestView > 0`).
+ *   - Formato: "X/Y assinaram (Z%)" com cor âmbar se pendente, verde se completo.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4268 - FIX: COMUNICADOS SEM DESTINATARIOSJSON TINHAM ASSINATURAS ZERADAS NA LISTA.
  *
  * PROBLEMA:

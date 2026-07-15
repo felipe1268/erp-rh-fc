@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4268** — **FIX: COMUNICADOS SEM DESTINATARIOSJSON TINHAM ASSINATURAS ZERADAS NA LISTA.** Backend: `comTemDestJs` per-comunicado substitui flag global `allDestIds.size === 0`; sem destinatariosJson → todas as assinaturas contam; com destinatariosJson → só ativos do JSON. Frontend: quando `totalDest=0` mas `totalAss>0`, exibe "N assinaram" com ícone verde (sem barra de progresso). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4269** — **COMUNICADOS INTERNOS: PADRONIZAÇÃO TOTAL DO PROGRESSO DE ASSINATURAS.** Sem `destinatariosJson`: `totalDestinatarios` = todos os ativos da empresa; `concluir` exige que TODOS assinem; lista sempre exibe barra X/Y + %. Com `destinatariosJson`: comportamento anterior. Badge de assinaturas sempre visível na view. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4267** — **COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.** `getStatusEfetivo` ganha tipo `"concluido_pendente"` — linha âmbar + badge duplo. Toolbar: badge X/Y sempre visível, usa `_hasPendingSignatures`. Botão FCSign sempre visível — "Reenviar FCSign" + confirm quando envelope já existe. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4268** — **FIX: COMUNICADOS SEM DESTINATARIOSJSON TINHAM ASSINATURAS ZERADAS NA LISTA.** Backend: `comTemDestJs` per-comunicado substitui flag global `allDestIds.size === 0`; sem destinatariosJson → todas as assinaturas contam; com destinatariosJson → só ativos do JSON. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4267** — **COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.** `getStatusEfetivo` ganha tipo `"concluido_pendente"` — linha âmbar + badge duplo. Toolbar: badge X/Y sempre visível, usa `_hasPendingSignatures`. Botão FCSign sempre visível. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4266** — **COMUNICADOS INTERNOS: AUDITORIA FUNCIONÁRIOS FANTASMA — CONTAGENS E GUARD SÓ COM ATIVOS.** batch-query `employees WHERE status='Ativo'`; guard `concluir` filtra apenas ativos. ZERO DELETE · ZERO ALTER destrutivo.
 

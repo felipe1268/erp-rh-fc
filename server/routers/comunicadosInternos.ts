@@ -97,6 +97,12 @@ export const comunicadosInternosRouter = router({
         activeRows.forEach(e => activeDestSet.add(e.id));
       }
 
+      // Total de funcionários ATIVOS da empresa — denominador para comunicados sem lista específica
+      const [{ totalAtivosEmpresa }] = await db
+        .select({ totalAtivosEmpresa: count(employees.id) })
+        .from(employees)
+        .where(and(eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")));
+
       // Conta assinaturas por comunicado APENAS de funcionários ainda ativos
       const assinCounts = await db
         .select({
@@ -143,10 +149,12 @@ export const comunicadosInternosRouter = router({
         }
         // Apenas destinatários que ainda são ativos
         const activeDestIds = destIds.filter(id => activeDestSet.has(id));
-        const totalDestinatarios = activeDestIds.length;
-        // Assinaturas de destinatários ativos (ou todas se sem destinatários definidos)
         const assinSet = assinActivePorCom.get(r.id);
-        const totalAssinados = destIds.length > 0
+        const temDest = comTemDestJs.has(r.id);
+        // totalDestinatarios: se tem lista específica → ativos do JSON; senão → todos os ativos da empresa
+        const totalDestinatarios = temDest ? activeDestIds.length : Number(totalAtivosEmpresa ?? 0);
+        // totalAssinados: se tem lista específica → ativos do JSON que assinaram; senão → qualquer funcionário
+        const totalAssinados = temDest
           ? activeDestIds.filter(id => assinSet?.has(id)).length
           : (assinSet?.size ?? 0);
         return { ...r, totalDestinatarios, totalAssinados };
@@ -291,6 +299,9 @@ export const comunicadosInternosRouter = router({
       if (row.status === "concluido") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Comunicado já está concluído" });
       }
+      // Determina a lista de funcionários que devem assinar
+      let activeIds: number[] = [];
+      let temListaEspecifica = false;
       if (row.destinatariosJson) {
         try {
           const destArr = JSON.parse(row.destinatariosJson as string);
@@ -299,33 +310,37 @@ export const comunicadosInternosRouter = router({
               .map((x: any) => Number(typeof x === "object" ? (x.id ?? x) : x))
               .filter((n: number) => !isNaN(n) && n > 0);
             if (rawIds.length > 0) {
-              // Considera apenas destinatários ainda ATIVOS — desligados não bloqueiam conclusão
               const activeDestinatarios = await db
                 .select({ id: employees.id })
                 .from(employees)
                 .where(and(inArray(employees.id, rawIds), eq(employees.status, "Ativo")));
-              const activeIds = activeDestinatarios.map(e => e.id);
-              const activeCount = activeIds.length;
-              if (activeCount > 0) {
-                // Verifica quantos dos ativos já assinaram
-                const [{ assinados }] = await db
-                  .select({ assinados: count(comunicadoAssinaturas.id) })
-                  .from(comunicadoAssinaturas)
-                  .where(and(
-                    eq(comunicadoAssinaturas.comunicadoId, input.id),
-                    inArray(comunicadoAssinaturas.employeeId, activeIds),
-                  ));
-                if (Number(assinados) < activeCount) {
-                  throw new TRPCError({
-                    code: "BAD_REQUEST",
-                    message: `Aguardando assinaturas: ${Number(assinados)} de ${activeCount} destinatário(s) ativo(s) assinaram. Todos devem assinar antes de concluir.`,
-                  });
-                }
-              }
+              activeIds = activeDestinatarios.map(e => e.id);
+              temListaEspecifica = true;
             }
           }
-        } catch (e: any) {
-          if (e.code === "BAD_REQUEST") throw e;
+        } catch {}
+      }
+      if (!temListaEspecifica) {
+        // Sem lista específica → todos os funcionários ativos da empresa devem assinar
+        const ativos = await db
+          .select({ id: employees.id })
+          .from(employees)
+          .where(and(eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")));
+        activeIds = ativos.map(e => e.id);
+      }
+      if (activeIds.length > 0) {
+        const [{ assinados }] = await db
+          .select({ assinados: count(comunicadoAssinaturas.id) })
+          .from(comunicadoAssinaturas)
+          .where(and(
+            eq(comunicadoAssinaturas.comunicadoId, input.id),
+            inArray(comunicadoAssinaturas.employeeId, activeIds),
+          ));
+        if (Number(assinados) < activeIds.length) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Aguardando assinaturas: ${Number(assinados)} de ${activeIds.length} colaborador(es) ativo(s) assinaram. Todos devem assinar antes de concluir.`,
+          });
         }
       }
       await db.update(comunicadosInternos).set({

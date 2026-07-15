@@ -611,12 +611,10 @@ export default function ComunicadosInternos() {
               </span>
             )}
             <div className="flex-1" />
-            {_totalDestView > 0 && (
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${_hasPendingSignatures ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200"}`}>
-                {_hasPendingSignatures ? <Clock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-                {_totalAssView}/{_totalDestView} assinaram ({_pctView}%)
-              </span>
-            )}
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${_hasPendingSignatures ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200"}`}>
+              {_hasPendingSignatures ? <Clock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+              {_totalAssView}/{_totalDestView} assinaram ({_pctView}%)
+            </span>
             {!isConcluido && (
               <Button size="sm"
                 className={_signPending ? "bg-slate-200 text-slate-500 cursor-not-allowed hover:bg-slate-200" : "bg-green-600 hover:bg-green-700"}
@@ -889,7 +887,7 @@ export default function ComunicadosInternos() {
                                 Rascunho
                               </span>
                             )}
-                            {totalDest > 0 ? (
+                            {totalDest > 0 && (
                               <div>
                                 <div className="flex items-center gap-1.5 mb-0.5">
                                   <span className="text-[10px] text-slate-500">{totalAss}/{totalDest} assinaram</span>
@@ -899,11 +897,7 @@ export default function ComunicadosInternos() {
                                   <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? "#16a34a" : pct >= 50 ? "#d97706" : "#ef4444" }} />
                                 </div>
                               </div>
-                            ) : totalAss > 0 ? (
-                              <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-500" /> {totalAss} assinaram
-                              </span>
-                            ) : null}
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-slate-600">{new Date(c.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}</td>
