@@ -114,21 +114,36 @@ function ChequeVinculosBreakdown({ companyId, numeroCheque }: { companyId: numbe
           <p className="text-muted-foreground">Nenhum vínculo encontrado.</p>
         ) : (
           <div className="space-y-1.5">
-            {vinculos.map((v) => (
-              <div key={v.id} className="flex items-center justify-between gap-2 border-b border-dashed pb-1 last:border-0">
-                <div className="min-w-0">
-                  <p className="font-medium text-foreground">
-                    {v.tipo === "ajuste" ? (FORMA_PAGAMENTO_LABEL[v.formaPagamento] ?? "Ajuste") : "PIX/TED"}
-                  </p>
-                  <p className="truncate text-[10px] text-muted-foreground">
-                    {[fmtData(v.data), v.pixContaApelido || v.pixDescricao].filter(Boolean).join(" · ") || "—"}
-                  </p>
+            {vinculos.map((v) => {
+              const valorAlocado = Math.abs(Number(v.valor));
+              const valorPix = v.valorLinhaPix != null ? Math.abs(Number(v.valorLinhaPix)) : null;
+              const isParcial = valorPix != null && Math.round(valorPix * 100) !== Math.round(valorAlocado * 100);
+              return (
+                <div key={v.id} className="flex items-start justify-between gap-2 border-b border-dashed pb-1.5 last:border-0">
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">
+                      {v.tipo === "ajuste" ? (FORMA_PAGAMENTO_LABEL[v.formaPagamento] ?? "Ajuste") : "PIX/TED"}
+                    </p>
+                    <p className="truncate text-[10px] text-muted-foreground">
+                      {[fmtData(v.data), v.pixContaApelido || v.pixDescricao].filter(Boolean).join(" · ") || "—"}
+                    </p>
+                    {isParcial && (
+                      <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+                        Valor total do PIX: {formatBRL(valorPix!)} · alocado a este cheque: {formatBRL(valorAlocado)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="font-semibold tabular-nums">{formatBRL(valorAlocado)}</span>
+                    {isParcial && (
+                      <p className="text-[10px] text-muted-foreground line-through">{formatBRL(valorPix!)}</p>
+                    )}
+                  </div>
                 </div>
-                <span className="shrink-0 font-semibold tabular-nums">{formatBRL(Math.abs(Number(v.valor)))}</span>
-              </div>
-            ))}
+              );
+            })}
             <div className="flex items-center justify-between pt-1 font-semibold">
-              <span>Total</span>
+              <span>Total alocado</span>
               <span className="tabular-nums">{formatBRL(vinculos.reduce((s, v) => s + Math.abs(Number(v.valor)), 0))}</span>
             </div>
           </div>

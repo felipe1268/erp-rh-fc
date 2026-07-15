@@ -14361,7 +14361,7 @@ export const financialRouter = router({
       `SELECT v.id, v.tipo, v.forma_pagamento AS "formaPagamento", v.valor,
               to_char(v.data,'YYYY-MM-DD') AS data, v.descricao,
               v.criado_por_nome AS "criadoPorNome", v.created_at AS "createdAt",
-              p.descricao AS "pixDescricao",
+              p.descricao AS "pixDescricao", p.valor AS "valorLinhaPix",
               cba.apelido AS "pixContaApelido", cba.banco AS "pixContaBanco"
          FROM bank_cheque_vinculos v
          LEFT JOIN bank_statement_lines p ON p.id = v.pix_line_id

@@ -1,4 +1,24 @@
 /**
+ * Rev. 4282 - CONTROLE DE CHEQUES: "VER PAGAMENTO" EXIBE VALOR TOTAL DO PIX QUANDO ALOCAÇÃO É PARCIAL.
+ *
+ * MELHORIA:
+ *   Quando um PIX de valor maior cobre múltiplos cheques (ex.: PIX R$ 5.800,00 → cheque A
+ *   R$ 2.900,00 + cheque B R$ 2.900,00), o popover "Ver pagamento" de cada cheque agora mostra:
+ *   - Valor alocado a este cheque: R$ 2.900,00  (negrito, como antes)
+ *   - Linha âmbar: "Valor total do PIX: R$ 5.800,00 · alocado a este cheque: R$ 2.900,00"
+ *   - Linha riscada com o valor total abaixo do alocado (sinalização visual)
+ *   - Rodapé: "Total alocado" em vez de "Total" (deixa claro que é a fatia, não o PIX inteiro)
+ *   Quando o PIX cobre exatamente um único cheque (alocado = total), nada muda visualmente.
+ *
+ * BACKEND: `getVinculosPorChequeNumero` agora retorna `p.valor AS "valorLinhaPix"` (valor bruto
+ *   da linha do extrato — o débito PIX completo).
+ * FRONTEND: `ChequeVinculosBreakdown` calcula `isParcial` e renderiza a linha âmbar + riscado.
+ *
+ * ARQUIVOS: server/routers/financial.ts (~14364) · client/src/pages/financeiro/FinanceiroCheques.tsx (~120).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4281 - FIX: CONTROLE DE CHEQUES — autoMarcarChequesDevolvidos SOBRESCREVIA STATUS COMPENSADO.
  *
  * PROBLEMA:

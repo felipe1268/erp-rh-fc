@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4282** — **CONTROLE DE CHEQUES: "VER PAGAMENTO" EXIBE VALOR TOTAL DO PIX QUANDO ALOCAÇÃO É PARCIAL.** PIX R$ 5.800,00 → 2 cheques de R$ 2.900,00: popover mostra o alocado + linha âmbar "Valor total do PIX: R$ 5.800,00 · alocado a este cheque: R$ 2.900,00". Backend: `getVinculosPorChequeNumero` retorna `valorLinhaPix`; frontend: `isParcial` + riscado. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4281** — **FIX: CONTROLE DE CHEQUES — autoMarcarChequesDevolvidos SOBRESCREVIA STATUS COMPENSADO.** `autoMarcarChequesDevolvidos` não checava `data_compensacao`; banco devolvia com "Motivo: Compensado" (confirmação) e o procedure revertia o cheque para `devolvido`. Fix: `AND data_compensacao IS NULL` no SELECT e UPDATE. Auditoria imediata no Neon: 5 cheques restaurados para `compensado` (nº 1342, 1389, 1399, 1343, 1300); 5 genuinamente devolvidos mantidos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4280** — **CONCILIAÇÃO: ALERTAS DE COBERTURA NO PAINEL "QUITAR CHEQUES DEVOLVIDOS".** Ao selecionar cheques: verde "✓ Cobertura total" quando totalSel = pixVal (±1¢); âmbar "⚠ R$ X ainda pendente" quando totalSel < pixVal; vermelho "⚠ Excede" já existia. `FinanceiroConciliacao.tsx` ~linha 7163. ZERO DELETE · ZERO ALTER destrutivo.
