@@ -7159,11 +7159,20 @@ export default function FinanceiroConciliacao() {
 
                           {quitarChequesSel.size > 0 && (
                             <div className="rounded-lg bg-white border border-orange-300 px-3 py-2 flex items-center justify-between gap-3">
-                              <div className="text-xs text-gray-700">
-                                <span className="font-semibold tabular-nums">{formatBRL(totalSel)}</span>
-                                <span className="text-gray-500"> de {formatBRL(pixVal)} selecionados</span>
-                                {totalSelCents > pixCents + 1 && (
-                                  <span className="ml-1.5 text-red-600 font-medium">⚠ Excede o valor do débito</span>
+                              <div className="text-xs text-gray-700 flex flex-col gap-0.5">
+                                <div>
+                                  <span className="font-semibold tabular-nums">{formatBRL(totalSel)}</span>
+                                  <span className="text-gray-500"> de {formatBRL(pixVal)} selecionados</span>
+                                  {totalSelCents > pixCents + 1 && (
+                                    <span className="ml-1.5 text-red-600 font-medium">⚠ Excede o valor do débito</span>
+                                  )}
+                                </div>
+                                {/* Rev. 4280 — alertas de cobertura */}
+                                {Math.abs(totalSelCents - pixCents) <= 1 && (
+                                  <span className="text-green-700 font-medium">✓ Cobertura total — PIX cobre 100% dos cheques selecionados</span>
+                                )}
+                                {totalSelCents < pixCents - 1 && (
+                                  <span className="text-amber-700 font-medium">⚠ {formatBRL((pixCents - totalSelCents) / 100)} ainda pendente para próxima conciliação</span>
                                 )}
                               </div>
                               <button

@@ -1,4 +1,19 @@
 /**
+ * Rev. 4280 - CONCILIAÇÃO: ALERTAS DE COBERTURA NO PAINEL "QUITAR CHEQUES DEVOLVIDOS".
+ *
+ * MELHORIA:
+ *   Ao selecionar cheques devolvidos para quitar com um PIX:
+ *   - Verde "✓ Cobertura total — PIX cobre 100% dos cheques selecionados" quando o total
+ *     selecionado bate exatamente com o valor do débito (tolerância de 1 centavo).
+ *   - Âmbar "⚠ R$ X ainda pendente para próxima conciliação" quando o total selecionado
+ *     é menor que o valor do PIX, indicando quanto ainda ficará descoberto.
+ *   - Vermelho "⚠ Excede o valor do débito" (já existia) quando ultrapassa.
+ *
+ * ARQUIVO: FinanceiroConciliacao.tsx (bloco quitarChequesSel, ~linha 7163).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4279 - CONCILIAÇÃO: STATUS DO CHEQUE DEVOLVIDO SINCRONIZA AUTOMATICAMENTE COM O CONTROLE DE CHEQUES.
  *
  * PROBLEMA:
