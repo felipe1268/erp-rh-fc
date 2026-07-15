@@ -7088,6 +7088,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         .where(and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, input.fornecedorId)));
 
       const jobId = `ia-${input.cotacaoId}-${input.fornecedorId}-${Date.now()}`;
+      const isPacoteCot = cot.tipo === "pacote";
       const itensRef = itens.map(it => {
         const existing = existingRespostas.find(r => r.itemId === it.id);
         return {
@@ -7095,7 +7096,13 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           descricao: it.descricao,
           unidade: it.unidade,
           quantidade: it.quantidade,
-          jaPreenchido: existing ? { precoUnitario: n(existing.precoUnitario), quantidade: n(existing.quantidade) } : null,
+          somenteMo: !!(it as any).somenteMo,
+          jaPreenchido: existing ? {
+            precoUnitario: n(existing.precoUnitario),
+            quantidade: n(existing.quantidade),
+            totalMat: n((existing as any).totalMat),
+            totalMdo: n((existing as any).totalMdo),
+          } : null,
         };
       });
 
@@ -7115,7 +7122,17 @@ INTELIGÊNCIA DE MATCHING:
 - Vários itens da SC podem ser o MESMO produto, divididos por atividade/EAP (ex: mesmo material aparece 3x com quantidades diferentes)
 - Um item do fornecedor pode corresponder a MÚLTIPLOS itens da SC se forem o mesmo produto
 - Se o fornecedor cota "Bacia acoplada" e a SC tem 3 linhas de "Bacia acoplada" com quantidades diferentes, faça match com TODOS eles
-- Use matchItemIds (array) quando um item do fornecedor cobre múltiplos itens da SC`;
+- Use matchItemIds (array) quando um item do fornecedor cobre múltiplos itens da SC
+${isPacoteCot ? `
+COTAÇÃO TIPO PACOTE (Material + Mão de Obra):
+- Esta cotação separa itens de MATERIAL (MAT) e itens de MÃO DE OBRA (MDO/serviço)
+- Na lista de itens da SC, itens marcados como [MDO] são exclusivamente mão de obra; os demais são material
+- Cada item/grupo do fornecedor pode ter um valor de Material e um valor de Mão de Obra separados
+- Quando o documento mostrar separação (ex: "Material: R$X, MO: R$Y" ou colunas separadas), extraia ambos
+- Use "totalMat" para o valor total de material e "totalMdo" para o valor total de mão de obra
+- Se o documento tiver apenas um valor total sem separação, coloque tudo em "precoTotal" e deixe totalMat/totalMdo null
+- Se o item for exclusivamente MDO, coloque o valor em "totalMdo" e "totalMat": 0 (ou null)
+- Se o item for exclusivamente Material, coloque o valor em "totalMat" e "totalMdo": 0 (ou null)` : ''}`;
 
           const jaPreenchidosInfo = itensRef.filter(it => it.jaPreenchido).length > 0
             ? `\n\nITENS JÁ PREENCHIDOS POR PROPOSTAS ANTERIORES (para contexto):\n${itensRef.filter(it => it.jaPreenchido).map(it => `- [ID:${it.id}] ${it.descricao}: R$ ${it.jaPreenchido!.precoUnitario.toFixed(2)} x ${it.jaPreenchido!.quantidade}`).join("\n")}`
@@ -7124,7 +7141,7 @@ INTELIGÊNCIA DE MATCHING:
           const prompt = `Analise ${arquivos.length > 1 ? `estes ${arquivos.length} documentos/imagens (são páginas/partes da MESMA cotação do mesmo fornecedor — considere TODOS em conjunto, sem duplicar itens repetidos entre páginas)` : "este documento"} de cotação/orçamento de fornecedor e extraia todos os itens.
 
 ITENS DA SOLICITAÇÃO DE COMPRA (para referência de matching):
-${itensRef.map((it, i) => `${i + 1}. [ID:${it.id}] ${it.descricao} | Qtd solicitada: ${it.quantidade} ${it.unidade || "un"}${it.jaPreenchido ? " (JÁ PREENCHIDO)" : ""}`).join("\n")}
+${itensRef.map((it, i) => `${i + 1}. [ID:${it.id}]${isPacoteCot && it.somenteMo ? " [MDO]" : isPacoteCot ? " [MAT]" : ""} ${it.descricao} | Qtd solicitada: ${it.quantidade} ${it.unidade || "un"}${it.jaPreenchido ? ` (JÁ PREENCHIDO: MAT R$${it.jaPreenchido.totalMat?.toFixed(2) ?? "—"} / MDO R$${it.jaPreenchido.totalMdo?.toFixed(2) ?? "—"})` : ""}`).join("\n")}
 ${jaPreenchidosInfo}
 
 INSTRUÇÕES:
@@ -7136,6 +7153,7 @@ INSTRUÇÕES:
 6. Extraia condição de pagamento, prazo de entrega e forma de pagamento se mencionados
 7. FORMA DE PAGAMENTO: identifique como o pagamento será feito (boleto, pix, transferencia, cheque, cartao, deposito). Procure menções a "boleto", "PIX", "transferência bancária", "depósito", etc.
 8. PARCELAMENTO: identifique o tipo de parcelamento. Classifique como um destes valores: a_vista, 7ddl, 14ddl, 21ddl, 28ddl, 30ddl, 30_60, 30_60_90, entrada_30, entrada_30_60, medicao. Se não corresponder a nenhum, use "personalizado".
+${isPacoteCot ? `9. OBRIGATÓRIO PACOTE: Para cada item extraído, identifique e separe o valor de Material (campo "totalMat") e o valor de Mão de Obra (campo "totalMdo"). Itens marcados [MDO] na SC são pura mão de obra; itens marcados [MAT] são puro material. Se o documento não separar, use o tipo do item da SC para classificar.` : ""}
 
 Retorne APENAS um JSON válido neste formato:
 {
@@ -7149,7 +7167,9 @@ Retorne APENAS um JSON válido neste formato:
       "matchItemId": 123,
       "matchItemIds": [123, 456, 789],
       "matchConfianca": "alta",
-      "matchDescricaoSC": "descrição do item da SC que deu match"
+      "matchDescricaoSC": "descrição do item da SC que deu match"${isPacoteCot ? `,
+      "totalMat": 180.00,
+      "totalMdo": 75.00` : ""}
     }
   ],
   "condicaoPagamento": "30 DDL" ou null,
@@ -7189,6 +7209,11 @@ Retorne APENAS um JSON válido neste formato:
             const precoTotal = parseFloat(item.precoTotal ?? item.preco_total) || null;
             const confianca = item.matchConfianca ?? item.match_confianca ?? null;
             const descSC = item.matchDescricaoSC ?? item.match_descricao_sc ?? null;
+            // Rev. 4287 — pacote: extrair totalMat/totalMdo do resultado IA
+            const rawTotalMat = item.totalMat ?? item.total_mat ?? null;
+            const rawTotalMdo = item.totalMdo ?? item.total_mdo ?? null;
+            const totalMat = rawTotalMat != null ? (parseFloat(rawTotalMat) || 0) : null;
+            const totalMdo = rawTotalMdo != null ? (parseFloat(rawTotalMdo) || 0) : null;
 
             const multiIds: number[] = item.matchItemIds ?? item.match_item_ids ?? [];
             const singleId = item.matchItemId ?? item.match_item_id ?? null;
@@ -7205,6 +7230,9 @@ Retorne APENAS um JSON válido neste formato:
                 const qtdItem = n(ref?.quantidade);
                 const proporcao = totalQtdSC > 0 ? qtdItem / totalQtdSC : 1 / allMatchIds.length;
                 const qtdDistribuida = qtdForn ? Math.round(qtdForn * proporcao * 100) / 100 : qtdItem;
+                // Distribui totalMat/totalMdo proporcionalmente entre os itens do grupo
+                const matDist = totalMat != null ? Math.round(totalMat * proporcao * 100) / 100 : null;
+                const mdoDist = totalMdo != null ? Math.round(totalMdo * proporcao * 100) / 100 : null;
 
                 itensExtraidos.push({
                   descricaoFornecedor: descForn,
@@ -7219,12 +7247,18 @@ Retorne APENAS um JSON válido neste formato:
                   distribuido: true,
                   grupoDistribuicao: allMatchIds,
                   quantidadeFornecedorOriginal: qtdForn,
+                  totalMat: matDist,
+                  totalMdo: mdoDist,
                 });
               }
             } else {
               const matchId = allMatchIds[0] ?? null;
               const ref = matchId ? itensRef.find(r => r.id === matchId) : null;
               const qtdSC = ref ? n(ref.quantidade) : null;
+              // Para item único: se somenteMo, forçar totalMat=0/totalMdo=precoTotal
+              const refSomenteMo = ref?.somenteMo ?? false;
+              const derivedTotalMat = totalMat != null ? totalMat : (isPacoteCot && refSomenteMo && precoTotal ? 0 : null);
+              const derivedTotalMdo = totalMdo != null ? totalMdo : (isPacoteCot && refSomenteMo && precoTotal ? precoTotal : null);
 
               itensExtraidos.push({
                 descricaoFornecedor: descForn,
@@ -7233,6 +7267,8 @@ Retorne APENAS um JSON válido neste formato:
                 unidade,
                 precoUnitario: precoUnit,
                 precoTotal,
+                totalMat: derivedTotalMat,
+                totalMdo: derivedTotalMdo,
                 matchItemId: matchId,
                 matchConfianca: confianca,
                 matchDescricaoSC: ref?.descricao ?? descSC,

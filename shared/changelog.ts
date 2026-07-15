@@ -1,4 +1,52 @@
 /**
+ * Rev. 4288 - FEATURE: LEITOR IA (extrairCotacaoIA) EXTRAI MAT/MO EM COTAÇÕES TIPO PACOTE.
+ *
+ * CONTEXTO:
+ *   O leitor IA (`extrairCotacaoIA`) funcionava bem para cotações de material/serviço mas era
+ *   cego ao split Material × Mão de Obra em cotações do tipo "pacote" (ex: PROMATEL — Instalações
+ *   Elétricas e Hidráulicas). O documento PROMATEL apresenta colunas separadas MAT / MO por grupo
+ *   de composição, mas a IA apenas extraía `precoUnitario` genérico, deixando `totalMat` e `totalMdo`
+ *   sempre nulos. O usuário precisava preencher esses campos manualmente no Mapa de Cotação.
+ *
+ * MUDANÇAS BACKEND (server/routers/compras.ts — extrairCotacaoIA):
+ *   1. Detecta `isPacoteCot = cot.tipo === "pacote"` após build de `itensRef`.
+ *   2. `itensRef` passa a incluir `somenteMo` (boolean da tabela) e `totalMat`/`totalMdo`
+ *      dos preenchimentos anteriores (para contexto ao modelo).
+ *   3. `systemPrompt` ganha bloco condicional para tipo pacote: explica a semântica
+ *      de `totalMat`/`totalMdo`, uso dos marcadores [MAT]/[MDO], e regras de extração.
+ *   4. `itensRef` na listagem do prompt mostra "[MAT]" ou "[MDO]" por item; itens JÁ
+ *      PREENCHIDOS mostram "MAT R$X / MDO R$Y" para contexto do modelo.
+ *   5. Instrução nº 9 adicionada ao prompt do usuário: "OBRIGATÓRIO PACOTE" pede extração
+ *      separada de Material e Mão de Obra.
+ *   6. JSON schema de exemplo inclui `"totalMat"` e `"totalMdo"` quando `isPacoteCot`.
+ *   7. No loop de processamento do resultado:
+ *      - Extrai `rawTotalMat`/`rawTotalMdo` de cada item retornado pela IA.
+ *      - Branch multi-match: distribui `totalMat`/`totalMdo` proporcionalmente à qtd SC.
+ *      - Branch single-match: se item é `somenteMo` e sem valores explícitos, deriva
+ *        `totalMdo = precoTotal` e `totalMat = 0` automaticamente.
+ *      - Todos os items de `itensExtraidos` passam a incluir `totalMat`/`totalMdo`.
+ *
+ * MUDANÇAS FRONTEND (client/src/pages/compras/Cotacoes.tsx — overlay de conferência IA):
+ *   1. `iaLinhas` (useEffect de hidratação) passa a copiar `totalMat`/`totalMdo` de cada item.
+ *   2. `iaPacote` computado no overlay: `mapaQ.data?.cotacao?.tipo === "pacote"`.
+ *   3. `respostasValidas`: para tipo pacote, item é válido se tiver precoUnitario OU
+ *      se tiver `totalMat`/`totalMdo` (ambos >= 0) — evita descartar itens MDO-only.
+ *   4. Cabeçalho da tabela: branch `iaPacote` substitui coluna "Preço Unit." por
+ *      "MAT (R$)" (azul) + "MO (R$)" (laranja) + "Total" calculado.
+ *   5. Células por linha: branch `iaPacote` renderiza dois inputs editáveis (border
+ *      azul para MAT, laranja para MO) que atualizam `totalMat`/`totalMdo` via `setIaLinha`.
+ *   6. "Confirmar e Salvar": para tipo pacote, inclui `{ totalMat, totalMdo }` em cada
+ *      resposta; `precoUnitario` é derivado como `totalMat + totalMdo` se não for explícito.
+ *
+ * ARQUIVOS TOCADOS:
+ *   - server/routers/compras.ts (extrairCotacaoIA: itensRef, systemPrompt, prompt, loop)
+ *   - client/src/pages/compras/Cotacoes.tsx (iaLinhas init, respostasValidas, tabela, save)
+ *   - shared/version.ts → Rev. 4288
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4287 - FIX: MAPA DE COTAÇÃO (PACOTE) — COLUNAS MATERIAL/MO NÃO EDITÁVEIS E MO SEMPRE ZERADA.
  *
  * CONTEXTO:

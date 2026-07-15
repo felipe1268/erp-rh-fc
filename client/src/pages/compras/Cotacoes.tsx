@@ -1072,6 +1072,8 @@ export default function Cotacoes() {
       matchItemId: it.matchItemId ?? null,
       matchConfianca: it.matchConfianca ?? null,
       distribuido: !!it.distribuido,
+      totalMat: it.totalMat ?? null,
+      totalMdo: it.totalMdo ?? null,
     }));
     setIaLinhas(arr);
   }, [iaExtracao]);
@@ -2143,7 +2145,17 @@ export default function Cotacoes() {
       if (diff < -0.01) nParcial++;
       else if (diff > 0.01) nExcedente++;
     }
-    const respostasValidas = iaLinhas.filter(l => l.matchItemId != null && l.precoUnitario != null && Number.isFinite(Number(l.precoUnitario)) && Number(l.precoUnitario) > 0);
+    const iaPacote = mapaQ.data?.cotacao?.tipo === "pacote" || mapaQ.data?.tipoEfetivo === "pacote";
+    const respostasValidas = iaLinhas.filter(l => {
+      if (l.matchItemId == null) return false;
+      if (iaPacote) {
+        // pacote: válido se tem precoUnitario OU se tem totalMat/totalMdo
+        const temPreco = l.precoUnitario != null && Number.isFinite(Number(l.precoUnitario)) && Number(l.precoUnitario) > 0;
+        const temMatMdo = (l.totalMat != null && Number(l.totalMat) >= 0) || (l.totalMdo != null && Number(l.totalMdo) >= 0);
+        return temPreco || temMatMdo;
+      }
+      return l.precoUnitario != null && Number.isFinite(Number(l.precoUnitario)) && Number(l.precoUnitario) > 0;
+    });
     const confBadge = (c: string | null) => {
       if (c === "alta") return { txt: "Alta", cls: "bg-emerald-100 text-emerald-700" };
       if (c === "media") return { txt: "Média", cls: "bg-amber-100 text-amber-700" };
@@ -2234,8 +2246,18 @@ export default function Cotacoes() {
                     <th className="text-left px-2 py-2 font-medium text-violet-700 w-[220px]">Item da cotação</th>
                     <th className="text-right px-2 py-2 font-medium text-violet-700">Qtd</th>
                     <th className="text-right px-2 py-2 font-medium text-violet-700">Qtd SC</th>
-                    <th className="text-right px-2 py-2 font-medium text-violet-700">Preço Unit.</th>
-                    <th className="text-right px-2 py-2 font-medium text-violet-700">Total</th>
+                    {iaPacote ? (
+                      <>
+                        <th className="text-right px-2 py-2 font-medium text-blue-600">MAT (R$)</th>
+                        <th className="text-right px-2 py-2 font-medium text-orange-600">MO (R$)</th>
+                        <th className="text-right px-2 py-2 font-medium text-violet-700">Total</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="text-right px-2 py-2 font-medium text-violet-700">Preço Unit.</th>
+                        <th className="text-right px-2 py-2 font-medium text-violet-700">Total</th>
+                      </>
+                    )}
                     <th className="text-center px-2 py-2 font-medium text-violet-700">Status</th>
                   </tr>
                 </thead>
@@ -2278,21 +2300,49 @@ export default function Cotacoes() {
                           {statusQtd === "parcial" && diff != null && <span className="text-[9px] ml-0.5">(-{Math.abs(diff).toFixed(0)})</span>}
                           {statusQtd === "excedente" && diff != null && <span className="text-[9px] ml-0.5">(+{diff.toFixed(0)})</span>}
                         </td>
-                        <td className="px-1 py-1 text-right">
-                          <div className="flex items-center gap-0.5 justify-end">
-                            <span className="text-[10px] text-gray-400">R$</span>
-                            <input
-                              type="text" inputMode="decimal"
-                              value={l.precoUnitario != null ? String(l.precoUnitario) : ""}
-                              onChange={e => setIaLinha(l.key, { precoUnitario: e.target.value.trim() === "" ? null : parseBRNumber(e.target.value) })}
-                              className={`w-20 h-7 text-right font-mono text-[11px] border rounded px-1.5 outline-none focus:ring-1 ${(l.precoUnitario == null || !(Number(l.precoUnitario) > 0)) ? "border-red-200 focus:border-red-400 focus:ring-red-200" : "border-gray-200 focus:border-violet-400 focus:ring-violet-200"}`}
-                              placeholder="0,00"
-                            />
-                          </div>
-                        </td>
-                        <td className="px-2 py-2 text-right font-mono text-gray-700">
-                          {total != null ? `R$ ${Number(total).toFixed(2)}` : "—"}
-                        </td>
+                        {iaPacote ? (
+                          <>
+                            <td className="px-1 py-1 text-right">
+                              <input
+                                type="text" inputMode="decimal"
+                                value={l.totalMat != null ? String(l.totalMat) : ""}
+                                onChange={e => setIaLinha(l.key, { totalMat: e.target.value.trim() === "" ? null : parseBRNumber(e.target.value) })}
+                                className="w-20 h-7 text-right font-mono text-[11px] border border-blue-200 rounded px-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                                placeholder="0,00"
+                              />
+                            </td>
+                            <td className="px-1 py-1 text-right">
+                              <input
+                                type="text" inputMode="decimal"
+                                value={l.totalMdo != null ? String(l.totalMdo) : ""}
+                                onChange={e => setIaLinha(l.key, { totalMdo: e.target.value.trim() === "" ? null : parseBRNumber(e.target.value) })}
+                                className="w-20 h-7 text-right font-mono text-[11px] border border-orange-200 rounded px-1.5 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-100"
+                                placeholder="0,00"
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono text-gray-700">
+                              {((l.totalMat != null || l.totalMdo != null)) ? `R$ ${(Number(l.totalMat ?? 0) + Number(l.totalMdo ?? 0)).toFixed(2)}` : "—"}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-1 py-1 text-right">
+                              <div className="flex items-center gap-0.5 justify-end">
+                                <span className="text-[10px] text-gray-400">R$</span>
+                                <input
+                                  type="text" inputMode="decimal"
+                                  value={l.precoUnitario != null ? String(l.precoUnitario) : ""}
+                                  onChange={e => setIaLinha(l.key, { precoUnitario: e.target.value.trim() === "" ? null : parseBRNumber(e.target.value) })}
+                                  className={`w-20 h-7 text-right font-mono text-[11px] border rounded px-1.5 outline-none focus:ring-1 ${(l.precoUnitario == null || !(Number(l.precoUnitario) > 0)) ? "border-red-200 focus:border-red-400 focus:ring-red-200" : "border-gray-200 focus:border-violet-400 focus:ring-violet-200"}`}
+                                  placeholder="0,00"
+                                />
+                              </div>
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono text-gray-700">
+                              {total != null ? `R$ ${Number(total).toFixed(2)}` : "—"}
+                            </td>
+                          </>
+                        )}
                         <td className="px-2 py-2 text-center">
                           {statusQtd === "nenhum" ? (
                             <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">Sem vínculo</span>
@@ -2335,12 +2385,21 @@ export default function Cotacoes() {
             <Button
               disabled={respostasValidas.length === 0}
               onClick={() => {
-                const respostas = respostasValidas.map((l: any) => ({
-                  itemId: l.matchItemId as number,
-                  precoUnitario: Number(l.precoUnitario),
-                  quantidade: l.quantidade != null ? Number(l.quantidade) : undefined,
-                  descontoPct: 0,
-                }));
+                const respostas = respostasValidas.map((l: any) => {
+                  const hasMdo = l.totalMat != null || l.totalMdo != null;
+                  const matVal = l.totalMat != null ? Number(l.totalMat) : 0;
+                  const mdoVal = l.totalMdo != null ? Number(l.totalMdo) : 0;
+                  const precoUnit = iaPacote && hasMdo && !l.precoUnitario
+                    ? (matVal + mdoVal)
+                    : Number(l.precoUnitario);
+                  return {
+                    itemId: l.matchItemId as number,
+                    precoUnitario: precoUnit,
+                    quantidade: l.quantidade != null ? Number(l.quantidade) : undefined,
+                    descontoPct: 0,
+                    ...(iaPacote && hasMdo ? { totalMat: matVal, totalMdo: mdoVal } : {}),
+                  };
+                });
                 if (respostas.length === 0) { toast.error("Nenhum item vinculado com preço para salvar"); return; }
                 salvarRespostas.mutate({
                   cotacaoId: showDetalhe!,
