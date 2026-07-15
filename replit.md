@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4278** — **FIX: CONCILIAÇÃO — 1 PIX → N CHEQUES DEVOLVIDOS SÓ MOSTRAVA O PRIMEIRO.** `vincByPix` era `Map<id,one>` — `set()` sobrescreve. Alterado para `Map<id,many[]>` com push. `_enrichVinc` popula `substituiChequesDevolvidos[]` (novo) + `substituiChequeDevolvido` (alias legado). Frontend itera o array — cada vínculo aparece com 🔗 próprio. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4277** — **CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.** Backend: nova procedure `listVinculosByPixLine` retorna vínculos ativos (estornado_em IS NULL) do PIX com descrição/conta/data. Frontend: header do painel laranja mostra "N cheque(s) vinculado(s) — R$X de R$Y" + badge count + lista com ✓ quando painel recolhido; refetch automático após confirmar vínculos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4276** — **FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).** Bug 1: `bank_statement_lines.status='devolvido'` nunca é gravado → JOIN com regex. Bug 2: `AND deb.desconsiderado_em IS NULL` bloqueava exatamente os cheques confirmados → removido + Ramo C. Bug 3: dbExecute param-binding por ordem de aparição — CTE com $1×3 e array[1] → renomear $1/$2/$3 e passar companyId 3×. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4276** — **FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).** `bank_statement_lines.status='devolvido'` nunca gravado → JOIN com regex; `desconsiderado_em IS NULL` bloqueava cheques confirmados; dbExecute param-binding $1×3 e array[1]. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4275** — **CONCILIAÇÃO BANCÁRIA: BOTÃO "QUITAR CHEQUES DEVOLVIDOS" NO DIALOG DE LANÇAMENTO.** Backend: `listPendingChequesDevolvidos` retorna todos os cheques devolvidos pendentes/parciais de TODAS as contas. Frontend: painel colapsável laranja no dialog de lançamento — multi-select com valor editável. ZERO DELETE · ZERO ALTER destrutivo.
 

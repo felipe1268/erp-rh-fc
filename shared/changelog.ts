@@ -1,4 +1,30 @@
 /**
+ * Rev. 4278 - FIX: CONCILIAÇÃO — 1 PIX → N CHEQUES DEVOLVIDOS SÓ MOSTRAVA O PRIMEIRO.
+ *
+ * PROBLEMA:
+ *   Quando um PIX tinha mais de um cheque devolvido vinculado, a lista de conciliação
+ *   mostrava apenas o primeiro vínculo (🔗 Substitui cheque devolvido). Os demais eram
+ *   silenciosamente descartados.
+ *
+ * CAUSA:
+ *   `vincByPix` era `Map<pixLineId, any>` — o `Map.set()` sobrescreve em vez de acumular.
+ *   Com 2 vínculos para o mesmo PIX, o segundo apagava o primeiro.
+ *
+ * FIX (backend — financial.ts):
+ *   `vincByPix` alterado para `Map<pixLineId, any[]>`. Para cada vínculo, push no array
+ *   existente ou cria novo array. `_enrichVinc` agora popula:
+ *   - `substituiChequeDevolvido` = arr[0] (alias de compatibilidade — campo legado)
+ *   - `substituiChequesDevolvidos` = arr completo (novo campo N-vínculos)
+ *
+ * FIX (frontend — FinanceiroConciliacao.tsx):
+ *   A renderização (linha ~6167) trocada de `c.substituiChequeDevolvido && <p>…</p>` para
+ *   `.map()` sobre `c.substituiChequesDevolvidos` com fallback para o campo legado.
+ *   Cada vínculo ganha sua própria linha 🔗 com número do cheque, valor e quem vinculou.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4277 - CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.
  *
  * PROBLEMA:

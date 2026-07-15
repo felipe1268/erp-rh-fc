@@ -6164,14 +6164,14 @@ export default function FinanceiroConciliacao() {
                               <p className="text-xs text-gray-500">{fmtData(c.data)}</p>
                               <p className="text-sm text-gray-700 break-words">{c.descricao || "—"}</p>
                               <p className="text-xs text-gray-400 break-words">↔ {c.entryFornecedor || c.entryDescricao || `Lançamento #${c.entryId ?? ""}`}</p>
-                              {c.substituiChequeDevolvido && (
-                                <p className="text-[11px] text-emerald-700 break-words mt-0.5">
+                              {((c.substituiChequesDevolvidos as any[]) ?? (c.substituiChequeDevolvido ? [c.substituiChequeDevolvido] : [])).map((v: any, vi: number) => (
+                                <p key={vi} className="text-[11px] text-emerald-700 break-words mt-0.5">
                                   🔗 Substitui <strong>cheque devolvido</strong>
-                                  {c.substituiChequeDevolvido.doc ? <> Doc {c.substituiChequeDevolvido.doc}</> : c.substituiChequeDevolvido.chequeNumero ? <> nº {c.substituiChequeDevolvido.chequeNumero}</> : null}
-                                  {" · "}{formatBRL(Number(c.substituiChequeDevolvido.valor || 0))}
-                                  {c.substituiChequeDevolvido.criadoPorNome ? <> · vínculo por {c.substituiChequeDevolvido.criadoPorNome}</> : null}
+                                  {v.doc ? <> Doc {v.doc}</> : v.chequeNumero ? <> nº {v.chequeNumero}</> : null}
+                                  {" · "}{formatBRL(Number(v.valor || 0))}
+                                  {v.criadoPorNome ? <> · vínculo por {v.criadoPorNome}</> : null}
                                 </p>
-                              )}
+                              ))}
                             </div>
                             <p className={`text-sm font-bold shrink-0 ${Number(c.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(c.valor)))}</p>
                             {c.entryId && (

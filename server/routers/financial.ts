@@ -2151,18 +2151,32 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
          LEFT JOIN bank_statement_lines dl ON dl.id = v.debito_line_id
         WHERE v.company_id=$1 AND v.estornado_em IS NULL AND v.pix_line_id IS NOT NULL`,
       [input.companyId]);
-    const vincByPix = new Map<number, any>();
+    // Rev. 4277 — alterado de Map<id,one> para Map<id,many[]> para suportar 1 PIX → N cheques.
+    const vincByPix = new Map<number, any[]>();
     for (const v of rows(vincPixRes) as any[]) {
-      vincByPix.set(Number(v.pixLineId), {
+      const key = Number(v.pixLineId);
+      const entry = {
         doc: parseDocNumero(v.debDescricao),
         chequeNumero: v.chequeNumero ?? parseChequeNumero(v.debDescricao) ?? null,
         valor: Number(v.valor),
         chequeValor: Math.abs(Number(v.debValor ?? 0)) || null,
         criadoPorNome: v.criadoPorNome ?? null,
         criadoEm: v.criadoEm ?? null,
-      });
+      };
+      const arr = vincByPix.get(key);
+      if (arr) arr.push(entry); else vincByPix.set(key, [entry]);
     }
-    const _enrichVinc = (r: any) => ({ ...r, substituiChequeDevolvido: vincByPix.get(Number(r.id)) ?? null });
+    // substituiChequesDevolvidos é agora um ARRAY (pode ser vazio). O campo legado
+    // substituiChequeDevolvido (singular) é mantido como alias = primeiro item, para
+    // compatibilidade com qualquer outro consumidor que ainda o use.
+    const _enrichVinc = (r: any) => {
+      const arr = vincByPix.get(Number(r.id)) ?? [];
+      return {
+        ...r,
+        substituiChequeDevolvido: arr[0] ?? null,
+        substituiChequesDevolvidos: arr,
+      };
+    };
 
     return {
       conciliados: rows(concRes).map(_enrichVinc),
