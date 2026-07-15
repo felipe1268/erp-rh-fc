@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4275** — **CONCILIAÇÃO BANCÁRIA: BOTÃO "QUITAR CHEQUES DEVOLVIDOS" NO DIALOG DE LANÇAMENTO.** Backend: `listPendingChequesDevolvidos` retorna todos os cheques devolvidos pendentes/parciais de TODAS as contas (status='devolvido' + vinculos ativos + HAVING saldo_livre>0.01). Frontend: painel colapsável laranja no dialog de lançamento — só para débitos; multi-select com valor editável por cheque; badge "Parcialmente quitado · livre R$ X"; chama `registrarVinculoChequeDevolvido` em loop e fecha o dialog. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4274** — **CONCILIAÇÃO BANCÁRIA: 1 PIX → N CHEQUES DEVOLVIDOS.** Backend: `searchPixTedGlobal` e `getChequeDevolvidoVinculacao` passam de `jaVinculado: boolean` para `valorAlocado + saldoLivre` por linha (SUM/GROUP BY). Frontend: label "já vinculado a outro cheque" → "usado R$ X · livre R$ Y"; `selecionar()` pré-preenche com `min(saldoCheque, saldoLivre)`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4273** — **FIX: COTAÇÕES — DIFERENÇA DE CENTAVOS NO TOTAL DO DIALOG "CONDIÇÕES DE PAGAMENTO".** Erro de ponto flutuante ao somar `preco * qty` no `reduce` (modo edição). Corrigido com `Math.round(...*100)/100` por item e no total final. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4273** — **FIX: COTAÇÕES — DIFERENÇA DE CENTAVOS NO TOTAL DO DIALOG "CONDIÇÕES DE PAGAMENTO".** Erro de ponto flutuante — `Math.round(...*100)/100` por item e no total. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4272** — **FIX: FECHAR DIA — FILTRO POR OBRA NÃO FUNCIONAVA + NOME DA OBRA OCULTO NOS CARDS.** Backend: `listOpenLoans` ganhou `.leftJoin(obras)` → `obraNome` agora chega no card. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4269** — **COMUNICADOS INTERNOS: PADRONIZAÇÃO TOTAL DO PROGRESSO DE ASSINATURAS.** Sem destinatariosJson → total = todos ativos; `concluir` exige que TODOS assinem; lista sempre exibe barra X/Y + %. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4267** — **COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.** `getStatusEfetivo` ganha tipo `"concluido_pendente"`. Toolbar: badge X/Y sempre visível. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4266** — **COMUNICADOS INTERNOS: AUDITORIA FUNCIONÁRIOS FANTASMA — CONTAGENS E GUARD SÓ COM ATIVOS.** batch-query `employees WHERE status='Ativo'`; guard `concluir` filtra apenas ativos. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

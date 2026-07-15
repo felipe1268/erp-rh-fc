@@ -14015,6 +14015,63 @@ export const financialRouter = router({
     return { ok: true, acumulado: acumCents / 100, saldo: Math.max(0, (chequeCents - acumCents)) / 100, quitado };
   }),
 
+  // Rev. 4275 — Lista TODOS os cheques devolvidos pendentes (ou parcialmente cobertos) de TODAS
+  // as contas da empresa, para a tela de lançamento poder oferecer "Quitar cheques devolvidos"
+  // sem precisar navegar conta a conta. Retorna linhas status='devolvido' + linhas que já têm
+  // algum vínculo ativo (mas saldo_livre > 0.01). READ-ONLY.
+  listPendingChequesDevolvidos: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const r = await dbExecute(db,
+      `SELECT
+         bsl.id                                                       AS "debitoLineId",
+         ROUND(ABS(bsl.valor)::numeric, 2)                           AS "valor",
+         bsl.descricao,
+         to_char(bsl.data, 'YYYY-MM-DD')                            AS "dataDebito",
+         bsl.conta_bancaria_id                                       AS "contaId",
+         COALESCE(cba.apelido, cba.banco, bsl.conta_bancaria_id::text) AS "contaApelido",
+         COALESCE(SUM(CASE WHEN bcv.estornado_em IS NULL THEN bcv.valor ELSE 0 END), 0) AS "valorAlocado"
+       FROM bank_statement_lines bsl
+       LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
+       LEFT JOIN bank_cheque_vinculos bcv  ON bcv.debito_line_id = bsl.id
+      WHERE bsl.company_id = $1
+        AND bsl.excluido_em IS NULL
+        AND bsl.valor < 0
+        AND (
+          bsl.status = 'devolvido'
+          OR EXISTS (
+            SELECT 1 FROM bank_cheque_vinculos v2
+            WHERE v2.debito_line_id = bsl.id AND v2.estornado_em IS NULL
+          )
+        )
+      GROUP BY bsl.id, cba.apelido, cba.banco
+      HAVING ROUND(ABS(bsl.valor)::numeric, 2)
+             - COALESCE(SUM(CASE WHEN bcv.estornado_em IS NULL THEN bcv.valor ELSE 0 END), 0) > 0.01
+      ORDER BY bsl.data DESC, bsl.id DESC
+      LIMIT 200`,
+      [input.companyId]);
+    const cheques = (rows(r) as any[]).map((c) => {
+      const totalCents = Math.round(Number(c.valor) * 100);
+      const alocCents  = Math.round(Number(c.valorAlocado) * 100);
+      const livreCents = Math.max(0, totalCents - alocCents);
+      return {
+        debitoLineId: Number(c.debitoLineId),
+        valor:        Number(c.valor),
+        valorAlocado: alocCents / 100,
+        saldoLivre:   livreCents / 100,
+        descricao:    c.descricao ?? null,
+        dataDebito:   c.dataDebito ?? null,
+        contaId:      c.contaId != null ? Number(c.contaId) : null,
+        contaApelido: c.contaApelido ?? null,
+        parcial:      alocCents > 0,
+      };
+    });
+    return { cheques };
+  }),
+
   // Rev. 3747 — Para um lote de cheques devolvidos (por linha de débito), retorna os vínculos
   // ativos (com a linha do PIX + apelido da conta), o acumulado/saldo, se está quitado e as
   // SUGESTÕES automáticas: PIX/TED de VALOR EXATAMENTE IGUAL em TODAS as contas da empresa.

@@ -1,4 +1,40 @@
 /**
+ * Rev. 4275 - CONCILIAÇÃO BANCÁRIA — "QUITAR CHEQUES DEVOLVIDOS" NO DIALOG DE LANÇAMENTO.
+ *
+ * PROBLEMA:
+ *   Cheques devolvidos de meses ou contas anteriores eram invisíveis ao analisar um PIX
+ *   novo: o usuário precisava navegar conta a conta, mês a mês, para encontrar o cheque
+ *   pendente e só então vincular o PIX a ele. Fluxo impraticável quando os cheques são de
+ *   uma conta diferente da que recebeu o PIX.
+ *
+ * SOLUÇÃO:
+ *   Backend — nova procedure `listPendingChequesDevolvidos` (READ-ONLY):
+ *     Consulta `bank_statement_lines` com `status='devolvido'` OU que tenham pelo menos
+ *     um vínculo ativo em `bank_cheque_vinculos`, de TODAS as contas da empresa.
+ *     Faz `GROUP BY + HAVING saldo_livre > 0.01` para retornar apenas os pendentes/parciais.
+ *     Retorna: debitoLineId, valor, valorAlocado, saldoLivre, descricao, dataDebito,
+ *     contaId, contaApelido, parcial (bool). Limite 200 linhas. ZERO ALTER destrutivo.
+ *
+ *   Frontend — painel "Quitar cheques devolvidos" no dialog de lançamento:
+ *     Aparece apenas para linhas de DÉBITO (`valor < 0`) com id de extrato.
+ *     Botão colapsável laranja — ao expandir, carrega a lista de cheques pendentes.
+ *     Cada cheque: checkbox, badge "Parcialmente quitado · livre R$ X" se parcial,
+ *     badge da conta, descrição completa, data, campo de valor editável (clampado
+ *     a min(saldoLivre, |PIX|)).
+ *     Barra inferior: total selecionado vs valor do PIX + aviso se exceder.
+ *     "Confirmar vínculos" chama `registrarVinculoChequeDevolvido` em loop para cada
+ *     cheque selecionado, fecha o dialog e dispara `refreshAposVinculo`.
+ *     Estado resetado ao fechar o dialog (onOpenChange).
+ *
+ * ARQUIVOS:
+ *   server/routers/financial.ts — listPendingChequesDevolvidos (nova procedure)
+ *   client/src/pages/financeiro/FinanceiroConciliacao.tsx — estados quitarCheques*,
+ *     query pendingChequesData, painel JSX no corpo do dialog de lançamento
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4274 - CONCILIAÇÃO BANCÁRIA — 1 PIX → N CHEQUES DEVOLVIDOS (PARCIAL POR LINHA).
  *
  * PROBLEMA:

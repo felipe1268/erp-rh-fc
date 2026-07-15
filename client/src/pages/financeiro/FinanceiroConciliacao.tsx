@@ -628,6 +628,15 @@ export default function FinanceiroConciliacao() {
   const registrarVinculoMut = (trpc as any).financial.registrarVinculoChequeDevolvido.useMutation();
   const estornarVinculoMut = (trpc as any).financial.estornarVinculoChequeDevolvido.useMutation();
   const autoMarcarChequesDevMut = (trpc as any).financial.autoMarcarChequesDevolvidos.useMutation();
+  // Rev. 4275 — Quitar cheques devolvidos direto do dialog de lançamento
+  const [quitarChequesOpen, setQuitarChequesOpen] = useState(false);
+  const [quitarChequesSel, setQuitarChequesSel] = useState<Map<number, string>>(new Map());
+  const [quitarChequesLoading, setQuitarChequesLoading] = useState(false);
+  const { data: pendingChequesData, isFetching: pendingChequesFetching, refetch: refetchPendingCheques } =
+    (trpc as any).financial.listPendingChequesDevolvidos.useQuery(
+      { companyId: Number(companyId) },
+      { enabled: !!quitarChequesOpen && !!companyId, staleTime: 10_000 }
+    );
   const { data: pixGlobalData, isFetching: pixGlobalFetching } =
     (trpc as any).financial.searchPixTedGlobal.useQuery(
       {
@@ -6917,7 +6926,7 @@ export default function FinanceiroConciliacao() {
         </AlertDialog>
 
         {/* Rev. 3198 — Lançar no ERP direto do item do extrato (data/conta/valor pré-preenchidos) */}
-        <Dialog open={lancStatement != null} onOpenChange={(o: boolean) => { if (!o && !lancBusy) setLancStatement(null); }}>
+        <Dialog open={lancStatement != null} onOpenChange={(o: boolean) => { if (!o && !lancBusy) { setLancStatement(null); setQuitarChequesOpen(false); setQuitarChequesSel(new Map()); } }}>
           <DialogContent resizable={false} className="max-w-none w-screen h-[100dvh] max-h-[100dvh] top-0 left-0 translate-x-0 translate-y-0 border-0 shadow-none p-0 gap-0 flex flex-col rounded-none overflow-hidden [&_[data-slot=dialog-close]]:text-white/80 [&_[data-slot=dialog-close]]:hover:text-white [&_[data-slot=dialog-maximize]]:hidden">
             <DialogHeader className="shrink-0 space-y-0 text-left bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5">
               <div className="flex items-start gap-3 pr-12">
@@ -6973,6 +6982,169 @@ export default function FinanceiroConciliacao() {
                     <p className="mt-3 text-sm text-gray-700 break-words border-t border-black/5 pt-2 leading-relaxed">{lancStatement.descricao}</p>
                   )}
                 </div>
+
+                {/* Rev. 4275 — Botão "Quitar cheques devolvidos" (só p/ débitos do extrato) */}
+                {lancStatement?.id != null && Number(lancStatement.valor) < 0 && (() => {
+                  const pixVal = Math.abs(Number(lancStatement.valor));
+                  const pendCheques: any[] = pendingChequesData?.cheques ?? [];
+                  const totalSel = Array.from(quitarChequesSel.values()).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+                  const totalSelCents = Math.round(totalSel * 100);
+                  const pixCents = Math.round(pixVal * 100);
+                  return (
+                    <div className="rounded-xl border border-orange-200 bg-orange-50/60 overflow-hidden">
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-orange-100/60 transition-colors"
+                        onClick={() => { setQuitarChequesOpen(o => !o); setQuitarChequesSel(new Map()); if (!quitarChequesOpen) setTimeout(() => refetchPendingCheques(), 50); }}
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/15 ring-1 ring-orange-400/30 shrink-0 text-orange-600">🔗</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-semibold text-orange-800">Quitar cheques devolvidos</span>
+                          <span className="block text-[11px] text-orange-600/80 leading-tight">Vincule este débito a cheques devolvidos de qualquer conta ou mês</span>
+                        </div>
+                        <span className={`text-orange-500 transition-transform duration-200 ${quitarChequesOpen ? "rotate-90" : ""}`}>▶</span>
+                      </button>
+
+                      {quitarChequesOpen && (
+                        <div className="border-t border-orange-200 px-4 pb-4 pt-3 space-y-3">
+                          {pendingChequesFetching ? (
+                            <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />Carregando cheques pendentes…
+                            </div>
+                          ) : pendCheques.length === 0 ? (
+                            <p className="text-xs text-gray-500 py-2">Nenhum cheque devolvido pendente encontrado.</p>
+                          ) : (
+                            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                              {pendCheques.map((chq: any) => {
+                                const sel = quitarChequesSel.get(chq.debitoLineId);
+                                const checked = sel !== undefined;
+                                const livreCents = Math.round(chq.saldoLivre * 100);
+                                const maxVal = Math.min(chq.saldoLivre, pixVal);
+                                return (
+                                  <div
+                                    key={chq.debitoLineId}
+                                    className={`rounded-lg border px-3 py-2.5 transition-colors ${checked ? "border-orange-400 bg-orange-50" : "border-gray-200 bg-white"}`}
+                                  >
+                                    <div className="flex items-start gap-2.5">
+                                      <input
+                                        type="checkbox"
+                                        className="mt-0.5 h-4 w-4 accent-orange-500 shrink-0 cursor-pointer"
+                                        checked={checked}
+                                        onChange={(e) => {
+                                          const m = new Map(quitarChequesSel);
+                                          if (e.target.checked) m.set(chq.debitoLineId, String(maxVal.toFixed(2)));
+                                          else m.delete(chq.debitoLineId);
+                                          setQuitarChequesSel(m);
+                                        }}
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                                          <span className="text-xs font-semibold text-gray-800 tabular-nums">{formatBRL(chq.valor)}</span>
+                                          {chq.parcial && (
+                                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-200">
+                                              Parcialmente quitado · livre {formatBRL(chq.saldoLivre)}
+                                            </span>
+                                          )}
+                                          {chq.contaApelido && (
+                                            <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600 ring-1 ring-gray-200">
+                                              <Landmark className="w-2.5 h-2.5" />{chq.contaApelido}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 break-words leading-snug">{chq.descricao || "—"}</p>
+                                        {chq.dataDebito && <p className="text-[10px] text-gray-400 mt-0.5">{fmtData(chq.dataDebito)}</p>}
+                                      </div>
+                                    </div>
+                                    {checked && (
+                                      <div className="mt-2 flex items-center gap-2 pl-6">
+                                        <Label className="text-[11px] text-gray-600 whitespace-nowrap">Valor a alocar</Label>
+                                        <div className="relative flex-1 max-w-[140px]">
+                                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
+                                          <input
+                                            type="number"
+                                            min={0.01}
+                                            max={maxVal}
+                                            step={0.01}
+                                            className="w-full rounded border border-gray-300 pl-7 pr-2 py-1 text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-orange-400"
+                                            value={sel ?? ""}
+                                            onChange={(e) => {
+                                              const m = new Map(quitarChequesSel);
+                                              m.set(chq.debitoLineId, e.target.value);
+                                              setQuitarChequesSel(m);
+                                            }}
+                                            onBlur={() => {
+                                              const v = parseFloat(sel ?? "");
+                                              const clamped = isNaN(v) ? maxVal : Math.min(Math.max(0.01, v), maxVal);
+                                              const m = new Map(quitarChequesSel);
+                                              m.set(chq.debitoLineId, clamped.toFixed(2));
+                                              setQuitarChequesSel(m);
+                                            }}
+                                          />
+                                        </div>
+                                        <span className="text-[10px] text-gray-400">max {formatBRL(maxVal)}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {quitarChequesSel.size > 0 && (
+                            <div className="rounded-lg bg-white border border-orange-300 px-3 py-2 flex items-center justify-between gap-3">
+                              <div className="text-xs text-gray-700">
+                                <span className="font-semibold tabular-nums">{formatBRL(totalSel)}</span>
+                                <span className="text-gray-500"> de {formatBRL(pixVal)} selecionados</span>
+                                {totalSelCents > pixCents + 1 && (
+                                  <span className="ml-1.5 text-red-600 font-medium">⚠ Excede o valor do débito</span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                disabled={quitarChequesLoading || quitarChequesSel.size === 0 || totalSelCents > pixCents + 1}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50 transition-colors"
+                                onClick={async () => {
+                                  setQuitarChequesLoading(true);
+                                  try {
+                                    let ok = 0;
+                                    for (const [debitoLineId, valorStr] of quitarChequesSel) {
+                                      const valor = parseFloat(valorStr);
+                                      if (!valor || valor <= 0) continue;
+                                      await registrarVinculoMut.mutateAsync({
+                                        companyId: Number(companyId),
+                                        debitoLineId,
+                                        tipo: "pix",
+                                        pixLineId: Number(lancStatement.id),
+                                        valor,
+                                        data: String(lancStatement.data ?? "").slice(0, 10),
+                                        descricao: lancStatement.descricao || undefined,
+                                      });
+                                      ok++;
+                                    }
+                                    toast({ title: `${ok} cheque${ok !== 1 ? "s" : ""} vinculado${ok !== 1 ? "s" : ""}!` });
+                                    setQuitarChequesOpen(false);
+                                    setQuitarChequesSel(new Map());
+                                    setLancStatement(null);
+                                    refreshAposVinculo();
+                                  } catch (e: any) {
+                                    toast({ title: "Erro ao vincular", description: String(e?.message ?? e), variant: "destructive" });
+                                  } finally {
+                                    setQuitarChequesLoading(false);
+                                  }
+                                }}
+                              >
+                                {quitarChequesLoading
+                                  ? <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block" />Salvando…</>
+                                  : <>✓ Confirmar vínculos</>}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Rev. 3390/3391 — Aviso + ação quando o extrato detecta movimentação interna */}
                 {lancStatement.interno && lancStatement.overrideNatureza !== "efetivo" && !lancStatement.chequeFornecedor && (
                   <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
