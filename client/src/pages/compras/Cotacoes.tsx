@@ -2324,11 +2324,11 @@ export default function Cotacoes() {
         const preco = parseFloat(editPrecos[key] ?? "0") || 0;
         const qtyStr = editQtds[key];
         const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
-        return acc + preco * qty;
+        return acc + Math.round(preco * qty * 100) / 100;
       }, 0);
       const isFob = (editFreteTipo[fId] ?? "cif") === "fob";
       const frete = isFob ? (parseFloat(editValorFrete[fId] ?? "0") || 0) : 0;
-      return totalItens + frete;
+      return Math.round((totalItens + frete) * 100) / 100;
     })() : parseFloat(fornP?.totalOrcado ?? "0");
 
     // Rev. 4073 — Condição de pagamento efetiva do fornecedor: prioridade

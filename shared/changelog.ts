@@ -1,4 +1,23 @@
 /**
+ * Rev. 4273 - FIX: COTAÇÕES — DIFERENÇA DE R$ 0,20 NO TOTAL DO DIALOG "CONDIÇÕES DE PAGAMENTO".
+ *
+ * PROBLEMA:
+ *   O header do dialog "Condições de Pagamento" exibia um total com diferença de centavos
+ *   (ex: R$ 2.100.000,20 em vez de R$ 2.100.000,00). Isso ocorre quando o fornecedor está
+ *   em modo de edição (`editingFornId === fId`): o `fornTotal` é recalculado ao vivo via
+ *   `reduce` somando `preco * qty` para cada item — acumulo de erros de ponto flutuante
+ *   IEEE 754 que, com dezenas de itens, pode resultar em diferenças de R$ 0,20 ou mais.
+ *
+ * SOLUÇÃO (frontend-only, `client/src/pages/compras/Cotacoes.tsx`):
+ *   - Dentro do `reduce`: cada produto `preco * qty` arredondado para 2 casas antes de
+ *     somar ao acumulador: `acc + Math.round(preco * qty * 100) / 100`.
+ *   - Resultado final: `Math.round((totalItens + frete) * 100) / 100` antes de retornar.
+ *   Fora do modo edição o valor já vem do banco (`totalOrcado`) — não afetado.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4272 - FIX: FECHAR DIA — FILTRO POR OBRA NÃO FUNCIONAVA + NOME DA OBRA OCULTO NOS CARDS.
  *
  * PROBLEMA:
