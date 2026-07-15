@@ -1,4 +1,35 @@
 /**
+ * Rev. 4291 - FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS DO GRUPO.
+ *
+ * CONTEXTO:
+ *   No módulo Cadastro de Habilidades, quando a empresa selecionada é "Construtoras" (multi-empresa),
+ *   o mesmo funcionário físico (ex: JOAO JOSE DE PAULA OLIVEIRA) pode ter dois registros `employees`
+ *   distintos (um por empresa irmã do grupo). Se a habilidade foi atribuída nas duas empresas,
+ *   `searchBySkill` retornava 2 linhas para o mesmo CPF, fazendo aparecer "2 funcionários" e
+ *   2 avatars idênticos no card da habilidade.
+ *
+ * CAUSA RAIZ:
+ *   (a) `searchBySkill` filtra por `companyIds` (múltiplos IDs de empresa) mas não deduplicava
+ *       por CPF — retornava uma linha por `(employeeId × skillId)` sem considerar que dois
+ *       `employeeId` distintos podem ser a mesma pessoa física.
+ *   (b) `skillSummaryGlobal` usava `COUNT(DISTINCT es."employeeId")` — contava 2 IDs distintos
+ *       para a mesma pessoa → "2 funcionários" no badge do card.
+ *
+ * FIX:
+ *   (a) `searchBySkill`: após enriquecer fotos via CPF, adiciona loop de deduplicação por
+ *       chave `${cpfLimpo}:${skillId}` — mantém apenas a primeira ocorrência por pessoa×habilidade.
+ *       Funcionários sem CPF caem em chave `id:{employeeId}:{skillId}` (nunca colapsa erroneamente).
+ *   (b) `skillSummaryGlobal`: troca `COUNT(DISTINCT es."employeeId")` por
+ *       `COUNT(DISTINCT regexp_replace(e.cpf, '[^0-9]', '', 'g'))` para contar pessoas físicas.
+ *
+ * ARQUIVOS TOCADOS:
+ *   - server/routers/skills.ts (searchBySkill dedup + skillSummaryGlobal COUNT)
+ *   - shared/version.ts
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4290 - FIX: CONCILIAÇÃO — parseChequeNumero SUPORTA "Nº NNN" SOLTO + CHEQUE 393 REGISTRADO COMO DEVOLVIDO.
  *
  * CONTEXTO:

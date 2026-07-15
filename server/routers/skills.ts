@@ -300,7 +300,21 @@ export const skillsRouter = router({
         }
       }
 
-      return rows.map(({ empCpf, ...rest }) => rest);
+      // Deduplicate by CPF — mesmo funcionário cadastrado em empresas irmãs
+      // do grupo gera 2 employeeIds distintos; mantemos apenas 1 linha por
+      // (CPF × skillId) para evitar duplicidade na exibição.
+      const seenKey = new Set<string>();
+      const deduped: typeof rows = [];
+      for (const r of rows) {
+        const cleanCpf = r.empCpf ? r.empCpf.replace(/[^0-9]/g, "") : "";
+        // sem CPF: chave cai em employeeId (nunca colapsa erroneamente)
+        const key = cleanCpf ? `${cleanCpf}:${r.skillId}` : `id:${r.employeeId}:${r.skillId}`;
+        if (!seenKey.has(key)) {
+          seenKey.add(key);
+          deduped.push(r);
+        }
+      }
+      return deduped.map(({ empCpf, ...rest }) => rest);
     }),
 
   // Summary: count employees per skill (for obra cards)
@@ -646,7 +660,7 @@ export const skillsRouter = router({
           s.nome as "skillNome",
           s.categoria as "skillCategoria",
           es.nivel,
-          COUNT(DISTINCT es."employeeId") as qtd
+          COUNT(DISTINCT regexp_replace(e.cpf, '[^0-9]', '', 'g')) as qtd
         FROM employee_skills es
         INNER JOIN skills s ON s.id = es."skillId" AND s.deleted_at IS NULL
         INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL

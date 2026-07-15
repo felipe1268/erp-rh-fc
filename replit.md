@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4290** — **FIX: CONCILIAÇÃO — parseChequeNumero SUPORTA "Nº NNN" SOLTO + CHEQUE 393 DEVOLVIDO.** `parseChequeNumero` não capturava número em "SEM FAVORECIDO Nº 393" (3 dígitos após MOTIVO + padrão Nº solto sem regex). Fix: terceiro padrão `/(?:^|\s)n[ºo°.]\s*0*(\d{1,12})/i` em `shared/chequeMotivos.ts`. Correção no banco: BSL 20565 descricao → "CHEQUE EMITIDO/DEBITADO Nº 393"; fc 352 atualizado com conta_bancaria_id=4, devolvido_em=05/06/2026, motivo_codigo=48. Cheque 393 agora aparece no painel "Cheques devolvidos no banco". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4291** — **FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS DO GRUPO.** No modo multi-empresa ("Construtoras"), o mesmo funcionário físico tinha 2 `employees.id` distintos → `searchBySkill` retornava 2 linhas e `skillSummaryGlobal` contava 2. Fix: dedup por `${cpfLimpo}:${skillId}` no retorno de `searchBySkill`; `skillSummaryGlobal` trocou `COUNT(DISTINCT employeeId)` por `COUNT(DISTINCT regexp_replace(cpf,...))`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4289** — **FIX: MAPA DE COTAÇÃO — INPUTS MAT/MO COM FORMATO BR (R$ + SEPARADOR DE MILHAR).** Campos Material e Mão de Obra em modo edição exibiam "114580,07" sem R$ e sem separador de milhar. Fix: `type="number"` → `type="text" inputMode="decimal"`; valor exibido formatado BR (`114.580,07`) ao abrir edição + `onFocus` seleciona tudo; prefixo "R$" visível antes do campo; todos os leitores `parseFloat(editMatMdo...)` substituídos por `parseBRNumber(...)` para aceitar "114.580,07" → 114580.07. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4290** — **FIX: CONCILIAÇÃO — parseChequeNumero SUPORTA "Nº NNN" SOLTO + CHEQUE 393 DEVOLVIDO.** `parseChequeNumero` não capturava número em "SEM FAVORECIDO Nº 393" (3 dígitos após MOTIVO + padrão Nº solto sem regex). Fix: terceiro padrão `/(?:^|\s)n[ºo°.]\s*0*(\d{1,12})/i` em `shared/chequeMotivos.ts`. Correção no banco: BSL 20565 descricao → "CHEQUE EMITIDO/DEBITADO Nº 393"; fc 352 atualizado com conta_bancaria_id=4, devolvido_em=05/06/2026, motivo_codigo=48. Cheque 393 agora aparece no painel "Cheques devolvidos no banco". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4288** — **FEATURE: LEITOR IA (extrairCotacaoIA) EXTRAI MAT/MO EM COTAÇÕES TIPO PACOTE.** O leitor IA era cego ao split Material × Mão de Obra para cotações `tipo=pacote` (ex: PROMATEL). Fix backend: detecta `isPacoteCot`, enriquece `itensRef` com `somenteMo`, adiciona marcadores `[MAT]`/`[MDO]` na lista de itens do prompt, bloco PACOTE no `systemPrompt`, campos `totalMat`/`totalMdo` no JSON schema e instrução nº 9; no loop de resultado, extrai/propaga MAT/MO (distribui proporcionalmente em multi-match; deriva MDO=precoTotal p/ item somenteMo). Fix frontend: `iaLinhas` copia `totalMat`/`totalMdo`; overlay detecta `iaPacote` e exibe colunas MAT (azul) + MO (laranja) com inputs editáveis; `respostasValidas` aceita itens com MAT/MO mesmo sem `precoUnitario`; save passa `{totalMat, totalMdo}` para `salvarRespostasLote`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -70,7 +70,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
-- **Rev. 4281** — **FIX: CONTROLE DE CHEQUES — autoMarcarChequesDevolvidos SOBRESCREVIA STATUS COMPENSADO.** Fix: `AND data_compensacao IS NULL` no SELECT e UPDATE. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4289** — **FIX: MAPA DE COTAÇÃO — INPUTS MAT/MO COM FORMATO BR (R$ + SEPARADOR DE MILHAR).** `type="number"` → `type="text" inputMode="decimal"`; valor BR ao abrir + `onFocus` seleciona tudo; prefixo R$; leitores trocados por `parseBRNumber`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4280** — **CONCILIAÇÃO: ALERTAS DE COBERTURA NO PAINEL "QUITAR CHEQUES DEVOLVIDOS".** Verde/âmbar/vermelho por totalSel vs pixVal. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -82,7 +82,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4267 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4276 e anteriores.
 
 ## User preferences
 
