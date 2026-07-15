@@ -14034,7 +14034,9 @@ export const financialRouter = router({
     //   — ramo B: já tem vínculo ativo em bank_cheque_vinculos (independe da descrição).
     const r = await dbExecute(db,
       `WITH devolved AS (
-         -- Ramo A: par comp+dev detectado por padrão de descrição
+         -- Ramo A: par comp+dev detectado por padrão de descrição (inclui linhas
+         -- desconsideradas, pois desconsiderado_em é exatamente o que marca um cheque
+         -- devolvido confirmado pelo usuário via "Desconsiderar da conciliação").
          SELECT DISTINCT deb.id
            FROM bank_statement_lines deb
            JOIN bank_statement_lines cred
@@ -14051,7 +14053,6 @@ export const financialRouter = router({
                  OR cred.descricao ~* '\\mdoc\\M' OR cred.descricao ~* 'mot|alinea|\\mal\\M')
           WHERE deb.company_id = $1
             AND deb.excluido_em IS NULL
-            AND deb.desconsiderado_em IS NULL
             AND deb.valor < 0
             -- pareceCompensacaoCheque(deb)
             AND NOT deb.descricao ~* 'cheque\\s+especial|cheq\\.?\\s*esp|limite\\s+especial|\\mlis\\M'
@@ -14064,6 +14065,21 @@ export const financialRouter = router({
          SELECT DISTINCT debito_line_id AS id
            FROM bank_cheque_vinculos
           WHERE company_id = $1 AND estornado_em IS NULL
+         UNION
+         -- Ramo C: confirmados como cheque devolvido via "Desconsiderar da conciliação"
+         -- (desconsiderado_em IS NOT NULL = par foi confirmado pelo usuário, mas ainda
+         -- pode não ter PIX associado). Filtra só linhas de saída com desc de cheque.
+         SELECT DISTINCT id
+           FROM bank_statement_lines
+          WHERE company_id = $1
+            AND excluido_em IS NULL
+            AND desconsiderado_em IS NOT NULL
+            AND valor < 0
+            AND NOT descricao ~* 'cheque\\s+especial|cheq\\.?\\s*esp|limite\\s+especial|\\mlis\\M'
+            AND NOT descricao ~* 'tarifa|juros|\\miof\\M|anuidad|manuten|\\mces\\M|pacote\\s+servic'
+            AND NOT descricao ~* 'devolv|sustad|sustac|estorn|contraordem|contra-ordem|oposic'
+            AND (descricao ~* 'cheq'
+                 OR (descricao ~* '\\mch\\M' AND descricao ~* 'compe|pag|liquid'))
        )
        SELECT
          deb.id                                                         AS "debitoLineId",
@@ -14078,7 +14094,6 @@ export const financialRouter = router({
        LEFT JOIN company_bank_accounts cba ON cba.id = deb.conta_bancaria_id
        LEFT JOIN bank_cheque_vinculos bcv  ON bcv.debito_line_id = deb.id
       WHERE deb.excluido_em IS NULL
-        AND deb.desconsiderado_em IS NULL
       GROUP BY deb.id, deb.valor, deb.descricao, deb.data, deb.conta_bancaria_id, cba.apelido, cba.banco
       HAVING ROUND(ABS(deb.valor)::numeric, 2)
              - COALESCE(SUM(CASE WHEN bcv.estornado_em IS NULL THEN bcv.valor ELSE 0 END), 0) > 0.01
