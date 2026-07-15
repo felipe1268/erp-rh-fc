@@ -1,3 +1,4 @@
+- **Rev. 4259** — **FIX: VALOR NEGOCIADO PACOTE — CORREÇÃO DE ARREDONDAMENTO NO ITEM ERRADO.** `lastNonZeroIdx` usado em AMBOS os pontos de correção em `calcNegociadoPreview`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4258** — **MAPA DE COTAÇÃO: 3 OTIMIZAÇÕES DE PERFORMANCE (812 ITENS).** 3 `useMemo` + substituição de IIFE + `Map` para `getMelhorPrecoItem`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4257** — **CONTROLE DE CHEQUES: CARDS DO TOPO REFLETEM FILTROS ATIVOS.** Cards derivam totais de `chequesFiltrados` quando filtros client-side ativos. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4255** — **TOGGLE PAUSAR/REATIVAR ITEM NO MAPA DE COTAÇÃO.** Item pausado fica visível com opacidade reduzida; botão Pause/Play no hover (âmbar pausado). Schema: `+pausado BOOLEAN DEFAULT false` via SyncSchema+. ZERO DELETE · ZERO ALTER destrutivo.

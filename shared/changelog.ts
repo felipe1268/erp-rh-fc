@@ -1,4 +1,43 @@
 /**
+ * Rev. 4267 - COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.
+ *
+ * PROBLEMA 1 — comunicado concluído com assinaturas faltando não mostrava alerta:
+ *   `getStatusEfetivo` retornava "concluido" sempre que `c.status === "concluido"`, ignorando que
+ *   `totalDestinatarios > 0 && totalAssinados < totalDestinatarios`. A linha ficava verde e não
+ *   havia indicativo de que o documento estava concluído sem todas as assinaturas.
+ *
+ * PROBLEMA 2 — botão "Solicitar Assinatura FCSign" desaparecia após primeiro envio:
+ *   Condicional `{!c.fcsignEnvelopeId && (` escondia o botão completamente quando já havia um
+ *   envelope. Não era possível reenviar o pacote para os destinatários.
+ *
+ * SOLUÇÃO:
+ *
+ * Frontend — `client/src/pages/ComunicadosInternos.tsx`:
+ *
+ *   getStatusEfetivo() — novo tipo de retorno `"concluido_pendente"`:
+ *     Quando `c.status === "concluido"` E `totalDestinatarios > 0` E `totalAssinados < totalDestinatarios`,
+ *     retorna "concluido_pendente" em vez de "concluido". Isso permite styling diferenciado.
+ *
+ *   Lista principal:
+ *     - Linha `"concluido_pendente"` → fundo âmbar (igual "pendente_assinatura"), não verde.
+ *     - Badge duplo: "Concluído" (verde) + "Assinaturas Pendentes" (âmbar) empilhados.
+ *     - Barra de progresso já era exibida para qualquer `totalDest > 0` — sem alteração.
+ *
+ *   Toolbar de visualização (viewComunicado):
+ *     - `_hasPendingSignatures = totalDestView > 0 && totalAssView < totalDestView` (sem `!isConcluido`).
+ *     - `_signPending = !isConcluido && _hasPendingSignatures` (usado só no botão "Concluir").
+ *     - Badge "X/Y assinaram (NN%)" agora usa `_hasPendingSignatures` → âmbar mesmo se concluído.
+ *     - Badge movido para FORA do bloco `{!isConcluido && (...)}` — sempre visível quando há destinatários.
+ *
+ *   Botão FCSign:
+ *     - Removida a condicional `{!c.fcsignEnvelopeId && (`.
+ *     - Quando já existe envelope: label muda para "Reenviar FCSign" + confirm de segurança antes.
+ *     - Sem envelope: label "Solicitar Assinatura FCSign" (comportamento original).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4266 - COMUNICADOS INTERNOS: AUDITORIA DE FUNCIONÁRIOS FANTASMA — TOTALDESTINATARIOS E GUARD USAM APENAS ATIVOS.
  *
  * PROBLEMA:

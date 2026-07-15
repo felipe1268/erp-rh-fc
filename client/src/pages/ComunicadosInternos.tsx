@@ -247,10 +247,13 @@ export default function ComunicadosInternos() {
     return comunicados.find((c: any) => c.id === viewComunicadoId) || null;
   }, [comunicados, viewComunicadoId]);
 
-  function getStatusEfetivo(c: any): "concluido" | "pendente_assinatura" | "rascunho" {
-    if (c.status === "concluido") return "concluido";
+  function getStatusEfetivo(c: any): "concluido" | "concluido_pendente" | "pendente_assinatura" | "rascunho" {
     const total = Number(c.totalDestinatarios ?? 0);
     const assinados = Number(c.totalAssinados ?? 0);
+    if (c.status === "concluido") {
+      if (total > 0 && assinados < total) return "concluido_pendente";
+      return "concluido";
+    }
     if (total > 0 && assinados < total) return "pendente_assinatura";
     return "rascunho";
   }
@@ -581,7 +584,8 @@ export default function ComunicadosInternos() {
     const _totalDestView = Number((c as any).totalDestinatarios ?? 0);
     const _totalAssView = Number((c as any).totalAssinados ?? 0);
     const _pctView = _totalDestView > 0 ? Math.round((_totalAssView / _totalDestView) * 100) : 0;
-    const _signPending = !isConcluido && _totalDestView > 0 && _totalAssView < _totalDestView;
+    const _hasPendingSignatures = _totalDestView > 0 && _totalAssView < _totalDestView;
+    const _signPending = !isConcluido && _hasPendingSignatures;
     const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "FC ENGENHARIA PROJETOS E CONSULTORIA LTDA";
     const cnpj = selectedCompany?.cnpj || "";
     const logoUrl = selectedCompany?.logoUrl;
@@ -601,36 +605,35 @@ export default function ComunicadosInternos() {
                 <Lock className="h-3 w-3" /> Concluído
               </span>
             )}
-            {c.fcsignEnvelopeId ? (
+            {c.fcsignEnvelopeId && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200">
                 <UserCheck className="h-3 w-3" /> FCSign Enviado
               </span>
-            ) : null}
-            <div className="flex-1" />
-            {!isConcluido && (
-              <>
-                {_totalDestView > 0 && (
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${_signPending ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200"}`}>
-                    {_signPending ? <Clock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-                    {_totalAssView}/{_totalDestView} assinaram ({_pctView}%)
-                  </span>
-                )}
-                <Button size="sm"
-                  className={_signPending ? "bg-slate-200 text-slate-500 cursor-not-allowed hover:bg-slate-200" : "bg-green-600 hover:bg-green-700"}
-                  disabled={concluirMut.isPending || _signPending}
-                  title={_signPending ? `Aguardando assinaturas: ${_totalAssView} de ${_totalDestView} assinaram` : ""}
-                  onClick={() => { if (confirm("Concluir este comunicado? Após concluído, ele não poderá ser editado ou excluído.")) concluirMut.mutate({ id: c.id, companyId }); }}>
-                  {concluirMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-                  {_signPending ? "Aguardando Assinaturas" : "Concluir"}
-                </Button>
-              </>
             )}
-            {!c.fcsignEnvelopeId && (
-              <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50"
-                onClick={() => setFcSignDialog({ id: c.id, numero: c.numero, titulo: c.titulo, emissorNome: c.emissorNome || c.criadoPor || "" })}>
-                <Send className="h-4 w-4 mr-1" /> Solicitar Assinatura FCSign
+            <div className="flex-1" />
+            {_totalDestView > 0 && (
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${_hasPendingSignatures ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200"}`}>
+                {_hasPendingSignatures ? <Clock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+                {_totalAssView}/{_totalDestView} assinaram ({_pctView}%)
+              </span>
+            )}
+            {!isConcluido && (
+              <Button size="sm"
+                className={_signPending ? "bg-slate-200 text-slate-500 cursor-not-allowed hover:bg-slate-200" : "bg-green-600 hover:bg-green-700"}
+                disabled={concluirMut.isPending || _signPending}
+                title={_signPending ? `Aguardando assinaturas: ${_totalAssView} de ${_totalDestView} assinaram` : ""}
+                onClick={() => { if (confirm("Concluir este comunicado? Após concluído, ele não poderá ser editado ou excluído.")) concluirMut.mutate({ id: c.id, companyId }); }}>
+                {concluirMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                {_signPending ? "Aguardando Assinaturas" : "Concluir"}
               </Button>
             )}
+            <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50"
+              onClick={() => {
+                if (c.fcsignEnvelopeId && !confirm("Já existe um pacote FCSign enviado para este comunicado. Deseja enviar um novo pacote para todos os destinatários?")) return;
+                setFcSignDialog({ id: c.id, numero: c.numero, titulo: c.titulo, emissorNome: c.emissorNome || c.criadoPor || "" });
+              }}>
+              <Send className="h-4 w-4 mr-1" /> {c.fcsignEnvelopeId ? "Reenviar FCSign" : "Solicitar Assinatura FCSign"}
+            </Button>
             {isConcluido && isAdminMaster && (
               <Button size="sm" variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50" disabled={reverterMut.isPending}
                 onClick={() => { if (confirm("Reverter este comunicado para rascunho? Ele poderá ser editado novamente.")) reverterMut.mutate({ id: c.id, companyId }); }}>
@@ -853,7 +856,7 @@ export default function ComunicadosInternos() {
                     const totalAss = Number(c.totalAssinados ?? 0);
                     const pct = totalDest > 0 ? Math.round((totalAss / totalDest) * 100) : 0;
                     return (
-                      <tr key={c.id} className={`border-b hover:bg-slate-50 ${statusEf === "concluido" ? "bg-green-50/30" : statusEf === "pendente_assinatura" ? "bg-amber-50/20" : ""}`}>
+                      <tr key={c.id} className={`border-b hover:bg-slate-50 ${statusEf === "concluido" ? "bg-green-50/30" : (statusEf === "pendente_assinatura" || statusEf === "concluido_pendente") ? "bg-amber-50/30" : ""}`}>
                         <td className="px-4 py-3 font-mono font-bold text-blue-700">{c.numero}</td>
                         <td className="px-4 py-3 overflow-hidden max-w-0">
                           <div className="font-medium text-slate-800 truncate">{c.titulo}</div>
@@ -868,6 +871,15 @@ export default function ComunicadosInternos() {
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 w-fit">
                                 <Lock className="h-2.5 w-2.5" /> Concluído
                               </span>
+                            ) : statusEf === "concluido_pendente" ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 w-fit">
+                                  <Lock className="h-2.5 w-2.5" /> Concluído
+                                </span>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 w-fit">
+                                  <Clock className="h-2.5 w-2.5" /> Assinaturas Pendentes
+                                </span>
+                              </div>
                             ) : statusEf === "pendente_assinatura" ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 w-fit">
                                 <Clock className="h-2.5 w-2.5" /> Pendente por Assinatura

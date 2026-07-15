@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4266** — **COMUNICADOS INTERNOS: AUDITORIA FUNCIONÁRIOS FANTASMA — CONTAGENS E GUARD SÓ COM ATIVOS.** `totalDestinatarios` e `totalAssinados` no `listar` usam batch-query de `employees WHERE status='Ativo'` para filtrar o JSON de destinatários — funcionários desligados pós-criação não inflam o total nem bloqueiam a conclusão. Guard do `concluir` também compara apenas contra ativos (`inArray(employeeId, activeIds)`). `listarFuncionariosParaAssinatura` já estava correto. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4267** — **COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.** `getStatusEfetivo` ganha tipo `"concluido_pendente"` — linha âmbar + badge duplo (verde "Concluído" + âmbar "Assinaturas Pendentes") quando concluído mas com assinaturas faltando. Toolbar: badge X/Y sempre visível (fora do bloco `!isConcluido`), usa `_hasPendingSignatures` (sem `!isConcluido`). Botão FCSign sempre visível — label "Reenviar FCSign" + confirm quando envelope já existe. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4265** — **COMUNICADOS INTERNOS: PROGRESSO DE ASSINATURAS E BLOQUEIO DE CONCLUSÃO ATÉ TODOS ASSINAREM.** A lista ganha coluna "Status / Assinaturas" com badge `Pendente por Assinatura` (âmbar) + barra de progresso X/Y (NN%) para comunicados com destinatários. Linha com fundo âmbar enquanto faltam assinaturas. No toolbar de visualização, badge de contagem aparece e o botão "Concluir" fica desabilitado (label "Aguardando Assinaturas") até todos assinarem. Backend: `listar` retorna `totalDestinatarios`+`totalAssinados` (batch COUNT por ID); `concluir` bloqueia com mensagem explicativa se faltam assinaturas. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4266** — **COMUNICADOS INTERNOS: AUDITORIA FUNCIONÁRIOS FANTASMA — CONTAGENS E GUARD SÓ COM ATIVOS.** `totalDestinatarios` e `totalAssinados` no `listar` usam batch-query de `employees WHERE status='Ativo'` para filtrar o JSON de destinatários — funcionários desligados pós-criação não inflam o total nem bloqueiam a conclusão. Guard do `concluir` também compara apenas contra ativos (`inArray(employeeId, activeIds)`). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4265** — **COMUNICADOS INTERNOS: PROGRESSO DE ASSINATURAS E BLOQUEIO DE CONCLUSÃO.** Coluna "Status / Assinaturas" com badge + barra de progresso X/Y; "Concluir" bloqueado até todos assinarem. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4264** — **COMUNICADOS INTERNOS: SETOR/DEPARTAMENTO, EMISSOR RESPONSÁVEL, DESTINATÁRIOS E FCSIGN.** +5 colunas em `comunicados_internos`; `listarFuncionariosSimples`; `solicitarAssinaturaFCSign` (envelope IntegSign). ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4261** — **CONTROLE DE CHEQUES: SINCRONIZAÇÃO AUTOMÁTICA COMPLETA COM O EXTRATO (AMBOS OS SENTIDOS).** Sentido inverso: cheque compensado no extrato → status "Compensado" automático + `conciliado=1`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4260** — **CONTROLE DE CHEQUES: STATUS "DEVOLVIDO" AUTOMÁTICO AO DETECTAR PAR COMP+DEV NO EXTRATO.** `autoMarcarChequesDevolvidos` (idempotente). Frontend: `useEffect` em `FinanceiroConciliacao.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4259** — **FIX: VALOR NEGOCIADO PACOTE — CORREÇÃO DE ARREDONDAMENTO NO ITEM ERRADO.** `lastNonZeroIdx` usado em AMBOS os pontos de correção em `calcNegociadoPreview`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
