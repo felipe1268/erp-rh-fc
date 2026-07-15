@@ -14026,79 +14026,87 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
-    // Rev. 4275-fix: `bank_statement_lines.status` nunca é gravado como 'devolvido' pelo sistema.
-    // A detecção de pares ocorre em memória via `detectarParesEstorno`. Aqui replicamos as mesmas
-    // regras em SQL (pareceCompensacaoCheque + pareceDevolucaoCheque) via JOIN com regex Postgres.
-    // CTE `devolved` elenca os ids dos DÉBITOS confirmados como cheque devolvido:
-    //   — ramo A: par encontrado (mesmo valor, crédito 0-90 dias depois, descrições compatíveis)
-    //   — ramo B: já tem vínculo ativo em bank_cheque_vinculos (independe da descrição).
-    const r = await dbExecute(db,
-      `WITH devolved AS (
-         -- Ramo A: par comp+dev detectado por padrão de descrição (inclui linhas
-         -- desconsideradas, pois desconsiderado_em é exatamente o que marca um cheque
-         -- devolvido confirmado pelo usuário via "Desconsiderar da conciliação").
-         -- ATENÇÃO: dbExecute liga params por ORDEM DE APARIÇÃO → cada ocorrência
-         -- de $N consome uma posição do array → $1/$2/$3 = companyId × 3.
-         SELECT DISTINCT deb.id
-           FROM bank_statement_lines deb
-           JOIN bank_statement_lines cred
-             ON cred.company_id = deb.company_id
-            AND cred.excluido_em IS NULL
-            AND cred.valor > 0
-            AND ROUND(ABS(cred.valor)::numeric * 100) = ROUND(ABS(deb.valor)::numeric * 100)
-            AND cred.data >= deb.data
-            AND cred.data <= deb.data + INTERVAL '90 days'
-            -- pareceDevolucaoCheque(cred)
-            AND NOT cred.descricao ~* 'cheque\\s+especial|cheq\\.?\\s*esp|limite\\s+especial|\\mlis\\M'
-            AND cred.descricao ~* 'devolv|sustad|sustac|estorn|contraordem|contra-ordem|oposic'
-            AND (cred.descricao ~* 'cheq' OR cred.descricao ~* '\\mch\\M'
-                 OR cred.descricao ~* '\\mdoc\\M' OR cred.descricao ~* 'mot|alinea|\\mal\\M')
-          WHERE deb.company_id = $1
-            AND deb.excluido_em IS NULL
-            AND deb.valor < 0
-            -- pareceCompensacaoCheque(deb)
-            AND NOT deb.descricao ~* 'cheque\\s+especial|cheq\\.?\\s*esp|limite\\s+especial|\\mlis\\M'
-            AND NOT deb.descricao ~* 'tarifa|juros|\\miof\\M|anuidad|manuten|\\mces\\M|pacote\\s+servic'
-            AND NOT deb.descricao ~* 'devolv|sustad|sustac|estorn|contraordem|contra-ordem|oposic'
-            AND (deb.descricao ~* 'cheq'
-                 OR (deb.descricao ~* '\\mch\\M' AND deb.descricao ~* 'compe|pag|liquid'))
-         UNION
-         -- Ramo B: já tem vínculo registrado (independe de descrição).
-         -- Usa $2 (2ª ocorrência de placeholder = params[1]).
-         SELECT DISTINCT debito_line_id AS id
-           FROM bank_cheque_vinculos
-          WHERE company_id = $2 AND estornado_em IS NULL
-         UNION
-         -- Ramo C: confirmados como cheque devolvido via "Desconsiderar da conciliação"
-         -- (desconsiderado_em IS NOT NULL). Não filtra por descrição — o usuário já
-         -- confirmou explicitamente que é cheque devolvido. Usa $3 (params[2]).
-         SELECT DISTINCT id
-           FROM bank_statement_lines
-          WHERE company_id = $3
-            AND excluido_em IS NULL
-            AND desconsiderado_em IS NOT NULL
-            AND valor < 0
-       )
-       SELECT
-         deb.id                                                         AS "debitoLineId",
-         ROUND(ABS(deb.valor)::numeric, 2)                             AS "valor",
+
+    // Rev. 4276 — Estratégia: rodar detectarParesEstorno (mesma função do servidor de
+    // conciliação) em TypeScript, varrendo TODAS as linhas da empresa de uma vez.
+    // Isso garante paridade 100% com a tela de conciliação sem replicar regex JS→SQL.
+    //
+    // Etapa 1: busca candidatas — linhas que POSSAM ser cheque ou devolução de cheque
+    //   (filtro amplo por ILIKE para não perder nada). Inclui tbm linhas com
+    //   desconsiderado_em IS NOT NULL (confirmadas pelo usuário como cheque devolvido).
+    const candidatasRes = await dbExecute(db,
+      `SELECT id, valor, descricao, to_char(data,'YYYY-MM-DD') AS data, desconsiderado_em IS NOT NULL AS desconsiderado
+         FROM bank_statement_lines
+        WHERE company_id = $1
+          AND excluido_em IS NULL
+          AND (
+            desconsiderado_em IS NOT NULL
+            OR descricao ILIKE '%cheq%'
+            OR descricao ILIKE '%devolv%'
+            OR descricao ILIKE '%sustad%'
+            OR descricao ILIKE '%sustac%'
+            OR descricao ILIKE '%estorn%'
+            OR descricao ILIKE '%contraordem%'
+            OR descricao ILIKE '%contra-ordem%'
+            OR descricao ILIKE '%oposic%'
+          )
+        ORDER BY data ASC, id ASC
+        LIMIT 5000`,
+      [input.companyId]);
+
+    const candidatas = rows(candidatasRes) as any[];
+
+    // Etapa 2: detectar pares com a MESMA lógica do servidor de conciliação
+    const linhasMin: LinhaEstornoMin[] = candidatas.map((l) => ({
+      id: Number(l.id),
+      valorCents: Math.round(Math.abs(Number(l.valor)) * 100),
+      isCredito: Number(l.valor) >= 0,
+      descricao: l.descricao,
+      data: String(l.data ?? ""),
+    }));
+    const pares = detectarParesEstorno(linhasMin);
+    const debitoIdsFromPares = new Set<number>(pares.map((p) => Number(p.debitoId)));
+
+    // Etapa 3: adicionar linhas confirmadas via "Desconsiderar da conciliação"
+    //   (desconsiderado_em IS NOT NULL AND valor < 0) — o usuário confirmou como cheque devolvido
+    for (const l of candidatas) {
+      if (l.desconsiderado && Number(l.valor) < 0) debitoIdsFromPares.add(Number(l.id));
+    }
+
+    // Etapa 4: adicionar IDs já presentes em bank_cheque_vinculos (já têm vínculo registrado)
+    const vincRes = await dbExecute(db,
+      `SELECT DISTINCT debito_line_id AS id FROM bank_cheque_vinculos
+        WHERE company_id = $1 AND estornado_em IS NULL`,
+      [input.companyId]);
+    for (const v of rows(vincRes) as any[]) debitoIdsFromPares.add(Number(v.id));
+
+    if (debitoIdsFromPares.size === 0) return { cheques: [] };
+
+    // Etapa 5: buscar detalhes + valorAlocado para os IDs encontrados
+    const ids = Array.from(debitoIdsFromPares).filter((n) => Number.isFinite(n) && n > 0);
+    const detalheRes = await dbExecute(db,
+      `SELECT
+         deb.id                                                          AS "debitoLineId",
+         ROUND(ABS(deb.valor)::numeric, 2)                              AS "valor",
          deb.descricao,
-         to_char(deb.data, 'YYYY-MM-DD')                              AS "dataDebito",
-         deb.conta_bancaria_id                                         AS "contaId",
+         to_char(deb.data, 'YYYY-MM-DD')                               AS "dataDebito",
+         deb.conta_bancaria_id                                          AS "contaId",
          COALESCE(cba.apelido, cba.banco, deb.conta_bancaria_id::text)  AS "contaApelido",
          COALESCE(SUM(CASE WHEN bcv.estornado_em IS NULL THEN bcv.valor ELSE 0 END), 0) AS "valorAlocado"
-       FROM devolved d
-       JOIN bank_statement_lines deb ON deb.id = d.id
+       FROM bank_statement_lines deb
        LEFT JOIN company_bank_accounts cba ON cba.id = deb.conta_bancaria_id
        LEFT JOIN bank_cheque_vinculos bcv  ON bcv.debito_line_id = deb.id
-      WHERE deb.excluido_em IS NULL
+      WHERE deb.id IN (${inlineIds(ids)})
+        AND deb.excluido_em IS NULL
+        AND deb.company_id = $1
       GROUP BY deb.id, deb.valor, deb.descricao, deb.data, deb.conta_bancaria_id, cba.apelido, cba.banco
       HAVING ROUND(ABS(deb.valor)::numeric, 2)
              - COALESCE(SUM(CASE WHEN bcv.estornado_em IS NULL THEN bcv.valor ELSE 0 END), 0) > 0.01
       ORDER BY deb.data DESC, deb.id DESC
       LIMIT 200`,
-      [input.companyId, input.companyId, input.companyId]);
-    const cheques = (rows(r) as any[]).map((c) => {
+      [input.companyId]);
+
+    const cheques = (rows(detalheRes) as any[]).map((c) => {
       const totalCents = Math.round(Number(c.valor) * 100);
       const alocCents  = Math.round(Number(c.valorAlocado) * 100);
       const livreCents = Math.max(0, totalCents - alocCents);

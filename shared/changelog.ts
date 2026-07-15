@@ -9,22 +9,29 @@
  * BUG 1 (Rev. 4275 original): `bank_statement_lines.status = 'devolvido'`
  *   Esse campo NUNCA é gravado no extrato. `autoMarcarChequesDevolvidos` atualiza
  *   `financial_cheques`, não `bank_statement_lines`. Query retornava sempre vazia.
- *   FIX: substituir por JOIN com regex (pareceCompensacaoCheque + pareceDevolucaoCheque).
  *
  * BUG 2: `AND deb.desconsiderado_em IS NULL` excluía todos os cheques confirmados.
  *   `desconsiderarChequeDevolvido` seta exatamente esse campo quando o usuário confirma
- *   um par como "cheque devolvido / saldo zero" — a query bloqueava o que devia mostrar.
- *   FIX: remover filtro + adicionar Ramo C (desconsiderado_em IS NOT NULL AND valor < 0).
+ *   um par como cheque devolvido — a query bloqueava o que devia mostrar.
  *
- * BUG 3 (causa raiz da persistência): dbExecute liga params por ORDEM DE APARIÇÃO.
- *   O CTE com 3 UNION usava `$1` em 3 lugares com array de 1 elemento:
- *     - 1ª ocorrência → params[0] = companyId ✓
- *     - 2ª ocorrência → params[1] = undefined → Ramo B filtrava company_id = NULL ✗
- *     - 3ª ocorrência → params[2] = undefined → Ramo C filtrava company_id = NULL ✗
- *   FIX: renomear para $1/$2/$3 e passar [companyId, companyId, companyId].
+ * BUG 3: dbExecute param-binding por ordem de aparição — CTE com $1×3 + array[1]
+ *   → Ramos B/C recebiam company_id=NULL. FIX: $1/$2/$3 + 3 elementos no array.
+ *
+ * BUG 4 (causa raiz final): Replicar a lógica de detecção JS em SQL é fundamentalmente
+ *   frágil — regex JS e Postgres têm diferenças de semântica que causam divergências.
+ *   SOLUÇÃO: abandonar a abordagem SQL e rodar a MESMA função TypeScript detectarParesEstorno
+ *   (shared/chequeMotivos.ts) que a tela de conciliação já usa, varendo TODAS as contas
+ *   da empresa de uma vez. Pipeline:
+ *     1. Busca candidatas: linhas com descricao ILIKE '%cheq%' | '%devolv%' | etc. (filtro
+ *        amplo) + linhas com desconsiderado_em IS NOT NULL (usuário confirmou). LIMIT 5000.
+ *     2. detectarParesEstorno() em memória → Set de debitoIds.
+ *     3. Adiciona IDs confirmados (desconsiderado_em IS NOT NULL AND valor < 0).
+ *     4. Adiciona IDs com vínculos em bank_cheque_vinculos.
+ *     5. Query final: detalhes + valorAlocado + HAVING saldo_livre > 0.01.
+ *   Paridade 100% com a detecção da tela de conciliação.
  *
  * ARQUIVOS:
- *   server/routers/financial.ts — listPendingChequesDevolvidos (CTE 3 ramos corrigida)
+ *   server/routers/financial.ts — listPendingChequesDevolvidos (reescrita total)
  *
  * ZERO DELETE · ZERO ALTER destrutivo.
  */
