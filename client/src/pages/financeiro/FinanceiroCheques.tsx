@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect, lazy, Suspense } from "react";
+import React, { useMemo, useState, useRef, useEffect, lazy, Suspense, ChangeEvent } from "react";
 import { cn } from "@/lib/utils";
 const FinanceiroChequesRecebidos = lazy(() => import("./FinanceiroChequesRecebidos"));
 import DashboardLayout from "@/components/DashboardLayout";
@@ -649,7 +649,7 @@ export default function FinanceiroCheques() {
     });
   }, [preview, previewFiltro, previewBusca]);
 
-  async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onPickFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
@@ -762,7 +762,7 @@ export default function FinanceiroCheques() {
   }
 
   // ── PDFs (IA) ──
-  async function onPickPdfs(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onPickPdfs(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     try {
