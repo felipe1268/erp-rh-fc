@@ -632,6 +632,7 @@ export default function FinanceiroConciliacao() {
   const [quitarChequesOpen, setQuitarChequesOpen] = useState(false);
   const [quitarChequesSel, setQuitarChequesSel] = useState<Map<number, string>>(new Map());
   const [quitarChequesLoading, setQuitarChequesLoading] = useState(false);
+  const [quitarChequesBusca, setQuitarChequesBusca] = useState("");
   const { data: pendingChequesData, isFetching: pendingChequesFetching, refetch: refetchPendingCheques } =
     (trpc as any).financial.listPendingChequesDevolvidos.useQuery(
       { companyId: Number(companyId) },
@@ -6987,6 +6988,14 @@ export default function FinanceiroConciliacao() {
                 {lancStatement?.id != null && Number(lancStatement.valor) < 0 && (() => {
                   const pixVal = Math.abs(Number(lancStatement.valor));
                   const pendCheques: any[] = pendingChequesData?.cheques ?? [];
+                  const _busca = quitarChequesBusca.trim().toLowerCase();
+                  const filtradosCheques: any[] = _busca
+                    ? pendCheques.filter((chq: any) =>
+                        String(chq.descricao ?? "").toLowerCase().includes(_busca) ||
+                        String(chq.contaApelido ?? "").toLowerCase().includes(_busca) ||
+                        String(chq.valor ?? "").replace(".", ",").includes(_busca)
+                      )
+                    : pendCheques;
                   const totalSel = Array.from(quitarChequesSel.values()).reduce((s, v) => s + (parseFloat(v) || 0), 0);
                   const totalSelCents = Math.round(totalSel * 100);
                   const pixCents = Math.round(pixVal * 100);
@@ -6995,7 +7004,7 @@ export default function FinanceiroConciliacao() {
                       <button
                         type="button"
                         className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-orange-100/60 transition-colors"
-                        onClick={() => { setQuitarChequesOpen(o => !o); setQuitarChequesSel(new Map()); if (!quitarChequesOpen) setTimeout(() => refetchPendingCheques(), 50); }}
+                        onClick={() => { setQuitarChequesOpen(o => !o); setQuitarChequesSel(new Map()); setQuitarChequesBusca(""); if (!quitarChequesOpen) setTimeout(() => refetchPendingCheques(), 50); }}
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/15 ring-1 ring-orange-400/30 shrink-0 text-orange-600">🔗</span>
                         <div className="flex-1 min-w-0">
@@ -7007,15 +7016,30 @@ export default function FinanceiroConciliacao() {
 
                       {quitarChequesOpen && (
                         <div className="border-t border-orange-200 px-4 pb-4 pt-3 space-y-3">
+                          {/* Campo de busca */}
+                          {!pendingChequesFetching && pendCheques.length > 0 && (
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                              <input
+                                type="text"
+                                placeholder="Buscar por nome, nº cheque ou valor…"
+                                className="w-full rounded-lg border border-gray-200 bg-white pl-8 pr-3 py-1.5 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                                value={quitarChequesBusca}
+                                onChange={(e) => setQuitarChequesBusca(e.target.value)}
+                              />
+                            </div>
+                          )}
                           {pendingChequesFetching ? (
                             <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />Carregando cheques pendentes…
                             </div>
                           ) : pendCheques.length === 0 ? (
                             <p className="text-xs text-gray-500 py-2">Nenhum cheque devolvido pendente encontrado.</p>
+                          ) : filtradosCheques.length === 0 ? (
+                            <p className="text-xs text-gray-500 py-2">Nenhum cheque encontrado para "{quitarChequesBusca}".</p>
                           ) : (
                             <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-                              {pendCheques.map((chq: any) => {
+                              {filtradosCheques.map((chq: any) => {
                                 const sel = quitarChequesSel.get(chq.debitoLineId);
                                 const checked = sel !== undefined;
                                 const livreCents = Math.round(chq.saldoLivre * 100);
