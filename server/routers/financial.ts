@@ -14017,40 +14017,72 @@ export const financialRouter = router({
 
   // Rev. 4275 — Lista TODOS os cheques devolvidos pendentes (ou parcialmente cobertos) de TODAS
   // as contas da empresa, para a tela de lançamento poder oferecer "Quitar cheques devolvidos"
-  // sem precisar navegar conta a conta. Retorna linhas status='devolvido' + linhas que já têm
-  // algum vínculo ativo (mas saldo_livre > 0.01). READ-ONLY.
+  // sem precisar navegar conta a conta. Detecta pares comp+dev via JOIN com regex Postgres
+  // (mesmas regras de pareceCompensacaoCheque + pareceDevolucaoCheque) + ramo B p/ vinculos
+  // já existentes. Retorna apenas linhas com saldo_livre > 0.01. READ-ONLY.
   listPendingChequesDevolvidos: protectedProcedure.input(z.object({
     companyId: z.number(),
   })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Rev. 4275-fix: `bank_statement_lines.status` nunca é gravado como 'devolvido' pelo sistema.
+    // A detecção de pares ocorre em memória via `detectarParesEstorno`. Aqui replicamos as mesmas
+    // regras em SQL (pareceCompensacaoCheque + pareceDevolucaoCheque) via JOIN com regex Postgres.
+    // CTE `devolved` elenca os ids dos DÉBITOS confirmados como cheque devolvido:
+    //   — ramo A: par encontrado (mesmo valor, crédito 0-90 dias depois, descrições compatíveis)
+    //   — ramo B: já tem vínculo ativo em bank_cheque_vinculos (independe da descrição).
     const r = await dbExecute(db,
-      `SELECT
-         bsl.id                                                       AS "debitoLineId",
-         ROUND(ABS(bsl.valor)::numeric, 2)                           AS "valor",
-         bsl.descricao,
-         to_char(bsl.data, 'YYYY-MM-DD')                            AS "dataDebito",
-         bsl.conta_bancaria_id                                       AS "contaId",
-         COALESCE(cba.apelido, cba.banco, bsl.conta_bancaria_id::text) AS "contaApelido",
+      `WITH devolved AS (
+         -- Ramo A: par comp+dev detectado por padrão de descrição
+         SELECT DISTINCT deb.id
+           FROM bank_statement_lines deb
+           JOIN bank_statement_lines cred
+             ON cred.company_id = deb.company_id
+            AND cred.excluido_em IS NULL
+            AND cred.valor > 0
+            AND ROUND(ABS(cred.valor)::numeric * 100) = ROUND(ABS(deb.valor)::numeric * 100)
+            AND cred.data >= deb.data
+            AND cred.data <= deb.data + INTERVAL '90 days'
+            -- pareceDevolucaoCheque(cred)
+            AND NOT cred.descricao ~* 'cheque\\s+especial|cheq\\.?\\s*esp|limite\\s+especial|\\mlis\\M'
+            AND cred.descricao ~* 'devolv|sustad|sustac|estorn|contraordem|contra-ordem|oposic'
+            AND (cred.descricao ~* 'cheq' OR cred.descricao ~* '\\mch\\M'
+                 OR cred.descricao ~* '\\mdoc\\M' OR cred.descricao ~* 'mot|alinea|\\mal\\M')
+          WHERE deb.company_id = $1
+            AND deb.excluido_em IS NULL
+            AND deb.desconsiderado_em IS NULL
+            AND deb.valor < 0
+            -- pareceCompensacaoCheque(deb)
+            AND NOT deb.descricao ~* 'cheque\\s+especial|cheq\\.?\\s*esp|limite\\s+especial|\\mlis\\M'
+            AND NOT deb.descricao ~* 'tarifa|juros|\\miof\\M|anuidad|manuten|\\mces\\M|pacote\\s+servic'
+            AND NOT deb.descricao ~* 'devolv|sustad|sustac|estorn|contraordem|contra-ordem|oposic'
+            AND (deb.descricao ~* 'cheq'
+                 OR (deb.descricao ~* '\\mch\\M' AND deb.descricao ~* 'compe|pag|liquid'))
+         UNION
+         -- Ramo B: já tem vínculo registrado (independe de descrição)
+         SELECT DISTINCT debito_line_id AS id
+           FROM bank_cheque_vinculos
+          WHERE company_id = $1 AND estornado_em IS NULL
+       )
+       SELECT
+         deb.id                                                         AS "debitoLineId",
+         ROUND(ABS(deb.valor)::numeric, 2)                             AS "valor",
+         deb.descricao,
+         to_char(deb.data, 'YYYY-MM-DD')                              AS "dataDebito",
+         deb.conta_bancaria_id                                         AS "contaId",
+         COALESCE(cba.apelido, cba.banco, deb.conta_bancaria_id::text)  AS "contaApelido",
          COALESCE(SUM(CASE WHEN bcv.estornado_em IS NULL THEN bcv.valor ELSE 0 END), 0) AS "valorAlocado"
-       FROM bank_statement_lines bsl
-       LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
-       LEFT JOIN bank_cheque_vinculos bcv  ON bcv.debito_line_id = bsl.id
-      WHERE bsl.company_id = $1
-        AND bsl.excluido_em IS NULL
-        AND bsl.valor < 0
-        AND (
-          bsl.status = 'devolvido'
-          OR EXISTS (
-            SELECT 1 FROM bank_cheque_vinculos v2
-            WHERE v2.debito_line_id = bsl.id AND v2.estornado_em IS NULL
-          )
-        )
-      GROUP BY bsl.id, cba.apelido, cba.banco
-      HAVING ROUND(ABS(bsl.valor)::numeric, 2)
+       FROM devolved d
+       JOIN bank_statement_lines deb ON deb.id = d.id
+       LEFT JOIN company_bank_accounts cba ON cba.id = deb.conta_bancaria_id
+       LEFT JOIN bank_cheque_vinculos bcv  ON bcv.debito_line_id = deb.id
+      WHERE deb.excluido_em IS NULL
+        AND deb.desconsiderado_em IS NULL
+      GROUP BY deb.id, deb.valor, deb.descricao, deb.data, deb.conta_bancaria_id, cba.apelido, cba.banco
+      HAVING ROUND(ABS(deb.valor)::numeric, 2)
              - COALESCE(SUM(CASE WHEN bcv.estornado_em IS NULL THEN bcv.valor ELSE 0 END), 0) > 0.01
-      ORDER BY bsl.data DESC, bsl.id DESC
+      ORDER BY deb.data DESC, deb.id DESC
       LIMIT 200`,
       [input.companyId]);
     const cheques = (rows(r) as any[]).map((c) => {
