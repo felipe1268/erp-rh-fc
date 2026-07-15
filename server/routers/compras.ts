@@ -6837,7 +6837,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         (await db.select({ id: comprasCotacoesItens.id }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId)))
           .map(r => r.id)
       );
-      let totalForn = 0;
+      let totalFornCents = 0;
       for (const r of input.respostas) {
         if (!validItemIds.has(r.itemId)) continue;
         const desc = r.descontoPct ?? 0;
@@ -6848,9 +6848,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           qty = n(itRow[0]?.quantidade ?? 1);
         }
         // Rev. 4252 — usar totalOverride quando fornecido (valor negociado exato), evita drift de arredondamento
+        // Rev. 4283 — acumular em centavos inteiros para evitar drift de ponto flutuante
         const totalCalc = qty * r.precoUnitario * (1 - desc / 100);
         const total = (r.totalOverride !== undefined && r.totalOverride > 0) ? r.totalOverride : totalCalc;
-        totalForn += total;
+        totalFornCents += Math.round(total * 100);
         const totalMatStr = r.totalMat != null ? String(r.totalMat.toFixed(2)) : null;
         const totalMdoStr = r.totalMdo != null ? String(r.totalMdo.toFixed(2)) : null;
         await db.insert(comprasCotacaoRespostas).values({
@@ -6866,7 +6867,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       }
       const valorFrete = n(input.valorFrete);
       const isFob = (input.freteTipo ?? "cif") === "fob";
-      const totalComFrete = totalForn + (isFob ? valorFrete : 0);
+      const totalComFreteCents = totalFornCents + (isFob ? Math.round(valorFrete * 100) : 0);
+      const totalComFrete = totalComFreteCents / 100;
 
       await db.update(comprasCotacaoFornecedores).set({
         totalOrcado: String(totalComFrete.toFixed(2)),
