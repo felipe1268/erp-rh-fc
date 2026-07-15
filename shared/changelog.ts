@@ -1,22 +1,39 @@
 /**
- * Rev. 4285 - FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (totalOrcado vs soma de resp.total).
+ * Rev. 4285 - FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (R$ 2.100.000,05 em vez de R$ 2.100.000,00).
  *
  * CONTEXTO:
- *   Ao abrir o dialog de Condições de Pagamento, `fornTotal` era re-calculado somando
- *   os `resp.total` individuais de cada item do respostaMap (cada um arredondado com
- *   `.toFixed(2)` no momento do salvamento). A soma desses valores arredondados individualmente
- *   pode divergir do `totalOrcado` (que o backend acumula em centavos inteiros via
- *   `Math.round(total * 100)` e só converte no final). Resultado: tela de cotação mostrava
- *   R$ 2.100.000,00 (totalOrcado) mas o dialog abria com R$ 2.100.000,05 (soma dos itens).
+ *   Cotação 691 / Fornecedor PROMATEL ENGENHARIA (895): tela de cotação mostrava R$ 2.100.000,00
+ *   mas o dialog de Condições de Pagamento abria com R$ 2.100.000,05 — drift de +R$ 0,05.
  *
- * FIX (Rev. 4285):
- *   Branch não-edição de `fornTotal` no dialog passa a usar diretamente
- *   `parseFloat(fornP.totalOrcado)` — a fonte autoritativa gravada pelo backend
- *   (já corretamente acumulada em centavos desde Rev. 4283). Elimina a re-soma de
- *   itens individuais que reintroduzia o drift.
+ * CAUSA RAIZ DEFINITIVA (encontrada após simular os 812 itens reais):
+ *   Item 7096 — preco_unitario="1481.03" (4dp, roundeado de ~1481.0278 no momento do
+ *   salvamento original), quantidade=18. Recomputar preco_unitario*qty = 26658.54, mas o
+ *   `total` armazenado no banco = 26658.49 (calculado com o preço exato original). Diferença:
+ *   5 centavos neste único item. O preco_unitario de 4dp não é o preço exato; o `total`
+ *   salvo é que é o valor correto. A acumulação no branch de edição usava preco*qty de todos
+ *   os itens, inclusive os não-alterados, introduzindo este drift.
+ *
+ * FIXES APLICADOS (4 pontos):
+ *
+ *   1. Branch EDIÇÃO de fornTotal (Cotacoes.tsx ~linha 2379):
+ *      - Itens SEM alteração pelo usuário → usa resp.total diretamente em centavos inteiros
+ *        (evita o drift preco_unitario roundeado × qty ≠ total salvo)
+ *      - Itens COM alteração → recomputa Math.round(novoPreco*qty*100) (preview correto)
+ *      - Detecta mudança comparando editPrecos[key]===origPreco && editQtds[key]===origQty
+ *
+ *   2. Branch NÃO-EDIÇÃO de fornTotal (Cotacoes.tsx ~linha 2405):
+ *      - Usa parseFloat(fornP.totalOrcado) — DB é a fonte autoritativa.
+ *
+ *   3. Backend getMapaCotacao — totaisPorFornecedor (compras.ts ~linha 6337):
+ *      - Acumula Math.round(n(r.total)*100) em centavos inteiros (evita drift de float
+ *        ao somar N itens).
+ *
+ *   4. Tabela (badge valor do fornecedor, Cotacoes.tsx ~linha 5563):
+ *      - Prefere totalOrcado (DB) sobre totaisPorFornecedor (recomputado).
  *
  * ARQUIVOS:
- *   client/src/pages/compras/Cotacoes.tsx (~linha 2390)
+ *   client/src/pages/compras/Cotacoes.tsx (~linhas 2379, 5563)
+ *   server/routers/compras.ts (~linha 6337)
  *
  * ZERO DELETE · ZERO ALTER destrutivo.
  */
