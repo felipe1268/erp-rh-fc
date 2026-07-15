@@ -2374,14 +2374,25 @@ export default function Cotacoes() {
     const fornP = (mapaQ.data?.participantes ?? []).find((p: any) => p.fornecedorId === fId);
     const fornNome = fornP?.fornecedor?.nomeFantasia || fornP?.fornecedor?.razaoSocial || `Fornecedor #${fId}`;
     const fornTotal = editingFornId === fId ? (() => {
-      // Rev. 4285 — acumular em CENTAVOS INTEIROS para evitar drift de float.
-      // `acc + Math.round(preco*qty*100)/100` soma valores N/100 que não são exatos
-      // em IEEE 754 → drift acumulado em 812 itens. Fix: acumular apenas inteiros.
+      // Rev. 4285 — causa raiz: preco_unitario é armazenado com 4dp (arredondado),
+      // então recomputar preco*qty pode divergir do total salvo (ex: item 7096:
+      // preco=1481.03, qty=18 → preco*qty=26658.54 mas total salvo=26658.49).
+      // Fix: usar resp.total (centavos inteiros) para itens SEM alteração pelo usuário;
+      // recomputar preco*qty apenas para itens COM preço/qty alterados.
       const totalItensCents = (mapaQ.data?.itens ?? []).reduce((acc: number, it: any) => {
         const key = `${it.id}_${fId}`;
-        const preco = parseFloat(editPrecos[key] ?? "0") || 0;
-        const qtyStr = editQtds[key];
-        const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
+        const origResp = (mapaQ.data?.respostaMap as any)?.[key];
+        const origPreco = origResp?.precoUnitario ?? "0";
+        const origQty   = origResp?.quantidade   ?? String(it.quantidade ?? "1");
+        const curPreco  = editPrecos[key] ?? origPreco;
+        const curQty    = editQtds[key]   ?? origQty;
+        // Sem alteração → fonte autoritativa (evita drift preco_unitario roundeado)
+        if (curPreco === origPreco && curQty === origQty && origResp?.total) {
+          return acc + Math.round(parseFloat(origResp.total) * 100);
+        }
+        // Com alteração → recomputa do novo preço (preview de mudança em andamento)
+        const preco = parseFloat(curPreco) || 0;
+        const qty   = parseFloat(curQty) > 0 ? parseFloat(curQty) : parseFloat(it.quantidade ?? "1");
         return acc + Math.round(preco * qty * 100);
       }, 0);
       const isFob = (editFreteTipo[fId] ?? "cif") === "fob";
