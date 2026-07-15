@@ -3794,7 +3794,10 @@ export default function Cotacoes() {
           const compQtd = (first as any).composicaoQtdOrcada || parseFloat(first.quantidade ?? "0");
           const firstKey = `${first.id}_${fornecedorId}`;
           const precoComp = parseFloat(editPrecos[firstKey] ?? "0") || 0;
-          respostas.push({ itemId: first.id, precoUnitario: precoComp, descontoPct: 0, quantidade: compQtd, totalOverride: editTotaisOverride[firstKey] });
+          const compMatMdo = editMatMdo[firstKey];
+          const compTotalMat = compMatMdo ? (parseFloat(compMatMdo.mat) || 0) : undefined;
+          const compTotalMdo = compMatMdo ? (parseFloat(compMatMdo.mdo) || 0) : undefined;
+          respostas.push({ itemId: first.id, precoUnitario: precoComp, descontoPct: 0, quantidade: compQtd, totalOverride: editTotaisOverride[firstKey], ...(compTotalMat != null || compTotalMdo != null ? { totalMat: compTotalMat, totalMdo: compTotalMdo } : {}) });
           for (let i = 1; i < items.length; i++) {
             respostas.push({ itemId: items[i].id, precoUnitario: 0, descontoPct: 0, quantidade: 0 });
           }
@@ -6234,38 +6237,88 @@ export default function Cotacoes() {
                                         </td>
                                         {isPacoteTipoMapa ? (() => {
                                           // Pacote: calcular MAT e MDO do fornecedor para este item
+                                          // Se em edição e usuário já definiu manualmente, usa editMatMdo direto
                                           let matF = 0, mdoF = 0;
-                                          if (it._isPacoteGroup) {
-                                            for (const c of (it._childItems as any[])) {
-                                              const rr = mapa?.respostaMap?.[`${c.id}_${p.fornecedorId}`];
-                                              const price = parseFloat((rr as any)?.precoUnitario ?? "0");
-                                              const qty = parseFloat((rr as any)?.quantidade ?? c.quantidade ?? "1");
-                                              const tot = price * qty;
-                                              if (tot <= 0) continue;
-                                              const cMat = parseFloat(c.metaUnitarioMat ?? "0");
-                                              const cMdo = parseFloat(c.metaUnitarioMdo ?? "0");
-                                              if (cMdo > 0 && cMat === 0) mdoF += tot;
-                                              else matF += tot;
+                                          const hasManualMatMdo = isEditing && editMatMdo[key] != null;
+                                          if (hasManualMatMdo) {
+                                            matF = parseFloat(editMatMdo[key].mat) || 0;
+                                            mdoF = parseFloat(editMatMdo[key].mdo) || 0;
+                                          } else if (it._isPacoteGroup) {
+                                            // Verifica se há totalMat/totalMdo já salvo no primeiro filho
+                                            const savedRr = mapa?.respostaMap?.[`${(it._childItems as any[])[0].id}_${p.fornecedorId}`];
+                                            const savedTm = parseFloat((savedRr as any)?.totalMat ?? "");
+                                            const savedTd = parseFloat((savedRr as any)?.totalMdo ?? "");
+                                            if (!isNaN(savedTm) && !isNaN(savedTd) && (savedTm > 0 || savedTd > 0)) {
+                                              matF = savedTm;
+                                              mdoF = savedTd;
+                                            } else {
+                                              // Cálculo proporcional: split pelo ratio mat/mdo da meta de cada filho
+                                              for (const c of (it._childItems as any[])) {
+                                                const rr = mapa?.respostaMap?.[`${c.id}_${p.fornecedorId}`];
+                                                const price = parseFloat((rr as any)?.precoUnitario ?? "0");
+                                                const qty = parseFloat((rr as any)?.quantidade ?? c.quantidade ?? "1");
+                                                const tot = price * qty;
+                                                if (tot <= 0) continue;
+                                                const cMat = parseFloat(c.metaUnitarioMat ?? "0");
+                                                const cMdo = parseFloat(c.metaUnitarioMdo ?? "0");
+                                                const totalMeta = cMat + cMdo;
+                                                if (totalMeta > 0) { matF += tot * (cMat / totalMeta); mdoF += tot * (cMdo / totalMeta); }
+                                                else if (cMdo > 0) mdoF += tot;
+                                                else matF += tot;
+                                              }
                                             }
                                           } else {
-                                            const cMat = parseFloat(it.metaUnitarioMat ?? "0");
-                                            const cMdo = parseFloat(it.metaUnitarioMdo ?? "0");
-                                            if (cMdo > 0 && cMat === 0) mdoF = displayTotal;
-                                            else matF = displayTotal;
+                                            const savedRr = mapa?.respostaMap?.[key];
+                                            const savedTm = parseFloat((savedRr as any)?.totalMat ?? "");
+                                            const savedTd = parseFloat((savedRr as any)?.totalMdo ?? "");
+                                            if (!isNaN(savedTm) && !isNaN(savedTd) && (savedTm > 0 || savedTd > 0)) {
+                                              matF = savedTm; mdoF = savedTd;
+                                            } else {
+                                              const cMat = parseFloat(it.metaUnitarioMat ?? "0");
+                                              const cMdo = parseFloat(it.metaUnitarioMdo ?? "0");
+                                              const totalMeta = cMat + cMdo;
+                                              if (totalMeta > 0) { mdoF = displayTotal * (cMdo / totalMeta); matF = displayTotal * (cMat / totalMeta); }
+                                              else if (cMdo > 0) mdoF = displayTotal;
+                                              else matF = displayTotal;
+                                            }
                                           }
                                           matF = Math.round(matF * 100) / 100;
                                           mdoF = Math.round(mdoF * 100) / 100;
                                           return (
                                             <>
                                               <td key={`forn_mat_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-100 ${rowCls}`}>
-                                                <span className="text-xs font-semibold text-blue-700">
-                                                  {matF > 0 ? matF.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
-                                                </span>
+                                                {isEditing ? (
+                                                  <Input type="number" step="0.01" min="0"
+                                                    value={editMatMdo[key]?.mat ?? String(matF)}
+                                                    onChange={e => {
+                                                      const mat = parseFloat(e.target.value) || 0;
+                                                      const mdo = parseFloat(editMatMdo[key]?.mdo ?? String(mdoF)) || 0;
+                                                      setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: String(matF), mdo: String(mdoF) }), mat: e.target.value } }));
+                                                      setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
+                                                    }}
+                                                    className="h-6 text-xs text-right border-blue-300 bg-white text-gray-900 w-24" placeholder="0,00" />
+                                                ) : (
+                                                  <span className="text-xs font-semibold text-blue-700">
+                                                    {matF > 0 ? matF.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                                  </span>
+                                                )}
                                               </td>
                                               <td key={`forn_mdo_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-100 ${rowCls}`}>
-                                                <span className="text-xs font-semibold text-orange-700">
-                                                  {mdoF > 0 ? mdoF.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
-                                                </span>
+                                                {isEditing ? (
+                                                  <Input type="number" step="0.01" min="0"
+                                                    value={editMatMdo[key]?.mdo ?? String(mdoF)}
+                                                    onChange={e => {
+                                                      const mdo = parseFloat(e.target.value) || 0;
+                                                      const mat = parseFloat(editMatMdo[key]?.mat ?? String(matF)) || 0;
+                                                      setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: String(matF), mdo: String(mdoF) }), mdo: e.target.value } }));
+                                                      setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
+                                                    }}
+                                                    className="h-6 text-xs text-right border-orange-300 bg-white text-gray-900 w-24" placeholder="0,00" />
+                                                ) : (
+                                                  <span className="text-xs font-semibold text-orange-700">
+                                                    {mdoF > 0 ? mdoF.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                                  </span>
+                                                )}
                                               </td>
                                             </>
                                           );

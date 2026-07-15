@@ -1,4 +1,49 @@
 /**
+ * Rev. 4287 - FIX: MAPA DE COTAÇÃO (PACOTE) — COLUNAS MATERIAL/MO NÃO EDITÁVEIS E MO SEMPRE ZERADA.
+ *
+ * CONTEXTO:
+ *   No Mapa de Cotação tipo "pacote" (ex: COT-0473-2026 — Instalações Elétricas e Hidráulicas),
+ *   dois bugs simultâneos afetavam o split Material × Mão de Obra por fornecedor:
+ *
+ *   BUG 1 — Colunas MAT/MO não editáveis:
+ *     O branch `isPacoteTipoMapa ? (() => { ... })()` (renderização das células de fornecedor)
+ *     sempre renderizava `<span>` estático, mesmo quando `isEditing === true`. Resultado: o usuário
+ *     clicava em "Editar" e os campos Material e Mão de Obra permaneciam não interativos.
+ *
+ *   BUG 2 — MO sempre zerada para fornecedores como PROMATEL:
+ *     A classificação MAT vs MDO era BINÁRIA:
+ *       `if (cMdo > 0 && cMat === 0) mdoF += tot; else matF += tot;`
+ *     Isso jogava 100% do valor do fornecedor para MAT em qualquer item que tivesse
+ *     AMBAS as rubricas no orçamento (metaUnitarioMat > 0 E metaUnitarioMdo > 0).
+ *     Como a cotação PROMATEL é um pacote MAT+MDO com itens mistos, o MDO ficava
+ *     zerado (exibido como "—") em todos os grupos.
+ *
+ * FIX:
+ *   (a) Split PROPORCIONAL: substituída a classificação binária por ratio:
+ *       totalMeta = cMat + cMdo; matF += tot * (cMat/totalMeta); mdoF += tot * (cMdo/totalMeta).
+ *       Fallback: se totalMeta === 0, aplica a regra binária como antes.
+ *
+ *   (b) Prioridade de fonte: se `respostaMap[key].totalMat`/`totalMdo` já foram salvos
+ *       (de edições anteriores com este fix), usa-os diretamente — sem recalcular.
+ *
+ *   (c) Modo EDIÇÃO: as células MAT e MDO do fornecedor agora renderizam `<Input>` quando
+ *       `isEditing === true`. OnChange: atualiza `editMatMdo[key]` e seta
+ *       `editPrecos[key] = mat + mdo`. O valor inicial do input é `editMatMdo[key]?.mat ?? String(matF)`
+ *       (proporcional calculado como default, editável pelo usuário).
+ *
+ *   (d) Save path (pacote): o loop de composição agora extrai `editMatMdo[firstKey]` e passa
+ *       `totalMat`/`totalMdo` no objeto de resposta enviado ao `salvarRespostasLote`.
+ *       O backend já suportava esses campos (Rev. 4253) — apenas o pacote não os enviava.
+ *
+ * ARQUIVOS:
+ *   - client/src/pages/compras/Cotacoes.tsx
+ *     · linhas 6238-6310: refatoração do bloco isPacoteTipoMapa (split + inputs de edição)
+ *     · linhas 3798-3803: save path do pacote passa totalMat/totalMdo
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4286 - FIX: SOLICITAÇÕES — ReferenceError "Can't find variable: selecionados" (variável fora de escopo).
  *
  * CONTEXTO:

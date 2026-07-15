@@ -50,15 +50,17 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4287** — **FIX: MAPA DE COTAÇÃO (PACOTE) — COLUNAS MATERIAL/MO NÃO EDITÁVEIS E MO SEMPRE ZERADA.** Dois bugs no Mapa de Cotação tipo "pacote": (1) colunas MAT/MO do fornecedor nunca renderizavam inputs em modo edição — sempre mostravam `<span>` calculado, impossibilitando edição; (2) classificação MAT vs MDO era binária (`cMdo > 0 && cMat === 0`), jogando 100% p/ MAT todos os itens com ambas as rubricas no orçamento, resultando em MO = "—" para PROMATEL. Fix: (a) split agora é proporcional ao ratio `metaUnitarioMat / metaUnitarioMdo` da meta de cada filho; (b) se `totalMat`/`totalMdo` já foram salvos, usa-os diretamente; (c) modo edição renderiza inputs `<Input>` para MAT e MDO nas colunas do fornecedor, atualizando `editMatMdo[key]` e recalculando `editPrecos[key] = mat + mdo`; (d) save path do pacote agora passa `totalMat`/`totalMdo` para o `salvarRespostasLote`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4286** — **FIX: SOLICITAÇÕES — ReferenceError "Can't find variable: selecionados".** Causa raiz: bloco "Somente MO" inserido na EAP item list de `Solicitacoes` (linhas 1107-6101) referenciava `selecionados` (Set<string> do `DisciplinasModal`, linhas 277-781) e `selKey(disc.nome, ...)` — variáveis fora de escopo. Fix: substituir pela condição correta do contexto: `(selectedEapIds.has(it.id) || qtdVal > 0)`. Botão "Somente MO" exibe corretamente para itens marcados. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4285** — **FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (+R$ 0,05).** Causa raiz: branch de edição recomputava `preco_unitario × qty` para todos os itens — mas `preco_unitario` (4dp) é arredondado do valor original exato, então `preco*qty ≠ total` salvo (item 7096: 1481.03×18=26658.54 vs total=26658.49, diff=5¢). Fix em 4 pontos: (1) branch edição usa `resp.total` diretamente para itens não-alterados, recomputa só os alterados; (2) branch não-edição usa `totalOrcado` do DB; (3) backend `totaisPorFornecedor` acumula em centavos inteiros; (4) badge tabela prefere `totalOrcado`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4285** — **FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (+R$ 0,05).** Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4284** — **COTAÇÕES/COMPRAS: ADIANTAMENTO (SINAL) E RETENÇÃO DE GARANTIA NO DIALOG "CONDIÇÕES DE PAGAMENTO".** Nova seção "Adiantamento & Retenção" no dialog de Condições de Pagamento (visível apenas em contratos de medição MDO/Pacote). Adiantamento: checkbox, tipo %/valor, prazo DDL, amortização proporcional ou parcelas fixas. Retenção: checkbox, % do bruto por medição, liberação no encerramento ou etapas. 10 colunas novas em `compras_cotacao_fornecedores`, 10 em `compras_ordens`, 3 em `terceiro_medicoes`. Bridge financeiro calcula deduções automaticamente ao criar lançamento. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4284** — **COTAÇÕES/COMPRAS: ADIANTAMENTO (SINAL) E RETENÇÃO DE GARANTIA NO DIALOG "CONDIÇÕES DE PAGAMENTO".** Nova seção "Adiantamento & Retenção". 10 colunas novas em `compras_cotacao_fornecedores`, 10 em `compras_ordens`, 3 em `terceiro_medicoes`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4283** — **FIX: COTAÇÕES — DRIFT DE CENTAVOS NO DIALOG "CONDIÇÕES DE PAGAMENTO".** Fix backend: acumula `totalOrcado` em centavos inteiros. Fix frontend (incompleto — corrigido em Rev. 4285). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4283** — **FIX: COTAÇÕES — DRIFT DE CENTAVOS NO DIALOG "CONDIÇÕES DE PAGAMENTO".** Fix backend acumula em centavos inteiros. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4282** — **CONTROLE DE CHEQUES: "VER PAGAMENTO" EXIBE VALOR TOTAL DO PIX QUANDO ALOCAÇÃO É PARCIAL.** PIX R$ 5.800,00 → 2 cheques de R$ 2.900,00: popover mostra o alocado + linha âmbar "Valor total do PIX: R$ 5.800,00 · alocado a este cheque: R$ 2.900,00". Backend: `getVinculosPorChequeNumero` retorna `valorLinhaPix`; frontend: `isParcial` + riscado. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4282** — **CONTROLE DE CHEQUES: "VER PAGAMENTO" EXIBE VALOR TOTAL DO PIX QUANDO ALOCAÇÃO É PARCIAL.** PIX R$ 5.800,00 → 2 cheques: popover mostra alocado + âmbar "Valor total do PIX". ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
