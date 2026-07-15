@@ -1,4 +1,42 @@
 /**
+ * Rev. 4279 - CONCILIAÇÃO: STATUS DO CHEQUE DEVOLVIDO SINCRONIZA AUTOMATICAMENTE COM O CONTROLE DE CHEQUES.
+ *
+ * PROBLEMA:
+ *   Ao quitar um cheque devolvido pelo painel "Quitar cheques devolvidos" (PIX substituto),
+ *   o status do cheque no Controle de Cheques permanecia "Devolvido" em vez de mudar para
+ *   "Compensado". O processo inverso (desconciliar a linha do PIX) também não revertia o status.
+ *
+ * CAUSA RAIZ (3 camadas):
+ *   1. O painel "Quitar cheques devolvidos" chamava registrarVinculoChequeDevolvido sem
+ *      passar chequeNumero → o guard `if (input.chequeNumero)` nunca disparava.
+ *   2. O INSERT em bank_cheque_vinculos gravava cheque_numero=NULL (histórico sem rastreio).
+ *   3. desconciliarLinha não verificava bank_cheque_vinculos → vínculo ficava ativo
+ *      mesmo após desconciliar, e o status do cheque não voltava para "devolvido".
+ *
+ * FIX (backend — financial.ts):
+ *   A) registrarVinculoChequeDevolvido:
+ *      - Introduz chequeNumParaGravar = input.chequeNumero ?? covAntes.chq ?? null
+ *        (covAntes.chq já era extraído via parseChequeNumero na descrição da linha de débito).
+ *      - Usa chequeNumParaGravar tanto no INSERT (cheque_numero) quanto no UPDATE
+ *        (financial_cheques.status → 'compensado_pix'). Funciona sem que o frontend passe o número.
+ *   B) desconciliarLinha (NOVO step 4 dentro da transaction):
+ *      - Busca bank_cheque_vinculos onde pix_line_id = linhaDesconciliada.
+ *      - Para cada vínculo ativo: (4a) marca estornado_em; (4b) desfaz desconsiderado_em
+ *        automático na linha de débito (só se desconsiderado_por_nome = MARCA_AUTO);
+ *        (4c) reverte financial_cheques.status compensado_pix → devolvido.
+ *      - Encapsulado em try/catch para não bloquear a desconciliação por falha no revert.
+ *
+ * FIX (startup — index.ts):
+ *   [SyncSchema+] Rev. 4279: auditoria retroativa em dois passos:
+ *   - Etapa A: backfill de cheque_numero em bank_cheque_vinculos antigos (NULL) cujos
+ *     débitos têm cobertura completa — deriva o número via parseChequeNumero(descrição).
+ *   - Etapa B: UPDATE financial_cheques devolvido/pendente → compensado_pix onde os
+ *     vinculos cobrem 100% do valor do cheque.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4278 - FIX: CONCILIAÇÃO — 1 PIX → N CHEQUES DEVOLVIDOS SÓ MOSTRAVA O PRIMEIRO.
  *
  * PROBLEMA:

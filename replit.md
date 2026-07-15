@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4279** — **CONCILIAÇÃO: STATUS DO CHEQUE DEVOLVIDO SINCRONIZA AUTOMATICAMENTE COM O CONTROLE DE CHEQUES (bidirecional).** 3 bugs em camadas: (1) painel "Quitar cheques devolvidos" não passava `chequeNumero` → guard `if(input.chequeNumero)` nunca disparava; (2) INSERT em `bank_cheque_vinculos` gravava `cheque_numero=NULL`; (3) `desconciliarLinha` não desfazia vínculos. Fix: `chequeNumParaGravar = input.chequeNumero ?? covAntes.chq` (parseChequeNumero da descrição); `desconciliarLinha` ganha step 4 na transaction que estorna vínculos + desfaz `desconsiderado_em` + reverte `financial_cheques.status → devolvido`; `[SyncSchema+]` Rev. 4279 audita e corrige retroativamente todos os cheques em estado inconsistente. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4278** — **FIX: CONCILIAÇÃO — 1 PIX → N CHEQUES DEVOLVIDOS SÓ MOSTRAVA O PRIMEIRO.** `vincByPix` era `Map<id,one>` — `set()` sobrescreve. Alterado para `Map<id,many[]>` com push. `_enrichVinc` popula `substituiChequesDevolvidos[]` (novo) + `substituiChequeDevolvido` (alias legado). Frontend itera o array — cada vínculo aparece com 🔗 próprio. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4277** — **CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.** Backend: nova procedure `listVinculosByPixLine` retorna vínculos ativos (estornado_em IS NULL) do PIX com descrição/conta/data. Frontend: header do painel laranja mostra "N cheque(s) vinculado(s) — R$X de R$Y" + badge count + lista com ✓ quando painel recolhido; refetch automático após confirmar vínculos. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4277** — **CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.** Backend: nova procedure `listVinculosByPixLine`; frontend: header do painel laranja mostra count + lista com ✓. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4276** — **FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).** `bank_statement_lines.status='devolvido'` nunca gravado → JOIN com regex; `desconsiderado_em IS NULL` bloqueava cheques confirmados; dbExecute param-binding $1×3 e array[1]. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,12 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4274** — **CONCILIAÇÃO BANCÁRIA: 1 PIX → N CHEQUES DEVOLVIDOS.** `searchPixTedGlobal`/`getChequeDevolvidoVinculacao` passam de `jaVinculado: boolean` para `valorAlocado + saldoLivre`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4273** — **FIX: COTAÇÕES — DIFERENÇA DE CENTAVOS NO TOTAL DO DIALOG "CONDIÇÕES DE PAGAMENTO".** Erro de ponto flutuante — `Math.round(...*100)/100` por item e no total. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4272** — **FIX: FECHAR DIA — FILTRO POR OBRA NÃO FUNCIONAVA + NOME DA OBRA OCULTO NOS CARDS.** Backend: `listOpenLoans` ganhou `.leftJoin(obras)` → `obraNome` agora chega no card. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4270** — **COMUNICADOS INTERNOS: BADGE "CONCLUÍDO" SÓ APÓS TODAS AS ASSINATURAS.** Lista: `concluido_pendente` exibe apenas "Assinaturas Pendentes" âmbar. View mode: badge "Concluído" oculto enquanto `_hasPendingSignatures`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4269** — **COMUNICADOS INTERNOS: PADRONIZAÇÃO TOTAL DO PROGRESSO DE ASSINATURAS.** Sem destinatariosJson → total = todos ativos; `concluir` exige que TODOS assinem; lista sempre exibe barra X/Y + %. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

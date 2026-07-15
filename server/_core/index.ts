@@ -25,6 +25,7 @@ import { serveStatic, setupVite } from "./vite";
 import { securityHeaders, apiRateLimit, authRateLimit } from "../security";
 import { sdk } from "./sdk";
 import { DOCUMENT_TEMPLATES_META, getSeedTemplate } from "../../shared/documentTemplates";
+import { parseChequeNumero } from "../../shared/chequeMotivos";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -5335,6 +5336,70 @@ REGRAS DE EXTRAÇÃO:
           await db.execute(sql`ALTER TABLE compras_cotacoes_itens ADD COLUMN IF NOT EXISTS pausado BOOLEAN DEFAULT false`);
           console.log("[SyncSchema+] Rev. 4255: coluna pausado garantida em compras_cotacoes_itens.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4255 pausado:", e?.message || e); }
+
+        // Rev. 4279 — Audit: cheques com status='devolvido' mas com vínculo quitado
+        // (não foram marcados como compensado_pix porque o painel "Quitar cheques devolvidos"
+        // não passava chequeNumero antes do fix). Duas etapas:
+        // A) Backfill de cheque_numero nos vinculos antigos (derivado da descrição da linha);
+        // B) UPDATE financial_cheques devolvido → compensado_pix onde cobertura >= valor.
+        try {
+          // Etapa A: buscar vinculos quitados sem cheque_numero
+          const vincToBackfill = await db.execute(sql`
+            SELECT bsl.id AS debito_line_id, bsl.company_id, bsl.descricao
+              FROM bank_statement_lines bsl
+             WHERE bsl.excluido_em IS NULL
+               AND EXISTS (
+                 SELECT 1 FROM bank_cheque_vinculos bcv
+                  WHERE bcv.debito_line_id = bsl.id
+                    AND bcv.company_id     = bsl.company_id
+                    AND bcv.estornado_em   IS NULL
+                    AND bcv.cheque_numero  IS NULL
+                  GROUP BY bcv.debito_line_id
+                 HAVING ROUND(SUM(bcv.valor)::numeric,2) >= ROUND(ABS(bsl.valor)::numeric,2) - 0.01
+               )
+          `);
+          let bfCount = 0;
+          for (const row of (vincToBackfill as any).rows ?? []) {
+            const chq = parseChequeNumero((row as any).descricao ?? "");
+            if (!chq) continue;
+            await db.execute(sql`
+              UPDATE bank_cheque_vinculos
+                 SET cheque_numero = ${chq}
+               WHERE debito_line_id = ${(row as any).debito_line_id}
+                 AND company_id     = ${(row as any).company_id}
+                 AND cheque_numero  IS NULL
+                 AND estornado_em   IS NULL
+            `);
+            bfCount++;
+          }
+          // Etapa B: marcar financial_cheques devolvido → compensado_pix
+          const auditUpd = await db.execute(sql`
+            UPDATE financial_cheques fc
+               SET status           = 'compensado_pix',
+                   data_compensacao = COALESCE(fc.data_compensacao, q.ultima_data::date),
+                   updated_at       = NOW()
+              FROM (
+                SELECT bcv.company_id,
+                       bcv.cheque_numero,
+                       MAX(bcv.data) AS ultima_data
+                  FROM bank_cheque_vinculos bcv
+                  JOIN bank_statement_lines bsl
+                    ON bsl.id = bcv.debito_line_id AND bsl.excluido_em IS NULL
+                 WHERE bcv.estornado_em  IS NULL
+                   AND bcv.cheque_numero IS NOT NULL
+                   AND bcv.cheque_numero <> ''
+                 GROUP BY bcv.company_id, bcv.cheque_numero, bsl.id, ABS(bsl.valor)
+                HAVING ROUND(SUM(bcv.valor)::numeric,2) >= ROUND(ABS(bsl.valor)::numeric,2) - 0.01
+              ) q
+             WHERE fc.company_id = q.company_id
+               AND fc.status     IN ('devolvido','pendente')
+               AND fc.excluido_em IS NULL
+               AND regexp_replace(fc.numero_cheque,'[^0-9]','','g')
+                 = regexp_replace(q.cheque_numero,'[^0-9]','','g')
+          `);
+          const fixed = (auditUpd as any).rowCount ?? 0;
+          console.log(`[SyncSchema+] Rev. 4279: ${bfCount} vínculo(s) com cheque_numero backfilled; ${fixed} cheque(s) devolvidos → compensado_pix.`);
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4279 audit cheques devolvidos:", e?.message || e); }
 
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));

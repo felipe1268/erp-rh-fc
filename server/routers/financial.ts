@@ -9098,6 +9098,53 @@ export const financialRouter = router({
             SET conciliado=0, entry_id=NULL
           WHERE id=$1 AND company_id=$2`,
         [input.linhaId, input.companyId]);
+
+      // 4) Rev. 4279 — Se esta linha era o PIX substituto de cheque(s) devolvido(s),
+      //    estornar os vínculos automaticamente, desfazer o desconsiderado_em automático
+      //    e reverter o status do cheque no Controle de Cheques: compensado_pix → devolvido.
+      try {
+        const vincSelDc = await dbExecute(tx,
+          `SELECT bcv.id,
+                  bcv.cheque_numero                      AS "chequeNumero",
+                  bcv.debito_line_id                     AS "debitoLineId",
+                  deb.descricao                          AS "debDescricao"
+             FROM bank_cheque_vinculos bcv
+             LEFT JOIN bank_statement_lines deb ON deb.id = bcv.debito_line_id
+            WHERE bcv.pix_line_id=$1 AND bcv.company_id=$2 AND bcv.estornado_em IS NULL`,
+          [input.linhaId, input.companyId]);
+        const vincsDc = rows(vincSelDc) as any[];
+        if (vincsDc.length) {
+          const porNomeDc = (ctx.user as any)?.nome ?? (ctx.user as any)?.name ?? null;
+          const MARCA_AUTO_DC = "Vínculo PIX/TED (automático)";
+          for (const v of vincsDc) {
+            // 4a) estornar o vínculo
+            await dbExecute(tx,
+              `UPDATE bank_cheque_vinculos
+                  SET estornado_em=NOW(), estornado_por_id=$1, estornado_por_nome=$2,
+                      estorno_motivo='Desconciliação automática da linha do extrato'
+                WHERE id=$3 AND company_id=$4 AND estornado_em IS NULL`,
+              [ctx.user?.id ?? null, porNomeDc, v.id, input.companyId]);
+            // 4b) desfazer o desconsiderado_em automático na linha de débito (cheque devolvido)
+            await dbExecute(tx,
+              `UPDATE bank_statement_lines
+                  SET desconsiderado_em=NULL, desconsiderado_por_id=NULL, desconsiderado_por_nome=NULL
+                WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL
+                  AND desconsiderado_por_nome=$3`,
+              [v.debitoLineId, input.companyId, MARCA_AUTO_DC]);
+            // 4c) reverter status do cheque: compensado_pix → devolvido
+            const chqNumDc = v.chequeNumero ?? parseChequeNumero(v.debDescricao ?? "");
+            if (chqNumDc) {
+              await dbExecute(tx,
+                `UPDATE financial_cheques
+                    SET status='devolvido', data_compensacao=NULL, updated_at=NOW()
+                  WHERE company_id=$1 AND excluido_em IS NULL
+                    AND regexp_replace(numero_cheque,'[^0-9]','','g') = regexp_replace($2,'[^0-9]','','g')
+                    AND status IN ('compensado_pix')`,
+                [input.companyId, chqNumDc]);
+            }
+          }
+        }
+      } catch { /* não bloquear a desconciliação por falha no revert do vínculo */ }
     });
 
     await createAuditLog({
@@ -13858,6 +13905,10 @@ export const financialRouter = router({
     const descVinc = input.descricao ?? (pixLine?.descricao ?? (input.tipo === "ajuste" ? FORMA_PAGAMENTO_LABEL[input.formaPagamento ?? "outro"] : null));
 
     // 4) insere o vínculo ($1..$13 distintos, na ordem de aparição = ordem do array)
+    // Rev. 4279 — quando o chamador não passa chequeNumero (ex.: painel "Quitar cheques devolvidos"),
+    // usa covAntes.chq (extraído da descrição da linha de débito via parseChequeNumero) como
+    // fallback, para que o registro sempre tenha rastreabilidade do número do cheque.
+    const chequeNumParaGravar = input.chequeNumero ?? covAntes.chq ?? null;
     const ins = await dbExecute(db,
       `INSERT INTO bank_cheque_vinculos
          (company_id, debito_line_id, credito_line_id, cheque_numero, tipo, forma_pagamento,
@@ -13866,7 +13917,7 @@ export const financialRouter = router({
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING id`,
       [input.companyId, input.debitoLineId, input.creditoLineId ?? null,
-       input.chequeNumero ?? null, input.tipo, input.tipo === "ajuste" ? (input.formaPagamento ?? null) : null,
+       chequeNumParaGravar, input.tipo, input.tipo === "ajuste" ? (input.formaPagamento ?? null) : null,
        input.pixLineId ?? null, pixLine?.contaId ?? null, input.valor,
        dataVinc, descVinc, ctx.user?.id ?? null, porNome]);
     const vinculoId = rows(ins)[0]?.id;
@@ -13914,7 +13965,10 @@ export const financialRouter = router({
           WHERE company_id=$2 AND excluido_em IS NULL AND desconsiderado_em IS NULL
             AND id IN (${inlineIds(parIds)})`,
         [MARCA_AUTO, input.companyId]);
-      if (input.chequeNumero) {
+      // Rev. 4279 — chequeNumParaGravar já inclui o fallback via covAntes.chq;
+      // antes era só input.chequeNumero, então o painel "Quitar cheques devolvidos"
+      // (que não passa chequeNumero) nunca atualizava o Controle de Cheques.
+      if (chequeNumParaGravar) {
         await dbExecute(db,
           `UPDATE financial_cheques
               SET status='compensado_pix',
@@ -13923,7 +13977,7 @@ export const financialRouter = router({
             WHERE company_id=$2 AND excluido_em IS NULL
               AND regexp_replace(numero_cheque,'[^0-9]','','g') = regexp_replace($3,'[^0-9]','','g')
               AND status NOT IN ('compensado','baixado','cancelado')`,
-          [dataVinc ?? null, input.companyId, input.chequeNumero]);
+          [dataVinc ?? null, input.companyId, chequeNumParaGravar]);
       }
     }
     await createAuditLog({
