@@ -13868,6 +13868,7 @@ export const financialRouter = router({
     // MESMA identidade (doc/nº + valor) e desconsidera todos de uma vez — "uma tacada só".
     const acumDepoisCents = acumAntesCents + novoCents;
     const quitado = acumDepoisCents >= chequeCents - 1;
+    let parIds: number[] = [];
     if (quitado) {
       const parIdsSet = new Set<number>([input.debitoLineId, ...(input.creditoLineId ? [input.creditoLineId] : [])]);
       try {
@@ -13892,7 +13893,7 @@ export const financialRouter = router({
           if (mesmo) { parIdsSet.add(Number(par.debitoId)); parIdsSet.add(Number(par.creditoId)); }
         }
       } catch { /* falha na busca de ocorrências-irmãs não deve impedir a quitação do par atual */ }
-      const parIds = Array.from(parIdsSet);
+      parIds = Array.from(parIdsSet);
       await dbExecute(db,
         `UPDATE bank_statement_lines
             SET desconsiderado_em=NOW(), desconsiderado_por_id=NULL, desconsiderado_por_nome=$1
