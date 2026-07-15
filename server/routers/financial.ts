@@ -14084,17 +14084,20 @@ export const financialRouter = router({
       candAll = rows(sSel) as any[];
     }
 
+    // Rev. 4274 — valorAlocado por linha de PIX (suporta N cheques → 1 PIX).
     const pvSel = await dbExecute(db,
-      `SELECT DISTINCT pix_line_id AS "pixLineId" FROM bank_cheque_vinculos
-        WHERE company_id=$1 AND estornado_em IS NULL AND pix_line_id IS NOT NULL`,
+      `SELECT pix_line_id AS "pixLineId", SUM(valor) AS "valorAlocado"
+         FROM bank_cheque_vinculos
+        WHERE company_id=$1 AND estornado_em IS NULL AND pix_line_id IS NOT NULL
+        GROUP BY pix_line_id`,
       [input.companyId]);
-    const pixVinculados = new Set(rows(pvSel).map((r: any) => Number(r.pixLineId)));
+    const pixAlocMap2 = new Map<number, number>();
+    for (const r of rows(pvSel) as any[]) pixAlocMap2.set(Number(r.pixLineId), Math.round(Number(r.valorAlocado) * 100));
 
     for (const it of input.itens) {
       const dbid = Number(it.debitoLineId);
       const chequeCents = Math.round(Math.abs(Number(it.valor)) * 100);
-      const ref = it.dataRef ? String(it.dataRef).slice(0, 10) : null; // data do débito (YYYY-MM-DD)
-      // Rev. 3750 — casa por linha exata OU identidade do cheque (doc/nº + valor).
+      const ref = it.dataRef ? String(it.dataRef).slice(0, 10) : null;
       const itDoc = it.doc != null ? String(it.doc) : null;
       const itChq = it.chequeNumero != null ? String(it.chequeNumero) : null;
       const meus = vinc.filter((x) => _mesmoChequeDevolvido(
@@ -14106,9 +14109,13 @@ export const financialRouter = router({
       const sugestoes = candAll
         .filter((c) => Math.round(Math.abs(Number(c.valor)) * 100) === chequeCents)
         .filter((c) => Number(c.id) !== dbid && !pixDoCheque.has(Number(c.id)))
-        // o PIX substituto ocorre EM/APÓS a data do cheque devolvido (reforço temporal; comparação lexical YYYY-MM-DD)
         .filter((c) => !ref || (c.data != null && String(c.data) >= ref))
-        .map((c) => ({ ...c, jaVinculado: pixVinculados.has(Number(c.id)) }))
+        .map((c) => {
+          const alocCents = pixAlocMap2.get(Number(c.id)) ?? 0;
+          const totalCents = Math.round(Math.abs(Number(c.valor)) * 100);
+          const livreCents = Math.max(0, totalCents - alocCents);
+          return { ...c, jaVinculado: alocCents > 0, valorAlocado: alocCents / 100, saldoLivre: livreCents / 100 };
+        })
         .slice(0, 12);
       mapa[String(dbid)] = {
         vinculos: meus,
@@ -14203,13 +14210,21 @@ export const financialRouter = router({
       }
     }
 
-    // pix já vinculados a algum cheque → flag p/ a UI alertar
+    // Rev. 4274 — pix já vinculados: valorAlocado + saldoLivre por linha (suporta N cheques → 1 PIX).
     const pvSel = await dbExecute(db,
-      `SELECT DISTINCT pix_line_id AS "pixLineId" FROM bank_cheque_vinculos
-        WHERE company_id=$1 AND estornado_em IS NULL AND pix_line_id IS NOT NULL`,
+      `SELECT pix_line_id AS "pixLineId", SUM(valor) AS "valorAlocado"
+         FROM bank_cheque_vinculos
+        WHERE company_id=$1 AND estornado_em IS NULL AND pix_line_id IS NOT NULL
+        GROUP BY pix_line_id`,
       [input.companyId]);
-    const pixVinculados = new Set(rows(pvSel).map((x: any) => Number(x.pixLineId)));
-    linhas = linhas.map((l) => ({ ...l, jaVinculado: pixVinculados.has(Number(l.id)) }));
+    const pixAlocMap = new Map<number, number>();
+    for (const r of rows(pvSel) as any[]) pixAlocMap.set(Number(r.pixLineId), Math.round(Number(r.valorAlocado) * 100));
+    linhas = linhas.map((l) => {
+      const alocCents = pixAlocMap.get(Number(l.id)) ?? 0;
+      const totalCents = Math.round(Math.abs(Number(l.valor)) * 100);
+      const livreCents = Math.max(0, totalCents - alocCents);
+      return { ...l, jaVinculado: alocCents > 0, valorAlocado: alocCents / 100, saldoLivre: livreCents / 100 };
+    });
     if (input.busca) {
       const b = input.busca.toLowerCase().replace(/\s/g, "");
       linhas = linhas.filter((l: any) => {

@@ -1,4 +1,36 @@
 /**
+ * Rev. 4274 - CONCILIAÇÃO BANCÁRIA — 1 PIX → N CHEQUES DEVOLVIDOS (PARCIAL POR LINHA).
+ *
+ * PROBLEMA:
+ *   Cenário real: dois cheques devolvidos em fevereiro (#1393 e #1394, R$ 2.900 cada)
+ *   pagos com um único PIX de R$ 5.800 em abril, de uma conta diferente.
+ *   O sistema já suportava no backend N vínculos por cheque (parciais), mas o label
+ *   "já vinculado a outro cheque" induzia o usuário a achar que NÃO podia reutilizar
+ *   o mesmo PIX para um segundo cheque. Além disso, ao selecionar um PIX já parcialmente
+ *   usado, o pré-preenchimento do valor usava o total da linha e não o saldo livre.
+ *
+ * SOLUÇÃO:
+ *   Backend — `searchPixTedGlobal` e `getChequeDevolvidoVinculacao`:
+ *     Substituiu o `SELECT DISTINCT pix_line_id` (boolean) por `SUM(valor) GROUP BY`
+ *     que devolve `valorAlocado` + calcula `saldoLivre = |valor| - valorAlocado`.
+ *     A propriedade `jaVinculado` continua existindo (true quando alocCents > 0).
+ *
+ *   Frontend — dialog "Vincular cheque devolvido a PIX/TED":
+ *     - `selecionar(l)`: pré-preenche `min(saldoCheque, saldoLivre)` em vez de
+ *       `min(saldoCheque, lineCents)`, evitando pré-preencher mais do que está livre.
+ *     - Label da linha: "já vinculado a outro cheque" → "usado R$ X · livre R$ Y",
+ *       deixando claro que o PIX ainda tem capacidade para cobrir outros cheques.
+ *     - Aplicado nos dois lugares onde o label aparecia (sugestões e busca manual).
+ *
+ * FLUXO RESULTANTE (exemplo):
+ *   1. Abrir cheque #1393 → buscar PIX R$ 5.800 → pré-preenche R$ 2.900 → vincular.
+ *   2. Abrir cheque #1394 → buscar o MESMO PIX → aparece "usado R$ 2.900 · livre R$ 2.900"
+ *      → pré-preenche R$ 2.900 → vincular → ambos os cheques quitados.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4273 - FIX: COTAÇÕES — DIFERENÇA DE R$ 0,20 NO TOTAL DO DIALOG "CONDIÇÕES DE PAGAMENTO".
  *
  * PROBLEMA:

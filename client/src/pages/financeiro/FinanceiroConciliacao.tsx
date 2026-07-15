@@ -7448,7 +7448,11 @@ export default function FinanceiroConciliacao() {
           const selecionar = (l: any) => {
             setVincularPixSel(l);
             const lineCents = Math.round(Math.abs(Number(l.valor ?? 0)) * 100);
-            const sugCents = Math.max(1, Math.min(saldoCents > 0 ? saldoCents : valCents, lineCents));
+            // Rev. 4274 — quando o PIX já foi usado por outro cheque, usar o saldo livre
+            // da linha (não o total dela) para não pré-preencher mais do que está disponível.
+            const livreCents = l.saldoLivre != null ? Math.round(Number(l.saldoLivre) * 100) : lineCents;
+            const chequeSaldo = saldoCents > 0 ? saldoCents : valCents;
+            const sugCents = Math.max(1, Math.min(chequeSaldo, livreCents > 0 ? livreCents : lineCents));
             setVincularPixValor((sugCents / 100).toFixed(2));
           };
           const registrar = async (tipo: "pix" | "ajuste") => {
@@ -7590,7 +7594,7 @@ export default function FinanceiroConciliacao() {
                                   <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: "50%", border: `2px solid ${isSel ? "#2563eb" : "#93c5fd"}`, background: isSel ? "#2563eb" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{isSel && <Check style={{ width: 11, height: 11, color: "#fff" }} />}</div>
                                   <div style={{ minWidth: 0, flex: 1 }}>
                                     <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.descricao}</p>
-                                    <p style={{ margin: "1px 0 0", fontSize: 11, color: "#6b7280" }}>{[fmtData(l.data), l.contaApelido].filter(Boolean).join(" · ")}{l.conciliado ? " · já conciliado" : ""}{l.jaVinculado ? " · já vinculado a outro cheque" : ""}</p>
+                                    <p style={{ margin: "1px 0 0", fontSize: 11, color: "#6b7280" }}>{[fmtData(l.data), l.contaApelido].filter(Boolean).join(" · ")}{l.conciliado ? " · já conciliado" : ""}{l.jaVinculado ? ` · usado ${formatBRL(Number(l.valorAlocado ?? 0))} · livre ${formatBRL(Number(l.saldoLivre ?? 0))}` : ""}</p>
                                   </div>
                                   <p style={{ flexShrink: 0, margin: 0, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#047857" }}>{formatBRL(Math.abs(Number(l.valor)))}</p>
                                 </button>
@@ -7634,7 +7638,7 @@ export default function FinanceiroConciliacao() {
                                 <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: "50%", border: `2px solid ${isSel ? "#4f46e5" : "#d1d5db"}`, background: isSel ? "#4f46e5" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{isSel && <Check style={{ width: 11, height: 11, color: "#fff" }} />}</div>
                                 <div style={{ minWidth: 0, flex: 1 }}>
                                   <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.descricao}</p>
-                                  <p style={{ margin: "1px 0 0", fontSize: 11, color: "#6b7280" }}>{[fmtData(l.data), l.contaApelido].filter(Boolean).join(" · ")}{l.conciliado ? " · já conciliado" : ""}{l.jaVinculado ? " · já vinculado a outro cheque" : ""}</p>
+                                  <p style={{ margin: "1px 0 0", fontSize: 11, color: "#6b7280" }}>{[fmtData(l.data), l.contaApelido].filter(Boolean).join(" · ")}{l.conciliado ? " · já conciliado" : ""}{l.jaVinculado ? ` · usado ${formatBRL(Number(l.valorAlocado ?? 0))} · livre ${formatBRL(Number(l.saldoLivre ?? 0))}` : ""}</p>
                                 </div>
                                 <div style={{ flexShrink: 0, textAlign: "right" }}>
                                   <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: isExact ? "#047857" : "#111827" }}>{formatBRL(Math.abs(Number(l.valor)))}</p>
