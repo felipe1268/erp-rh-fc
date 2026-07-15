@@ -870,13 +870,19 @@ export default function ComunicadosInternos() {
                                 <Lock className="h-2.5 w-2.5" /> Concluído
                               </span>
                             ) : statusEf === "concluido_pendente" ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 w-fit">
+                              <button
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 w-fit hover:bg-amber-200 transition-colors cursor-pointer"
+                                title="Ver quem falta assinar"
+                                onClick={() => { setListaAssinaturaId(c.id); setFiltroAssinatura("pendentes"); }}>
                                 <Clock className="h-2.5 w-2.5" /> Assinaturas Pendentes
-                              </span>
+                              </button>
                             ) : statusEf === "pendente_assinatura" ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 w-fit">
+                              <button
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 w-fit hover:bg-amber-200 transition-colors cursor-pointer"
+                                title="Ver quem falta assinar"
+                                onClick={() => { setListaAssinaturaId(c.id); setFiltroAssinatura("pendentes"); }}>
                                 <Clock className="h-2.5 w-2.5" /> Pendente por Assinatura
-                              </span>
+                              </button>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 w-fit">
                                 Rascunho
@@ -922,6 +928,10 @@ export default function ComunicadosInternos() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-violet-600 hover:bg-violet-50" title="Lista de Assinaturas"
+                            onClick={() => { setListaAssinaturaId(c.id); setFiltroAssinatura("pendentes"); }}>
+                            <Users className="h-3.5 w-3.5" />
+                          </Button>
                           <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50" title="Visualizar / Imprimir"
                             onClick={() => setViewComunicadoId(c.id)}>
                             <Eye className="h-3.5 w-3.5" />

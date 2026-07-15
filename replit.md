@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4271** — **COMUNICADOS INTERNOS: ACESSO RÁPIDO À LISTA DE PENDENTES NA TABELA.** Botão violeta `<Users>` nas Ações abre Lista para Assinatura filtrada em "pendentes". Badges âmbar na coluna Status tornados clicáveis (mesmo comportamento). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4270** — **COMUNICADOS INTERNOS: BADGE "CONCLUÍDO" SÓ APÓS TODAS AS ASSINATURAS.** Lista: `concluido_pendente` exibe apenas "Assinaturas Pendentes" âmbar (sem o badge verde "Concluído"). View mode: badge "Concluído" oculto enquanto `_hasPendingSignatures`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4269** — **COMUNICADOS INTERNOS: PADRONIZAÇÃO TOTAL DO PROGRESSO DE ASSINATURAS.** Sem `destinatariosJson`: `totalDestinatarios` = todos os ativos da empresa; `concluir` exige que TODOS assinem; lista sempre exibe barra X/Y + %. Com `destinatariosJson`: comportamento anterior. Badge de assinaturas sempre visível na view. ZERO DELETE · ZERO ALTER destrutivo.

@@ -1,4 +1,27 @@
 /**
+ * Rev. 4271 - COMUNICADOS INTERNOS: ACESSO RÁPIDO À LISTA DE PENDENTES NA TABELA.
+ *
+ * PROBLEMA:
+ *   Para ver quem faltava assinar era necessário abrir o comunicado (olhinho) e depois
+ *   clicar em "Lista para Assinatura". Não havia atalho direto na tabela principal.
+ *
+ * SOLUÇÃO (frontend-only):
+ *
+ * Coluna Ações:
+ *   - Novo botão violeta com ícone `<Users>` adicionado ANTES do olhinho.
+ *   - Abre a sub-view "Lista para Assinatura" (já existente) com filtro pré-definido
+ *     em "pendentes" via `setFiltroAssinatura("pendentes")`.
+ *   - Visível em todos os comunicados (inclusive concluídos).
+ *
+ * Badge "Assinaturas Pendentes" e "Pendente por Assinatura" na coluna Status:
+ *   - Convertidos de `<span>` para `<button>` clicável.
+ *   - Mesmo comportamento: abre Lista para Assinatura filtrada em "pendentes".
+ *   - Hover: fundo âmbar mais escuro para indicar interatividade.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4270 - COMUNICADOS INTERNOS: BADGE "CONCLUÍDO" SÓ APÓS TODAS AS ASSINATURAS.
  *
  * PROBLEMA:
