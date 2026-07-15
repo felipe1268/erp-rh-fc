@@ -7152,10 +7152,11 @@ export default function FinanceiroConciliacao() {
                                       });
                                       ok++;
                                     }
-                                    toast({ title: `${ok} cheque${ok !== 1 ? "s" : ""} vinculado${ok !== 1 ? "s" : ""}!` });
+                                    toast({ title: `${ok} cheque${ok !== 1 ? "s" : ""} vinculado${ok !== 1 ? "s" : ""}! Complete o lançamento abaixo para conciliar.` });
                                     setQuitarChequesOpen(false);
                                     setQuitarChequesSel(new Map());
-                                    setLancStatement(null);
+                                    // NÃO fecha o dialog principal — usuário ainda precisa
+                                    // preencher fornecedor/conta e clicar "Lançar e conciliar".
                                     refreshAposVinculo();
                                   } catch (e: any) {
                                     toast({ title: "Erro ao vincular", description: String(e?.message ?? e), variant: "destructive" });
