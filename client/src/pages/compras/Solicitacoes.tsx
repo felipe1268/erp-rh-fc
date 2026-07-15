@@ -3673,7 +3673,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                                           </span>
                                         </div>
                                       )}
-                                      {selecionados.has(selKey(disc.nome, it.eapCodigo)) && (() => {
+                                      {(selectedEapIds.has(it.id) || qtdVal > 0) && (() => {
                                         const scItem = itens.find(pi => pi.orcamentoItemId === it.id);
                                         const isMo = scItem?.somenteMo ?? false;
                                         return (

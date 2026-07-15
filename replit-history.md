@@ -1,3 +1,4 @@
+- **Rev. 4276** — **FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).** status nunca gravado; `desconsiderado_em IS NULL` bloqueava confirmados; param-binding $1×3. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4264** — **COMUNICADOS INTERNOS: SETOR/DEPARTAMENTO, EMISSOR RESPONSÁVEL, DESTINATÁRIOS E FCSIGN.** +5 colunas em `comunicados_internos`; `listarFuncionariosSimples`; `solicitarAssinaturaFCSign` (envelope IntegSign). ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4259** — **FIX: VALOR NEGOCIADO PACOTE — CORREÇÃO DE ARREDONDAMENTO NO ITEM ERRADO.** `lastNonZeroIdx` usado em AMBOS os pontos de correção em `calcNegociadoPreview`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4258** — **MAPA DE COTAÇÃO: 3 OTIMIZAÇÕES DE PERFORMANCE (812 ITENS).** 3 `useMemo` + substituição de IIFE + `Map` para `getMelhorPrecoItem`. ZERO DELETE · ZERO ALTER destrutivo.

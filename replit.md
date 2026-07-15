@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4286** — **FIX: SOLICITAÇÕES — ReferenceError "Can't find variable: selecionados".** Causa raiz: bloco "Somente MO" inserido na EAP item list de `Solicitacoes` (linhas 1107-6101) referenciava `selecionados` (Set<string> do `DisciplinasModal`, linhas 277-781) e `selKey(disc.nome, ...)` — variáveis fora de escopo. Fix: substituir pela condição correta do contexto: `(selectedEapIds.has(it.id) || qtdVal > 0)`. Botão "Somente MO" exibe corretamente para itens marcados. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4285** — **FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (+R$ 0,05).** Causa raiz: branch de edição recomputava `preco_unitario × qty` para todos os itens — mas `preco_unitario` (4dp) é arredondado do valor original exato, então `preco*qty ≠ total` salvo (item 7096: 1481.03×18=26658.54 vs total=26658.49, diff=5¢). Fix em 4 pontos: (1) branch edição usa `resp.total` diretamente para itens não-alterados, recomputa só os alterados; (2) branch não-edição usa `totalOrcado` do DB; (3) backend `totaisPorFornecedor` acumula em centavos inteiros; (4) badge tabela prefere `totalOrcado`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4284** — **COTAÇÕES/COMPRAS: ADIANTAMENTO (SINAL) E RETENÇÃO DE GARANTIA NO DIALOG "CONDIÇÕES DE PAGAMENTO".** Nova seção "Adiantamento & Retenção" no dialog de Condições de Pagamento (visível apenas em contratos de medição MDO/Pacote). Adiantamento: checkbox, tipo %/valor, prazo DDL, amortização proporcional ou parcelas fixas. Retenção: checkbox, % do bruto por medição, liberação no encerramento ou etapas. 10 colunas novas em `compras_cotacao_fornecedores`, 10 em `compras_ordens`, 3 em `terceiro_medicoes`. Bridge financeiro calcula deduções automaticamente ao criar lançamento. ZERO DELETE · ZERO ALTER destrutivo.
@@ -58,9 +60,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4282** — **CONTROLE DE CHEQUES: "VER PAGAMENTO" EXIBE VALOR TOTAL DO PIX QUANDO ALOCAÇÃO É PARCIAL.** PIX R$ 5.800,00 → 2 cheques de R$ 2.900,00: popover mostra o alocado + linha âmbar "Valor total do PIX: R$ 5.800,00 · alocado a este cheque: R$ 2.900,00". Backend: `getVinculosPorChequeNumero` retorna `valorLinhaPix`; frontend: `isParcial` + riscado. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4281** — **FIX: CONTROLE DE CHEQUES — autoMarcarChequesDevolvidos SOBRESCREVIA STATUS COMPENSADO.** Fix: `AND data_compensacao IS NULL` no SELECT e UPDATE. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4281** — **FIX: CONTROLE DE CHEQUES — autoMarcarChequesDevolvidos SOBRESCREVIA STATUS COMPENSADO.** Fix: `AND data_compensacao IS NULL` no SELECT e UPDATE. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4280** — **CONCILIAÇÃO: ALERTAS DE COBERTURA NO PAINEL "QUITAR CHEQUES DEVOLVIDOS".** Verde/âmbar/vermelho por totalSel vs pixVal. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -69,8 +71,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4278** — **FIX: CONCILIAÇÃO — 1 PIX → N CHEQUES DEVOLVIDOS SÓ MOSTRAVA O PRIMEIRO.** `vincByPix` Map sobrescrevia; alterado para array com push. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4277** — **CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.** Backend: `listVinculosByPixLine`; frontend: count + lista com ✓. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4276** — **FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).** status nunca gravado; `desconsiderado_em IS NULL` bloqueava confirmados; param-binding $1×3. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

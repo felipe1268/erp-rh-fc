@@ -1,4 +1,29 @@
 /**
+ * Rev. 4286 - FIX: SOLICITAÇÕES — ReferenceError "Can't find variable: selecionados" (variável fora de escopo).
+ *
+ * CONTEXTO:
+ *   A tela de Solicitações crashava com ReferenceError ao abrir o seletor de EAP.
+ *   A variável `selecionados` (um Set<string> declarado em DisciplinasModal, linhas 277-781)
+ *   foi inadvertidamente referenciada na linha 3676 dentro do componente principal
+ *   `Solicitacoes` (linhas 1107-6101) — fora do escopo onde estava declarada.
+ *   A chamada `selecionados.has(selKey(disc.nome, it.eapCodigo))` usava também `disc`
+ *   (variável do loop de DisciplinasModal) e `selKey` (função local do mesmo modal),
+ *   nenhuma disponível no contexto de Solicitacoes.
+ *
+ * FIX:
+ *   Substituir `selecionados.has(selKey(disc.nome, it.eapCodigo))` por
+ *   `(selectedEapIds.has(it.id) || qtdVal > 0)` — ambas as variáveis disponíveis
+ *   no mesmo IIFE de Solicitacoes (declaradas em ~linhas 3555-3560).
+ *   O botão "Somente MO" passa a aparecer corretamente para itens marcados
+ *   no seletor de EAP da tela de Solicitações.
+ *
+ * ARQUIVOS:
+ *   client/src/pages/compras/Solicitacoes.tsx (linha 3679)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4285 - FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (R$ 2.100.000,05 em vez de R$ 2.100.000,00).
  *
  * CONTEXTO:
