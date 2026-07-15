@@ -3854,8 +3854,8 @@ export default function Cotacoes() {
           const firstKey = `${first.id}_${fornecedorId}`;
           const precoComp = parseFloat(editPrecos[firstKey] ?? "0") || 0;
           const compMatMdo = editMatMdo[firstKey];
-          const compTotalMat = compMatMdo ? (parseFloat(compMatMdo.mat) || 0) : undefined;
-          const compTotalMdo = compMatMdo ? (parseFloat(compMatMdo.mdo) || 0) : undefined;
+          const compTotalMat = compMatMdo ? (parseBRNumber(compMatMdo.mat) || 0) : undefined;
+          const compTotalMdo = compMatMdo ? (parseBRNumber(compMatMdo.mdo) || 0) : undefined;
           respostas.push({ itemId: first.id, precoUnitario: precoComp, descontoPct: 0, quantidade: compQtd, totalOverride: editTotaisOverride[firstKey], ...(compTotalMat != null || compTotalMdo != null ? { totalMat: compTotalMat, totalMdo: compTotalMdo } : {}) });
           for (let i = 1; i < items.length; i++) {
             respostas.push({ itemId: items[i].id, precoUnitario: 0, descontoPct: 0, quantidade: 0 });
@@ -3873,8 +3873,8 @@ export default function Cotacoes() {
           const key = `${it.id}_${fornecedorId}`;
           const qtyStr = editQtds[key];
           const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
-          const matVal = tipoEfetivoSalvar === "servico" ? (parseFloat(editMatMdo[key]?.mat ?? "0") || 0) : 0;
-          const mdoVal = tipoEfetivoSalvar === "servico" ? (parseFloat(editMatMdo[key]?.mdo ?? "0") || 0) : 0;
+          const matVal = tipoEfetivoSalvar === "servico" ? (parseBRNumber(editMatMdo[key]?.mat ?? "0") || 0) : 0;
+          const mdoVal = tipoEfetivoSalvar === "servico" ? (parseBRNumber(editMatMdo[key]?.mdo ?? "0") || 0) : 0;
           const matMdoTotal = matVal + mdoVal;
           return {
             itemId: it.id,
@@ -6300,8 +6300,8 @@ export default function Cotacoes() {
                                           let matF = 0, mdoF = 0;
                                           const hasManualMatMdo = isEditing && editMatMdo[key] != null;
                                           if (hasManualMatMdo) {
-                                            matF = parseFloat(editMatMdo[key].mat) || 0;
-                                            mdoF = parseFloat(editMatMdo[key].mdo) || 0;
+                                            matF = parseBRNumber(editMatMdo[key].mat) || 0;
+                                            mdoF = parseBRNumber(editMatMdo[key].mdo) || 0;
                                           } else if (it._isPacoteGroup) {
                                             // Verifica se há totalMat/totalMdo já salvo no primeiro filho
                                             const savedRr = mapa?.respostaMap?.[`${(it._childItems as any[])[0].id}_${p.fornecedorId}`];
@@ -6347,15 +6347,19 @@ export default function Cotacoes() {
                                             <>
                                               <td key={`forn_mat_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-100 ${rowCls}`}>
                                                 {isEditing ? (
-                                                  <Input type="number" step="0.01" min="0"
-                                                    value={editMatMdo[key]?.mat ?? String(matF)}
-                                                    onChange={e => {
-                                                      const mat = parseFloat(e.target.value) || 0;
-                                                      const mdo = parseFloat(editMatMdo[key]?.mdo ?? String(mdoF)) || 0;
-                                                      setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: String(matF), mdo: String(mdoF) }), mat: e.target.value } }));
-                                                      setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
-                                                    }}
-                                                    className="h-6 text-xs text-right border-blue-300 bg-white text-gray-900 w-24" placeholder="0,00" />
+                                                  <div className="flex items-center justify-end gap-0.5">
+                                                    <span className="text-[10px] text-gray-400 select-none">R$</span>
+                                                    <Input type="text" inputMode="decimal"
+                                                      value={editMatMdo[key]?.mat != null ? editMatMdo[key].mat : matF.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                      onFocus={e => e.target.select()}
+                                                      onChange={e => {
+                                                        const mat = parseBRNumber(e.target.value) || 0;
+                                                        const mdo = parseBRNumber(editMatMdo[key]?.mdo ?? String(mdoF)) || 0;
+                                                        setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: String(matF), mdo: String(mdoF) }), mat: e.target.value } }));
+                                                        setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
+                                                      }}
+                                                      className="h-6 text-xs text-right border-blue-300 bg-white text-gray-900 w-24" placeholder="0,00" />
+                                                  </div>
                                                 ) : (
                                                   <span className="text-xs font-semibold text-blue-700">
                                                     {matF > 0 ? matF.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
@@ -6364,15 +6368,19 @@ export default function Cotacoes() {
                                               </td>
                                               <td key={`forn_mdo_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-100 ${rowCls}`}>
                                                 {isEditing ? (
-                                                  <Input type="number" step="0.01" min="0"
-                                                    value={editMatMdo[key]?.mdo ?? String(mdoF)}
-                                                    onChange={e => {
-                                                      const mdo = parseFloat(e.target.value) || 0;
-                                                      const mat = parseFloat(editMatMdo[key]?.mat ?? String(matF)) || 0;
-                                                      setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: String(matF), mdo: String(mdoF) }), mdo: e.target.value } }));
-                                                      setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
-                                                    }}
-                                                    className="h-6 text-xs text-right border-orange-300 bg-white text-gray-900 w-24" placeholder="0,00" />
+                                                  <div className="flex items-center justify-end gap-0.5">
+                                                    <span className="text-[10px] text-gray-400 select-none">R$</span>
+                                                    <Input type="text" inputMode="decimal"
+                                                      value={editMatMdo[key]?.mdo != null ? editMatMdo[key].mdo : mdoF.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                      onFocus={e => e.target.select()}
+                                                      onChange={e => {
+                                                        const mdo = parseBRNumber(e.target.value) || 0;
+                                                        const mat = parseBRNumber(editMatMdo[key]?.mat ?? String(matF)) || 0;
+                                                        setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: String(matF), mdo: String(mdoF) }), mdo: e.target.value } }));
+                                                        setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
+                                                      }}
+                                                      className="h-6 text-xs text-right border-orange-300 bg-white text-gray-900 w-24" placeholder="0,00" />
+                                                  </div>
                                                 ) : (
                                                   <span className="text-xs font-semibold text-orange-700">
                                                     {mdoF > 0 ? mdoF.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
@@ -6393,11 +6401,13 @@ export default function Cotacoes() {
                                                   <div className="flex flex-col gap-0.5 items-end">
                                                     <div className="flex items-center gap-1">
                                                       <span className="text-[9px] text-blue-600 font-bold w-7 text-right">MAT</span>
-                                                      <Input type="number" step="0.01" min="0"
-                                                        value={editMatMdo[key]?.mat ?? ""}
+                                                      <span className="text-[10px] text-gray-400 select-none">R$</span>
+                                                      <Input type="text" inputMode="decimal"
+                                                        value={editMatMdo[key]?.mat != null ? editMatMdo[key].mat : (savedMat > 0 ? savedMat.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "")}
+                                                        onFocus={e => e.target.select()}
                                                         onChange={e => {
-                                                          const mat = parseFloat(e.target.value) || 0;
-                                                          const mdo = parseFloat(editMatMdo[key]?.mdo ?? "0") || 0;
+                                                          const mat = parseBRNumber(e.target.value) || 0;
+                                                          const mdo = parseBRNumber(editMatMdo[key]?.mdo ?? "0") || 0;
                                                           setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: "0", mdo: "0" }), mat: e.target.value } }));
                                                           setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
                                                         }}
@@ -6405,11 +6415,13 @@ export default function Cotacoes() {
                                                     </div>
                                                     <div className="flex items-center gap-1">
                                                       <span className="text-[9px] text-orange-600 font-bold w-7 text-right">MDO</span>
-                                                      <Input type="number" step="0.01" min="0"
-                                                        value={editMatMdo[key]?.mdo ?? ""}
+                                                      <span className="text-[10px] text-gray-400 select-none">R$</span>
+                                                      <Input type="text" inputMode="decimal"
+                                                        value={editMatMdo[key]?.mdo != null ? editMatMdo[key].mdo : (savedMdo > 0 ? savedMdo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "")}
+                                                        onFocus={e => e.target.select()}
                                                         onChange={e => {
-                                                          const mdo = parseFloat(e.target.value) || 0;
-                                                          const mat = parseFloat(editMatMdo[key]?.mat ?? "0") || 0;
+                                                          const mdo = parseBRNumber(e.target.value) || 0;
+                                                          const mat = parseBRNumber(editMatMdo[key]?.mat ?? "0") || 0;
                                                           setEditMatMdo(prev => ({ ...prev, [key]: { ...(prev[key] ?? { mat: "0", mdo: "0" }), mdo: e.target.value } }));
                                                           setEditPrecos(prev => ({ ...prev, [key]: String(mat + mdo) }));
                                                         }}

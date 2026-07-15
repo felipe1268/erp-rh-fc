@@ -1,4 +1,30 @@
 /**
+ * Rev. 4289 - FIX: MAPA DE COTAÇÃO — INPUTS MAT/MO COM FORMATO BR (R$ + SEPARADOR DE MILHAR).
+ *
+ * CONTEXTO:
+ *   Os campos Material e Mão de Obra no Mapa de Cotação (modo edição) exibiam o valor cru sem
+ *   formatação monetária: "114580,07" em vez de "R$ 114.580,07". Faltavam o símbolo R$ e o
+ *   separador de milhar (ponto), tornando difícil a leitura de valores grandes.
+ *
+ * MUDANÇAS (client/src/pages/compras/Cotacoes.tsx):
+ *   1. Colunas pacote (forn_mat/forn_mdo): Input mudou de `type="number"` para
+ *      `type="text" inputMode="decimal"`. Valor exibido: `matF.toLocaleString("pt-BR", {
+ *      minimumFractionDigits:2, maximumFractionDigits:2 })` (ex: "114.580,07") quando sem
+ *      edição manual; texto bruto enquanto o usuário digita. `onFocus` seleciona tudo.
+ *      Prefixo "R$" adicionado antes do input.
+ *   2. Colunas serviço (MAT/MDO inline): mesmo tratamento — R$ + formato BR + onFocus select.
+ *   3. Todos os `parseFloat(editMatMdo[key]?.mat/mdo)` nos leitores (cálculo de matF/mdoF
+ *      para display, e nos dois paths de salvar) substituídos por `parseBRNumber(...)` para
+ *      aceitar corretamente "114.580,07" como 114580.07.
+ *
+ * ARQUIVOS TOCADOS:
+ *   - client/src/pages/compras/Cotacoes.tsx (inputs MAT/MO + 4 leitores parseFloat→parseBRNumber)
+ *   - shared/version.ts → Rev. 4289
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4288 - FEATURE: LEITOR IA (extrairCotacaoIA) EXTRAI MAT/MO EM COTAÇÕES TIPO PACOTE.
  *
  * CONTEXTO:
