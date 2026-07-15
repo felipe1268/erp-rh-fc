@@ -600,7 +600,7 @@ export default function ComunicadosInternos() {
             <Button variant="ghost" size="sm" onClick={() => setViewComunicadoId(null)}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
             </Button>
-            {isConcluido && (
+            {isConcluido && !_hasPendingSignatures && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200">
                 <Lock className="h-3 w-3" /> Concluído
               </span>
@@ -870,14 +870,9 @@ export default function ComunicadosInternos() {
                                 <Lock className="h-2.5 w-2.5" /> Concluído
                               </span>
                             ) : statusEf === "concluido_pendente" ? (
-                              <div className="flex flex-col gap-0.5">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 w-fit">
-                                  <Lock className="h-2.5 w-2.5" /> Concluído
-                                </span>
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 w-fit">
-                                  <Clock className="h-2.5 w-2.5" /> Assinaturas Pendentes
-                                </span>
-                              </div>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 w-fit">
+                                <Clock className="h-2.5 w-2.5" /> Assinaturas Pendentes
+                              </span>
                             ) : statusEf === "pendente_assinatura" ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 w-fit">
                                 <Clock className="h-2.5 w-2.5" /> Pendente por Assinatura

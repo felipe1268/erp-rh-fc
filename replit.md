@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4270** — **COMUNICADOS INTERNOS: BADGE "CONCLUÍDO" SÓ APÓS TODAS AS ASSINATURAS.** Lista: `concluido_pendente` exibe apenas "Assinaturas Pendentes" âmbar (sem o badge verde "Concluído"). View mode: badge "Concluído" oculto enquanto `_hasPendingSignatures`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4269** — **COMUNICADOS INTERNOS: PADRONIZAÇÃO TOTAL DO PROGRESSO DE ASSINATURAS.** Sem `destinatariosJson`: `totalDestinatarios` = todos os ativos da empresa; `concluir` exige que TODOS assinem; lista sempre exibe barra X/Y + %. Com `destinatariosJson`: comportamento anterior. Badge de assinaturas sempre visível na view. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4268** — **FIX: COMUNICADOS SEM DESTINATARIOSJSON TINHAM ASSINATURAS ZERADAS NA LISTA.** Backend: `comTemDestJs` per-comunicado substitui flag global `allDestIds.size === 0`; sem destinatariosJson → todas as assinaturas contam; com destinatariosJson → só ativos do JSON. ZERO DELETE · ZERO ALTER destrutivo.

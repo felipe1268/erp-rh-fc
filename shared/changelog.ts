@@ -1,4 +1,29 @@
 /**
+ * Rev. 4270 - COMUNICADOS INTERNOS: BADGE "CONCLUÍDO" SÓ APÓS TODAS AS ASSINATURAS.
+ *
+ * PROBLEMA:
+ *   Status `"concluido_pendente"` exibia DOIS badges ("Concluído" + "Assinaturas Pendentes"),
+ *   passando a impressão de que o comunicado estava concluído mesmo sem todas as assinaturas.
+ *   Na view mode, o badge "Concluído" também aparecia quando ainda havia pendentes.
+ *
+ * SOLUÇÃO (apenas frontend):
+ *
+ * Lista — bloco `statusEf === "concluido_pendente"`:
+ *   - Removido o badge verde "Concluído".
+ *   - Exibe apenas o badge âmbar "Assinaturas Pendentes".
+ *
+ * View mode — toolbar:
+ *   - Badge "Concluído" (lock verde) agora exige `!_hasPendingSignatures`.
+ *   - Enquanto houver pendentes: badge some; badge âmbar X/Y já indica o estado.
+ *
+ * Resultado:
+ *   - "Concluído" (verde) aparece SOMENTE quando totalAssinados === totalDestinatarios.
+ *   - Enquanto pendente: apenas "Assinaturas Pendentes" (âmbar) + barra de progresso.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4269 - COMUNICADOS INTERNOS: PADRONIZAÇÃO TOTAL DO PROGRESSO DE ASSINATURAS.
  *
  * PROBLEMA:
