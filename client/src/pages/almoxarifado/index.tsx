@@ -1503,7 +1503,7 @@ export default function AlmoxarifadoPage() {
   );
   const hojeStr = new Date().toISOString().split("T")[0];
   const emprestimosHoje = (emprestimosAbertos as any[])
-    .filter((l) => fecharDiaObraFiltro === "todas" || l.obraId === fecharDiaObraFiltro)
+    .filter((l) => fecharDiaObraFiltro === "todas" || Number(l.obraId) === Number(fecharDiaObraFiltro))
     .sort((a, b) => String(a.dataEmprestimo).localeCompare(String(b.dataEmprestimo)));
   const returnLoan = trpc.warehouse.returnLoanById.useMutation({
     onSuccess: () => { refetchLoans(); refetchLoansAbertos(); refetch(); toast.success("Ferramenta devolvida!"); },

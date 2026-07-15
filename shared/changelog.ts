@@ -1,4 +1,30 @@
 /**
+ * Rev. 4272 - FIX: FECHAR DIA — FILTRO POR OBRA NÃO FUNCIONAVA + NOME DA OBRA OCULTO NOS CARDS.
+ *
+ * PROBLEMA:
+ *   1. Ao selecionar uma obra no seletor de "Fechar Dia — Pendências de Devolução",
+ *      itens de outras obras continuavam aparecendo. Causa: comparação estrita
+ *      `l.obraId === fecharDiaObraFiltro` falhava silenciosamente por mismatch de tipo
+ *      (integer do Drizzle vs. Number() do select HTML).
+ *   2. O nome da obra nunca aparecia nos cards (ícone 📍) porque `listOpenLoans`
+ *      retornava apenas colunas de `warehouse_loans`, sem fazer join com `obras`.
+ *      Assim o usuário não conseguia confirmar se o filtro estava funcionando.
+ *
+ * SOLUÇÃO:
+ *   Backend (`server/routers/warehouse.ts`):
+ *     - `listOpenLoans` agora faz `.leftJoin(obras, eq(obras.id, warehouseLoans.obraId))`
+ *       e inclui `obraNome: obras.nome` na resposta. Campo já era renderizado no card
+ *       (`{loan.obraNome && <p>📍 {loan.obraNome}</p>}`) mas chegava sempre `undefined`.
+ *
+ *   Frontend (`client/src/pages/almoxarifado/index.tsx`):
+ *     - Comparação mudada de `l.obraId === fecharDiaObraFiltro` para
+ *       `Number(l.obraId) === Number(fecharDiaObraFiltro)`, tornando-a robusta
+ *       contra qualquer coerção de tipo string/number.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4271 - COMUNICADOS INTERNOS: ACESSO RÁPIDO À LISTA DE PENDENTES NA TABELA.
  *
  * PROBLEMA:

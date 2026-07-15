@@ -669,11 +669,37 @@ export const warehouseRouter = router({
         conditions.push(inArray(warehouseLoans.obraId, allowed));
       }
 
-      return db
-        .select()
+      const rows = await db
+        .select({
+          id:                   warehouseLoans.id,
+          companyId:            warehouseLoans.companyId,
+          obraId:               warehouseLoans.obraId,
+          obraNome:             obras.nome,
+          itemId:               warehouseLoans.itemId,
+          itemNome:             warehouseLoans.itemNome,
+          quantidade:           warehouseLoans.quantidade,
+          funcionarioId:        warehouseLoans.funcionarioId,
+          funcionarioCodigo:    warehouseLoans.funcionarioCodigo,
+          funcionarioNome:      warehouseLoans.funcionarioNome,
+          dataEmprestimo:       warehouseLoans.dataEmprestimo,
+          horaEmprestimo:       warehouseLoans.horaEmprestimo,
+          dataDevolucao:        warehouseLoans.dataDevolucao,
+          horaDevolucao:        warehouseLoans.horaDevolucao,
+          status:               warehouseLoans.status,
+          observacoes:          warehouseLoans.observacoes,
+          almoxarifeId:         warehouseLoans.almoxarifeId,
+          almoxarifeNome:       warehouseLoans.almoxarifeNome,
+          createdAt:            warehouseLoans.createdAt,
+          fotoDevolucaoUrl:     warehouseLoans.fotoDevolucaoUrl,
+          equipamentoProprioId: warehouseLoans.equipamentoProprioId,
+          equipamentoLocadoId:  warehouseLoans.equipamentoLocadoId,
+          assinaturaDevolucaoUrl: warehouseLoans.assinaturaDevolucaoUrl,
+        })
         .from(warehouseLoans)
+        .leftJoin(obras, eq(obras.id, warehouseLoans.obraId))
         .where(and(...conditions))
         .orderBy(desc(warehouseLoans.createdAt));
+      return rows;
     }),
 
   // Devolver item

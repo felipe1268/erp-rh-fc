@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4271** — **COMUNICADOS INTERNOS: ACESSO RÁPIDO À LISTA DE PENDENTES NA TABELA.** Botão violeta `<Users>` nas Ações abre Lista para Assinatura filtrada em "pendentes". Badges âmbar na coluna Status tornados clicáveis (mesmo comportamento). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4272** — **FIX: FECHAR DIA — FILTRO POR OBRA NÃO FUNCIONAVA + NOME DA OBRA OCULTO NOS CARDS.** Backend: `listOpenLoans` ganhou `.leftJoin(obras)` → `obraNome` agora chega no card (ícone 📍). Frontend: comparação `Number(l.obraId) === Number(fecharDiaObraFiltro)` elimina mismatch de tipo. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4270** — **COMUNICADOS INTERNOS: BADGE "CONCLUÍDO" SÓ APÓS TODAS AS ASSINATURAS.** Lista: `concluido_pendente` exibe apenas "Assinaturas Pendentes" âmbar (sem o badge verde "Concluído"). View mode: badge "Concluído" oculto enquanto `_hasPendingSignatures`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4271** — **COMUNICADOS INTERNOS: ACESSO RÁPIDO À LISTA DE PENDENTES NA TABELA.** Botão violeta `<Users>` nas Ações abre Lista para Assinatura filtrada em "pendentes". Badges âmbar na coluna Status tornados clicáveis (mesmo comportamento). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4269** — **COMUNICADOS INTERNOS: PADRONIZAÇÃO TOTAL DO PROGRESSO DE ASSINATURAS.** Sem `destinatariosJson`: `totalDestinatarios` = todos os ativos da empresa; `concluir` exige que TODOS assinem; lista sempre exibe barra X/Y + %. Com `destinatariosJson`: comportamento anterior. Badge de assinaturas sempre visível na view. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -60,19 +60,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
-- **Rev. 4267** — **COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.** `getStatusEfetivo` ganha tipo `"concluido_pendente"` — linha âmbar + badge duplo. Toolbar: badge X/Y sempre visível, usa `_hasPendingSignatures`. Botão FCSign sempre visível. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4270** — **COMUNICADOS INTERNOS: BADGE "CONCLUÍDO" SÓ APÓS TODAS AS ASSINATURAS.** Lista: `concluido_pendente` exibe apenas "Assinaturas Pendentes" âmbar. View mode: badge "Concluído" oculto enquanto `_hasPendingSignatures`. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4269** — **COMUNICADOS INTERNOS: PADRONIZAÇÃO TOTAL DO PROGRESSO DE ASSINATURAS.** Sem destinatariosJson → total = todos ativos; `concluir` exige que TODOS assinem; lista sempre exibe barra X/Y + %. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4267** — **COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.** `getStatusEfetivo` ganha tipo `"concluido_pendente"`. Toolbar: badge X/Y sempre visível. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4266** — **COMUNICADOS INTERNOS: AUDITORIA FUNCIONÁRIOS FANTASMA — CONTAGENS E GUARD SÓ COM ATIVOS.** batch-query `employees WHERE status='Ativo'`; guard `concluir` filtra apenas ativos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4265** — **COMUNICADOS INTERNOS: PROGRESSO DE ASSINATURAS E BLOQUEIO DE CONCLUSÃO.** Coluna "Status / Assinaturas" com badge + barra de progresso X/Y; "Concluir" bloqueado até todos assinarem. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4264** — **COMUNICADOS INTERNOS: SETOR/DEPARTAMENTO, EMISSOR RESPONSÁVEL, DESTINATÁRIOS E FCSIGN.** +5 colunas em `comunicados_internos`; `listarFuncionariosSimples`; `solicitarAssinaturaFCSign` (envelope IntegSign). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4263** — **EDITAR TÍTULO DIALOG MODERNIZADO + GRID 3-COLUNAS EM CONTAS A RECEBER.** Header branco+ícone azul; layout 3 colunas nas telas de Contas a Receber. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4261** — **CONTROLE DE CHEQUES: SINCRONIZAÇÃO AUTOMÁTICA COMPLETA COM O EXTRATO (AMBOS OS SENTIDOS).** Sentido inverso: cheque compensado no extrato → status "Compensado" automático + `conciliado=1`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4260** — **CONTROLE DE CHEQUES: STATUS "DEVOLVIDO" AUTOMÁTICO AO DETECTAR PAR COMP+DEV NO EXTRATO.** `autoMarcarChequesDevolvidos` (idempotente). Frontend: `useEffect` em `FinanceiroConciliacao.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
