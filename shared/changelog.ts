@@ -1,4 +1,28 @@
 /**
+ * Rev. 4281 - FIX: CONTROLE DE CHEQUES — autoMarcarChequesDevolvidos SOBRESCREVIA STATUS COMPENSADO.
+ *
+ * PROBLEMA:
+ *   `autoMarcarChequesDevolvidos` detecta pares compensação+devolução no extrato e muda o cheque
+ *   para `devolvido`. Porém, quando o banco devolve com "Motivo: Compensado" (confirmação do
+ *   clearing), o cheque já tinha `data_compensacao` setado (estava corretamente `compensado`).
+ *   A procedure sobrescrevia para `devolvido` sem checar `data_compensacao`, gerando inconsistência.
+ *
+ * CORREÇÃO (código):
+ *   Adicionado `AND data_compensacao IS NULL` tanto no SELECT de candidatos quanto no UPDATE da
+ *   `autoMarcarChequesDevolvidos`. Cheques com compensação já confirmada nunca mais serão
+ *   revertidos para `devolvido` por esse caminho automático.
+ *
+ * AUDITORIA RETROATIVA (Neon):
+ *   5 cheques corrigidos diretamente (status `devolvido → compensado`, devolvido_em → NULL):
+ *   nº 1342, 1389, 1399 (Fev/2026) · nº 1343 (Mar/2026) · nº 1300 (Abr/2026).
+ *   5 devolvidos restantes (nº 1024, 1387, 1390, 1391, 930) mantidos como `devolvido`
+ *   pois não têm `data_compensacao` — são devoluções genuínas.
+ *
+ * ARQUIVO: server/routers/financial.ts — autoMarcarChequesDevolvidos (~linha 7300 e ~linha 7315).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4280 - CONCILIAÇÃO: ALERTAS DE COBERTURA NO PAINEL "QUITAR CHEQUES DEVOLVIDOS".
  *
  * MELHORIA:

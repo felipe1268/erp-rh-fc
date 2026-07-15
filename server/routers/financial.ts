@@ -7299,6 +7299,7 @@ export const financialRouter = router({
              FROM financial_cheques
             WHERE company_id=$1 AND excluido_em IS NULL
               AND status IN ('compensado','pendente')
+              AND data_compensacao IS NULL
               AND ROUND(ABS(valor)*100)=$2`,
           [input.companyId, par.valorCents]);
         const cands = (rows(candRes) as any[]).filter((c) => norm(c.numeroCheque) === alvo);
@@ -7310,6 +7311,7 @@ export const financialRouter = router({
                   updated_at=NOW()
             WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL
               AND status IN ('compensado','pendente')
+              AND data_compensacao IS NULL
             RETURNING id`,
           [cands[0].id, input.companyId]);
         atualizados += rows(upd).length;

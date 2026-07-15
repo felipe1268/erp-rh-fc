@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4281** — **FIX: CONTROLE DE CHEQUES — autoMarcarChequesDevolvidos SOBRESCREVIA STATUS COMPENSADO.** `autoMarcarChequesDevolvidos` não checava `data_compensacao`; banco devolvia com "Motivo: Compensado" (confirmação) e o procedure revertia o cheque para `devolvido`. Fix: `AND data_compensacao IS NULL` no SELECT e UPDATE. Auditoria imediata no Neon: 5 cheques restaurados para `compensado` (nº 1342, 1389, 1399, 1343, 1300); 5 genuinamente devolvidos mantidos. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4280** — **CONCILIAÇÃO: ALERTAS DE COBERTURA NO PAINEL "QUITAR CHEQUES DEVOLVIDOS".** Ao selecionar cheques: verde "✓ Cobertura total" quando totalSel = pixVal (±1¢); âmbar "⚠ R$ X ainda pendente" quando totalSel < pixVal; vermelho "⚠ Excede" já existia. `FinanceiroConciliacao.tsx` ~linha 7163. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4279** — **CONCILIAÇÃO: STATUS DO CHEQUE DEVOLVIDO SINCRONIZA AUTOMATICAMENTE COM O CONTROLE DE CHEQUES (bidirecional).** 3 bugs em camadas: (1) painel "Quitar cheques devolvidos" não passava `chequeNumero` → guard `if(input.chequeNumero)` nunca disparava; (2) INSERT em `bank_cheque_vinculos` gravava `cheque_numero=NULL`; (3) `desconciliarLinha` não desfazia vínculos. Fix: `chequeNumParaGravar = input.chequeNumero ?? covAntes.chq` (parseChequeNumero da descrição); `desconciliarLinha` ganha step 4 na transaction que estorna vínculos + desfaz `desconsiderado_em` + reverte `financial_cheques.status → devolvido`; `[SyncSchema+]` Rev. 4279 audita e corrige retroativamente todos os cheques em estado inconsistente. ZERO DELETE · ZERO ALTER destrutivo.
