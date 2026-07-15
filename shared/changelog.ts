@@ -1,4 +1,31 @@
 /**
+ * Rev. 4283 - FIX: COTAÇÕES — DRIFT DE CENTAVOS NO DIALOG "CONDIÇÕES DE PAGAMENTO".
+ *
+ * PROBLEMA:
+ *   `salvarRespostas` acumulava `totalForn += total` usando floats brutos (ex.: qty×preço
+ *   retornava 1.050.000,025). Cada item era salvo como `.toFixed(2)` (arredondado), mas o
+ *   acumulador usava o valor bruto → soma dos brutos ≠ soma dos arredondados → `totalOrcado`
+ *   ficava com drift (ex.: "2100000.05" em vez de "2100000.00"). O dialog de Condições de
+ *   Pagamento usava `totalOrcado` direto → header, parcelas e total mostravam o valor errado.
+ *
+ * CORREÇÃO BACKEND (root cause):
+ *   `salvarRespostas` agora acumula em centavos inteiros:
+ *   `totalFornCents += Math.round(total * 100)` → sem drift de IEEE-754.
+ *   Frete também convertido: `Math.round(valorFrete * 100)`.
+ *   `totalOrcado = String((totalFornCents / 100).toFixed(2))` — exato.
+ *
+ * CORREÇÃO FRONTEND (guard para dados legados):
+ *   Dialog "Condições de Pagamento" agora computa `fornTotal` do `respostaMap` (valores
+ *   individualmente arredondados já na DB) em vez de `totalOrcado`. Usa centavos inteiros
+ *   para somar — resultado idêntico ao que a tela de cotação exibe.
+ *
+ * ARQUIVOS:
+ *   server/routers/compras.ts — `salvarRespostas` (~linha 6843).
+ *   client/src/pages/compras/Cotacoes.tsx — cálculo de `fornTotal` no portal (~linha 2335).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4282 - CONTROLE DE CHEQUES: "VER PAGAMENTO" EXIBE VALOR TOTAL DO PIX QUANDO ALOCAÇÃO É PARCIAL.
  *
  * MELHORIA:
