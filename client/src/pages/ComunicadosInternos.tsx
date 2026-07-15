@@ -889,7 +889,7 @@ export default function ComunicadosInternos() {
                                 Rascunho
                               </span>
                             )}
-                            {totalDest > 0 && (
+                            {totalDest > 0 ? (
                               <div>
                                 <div className="flex items-center gap-1.5 mb-0.5">
                                   <span className="text-[10px] text-slate-500">{totalAss}/{totalDest} assinaram</span>
@@ -899,7 +899,11 @@ export default function ComunicadosInternos() {
                                   <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? "#16a34a" : pct >= 50 ? "#d97706" : "#ef4444" }} />
                                 </div>
                               </div>
-                            )}
+                            ) : totalAss > 0 ? (
+                              <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-500" /> {totalAss} assinaram
+                              </span>
+                            ) : null}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-slate-600">{new Date(c.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}</td>

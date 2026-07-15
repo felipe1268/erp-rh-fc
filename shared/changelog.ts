@@ -1,4 +1,35 @@
 /**
+ * Rev. 4268 - FIX: COMUNICADOS SEM DESTINATARIOSJSON TINHAM ASSINATURAS ZERADAS NA LISTA.
+ *
+ * PROBLEMA:
+ *   Comunicados sem `destinatariosJson` (001-003) mostravam `totalAssinados = 0` na lista principal,
+ *   mesmo tendo assinaturas registradas em `comunicado_assinaturas`. A causa: a condição de filtro
+ *   em `assinActivePorCom` era `activeDestSet.has(a.employeeId) || allDestIds.size === 0`. Quando
+ *   qualquer comunicado da página tinha destinatariosJson (ex: 004/2026 com 6 IDs), `allDestIds.size > 0`
+ *   tornava a segunda condição `false`, e funcionários fora daqueles 6 IDs tinham suas assinaturas
+ *   descartadas — inclusive as dos comunicados 001-003 que não têm lista específica.
+ *
+ * RAIZ:
+ *   Condição global (`allDestIds.size === 0`) em vez de per-comunicado. O filtro de ativos deve ser
+ *   aplicado só aos comunicados que TÊM destinatariosJson.
+ *
+ * SOLUÇÃO:
+ *
+ * Backend — `server/routers/comunicadosInternos.ts` (`listar`):
+ *   - Pré-computa `comTemDestJs: Set<number>` com os IDs dos comunicados que têm destinatariosJson.
+ *   - Loop de `assinActivePorCom`: condição mudada para `!comTemDestJs.has(a.comunicadoId) || activeDestSet.has(a.employeeId)`.
+ *   - Comunicados SEM destinatariosJson: todas as assinaturas contam.
+ *   - Comunicados COM destinatariosJson: só assinaturas de funcionários ativos no JSON contam.
+ *
+ * Frontend — `client/src/pages/ComunicadosInternos.tsx` (lista):
+ *   - Quando `totalDest === 0` mas `totalAss > 0` (sem lista específica mas com assinaturas):
+ *     exibe "N assinaram" com ícone verde — sem barra de progresso/denominador (não há total definido).
+ *   - Quando `totalDest > 0`: comportamento anterior (barra + X/Y + %).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4267 - COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.
  *
  * PROBLEMA 1 — comunicado concluído com assinaturas faltando não mostrava alerta:

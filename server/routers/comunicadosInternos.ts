@@ -106,11 +106,25 @@ export const comunicadosInternosRouter = router({
         .from(comunicadoAssinaturas)
         .where(inArray(comunicadoAssinaturas.comunicadoId, ids));
 
-      // Mapa: comunicadoId → Set de employeeIds que assinaram e ainda são ativos
+      // Quais comunicados têm destinatariosJson definido (lista específica)?
+      const comTemDestJs = new Set<number>(
+        rows.filter(r => {
+          if (!r.destinatariosJson) return false;
+          try {
+            const d = JSON.parse(r.destinatariosJson as string);
+            return Array.isArray(d) && d.length > 0;
+          } catch { return false; }
+        }).map(r => r.id)
+      );
+
+      // Mapa: comunicadoId → Set de employeeIds que assinaram
+      // - COM destinatariosJson: só conta assinantes que ainda são ativos E estão no JSON
+      // - SEM destinatariosJson: conta TODAS as assinaturas (qualquer funcionário)
       const assinActivePorCom = new Map<number, Set<number>>();
       for (const a of assinCounts) {
         if (!assinActivePorCom.has(a.comunicadoId)) assinActivePorCom.set(a.comunicadoId, new Set());
-        if (activeDestSet.has(a.employeeId) || allDestIds.size === 0) {
+        const temDest = comTemDestJs.has(a.comunicadoId);
+        if (!temDest || activeDestSet.has(a.employeeId)) {
           assinActivePorCom.get(a.comunicadoId)!.add(a.employeeId);
         }
       }

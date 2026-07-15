@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4267** — **COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.** `getStatusEfetivo` ganha tipo `"concluido_pendente"` — linha âmbar + badge duplo (verde "Concluído" + âmbar "Assinaturas Pendentes") quando concluído mas com assinaturas faltando. Toolbar: badge X/Y sempre visível (fora do bloco `!isConcluido`), usa `_hasPendingSignatures` (sem `!isConcluido`). Botão FCSign sempre visível — label "Reenviar FCSign" + confirm quando envelope já existe. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4268** — **FIX: COMUNICADOS SEM DESTINATARIOSJSON TINHAM ASSINATURAS ZERADAS NA LISTA.** Backend: `comTemDestJs` per-comunicado substitui flag global `allDestIds.size === 0`; sem destinatariosJson → todas as assinaturas contam; com destinatariosJson → só ativos do JSON. Frontend: quando `totalDest=0` mas `totalAss>0`, exibe "N assinaram" com ícone verde (sem barra de progresso). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4266** — **COMUNICADOS INTERNOS: AUDITORIA FUNCIONÁRIOS FANTASMA — CONTAGENS E GUARD SÓ COM ATIVOS.** `totalDestinatarios` e `totalAssinados` no `listar` usam batch-query de `employees WHERE status='Ativo'` para filtrar o JSON de destinatários — funcionários desligados pós-criação não inflam o total nem bloqueiam a conclusão. Guard do `concluir` também compara apenas contra ativos (`inArray(employeeId, activeIds)`). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4267** — **COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.** `getStatusEfetivo` ganha tipo `"concluido_pendente"` — linha âmbar + badge duplo. Toolbar: badge X/Y sempre visível, usa `_hasPendingSignatures`. Botão FCSign sempre visível — "Reenviar FCSign" + confirm quando envelope já existe. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4266** — **COMUNICADOS INTERNOS: AUDITORIA FUNCIONÁRIOS FANTASMA — CONTAGENS E GUARD SÓ COM ATIVOS.** batch-query `employees WHERE status='Ativo'`; guard `concluir` filtra apenas ativos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4265** — **COMUNICADOS INTERNOS: PROGRESSO DE ASSINATURAS E BLOQUEIO DE CONCLUSÃO.** Coluna "Status / Assinaturas" com badge + barra de progresso X/Y; "Concluir" bloqueado até todos assinarem. ZERO DELETE · ZERO ALTER destrutivo.
 
