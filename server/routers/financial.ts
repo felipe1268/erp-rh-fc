@@ -13931,6 +13931,44 @@ export const financialRouter = router({
     };
   }),
 
+  // Rev. 4276 — Lista os vínculos ATIVOS (não estornados) de uma linha de PIX/TED.
+  // Usado no dialog "Lançar no Contas a Pagar" para mostrar quais cheques devolvidos
+  // já estão vinculados a este débito do extrato.
+  listVinculosByPixLine: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    pixLineId: z.number(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `SELECT bcv.id,
+              bcv.debito_line_id AS "debitoLineId",
+              bcv.cheque_numero AS "chequeNumero",
+              bcv.valor,
+              to_char(bsl.data,'DD/MM/YYYY') AS "dataDebito",
+              bsl.descricao AS "descricaoDebito",
+              cba.apelido AS "contaApelido",
+              bcv.criado_por_nome AS "criadoPorNome"
+         FROM bank_cheque_vinculos bcv
+         LEFT JOIN bank_statement_lines bsl ON bsl.id = bcv.debito_line_id
+         LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
+        WHERE bcv.pix_line_id = $1 AND bcv.company_id = $2 AND bcv.estornado_em IS NULL
+        ORDER BY bcv.id`,
+      [input.pixLineId, input.companyId]);
+    const vinculos = (rows(res) as any[]).map((v: any) => ({
+      id: Number(v.id),
+      debitoLineId: Number(v.debitoLineId),
+      chequeNumero: v.chequeNumero ?? null,
+      valor: Number(v.valor),
+      dataDebito: v.dataDebito ?? null,
+      descricaoDebito: v.descricaoDebito ?? null,
+      contaApelido: v.contaApelido ?? null,
+      criadoPorNome: v.criadoPorNome ?? null,
+    }));
+    return { vinculos, totalVinculado: vinculos.reduce((s, v) => s + v.valor, 0) };
+  }),
+
   // Rev. 3747 — ESTORNA um vínculo (soft). Se o cheque deixar de estar coberto, RECONSIDERA
   // o par de volta ao % — porém SÓ as linhas que foram desconsideradas pelo automático
   // (preserva um "Desconsiderar" manual feito por uma pessoa).

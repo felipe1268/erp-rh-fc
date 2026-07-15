@@ -1,4 +1,33 @@
 /**
+ * Rev. 4277 - CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.
+ *
+ * PROBLEMA:
+ *   Após confirmar vínculos de cheques devolvidos, o painel colapsava e o usuário não
+ *   tinha como saber quais cheques já estavam vinculados ao PIX atual sem reabrir o painel.
+ *
+ * SOLUÇÃO:
+ *   Backend: nova procedure `listVinculosByPixLine` em financial.ts — retorna todos os
+ *   vínculos ativos (estornado_em IS NULL) de uma linha de PIX/TED, com dados do débito
+ *   (descrição, conta, data) e valor vinculado. JOIN em bank_statement_lines +
+ *   company_bank_accounts. Autorizada via _assertFinanceiroCompanyAccess.
+ *
+ *   Frontend: query tRPC `listVinculosByPixLine` ativa sempre que o dialog de lançamento
+ *   está aberto para uma linha de débito (valor < 0). O header do painel laranja exibe:
+ *   - Sem vínculos: texto original "Vincule este débito a cheques devolvidos…"
+ *   - Com vínculos: "N cheque(s) vinculado(s) — R$ X de R$ Y" + badge circular laranja
+ *     com o count. Abaixo do botão (quando painel recolhido) lista cada vínculo com ✓,
+ *     descrição do débito, conta bancária, data e valor.
+ *   - O `refetchPixVinculos()` é chamado logo após "Confirmar vínculos" para atualizar
+ *     imediatamente o resumo.
+ *
+ * ARQUIVOS:
+ *   server/routers/financial.ts — listVinculosByPixLine (nova procedure query)
+ *   client/src/pages/financeiro/FinanceiroConciliacao.tsx — query + header display
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4276 - FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).
  *
  * PROBLEMA:

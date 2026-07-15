@@ -638,6 +638,12 @@ export default function FinanceiroConciliacao() {
       { companyId: Number(companyId) },
       { enabled: !!quitarChequesOpen && !!companyId, staleTime: 10_000 }
     );
+  // Rev. 4276 — Vínculos já registrados para o PIX/TED do dialog atual
+  const { data: pixVinculosData, refetch: refetchPixVinculos } =
+    (trpc as any).financial.listVinculosByPixLine.useQuery(
+      { companyId: Number(companyId), pixLineId: Number(lancStatement?.id ?? 0) },
+      { enabled: !!lancStatement?.id && !!companyId && Number(lancStatement?.valor ?? 0) < 0, staleTime: 5_000 }
+    );
   const { data: pixGlobalData, isFetching: pixGlobalFetching } =
     (trpc as any).financial.searchPixTedGlobal.useQuery(
       {
@@ -7006,6 +7012,8 @@ export default function FinanceiroConciliacao() {
                   const totalSel = Array.from(quitarChequesSel.values()).reduce((s, v) => s + (parseFloat(v) || 0), 0);
                   const totalSelCents = Math.round(totalSel * 100);
                   const pixCents = Math.round(pixVal * 100);
+                  const pixVinculos: any[] = pixVinculosData?.vinculos ?? [];
+                  const totalVinculado: number = pixVinculosData?.totalVinculado ?? 0;
                   return (
                     <div className="rounded-xl border border-orange-200 bg-orange-50/60 overflow-hidden">
                       <button
@@ -7016,10 +7024,38 @@ export default function FinanceiroConciliacao() {
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/15 ring-1 ring-orange-400/30 shrink-0 text-orange-600">🔗</span>
                         <div className="flex-1 min-w-0">
                           <span className="text-sm font-semibold text-orange-800">Quitar cheques devolvidos</span>
-                          <span className="block text-[11px] text-orange-600/80 leading-tight">Vincule este débito a cheques devolvidos de qualquer conta ou mês</span>
+                          {pixVinculos.length > 0 ? (
+                            <span className="block text-[11px] text-orange-700 leading-tight font-medium">
+                              {pixVinculos.length} cheque{pixVinculos.length !== 1 ? "s" : ""} vinculado{pixVinculos.length !== 1 ? "s" : ""} — {formatBRL(totalVinculado)} de {formatBRL(pixVal)}
+                            </span>
+                          ) : (
+                            <span className="block text-[11px] text-orange-600/80 leading-tight">Vincule este débito a cheques devolvidos de qualquer conta ou mês</span>
+                          )}
                         </div>
+                        {pixVinculos.length > 0 && (
+                          <span className="inline-flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold w-5 h-5 shrink-0">
+                            {pixVinculos.length}
+                          </span>
+                        )}
                         <span className={`text-orange-500 transition-transform duration-200 ${quitarChequesOpen ? "rotate-90" : ""}`}>▶</span>
                       </button>
+
+                      {/* Resumo dos vínculos já registrados — sempre visível quando há vínculos */}
+                      {pixVinculos.length > 0 && !quitarChequesOpen && (
+                        <div className="border-t border-orange-200 bg-orange-50 px-4 py-2 space-y-1">
+                          {pixVinculos.map((v: any) => (
+                            <div key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-orange-500 shrink-0">✓</span>
+                                <span className="text-gray-700 truncate">{v.descricaoDebito ?? `Débito #${v.debitoLineId}`}</span>
+                                {v.contaApelido && <span className="text-gray-400 shrink-0">· {v.contaApelido}</span>}
+                                {v.dataDebito && <span className="text-gray-400 shrink-0">· {v.dataDebito}</span>}
+                              </div>
+                              <span className="tabular-nums font-semibold text-orange-700 shrink-0">{formatBRL(v.valor)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       {quitarChequesOpen && (
                         <div className="border-t border-orange-200 px-4 pb-4 pt-3 space-y-3">
@@ -7158,6 +7194,7 @@ export default function FinanceiroConciliacao() {
                                     // NÃO fecha o dialog principal — usuário ainda precisa
                                     // preencher fornecedor/conta e clicar "Lançar e conciliar".
                                     refreshAposVinculo();
+                                    refetchPixVinculos();
                                   } catch (e: any) {
                                     toast({ title: "Erro ao vincular", description: String(e?.message ?? e), variant: "destructive" });
                                   } finally {

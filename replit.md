@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4277** — **CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.** Backend: nova procedure `listVinculosByPixLine` retorna vínculos ativos (estornado_em IS NULL) do PIX com descrição/conta/data. Frontend: header do painel laranja mostra "N cheque(s) vinculado(s) — R$X de R$Y" + badge count + lista com ✓ quando painel recolhido; refetch automático após confirmar vínculos. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4276** — **FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).** Bug 1: `bank_statement_lines.status='devolvido'` nunca é gravado → JOIN com regex. Bug 2: `AND deb.desconsiderado_em IS NULL` bloqueava exatamente os cheques confirmados → removido + Ramo C. Bug 3: dbExecute param-binding por ordem de aparição — CTE com $1×3 e array[1] → renomear $1/$2/$3 e passar companyId 3×. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4275** — **CONCILIAÇÃO BANCÁRIA: BOTÃO "QUITAR CHEQUES DEVOLVIDOS" NO DIALOG DE LANÇAMENTO.** Backend: `listPendingChequesDevolvidos` retorna todos os cheques devolvidos pendentes/parciais de TODAS as contas. Frontend: painel colapsável laranja no dialog de lançamento — multi-select com valor editável; chama `registrarVinculoChequeDevolvido` em loop. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4275** — **CONCILIAÇÃO BANCÁRIA: BOTÃO "QUITAR CHEQUES DEVOLVIDOS" NO DIALOG DE LANÇAMENTO.** Backend: `listPendingChequesDevolvidos` retorna todos os cheques devolvidos pendentes/parciais de TODAS as contas. Frontend: painel colapsável laranja no dialog de lançamento — multi-select com valor editável. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4274** — **CONCILIAÇÃO BANCÁRIA: 1 PIX → N CHEQUES DEVOLVIDOS.** `searchPixTedGlobal`/`getChequeDevolvidoVinculacao` passam de `jaVinculado: boolean` para `valorAlocado + saldoLivre`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -66,11 +68,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4269** — **COMUNICADOS INTERNOS: PADRONIZAÇÃO TOTAL DO PROGRESSO DE ASSINATURAS.** Sem destinatariosJson → total = todos ativos; `concluir` exige que TODOS assinem; lista sempre exibe barra X/Y + %. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4267** — **COMUNICADOS INTERNOS: BADGE "ASSINATURAS PENDENTES" PARA CONCLUÍDOS + BOTÃO REENVIAR FCSIGN.** `getStatusEfetivo` ganha tipo `"concluido_pendente"`. Toolbar: badge X/Y sempre visível. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4252 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4267 e anteriores.
 
 ## User preferences
 
