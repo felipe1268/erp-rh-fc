@@ -1,3 +1,4 @@
+- **Rev. 4277** — **CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.** Backend: `listVinculosByPixLine`; frontend: count + lista com ✓. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4281** — **FIX: CONTROLE DE CHEQUES — autoMarcarChequesDevolvidos SOBRESCREVIA STATUS COMPENSADO.** Fix: `AND data_compensacao IS NULL` no SELECT e UPDATE. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4276** — **FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).** status nunca gravado; `desconsiderado_em IS NULL` bloqueava confirmados; param-binding $1×3. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4264** — **COMUNICADOS INTERNOS: SETOR/DEPARTAMENTO, EMISSOR RESPONSÁVEL, DESTINATÁRIOS E FCSIGN.** +5 colunas em `comunicados_internos`; `listarFuncionariosSimples`; `solicitarAssinaturaFCSign` (envelope IntegSign). ZERO DELETE · ZERO ALTER destrutivo.

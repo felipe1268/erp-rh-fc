@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4291** — **FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS DO GRUPO.** No modo multi-empresa ("Construtoras"), o mesmo funcionário físico tinha 2 `employees.id` distintos → `searchBySkill` retornava 2 linhas e `skillSummaryGlobal` contava 2. Fix: dedup por `${cpfLimpo}:${skillId}` no retorno de `searchBySkill`; `skillSummaryGlobal` trocou `COUNT(DISTINCT employeeId)` por `COUNT(DISTINCT regexp_replace(cpf,...))`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4292** — **FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ CONCILIADO.** Motor de conciliação rodava `detectarParesEstorno` em 2 passagens separadas (pendRes e concRes). Par com débito em concRes + crédito em pendRes (cavalo) não era detectado por nenhuma delas. Fix: 3ª passagem híbrida (bloco 2f) combina `concMin + linhasMin`, roda `detectarParesEstorno` e descarta pares já encontrados via dedup `debitoId:creditoId`. Caso real: cheque 393 Santander FC Aparecida R$ 15.000, motivo 48. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4290** — **FIX: CONCILIAÇÃO — parseChequeNumero SUPORTA "Nº NNN" SOLTO + CHEQUE 393 DEVOLVIDO.** `parseChequeNumero` não capturava número em "SEM FAVORECIDO Nº 393" (3 dígitos após MOTIVO + padrão Nº solto sem regex). Fix: terceiro padrão `/(?:^|\s)n[ºo°.]\s*0*(\d{1,12})/i` em `shared/chequeMotivos.ts`. Correção no banco: BSL 20565 descricao → "CHEQUE EMITIDO/DEBITADO Nº 393"; fc 352 atualizado com conta_bancaria_id=4, devolvido_em=05/06/2026, motivo_codigo=48. Cheque 393 agora aparece no painel "Cheques devolvidos no banco". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4291** — **FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS DO GRUPO.** No modo multi-empresa ("Construtoras"), o mesmo funcionário físico tinha 2 `employees.id` distintos → `searchBySkill` retornava 2 linhas e `skillSummaryGlobal` contava 2. Fix: dedup por `${cpfLimpo}:${skillId}` no retorno de `searchBySkill`; `skillSummaryGlobal` trocou `COUNT(DISTINCT employeeId)` por `COUNT(DISTINCT regexp_replace(cpf,...))`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4288** — **FEATURE: LEITOR IA (extrairCotacaoIA) EXTRAI MAT/MO EM COTAÇÕES TIPO PACOTE.** O leitor IA era cego ao split Material × Mão de Obra para cotações `tipo=pacote` (ex: PROMATEL). Fix backend: detecta `isPacoteCot`, enriquece `itensRef` com `somenteMo`, adiciona marcadores `[MAT]`/`[MDO]` na lista de itens do prompt, bloco PACOTE no `systemPrompt`, campos `totalMat`/`totalMdo` no JSON schema e instrução nº 9; no loop de resultado, extrai/propaga MAT/MO (distribui proporcionalmente em multi-match; deriva MDO=precoTotal p/ item somenteMo). Fix frontend: `iaLinhas` copia `totalMat`/`totalMdo`; overlay detecta `iaPacote` e exibe colunas MAT (azul) + MO (laranja) com inputs editáveis; `respostasValidas` aceita itens com MAT/MO mesmo sem `precoUnitario`; save passa `{totalMat, totalMdo}` para `salvarRespostasLote`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -70,6 +70,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
+- **Rev. 4290** — **FIX: CONCILIAÇÃO — parseChequeNumero SUPORTA "Nº NNN" SOLTO + CHEQUE 393 DEVOLVIDO.** Terceiro padrão `/(?:^|\s)n[ºo°.]\s*0*(\d{1,12})/i`; BSL 20565 desc corrigido; fc 352 com conta_bancaria_id=4, devolvido_em, motivo_codigo=48. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4289** — **FIX: MAPA DE COTAÇÃO — INPUTS MAT/MO COM FORMATO BR (R$ + SEPARADOR DE MILHAR).** `type="number"` → `type="text" inputMode="decimal"`; valor BR ao abrir + `onFocus` seleciona tudo; prefixo R$; leitores trocados por `parseBRNumber`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4280** — **CONCILIAÇÃO: ALERTAS DE COBERTURA NO PAINEL "QUITAR CHEQUES DEVOLVIDOS".** Verde/âmbar/vermelho por totalSel vs pixVal. ZERO DELETE · ZERO ALTER destrutivo.
@@ -77,8 +79,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4279** — **CONCILIAÇÃO: STATUS DO CHEQUE DEVOLVIDO SINCRONIZA COM CONTROLE DE CHEQUES (bidirecional).** 3 bugs em camadas: `chequeNumero` nunca passado, INSERT NULL, desconciliar não estornava vínculos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4278** — **FIX: CONCILIAÇÃO — 1 PIX → N CHEQUES DEVOLVIDOS SÓ MOSTRAVA O PRIMEIRO.** `vincByPix` Map sobrescrevia; alterado para array com push. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4277** — **CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.** Backend: `listVinculosByPixLine`; frontend: count + lista com ✓. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

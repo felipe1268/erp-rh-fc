@@ -2012,6 +2012,65 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
     });
     if (chequesDevolvidosConc.length) chequesDevolvidos.push(...chequesDevolvidosConc);
 
+    // 2f) Rev. 4292 — PARES CRUZADOS (uma perna conciliada, outra pendente).
+    // Quando apenas UMA das pernas do par cheque-devolvido já foi conciliada (ex.: o
+    // débito foi conciliado ao lançamento da despesa do cheque, mas o crédito de devolução
+    // ainda está pendente), nem a passagem 2d (extratoSemLancamento) nem a 2e (concLinhas)
+    // detectam o par — cada passagem enxerga somente metade. Fix: 3ª passagem que combina
+    // TODOS os lançamentos (conciliados + pendentes), depois descarta pares já detectados
+    // nas passagens anteriores (dedup por debitoId:creditoId). READ-ONLY.
+    {
+      const _knownPairs = new Set<string>(
+        [...paresEstorno, ...paresConc].map((p: any) => `${p.debitoId}:${p.creditoId}`)
+      );
+      const allMin: LinhaEstornoMin[] = [...concMin, ...linhasMin];
+      const paresAll = detectarParesEstorno(allMin);
+      const paresHibrido = paresAll.filter(
+        (p: any) => !_knownPairs.has(`${p.debitoId}:${p.creditoId}`)
+      );
+      if (paresHibrido.length) {
+        const allLinesById = new Map<any, any>([
+          ...(Array.from(concById.entries()) as [any, any][]),
+          ...(Array.from(linhaById.entries()) as [any, any][]),
+        ]);
+        const chequesDevolvidosHibrido = paresHibrido.map((p: any, idx: number) => {
+          const deb: any = allLinesById.get(p.debitoId);
+          const cred: any = allLinesById.get(p.creditoId);
+          const cMatch = deb ? matchChequeLinha(deb) : null;
+          const debConciliado = concById.has(p.debitoId);
+          return {
+            grupoId: `devh-${idx}`,
+            doc: p.doc,
+            chequeNumero: p.chequeNumero,
+            valor: deb?.valor ?? cred?.valor ?? null,
+            valorCents: p.valorCents,
+            motivoCodigo: p.motivo?.codigo ?? null,
+            motivoTexto: p.motivo?.motivo ?? null,
+            motivoGrupo: p.motivo?.grupo ?? null,
+            motivoSustado: !!p.motivo?.sustado,
+            motivoReapresentavel: p.motivo?.reapresentavel ?? null,
+            dataDebito: p.dataDebito,
+            dataCredito: p.dataCredito,
+            descricaoDebito: p.descricaoDebito,
+            descricaoCredito: p.descricaoCredito,
+            fornecedor: cMatch?.fornecedorNome ?? null,
+            obraNome: cMatch?.obraNome ?? null,
+            nf: cMatch?.nf ?? null,
+            debitoId: p.debitoId,
+            creditoId: p.creditoId,
+            // Débito já conciliado = usuário lançou a despesa, mas o crédito de devolução
+            // ainda está pendente → continua "pendente" para o usuário tratar a quitação.
+            resolucao: debConciliado
+              ? { tipo: "pendente" }
+              : { tipo: "pendente" },
+            desconsiderado: !!(deb?.desconsideradoEm || cred?.desconsideradoEm),
+            jaConciliado: false,
+          };
+        });
+        chequesDevolvidos.push(...chequesDevolvidosHibrido);
+      }
+    }
+
     // 3) Lançamentos do sistema sem conciliação no período — APENAS desta conta.
     // Rev. 3188 — antes incluía também os lançamentos SEM conta (conta_bancaria_id IS
     // NULL), que apareciam (e eram contados) em TODAS as contas, inflando o KPI "ERP sem

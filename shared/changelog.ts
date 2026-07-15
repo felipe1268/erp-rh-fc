@@ -1,4 +1,35 @@
 /**
+ * Rev. 4292 - FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ FOI CONCILIADO.
+ *
+ * CONTEXTO:
+ *   O painel "Cheques devolvidos no banco" da Conciliação Bancária ficava vazio para cheques cuja
+ *   linha de DÉBITO (compensação) já havia sido conciliada manualmente com um lançamento de despesa
+ *   no ERP. Caso concreto: cheque 393 (Santander FC Aparecida, R$ 15.000), BSL 20565 (débito,
+ *   conciliado=1, entry_id=890793) + BSL 20569 (crédito de devolução, conciliado=0). O cheque
+ *   retornou por motivo 48 (sustação) mas não aparecia no painel para o usuário tratar a quitação.
+ *
+ * CAUSA RAIZ:
+ *   O motor de conciliação tem DUAS passagens de `detectarParesEstorno`:
+ *     - Passagem 2d: roda sobre `extratoSemLancamento` (linhas NÃO conciliadas → pendRes).
+ *     - Passagem 2e: roda sobre `concLinhas` (linhas JÁ conciliadas → concRes).
+ *   Quando o par está a CAVALO dos dois conjuntos (débito em concRes, crédito em pendRes),
+ *   nenhuma das duas passagens encontra o par completo — cada uma enxerga apenas metade.
+ *
+ * FIX:
+ *   3ª passagem híbrida (2f) que combina concMin + linhasMin em `allMin` e roda
+ *   `detectarParesEstorno` sobre o conjunto completo. Pares já detectados nas passagens
+ *   anteriores são descartados via Set de dedup por `"debitoId:creditoId"`. Pares novos
+ *   são adicionados a `chequesDevolvidos` com `resolucao.tipo="pendente"` e
+ *   `jaConciliado=false` — ficam visíveis no painel para o usuário tratar. READ-ONLY.
+ *
+ * ARQUIVOS TOCADOS:
+ *   - server/routers/financial.ts (bloco 2f após linha 2013)
+ *   - shared/version.ts
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4291 - FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS DO GRUPO.
  *
  * CONTEXTO:
