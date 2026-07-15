@@ -1064,7 +1064,7 @@ export default function FinanceiroCheques() {
               <div className="flex-1 min-w-[180px]">
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-8" value={fBusca} onChange={(e) => setFBusca(e.target.value)} placeholder="Buscar nº, fornecedor…" />
+                  <Input className="pl-8" value={fBusca} onChange={(e) => setFBusca(e.target.value)} placeholder="Buscar nº, fornecedor, valor…" />
                 </div>
               </div>
               <Select value={fStatus} onValueChange={setFStatus}>

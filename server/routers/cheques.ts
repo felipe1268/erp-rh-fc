@@ -1034,8 +1034,10 @@ export const chequesRouter = router({
     if (input.conciliado != null) { where.push(`conciliado=$${p++}`); params.push(input.conciliado ? 1 : 0); }
     if (input.fornecedor) { where.push(`LOWER(fornecedor_nome) LIKE $${p++}`); params.push(`%${input.fornecedor.toLowerCase()}%`); }
     if (input.busca) {
-      where.push(`(numero_cheque ILIKE $${p} OR LOWER(fornecedor_nome) LIKE $${p + 1})`);
-      params.push(`%${input.busca}%`, `%${input.busca.toLowerCase()}%`); p += 2;
+      // Normaliza vírgula BR → ponto para bater com valor numérico
+      const buscaValor = input.busca.replace(",", ".");
+      where.push(`(numero_cheque ILIKE $${p} OR LOWER(fornecedor_nome) LIKE $${p + 1} OR valor::text LIKE $${p + 2})`);
+      params.push(`%${input.busca}%`, `%${input.busca.toLowerCase()}%`, `%${buscaValor}%`); p += 3;
     }
     const res = await dbExecute(db,
       `SELECT id, company_id AS "companyId", conta_bancaria_id AS "contaBancariaId",
