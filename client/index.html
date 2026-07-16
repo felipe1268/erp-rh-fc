@@ -7,8 +7,33 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, user-scalable=yes, viewport-fit=cover" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>ERP - Gestão Integrada</title>
     <meta name="theme-color" content="#0A192F" />
+    <!-- Dead-page detector: se o #root continuar vazio após 4s (cache stale, porta errada,
+         chunk 404), força reload com cache-buster. Guard em localStorage (chave _erp_dp)
+         evita loop: só recarrega 1× a cada 15s. Script inline roda antes do módulo JS. -->
+    <script>
+      (function () {
+        try {
+          var KEY = '_erp_dp';
+          var last = Number(localStorage.getItem(KEY) || 0);
+          var now = Date.now();
+          if (now - last < 15000) return; // já tentou recentemente, não faz loop
+          setTimeout(function () {
+            var root = document.getElementById('root');
+            if (!root || root.children.length === 0) {
+              localStorage.setItem(KEY, String(Date.now()));
+              var u = new URL(location.href);
+              u.searchParams.set('_cb', String(Date.now()));
+              location.replace(u.toString());
+            }
+          }, 4000);
+        } catch (e) { /* modo privado ou sem suporte */ }
+      })();
+    </script>
     <!-- Rev. 2910 — PWA "Instalar/Abrir no app" removido: sem <link rel="manifest"> e sem
          meta tags *-web-app-capable, o navegador deixa de oferecer instalar/abrir como app.
          O Service Worker (/sw.js) continua registrado para o offline do Levantamento de Campo. -->
