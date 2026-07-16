@@ -7325,6 +7325,11 @@ REGRAS DE EXTRAÇÃO:
       import("../services/pjConformidadeJobs").then(m => m.startPJConformidadeJobs()).catch(e => console.error("[PJConformidadeJobs] Erro:", e))
     );
 
+    // t=10s — SMO Rev.4296: recomputa registros sem teto de sanidade salarial (one-shot, idempotente)
+    delay(10_000).then(() =>
+      import("../routers/smo").then(m => m.recomputarSmosSemRev()).catch(e => console.error("[SMO Rev.4296] Erro no recompute startup:", e))
+    );
+
     // t=150s — SyncMonitor (saúde do backup + sincronização do código com o GitHub)
     delay(150_000).then(() =>
       import("../services/syncMonitorJob").then(m => m.startSyncMonitorJob()).catch(e => console.error("[SyncMonitor] Erro:", e))

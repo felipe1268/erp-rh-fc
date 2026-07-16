@@ -1737,3 +1737,66 @@ export const smoRouter = router({
       };
     }),
 });
+
+// Rev. 4296 — Recomputa todos os registros de SMO que não têm rev:4296 no detalheCustos,
+// corrigindo custos calculados com salários anômalos (teto pisoFallback×12).
+// Chamado uma única vez no startup; registros já corrigidos (com rev) são ignorados.
+export async function recomputarSmosSemRev(): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    // Usa SQL bruto para evitar dependência de isNull dinâmico
+    const result = await db.execute(sql`
+      SELECT id, company_id, obra_id, funcao_solicitada, quantidade, duracao_meses,
+             COALESCE(regime_contratacao, 'experiencia') AS regime_contratacao,
+             detalhe_custos
+      FROM smo_solicitacoes
+      WHERE deleted_at IS NULL
+        AND (detalhe_custos IS NULL OR detalhe_custos NOT LIKE '%"rev":%')
+    `);
+
+    const rows = (result as any)?.rows ?? result ?? [];
+    const aCorrigir: any[] = Array.isArray(rows) ? rows : [];
+
+    console.log(`[SMO Rev.4296] ${aCorrigir.length} SMO(s) sem rev encontrado(s) para recompute.`);
+    if (aCorrigir.length === 0) {
+      console.log("[SMO Rev.4296] Nenhum registro pendente — OK.");
+      return;
+    }
+
+    let corrigidos = 0;
+    let anomalos = 0;
+
+    for (const s of aCorrigir) {
+      try {
+        const reg = ((s.regime_contratacao as string) || "experiencia") as RegimeContratacao;
+        const computed = await computeCustoSMO(
+          db,
+          { companyId: Number(s.company_id) },
+          Number(s.obra_id),
+          String(s.funcao_solicitada),
+          Number(s.quantidade) || 1,
+          Number(s.duracao_meses) || 1,
+          reg,
+        );
+        await db.execute(sql`
+          UPDATE smo_solicitacoes
+          SET custo_mensal_estimado = ${String(computed.custoMensal.toFixed(2))},
+              custo_total_estimado  = ${String(computed.custoTotal.toFixed(2))},
+              detalhe_custos        = ${JSON.stringify(computed.detalhes)},
+              atualizado_em         = NOW()
+          WHERE id = ${Number(s.id)}
+        `);
+        if (computed.detalhes.alertaSalarioAnomalo) anomalos++;
+        corrigidos++;
+      } catch (e: any) {
+        console.error(`[SMO Rev.4296] FALHA ao recomputar SMO id=${s.id}:`, e?.message ?? e);
+      }
+    }
+
+    console.log(`[SMO Rev.4296] Concluído — ${corrigidos} recomputado(s)${anomalos > 0 ? `, ${anomalos} com salário anômalo corrigido` : ""}.`);
+  } catch (e: any) {
+    console.error("[SMO Rev.4296] Erro no job de recompute:", e?.message ?? e);
+  }
+}
