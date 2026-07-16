@@ -2,7 +2,7 @@ import { useRoute } from "wouter";
 import { useRef, useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShieldCheck, AlertTriangle, CheckCircle2, FileText, Users, Building2, ZoomIn, ZoomOut, Printer, Maximize2, Eye, X, PenLine, Hourglass } from "lucide-react";
+import { Loader2, ShieldCheck, AlertTriangle, CheckCircle2, FileText, Users, Building2, ZoomIn, ZoomOut, Printer, Maximize2, Eye, X, PenLine, Hourglass, RotateCcw, ChevronDown } from "lucide-react";
 import SignaturePad, { type SignaturePadHandle } from "@/components/SignaturePad";
 import { toast } from "sonner";
 import DOMPurify from "dompurify";
@@ -25,9 +25,14 @@ export default function AssinarDocumento() {
   const [justSigned, setJustSigned] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [readerOpen, setReaderOpen] = useState(false);
+  const [showRevision, setShowRevision] = useState(false);
+  const [revMotivo, setRevMotivo] = useState("");
+  const [revSubmitting, setRevSubmitting] = useState(false);
+  const [revisionSent, setRevisionSent] = useState(false);
 
   const q = trpc.signatures.getByToken.useQuery({ token }, { enabled: token.length === 64, retry: false });
   const signMut = trpc.signatures.sign.useMutation();
+  const revisionMut = trpc.signatures.requestRevision.useMutation();
   const utils = trpc.useUtils();
 
   // XSS hardening — sanitiza HTML do documento antes de renderizar (defense in depth).
@@ -53,6 +58,21 @@ export default function AssinarDocumento() {
       toast.error(e?.message || "Falha ao registrar assinatura.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRequestRevision = async () => {
+    if (revMotivo.trim().length < 10) { toast.error("Descreva o que precisa ser ajustado (mínimo 10 caracteres)."); return; }
+    setRevSubmitting(true);
+    try {
+      await revisionMut.mutateAsync({ token, motivo: revMotivo.trim() });
+      setRevisionSent(true);
+      toast.success("Solicitação de revisão enviada. O RH será notificado.");
+      await utils.signatures.getByToken.invalidate({ token });
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao enviar solicitação de revisão.");
+    } finally {
+      setRevSubmitting(false);
     }
   };
 
@@ -256,6 +276,13 @@ export default function AssinarDocumento() {
               )}
               <p className="text-[11px] text-amber-700 mt-2">Atualize esta página ou aguarde a notificação do RH quando for sua vez.</p>
             </div>
+          ) : revisionSent ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-amber-800 font-semibold text-sm"><RotateCcw className="h-4 w-4" /> Revisão solicitada</div>
+              <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                Sua solicitação foi registrada. O RH receberá o motivo e entrará em contato para os ajustes necessários.
+              </p>
+            </div>
           ) : (
             <div className="bg-white rounded-lg shadow border border-slate-200 p-4">
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Sua assinatura ({signer.ordem}ª na ordem)</div>
@@ -272,6 +299,57 @@ export default function AssinarDocumento() {
                 {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
                 Confirmar Assinatura
               </Button>
+
+              {/* Solicitar Revisão — expansível */}
+              {!showRevision ? (
+                <button
+                  type="button"
+                  onClick={() => setShowRevision(true)}
+                  className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs text-amber-700 hover:text-amber-900 border border-amber-200 hover:border-amber-400 bg-amber-50 hover:bg-amber-100 rounded-md py-2 transition"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Não concordo — Solicitar revisão
+                  <ChevronDown className="h-3 w-3 ml-0.5" />
+                </button>
+              ) : (
+                <div className="mt-2 border border-amber-300 bg-amber-50 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-amber-800 flex items-center gap-1"><RotateCcw className="h-3.5 w-3.5" /> Solicitar revisão do contrato</span>
+                    <button type="button" onClick={() => { setShowRevision(false); setRevMotivo(""); }} className="text-amber-600 hover:text-amber-800">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-amber-700 leading-relaxed">
+                    Descreva o que precisa ser ajustado. O RH será notificado e o contrato ficará bloqueado até a correção.
+                  </p>
+                  <textarea
+                    value={revMotivo}
+                    onChange={(e) => setRevMotivo(e.target.value)}
+                    placeholder="Ex: O valor do contrato está incorreto — deveria ser R$ 5.000,00..."
+                    maxLength={1000}
+                    rows={4}
+                    className="w-full text-xs border border-amber-300 rounded p-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={handleRequestRevision}
+                      disabled={revSubmitting || revMotivo.trim().length < 10}
+                      size="sm"
+                      className="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                    >
+                      {revSubmitting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                      Enviar solicitação
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowRevision(false); setRevMotivo(""); }}
+                      className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </aside>

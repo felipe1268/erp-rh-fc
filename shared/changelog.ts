@@ -1,4 +1,40 @@
 /**
+ * Rev. 4301 - FCSIGN: BOTÃO "SOLICITAR REVISÃO" PARA O ASSINANTE NA TELA DE ASSINATURA
+ *
+ * CONTEXTO:
+ *   O assinante (ex: CONTRATANTE - FC Engenharia) não tinha forma de recusar o contrato
+ *   diretamente na tela de assinatura. Precisava contatar o RH manualmente, enquanto os
+ *   demais assinantes continuavam aguardando e podendo potencialmente assinar um documento
+ *   que continha erros.
+ *
+ * SOLUÇÃO:
+ *   1. Backend — nova procedure pública `signatures.requestRevision({ token, motivo })`:
+ *      - Valida que o signer não assinou ainda e a sessão está pendente/em_andamento
+ *      - Marca a sessão como `status='cancelado'` com `observacoes='[Revisão solicitada por
+ *        NOME em DD/MM/YYYY] motivo'` — bloqueia todos os demais assinantes imediatamente
+ *      - Log: [FCSign] requestRevision sess=N signer=NOME motivo="..."
+ *
+ *   2. Frontend `AssinarDocumento.tsx` — novo botão amber "Não concordo — Solicitar revisão"
+ *      embaixo do "Confirmar Assinatura":
+ *      - Expande inline uma textarea para descrever os ajustes necessários (mín 10 chars)
+ *      - Botão "Enviar solicitação" chama a procedure; estado de sucesso substitui o painel
+ *      - Após envio: card âmbar "Revisão solicitada" + mensagem para aguardar contato do RH
+ *
+ *   3. Frontend `Colaboradores.tsx` — novo bloco "Bloco A2: Revisão solicitada pelo assinante"
+ *      no RAIO-X do colaborador (aba Documentos):
+ *      - Filtra `fcSessions` por `status='cancelado'` E `observacoes.startsWith('[Revisão solicitada')`
+ *      - Exibe o motivo completo (break-words) + nome do emissor do contrato
+ *      - Visível para admin/RH para que saibam o que precisa ser corrigido antes de reemitir
+ *
+ * ARQUIVOS TOCADOS:
+ *   - server/routers/signatures.ts (nova procedure requestRevision — publicProcedure)
+ *   - client/src/pages/AssinarDocumento.tsx (botão + form inline + estado de sucesso)
+ *   - client/src/pages/Colaboradores.tsx (bloco A2 no RAIO-X de documentos)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4300 - NFS-e: SUPORTE AO FORMATO NFS-e NACIONAL (SPED/RFB v1.01) NO IMPORT XML
  *
  * CONTEXTO:

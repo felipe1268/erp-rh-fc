@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4301** — **FCSIGN: BOTÃO "SOLICITAR REVISÃO" PARA O ASSINANTE NA TELA DE ASSINATURA.** Assinante não tinha como recusar o contrato sem contato manual com o RH. Nova procedure pública `signatures.requestRevision({ token, motivo })` cancela a sessão registrando `[Revisão solicitada por NOME em DD/MM]` no campo `observacoes` — bloqueia todos os demais assinantes imediatamente. Frontend `AssinarDocumento.tsx`: botão amber "Não concordo — Solicitar revisão" expande inline uma textarea; após envio exibe card âmbar de confirmação. RAIO-X do colaborador (`Colaboradores.tsx`): novo bloco "Revisão solicitada pelo assinante" exibe o motivo para o admin/RH saber o que corrigir antes de reemitir. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4300** — **NFS-e: SUPORTE AO FORMATO NFS-e NACIONAL (SPED/RFB v1.01) NO IMPORT XML.** Log de produção revelou root `<NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe>` — padrão RFB completamente diferente do ABRASF/SIAP GEO (campos: nNFSe, dhEmi, prest/toma/serv/valores, trib.tribMun, retTrib). Novo bloco no importNfseXmlManual detecta `xmlParsed.NFSe.infNFSe` e faz INSERT com todos os campos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4299** — **NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING.** `parseDateBR` retornava `"0"` (truthy) para tags de data ausentes → `"0"::date` explodindo no PostgreSQL. Fix: retorna `null` para valores não-reconhecidos. Novo handler `ListaNfse.CompNfse` para XMLs do Portal Nacional 2026 com múltiplas notas. Toast de erro agora mostra descrição do primeiro erro + `console.error` no backend. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4299** — **NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING.** `parseDateBR` retornava `"0"` para tags ausentes → `"0"::date` explodindo no PostgreSQL. Fix: retorna `null`. Handler `ListaNfse.CompNfse` + toast com descrição do erro. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4298** — **SMO: FIX CRÍTICO — COLUMNNAME MISMATCH totalVA_iFood + CONFIG PARA R$ 700 VA (CONVENÇÃO 2026-2028).** `parseBRL(mealCfg.totalVaIFood ?? mealCfg['totalVA_iFood'])`; meal_benefit_configs id=4 atualizado VA=R$ 700,00. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4295** — **INTEGRASIGN: FLUXO "SOLICITAR REVISÕES" DISTINTO DE "RECUSAR DEFINITIVAMENTE".** Botão amber + 2 opções distintas (revisão vs recusa definitiva). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4294** — **HE: LIMPAR ASSINATURA DE CONFIRMAÇÃO DE PRESENÇA (ADMIN/ADMIN_MASTER).** Gate backend + botão Limpar (laranja) + AlertDialog. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4293** — **CONTRATO PJ: NOME DO SÓCIO/ADMINISTRADOR COMO REPRESENTANTE + DADOS BANCÁRIOS DO PRESTADOR.** SyncSchema+ Rev. 4293, 4 colunas novas em `pj_contracts`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

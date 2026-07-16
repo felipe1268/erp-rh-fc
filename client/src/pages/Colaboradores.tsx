@@ -4778,6 +4778,32 @@ function DocumentUploadSection({ employeeId, companyId }: { employeeId: number; 
         </div>
       )}
 
+      {/* ── Bloco A2: sessões FCSign com revisão solicitada (canceladas pelo assinante) ── */}
+      {(() => {
+        const revisoesAbertas = (fcSessions || []).filter(
+          (s: any) => s.status === 'cancelado' && typeof s.observacoes === 'string' && s.observacoes.startsWith('[Revisão solicitada')
+        );
+        if (revisoesAbertas.length === 0) return null;
+        return (
+          <div className="rounded-xl border border-amber-300 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-900 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">Revisão solicitada pelo assinante</span>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-600 text-white">{revisoesAbertas.length}</span>
+            </div>
+            <div className="space-y-2">
+              {revisoesAbertas.map((s: any) => (
+                <div key={s.id} className="bg-white dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-100">{fcsignLabel(s.tipo, s.documentTitle)}</div>
+                  <div className="mt-1 text-[11px] text-amber-700 dark:text-amber-300 break-words">{s.observacoes}</div>
+                  <div className="mt-1 text-[10px] text-slate-500">Emitido por: {s.createdByName}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Bloco B: upload manual — lista amigável de documentos por tipo ── */}
       <div>
         <div className="flex items-center justify-between gap-2 mb-1">

@@ -937,6 +937,32 @@ export const signaturesRouter = router({
       return { success: true };
     }),
 
+  // Solicitar revisão do contrato pelo próprio assinante (via token, sem login).
+  // Cancela a sessão com motivo registrado — bloqueia demais assinantes.
+  requestRevision: publicProcedure
+    .input(z.object({ token: z.string().length(64), motivo: z.string().min(10).max(1000) }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const [signer] = await db.select().from(signatureSigners)
+        .where(eq(signatureSigners.token, input.token)).limit(1);
+      if (!signer) throw new TRPCError({ code: "NOT_FOUND", message: "Link inválido ou expirado." });
+      if (signer.signedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Você já assinou este documento. Não é possível solicitar revisão após assinar." });
+      const [session] = await db.select().from(signatureSessions)
+        .where(eq(signatureSessions.id, signer.sessionId)).limit(1);
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada." });
+      if (session.status === "cancelado") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta sessão já foi cancelada." });
+      if (session.status === "completo") throw new TRPCError({ code: "BAD_REQUEST", message: "Este documento já foi assinado por todos. Não é possível solicitar revisão." });
+      const dataFmt = new Date().toLocaleDateString("pt-BR");
+      const obs = `[Revisão solicitada por ${signer.nome} em ${dataFmt}] ${input.motivo.trim()}`;
+      await db.update(signatureSessions).set({
+        status: "cancelado",
+        cancelledAt: new Date().toISOString(),
+        observacoes: obs,
+      }).where(eq(signatureSessions.id, session.id));
+      console.log(`[FCSign] requestRevision sess=${session.id} signer=${signer.nome} motivo="${input.motivo.substring(0, 80)}"`);
+      return { success: true };
+    }),
+
   // Cancelar sessao
   cancel: protectedProcedure
     .input(z.object({
