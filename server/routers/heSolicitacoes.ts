@@ -1262,6 +1262,51 @@ export const heSolicitacoesRouter = router({
     return { ok: true };
   }),
 
+  limparAssinaturaConfirmacao: protectedProcedure.input(z.object({
+    solicitacaoId: z.number(),
+    employeeId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    const userRole = (ctx.user as any)?.role || (ctx.user as any)?.tipo;
+    if (userRole !== "admin_master" && userRole !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem limpar assinaturas de confirmação" });
+    }
+
+    const [sol] = await db.select({ id: heSolicitacoes.id, companyId: heSolicitacoes.companyId })
+      .from(heSolicitacoes).where(eq(heSolicitacoes.id, input.solicitacaoId));
+    if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+
+    const [conf] = await db.select({ id: heSolicitacaoConfirmacoes.id })
+      .from(heSolicitacaoConfirmacoes)
+      .where(and(
+        eq(heSolicitacaoConfirmacoes.solicitacaoId, input.solicitacaoId),
+        eq(heSolicitacaoConfirmacoes.employeeId, input.employeeId),
+      ));
+    if (!conf) throw new TRPCError({ code: "NOT_FOUND", message: "Confirmação não encontrada para este funcionário" });
+
+    const [emp] = await db.select({ nome: employees.nomeCompleto })
+      .from(employees).where(eq(employees.id, input.employeeId));
+
+    await db.delete(heSolicitacaoConfirmacoes)
+      .where(and(
+        eq(heSolicitacaoConfirmacoes.solicitacaoId, input.solicitacaoId),
+        eq(heSolicitacaoConfirmacoes.employeeId, input.employeeId),
+      ));
+
+    await createAuditLog({
+      userId: ctx.user?.id,
+      action: "limpar_assinatura_confirmacao_he",
+      entity: "he_solicitacao_confirmacoes",
+      entityId: conf.id,
+      details: `Assinatura de confirmação de ${emp?.nome || `ID ${input.employeeId}`} na HE #${input.solicitacaoId} removida por ${ctx.user?.name || "admin"}. Funcionário poderá assinar novamente.`,
+      companyId: sol.companyId,
+    });
+
+    return { ok: true };
+  }),
+
   enviarProvaAlternativa: protectedProcedure.input(z.object({
     confirmacaoId: z.number(),
     provaBase64: z.string().min(100, "Arquivo inválido"),

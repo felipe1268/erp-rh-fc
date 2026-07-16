@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { fmtNum } from "@/lib/formatters";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import {
   Clock, Plus, CheckCircle, CheckCircle2, XCircle, AlertTriangle, Send,
@@ -408,6 +408,7 @@ export default function SolicitacaoHE() {
   const [modoComparecimento, setModoComparecimento] = useState(false);
   const [verAssinatura, setVerAssinatura] = useState<number | null>(null);
   const [ausenciaDialog, setAusenciaDialog] = useState<{ employeeId: number; nome: string; solicitacaoId: number; dataSolicitacao?: string; bulk?: { employeeId: number; nome: string }[] } | null>(null);
+  const [limparConfDialog, setLimparConfDialog] = useState<{ solicitacaoId: number; employeeId: number; employeeNome: string } | null>(null);
   const [justificativaTexto, setJustificativaTexto] = useState("");
 
   const confirmQ = trpc.heSolicitacoes.getConfirmacoes.useQuery(
@@ -446,6 +447,15 @@ export default function SolicitacaoHE() {
       utils.heSolicitacoes.getConfirmacoes.invalidate();
     },
     onError: (err) => toast.error(err.message),
+  });
+
+  const limparAssinaturaConfMut = trpc.heSolicitacoes.limparAssinaturaConfirmacao.useMutation({
+    onSuccess: () => {
+      toast.success("Assinatura removida. O funcionário poderá assinar novamente.");
+      setLimparConfDialog(null);
+      utils.heSolicitacoes.getConfirmacoes.invalidate();
+    },
+    onError: (err) => { toast.error(err.message); setLimparConfDialog(null); },
   });
 
   const handleProvaAlternativa = useCallback((confirmacaoId: number) => {
@@ -2082,6 +2092,17 @@ export default function SolicitacaoHE() {
                                     {verAssinatura === c.id ? "Ocultar" : "Ver Assinatura"}
                                   </button>
                                 )}
+                                {c.assinaturaUrl && (isAdminMaster || user?.role === "admin") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setLimparConfDialog({ solicitacaoId: sol.id, employeeId: c.employeeId, employeeNome: c.nomeCompleto || `ID ${c.employeeId}` })}
+                                    className="text-xs text-orange-600 hover:text-orange-800 flex items-center gap-1 shrink-0"
+                                    title="Limpar assinatura (apenas admins)"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                    Limpar
+                                  </button>
+                                )}
                               </div>
                               {c.observacao && c.compareceu === false && (
                                 <p className="text-xs text-red-600 italic pl-1">{c.observacao}</p>
@@ -2539,6 +2560,35 @@ export default function SolicitacaoHE() {
             <ShieldAlert className="h-4 w-4 mr-1" />
             Não justificou — Advertência
           </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog open={!!limparConfDialog} onOpenChange={(open) => { if (!open) setLimparConfDialog(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-orange-700">
+            <Trash2 className="h-5 w-5" /> Limpar Assinatura de Confirmação
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-sm">
+            Você está prestes a remover a assinatura de <strong>{limparConfDialog?.employeeNome}</strong> nesta solicitação de HE.
+            <br /><br />
+            O funcionário ficará como <em>não assinado</em> e poderá assinar novamente. Esta ação fica registrada no log de auditoria.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={limparAssinaturaConfMut.isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-orange-600 hover:bg-orange-700"
+            disabled={limparAssinaturaConfMut.isPending}
+            onClick={() => {
+              if (!limparConfDialog) return;
+              limparAssinaturaConfMut.mutate({ solicitacaoId: limparConfDialog.solicitacaoId, employeeId: limparConfDialog.employeeId });
+            }}
+          >
+            {limparAssinaturaConfMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+            Limpar Assinatura
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

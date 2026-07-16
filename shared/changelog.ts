@@ -1,4 +1,45 @@
 /**
+ * Rev. 4294 - HE: LIMPAR ASSINATURA DE CONFIRMAÇÃO DE PRESENÇA (ADMIN/ADMIN_MASTER)
+ *
+ * CONTEXTO:
+ *   Quando um funcionário assina com o nome errado (assinatura divergente ou simplesmente incorreta),
+ *   não havia forma de limpar a assinatura para que ele assinasse novamente. A única saída era
+ *   enviar uma prova alternativa (foto/vídeo), o que nem sempre é viável ou adequado.
+ *
+ * PROBLEMA:
+ *   O campo `he_solicitacao_confirmacoes` guardava a assinatura sem mecanismo de remoção.
+ *   `confirmarPresenca` bloqueava re-assinatura com CONFLICT se já existia registro.
+ *   Não havia endpoint nem UI para limpar a assinatura de um funcionário específico.
+ *
+ * SOLUÇÃO:
+ *   Backend: novo procedure `limparAssinaturaConfirmacao` em heSolicitacoes.ts:
+ *   - Gate duplo: apenas `admin_master` ou `admin` podem executar (igual ao `limparAssinaturaMemorial`).
+ *   - Valida que a solicitação e a confirmação existem e pertencem à empresa.
+ *   - Deleta a linha de `he_solicitacao_confirmacoes` (solicitacaoId + employeeId).
+ *   - Grava audit log com action `limpar_assinatura_confirmacao_he`.
+ *
+ *   Frontend (SolicitacaoHE.tsx):
+ *   - Botão "Limpar" (ícone Trash2, cor laranja) aparece ao lado de "Ver Assinatura"
+ *     somente para usuários `admin_master` ou `admin`.
+ *   - Clique abre AlertDialog de confirmação com nome do funcionário.
+ *   - Após confirmação, chama a mutation e invalida `getConfirmacoes`.
+ *   - Estado: `limparConfDialog` com solicitacaoId, employeeId, employeeNome.
+ *
+ * ARQUIVOS ALTERADOS:
+ *   - server/routers/heSolicitacoes.ts (novo procedure limparAssinaturaConfirmacao)
+ *   - client/src/pages/SolicitacaoHE.tsx (estado + mutation + botão + AlertDialog)
+ *   - shared/version.ts (Rev. 4294)
+ *
+ * SEGURANÇA:
+ *   - Gate de role no BACKEND (não só na UI) — admin_master ou admin.
+ *   - Audit log rastreável: quem limpou, qual HE, qual funcionário.
+ *   - Não altera `assinatura_memorial` do funcionário — apenas remove a confirmação desta HE.
+ *   - Funcionário pode assinar novamente normalmente após a limpeza.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4293 - CONTRATO PJ: NOME DO SÓCIO/ADMINISTRADOR COMO REPRESENTANTE + DADOS BANCÁRIOS DO PRESTADOR.
  *
  * CONTEXTO:

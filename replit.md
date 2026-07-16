@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4294** — **HE: LIMPAR ASSINATURA DE CONFIRMAÇÃO DE PRESENÇA (ADMIN/ADMIN_MASTER).** Quando funcionário assina com nome errado não havia como limpar — ele ficava bloqueado de re-assinar. Fix: novo procedure `limparAssinaturaConfirmacao` (gate: admin_master ou admin no backend, não só na UI) que deleta a linha de `he_solicitacao_confirmacoes` e grava audit log. Frontend: botão "Limpar" (laranja, Trash2) ao lado de "Ver Assinatura" só visível p/ admins → AlertDialog de confirmação com nome do funcionário → mutation invalida `getConfirmacoes`. Assinatura memorial do funcionário NÃO é afetada. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4293** — **CONTRATO PJ: NOME DO SÓCIO/ADMINISTRADOR COMO REPRESENTANTE + DADOS BANCÁRIOS DO PRESTADOR.** O campo `[CONTRATANTE_REPRESENTANTE]` ficava em branco porque `companies` não tem `responsavelLegal`; fonte correta é `company_partners`. Fix: subquery em `company_partners` no `getById` retorna `companyRepresentante` (1º sócio ativo). Dados bancários: 4 novas colunas em `pj_contracts` (`banco_prestador`, `agencia_prestador`, `conta_prestador`, `pix_prestador`), SyncSchema+ Rev. 4293, seção "Dados Bancários da Contratada" no form de `ModuloPJ` e bloco de exibição no `ContratoPJView`. Placeholder `[DADOS_BANCARIOS_CONTRATADA]` também suportado no modelo e no FCSign. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4292** — **FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ CONCILIADO + CRÉDITO VAZAVA PARA "SEM LANÇAMENTO".** Motor de conciliação rodava `detectarParesEstorno` em 2 passagens separadas (pendRes e concRes). Par com débito em concRes + crédito em pendRes (cavalo) não era detectado. Fix (A): 3ª passagem híbrida combina `concMin + linhasMin` e dedup por `debitoId:creditoId`. Fix (B): perna em pendRes recebe `.reversal` para sair de "No extrato, sem lançamento". Caso real: cheque 393 Santander FC Aparecida R$ 15.000, motivo 48. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4292** — **FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ CONCILIADO + CRÉDITO VAZAVA PARA "SEM LANÇAMENTO".** 3ª passagem híbrida + dedup por debitoId:creditoId. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4291** — **FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS.** Dedup por `${cpfLimpo}:${skillId}` + COUNT DISTINCT por CPF limpo. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4288** — **FEATURE: LEITOR IA EXTRAI MAT/MO EM COTAÇÕES TIPO PACOTE.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4287** — **FIX: MAPA DE COTAÇÃO (PACOTE) — COLUNAS MAT/MO NÃO EDITÁVEIS E MO ZERADA.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4286 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4287 e anteriores.
 
 ## User preferences
 

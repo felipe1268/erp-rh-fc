@@ -1,3 +1,4 @@
+- **Rev. 4287** — **FIX: MAPA DE COTAÇÃO (PACOTE) — COLUNAS MAT/MO NÃO EDITÁVEIS E MO ZERADA.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4286** — **FIX: SOLICITAÇÕES — ReferenceError "Can't find variable: selecionados".** Fix: substituir pela condição correta do contexto: `(selectedEapIds.has(it.id) || qtdVal > 0)`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4285** — **FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (+R$ 0,05).** Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4284** — **COTAÇÕES/COMPRAS: ADIANTAMENTO (SINAL) E RETENÇÃO DE GARANTIA NO DIALOG "CONDIÇÕES DE PAGAMENTO".** 10 colunas novas em `compras_cotacao_fornecedores`, 10 em `compras_ordens`, 3 em `terceiro_medicoes`. ZERO DELETE · ZERO ALTER destrutivo.
