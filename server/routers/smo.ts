@@ -246,7 +246,9 @@ function calcBeneficiosFromConfig(mealCfg: any, convVrDiario: number, convVaMens
     vrMensal = cafeMensal + lancheMensal;
 
     const cfgVaMensal = parseBRL(mealCfg.valeAlimentacaoMes);
-    const cfgTotalIFood = parseBRL(mealCfg.totalVaIFood);
+    // Rev. 4298 — Fix: resolveMealBenefitConfig usa SELECT * raw → retorna "totalVA_iFood" (DB name),
+    // não "totalVaIFood" (Drizzle JS name). Checar ambos para compatibilidade.
+    const cfgTotalIFood = parseBRL(mealCfg.totalVaIFood ?? (mealCfg as any)['totalVA_iFood']);
 
     if (cfgTotalIFood > 0) {
       vaMensal = Math.round((cfgTotalIFood - vrMensal) * 100) / 100;

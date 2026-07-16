@@ -1,4 +1,36 @@
 /**
+ * Rev. 4298 - SMO: FIX CRÍTICO — COLUMNNAME MISMATCH totalVA_iFood + CONFIG PARA R$ 700 VA (CONVENÇÃO 2026-2028)
+ *
+ * CONTEXTO:
+ *   Todos os SMOs ativos exibiam benefVA = R$ 10.658,56 (erro ~22×). Causa raiz: a função
+ *   `resolveMealBenefitConfig` usa `db.execute(sql\`SELECT *\`)` (SQL raw), que retorna o
+ *   nome literal da coluna do banco: "totalVA_iFood" (com VA maiúsculo). Mas
+ *   `calcBeneficiosFromConfig` acessava `mealCfg.totalVaIFood` (Drizzle JS name com 'va'
+ *   minúsculo). O mismatch resultava em `parseBRL(undefined) = 0`, caindo no else-if:
+ *   `vaMensal = cfgVaMensal × 22 = 484,48 × 22 = R$ 10.658,56`.
+ *
+ * SOLUÇÃO:
+ *   1. calcBeneficiosFromConfig: `parseBRL(mealCfg.totalVaIFood ?? mealCfg['totalVA_iFood'])`
+ *      — lê ambos os nomes de propriedade para compatibilidade com raw SQL e Drizzle ORM.
+ *   2. meal_benefit_configs id=4 (PADRÃO, vigência 2026-2027): atualizado conforme convenção
+ *      coletiva SINDICATOS × SINDUSCON-SP 2026-2028 (Guaratinguetá): VA = R$ 700,00/mês por
+ *      pessoa (tudo incluso), sem café da manhã / lanche separados (cafeAtivo=0, lancheAtivo=0).
+ *   3. Todos os 5 SMOs ativos com benefVA > R$ 5.000 tiveram detalhe_custos limpo no banco
+ *      → serão recomputados automaticamente na próxima abertura (trigger getById benefVR==null).
+ *   4. Startup job também reprocessará na próxima inicialização.
+ *
+ * RESULTADO ESPERADO (Ajudante Geral, salário R$ 1.738):
+ *   VR = R$ 0,00 | VA = R$ 700,00 | VT = R$ 104,28 | EPI = R$ 45,00
+ *   Benefícios = R$ 849,28/pessoa (vs R$ 11.027 antes)
+ *   Custo estimado SMO-0012 (6 vagas, 3m) ≈ R$ 77.500 (vs R$ 260.716 antes)
+ *
+ * ARQUIVOS:
+ *   server/routers/smo.ts, server/services/mealBenefitResolver.ts (diagnóstico), shared/version.ts
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4297 - SMO: DETALHAMENTO DE BENEFÍCIOS (VR/VA/VT) + ALERTA DE BENEFÍCIO ANÔMALO
  *
  * CONTEXTO:

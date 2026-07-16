@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4297** — **SMO: DETALHAMENTO VR/VA/VT NO BENEFÍCIO + ALERTA DE BENEFÍCIO ANÔMALO.** Investigação revelou que o campo "Benefícios" no SMO-0012 exibia R$ 11.027/pessoa (7-10× acima do normal; construção civil BR: R$ 900-1.800/pessoa). Causa: `totalVaIFood` na config de Benefícios de Alimentação provavelmente com total da obra (todos funcionários) em vez de valor por pessoa. Fix: `computeCustoSMO` grava `benefVR/benefVA/benefVT/benefFixos` separadamente; UI expande linha Benefícios com breakdown `↳ VR / VA / VT / EPI`; alerta vermelho instrui onde corrigir (`alertaBeneficioAnomalo` quando VR+VA > salário×1,2); `getById` recomputa se `benefVR==null`; startup job filtra por `NOT LIKE '%"benefVR":%'`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4298** — **SMO: FIX CRÍTICO — COLUMNNAME MISMATCH totalVA_iFood + CONFIG PARA R$ 700 VA (CONVENÇÃO 2026-2028).** `resolveMealBenefitConfig` usa `SELECT *` raw → retorna `"totalVA_iFood"` (DB), mas `calcBeneficiosFromConfig` lia `totalVaIFood` (Drizzle JS); mismatch → `parseBRL(undefined)=0` → else-if → `484,48×22=R$ 10.658,56`. Fix: `parseBRL(mealCfg.totalVaIFood ?? mealCfg['totalVA_iFood'])`. meal_benefit_configs id=4 (PADRÃO) atualizado: VA=R$ 700,00, sem VR (convenção SINDUSCON-SP 2026-2028 Guaratinguetá). 5 SMOs com benefVA>5k limpos no banco → recompute automático. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4296** — **SMO: TETO DE SANIDADE SALARIAL NO CÁLCULO DE CUSTO ESTIMADO.** SMO-0013 (Pedreiro, 2 vagas, 4m) exibia R$ 4.263.265,10 (~100× correto). Causa: único Pedreiro ativo no cadastro com `salarioBase` incorreto (~R$ 313k); `calcSalarioMediana` não filtra outlier quando há 1 único ponto. Fix: teto `pisoFallback × 12` em `computeCustoSMO`, `create` inline e `calcularImpactoFinanceiro`; flag `alertaSalarioAnomalo` no JSON; alerta laranja no detalhe; `getById` recomputa automaticamente SMOs antigas via `|| !parsed.rev`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4297** — **SMO: DETALHAMENTO VR/VA/VT NO BENEFÍCIO + ALERTA DE BENEFÍCIO ANÔMALO.** Investigação revelou que o campo "Benefícios" no SMO-0012 exibia R$ 11.027/pessoa (7-10× acima do normal; construção civil BR: R$ 900-1.800/pessoa). Fix: `computeCustoSMO` grava `benefVR/benefVA/benefVT/benefFixos` separadamente; UI expande linha Benefícios com breakdown; alerta vermelho `alertaBeneficioAnomalo`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4296** — **SMO: TETO DE SANIDADE SALARIAL NO CÁLCULO DE CUSTO ESTIMADO.** Teto `pisoFallback×12` em `computeCustoSMO`; flag `alertaSalarioAnomalo`; `getById` recomputa via `|| !parsed.rev`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4295** — **INTEGRASIGN: FLUXO "SOLICITAR REVISÕES" DISTINTO DE "RECUSAR DEFINITIVAMENTE".** Botão amber + 2 opções distintas (revisão vs recusa definitiva). ZERO DELETE · ZERO ALTER destrutivo.
 
