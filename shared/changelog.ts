@@ -1,4 +1,36 @@
 /**
+ * Rev. 4297 - SMO: DETALHAMENTO DE BENEFÍCIOS (VR/VA/VT) + ALERTA DE BENEFÍCIO ANÔMALO
+ *
+ * CONTEXTO:
+ *   Ao investigar se os valores do SMO estavam corretos, identificou-se que o cálculo era
+ *   internamente consistente, mas o insumo "Benefícios" estava inflado (~R$ 11.027/pessoa
+ *   no SMO-0012, quando o normal para construção civil é R$ 900-1.800/pessoa). A causa é
+ *   provável configuração errada no campo "totalVaIFood" (Benefícios de Alimentação) — o
+ *   campo "Total/mês" pode ter sido preenchido com o total da obra (todos os funcionários)
+ *   em vez do valor por pessoa, ou com valor anual em vez de mensal.
+ *
+ * SOLUÇÃO:
+ *   1. computeCustoSMO: agora grava benefVR, benefVA, benefVT, benefFixos separadamente
+ *      no JSON de detalhes, além de flag alertaBeneficioAnomalo quando (VR+VA) > salário × 1,2.
+ *   2. SolicitacaoMDO.tsx: expande linha "Benefícios" com breakdown ↳ VR / ↳ VA / ↳ VT / ↳ EPI,
+ *      e exibe alerta vermelho com instrução de onde corrigir quando alertaBeneficioAnomalo=true.
+ *   3. getById trigger: adicionado `|| parsed.benefVR == null` para recomputar automaticamente
+ *      registros Rev. 4296 (que não têm o breakdown) na próxima abertura.
+ *   4. Startup job: filtro atualizado para NOT LIKE '%"benefVR":%' (mais confiável que checar rev#).
+ *
+ * PARÂMETROS TÍPICOS (construção civil Brasil 2025-2026):
+ *   VR (café + lanche): R$ 20-45/dia × 22 dias = R$ 440-990/mês por pessoa
+ *   VA (iFood/alimentação): R$ 300-700/mês por pessoa
+ *   VT: 6% do salário base (CLT Art. 4° Dec. 95.247/87) — parte do empregado
+ *   Total razoável: R$ 900-1.800/mês por pessoa
+ *
+ * ARQUIVOS:
+ *   server/routers/smo.ts, client/src/pages/SolicitacaoMDO.tsx, shared/version.ts
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4296 - SMO: TETO DE SANIDADE SALARIAL NO CÁLCULO DE CUSTO ESTIMADO
  *
  * CONTEXTO:

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4297** — **SMO: DETALHAMENTO VR/VA/VT NO BENEFÍCIO + ALERTA DE BENEFÍCIO ANÔMALO.** Investigação revelou que o campo "Benefícios" no SMO-0012 exibia R$ 11.027/pessoa (7-10× acima do normal; construção civil BR: R$ 900-1.800/pessoa). Causa: `totalVaIFood` na config de Benefícios de Alimentação provavelmente com total da obra (todos funcionários) em vez de valor por pessoa. Fix: `computeCustoSMO` grava `benefVR/benefVA/benefVT/benefFixos` separadamente; UI expande linha Benefícios com breakdown `↳ VR / VA / VT / EPI`; alerta vermelho instrui onde corrigir (`alertaBeneficioAnomalo` quando VR+VA > salário×1,2); `getById` recomputa se `benefVR==null`; startup job filtra por `NOT LIKE '%"benefVR":%'`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4296** — **SMO: TETO DE SANIDADE SALARIAL NO CÁLCULO DE CUSTO ESTIMADO.** SMO-0013 (Pedreiro, 2 vagas, 4m) exibia R$ 4.263.265,10 (~100× correto). Causa: único Pedreiro ativo no cadastro com `salarioBase` incorreto (~R$ 313k); `calcSalarioMediana` não filtra outlier quando há 1 único ponto. Fix: teto `pisoFallback × 12` em `computeCustoSMO`, `create` inline e `calcularImpactoFinanceiro`; flag `alertaSalarioAnomalo` no JSON; alerta laranja no detalhe; `getById` recomputa automaticamente SMOs antigas via `|| !parsed.rev`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4295** — **INTEGRASIGN: FLUXO "SOLICITAR REVISÕES" DISTINTO DE "RECUSAR DEFINITIVAMENTE".** O botão "Recusar" na página de assinatura pública era ambíguo — parecia definitivo quando às vezes o signatário só quer pedir correções. Fix: botão renomeado para "Solicitar Revisões / Recusar" (amber); ao clicar, abre card com 2 opções em destaque: "✏️ Solicitar Revisões" (amber, prefixo "REVISÃO SOLICITADA: " no motivo) e "✗ Recusar Definitivamente" (vermelho). Fluxo 2 passos com labels/placeholders/botões distintos. Backend `recusarDocumento` inalterado. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4295** — **INTEGRASIGN: FLUXO "SOLICITAR REVISÕES" DISTINTO DE "RECUSAR DEFINITIVAMENTE".** Botão amber + 2 opções distintas (revisão vs recusa definitiva). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4294** — **HE: LIMPAR ASSINATURA DE CONFIRMAÇÃO DE PRESENÇA (ADMIN/ADMIN_MASTER).** Gate backend + botão Limpar (laranja) + AlertDialog. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4292** — **FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ CONCILIADO + CRÉDITO VAZAVA PARA "SEM LANÇAMENTO".** 3ª passagem híbrida + dedup por debitoId:creditoId. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4291** — **FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS.** Dedup por `${cpfLimpo}:${skillId}` + COUNT DISTINCT por CPF limpo. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4290** — **FIX: CONCILIAÇÃO — parseChequeNumero SUPORTA "Nº NNN" SOLTO.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

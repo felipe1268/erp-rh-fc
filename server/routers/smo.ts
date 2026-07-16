@@ -120,8 +120,13 @@ async function computeCustoSMO(
   const vr = benef.vrMensal;
   const va = benef.vaMensal;
   const vt = salarioRef * 0.06;
-  const beneficios = vr + va + vt + 45;
+  const beneficiosFixos = 45; // EPI/equipamentos
+  const beneficios = vr + va + vt + beneficiosFixos;
   const dur = duracaoMeses || 1;
+
+  // Rev. 4297 — Alerta quando benefícios > salário base (muito incomum no Brasil;
+  // indica config de VR/VA com valor total da obra em vez de por pessoa, ou valor anual)
+  const alertaBeneficioAnomalo = (vr + va) > salarioRef * 1.2;
 
   const blended = calcEncargosBlended(basicoPerc, rescisaoPerc, regime, dur);
   const encargosValor = salarioRef * (blended.mediaPerc / 100);
@@ -153,7 +158,13 @@ async function computeCustoSMO(
     mesesEfetivo: blended.mesesEfetivo,
     custoMensalUnitExperiencia,
     custoMensalUnitEfetivo,
+    // Detalhamento de benefícios (Rev. 4297)
     beneficios,
+    benefVR: vr,
+    benefVA: va,
+    benefVT: vt,
+    benefFixos: beneficiosFixos,
+    alertaBeneficioAnomalo,
     custoMensalUnit,
     custoMensalTotal: custoMensal,
     custoTotal,
@@ -165,7 +176,7 @@ async function computeCustoSMO(
       : emps.length > 0 ? "Média ativos" : "Piso convenção",
     alertaSalarioAnomalo,
     salarioRefOriginal: alertaSalarioAnomalo ? salarioRefOriginal : undefined,
-    rev: 4296,
+    rev: 4297,
   };
 
   return { custoMensal, custoTotal, detalhes };
@@ -514,7 +525,8 @@ export const smoRouter = router({
           || parsed.encargosBasicoPerc == null
           || parsed.mesesExperiencia == null
           || parsed.custoMensalUnitExperiencia == null
-          || !parsed.rev;  // Rev. 4296: garante recompute com teto de sanidade salarial
+          || !parsed.rev     // Rev. 4296: garante recompute com teto de sanidade salarial
+          || parsed.benefVR == null;  // Rev. 4297: garante recompute com breakdown VR/VA/VT
         if (faltaSplit && s.obraId && s.funcaoSolicitada) {
           const recomputado = await computeCustoSMO(
             db, { companyId: input.companyId, companyIds: input.companyIds },
@@ -1753,7 +1765,7 @@ export async function recomputarSmosSemRev(): Promise<void> {
              detalhe_custos
       FROM smo_solicitacoes
       WHERE deleted_at IS NULL
-        AND (detalhe_custos IS NULL OR detalhe_custos NOT LIKE '%"rev":%')
+        AND (detalhe_custos IS NULL OR detalhe_custos NOT LIKE '%"benefVR":%')
     `);
 
     const rows = (result as any)?.rows ?? result ?? [];

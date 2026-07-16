@@ -1548,7 +1548,25 @@ export default function SolicitacaoMDO() {
                             ) : (
                               <div className="flex justify-between"><span className="text-muted-foreground">Encargos ({(c.encargosMediaPerc ?? c.encargosPerc ?? 79.3).toFixed(1)}%)</span><span className="font-mono">{fmtMoney(c.encargosValor)}</span></div>
                             )}
-                            <div className="flex justify-between"><span className="text-muted-foreground">Benefícios</span><span className="font-mono">{fmtMoney(c.beneficios || 0)}</span></div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Benefícios</span>
+                              <span className="font-mono">{fmtMoney(c.beneficios || 0)}</span>
+                            </div>
+                            {/* Rev. 4297 — Detalhamento de benefícios */}
+                            {(c.benefVR != null || c.benefVA != null) && (
+                              <div className="pl-3 space-y-0.5 text-[10px] text-muted-foreground border-l-2 border-dashed border-slate-200 ml-1">
+                                {c.benefVR > 0 && <div className="flex justify-between"><span>↳ VR (refeição)</span><span className="font-mono">{fmtMoney(c.benefVR)}</span></div>}
+                                {c.benefVA > 0 && <div className="flex justify-between"><span>↳ VA (alimentação)</span><span className="font-mono">{fmtMoney(c.benefVA)}</span></div>}
+                                {c.benefVT > 0 && <div className="flex justify-between"><span>↳ VT (6% salário)</span><span className="font-mono">{fmtMoney(c.benefVT)}</span></div>}
+                                {c.benefFixos > 0 && <div className="flex justify-between"><span>↳ EPI/equipamentos</span><span className="font-mono">{fmtMoney(c.benefFixos)}</span></div>}
+                              </div>
+                            )}
+                            {c.alertaBeneficioAnomalo && (
+                              <div className="flex items-start gap-1.5 p-2 rounded-lg bg-red-50 border border-red-200 text-red-800 text-[11px]">
+                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                <span><strong>Benefício VR/VA anômalo:</strong> R$ {fmtMoney((c.benefVR || 0) + (c.benefVA || 0))} por pessoa/mês excede o salário base. Provavelmente o campo "Total/mês" na Configuração de Benefícios Alimentares está com o total da obra (todos os funcionários) em vez do valor por pessoa. Acesse <em>Ponto e Folha → Benefícios de Alimentação</em> e corrija.</span>
+                              </div>
+                            )}
                             <div className="border-t pt-1.5 flex justify-between font-semibold"><span>Mensal CLT médio ({d.quantidade}x)</span><span className="text-blue-700">{fmtMoney(c.custoMensalTotal)}</span></div>
                             <div className="bg-blue-50 text-blue-900 rounded-lg p-2 flex justify-between font-bold">
                               <span>CLT Total ({d.duracaoMeses}m)</span><span>{fmtMoney(c.custoTotal)}</span>
