@@ -375,6 +375,10 @@ export default function ModuloPJ() {
       diaAdiantamento: c.diaAdiantamento || 15,
       diaFechamento: c.diaFechamento || 5,
       observacoes: c.observacoes || "",
+      bancoPrestador: c.bancoPrestador || "",
+      agenciaPrestador: c.agenciaPrestador || "",
+      contaPrestador: c.contaPrestador || "",
+      pixPrestador: c.pixPrestador || "",
     });
     setShowContratoDialog(true);
   };
@@ -400,6 +404,10 @@ export default function ModuloPJ() {
         diaFechamento: form.diaFechamento || 5,
         observacoes: form.observacoes,
         motivoAlteracao: motivoAlteracao || undefined,
+        bancoPrestador: form.bancoPrestador || undefined,
+        agenciaPrestador: form.agenciaPrestador || undefined,
+        contaPrestador: form.contaPrestador || undefined,
+        pixPrestador: form.pixPrestador || undefined,
       });
     } else {
       if (!form.employeeId) { toast.error("Selecione o prestador"); return; }
@@ -416,6 +424,10 @@ export default function ModuloPJ() {
         diaAdiantamento: form.diaAdiantamento || 15,
         diaFechamento: form.diaFechamento || 5,
         observacoes: form.observacoes,
+        bancoPrestador: form.bancoPrestador || undefined,
+        agenciaPrestador: form.agenciaPrestador || undefined,
+        contaPrestador: form.contaPrestador || undefined,
+        pixPrestador: form.pixPrestador || undefined,
       });
     }
   };
@@ -1195,6 +1207,29 @@ export default function ModuloPJ() {
               <div className="col-span-2">
                 <label className="text-sm font-medium">Observações</label>
                 <Textarea value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} rows={2} />
+              </div>
+
+              {/* Dados Bancários do Prestador */}
+              <div className="col-span-2 bg-blue-50 rounded-lg p-4">
+                <p className="text-sm font-semibold text-blue-800 mb-3">Dados Bancários da Contratada (para pagamento)</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium">Banco</label>
+                    <Input value={form.bancoPrestador || ""} onChange={e => setForm({ ...form, bancoPrestador: e.target.value })} placeholder="Ex: Banco do Brasil, Itaú..." />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Agência</label>
+                    <Input value={form.agenciaPrestador || ""} onChange={e => setForm({ ...form, agenciaPrestador: e.target.value })} placeholder="0000-0" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Conta Corrente</label>
+                    <Input value={form.contaPrestador || ""} onChange={e => setForm({ ...form, contaPrestador: e.target.value })} placeholder="00000-0" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Chave PIX</label>
+                    <Input value={form.pixPrestador || ""} onChange={e => setForm({ ...form, pixPrestador: e.target.value })} placeholder="CNPJ, e-mail, celular ou chave aleatória" />
+                  </div>
+                </div>
               </div>
 
               {/* Campo Motivo da Alteração (somente ao editar) */}

@@ -540,6 +540,10 @@ export const pjContractsRouter = router({
           revisao: pjContracts.revisao,
           revisaoMotivo: pjContracts.revisaoMotivo,
           clausulasCustomizadas: pjContracts.clausulasCustomizadas,
+          bancoPrestador: pjContracts.bancoPrestador,
+          agenciaPrestador: pjContracts.agenciaPrestador,
+          contaPrestador: pjContracts.contaPrestador,
+          pixPrestador: pjContracts.pixPrestador,
           createdAt: pjContracts.createdAt,
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
@@ -556,6 +560,12 @@ export const pjContractsRouter = router({
           companyTelefone: companies.telefone,
           companyEmail: companies.email,
           companySite: companies.site,
+          // Primeiro sócio/administrador ativo como representante legal da contratante
+          companyRepresentante: sql<string | null>`(
+            SELECT cp.nome FROM company_partners cp
+            WHERE cp.company_id = ${pjContracts.companyId} AND cp.ativo = 1
+            ORDER BY cp.id ASC LIMIT 1
+          )`,
         })
         .from(pjContracts)
         .innerJoin(employees, eq(pjContracts.employeeId, employees.id))
@@ -690,6 +700,10 @@ export const pjContractsRouter = router({
         diaAdiantamento: z.number().default(15),
         diaFechamento: z.number().default(5),
         observacoes: z.string().optional(),
+        bancoPrestador: z.string().optional(),
+        agenciaPrestador: z.string().optional(),
+        contaPrestador: z.string().optional(),
+        pixPrestador: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
@@ -722,6 +736,10 @@ export const pjContractsRouter = router({
           criadoPor: ctx.user.name ?? 'Sistema',
           criadoPorUserId: ctx.user.id,
           observacoes: input.observacoes || null,
+          bancoPrestador: input.bancoPrestador || null,
+          agenciaPrestador: input.agenciaPrestador || null,
+          contaPrestador: input.contaPrestador || null,
+          pixPrestador: input.pixPrestador || null,
         }).returning({ id: pjContracts.id, employeeId: pjContracts.employeeId, companyId: pjContracts.companyId });
 
         // Criar registro inicial de revisão ISO
@@ -779,6 +797,10 @@ export const pjContractsRouter = router({
         status: z.string().optional(),
         observacoes: z.string().optional(),
         motivoAlteracao: z.string().optional(),
+        bancoPrestador: z.string().optional(),
+        agenciaPrestador: z.string().optional(),
+        contaPrestador: z.string().optional(),
+        pixPrestador: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
@@ -1561,7 +1583,7 @@ export const pjContractsRouter = router({
                  comp.cidade as "companyCidade",
                  comp.estado as "companyEstado",
                  comp."logoUrl" as "companyLogoUrl",
-                 NULL as "responsavelLegal"
+                 (SELECT cp.nome FROM company_partners cp WHERE cp.company_id = a."companyId" AND cp.ativo = 1 ORDER BY cp.id ASC LIMIT 1) as "companyRepresentante"
           FROM pj_contract_aditivos a
           JOIN pj_contracts c ON c.id = a."contractId"
           JOIN employees e ON e.id = a."employeeId"

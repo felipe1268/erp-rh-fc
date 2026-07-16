@@ -1,4 +1,42 @@
 /**
+ * Rev. 4293 - CONTRATO PJ: NOME DO SÓCIO/ADMINISTRADOR COMO REPRESENTANTE + DADOS BANCÁRIOS DO PRESTADOR.
+ *
+ * CONTEXTO:
+ *   O contrato PJ exibia "_______________" no campo do representante legal da CONTRATANTE porque o campo
+ *   `responsavelLegal` não existe na tabela `companies`. Os dados bancários do prestador (CONTRATADA)
+ *   não existiam como campo no contrato, impossibilitando registrá-los e exibi-los para pagamento.
+ *
+ * CAUSA RAIZ:
+ *   (1) `ContratoPJView.tsx` buscava `selectedCompany?.responsavelLegal` que nunca é populado.
+ *       A fonte correta é `company_partners` (tabela de sócios/administradores da empresa).
+ *   (2) `pj_contracts` não tinha colunas para os dados bancários do prestador.
+ *
+ * FIX:
+ *   (1) REPRESENTANTE: `pj.contratos.getById` agora faz subquery em `company_partners` para buscar
+ *       o primeiro sócio/admin ativo (`ativo=1`, ORDER BY id ASC LIMIT 1) e retorna como
+ *       `companyRepresentante`. `ContratoPJView.tsx` usa esse campo para preencher
+ *       `[CONTRATANTE_REPRESENTANTE]`. `AditivoPJView` (aditivos.getById) também atualizado.
+ *   (2) DADOS BANCÁRIOS: 4 novas colunas em `pj_contracts` — `banco_prestador`, `agencia_prestador`,
+ *       `conta_prestador`, `pix_prestador`. SyncSchema+ (Rev. 4293) garante a criação. Campos
+ *       expostos no `getById`, `create` e `update`. Formulário em `ModuloPJ.tsx` ganhou seção
+ *       "Dados Bancários da Contratada" com 4 inputs. `ContratoPJView.tsx` exibe bloco
+ *       "Dados Bancários para Pagamento" quando preenchido + suporte ao placeholder
+ *       `[DADOS_BANCARIOS_CONTRATADA]` no modelo de contrato. `contratoPjDocument.ts` (FCSign)
+ *       também atualizado com os 4 campos e o placeholder.
+ *
+ * ARQUIVOS TOCADOS:
+ *   - drizzle/schema.ts (4 colunas em pjContracts)
+ *   - server/_core/index.ts (SyncSchema+ Rev. 4293)
+ *   - server/routers/pjContracts.ts (getById + create + update + aditivos.getById)
+ *   - client/src/lib/contratoPjDocument.ts (interface + replacePlaceholders)
+ *   - client/src/pages/ContratoPJView.tsx (representante + dadosBancarios + section)
+ *   - client/src/pages/ModuloPJ.tsx (form state + submit + UI)
+ *   - shared/version.ts
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4292 - FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ FOI CONCILIADO.
  *
  * CONTEXTO:

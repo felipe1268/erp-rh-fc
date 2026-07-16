@@ -140,6 +140,10 @@ export interface ContratoPjForDoc {
   companyEstado?: string | null;
   companyLogoUrl?: string | null;
   companyRepresentante?: string | null;
+  bancoPrestador?: string | null;
+  agenciaPrestador?: string | null;
+  contaPrestador?: string | null;
+  pixPrestador?: string | null;
 }
 
 function replacePlaceholders(text: string, c: ContratoPjForDoc): string {
@@ -151,6 +155,12 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc): string {
   const estadoEmpresa = c.companyEstado || "SP";
   const representante = c.companyRepresentante || "_______________";
   const nomePrestador = c.razaoSocialPrestador || c.employeeName || "_______________";
+  const dadosBancarios = [
+    c.bancoPrestador && `Banco: ${c.bancoPrestador}`,
+    c.agenciaPrestador && `Agência: ${c.agenciaPrestador}`,
+    c.contaPrestador && `Conta: ${c.contaPrestador}`,
+    c.pixPrestador && `PIX: ${c.pixPrestador}`,
+  ].filter(Boolean).join(" | ") || "_______________";
   const cnpjPrestador = c.cnpjPrestador || "_______________";
   const enderecoPrestador = c.enderecoPrestador || "_______________";
   const cidadePrestador = c.cidadePrestador || cidadeEmpresa;
@@ -190,7 +200,8 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc): string {
     .replace(/\[DATA_ASSINATURA\]/g, dataAssinatura)
     .replace(/\[FORO_COMARCA\]/g, cidadeEmpresa + " - " + estadoEmpresa)
     .replace(/\[PRESTADOR_NOME\]/g, c.employeeName || nomePrestador)
-    .replace(/\[PRESTADOR_CPF\]/g, c.employeeCpf || "_______________");
+    .replace(/\[PRESTADOR_CPF\]/g, c.employeeCpf || "_______________")
+    .replace(/\[DADOS_BANCARIOS_CONTRATADA\]/g, dadosBancarios);
 }
 
 /** Realça CONTRATANTE/CONTRATADA em negrito (texto já escapado). */

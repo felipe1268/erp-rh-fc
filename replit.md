@@ -50,39 +50,25 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4293** — **CONTRATO PJ: NOME DO SÓCIO/ADMINISTRADOR COMO REPRESENTANTE + DADOS BANCÁRIOS DO PRESTADOR.** O campo `[CONTRATANTE_REPRESENTANTE]` ficava em branco porque `companies` não tem `responsavelLegal`; fonte correta é `company_partners`. Fix: subquery em `company_partners` no `getById` retorna `companyRepresentante` (1º sócio ativo). Dados bancários: 4 novas colunas em `pj_contracts` (`banco_prestador`, `agencia_prestador`, `conta_prestador`, `pix_prestador`), SyncSchema+ Rev. 4293, seção "Dados Bancários da Contratada" no form de `ModuloPJ` e bloco de exibição no `ContratoPJView`. Placeholder `[DADOS_BANCARIOS_CONTRATADA]` também suportado no modelo e no FCSign. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4292** — **FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ CONCILIADO + CRÉDITO VAZAVA PARA "SEM LANÇAMENTO".** Motor de conciliação rodava `detectarParesEstorno` em 2 passagens separadas (pendRes e concRes). Par com débito em concRes + crédito em pendRes (cavalo) não era detectado. Fix (A): 3ª passagem híbrida combina `concMin + linhasMin` e dedup por `debitoId:creditoId`. Fix (B): perna em pendRes recebe `.reversal` para sair de "No extrato, sem lançamento". Caso real: cheque 393 Santander FC Aparecida R$ 15.000, motivo 48. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4291** — **FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS DO GRUPO.** No modo multi-empresa ("Construtoras"), o mesmo funcionário físico tinha 2 `employees.id` distintos → `searchBySkill` retornava 2 linhas e `skillSummaryGlobal` contava 2. Fix: dedup por `${cpfLimpo}:${skillId}` no retorno de `searchBySkill`; `skillSummaryGlobal` trocou `COUNT(DISTINCT employeeId)` por `COUNT(DISTINCT regexp_replace(cpf,...))`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4288** — **FEATURE: LEITOR IA (extrairCotacaoIA) EXTRAI MAT/MO EM COTAÇÕES TIPO PACOTE.** O leitor IA era cego ao split Material × Mão de Obra para cotações `tipo=pacote` (ex: PROMATEL). Fix backend: detecta `isPacoteCot`, enriquece `itensRef` com `somenteMo`, adiciona marcadores `[MAT]`/`[MDO]` na lista de itens do prompt, bloco PACOTE no `systemPrompt`, campos `totalMat`/`totalMdo` no JSON schema e instrução nº 9; no loop de resultado, extrai/propaga MAT/MO (distribui proporcionalmente em multi-match; deriva MDO=precoTotal p/ item somenteMo). Fix frontend: `iaLinhas` copia `totalMat`/`totalMdo`; overlay detecta `iaPacote` e exibe colunas MAT (azul) + MO (laranja) com inputs editáveis; `respostasValidas` aceita itens com MAT/MO mesmo sem `precoUnitario`; save passa `{totalMat, totalMdo}` para `salvarRespostasLote`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4287** — **FIX: MAPA DE COTAÇÃO (PACOTE) — COLUNAS MATERIAL/MO NÃO EDITÁVEIS E MO SEMPRE ZERADA.** Dois bugs no Mapa de Cotação tipo "pacote": (1) colunas MAT/MO do fornecedor nunca renderizavam inputs em modo edição — sempre mostravam `<span>` calculado, impossibilitando edição; (2) classificação MAT vs MDO era binária (`cMdo > 0 && cMat === 0`), jogando 100% p/ MAT todos os itens com ambas as rubricas no orçamento, resultando em MO = "—" para PROMATEL. Fix: (a) split agora é proporcional ao ratio `metaUnitarioMat / metaUnitarioMdo` da meta de cada filho; (b) se `totalMat`/`totalMdo` já foram salvos, usa-os diretamente; (c) modo edição renderiza inputs `<Input>` para MAT e MDO nas colunas do fornecedor, atualizando `editMatMdo[key]` e recalculando `editPrecos[key] = mat + mdo`; (d) save path do pacote agora passa `totalMat`/`totalMdo` para o `salvarRespostasLote`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4286** — **FIX: SOLICITAÇÕES — ReferenceError "Can't find variable: selecionados".** Causa raiz: bloco "Somente MO" inserido na EAP item list de `Solicitacoes` (linhas 1107-6101) referenciava `selecionados` (Set<string> do `DisciplinasModal`, linhas 277-781) e `selKey(disc.nome, ...)` — variáveis fora de escopo. Fix: substituir pela condição correta do contexto: `(selectedEapIds.has(it.id) || qtdVal > 0)`. Botão "Somente MO" exibe corretamente para itens marcados. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4285** — **FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (+R$ 0,05).** Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4284** — **COTAÇÕES/COMPRAS: ADIANTAMENTO (SINAL) E RETENÇÃO DE GARANTIA NO DIALOG "CONDIÇÕES DE PAGAMENTO".** Nova seção "Adiantamento & Retenção". 10 colunas novas em `compras_cotacao_fornecedores`, 10 em `compras_ordens`, 3 em `terceiro_medicoes`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4283** — **FIX: COTAÇÕES — DRIFT DE CENTAVOS NO DIALOG "CONDIÇÕES DE PAGAMENTO".** Fix backend acumula em centavos inteiros. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4282** — **CONTROLE DE CHEQUES: "VER PAGAMENTO" EXIBE VALOR TOTAL DO PIX QUANDO ALOCAÇÃO É PARCIAL.** PIX R$ 5.800,00 → 2 cheques: popover mostra alocado + âmbar "Valor total do PIX". ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4290** — **FIX: CONCILIAÇÃO — parseChequeNumero SUPORTA "Nº NNN" SOLTO + CHEQUE 393 DEVOLVIDO.** Terceiro padrão `/(?:^|\s)n[ºo°.]\s*0*(\d{1,12})/i`; BSL 20565 desc corrigido; fc 352 com conta_bancaria_id=4, devolvido_em, motivo_codigo=48. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4291** — **FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS.** Dedup por `${cpfLimpo}:${skillId}` + COUNT DISTINCT por CPF limpo. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4289** — **FIX: MAPA DE COTAÇÃO — INPUTS MAT/MO COM FORMATO BR (R$ + SEPARADOR DE MILHAR).** `type="number"` → `type="text" inputMode="decimal"`; valor BR ao abrir + `onFocus` seleciona tudo; prefixo R$; leitores trocados por `parseBRNumber`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4290** — **FIX: CONCILIAÇÃO — parseChequeNumero SUPORTA "Nº NNN" SOLTO.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4280** — **CONCILIAÇÃO: ALERTAS DE COBERTURA NO PAINEL "QUITAR CHEQUES DEVOLVIDOS".** Verde/âmbar/vermelho por totalSel vs pixVal. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4289** — **FIX: MAPA DE COTAÇÃO — INPUTS MAT/MO COM FORMATO BR.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4279** — **CONCILIAÇÃO: STATUS DO CHEQUE DEVOLVIDO SINCRONIZA COM CONTROLE DE CHEQUES (bidirecional).** 3 bugs em camadas: `chequeNumero` nunca passado, INSERT NULL, desconciliar não estornava vínculos. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4288** — **FEATURE: LEITOR IA EXTRAI MAT/MO EM COTAÇÕES TIPO PACOTE.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4278** — **FIX: CONCILIAÇÃO — 1 PIX → N CHEQUES DEVOLVIDOS SÓ MOSTRAVA O PRIMEIRO.** `vincByPix` Map sobrescrevia; alterado para array com push. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4287** — **FIX: MAPA DE COTAÇÃO (PACOTE) — COLUNAS MAT/MO NÃO EDITÁVEIS E MO ZERADA.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4276 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4286 e anteriores.
 
 ## User preferences
 

@@ -5435,6 +5435,16 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4284: adiantamento+retenção garantidos em cotacao_fornecedores, compras_ordens e terceiro_medicoes.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4284 adiantamento/retencao:", e?.message || e); }
 
+        try {
+          await db.execute(sql.raw(`
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS banco_prestador VARCHAR(100);
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS agencia_prestador VARCHAR(20);
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS conta_prestador VARCHAR(30);
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS pix_prestador VARCHAR(150);
+          `));
+          console.log("[SyncSchema+] Rev. 4293: dados bancários do prestador garantidos em pj_contracts.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4293 dados bancários prestador:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

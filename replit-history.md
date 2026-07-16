@@ -1,3 +1,11 @@
+- **Rev. 4286** — **FIX: SOLICITAÇÕES — ReferenceError "Can't find variable: selecionados".** Fix: substituir pela condição correta do contexto: `(selectedEapIds.has(it.id) || qtdVal > 0)`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4285** — **FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (+R$ 0,05).** Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4284** — **COTAÇÕES/COMPRAS: ADIANTAMENTO (SINAL) E RETENÇÃO DE GARANTIA NO DIALOG "CONDIÇÕES DE PAGAMENTO".** 10 colunas novas em `compras_cotacao_fornecedores`, 10 em `compras_ordens`, 3 em `terceiro_medicoes`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4283** — **FIX: COTAÇÕES — DRIFT DE CENTAVOS NO DIALOG "CONDIÇÕES DE PAGAMENTO".** Fix backend acumula em centavos inteiros. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4282** — **CONTROLE DE CHEQUES: "VER PAGAMENTO" EXIBE VALOR TOTAL DO PIX QUANDO ALOCAÇÃO É PARCIAL.** ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4280** — **CONCILIAÇÃO: ALERTAS DE COBERTURA NO PAINEL "QUITAR CHEQUES DEVOLVIDOS".** Verde/âmbar/vermelho por totalSel vs pixVal. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4279** — **CONCILIAÇÃO: STATUS DO CHEQUE DEVOLVIDO SINCRONIZA COM CONTROLE DE CHEQUES (bidirecional).** 3 bugs em camadas: `chequeNumero` nunca passado, INSERT NULL, desconciliar não estornava vínculos. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4278** — **FIX: CONCILIAÇÃO — 1 PIX → N CHEQUES DEVOLVIDOS SÓ MOSTRAVA O PRIMEIRO.** `vincByPix` Map sobrescrevia; alterado para array com push. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4277** — **CONCILIAÇÃO BANCÁRIA: RESUMO DOS CHEQUES JÁ VINCULADOS NO HEADER DO PAINEL.** Backend: `listVinculosByPixLine`; frontend: count + lista com ✓. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4281** — **FIX: CONTROLE DE CHEQUES — autoMarcarChequesDevolvidos SOBRESCREVIA STATUS COMPENSADO.** Fix: `AND data_compensacao IS NULL` no SELECT e UPDATE. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4276** — **FIX: QUITAR CHEQUES DEVOLVIDOS — LISTA SEMPRE VAZIA (3 BUGS EM CAMADAS).** status nunca gravado; `desconsiderado_em IS NULL` bloqueava confirmados; param-binding $1×3. ZERO DELETE · ZERO ALTER destrutivo.

@@ -231,13 +231,25 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
   const telefoneEmpresa = contrato.companyTelefone || (selectedCompany as any)?.telefone || "";
   const emailEmpresa = contrato.companyEmail || (selectedCompany as any)?.email || "";
   const siteEmpresa = contrato.companySite || (selectedCompany as any)?.site || "";
-  const representante = (selectedCompany as any)?.responsavelLegal || (selectedCompany as any)?.representanteLegal || "_______________";
+  const representante = (contrato as any)?.companyRepresentante || "_______________";
 
   const nomePrestador = contrato.razaoSocialPrestador || contrato.employeeName || "_______________";
   const cnpjPrestador = contrato.cnpjPrestador || "_______________";
-  const enderecoPrestador = contrato.enderecoPrestador || "_______________";
-  const cidadePrestador = contrato.cidadePrestador || cidadeEmpresa;
-  const estadoPrestador = contrato.estadoPrestador || estadoEmpresa;
+  const enderecoPrestador = (contrato as any).enderecoPrestador || "_______________";
+  const cidadePrestador = (contrato as any).cidadePrestador || cidadeEmpresa;
+  const estadoPrestador = (contrato as any).estadoPrestador || estadoEmpresa;
+
+  const bancoPrestador = (contrato as any).bancoPrestador || "";
+  const agenciaPrestador = (contrato as any).agenciaPrestador || "";
+  const contaPrestador = (contrato as any).contaPrestador || "";
+  const pixPrestador = (contrato as any).pixPrestador || "";
+  const temDadosBancarios = !!(bancoPrestador || agenciaPrestador || contaPrestador || pixPrestador);
+  const dadosBancariosStr = [
+    bancoPrestador && `Banco: ${bancoPrestador}`,
+    agenciaPrestador && `Agência: ${agenciaPrestador}`,
+    contaPrestador && `Conta: ${contaPrestador}`,
+    pixPrestador && `PIX: ${pixPrestador}`,
+  ].filter(Boolean).join(" | ") || "_______________";
 
   const percAdiantamento = contrato?.percentualAdiantamento || 40;
   const percFechamento = contrato?.percentualFechamento || 60;
@@ -277,7 +289,8 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
       .replace(/\[DATA_ASSINATURA\]/g, dataAssinatura)
       .replace(/\[FORO_COMARCA\]/g, cidadeEmpresa + " - " + estadoEmpresa)
       .replace(/\[PRESTADOR_NOME\]/g, contrato.employeeName || nomePrestador)
-      .replace(/\[PRESTADOR_CPF\]/g, contrato.employeeCpf || "_______________");
+      .replace(/\[PRESTADOR_CPF\]/g, contrato.employeeCpf || "_______________")
+      .replace(/\[DADOS_BANCARIOS_CONTRATADA\]/g, dadosBancariosStr);
   }
 
   // Renderizar o texto do template com formatação
@@ -441,6 +454,14 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
               </p>
             )}
           </div>
+
+          {/* DADOS BANCÁRIOS DA CONTRATADA */}
+          {temDadosBancarios && (
+            <div className="mt-8 pt-4 border-t-2 border-blue-100">
+              <p className="text-[9pt] font-bold text-blue-900 uppercase tracking-wider mb-2">Dados Bancários para Pagamento</p>
+              <p className="text-[10pt] text-gray-700">{dadosBancariosStr}</p>
+            </div>
+          )}
 
           {/* RODAPÉ COM DADOS DA EMPRESA */}
           {(telefoneEmpresa || emailEmpresa || siteEmpresa) && (
