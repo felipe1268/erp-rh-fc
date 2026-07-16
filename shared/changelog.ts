@@ -1,4 +1,38 @@
 /**
+ * Rev. 4304 - SCORECARD: FIX CRÍTICO getCustosRH — CAST NUMÉRICO COM SEPARADOR DE MILHAR (BR)
+ *
+ * CONTEXTO:
+ *   Scorecard do Gestor → aba "RH / Folha" mostrava "Sem dados de folha para esta obra no
+ *   período selecionado" para obras com funcionários cujo salário >= R$ 1.000 (ou seja, com
+ *   separador de milhar no formato BR).
+ *
+ * CAUSA-RAIZ:
+ *   Salários são persistidos em `payroll_payments` como VARCHAR no formato BR: "2.918,67"
+ *   (ponto = milhar, vírgula = decimal). O `getCustosRH` fazia apenas
+ *   `REPLACE(col, ',', '.')::numeric`, que converte "2.918,67" → "2.918.67" (dois pontos) —
+ *   valor inválido para o tipo NUMERIC do PostgreSQL. O erro "invalid input syntax for type
+ *   numeric: '2.918.67'" causava falha de toda a query, retornando null para o frontend que
+ *   exibia "Sem dados".
+ *
+ * FIX:
+ *   Duplo REPLACE em todas as 11 colunas afetadas no getCustosRH:
+ *     REPLACE(REPLACE(col, '.', ''), ',', '.')::numeric
+ *   Passo 1 — remove TODOS os pontos (separador de milhar BR).
+ *   Passo 2 — substitui vírgula por ponto (separador decimal → US format).
+ *   Resultado: "2.918,67" → "2918,67" → "2918.67" ✓
+ *   Seguro para valores < 1.000 (ex: "918,67" → sem ponto → "918.67" ✓).
+ *
+ * COLUNAS CORRIGIDAS (todas em `getCustosRH`, server/routers/scorecard.ts):
+ *   payroll_frac CTE: salarioBrutoMes, horasExtrasValor, adicionaisValor,
+ *                     descontoInss, descontoFgts, totalProventos, totalDescontos, salarioLiquido
+ *   vr_data CTE:      vr_benefits.valorTotal
+ *   ferias query:     vacation_periods.valorTotal
+ *   seguro query:     seguro_vida_coberturas.premio_vg, premio_apc
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4303 - SCORECARD: FIX CUSTO MO INVISÍVEL (RAMO B EXCLUÍA HISTÓRICO) + LOCAÇÕES VIA OC
  *
  * CONTEXTO:

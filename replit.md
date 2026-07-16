@@ -50,23 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4303** — **SCORECARD: FIX CUSTO MO INVISÍVEL + LOCAÇÕES VIA OC.** Duas falhas: (1) RH/Folha mostrava "Sem dados" porque o Ramo B de `site_periods` excluía completamente funcionários transferidos — fix: `NOT EXISTS` substituído por `COALESCE(MIN(of3.createdAt), CURRENT_DATE)` fechando `periodo_fim` na data de transferência (preserva anti-duplicata via período fechado); (2) Locações vinculadas à obra via OC sem `obra_id` direto não apareciam — fix: novo Ramo C no UNION com JOIN `equipamentos_locados × compras_ordens.obra_id`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4304** — **SCORECARD: FIX CRÍTICO getCustosRH — CAST NUMÉRICO COM SEPARADOR DE MILHAR BR.** `getCustosRH` lançava "invalid input syntax for type numeric: '2.918.67'" porque salários VARCHAR no formato BR ("2.918,67") eram convertidos com apenas `REPLACE(',','.')` → dois pontos. Fix: duplo REPLACE em todas as 11 colunas: `REPLACE(REPLACE(col,'.',''),',','.')::numeric` — remove separador de milhar primeiro, depois converte decimal. Afetava toda obra com salário ≥ R$ 1.000. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4302** — **SMO: CUSTOS ÚNICOS DE ADMISSÃO (EPI COMPLETO, UNIFORME, JOGO INICIAL) NO CARD DE IMPACTO FINANCEIRO.** Card mostrava só R$ 45/mês de "EPI/equipamentos" (recorrente); os custos únicos de admissão já existiam no CLT Total mas eram invisíveis. `computeCustoSMO` agora expõe `epiCompletoUnico=200`, `uniformeUnico=350`, `jogoInicialUnico=250` no objeto `detalhes`. Card compacto: nova seção "Custos únicos de admissão" com borda âmbar tracejada mostra as 3 linhas; fallback p/ SMOs antigas via constantes fixas. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4303** — **SCORECARD: FIX CUSTO MO INVISÍVEL + LOCAÇÕES VIA OC.** Duas falhas: (1) RH/Folha mostrava "Sem dados" porque o Ramo B de `site_periods` excluía completamente funcionários transferidos — fix: `NOT EXISTS` substituído por `COALESCE(MIN(of3.createdAt), CURRENT_DATE)` fechando `periodo_fim` na data de transferência; (2) Locações vinculadas à obra via OC sem `obra_id` direto não apareciam — fix: novo Ramo C no UNION. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4301** — **FCSIGN: BOTÃO "SOLICITAR REVISÃO" PARA O ASSINANTE NA TELA DE ASSINATURA.** Nova procedure pública `requestRevision`. Botão amber inline + card de confirmação em `AssinarDocumento.tsx`. Bloco de motivo no RAIO-X do colaborador. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4302** — **SMO: CUSTOS ÚNICOS DE ADMISSÃO (EPI COMPLETO, UNIFORME, JOGO INICIAL) NO CARD DE IMPACTO FINANCEIRO.** `computeCustoSMO` expõe `epiCompletoUnico/uniformeUnico/jogoInicialUnico`; nova seção âmbar no card. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4301** — **FCSIGN: BOTÃO "SOLICITAR REVISÃO" PARA O ASSINANTE NA TELA DE ASSINATURA.** Nova procedure pública `requestRevision`. Botão amber inline + card de confirmação em `AssinarDocumento.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4300** — **NFS-e: SUPORTE AO FORMATO NFS-e NACIONAL (SPED/RFB v1.01) NO IMPORT XML.** Novo bloco no importNfseXmlManual detecta `xmlParsed.NFSe.infNFSe` e faz INSERT com todos os campos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4299** — **NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING.** `parseDateBR` retornava `"0"` para tags ausentes → `"0"::date` explodindo no PostgreSQL. Fix: retorna `null`. Handler `ListaNfse.CompNfse` + toast com descrição do erro. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4299** — **NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING.** `parseDateBR` retornava `"0"` para tags ausentes → `"0"::date` explodindo no PostgreSQL. Fix: retorna `null`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4298** — **SMO: FIX CRÍTICO — COLUMNNAME MISMATCH totalVA_iFood + CONFIG PARA R$ 700 VA (CONVENÇÃO 2026-2028).** `parseBRL(mealCfg.totalVaIFood ?? mealCfg['totalVA_iFood'])`; meal_benefit_configs id=4 atualizado VA=R$ 700,00. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4296** — **SMO: TETO DE SANIDADE SALARIAL NO CÁLCULO DE CUSTO ESTIMADO.** Teto `pisoFallback×12` em `computeCustoSMO`; flag `alertaSalarioAnomalo`; `getById` recomputa via `|| !parsed.rev`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4295** — **INTEGRASIGN: FLUXO "SOLICITAR REVISÕES" DISTINTO DE "RECUSAR DEFINITIVAMENTE".** Botão amber + 2 opções distintas (revisão vs recusa definitiva). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

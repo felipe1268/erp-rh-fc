@@ -1769,14 +1769,14 @@ export const scorecardRouter = router({
                 + INTERVAL '1 month' - INTERVAL '1 day')::date     AS mes_fim_d,
               DATE_PART('day', ((pp."mesReferencia" || '-01')::date
                 + INTERVAL '1 month' - INTERVAL '1 day')::timestamp)::int AS dias_no_mes,
-              COALESCE(CASE WHEN pp."salarioBrutoMes"  ~ '^-?[0-9]' THEN REPLACE(pp."salarioBrutoMes",  ',', '.')::numeric ELSE NULL END, 0) AS salario_bruto,
-              COALESCE(CASE WHEN pp."horasExtrasValor" ~ '^-?[0-9]' THEN REPLACE(pp."horasExtrasValor", ',', '.')::numeric ELSE NULL END, 0) AS he_valor,
-              COALESCE(CASE WHEN pp."adicionaisValor"  ~ '^-?[0-9]' THEN REPLACE(pp."adicionaisValor",  ',', '.')::numeric ELSE NULL END, 0) AS adicionais,
-              COALESCE(CASE WHEN pp."descontoInss"     ~ '^-?[0-9]' THEN REPLACE(pp."descontoInss",     ',', '.')::numeric ELSE NULL END, 0) AS inss_valor,
-              COALESCE(CASE WHEN pp."descontoFgts"     ~ '^-?[0-9]' THEN REPLACE(pp."descontoFgts",     ',', '.')::numeric ELSE NULL END, 0) AS fgts_valor,
-              COALESCE(CASE WHEN pp."totalProventos"   ~ '^-?[0-9]' THEN REPLACE(pp."totalProventos",   ',', '.')::numeric ELSE NULL END, 0) AS total_proventos,
-              COALESCE(CASE WHEN pp."totalDescontos"   ~ '^-?[0-9]' THEN REPLACE(pp."totalDescontos",   ',', '.')::numeric ELSE NULL END, 0) AS total_descontos,
-              COALESCE(CASE WHEN pp."salarioLiquido"   ~ '^-?[0-9]' THEN REPLACE(pp."salarioLiquido",   ',', '.')::numeric ELSE NULL END, 0) AS liquido,
+              COALESCE(CASE WHEN pp."salarioBrutoMes"  ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."salarioBrutoMes",  '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS salario_bruto,
+              COALESCE(CASE WHEN pp."horasExtrasValor" ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."horasExtrasValor", '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS he_valor,
+              COALESCE(CASE WHEN pp."adicionaisValor"  ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."adicionaisValor",  '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS adicionais,
+              COALESCE(CASE WHEN pp."descontoInss"     ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."descontoInss",     '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS inss_valor,
+              COALESCE(CASE WHEN pp."descontoFgts"     ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."descontoFgts",     '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS fgts_valor,
+              COALESCE(CASE WHEN pp."totalProventos"   ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."totalProventos",   '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS total_proventos,
+              COALESCE(CASE WHEN pp."totalDescontos"   ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."totalDescontos",   '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS total_descontos,
+              COALESCE(CASE WHEN pp."salarioLiquido"   ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."salarioLiquido",   '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS liquido,
               GREATEST(
                 -- Dias pela alocação (employee_site_history)
                 (
@@ -1820,7 +1820,7 @@ export const scorecardRouter = router({
             SELECT
               vr."employeeId" AS employee_id,
               vr."mesReferencia" AS mes_referencia,
-              COALESCE(CASE WHEN vr."valorTotal" ~ '^-?[0-9]' THEN REPLACE(vr."valorTotal", ',', '.')::numeric ELSE NULL END, 0) AS va_total
+              COALESCE(CASE WHEN vr."valorTotal" ~ '^-?[0-9]' THEN REPLACE(REPLACE(vr."valorTotal", '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS va_total
             FROM vr_benefits vr
             -- Rev. 4303: usa empresa real do funcionário (não da obra)
             JOIN employees emp_vr ON emp_vr.id = vr."employeeId"
@@ -1883,7 +1883,7 @@ export const scorecardRouter = router({
           SELECT
             vp."employeeId"                                                         AS employee_id,
             TO_CHAR(COALESCE(vp."dataPagamento"::date, vp."dataInicio"::date), 'YYYY-MM') AS mes_ref,
-            COALESCE(CASE WHEN vp."valorTotal" ~ '^-?[0-9]' THEN REPLACE(vp."valorTotal", ',', '.')::numeric ELSE NULL END, 0) AS valor_total
+            COALESCE(CASE WHEN vp."valorTotal" ~ '^-?[0-9]' THEN REPLACE(REPLACE(vp."valorTotal", '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS valor_total
           FROM vacation_periods vp
           -- Rev. 4303: usa empresa real do funcionário (não da obra)
           JOIN employees emp_fer ON emp_fer.id = vp."employeeId"
@@ -1900,8 +1900,8 @@ export const scorecardRouter = router({
           SELECT
             svc.employee_id,
             -- Custo/Mês = VG + APC (prêmios mensais da apólice)
-            COALESCE(CASE WHEN svc.premio_vg  ~ '^-?[0-9]' THEN REPLACE(svc.premio_vg,  ',', '.')::numeric ELSE 0 END, 0)
-            + COALESCE(CASE WHEN svc.premio_apc ~ '^-?[0-9]' THEN REPLACE(svc.premio_apc, ',', '.')::numeric ELSE 0 END, 0) AS custo_mensal
+            COALESCE(CASE WHEN svc.premio_vg  ~ '^-?[0-9]' THEN REPLACE(REPLACE(svc.premio_vg,  '.', ''), ',', '.')::numeric ELSE 0 END, 0)
+            + COALESCE(CASE WHEN svc.premio_apc ~ '^-?[0-9]' THEN REPLACE(REPLACE(svc.premio_apc, '.', ''), ',', '.')::numeric ELSE 0 END, 0) AS custo_mensal
           FROM seguro_vida_coberturas svc
           -- Rev. 4303: usa empresa real do funcionário (não da obra)
           JOIN employees emp_seg ON emp_seg.id = svc.employee_id
