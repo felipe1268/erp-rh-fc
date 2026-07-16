@@ -1928,7 +1928,7 @@ export const scorecardRouter = router({
                 DATE_TRUNC('month', (${mesFeriasFim} || '-01')::date)
               ) AS range_fim
             FROM pj_contracts pc
-            WHERE pc."obraId"     = ${input.obraId}
+            WHERE pc.obra_id      = ${input.obraId}
               AND pc."companyId"  = ${input.companyId}
               AND pc.status       = 'ativo'
               AND pc."deletedAt"  IS NULL
