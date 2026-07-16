@@ -1688,7 +1688,7 @@ export const scorecardRouter = router({
         WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
       `;
 
-      const [r, feriasR, seguroR] = await Promise.all([
+      const [r, feriasR, seguroR, pjR] = await Promise.all([
         db.execute(sql`
           WITH
           -- Piso absoluto: nenhum custo pode ser anterior à data de início da obra
@@ -1910,12 +1910,84 @@ export const scorecardRouter = router({
           WHERE svc.status = 'ativo'
             AND svc.employee_id IN (${relevantEmpSql})
         `),
+
+        // Rev. 4307 — PJ contracts linked to this obra, pro-rated by active months
+        db.execute(sql`
+          WITH pj_range AS (
+            SELECT
+              pc."employeeId"                                                              AS employee_id,
+              REPLACE(REPLACE(COALESCE(pc."valorMensal",'0'), '.', ''), ',', '.')::numeric AS valor_mensal,
+              pc."numeroContrato"                                                          AS numero_contrato,
+              pc."razaoSocialPrestador"                                                    AS razao_social,
+              GREATEST(
+                DATE_TRUNC('month', pc."dataInicio"::date),
+                DATE_TRUNC('month', (${mesFeriasIni} || '-01')::date)
+              ) AS range_ini,
+              LEAST(
+                DATE_TRUNC('month', pc."dataFim"::date),
+                DATE_TRUNC('month', (${mesFeriasFim} || '-01')::date)
+              ) AS range_fim
+            FROM pj_contracts pc
+            WHERE pc."obraId"     = ${input.obraId}
+              AND pc."companyId"  = ${input.companyId}
+              AND pc.status       = 'ativo'
+              AND pc."deletedAt"  IS NULL
+              AND pc."dataFim"    >= (${mesFeriasIni} || '-01')::date
+              AND pc."dataInicio" <= (${mesFeriasFim} || '-28')::date
+          ),
+          pj_meses AS (
+            SELECT
+              pr.employee_id,
+              pr.valor_mensal,
+              pr.numero_contrato,
+              pr.razao_social,
+              TO_CHAR(m, 'YYYY-MM') AS mes
+            FROM pj_range pr
+            CROSS JOIN LATERAL generate_series(pr.range_ini, pr.range_fim, '1 month'::interval) AS m
+            WHERE pr.range_ini <= pr.range_fim
+          )
+          SELECT
+            pm.employee_id,
+            e."nomeCompleto"    AS nome,
+            e."fotoUrl"         AS foto_url,
+            e.matricula,
+            e.cargo,
+            COUNT(DISTINCT pm.mes)::int   AS meses_ativos,
+            SUM(pm.valor_mensal)          AS custo_total,
+            MAX(pm.numero_contrato)       AS numero_contrato,
+            MAX(pm.razao_social)          AS razao_social,
+            JSON_AGG(
+              JSON_BUILD_OBJECT(
+                'mes',          pm.mes,
+                'diasNaObra',   30,
+                'diasNoMes',    30,
+                'fracao',       1,
+                'salarioBruto', pm.valor_mensal,
+                'horasExtras',  0,
+                'adicionais',   0,
+                'va',           0,
+                'fgts',         0,
+                'inss',         0,
+                'ferias',       0,
+                'seguroVida',   0,
+                'liquido',      0,
+                'custoEmpresa', pm.valor_mensal,
+                'custoTotal',   pm.valor_mensal,
+                'folhaStatus',  'pj'
+              ) ORDER BY pm.mes
+            ) AS historico_mensal
+          FROM pj_meses pm
+          JOIN employees e ON e.id = pm.employee_id
+          GROUP BY pm.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo
+          ORDER BY custo_total DESC NULLS LAST
+        `),
       ]);
 
       const funcs = r.rows as any[];
       const feriasRows = feriasR.rows as any[];
       const seguroRows  = seguroR.rows  as any[];
-      console.log(`[getCustosRH] obraId=${input.obraId} companyId=${input.companyId} mesInicio=${input.mesInicio} mesFim=${input.mesFim} funcs=${funcs.length} ferias=${feriasRows.length} seguro=${seguroRows.length}`);
+      const pjRows      = pjR.rows      as any[];
+      console.log(`[getCustosRH] obraId=${input.obraId} companyId=${input.companyId} mesInicio=${input.mesInicio} mesFim=${input.mesFim} funcs=${funcs.length} ferias=${feriasRows.length} seguro=${seguroRows.length} pj=${pjRows.length}`);
       const n = (v: any) => Number(v ?? 0);
 
       const feriasKeyMap  = new Map<string, number>();
@@ -1947,6 +2019,33 @@ export const scorecardRouter = router({
           h.custoTotal = n(h.custoEmpresa) + h.ferias + h.seguroVida;
         }
         f.historico_mensal = hist;
+      }
+
+      // Rev. 4307 — push PJ contractors into funcs array
+      for (const pj of pjRows) {
+        funcs.push({
+          employee_id:         pj.employee_id,
+          nome:                pj.nome,
+          foto_url:            pj.foto_url,
+          matricula:           pj.numero_contrato ?? pj.matricula,
+          cargo:               pj.cargo,
+          tipo_pessoa:         'PJ',
+          razao_social:        pj.razao_social,
+          meses_na_obra:       pj.meses_ativos,
+          total_dias_na_obra:  n(pj.meses_ativos) * 30,
+          salario_bruto_total: n(pj.custo_total),
+          he_total:            0,
+          va_total:            0,
+          adicionais_total:    0,
+          inss_total:          0,
+          fgts_total:          0,
+          liquido_total:       0,
+          ferias_total:        0,
+          seguro_vida_total:   0,
+          custo_folha_empresa: 0,
+          custo_total_empresa: n(pj.custo_total),
+          historico_mensal:    Array.isArray(pj.historico_mensal) ? pj.historico_mensal : [],
+        });
       }
 
       const mensalMap = new Map<string, any>();

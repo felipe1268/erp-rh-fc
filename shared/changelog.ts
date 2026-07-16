@@ -1,4 +1,33 @@
 /**
+ * Rev. 4307 - SCORECARD: RH/FOLHA — PJ CONTRACTORS INCLUÍDOS NO CUSTO
+ *
+ * CONTEXTO:
+ *   A aba RH/Folha do Scorecard do Gestor mostrava apenas colaboradores CLT
+ *   (via payroll_payments). Prestadores PJ com pj_contracts.obraId = obra
+ *   e status='ativo' ficavam invisíveis, mesmo sendo parte do efetivo da obra.
+ *   9 contratos ativos somavam R$46.500/mês sem aparecer no custo.
+ *
+ * SOLUÇÃO:
+ *   Backend (getCustosRH): 4ª query no Promise.all que busca pj_contracts para
+ *   a obra/período via generate_series (range_ini→range_fim por mês). Cada contrato
+ *   PJ vira um "funcionario" com:
+ *     - salario_bruto_total = sum(valorMensal × meses ativos)
+ *     - custo_total_empresa = mesmo valor
+ *     - he/va/fgts/inss/ferias/seguro = 0
+ *     - historico_mensal por mês com custoEmpresa/custoTotal = valorMensal
+ *     - tipo_pessoa = 'PJ', matricula = numeroContrato
+ *   Esses registros são pushed ao array `funcs` após o loop CLT, portanto entram
+ *   automaticamente no mensalMap e no resumo (sem alterar nenhum cálculo CLT).
+ *
+ *   Frontend (ScorecardTab.tsx): badge "PJ" (roxo) ao lado do nome + razão social
+ *   como subtítulo. Colunas existentes (Sal.Bruto = contrato, HE/VA/FGTS = —)
+ *   funcionam sem alteração na estrutura da tabela.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers/scorecard.ts, client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4306 - SCORECARD: FIX LOCAÇÕES INVISÍVEIS — ORDER BY CASE ALIAS EM UNION SEM SUBQUERY
  *
  * CONTEXTO:

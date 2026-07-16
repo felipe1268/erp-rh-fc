@@ -1219,9 +1219,17 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                       </div>
                                     )}
                                     <div>
-                                      <p className="font-medium text-gray-800 leading-tight">{f.nome}</p>
+                                      <div className="flex items-center gap-1 leading-tight">
+                                        <p className="font-medium text-gray-800">{f.nome}</p>
+                                        {f.tipo_pessoa === 'PJ' && (
+                                          <span className="px-1 py-0 rounded text-[8px] font-bold bg-purple-100 text-purple-700 border border-purple-200">PJ</span>
+                                        )}
+                                      </div>
                                       <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
-                                      {f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
+                                      {f.tipo_pessoa === 'PJ' && f.razao_social && (
+                                        <p className="text-[8px] text-purple-500 font-medium leading-tight">{f.razao_social}</p>
+                                      )}
+                                      {f.tipo_pessoa !== 'PJ' && f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
                                     </div>
                                   </div>
                                 </td>
