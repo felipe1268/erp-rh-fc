@@ -1804,8 +1804,11 @@ export const scorecardRouter = router({
                 )
               ) AS dias_na_obra
             FROM payroll_payments pp
-            WHERE pp."companyId"  = ${input.companyId}
-              AND pp."employeeId" IN (SELECT employee_id FROM relevant_emp)
+            -- Rev. 4303: usa a empresa real do funcionário (não da obra) para achar a folha.
+            -- Funcionários podem ser CLT de empresa B mas alocados em obra de empresa A.
+            JOIN employees emp_folha ON emp_folha.id = pp."employeeId"
+              AND pp."companyId" = emp_folha."companyId"
+            WHERE pp."employeeId" IN (SELECT employee_id FROM relevant_emp)
               ${mesInicioFilter}
               ${mesFimFilter}
           ),
@@ -1815,12 +1818,14 @@ export const scorecardRouter = router({
           vr_data AS (
             -- valorTotal já inclui café+lanche+janta+VA (líquido após desconto de faltas)
             SELECT
-              "employeeId" AS employee_id,
-              "mesReferencia" AS mes_referencia,
-              COALESCE(CASE WHEN "valorTotal" ~ '^-?[0-9]' THEN REPLACE("valorTotal", ',', '.')::numeric ELSE NULL END, 0) AS va_total
-            FROM vr_benefits
-            WHERE "companyId"  = ${input.companyId}
-              AND "employeeId" IN (SELECT employee_id FROM relevant_emp)
+              vr."employeeId" AS employee_id,
+              vr."mesReferencia" AS mes_referencia,
+              COALESCE(CASE WHEN vr."valorTotal" ~ '^-?[0-9]' THEN REPLACE(vr."valorTotal", ',', '.')::numeric ELSE NULL END, 0) AS va_total
+            FROM vr_benefits vr
+            -- Rev. 4303: usa empresa real do funcionário (não da obra)
+            JOIN employees emp_vr ON emp_vr.id = vr."employeeId"
+              AND vr."companyId" = emp_vr."companyId"
+            WHERE vr."employeeId" IN (SELECT employee_id FROM relevant_emp)
           ),
           custos AS (
             SELECT
@@ -1866,7 +1871,8 @@ export const scorecardRouter = router({
                 ) ORDER BY pf.mes_referencia
               ) AS historico_mensal
             FROM pf
-            JOIN employees e ON e.id = pf.employee_id AND e."companyId" = ${input.companyId}
+            -- Rev. 4303: sem filtro de companyId — o funcionário pode ser de empresa diferente da obra
+            JOIN employees e ON e.id = pf.employee_id
             LEFT JOIN vr_data v ON v.employee_id = pf.employee_id AND v.mes_referencia = pf.mes_referencia
             GROUP BY pf.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase"
           )
@@ -1879,8 +1885,10 @@ export const scorecardRouter = router({
             TO_CHAR(COALESCE(vp."dataPagamento"::date, vp."dataInicio"::date), 'YYYY-MM') AS mes_ref,
             COALESCE(CASE WHEN vp."valorTotal" ~ '^-?[0-9]' THEN REPLACE(vp."valorTotal", ',', '.')::numeric ELSE NULL END, 0) AS valor_total
           FROM vacation_periods vp
-          WHERE vp."companyId" = ${input.companyId}
-            AND vp.status IN ('agendada', 'concluida', 'em_gozo', 'pago', 'paga')
+          -- Rev. 4303: usa empresa real do funcionário (não da obra)
+          JOIN employees emp_fer ON emp_fer.id = vp."employeeId"
+            AND vp."companyId" = emp_fer."companyId"
+          WHERE vp.status IN ('agendada', 'concluida', 'em_gozo', 'pago', 'paga')
             AND vp."valorTotal" IS NOT NULL
             AND vp."dataInicio" IS NOT NULL
             AND TO_CHAR(COALESCE(vp."dataPagamento"::date, vp."dataInicio"::date), 'YYYY-MM')
@@ -1895,8 +1903,10 @@ export const scorecardRouter = router({
             COALESCE(CASE WHEN svc.premio_vg  ~ '^-?[0-9]' THEN REPLACE(svc.premio_vg,  ',', '.')::numeric ELSE 0 END, 0)
             + COALESCE(CASE WHEN svc.premio_apc ~ '^-?[0-9]' THEN REPLACE(svc.premio_apc, ',', '.')::numeric ELSE 0 END, 0) AS custo_mensal
           FROM seguro_vida_coberturas svc
-          WHERE svc.company_id = ${input.companyId}
-            AND svc.status = 'ativo'
+          -- Rev. 4303: usa empresa real do funcionário (não da obra)
+          JOIN employees emp_seg ON emp_seg.id = svc.employee_id
+            AND svc.company_id = emp_seg."companyId"
+          WHERE svc.status = 'ativo'
             AND svc.employee_id IN (${relevantEmpSql})
         `),
       ]);

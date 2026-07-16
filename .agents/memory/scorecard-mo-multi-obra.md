@@ -1,33 +1,41 @@
 ---
-name: Scorecard MO — equipe duplicada multi-obra
-description: Funcionário aparecia em múltiplas obras simultaneamente no Scorecard; time_records puxava extras sem alocação formal.
+name: Scorecard MO — equipe duplicada multi-obra e cross-company payroll
+description: Dois padrões de falha no Scorecard RH/Folha; ambos causam "Sem dados" mesmo com folha processada.
 ---
 
-## Problema 1 — Funcionário em múltiplas obras (custo duplicado)
+## Problema 1 — NOT EXISTS excludia histórico (Ramo B)
 
-`site_periods` Ramo B (obra_funcionarios sem employee_site_history) não tinha guard para o caso em que o mesmo employee_id estava em `obra_funcionarios` de VÁRIAS obras ao mesmo tempo (alocações sem transferência formal). O funcionário aparecia com 30 dias em CADA uma das obras.
+`site_periods` Ramo B (obra_funcionarios sem employee_site_history) usava NOT EXISTS para excluir workers com alocação mais recente em outra obra. Isso resolvia a duplicação mas apagava todo o histórico da obra atual quando o worker era transferido → obras com alta rotatividade ficavam com `relevant_emp` vazio.
 
-**Fix Rev. 4303 (substitui fix anterior)**: Em vez de NOT EXISTS (que excluía completamente o histórico do funcionário na obra quando ele se movia para outra), usa COALESCE que fecha o `periodo_fim` na data de alocação mais recente em outra obra:
+**Fix Rev. 4303**: substituído NOT EXISTS por COALESCE que fecha `periodo_fim` na data de nova alocação:
 ```sql
 COALESCE(
-  (SELECT MIN(of3."createdAt"::date)
-   FROM obra_funcionarios of3
-   WHERE of3."employeeId" = of2."employeeId"
-     AND of3."companyId"  = of2."companyId"
-     AND of3."obraId"    <> of2."obraId"
-     AND of3."createdAt"  > of2."createdAt"),
+  (SELECT MIN(of3."createdAt"::date) FROM obra_funcionarios of3
+   WHERE of3."employeeId" = of2."employeeId" AND of3."companyId" = of2."companyId"
+     AND of3."obraId" <> of2."obraId" AND of3."createdAt" > of2."createdAt"),
   CURRENT_DATE
 ) AS periodo_fim
 ```
 
-**Why:** O fix anterior com NOT EXISTS resolvia a duplicação mas causava efeito colateral grave: obras com alta rotatividade (todos os workers transferidos) ficavam com `relevant_emp` vazio → "Sem dados de folha". O novo fix preserva a anti-duplicata via período fechado — o custo é proporcionalizado só aos meses em que o funcionário estava nesta obra.
+**Why:** Anti-duplicata fica preservada via período fechado (custo proporcional), não via exclusão total.
 
-**How to apply:** Se "Sem dados de folha" aparecer em obra com workers históricos, suspeitar de Ramo B. A solução definitiva para o usuário é usar "Transferir" (não apenas "Alocar") ao mover funcionários — isso cria `employee_site_history` e usa o Ramo A (mais preciso).
+## Problema 2 — Cross-company payroll invisível
 
-## Problema 2 — Funcionários fantasma via time_records
+`payroll_frac`, `vr_data`, `custos`, férias e seguro filtravam por `companyId = input.companyId` (empresa da obra). Mas a folha é gerada sob a empresa EMPREGADORA do funcionário (`employees.companyId`), que pode ser diferente da empresa da obra em grupos multi-empresa.
 
-`relevant_emp` fazia UNION com `time_records`, puxando qualquer pessoa que bateu ponto nesta obra mesmo sem alocação formal. Isso inflava o número de funcionários no Scorecard.
+**Fix Rev. 4303**: substituído filtro fixo `pp."companyId" = input.companyId` por JOIN contra `employees` para usar o companyId real:
+```sql
+JOIN employees emp_folha ON emp_folha.id = pp."employeeId"
+  AND pp."companyId" = emp_folha."companyId"
+```
+Mesmo padrão aplicado em: `payroll_payments`, `vr_benefits`, `vacation_periods`, `seguro_vida_coberturas`, e JOIN de `employees` no CTE `custos`.
 
-**Fix**: Removido o UNION com time_records do `relevant_emp`. O time_records continua como fallback de CONTAGEM DE DIAS (subquery GREATEST em payroll_frac), mas não define mais QUEM pertence à equipe.
+**Why:** Segurança mantida: `relevant_emp` já é scoped à obra específica (via `obra_funcionarios.obraId + companyId`). Payroll só é buscado para employees DESSA obra, independente de qual empresa pagou.
 
-**Why:** "Quem é da equipe" = quem está formalmente alocado (obra_funcionarios ou employee_site_history). Bater ponto é uma consequência, não uma definição de pertencimento.
+**How to apply:** Se "Sem dados de folha" aparecer em obra com workers confirmados, verificar se a empresa da obra ≠ empresa empregadora dos funcionários. A solução é usar empresa do funcionário, não da obra.
+
+## Problema 3 — Funcionários fantasma via time_records (histórico)
+
+`relevant_emp` fazia UNION com `time_records`, puxando qualquer pessoa que bateu ponto nesta obra mesmo sem alocação formal → inflava o Scorecard.
+
+**Fix (anterior)**: Removido o UNION com time_records do `relevant_emp`. O time_records continua como fallback de CONTAGEM DE DIAS (subquery GREATEST em payroll_frac), mas não define mais QUEM pertence à equipe.
