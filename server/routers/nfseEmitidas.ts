@@ -185,7 +185,7 @@ function decompressGzipBase64(b64: string): Promise<string> {
 // Datas em DD/MM/YYYY. Uma única chamada retorna N notas.
 type SiapGeoNota = {
   numero: string; serie: string; chave: string;
-  dataEmissao: string; dataPrestacao: string;
+  dataEmissao: string | null; dataPrestacao: string | null;
   prestadorCnpj: string;
   tomadorCnpj: string; tomadorNome: string;
   tomadorInscricao: string; tomadorEmail: string; tomadorTelefone: string;
@@ -208,9 +208,15 @@ function parseSiapGeoExportXml(xml: string): SiapGeoNota[] | null {
     const nfArr: any[] = Array.isArray(root.nf) ? root.nf : root.nf ? [root.nf] : [];
     if (!nfArr.length) return null;
 
-    const parseDateBR = (s: string): string => {
-      const m = String(s || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-      return m ? `${m[3]}-${m[2]}-${m[1]}` : String(s || "").slice(0, 10);
+    const parseDateBR = (s: any): string | null => {
+      const clean = String(s ?? "").trim();
+      if (!clean || clean === "0") return null;
+      // DD/MM/YYYY
+      const m = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+      // YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
+      if (/^\d{4}-\d{2}-\d{2}/.test(clean)) return clean.slice(0, 10);
+      return null; // valor não reconhecido — caller usa || null / || hoje
     };
     const centsToReais = (v: any): number => {
       const n = parseInt(String(v ?? "0"), 10);
@@ -334,10 +340,17 @@ export function parseSefinNfseXmlFull(xml: string): Record<string, any> | null {
       return undefined;
     };
 
+    // Suporta vários envelopes de resposta ABRASF/Portal Nacional
+    // ListaNfse → pega o primeiro CompNfse quando há wrapper de lista
+    const listaNfse = getDeep(parsed, "ListaNfse.CompNfse") || getDeep(parsed, "ConsultarNfseResposta.ListaNfse.CompNfse");
+    const firstComp = listaNfse ? (Array.isArray(listaNfse) ? listaNfse[0] : listaNfse) : null;
     const inf: any =
       getDeep(parsed, "CompNfse.Nfse.InfNfse") ||
+      (firstComp ? (firstComp?.Nfse?.InfNfse || {}) : null) ||
       getDeep(parsed, "nfse.infNfse") ||
       getDeep(parsed, "Nfse.InfNfse") ||
+      getDeep(parsed, "ConsultarNfseResposta.CompNfse.Nfse.InfNfse") ||
+      getDeep(parsed, "Envelope.Body.ConsultarNfseResposta.ListaNfse.CompNfse.Nfse.InfNfse") ||
       {};
 
     const numero = String(inf?.Numero || inf?.numero || "");
@@ -1448,18 +1461,95 @@ export const nfseEmitidasRouter = router({
                 );
                 importadas++;
               } catch (e: any) {
-                erros.push(`${file.name} NF#${nota.numero}: ${e?.message || "Erro"}`);
+                const msg = `${file.name} NF#${nota.numero}: ${e?.message || "Erro"}`;
+                console.error("[importNfseXmlManual] SIAP GEO INSERT erro:", msg);
+                erros.push(msg);
               }
             }
             continue; // próximo arquivo
           }
 
-          // ── Formato ABRASF individual (Portal Nacional, uma nota por XML) ─
-          // Usa parseSefinNfseXmlFull para extrair TODOS os campos, incluindo
-          // ValorLiquidoNfse diretamente do XML (fonte autoritativa — sem recalcular).
+          // ── Formato ABRASF individual ou ListaNfse (Portal Nacional) ─
+          // Usa parseSefinNfseXmlFull para extrair TODOS os campos.
+          // Para ListaNfse, itera sobre todos os CompNfse do arquivo.
+          const xmlParsed = xmlParser.parse(file.content);
+          const getDeepLocal = (obj: any, ...paths: string[]) => {
+            for (const p of paths) {
+              let n: any = obj;
+              for (const k of p.split(".")) { n = n?.[k]; }
+              if (n !== undefined && n !== null) return n;
+            }
+            return undefined;
+          };
+          const listaCompNfse = getDeepLocal(xmlParsed, "ListaNfse.CompNfse") ||
+            getDeepLocal(xmlParsed, "ConsultarNfseResposta.ListaNfse.CompNfse") ||
+            getDeepLocal(xmlParsed, "Envelope.Body.ConsultarNfseResposta.ListaNfse.CompNfse");
+          if (listaCompNfse) {
+            // Arquivo com múltiplas NFS-e (wrapper ListaNfse)
+            const arr = Array.isArray(listaCompNfse) ? listaCompNfse : [listaCompNfse];
+            for (const comp of arr) {
+              try {
+                const compXml = `<CompNfse>${JSON.stringify(comp)}</CompNfse>`;
+                // Re-serializa cada CompNfse como XML individual e reutiliza parseSefinNfseXmlFull
+                // Cria um XML sintético só com o CompNfse
+                const nota = (() => {
+                  const inf: any = comp?.Nfse?.InfNfse || {};
+                  const numero = String(inf?.Numero || inf?.numero || "");
+                  if (!numero) return null;
+                  const n2 = (v: any) => parseFloat(String(v || "0")) || 0;
+                  const vals = inf?.Servico?.Valores || inf?.servico?.Valores || {};
+                  const tom = inf?.TomadorServico || inf?.Tomador || {};
+                  const tomIdent = tom?.IdentificacaoTomador || {};
+                  const tomCnpj = tomIdent?.CpfCnpj?.Cnpj || tomIdent?.CpfCnpj?.Cpf || "";
+                  const issRetidoVal = String(vals?.IssRetido || "2") === "1" ? n2(vals?.ValorIssRetido || vals?.ValorIss) : 0;
+                  return {
+                    numero,
+                    codigoVerificacao: String(inf?.CodigoVerificacao || inf?.ChaveNfse || ""),
+                    dataEmissao: String(inf?.DataEmissao || "").replace("T", " ").slice(0, 10) || hoje,
+                    tomadorCnpj: String(tomCnpj).replace(/\D/g, "") || null,
+                    tomadorNome: String(tom?.RazaoSocial || ""),
+                    discriminacao: String(inf?.Servico?.Discriminacao || ""),
+                    valorServicos: n2(vals?.ValorServicos),
+                    valorDeducoes: n2(vals?.ValorDeducoes),
+                    baseCalculo: n2(vals?.BaseCalculo) || null,
+                    aliquota: n2(vals?.Aliquota) || null,
+                    issRetidoValor: issRetidoVal,
+                    valorInss: n2(vals?.ValorInss),
+                    valorIr: n2(vals?.ValorIr),
+                    valorCsll: n2(vals?.ValorCsll),
+                    valorPis: n2(vals?.ValorPis),
+                    valorCofins: n2(vals?.ValorCofins),
+                    valorOutrasRetencoes: n2(vals?.OutrasRetencoes),
+                    valorLiquido: n2(vals?.ValorLiquidoNfse || vals?.ValorServicos),
+                  };
+                })();
+                if (!nota) { erros.push(`${file.name}: CompNfse sem número`); continue; }
+                const hasChave = nota.codigoVerificacao && nota.codigoVerificacao.length >= 4;
+                const dup = hasChave
+                  ? await db.$client.query<any>(`SELECT id FROM fiscal_notes WHERE company_id=$1 AND chave_acesso=$2 AND origem LIKE 'nfse%' LIMIT 1`, [input.companyId, nota.codigoVerificacao])
+                  : await db.$client.query<any>(`SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND EXTRACT(YEAR FROM data_emissao)=EXTRACT(YEAR FROM $3::date) AND origem LIKE 'nfse%' LIMIT 1`, [input.companyId, nota.numero, nota.dataEmissao || hoje]);
+                if (dup.rows[0]) { ignoradas++; continue; }
+                await db.$client.query(
+                  `INSERT INTO fiscal_notes (company_id, numero_nf, chave_acesso, data_emissao, tomador_cnpj, tomador_razao_social, descricao_servico, valor_bruto, deducoes_total, base_calculo_iss, aliquota_iss, iss_retido, retencao_inss, retencao_irrf, retencao_csll, retencao_pis, retencao_cofins, retencao_outras, retencao_pis_cofins, valor_liquido, status, origem, xml_payload, created_at, updated_at)
+                   VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,0,$19,'pendente','nfse_xml_manual',$20,NOW(),NOW())`,
+                  [input.companyId, nota.numero, nota.codigoVerificacao || null, nota.dataEmissao || hoje, nota.tomadorCnpj || null, nota.tomadorNome || null, nota.discriminacao || null, nota.valorServicos, nota.valorDeducoes, nota.baseCalculo, nota.aliquota, nota.issRetidoValor, nota.valorInss, nota.valorIr, nota.valorCsll, nota.valorPis, nota.valorCofins, nota.valorOutrasRetencoes, nota.valorLiquido, file.content]
+                );
+                importadas++;
+              } catch (e: any) {
+                const msg2 = `${file.name} (ListaNfse): ${e?.message || "Erro"}`;
+                console.error("[importNfseXmlManual] ListaNfse INSERT erro:", msg2);
+                erros.push(msg2);
+              }
+            }
+            continue;
+          }
+
           const nota = parseSefinNfseXmlFull(file.content);
           if (!nota || !nota.numero) {
-            erros.push(`${file.name}: XML inválido ou formato não reconhecido (suporte: ABRASF individual ou exportação SIAP GEO)`);
+            const preview = file.content.slice(0, 120).replace(/\s+/g, " ");
+            const errMsg = `${file.name}: XML inválido ou formato não reconhecido. Início: ${preview}`;
+            console.error("[importNfseXmlManual] formato não reconhecido:", errMsg);
+            erros.push(`${file.name}: XML inválido ou formato não reconhecido (suporte: ABRASF individual, ListaNfse ou exportação SIAP GEO)`);
             continue;
           }
           // issRetido '1'=retido pelo tomador → usar valorIssRetido; '2'=prestador recolhe via guia

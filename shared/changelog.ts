@@ -1,4 +1,35 @@
 /**
+ * Rev. 4299 - NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING + DESCRIÇÃO DE ERRO
+ *
+ * CONTEXTO:
+ *   Upload de XML de NFS-e emitidas falhava com "4 com erro" sem mostrar o motivo ao usuário.
+ *   Três causas identificadas:
+ *
+ *   1. DATAS INVÁLIDAS (bug principal): `parseDateBR` retornava `"0"` (string truthy) quando
+ *      o campo de data vinha como inteiro `0` do fast-xml-parser (tag `<dt_prestacao/>` vazia
+ *      ou ausente). O operador `|| null` não atuava porque `"0"` é truthy em JS. Resultado:
+ *      `"0"::date` no PostgreSQL → error "invalid input syntax for type date". Fix: `parseDateBR`
+ *      agora retorna `null` para qualquer valor que não seja DD/MM/YYYY ou YYYY-MM-DD válido.
+ *
+ *   2. FORMATO NÃO SUPORTADO: XMLs do Portal Nacional (2026+) com wrapper `<ListaNfse>` contendo
+ *      múltiplos `<CompNfse>` não eram reconhecidos por nenhum dos dois parsers. `parseSefinNfseXmlFull`
+ *      procurava apenas `CompNfse.Nfse.InfNfse` (sem wrapper). Fix: novo bloco de detecção
+ *      `ListaNfse.CompNfse` em `importNfseXmlManual` que itera sobre cada nota do array.
+ *      `parseSefinNfseXmlFull` agora também detecta `ListaNfse.CompNfse` e `ConsultarNfseResposta.*`.
+ *
+ *   3. TOAST SEM DESCRIÇÃO + SEM LOGGING: o toast de erro mostrava apenas a contagem "4 com erro"
+ *      mas não o motivo. Fix: toast agora inclui `description: allErros[0]`; console.error no
+ *      cliente e no servidor para cada nota que falha.
+ *
+ * ARQUIVOS:
+ *   server/routers/nfseEmitidas.ts (parseDateBR, parseSefinNfseXmlFull, importNfseXmlManual)
+ *   client/src/pages/financeiro/FinanceiroNotasFiscais.tsx (toast description + logging)
+ *   shared/version.ts
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4298 - SMO: FIX CRÍTICO — COLUMNNAME MISMATCH totalVA_iFood + CONFIG PARA R$ 700 VA (CONVENÇÃO 2026-2028)
  *
  * CONTEXTO:

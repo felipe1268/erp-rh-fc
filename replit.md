@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4298** — **SMO: FIX CRÍTICO — COLUMNNAME MISMATCH totalVA_iFood + CONFIG PARA R$ 700 VA (CONVENÇÃO 2026-2028).** `resolveMealBenefitConfig` usa `SELECT *` raw → retorna `"totalVA_iFood"` (DB), mas `calcBeneficiosFromConfig` lia `totalVaIFood` (Drizzle JS); mismatch → `parseBRL(undefined)=0` → else-if → `484,48×22=R$ 10.658,56`. Fix: `parseBRL(mealCfg.totalVaIFood ?? mealCfg['totalVA_iFood'])`. meal_benefit_configs id=4 (PADRÃO) atualizado: VA=R$ 700,00, sem VR (convenção SINDUSCON-SP 2026-2028 Guaratinguetá). 5 SMOs com benefVA>5k limpos no banco → recompute automático. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4299** — **NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING.** `parseDateBR` retornava `"0"` (truthy) para tags de data ausentes → `"0"::date` explodindo no PostgreSQL. Fix: retorna `null` para valores não-reconhecidos. Novo handler `ListaNfse.CompNfse` para XMLs do Portal Nacional 2026 com múltiplas notas. Toast de erro agora mostra descrição do primeiro erro + `console.error` no backend. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4297** — **SMO: DETALHAMENTO VR/VA/VT NO BENEFÍCIO + ALERTA DE BENEFÍCIO ANÔMALO.** Investigação revelou que o campo "Benefícios" no SMO-0012 exibia R$ 11.027/pessoa (7-10× acima do normal; construção civil BR: R$ 900-1.800/pessoa). Fix: `computeCustoSMO` grava `benefVR/benefVA/benefVT/benefFixos` separadamente; UI expande linha Benefícios com breakdown; alerta vermelho `alertaBeneficioAnomalo`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4298** — **SMO: FIX CRÍTICO — COLUMNNAME MISMATCH totalVA_iFood + CONFIG PARA R$ 700 VA (CONVENÇÃO 2026-2028).** `resolveMealBenefitConfig` usa `SELECT *` raw → retorna `"totalVA_iFood"` (DB), mas `calcBeneficiosFromConfig` lia `totalVaIFood` (Drizzle JS); mismatch → `parseBRL(undefined)=0` → else-if → `484,48×22=R$ 10.658,56`. Fix: `parseBRL(mealCfg.totalVaIFood ?? mealCfg['totalVA_iFood'])`. meal_benefit_configs id=4 (PADRÃO) atualizado: VA=R$ 700,00, sem VR (convenção SINDUSCON-SP 2026-2028 Guaratinguetá). 5 SMOs com benefVA>5k limpos no banco → recompute automático. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
@@ -66,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4292** — **FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ CONCILIADO + CRÉDITO VAZAVA PARA "SEM LANÇAMENTO".** 3ª passagem híbrida + dedup por debitoId:creditoId. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4291** — **FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS.** Dedup por `${cpfLimpo}:${skillId}` + COUNT DISTINCT por CPF limpo. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4288 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4291 e anteriores.
 
 ## User preferences
 

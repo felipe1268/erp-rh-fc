@@ -1098,7 +1098,12 @@ export default function FinanceiroNotasFiscais() {
       listQuery.refetch(); yearQuery.refetch();
       const msg = `${totalImportadas} NFS-e importada${totalImportadas !== 1 ? "s" : ""}, ${totalIgnoradas} já existia${totalIgnoradas !== 1 ? "m" : ""}.`;
       const erroTxt = allErros.length ? ` ${allErros.length} com erro.` : "";
-      toast({ title: "Import XML NFS-e: " + msg + erroTxt, variant: totalImportadas > 0 ? "default" : "destructive" });
+      if (allErros.length) console.error("[ImportXML NFS-e] erros:", allErros);
+      toast({
+        title: "Import XML NFS-e: " + msg + erroTxt,
+        description: allErros.length > 0 ? allErros[0].slice(0, 200) : undefined,
+        variant: totalImportadas > 0 ? "default" : allErros.length > 0 ? "destructive" : "default",
+      });
     } catch (err: any) {
       setXmlImportProgress(null);
       toast({ title: "Erro no import XML NFS-e", description: err?.message, variant: "destructive" });
