@@ -1544,12 +1544,94 @@ export const nfseEmitidasRouter = router({
             continue;
           }
 
+          // ── Formato NFS-e Nacional (SPED/RFB) v1.01 ─────────────────────────
+          // Root: <NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+          //   <infNFSe Id="NFS..."><nNFSe> <dhEmi> <prest> <toma> <serv> <valores>
+          const nfseNacInf: any = xmlParsed?.NFSe?.infNFSe;
+          if (nfseNacInf) {
+            try {
+              const n2nac = (v: any) => parseFloat(String(v ?? 0)) || 0;
+              const chaveRaw = String(nfseNacInf?.["@_Id"] || "").replace(/^NFS/i, "");
+              const numero = String(nfseNacInf?.nNFSe || "");
+              if (!numero) {
+                erros.push(`${file.name}: NFS-e Nacional sem número (nNFSe vazio)`);
+                continue;
+              }
+              const dhEmi = String(nfseNacInf?.dhEmi || "").slice(0, 10) || hoje;
+              const prest: any = nfseNacInf?.prest || {};
+              const toma: any  = nfseNacInf?.toma  || {};
+              const serv: any  = nfseNacInf?.serv  || {};
+              const vals: any  = nfseNacInf?.valores || {};
+              const tribMun: any = vals?.trib?.tribMun || {};
+              const retTrib: any = vals?.trib?.retTrib || {};
+              const tomadorCnpj = String(toma?.CNPJ || toma?.CPF || "").replace(/\D/g, "") || null;
+              const tomadorNome = String(toma?.xNome || "");
+              const discriminacao = String(serv?.xDiscServ || "");
+              const valorBruto = n2nac(vals?.vCalcDR || vals?.vServ || 0);
+              const aliquota = n2nac(tribMun?.pAliq) || null;
+              // tpRetISSQN: 1=retido pelo tomador, 2=recolhido pelo prestador
+              const issRetidoFlag = String(tribMun?.tpRetISSQN ?? "2") === "1";
+              const issRetidoValor = issRetidoFlag ? n2nac(tribMun?.vTrib) : 0;
+              const retInss    = n2nac(retTrib?.vRetCP);
+              const retIrrf    = n2nac(retTrib?.vRetIRRF);
+              const retCsll    = n2nac(retTrib?.vRetCSSL);
+              const retPis     = n2nac(retTrib?.vRetPIS);
+              const retCofins  = n2nac(retTrib?.vRetCOFINS);
+              const valorLiquido = Math.max(0, valorBruto - issRetidoValor - retInss - retIrrf - retCsll - retPis - retCofins);
+              const cServ: any  = serv?.cServ || {};
+              const cdListaServico = String(cServ?.cTribNac || cServ?.cTribMun || "");
+              const cdCnae = String(cServ?.CNAE || "");
+
+              // Dedup por chave_acesso OU numero+ano
+              const hasChaveNac = chaveRaw.length >= 10;
+              const dupNac = hasChaveNac
+                ? await db.$client.query<any>(`SELECT id FROM fiscal_notes WHERE company_id=$1 AND chave_acesso=$2 AND origem LIKE 'nfse%' LIMIT 1`, [input.companyId, chaveRaw])
+                : await db.$client.query<any>(`SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND EXTRACT(YEAR FROM data_emissao)=EXTRACT(YEAR FROM $3::date) AND origem LIKE 'nfse%' LIMIT 1`, [input.companyId, numero, dhEmi]);
+              if (dupNac.rows[0]) { ignoradas++; continue; }
+
+              await db.$client.query(
+                `INSERT INTO fiscal_notes
+                  (company_id, numero_nf, chave_acesso, data_emissao, data_prestacao,
+                   tomador_cnpj, tomador_razao_social, descricao_servico,
+                   valor_bruto, deducoes_total, base_calculo_iss, aliquota_iss,
+                   iss_retido, retencao_inss, retencao_irrf, retencao_csll,
+                   retencao_pis, retencao_cofins, retencao_outras, retencao_pis_cofins,
+                   valor_liquido, cd_lista_servico, cd_cnae,
+                   status, origem, xml_payload, created_at, updated_at)
+                 VALUES
+                  ($1,$2,$3,$4::date,$5::date,
+                   $6,$7,$8,
+                   $9,0,$10,$11,
+                   $12,$13,$14,$15,
+                   $16,$17,0,0,
+                   $18,$19,$20,
+                   'pendente','nfse_xml_manual',$21,NOW(),NOW())`,
+                [
+                  input.companyId, numero, chaveRaw || null, dhEmi, dhEmi,
+                  tomadorCnpj, tomadorNome || null, discriminacao || null,
+                  valorBruto, valorBruto, aliquota,
+                  issRetidoValor, retInss, retIrrf, retCsll,
+                  retPis, retCofins,
+                  valorLiquido, cdListaServico || null, cdCnae || null,
+                  file.content,
+                ]
+              );
+              importadas++;
+            } catch (e: any) {
+              const msg = `${file.name} (NFS-e Nacional): ${e?.message || "Erro"}`;
+              console.error("[importNfseXmlManual] NFS-e Nacional INSERT erro:", msg);
+              erros.push(msg);
+            }
+            continue;
+          }
+
           const nota = parseSefinNfseXmlFull(file.content);
           if (!nota || !nota.numero) {
+            const rootKeys = Object.keys(xmlParsed || {}).join(", ");
             const preview = file.content.slice(0, 120).replace(/\s+/g, " ");
-            const errMsg = `${file.name}: XML inválido ou formato não reconhecido. Início: ${preview}`;
+            const errMsg = `${file.name}: XML inválido ou formato não reconhecido. Raiz: [${rootKeys}]. Início: ${preview}`;
             console.error("[importNfseXmlManual] formato não reconhecido:", errMsg);
-            erros.push(`${file.name}: XML inválido ou formato não reconhecido (suporte: ABRASF individual, ListaNfse ou exportação SIAP GEO)`);
+            erros.push(`${file.name}: formato não suportado (raiz XML: ${rootKeys || "vazia"})`);
             continue;
           }
           // issRetido '1'=retido pelo tomador → usar valorIssRetido; '2'=prestador recolhe via guia

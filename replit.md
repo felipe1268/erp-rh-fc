@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4300** — **NFS-e: SUPORTE AO FORMATO NFS-e NACIONAL (SPED/RFB v1.01) NO IMPORT XML.** Log de produção revelou root `<NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe>` — padrão RFB completamente diferente do ABRASF/SIAP GEO (campos: nNFSe, dhEmi, prest/toma/serv/valores, trib.tribMun, retTrib). Novo bloco no importNfseXmlManual detecta `xmlParsed.NFSe.infNFSe` e faz INSERT com todos os campos. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4299** — **NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING.** `parseDateBR` retornava `"0"` (truthy) para tags de data ausentes → `"0"::date` explodindo no PostgreSQL. Fix: retorna `null` para valores não-reconhecidos. Novo handler `ListaNfse.CompNfse` para XMLs do Portal Nacional 2026 com múltiplas notas. Toast de erro agora mostra descrição do primeiro erro + `console.error` no backend. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4298** — **SMO: FIX CRÍTICO — COLUMNNAME MISMATCH totalVA_iFood + CONFIG PARA R$ 700 VA (CONVENÇÃO 2026-2028).** `resolveMealBenefitConfig` usa `SELECT *` raw → retorna `"totalVA_iFood"` (DB), mas `calcBeneficiosFromConfig` lia `totalVaIFood` (Drizzle JS); mismatch → `parseBRL(undefined)=0` → else-if → `484,48×22=R$ 10.658,56`. Fix: `parseBRL(mealCfg.totalVaIFood ?? mealCfg['totalVA_iFood'])`. meal_benefit_configs id=4 (PADRÃO) atualizado: VA=R$ 700,00, sem VR (convenção SINDUSCON-SP 2026-2028 Guaratinguetá). 5 SMOs com benefVA>5k limpos no banco → recompute automático. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4298** — **SMO: FIX CRÍTICO — COLUMNNAME MISMATCH totalVA_iFood + CONFIG PARA R$ 700 VA (CONVENÇÃO 2026-2028).** `parseBRL(mealCfg.totalVaIFood ?? mealCfg['totalVA_iFood'])`; meal_benefit_configs id=4 atualizado VA=R$ 700,00. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4296** — **SMO: TETO DE SANIDADE SALARIAL NO CÁLCULO DE CUSTO ESTIMADO.** Teto `pisoFallback×12` em `computeCustoSMO`; flag `alertaSalarioAnomalo`; `getById` recomputa via `|| !parsed.rev`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4293** — **CONTRATO PJ: NOME DO SÓCIO/ADMINISTRADOR COMO REPRESENTANTE + DADOS BANCÁRIOS DO PRESTADOR.** SyncSchema+ Rev. 4293, 4 colunas novas em `pj_contracts`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4292** — **FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ CONCILIADO + CRÉDITO VAZAVA PARA "SEM LANÇAMENTO".** 3ª passagem híbrida + dedup por debitoId:creditoId. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4291 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4292 e anteriores.
 
 ## User preferences
 

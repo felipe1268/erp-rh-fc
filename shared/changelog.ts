@@ -1,4 +1,48 @@
 /**
+ * Rev. 4300 - NFS-e: SUPORTE AO FORMATO NFS-e NACIONAL (SPED/RFB v1.01) NO IMPORT XML
+ *
+ * CONTEXTO:
+ *   Após o fix das datas (Rev. 4299), o import ainda falhava com "4 com erro" para arquivos
+ *   no novo formato NFS-e Nacional emitido pela Prefeitura de Guaratinguetá (e outros municípios
+ *   que aderiram ao Portal Nacional da RFB). O log de produção revelou:
+ *
+ *     <?xml version="1.0" encoding="utf-8"?>
+ *     <NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+ *       <infNFSe Id="NFS35184042...">
+ *         <nNFSe>71</nNFSe>
+ *         <dhEmi>2026-07-13T10:00:00-03:00</dhEmi>
+ *         <prest>/<toma>/<serv>/<valores> ...
+ *
+ *   Este é o padrão NFS-e Nacional da Receita Federal (SPED), totalmente diferente do
+ *   ABRASF/SIAP GEO. O root é `NFSe` (não `CompNfse`/`nfse`), os campos usam nomes
+ *   abreviados (nNFSe, dhEmi, prest, toma, serv, valores) e a chave fica no atributo `Id`
+ *   com prefixo "NFS".
+ *
+ * SOLUÇÃO:
+ *   Novo bloco em `importNfseXmlManual` detecta `xmlParsed.NFSe.infNFSe` e extrai:
+ *   - numero: infNFSe.nNFSe
+ *   - chave_acesso: @_Id.replace(/^NFS/i,"")
+ *   - data_emissao/prestacao: infNFSe.dhEmi (slice 0-10, timezone já descartada)
+ *   - tomador: infNFSe.toma.CNPJ|CPF + xNome
+ *   - discriminacao: infNFSe.serv.xDiscServ
+ *   - valor_bruto: infNFSe.valores.vCalcDR
+ *   - aliquota: infNFSe.valores.trib.tribMun.pAliq
+ *   - iss_retido: tpRetISSQN===1 ? vTrib : 0
+ *   - retenções: retTrib.vRetCP/vRetIRRF/vRetCSSL/vRetPIS/vRetCOFINS
+ *   - valor_liquido: bruto − ISS retido − soma retenções (Math.max 0)
+ *   - cd_lista_servico: cServ.cTribNac|cTribMun; cd_cnae: cServ.CNAE
+ *   Dedup por chave_acesso (quando ≥10 chars) ou numero+ano.
+ *   A mensagem de erro "formato não suportado" agora inclui as chaves raiz do XML para
+ *   diagnóstico imediato sem acesso ao servidor.
+ *
+ * ARQUIVOS:
+ *   server/routers/nfseEmitidas.ts (importNfseXmlManual — novo bloco NFSe Nacional)
+ *   shared/version.ts
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4299 - NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING + DESCRIÇÃO DE ERRO
  *
  * CONTEXTO:
