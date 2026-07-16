@@ -1,4 +1,39 @@
 /**
+ * Rev. 4303 - SCORECARD: FIX CUSTO MO INVISÍVEL (RAMO B EXCLUÍA HISTÓRICO) + LOCAÇÕES VIA OC
+ *
+ * CONTEXTO:
+ *   Duas falhas no Scorecard do Gestor — aba "RH / Folha" e sub-aba "Locações":
+ *
+ *   1. RH/Folha — "Sem dados de folha para esta obra":
+ *      O Ramo B de site_periods usava NOT EXISTS para excluir completamente funcionários
+ *      que tinham uma alocação mais recente em outra obra. Isso resolvia a duplicação
+ *      (funcionário contado em N obras ao mesmo tempo), mas causava o efeito colateral de
+ *      apagar todo o histórico de custo do funcionário na obra atual quando ele era transferido.
+ *      Obras com muita rotatividade (todos os workers já transferidos) ficavam com relevant_emp
+ *      vazio → "Sem dados de folha" mesmo com folha processada e funcionários formalmente alocados.
+ *
+ *      Fix Rev. 4303: substituído o NOT EXISTS por COALESCE que fecha o periodo_fim na data da
+ *      alocação mais recente em outra obra (MIN(of3.createdAt)). Se o funcionário saiu para
+ *      outra obra em 2026-04, o periodo_fim para esta obra é 2026-04-01 — e o custo é
+ *      proporcionalizado apenas aos meses em que estava aqui. Anti-duplicata preservada via
+ *      período fechado (sem o hard-exclude).
+ *
+ *   2. Locações — "Nenhum equipamento locado ativo nesta obra":
+ *      A query existia em dois ramos (almoxarifado_itens + equipamentos_locados.obra_id).
+ *      Locações criadas via OC de compra (ordem_compra_id) sem campo obra_id preenchido
+ *      ficavam invisíveis porque nenhum ramo as capturava.
+ *
+ *      Fix Rev. 4303: novo Ramo C no UNION — JOIN de equipamentos_locados com compras_ordens
+ *      pelo obra_id da OC. Captura locações vinculadas à obra via OC mesmo sem obra_id direto.
+ *      NOT EXISTS garante que itens já cobertos pelos Ramos A/B não aparecem em duplicata.
+ *
+ * ARQUIVOS TOCADOS:
+ *   - server/routers/scorecard.ts (getCustosRH Ramo B + getAnalise locações Ramo C)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4302 - SMO: CUSTOS ÚNICOS DE ADMISSÃO (EPI COMPLETO, UNIFORME, JOGO INICIAL) NO CARD DE IMPACTO FINANCEIRO
  *
  * CONTEXTO:

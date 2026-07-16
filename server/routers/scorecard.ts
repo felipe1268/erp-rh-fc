@@ -1528,7 +1528,7 @@ export const scorecardRouter = router({
 
             UNION ALL
 
-            -- Fallback: equipamentos_locados com obra_id direto que não têm
+            -- Ramo B: equipamentos_locados com obra_id direto que não têm
             -- almoxarifado_itens vinculado nesta obra (evita duplicatas)
             SELECT
               el.id,
@@ -1571,6 +1571,56 @@ export const scorecardRouter = router({
                   AND ai2.obra_id    = ${input.obraId}
                   AND ai2.company_id = ${input.companyId}
                   AND ai2.ativo      = true
+              )
+
+            UNION ALL
+
+            -- Ramo C (Rev. 4303): equipamentos_locados sem obra_id direto mas vinculados
+            -- a uma OC (ordem de compra) que pertence a esta obra.
+            -- Captura locações criadas via OC sem preenchimento manual do campo obra.
+            SELECT
+              el.id,
+              el.descricao,
+              el.categoria,
+              el.status,
+              el.foto_url,
+              el.data_inicio,
+              el.data_fim_prevista,
+              el.data_fim_real,
+              el.valor_mensal,
+              el.valor_diario,
+              el.funcionario_responsavel_nome,
+              el.numero_contrato_fornecedor,
+              el.fornecedor_nome,
+              NULL AS quantidade_atual,
+              CASE
+                WHEN el.data_fim_real IS NOT NULL
+                THEN (el.data_fim_real::date - el.data_inicio::date)
+                ELSE (CURRENT_DATE - el.data_inicio::date)
+              END AS dias_locado,
+              CASE
+                WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
+                THEN ROUND(
+                  el.valor_mensal *
+                  (COALESCE(el.data_fim_real::date, CURRENT_DATE) - el.data_inicio::date)
+                  / 30.0, 2)
+                ELSE NULL
+              END AS custo_estimado,
+              'locado' AS tipo_vinculo
+            FROM equipamentos_locados el
+            JOIN compras_ordens co ON co.id = el.ordem_compra_id
+              AND co.company_id = ${input.companyId}
+              AND co.obra_id    = ${input.obraId}
+            WHERE el.company_id = ${input.companyId}
+              AND el.status    != 'devolvido'
+              AND (el.obra_id IS NULL OR el.obra_id <> ${input.obraId})
+              AND NOT EXISTS (
+                SELECT 1 FROM almoxarifado_itens ai3
+                WHERE ai3.equipamento_vinculado_id   = el.id
+                  AND ai3.equipamento_vinculado_tipo  = 'locado'
+                  AND ai3.obra_id    = ${input.obraId}
+                  AND ai3.company_id = ${input.companyId}
+                  AND ai3.ativo      = true
               )
 
             ORDER BY
@@ -1673,33 +1723,34 @@ export const scorecardRouter = router({
             -- Ramo B: funcionários em obra_funcionarios SEM registro de history
             -- periodo_inicio = MAX(data que foi cadastrado na obra, dataInicio da obra)
             -- NÃO usa dataAdmissão (pode ser de anos atrás e infla custo retroativo)
-            -- Guard multi-obra: só inclui se esta obra é a MAIS RECENTE alocação do funcionário
-            -- (evita contar Antonio em 3 obras simultaneamente quando não houve transferência formal)
+            -- Rev. 4303 — Anti-duplicata via periodo_fim fechado: em vez de excluir quem se
+            -- moveu para outra obra (o que apagava todo o histórico do funcionário nesta obra),
+            -- fecha o periodo_fim na data da alocação mais recente em outra obra (se existir).
+            -- Assim o custo é proporcionalizado só aos meses em que o funcionário estava aqui.
             SELECT
               of2."employeeId"                                               AS employee_id,
               GREATEST(
                 of2."createdAt"::date,
                 (SELECT data_inicio FROM obra_inicio)
               )                                                              AS periodo_inicio,
-              CURRENT_DATE                                                   AS periodo_fim
+              COALESCE(
+                -- Se foi alocado em outra obra depois: fecha o período nesta obra
+                (SELECT MIN(of3."createdAt"::date)
+                 FROM obra_funcionarios of3
+                 WHERE of3."employeeId" = of2."employeeId"
+                   AND of3."companyId"  = of2."companyId"
+                   AND of3."obraId"    <> of2."obraId"
+                   AND of3."createdAt"  > of2."createdAt"),
+                CURRENT_DATE
+              )                                                              AS periodo_fim
             FROM obra_funcionarios of2
-            JOIN employees e ON e.id = of2."employeeId"
             WHERE of2."obraId"    = ${input.obraId}
               AND of2."companyId" = ${input.companyId}
-              AND e.status NOT IN ('Desligado','Lista_Negra','Inativo')
               AND NOT EXISTS (
                 SELECT 1 FROM employee_site_history esh2
                 WHERE esh2."employeeId" = of2."employeeId"
                   AND esh2."obraId"     = ${input.obraId}
                   AND esh2."companyId"  = ${input.companyId}
-              )
-              -- Não inclui se o funcionário tem alocação mais recente em outra obra
-              AND NOT EXISTS (
-                SELECT 1 FROM obra_funcionarios of3
-                WHERE of3."employeeId" = of2."employeeId"
-                  AND of3."companyId"  = of2."companyId"
-                  AND of3."obraId"    <> of2."obraId"
-                  AND of3."createdAt"  > of2."createdAt"
               )
           ),
           relevant_emp AS (

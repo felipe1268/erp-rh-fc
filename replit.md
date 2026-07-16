@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4303** — **SCORECARD: FIX CUSTO MO INVISÍVEL + LOCAÇÕES VIA OC.** Duas falhas: (1) RH/Folha mostrava "Sem dados" porque o Ramo B de `site_periods` excluía completamente funcionários transferidos — fix: `NOT EXISTS` substituído por `COALESCE(MIN(of3.createdAt), CURRENT_DATE)` fechando `periodo_fim` na data de transferência (preserva anti-duplicata via período fechado); (2) Locações vinculadas à obra via OC sem `obra_id` direto não apareciam — fix: novo Ramo C no UNION com JOIN `equipamentos_locados × compras_ordens.obra_id`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4302** — **SMO: CUSTOS ÚNICOS DE ADMISSÃO (EPI COMPLETO, UNIFORME, JOGO INICIAL) NO CARD DE IMPACTO FINANCEIRO.** Card mostrava só R$ 45/mês de "EPI/equipamentos" (recorrente); os custos únicos de admissão já existiam no CLT Total mas eram invisíveis. `computeCustoSMO` agora expõe `epiCompletoUnico=200`, `uniformeUnico=350`, `jogoInicialUnico=250` no objeto `detalhes`. Card compacto: nova seção "Custos únicos de admissão" com borda âmbar tracejada mostra as 3 linhas; fallback p/ SMOs antigas via constantes fixas. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4301** — **FCSIGN: BOTÃO "SOLICITAR REVISÃO" PARA O ASSINANTE NA TELA DE ASSINATURA.** Assinante não tinha como recusar o contrato sem contato manual com o RH. Nova procedure pública `signatures.requestRevision({ token, motivo })` cancela a sessão registrando `[Revisão solicitada por NOME em DD/MM]` no campo `observacoes` — bloqueia todos os demais assinantes imediatamente. Frontend `AssinarDocumento.tsx`: botão amber "Não concordo — Solicitar revisão" expande inline uma textarea; após envio exibe card âmbar de confirmação. RAIO-X do colaborador (`Colaboradores.tsx`): novo bloco "Revisão solicitada pelo assinante" exibe o motivo para o admin/RH saber o que corrigir antes de reemitir. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4301** — **FCSIGN: BOTÃO "SOLICITAR REVISÃO" PARA O ASSINANTE NA TELA DE ASSINATURA.** Nova procedure pública `requestRevision`. Botão amber inline + card de confirmação em `AssinarDocumento.tsx`. Bloco de motivo no RAIO-X do colaborador. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4300** — **NFS-e: SUPORTE AO FORMATO NFS-e NACIONAL (SPED/RFB v1.01) NO IMPORT XML.** Novo bloco no importNfseXmlManual detecta `xmlParsed.NFSe.infNFSe` e faz INSERT com todos os campos. ZERO DELETE · ZERO ALTER destrutivo.
 

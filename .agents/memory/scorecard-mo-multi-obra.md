@@ -7,21 +7,22 @@ description: Funcionário aparecia em múltiplas obras simultaneamente no Scorec
 
 `site_periods` Ramo B (obra_funcionarios sem employee_site_history) não tinha guard para o caso em que o mesmo employee_id estava em `obra_funcionarios` de VÁRIAS obras ao mesmo tempo (alocações sem transferência formal). O funcionário aparecia com 30 dias em CADA uma das obras.
 
-**Fix**: Adicionado NOT EXISTS no Ramo B:
+**Fix Rev. 4303 (substitui fix anterior)**: Em vez de NOT EXISTS (que excluía completamente o histórico do funcionário na obra quando ele se movia para outra), usa COALESCE que fecha o `periodo_fim` na data de alocação mais recente em outra obra:
 ```sql
-AND NOT EXISTS (
-  SELECT 1 FROM obra_funcionarios of3
-  WHERE of3."employeeId" = of2."employeeId"
-    AND of3."companyId"  = of2."companyId"
-    AND of3."obraId"    <> of2."obraId"
-    AND of3."createdAt"  > of2."createdAt"
-)
+COALESCE(
+  (SELECT MIN(of3."createdAt"::date)
+   FROM obra_funcionarios of3
+   WHERE of3."employeeId" = of2."employeeId"
+     AND of3."companyId"  = of2."companyId"
+     AND of3."obraId"    <> of2."obraId"
+     AND of3."createdAt"  > of2."createdAt"),
+  CURRENT_DATE
+) AS periodo_fim
 ```
-Garante que o funcionário só aparece na obra onde foi mais recentemente alocado.
 
-**Why:** O botão "Transferir" na tela de Equipe atualiza employee_site_history, mas se o usuário apenas aloca sem transferir formalmente, o registro em obra_funcionarios fica em múltiplas obras.
+**Why:** O fix anterior com NOT EXISTS resolvia a duplicação mas causava efeito colateral grave: obras com alta rotatividade (todos os workers transferidos) ficavam com `relevant_emp` vazio → "Sem dados de folha". O novo fix preserva a anti-duplicata via período fechado — o custo é proporcionalizado só aos meses em que o funcionário estava nesta obra.
 
-**How to apply:** Sempre que o Scorecard RH/Folha exibir mais funcionários do que a tela de Equipe mostra, suspeitar deste padrão. A solução definitiva para o usuário é usar "Transferir" (não apenas "Alocar") ao mover funcionários entre obras.
+**How to apply:** Se "Sem dados de folha" aparecer em obra com workers históricos, suspeitar de Ramo B. A solução definitiva para o usuário é usar "Transferir" (não apenas "Alocar") ao mover funcionários — isso cria `employee_site_history` e usa o Ramo A (mais preciso).
 
 ## Problema 2 — Funcionários fantasma via time_records
 
