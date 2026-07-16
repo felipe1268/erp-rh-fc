@@ -794,6 +794,7 @@ export const signaturesRouter = router({
 
       const sessions = await db.select({
         id: signatureSessions.id,
+        companyId: signatureSessions.companyId,
         documentTitle: signatureSessions.documentTitle,
         createdAt: signatureSessions.createdAt,
       }).from(signatureSessions)
@@ -802,6 +803,7 @@ export const signaturesRouter = router({
 
       const result: Array<{
         sessionId: number;
+        companyId: number;
         signerId: number;
         token: string;
         ordem: number;
@@ -822,6 +824,7 @@ export const signaturesRouter = router({
         if (!sess) continue;
         result.push({
           sessionId: sg.sessionId,
+          companyId: sess.companyId,
           signerId: sg.signerId,
           token: sg.token,
           ordem: myOrdem,
@@ -936,7 +939,12 @@ export const signaturesRouter = router({
 
   // Cancelar sessao
   cancel: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), id: z.number() }))
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      id: z.number(),
+      observacoes: z.string().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       // Rev. 2122 — alinha com regra explícita do user: SOMENTE ADM Master
       // pode cancelar/apagar uma sessão FCSign.
@@ -956,9 +964,14 @@ export const signaturesRouter = router({
           companyFilter(signatureSessions.companyId, input),
           eq(signatureSessions.id, input.id),
         )).limit(1);
+      const obsAtual = (sessC as any)?.observacoes || "";
+      const novaObs = input.observacoes?.trim()
+        ? `${obsAtual ? obsAtual + "\n" : ""}[Cancelado por ${ctx.user.name ?? "Admin Master"} em ${new Date().toLocaleDateString("pt-BR")}] ${input.observacoes.trim()}`
+        : obsAtual || null;
       await db.update(signatureSessions).set({
         status: "cancelado",
         cancelledAt: new Date().toISOString(),
+        observacoes: novaObs,
       }).where(and(
         companyFilter(signatureSessions.companyId, input),
         eq(signatureSessions.id, input.id),

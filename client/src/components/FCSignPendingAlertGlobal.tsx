@@ -18,11 +18,12 @@
  *  - Dispense automático quando assina em outra aba/dispositivo.
  *
  * Rev. 2130: gate `enabled` relaxado p/ admin_master/admin sem email.
+ * Rev. 4298: botão "Cancelar contrato" para admin_master com observação.
  */
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { FileSignature, ExternalLink } from "lucide-react";
+import { FileSignature, ExternalLink, XCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -33,18 +34,46 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+
+type PendingItem = {
+  sessionId: number;
+  companyId: number;
+  signerId: number;
+  token: string;
+  ordem: number;
+  documentTitle: string;
+  createdAt: string;
+};
 
 export function FCSignPendingAlertGlobal() {
   const { user, isAuthenticated } = useAuth();
   const toastIdsRef = useRef<Map<number, string | number>>(new Map());
   const [location] = useLocation();
   const [modalOpen, setModalOpen] = useState(false);
-  // Tela em que o user fechou o modal pela última vez — pra reabrir só
-  // quando NAVEGA pra outra rota (não a cada refetch de 60s na mesma tela).
   const dismissedAtLocationRef = useRef<string | null>(null);
 
-  const isAdminLike = user?.role === "admin_master" || user?.role === "admin";
+  // Estado do AlertDialog de cancelamento
+  const [cancelTarget, setCancelTarget] = useState<PendingItem | null>(null);
+  const [cancelObs, setCancelObs] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+
+  const isAdminMaster = user?.role === "admin_master";
+  const isAdminLike = isAdminMaster || user?.role === "admin";
+
+  const utils = trpc.useUtils();
   const { data } = trpc.signatures.pendingForCurrentUser.useQuery(undefined, {
     enabled: isAuthenticated && (!!user?.email || isAdminLike),
     refetchInterval: 60_000,
@@ -52,9 +81,20 @@ export function FCSignPendingAlertGlobal() {
     staleTime: 30_000,
   });
 
-  // HOTFIX (code review): força dismiss de todos os toasts ao deslogar/unmount
-  // pra evitar que um token bearer de assinatura fique pendurado na UI após
-  // troca de usuário em máquina compartilhada.
+  const cancelMutation = trpc.signatures.cancel.useMutation({
+    onSuccess: () => {
+      toast.success("Contrato cancelado com sucesso.");
+      utils.signatures.pendingForCurrentUser.invalidate();
+      setCancelTarget(null);
+      setCancelObs("");
+    },
+    onError: (err) => {
+      toast.error(`Erro ao cancelar: ${err.message}`);
+    },
+    onSettled: () => setCancelling(false),
+  });
+
+  // HOTFIX: força dismiss de todos os toasts ao deslogar/unmount
   useEffect(() => {
     if (!isAuthenticated) {
       for (const [signerId, toastId] of Array.from(toastIdsRef.current.entries())) {
@@ -81,7 +121,6 @@ export function FCSignPendingAlertGlobal() {
       setModalOpen(false);
       return;
     }
-    // Se o user fechou o modal e ainda está na MESMA rota, não reabre.
     if (dismissedAtLocationRef.current === location) return;
     setModalOpen(true);
   }, [data, location]);
@@ -90,8 +129,6 @@ export function FCSignPendingAlertGlobal() {
     if (!data) return;
     const currentIds = new Set(data.map((d) => d.signerId));
 
-    // Dispensa toasts cujos signers não estão mais pendentes (assinou em outra
-    // aba, sessão cancelada, etc).
     for (const [signerId, toastId] of Array.from(toastIdsRef.current.entries())) {
       if (!currentIds.has(signerId)) {
         toast.dismiss(toastId);
@@ -99,7 +136,6 @@ export function FCSignPendingAlertGlobal() {
       }
     }
 
-    // Mostra um toast por NOVO signer pendente (não re-dispara os já visíveis).
     for (const item of data) {
       if (toastIdsRef.current.has(item.signerId)) continue;
       const url = `${window.location.origin}/assinar/${item.token}`;
@@ -130,66 +166,149 @@ export function FCSignPendingAlertGlobal() {
     window.open(url, "_blank", "noopener");
   };
 
-  const pending = data ?? [];
+  const handleCancelClick = (item: PendingItem) => {
+    setCancelTarget(item);
+    setCancelObs("");
+  };
+
+  const handleConfirmCancel = () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    cancelMutation.mutate({
+      companyId: cancelTarget.companyId,
+      id: cancelTarget.sessionId,
+      observacoes: cancelObs.trim() || undefined,
+    });
+  };
+
+  const pending = (data ?? []) as PendingItem[];
 
   return (
-    <Dialog open={modalOpen && pending.length > 0} onOpenChange={(open) => {
-      if (!open) handleDismiss();
-    }}>
-      <DialogContent className="sm:max-w-lg border-blue-300">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <div className="rounded-full bg-blue-100 p-2">
-              <FileSignature className="h-5 w-5 text-blue-700" />
+    <>
+      <Dialog open={modalOpen && pending.length > 0} onOpenChange={(open) => {
+        if (!open) handleDismiss();
+      }}>
+        <DialogContent className="sm:max-w-lg border-blue-300">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="rounded-full bg-blue-100 p-2">
+                <FileSignature className="h-5 w-5 text-blue-700" />
+              </div>
+              <DialogTitle className="text-blue-900">
+                {pending.length === 1
+                  ? "Documento aguardando sua assinatura"
+                  : `${pending.length} documentos aguardando sua assinatura`}
+              </DialogTitle>
             </div>
-            <DialogTitle className="text-blue-900">
-              {pending.length === 1
-                ? "Documento aguardando sua assinatura"
-                : `${pending.length} documentos aguardando sua assinatura`}
-            </DialogTitle>
-          </div>
-          <DialogDescription className="pt-2">
-            Sua ação é necessária para concluir {pending.length === 1 ? "este documento" : "estes documentos"}.
-            Clique em <strong>Assinar agora</strong> para abrir em uma nova aba.
-          </DialogDescription>
-        </DialogHeader>
+            <DialogDescription className="pt-2">
+              Sua ação é necessária para concluir {pending.length === 1 ? "este documento" : "estes documentos"}.
+              Clique em <strong>Assinar agora</strong> para abrir em uma nova aba.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-2 max-h-[50vh] overflow-y-auto">
-          {pending.map((item) => (
-            <div
-              key={item.signerId}
-              className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3"
-            >
-              <FileSignature className="h-5 w-5 text-blue-700 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm text-slate-900 truncate" title={item.documentTitle}>
-                  {item.documentTitle}
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            {pending.map((item) => (
+              <div
+                key={item.signerId}
+                className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3"
+              >
+                <FileSignature className="h-5 w-5 text-blue-700 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm text-slate-900 truncate" title={item.documentTitle}>
+                    {item.documentTitle}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {item.ordem ? `${item.ordem}ª assinatura` : "Sua vez de assinar"}
+                  </div>
                 </div>
-                <div className="text-[11px] text-muted-foreground">
-                  {item.ordem ? `${item.ordem}ª assinatura` : "Sua vez de assinar"}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button
+                    size="sm"
+                    onClick={() => handleSignNow(item.token)}
+                    className="bg-blue-700 hover:bg-blue-800 text-white"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                    Assinar agora
+                  </Button>
+                  {isAdminMaster && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCancelClick(item)}
+                      className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                      title="Cancelar contrato (Admin Master)"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
-              <Button
-                size="sm"
-                onClick={() => handleSignNow(item.token)}
-                className="bg-blue-700 hover:bg-blue-800 text-white shrink-0"
-              >
-                <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                Assinar agora
-              </Button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        <DialogFooter className="sm:justify-between gap-2">
-          <span className="text-[11px] text-muted-foreground self-center">
-            O alerta volta a aparecer ao trocar de tela enquanto houver pendência.
-          </span>
-          <Button variant="outline" onClick={handleDismiss}>
-            Lembrar mais tarde
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          {isAdminMaster && (
+            <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+              Como Admin Master, você pode cancelar um contrato usando o botão <XCircle className="h-3 w-3 inline" /> em cada item.
+            </p>
+          )}
+
+          <DialogFooter className="sm:justify-between gap-2">
+            <span className="text-[11px] text-muted-foreground self-center">
+              O alerta volta a aparecer ao trocar de tela enquanto houver pendência.
+            </span>
+            <Button variant="outline" onClick={handleDismiss}>
+              Lembrar mais tarde
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AlertDialog de confirmação de cancelamento */}
+      <AlertDialog open={!!cancelTarget} onOpenChange={(open) => {
+        if (!open) { setCancelTarget(null); setCancelObs(""); }
+      }}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-700 flex items-center gap-2">
+              <XCircle className="h-5 w-5" />
+              Cancelar contrato
+            </AlertDialogTitle>
+            <AlertDialogDescription className="break-words">
+              Você está prestes a cancelar o envio para assinatura de:
+              <br />
+              <strong className="text-slate-800">{cancelTarget?.documentTitle}</strong>
+              <br /><br />
+              O documento será marcado como <strong>cancelado</strong> e o processo de assinatura será encerrado.
+              Você poderá reenviar um novo documento corrigido depois.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-2 px-1">
+            <Label htmlFor="cancel-obs" className="text-sm font-medium">
+              Observação para o time <span className="text-muted-foreground font-normal">(opcional)</span>
+            </Label>
+            <Textarea
+              id="cancel-obs"
+              placeholder="Ex: Dados do contratado estão incorretos. Favor corrigir e reenviar."
+              value={cancelObs}
+              onChange={(e) => setCancelObs(e.target.value)}
+              rows={3}
+              className="resize-none text-sm"
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelling}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmCancel}
+              disabled={cancelling}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {cancelling ? "Cancelando..." : "Confirmar cancelamento"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
