@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4296** — **SMO: TETO DE SANIDADE SALARIAL NO CÁLCULO DE CUSTO ESTIMADO.** SMO-0013 (Pedreiro, 2 vagas, 4m) exibia R$ 4.263.265,10 (~100× correto). Causa: único Pedreiro ativo no cadastro com `salarioBase` incorreto (~R$ 313k); `calcSalarioMediana` não filtra outlier quando há 1 único ponto. Fix: teto `pisoFallback × 12` em `computeCustoSMO`, `create` inline e `calcularImpactoFinanceiro`; flag `alertaSalarioAnomalo` no JSON; alerta laranja no detalhe; `getById` recomputa automaticamente SMOs antigas via `|| !parsed.rev`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4295** — **INTEGRASIGN: FLUXO "SOLICITAR REVISÕES" DISTINTO DE "RECUSAR DEFINITIVAMENTE".** O botão "Recusar" na página de assinatura pública era ambíguo — parecia definitivo quando às vezes o signatário só quer pedir correções. Fix: botão renomeado para "Solicitar Revisões / Recusar" (amber); ao clicar, abre card com 2 opções em destaque: "✏️ Solicitar Revisões" (amber, prefixo "REVISÃO SOLICITADA: " no motivo) e "✗ Recusar Definitivamente" (vermelho). Fluxo 2 passos com labels/placeholders/botões distintos. Backend `recusarDocumento` inalterado. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4294** — **HE: LIMPAR ASSINATURA DE CONFIRMAÇÃO DE PRESENÇA (ADMIN/ADMIN_MASTER).** Quando funcionário assina com nome errado não havia como limpar — ele ficava bloqueado de re-assinar. Fix: novo procedure `limparAssinaturaConfirmacao` (gate: admin_master ou admin no backend, não só na UI) que deleta a linha de `he_solicitacao_confirmacoes` e grava audit log. Frontend: botão "Limpar" (laranja, Trash2) ao lado de "Ver Assinatura" só visível p/ admins → AlertDialog de confirmação com nome do funcionário → mutation invalida `getConfirmacoes`. Assinatura memorial do funcionário NÃO é afetada. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4294** — **HE: LIMPAR ASSINATURA DE CONFIRMAÇÃO DE PRESENÇA (ADMIN/ADMIN_MASTER).** Gate backend + botão Limpar (laranja) + AlertDialog. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4293** — **CONTRATO PJ: NOME DO SÓCIO/ADMINISTRADOR COMO REPRESENTANTE + DADOS BANCÁRIOS DO PRESTADOR.** SyncSchema+ Rev. 4293, 4 colunas novas em `pj_contracts`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4291** — **FIX: HABILIDADES — FUNCIONÁRIO DUPLICADO QUANDO MESMO CPF ESTÁ EM DUAS EMPRESAS.** Dedup por `${cpfLimpo}:${skillId}` + COUNT DISTINCT por CPF limpo. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4290** — **FIX: CONCILIAÇÃO — parseChequeNumero SUPORTA "Nº NNN" SOLTO.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4289** — **FIX: MAPA DE COTAÇÃO — INPUTS MAT/MO COM FORMATO BR.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

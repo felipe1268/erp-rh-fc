@@ -1522,6 +1522,12 @@ export default function SolicitacaoMDO() {
                           )}
                           <div className="space-y-1.5 text-xs">
                             <div className="flex justify-between"><span className="text-muted-foreground">Salário Base</span><span className="font-mono">{fmtMoney(c.salarioBase)}</span></div>
+                            {c.alertaSalarioAnomalo && (
+                              <div className="flex items-start gap-1.5 p-2 rounded-lg bg-orange-50 border border-orange-200 text-orange-800 text-[11px] mt-1">
+                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                <span>Salário anômalo detectado no cadastro{c.salarioRefOriginal ? ` (R$ ${Number(c.salarioRefOriginal).toLocaleString("pt-BR", { minimumFractionDigits: 0 })})` : ""}. Custo recalculado usando o piso da convenção. Verifique o cadastro do funcionário.</span>
+                              </div>
+                            )}
                             {c.regimeContratacao === "experiencia" && c.mesesExperiencia > 0 && c.encargosBasicoPerc != null ? (
                               <>
                                 <div className="flex justify-between text-amber-700">

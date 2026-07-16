@@ -1,4 +1,49 @@
 /**
+ * Rev. 4296 - SMO: TETO DE SANIDADE SALARIAL NO CÁLCULO DE CUSTO ESTIMADO
+ *
+ * CONTEXTO:
+ *   A SMO-0013 (Pedreiro, 2 vagas, 4 meses) exibia Custo Estimado de R$ 4.263.265,10 —
+ *   cerca de 100× o valor correto. Cálculo retroativo indicava salarioRef ≈ R$ 313.000/mês
+ *   para Pedreiro, claramente incorreto (provavelmente salário anual digitado no campo mensal,
+ *   ou um zero extra na digitação).
+ *
+ * CAUSA RAIZ:
+ *   O `calcSalarioMediana` aplica filtro de outlier (> 5× a mediana), mas esse filtro é ineficaz
+ *   quando há apenas 1 funcionário ativo na função consultada: a mediana É o valor absurdo, e
+ *   o filtro mantém tudo ≤ 5× esse valor (o que inclui o próprio valor).
+ *
+ * SOLUÇÃO — TETO DE SANIDADE (pisoFallback × 12):
+ *   Se salarioRef > pisoFallback × 12 (ex: R$2.500 × 12 = R$30.000), assume-se dado incorreto
+ *   e o cálculo usa pisoFallback no lugar. Valor escolhido: 12 meses do piso é já muito acima
+ *   do salário real de qualquer operário de construção.
+ *
+ *   Aplicado em 3 locais:
+ *   1. `computeCustoSMO()` — chamado por `update` e pelo recompute do `getById`
+ *   2. `calcularImpactoFinanceiro` — preview ao vivo no formulário de criação
+ *   3. `create` mutation — inline (duplicata histórica de `computeCustoSMO`)
+ *
+ * RECOMPUTE AUTOMÁTICO:
+ *   `getById` adicionou `|| !parsed.rev` ao critério `faltaSplit`. Qualquer SMO existente
+ *   que não tenha `rev` no JSON de detalheCustos (= todas antes desta rev.) é recomputado
+ *   automaticamente na primeira vez que for aberto, gravando o resultado corrigido.
+ *
+ * ALERTA VISUAL:
+ *   Quando `alertaSalarioAnomalo === true`, o painel "Impacto Financeiro" do detalhe da SMO
+ *   exibe aviso laranja: "Salário anômalo detectado no cadastro (R$ NNN). Custo recalculado
+ *   usando o piso da convenção. Verifique o cadastro do funcionário."
+ *
+ * CAMPOS NOVOS em detalheCustos JSON:
+ *   - `alertaSalarioAnomalo: boolean` — true se o cap foi acionado
+ *   - `salarioRefOriginal: number | undefined` — valor original antes do cap
+ *   - `rev: 4296` — marcador de revisão para trigger de recompute one-time
+ *
+ * ARQUIVOS:
+ *   server/routers/smo.ts, client/src/pages/SolicitacaoMDO.tsx, shared/version.ts
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4295 - INTEGRASIGN: FLUXO "SOLICITAR REVISÕES" DISTINTO DE "RECUSAR DEFINITIVAMENTE"
  *
  * CONTEXTO:

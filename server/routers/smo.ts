@@ -104,6 +104,19 @@ async function computeCustoSMO(
   }
   if (salarioRef === 0) salarioRef = pisoFallback;
 
+  // Rev. 4296 — Teto de sanidade: se salarioRef > pisoFallback × 12, provavelmente dado incorreto
+  // (ex: salário anual digitado no campo mensal, ou digitação errada). Filtra outliers não capturados
+  // pela mediana quando há apenas 1 funcionário na função consultada.
+  let alertaSalarioAnomalo = false;
+  let salarioRefOriginal = 0;
+  const CAP_SALARIO = pisoFallback > 0 ? pisoFallback * 12 : 30000;
+  if (salarioRef > CAP_SALARIO) {
+    console.warn(`[SMO] salarioRef anomalo para "${funcao}": R$${salarioRef.toFixed(0)} > teto R$${CAP_SALARIO.toFixed(0)}. Usando piso R$${pisoFallback.toFixed(0)}.`);
+    salarioRefOriginal = salarioRef;
+    salarioRef = pisoFallback > 0 ? pisoFallback : 2500;
+    alertaSalarioAnomalo = true;
+  }
+
   const vr = benef.vrMensal;
   const va = benef.vaMensal;
   const vt = salarioRef * 0.06;
@@ -147,7 +160,12 @@ async function computeCustoSMO(
     tercMensalTotal: tercMensal,
     tercTotal,
     recomendacao: custoTotal > tercTotal ? "terceirizar" : "contratar",
-    baseSalarial: emps.length > 0 ? "Média ativos" : "Piso convenção",
+    baseSalarial: alertaSalarioAnomalo
+      ? `ANOMALIA (R$${salarioRefOriginal.toFixed(0)}) → Piso convenção`
+      : emps.length > 0 ? "Média ativos" : "Piso convenção",
+    alertaSalarioAnomalo,
+    salarioRefOriginal: alertaSalarioAnomalo ? salarioRefOriginal : undefined,
+    rev: 4296,
   };
 
   return { custoMensal, custoTotal, detalhes };
@@ -495,7 +513,8 @@ export const smoRouter = router({
           || parsed.regimeContratacao == null
           || parsed.encargosBasicoPerc == null
           || parsed.mesesExperiencia == null
-          || parsed.custoMensalUnitExperiencia == null;
+          || parsed.custoMensalUnitExperiencia == null
+          || !parsed.rev;  // Rev. 4296: garante recompute com teto de sanidade salarial
         if (faltaSplit && s.obraId && s.funcaoSolicitada) {
           const recomputado = await computeCustoSMO(
             db, { companyId: input.companyId, companyIds: input.companyIds },
@@ -590,11 +609,18 @@ export const smoRouter = router({
         const sals = emps.map(e => parseBRL(e.salarioBase)).filter(s => s > 0);
         salarioRef = calcSalarioMediana(sals);
       }
-      if (salarioRef === 0) {
-        const [conv] = await db.select().from(convencaoColetiva)
-          .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
-          .orderBy(desc(convencaoColetiva.vigenciaInicio)).limit(1);
-        salarioRef = parseFloat(conv?.pisoSalarial || "2500");
+      const [convPiso] = await db.select({ pisoSalarial: convencaoColetiva.pisoSalarial })
+        .from(convencaoColetiva)
+        .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
+        .orderBy(desc(convencaoColetiva.vigenciaInicio)).limit(1);
+      const pisoRef = parseFloat(convPiso?.pisoSalarial || "2500");
+      if (salarioRef === 0) salarioRef = pisoRef;
+      let alertaImpFinanceiro = false;
+      const capImpFinanceiro = pisoRef * 12;
+      if (salarioRef > capImpFinanceiro) {
+        console.warn(`[SMO calcular] salarioRef anomalo para "${input.funcao}": R$${salarioRef.toFixed(0)} > teto R$${capImpFinanceiro.toFixed(0)}. Usando piso.`);
+        salarioRef = pisoRef;
+        alertaImpFinanceiro = true;
       }
 
       const encargos = await db.select().from(encargosSociais).where(companyFilter(encargosSociais.companyId, input));
@@ -667,8 +693,11 @@ export const smoRouter = router({
         custoMensalTotal,
         custoUnicoTotal: custoUnico * input.quantidade,
         custoTotal,
-        baseSalarial: emps.length > 0 ? "Média dos ativos" : "Piso salarial (convenção)",
+        baseSalarial: alertaImpFinanceiro
+          ? "ANOMALIA detectada → Piso convenção"
+          : emps.length > 0 ? "Média dos ativos" : "Piso salarial (convenção)",
         qtdReferencia: emps.length,
+        alertaSalarioAnomalo: alertaImpFinanceiro,
         beneficiosOrigem: mealCfg ? `Config: ${mealCfg.nome || "VR/VA"}` : (convVrDiario > 0 ? "Convenção Coletiva" : "Valores padrão"),
         cafeMensal: benef.cafeMensal,
         lancheMensal: benef.lancheMensal,
@@ -1154,6 +1183,16 @@ export const smoRouter = router({
         }
         if (salarioRef === 0) salarioRef = pisoFallback;
 
+        let alertaCreate = false;
+        let salarioOriginalCreate = 0;
+        const capCreate = pisoFallback > 0 ? pisoFallback * 12 : 30000;
+        if (salarioRef > capCreate) {
+          console.warn(`[SMO create] salarioRef anomalo para "${item.funcao}": R$${salarioRef.toFixed(0)} > teto R$${capCreate.toFixed(0)}. Usando piso.`);
+          salarioOriginalCreate = salarioRef;
+          salarioRef = pisoFallback > 0 ? pisoFallback : 2500;
+          alertaCreate = true;
+        }
+
         const vr = benefCreate.vrMensal;
         const va = benefCreate.vaMensal;
         const vt = salarioRef * 0.06;
@@ -1196,7 +1235,12 @@ export const smoRouter = router({
           tercMensalTotal: tercMensal,
           tercTotal,
           recomendacao: custoTotal > tercTotal ? "terceirizar" : "contratar",
-          baseSalarial: emps.length > 0 ? "Média ativos" : "Piso convenção",
+          baseSalarial: alertaCreate
+            ? `ANOMALIA (R$${salarioOriginalCreate.toFixed(0)}) → Piso convenção`
+            : emps.length > 0 ? "Média ativos" : "Piso convenção",
+          alertaSalarioAnomalo: alertaCreate,
+          salarioRefOriginal: alertaCreate ? salarioOriginalCreate : undefined,
+          rev: 4296,
         };
 
         const [sol] = await db.insert(smoSolicitacoes).values({
