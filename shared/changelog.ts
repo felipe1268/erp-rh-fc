@@ -1,4 +1,40 @@
 /**
+ * Rev. 4295 - INTEGRASIGN: FLUXO "SOLICITAR REVISÕES" DISTINTO DE "RECUSAR DEFINITIVAMENTE"
+ *
+ * CONTEXTO:
+ *   A página de assinatura pública (/integrasign/assinar/:token) tinha um único botão "Recusar"
+ *   com um campo de motivo. O signatário não tinha como deixar claro se estava recusando
+ *   definitivamente (processo encerrado) ou apenas solicitando ajustes para reenvio.
+ *   O usuário perguntou "onde eu reviso isso?" — hoje fica apenas no Dashboard IntegraSign
+ *   (/integrasign), NÃO no painel do contrato PJ, NÃO em "Critérios" (avaliação de desempenho).
+ *
+ * PROBLEMA:
+ *   - Botão único "Recusar" era ambíguo — parecia definitivo quando às vezes o signatário
+ *     só quer pedir correções para reenvio.
+ *   - Falta de diferenciação visual e semântica entre recusa e revisão.
+ *
+ * SOLUÇÃO:
+ *   Frontend (IntegraSignAssinar.tsx):
+ *   - Botão "Recusar" renomeado para "Solicitar Revisões / Recusar" (amber, menos agressivo).
+ *   - Ao clicar, abre um card com 2 opções distintas:
+ *     · "✏️ Solicitar Revisões" (amber) — descreva o que precisa ser ajustado; remetente é
+ *       notificado para corrigir e reenviar. O motivo é prefixado com "REVISÃO SOLICITADA: "
+ *       no `motivoRecusa` para identificação no Dashboard.
+ *     · "✗ Recusar Definitivamente" (vermelho) — processo encerrado; remetente notificado.
+ *   - Fluxo em 2 passos: escolha do tipo → formulário correspondente com labels/placeholders
+ *     distintos e botão de ação com cor adequada.
+ *   - Mensagem de sucesso diferenciada por tipo.
+ *   - Backend `recusarDocumento` INALTERADO — ambas as ações usam o mesmo endpoint; a
+ *     diferenciação fica no prefixo do texto de `motivoRecusa`.
+ *
+ * ARQUIVOS ALTERADOS:
+ *   - client/src/pages/IntegraSignAssinar.tsx (novo estado recusandoTipo, UI 2 passos)
+ *   - shared/version.ts (bump Rev. 4295)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4294 - HE: LIMPAR ASSINATURA DE CONFIRMAÇÃO DE PRESENÇA (ADMIN/ADMIN_MASTER)
  *
  * CONTEXTO:

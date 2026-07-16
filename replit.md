@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4295** — **INTEGRASIGN: FLUXO "SOLICITAR REVISÕES" DISTINTO DE "RECUSAR DEFINITIVAMENTE".** O botão "Recusar" na página de assinatura pública era ambíguo — parecia definitivo quando às vezes o signatário só quer pedir correções. Fix: botão renomeado para "Solicitar Revisões / Recusar" (amber); ao clicar, abre card com 2 opções em destaque: "✏️ Solicitar Revisões" (amber, prefixo "REVISÃO SOLICITADA: " no motivo) e "✗ Recusar Definitivamente" (vermelho). Fluxo 2 passos com labels/placeholders/botões distintos. Backend `recusarDocumento` inalterado. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4294** — **HE: LIMPAR ASSINATURA DE CONFIRMAÇÃO DE PRESENÇA (ADMIN/ADMIN_MASTER).** Quando funcionário assina com nome errado não havia como limpar — ele ficava bloqueado de re-assinar. Fix: novo procedure `limparAssinaturaConfirmacao` (gate: admin_master ou admin no backend, não só na UI) que deleta a linha de `he_solicitacao_confirmacoes` e grava audit log. Frontend: botão "Limpar" (laranja, Trash2) ao lado de "Ver Assinatura" só visível p/ admins → AlertDialog de confirmação com nome do funcionário → mutation invalida `getConfirmacoes`. Assinatura memorial do funcionário NÃO é afetada. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4293** — **CONTRATO PJ: NOME DO SÓCIO/ADMINISTRADOR COMO REPRESENTANTE + DADOS BANCÁRIOS DO PRESTADOR.** O campo `[CONTRATANTE_REPRESENTANTE]` ficava em branco porque `companies` não tem `responsavelLegal`; fonte correta é `company_partners`. Fix: subquery em `company_partners` no `getById` retorna `companyRepresentante` (1º sócio ativo). Dados bancários: 4 novas colunas em `pj_contracts` (`banco_prestador`, `agencia_prestador`, `conta_prestador`, `pix_prestador`), SyncSchema+ Rev. 4293, seção "Dados Bancários da Contratada" no form de `ModuloPJ` e bloco de exibição no `ContratoPJView`. Placeholder `[DADOS_BANCARIOS_CONTRATADA]` também suportado no modelo e no FCSign. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4293** — **CONTRATO PJ: NOME DO SÓCIO/ADMINISTRADOR COMO REPRESENTANTE + DADOS BANCÁRIOS DO PRESTADOR.** SyncSchema+ Rev. 4293, 4 colunas novas em `pj_contracts`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4292** — **FIX: CONCILIAÇÃO — CHEQUE DEVOLVIDO NÃO APARECIA NO PAINEL QUANDO DÉBITO JÁ CONCILIADO + CRÉDITO VAZAVA PARA "SEM LANÇAMENTO".** 3ª passagem híbrida + dedup por debitoId:creditoId. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4289** — **FIX: MAPA DE COTAÇÃO — INPUTS MAT/MO COM FORMATO BR.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4288** — **FEATURE: LEITOR IA EXTRAI MAT/MO EM COTAÇÕES TIPO PACOTE.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4287 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4288 e anteriores.
 
 ## User preferences
 

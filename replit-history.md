@@ -1,3 +1,4 @@
+- **Rev. 4288** — **FEATURE: LEITOR IA EXTRAI MAT/MO EM COTAÇÕES TIPO PACOTE.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4287** — **FIX: MAPA DE COTAÇÃO (PACOTE) — COLUNAS MAT/MO NÃO EDITÁVEIS E MO ZERADA.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4286** — **FIX: SOLICITAÇÕES — ReferenceError "Can't find variable: selecionados".** Fix: substituir pela condição correta do contexto: `(selectedEapIds.has(it.id) || qtdVal > 0)`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4285** — **FIX: COTAÇÕES — DIALOG "CONDIÇÕES DE PAGAMENTO" EXIBIA DRIFT DE CENTAVOS (+R$ 0,05).** Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.

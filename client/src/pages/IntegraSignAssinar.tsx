@@ -72,6 +72,7 @@ export default function IntegraSignAssinar() {
   const [nomeConfirmado, setNomeConfirmado] = useState("");
   const [cpfCnpjConfirmado, setCpfCnpjConfirmado] = useState("");
   const [recusando, setRecusando] = useState(false);
+  const [recusandoTipo, setRecusandoTipo] = useState<"revisao" | "recusa" | null>(null);
   const [motivoRecusa, setMotivoRecusa] = useState("");
   const [assinando, setAssinando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
@@ -231,13 +232,18 @@ export default function IntegraSignAssinar() {
     if (!motivoRecusa.trim()) return;
     setAssinando(true);
     try {
+      const prefixo = recusandoTipo === "revisao" ? "REVISÃO SOLICITADA: " : "";
       await recusarMut.mutateAsync({
         token,
-        motivoRecusa: motivoRecusa.trim(),
+        motivoRecusa: prefixo + motivoRecusa.trim(),
         userAgent: navigator.userAgent,
       });
       setSucesso(true);
-      setSucessoMsg("Documento recusado. O remetente será notificado sobre sua decisão.");
+      setSucessoMsg(
+        recusandoTipo === "revisao"
+          ? "Solicitação de revisão enviada. O remetente será notificado para ajustar o documento."
+          : "Documento recusado. O remetente será notificado sobre sua decisão."
+      );
     } catch (err: any) {
       alert(err.message || "Erro ao recusar");
     } finally {
@@ -607,8 +613,8 @@ export default function IntegraSignAssinar() {
                   {assinando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PenLine className="h-4 w-4 mr-2" />}
                   Assinar Documento
                 </Button>
-                <Button variant="outline" className="text-red-600 border-red-200" onClick={() => setRecusando(true)}>
-                  Recusar
+                <Button variant="outline" className="text-amber-700 border-amber-300 hover:bg-amber-50" onClick={() => { setRecusando(true); setRecusandoTipo(null); }}>
+                  Solicitar Revisões / Recusar
                 </Button>
               </div>
             </CardContent>
@@ -628,34 +634,68 @@ export default function IntegraSignAssinar() {
         )}
 
         {recusando && (
-          <Card className="border-red-200 bg-red-50/30">
+          <Card className={recusandoTipo === "recusa" ? "border-red-200 bg-red-50/30" : "border-amber-200 bg-amber-50/30"}>
             <CardHeader>
-              <CardTitle className="text-base text-red-700">Recusar Documento</CardTitle>
+              <CardTitle className={`text-base ${recusandoTipo === "recusa" ? "text-red-700" : "text-amber-700"}`}>
+                {recusandoTipo === "revisao" ? "Solicitar Revisões no Documento" : recusandoTipo === "recusa" ? "Recusar Definitivamente" : "O que deseja fazer?"}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label>Motivo da Recusa *</Label>
-                <Textarea
-                  value={motivoRecusa}
-                  onChange={(e) => setMotivoRecusa(e.target.value)}
-                  placeholder="Descreva o motivo da recusa..."
-                  rows={4}
-                />
-              </div>
-              <div className="flex gap-3">
-                <Button
-                  variant="destructive"
-                  className="flex-1"
-                  disabled={!motivoRecusa.trim() || assinando}
-                  onClick={handleRecusar}
-                >
-                  {assinando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Confirmar Recusa
-                </Button>
-                <Button variant="outline" onClick={() => { setRecusando(false); setMotivoRecusa(""); }}>
-                  Voltar
-                </Button>
-              </div>
+              {!recusandoTipo && (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600">Escolha a ação que deseja tomar com este documento:</p>
+                  <button
+                    className="w-full text-left p-4 rounded-lg border-2 border-amber-300 bg-white hover:bg-amber-50 transition-colors"
+                    onClick={() => setRecusandoTipo("revisao")}
+                  >
+                    <div className="font-semibold text-amber-700 mb-1">✏️ Solicitar Revisões</div>
+                    <div className="text-sm text-gray-600">Descreva o que precisa ser ajustado. O remetente será notificado para corrigir e reenviar o documento.</div>
+                  </button>
+                  <button
+                    className="w-full text-left p-4 rounded-lg border-2 border-red-200 bg-white hover:bg-red-50 transition-colors"
+                    onClick={() => setRecusandoTipo("recusa")}
+                  >
+                    <div className="font-semibold text-red-700 mb-1">✗ Recusar Definitivamente</div>
+                    <div className="text-sm text-gray-600">O processo de assinatura será encerrado. O remetente será notificado com o motivo.</div>
+                  </button>
+                  <Button variant="outline" className="w-full" onClick={() => { setRecusando(false); setMotivoRecusa(""); }}>
+                    Cancelar — Voltar ao documento
+                  </Button>
+                </div>
+              )}
+              {recusandoTipo && (
+                <>
+                  <div>
+                    <Label>
+                      {recusandoTipo === "revisao" ? "O que precisa ser revisado? *" : "Motivo da recusa *"}
+                    </Label>
+                    <Textarea
+                      value={motivoRecusa}
+                      onChange={(e) => setMotivoRecusa(e.target.value)}
+                      placeholder={
+                        recusandoTipo === "revisao"
+                          ? "Ex: O valor do contrato está incorreto. A cláusula 3 precisa ser ajustada para incluir..."
+                          : "Descreva o motivo da recusa..."
+                      }
+                      rows={4}
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <Button
+                      className={`flex-1 ${recusandoTipo === "revisao" ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}`}
+                      variant={recusandoTipo === "recusa" ? "destructive" : "default"}
+                      disabled={!motivoRecusa.trim() || assinando}
+                      onClick={handleRecusar}
+                    >
+                      {assinando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                      {recusandoTipo === "revisao" ? "Enviar Solicitação de Revisão" : "Confirmar Recusa Definitiva"}
+                    </Button>
+                    <Button variant="outline" onClick={() => { setRecusandoTipo(null); setMotivoRecusa(""); }}>
+                      ← Voltar
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         )}
