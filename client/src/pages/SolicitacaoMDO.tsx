@@ -1568,6 +1568,26 @@ export default function SolicitacaoMDO() {
                               </div>
                             )}
                             <div className="border-t pt-1.5 flex justify-between font-semibold"><span>Mensal CLT médio ({d.quantidade}x)</span><span className="text-blue-700">{fmtMoney(c.custoMensalTotal)}</span></div>
+                            {/* Rev. 4302 — Custos únicos de admissão detalhados
+                                Fallback p/ SMOs criadas antes desta rev: usa constantes fixas */}
+                            {(() => {
+                              const qtd = d.quantidade || 1;
+                              const epiVal = c.epiCompletoUnico ?? 200;
+                              const unifVal = c.uniformeUnico ?? 350;
+                              const jogoVal = c.jogoInicialUnico ?? 250;
+                              const totalUnico = c.custoUnicoTotal ?? ((epiVal + unifVal + jogoVal) * qtd);
+                              if (totalUnico <= 0) return null;
+                              return (
+                                <div className="mt-1.5">
+                                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Custos únicos de admissão ({qtd}x)</div>
+                                  <div className="pl-3 space-y-0.5 text-[10px] text-muted-foreground border-l-2 border-dashed border-amber-300 ml-1">
+                                    <div className="flex justify-between"><span>↳ EPI completo (kit inicial)</span><span className="font-mono">{fmtMoney(epiVal * qtd)}</span></div>
+                                    <div className="flex justify-between"><span>↳ Uniforme de trabalho</span><span className="font-mono">{fmtMoney(unifVal * qtd)}</span></div>
+                                    <div className="flex justify-between"><span>↳ Jogo inicial de ferramentas</span><span className="font-mono">{fmtMoney(jogoVal * qtd)}</span></div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                             <div className="bg-blue-50 text-blue-900 rounded-lg p-2 flex justify-between font-bold">
                               <span>CLT Total ({d.duracaoMeses}m)</span><span>{fmtMoney(c.custoTotal)}</span>
                             </div>

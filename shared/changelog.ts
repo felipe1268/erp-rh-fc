@@ -1,4 +1,30 @@
 /**
+ * Rev. 4302 - SMO: CUSTOS ÚNICOS DE ADMISSÃO (EPI COMPLETO, UNIFORME, JOGO INICIAL) NO CARD DE IMPACTO FINANCEIRO
+ *
+ * CONTEXTO:
+ *   O card compacto "Impacto Financeiro" da SMO exibia R$ 45/mês de "EPI/equipamentos"
+ *   (custo RECORRENTE mensal) mas não mostrava os custos ÚNICOS de admissão — EPI completo,
+ *   uniforme e jogo inicial — que já eram somados no CLT Total mas invisíveis ao usuário.
+ *
+ * SOLUÇÃO:
+ *   1. Backend `computeCustoSMO` (smo.ts): nomeou explicitamente as 3 constantes do custoUnico
+ *      (epiCompletoUnico=200, uniformeUnico=350, jogoInicialUnico=250) e as adicionou ao objeto
+ *      `detalhes` retornado junto com `custoUnicoTotal`.
+ *
+ *   2. Frontend `SolicitacaoMDO.tsx`: nova seção "Custos únicos de admissão (Nx)" com borda
+ *      tracejada âmbar, entre o "Mensal CLT médio" e o "CLT Total", exibindo 3 sub-linhas:
+ *      ↳ EPI completo (kit inicial), ↳ Uniforme de trabalho, ↳ Jogo inicial de ferramentas.
+ *      Fallback para SMOs criadas antes desta rev: usa as constantes fixas (200/350/250 × qtd)
+ *      quando os campos não existem no JSON armazenado.
+ *
+ * ARQUIVOS TOCADOS:
+ *   - server/routers/smo.ts (computeCustoSMO — 3 constantes nomeadas + campos no detalhes)
+ *   - client/src/pages/SolicitacaoMDO.tsx (seção custos únicos no card compacto)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4301 - FCSIGN: BOTÃO "SOLICITAR REVISÃO" PARA O ASSINANTE NA TELA DE ASSINATURA
  *
  * CONTEXTO:

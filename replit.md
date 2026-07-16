@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4302** — **SMO: CUSTOS ÚNICOS DE ADMISSÃO (EPI COMPLETO, UNIFORME, JOGO INICIAL) NO CARD DE IMPACTO FINANCEIRO.** Card mostrava só R$ 45/mês de "EPI/equipamentos" (recorrente); os custos únicos de admissão já existiam no CLT Total mas eram invisíveis. `computeCustoSMO` agora expõe `epiCompletoUnico=200`, `uniformeUnico=350`, `jogoInicialUnico=250` no objeto `detalhes`. Card compacto: nova seção "Custos únicos de admissão" com borda âmbar tracejada mostra as 3 linhas; fallback p/ SMOs antigas via constantes fixas. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4301** — **FCSIGN: BOTÃO "SOLICITAR REVISÃO" PARA O ASSINANTE NA TELA DE ASSINATURA.** Assinante não tinha como recusar o contrato sem contato manual com o RH. Nova procedure pública `signatures.requestRevision({ token, motivo })` cancela a sessão registrando `[Revisão solicitada por NOME em DD/MM]` no campo `observacoes` — bloqueia todos os demais assinantes imediatamente. Frontend `AssinarDocumento.tsx`: botão amber "Não concordo — Solicitar revisão" expande inline uma textarea; após envio exibe card âmbar de confirmação. RAIO-X do colaborador (`Colaboradores.tsx`): novo bloco "Revisão solicitada pelo assinante" exibe o motivo para o admin/RH saber o que corrigir antes de reemitir. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4300** — **NFS-e: SUPORTE AO FORMATO NFS-e NACIONAL (SPED/RFB v1.01) NO IMPORT XML.** Log de produção revelou root `<NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe>` — padrão RFB completamente diferente do ABRASF/SIAP GEO (campos: nNFSe, dhEmi, prest/toma/serv/valores, trib.tribMun, retTrib). Novo bloco no importNfseXmlManual detecta `xmlParsed.NFSe.infNFSe` e faz INSERT com todos os campos. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4300** — **NFS-e: SUPORTE AO FORMATO NFS-e NACIONAL (SPED/RFB v1.01) NO IMPORT XML.** Novo bloco no importNfseXmlManual detecta `xmlParsed.NFSe.infNFSe` e faz INSERT com todos os campos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4299** — **NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING.** `parseDateBR` retornava `"0"` para tags ausentes → `"0"::date` explodindo no PostgreSQL. Fix: retorna `null`. Handler `ListaNfse.CompNfse` + toast com descrição do erro. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4296** — **SMO: TETO DE SANIDADE SALARIAL NO CÁLCULO DE CUSTO ESTIMADO.** Teto `pisoFallback×12` em `computeCustoSMO`; flag `alertaSalarioAnomalo`; `getById` recomputa via `|| !parsed.rev`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4295** — **INTEGRASIGN: FLUXO "SOLICITAR REVISÕES" DISTINTO DE "RECUSAR DEFINITIVAMENTE".** Botão amber + 2 opções distintas (revisão vs recusa definitiva). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4294** — **HE: LIMPAR ASSINATURA DE CONFIRMAÇÃO DE PRESENÇA (ADMIN/ADMIN_MASTER).** Gate backend + botão Limpar (laranja) + AlertDialog. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

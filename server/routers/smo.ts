@@ -136,7 +136,10 @@ async function computeCustoSMO(
   const custoMensalUnitEfetivo = salarioRef + encargosValorEf + beneficios;
   const custoMensalUnit = salarioRef + encargosValor + beneficios;
   const custoMensal = custoMensalUnit * quantidade;
-  const custoUnico = (200 + 350 + 250) * quantidade;
+  const epiCompletoUnico = 200;   // EPI completo (kit inicial por pessoa)
+  const uniformeUnico = 350;      // Uniforme de trabalho
+  const jogoInicialUnico = 250;   // Jogo inicial de ferramentas/EPC
+  const custoUnico = (epiCompletoUnico + uniformeUnico + jogoInicialUnico) * quantidade;
   const folhaPeriodo = (custoMensalUnitExperiencia * blended.mesesExperiencia + custoMensalUnitEfetivo * blended.mesesEfetivo) * quantidade;
   const custoTotal = folhaPeriodo + custoUnico;
 
@@ -167,6 +170,11 @@ async function computeCustoSMO(
     alertaBeneficioAnomalo,
     custoMensalUnit,
     custoMensalTotal: custoMensal,
+    // Rev. 4302 — custos únicos de admissão detalhados
+    epiCompletoUnico,
+    uniformeUnico,
+    jogoInicialUnico,
+    custoUnicoTotal: custoUnico,
     custoTotal,
     tercMensalTotal: tercMensal,
     tercTotal,
