@@ -1,4 +1,34 @@
 /**
+ * Rev. 4305 - SCORECARD: FIX LOCAÇÕES INVISÍVEIS — data_fim_real/data_inicio EMPTY STRING → DATE CAST FAILURE
+ *
+ * CONTEXTO:
+ *   Scorecard do Gestor → aba "Compras" → sub-aba "Locações" mostrava
+ *   "Nenhum equipamento locado ativo nesta obra" mesmo com equipamentos cadastrados
+ *   e vinculados à obra no módulo Almoxarifado → Equipamentos Locados.
+ *
+ * CAUSA-RAIZ:
+ *   Colunas `data_fim_real` e `data_inicio` em `equipamentos_locados` são VARCHAR(10).
+ *   Alguns registros têm `data_fim_real = ''` (string vazia, não NULL).
+ *   O CASE na query fazia:
+ *     WHEN el.data_fim_real IS NOT NULL → TRUE para '' (não é NULL!)
+ *     THEN el.data_fim_real::date       → ''::date → ERROR: invalid input syntax for type date
+ *   O `safe()` wrapper capturava o erro e retornava [] → UI "Nenhum equipamento".
+ *
+ * FIX:
+ *   Substituído `el.data_fim_real IS NOT NULL` por `NULLIF(el.data_fim_real, '') IS NOT NULL`
+ *   e `el.data_fim_real::date` por `NULLIF(el.data_fim_real, '')::date` em TODOS os
+ *   3 Ramos (A, B, C) da query de locações. Mesmo tratamento para `data_inicio`.
+ *   Adicionado console.log de diagnóstico: count de locações por obraId/companyId.
+ *
+ * RAMOS CORRIGIDOS (server/routers/scorecard.ts — safe("locacoes")):
+ *   Ramo A (almoxarifado_itens + LEFT JOIN equipamentos_locados)
+ *   Ramo B (equipamentos_locados.obra_id direto)
+ *   Ramo C (via compras_ordens.obra_id — Rev.4303)
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4304 - SCORECARD: FIX CRÍTICO getCustosRH — CAST NUMÉRICO COM SEPARADOR DE MILHAR (BR)
  *
  * CONTEXTO:

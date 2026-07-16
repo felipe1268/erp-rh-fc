@@ -1499,17 +1499,17 @@ export const scorecardRouter = router({
               el.fornecedor_nome,
               ai.quantidade_atual,
               CASE
-                WHEN el.data_fim_real IS NOT NULL
-                THEN (el.data_fim_real::date - COALESCE(el.data_inicio::date, ai.criado_em::date))
-                ELSE (CURRENT_DATE - COALESCE(el.data_inicio::date, ai.criado_em::date))
+                WHEN NULLIF(el.data_fim_real, '') IS NOT NULL
+                THEN (NULLIF(el.data_fim_real, '')::date - COALESCE(NULLIF(el.data_inicio, '')::date, ai.criado_em::date))
+                ELSE (CURRENT_DATE - COALESCE(NULLIF(el.data_inicio, '')::date, ai.criado_em::date))
               END AS dias_locado,
               CASE
                 WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
                 THEN ROUND(
                   el.valor_mensal *
                   (
-                    COALESCE(el.data_fim_real::date, CURRENT_DATE)
-                    - COALESCE(el.data_inicio::date, ai.criado_em::date)
+                    COALESCE(NULLIF(el.data_fim_real, '')::date, CURRENT_DATE)
+                    - COALESCE(NULLIF(el.data_inicio, '')::date, ai.criado_em::date)
                   ) / 30.0, 2)
                 ELSE NULL
               END AS custo_estimado,
@@ -1546,16 +1546,16 @@ export const scorecardRouter = router({
               el.fornecedor_nome,
               NULL AS quantidade_atual,
               CASE
-                WHEN el.data_fim_real IS NOT NULL
-                THEN (el.data_fim_real::date - el.data_inicio::date)
-                ELSE (CURRENT_DATE - el.data_inicio::date)
+                WHEN NULLIF(el.data_fim_real, '') IS NOT NULL
+                THEN (NULLIF(el.data_fim_real, '')::date - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
+                ELSE (CURRENT_DATE - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
               END AS dias_locado,
               CASE
                 WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
                 THEN ROUND(
                   el.valor_mensal *
                   (
-                    COALESCE(el.data_fim_real::date, CURRENT_DATE) - el.data_inicio::date
+                    COALESCE(NULLIF(el.data_fim_real, '')::date, CURRENT_DATE) - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE)
                   ) / 30.0, 2)
                 ELSE NULL
               END AS custo_estimado,
@@ -1594,15 +1594,15 @@ export const scorecardRouter = router({
               el.fornecedor_nome,
               NULL AS quantidade_atual,
               CASE
-                WHEN el.data_fim_real IS NOT NULL
-                THEN (el.data_fim_real::date - el.data_inicio::date)
-                ELSE (CURRENT_DATE - el.data_inicio::date)
+                WHEN NULLIF(el.data_fim_real, '') IS NOT NULL
+                THEN (NULLIF(el.data_fim_real, '')::date - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
+                ELSE (CURRENT_DATE - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
               END AS dias_locado,
               CASE
                 WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
                 THEN ROUND(
                   el.valor_mensal *
-                  (COALESCE(el.data_fim_real::date, CURRENT_DATE) - el.data_inicio::date)
+                  (COALESCE(NULLIF(el.data_fim_real, '')::date, CURRENT_DATE) - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
                   / 30.0, 2)
                 ELSE NULL
               END AS custo_estimado,
@@ -1628,6 +1628,7 @@ export const scorecardRouter = router({
               descricao
             LIMIT 60
           `);
+          console.log(`[Scorecard.getAnalise] locacoes: obraId=${input.obraId} companyId=${input.companyId} count=${r.rows.length}`);
           return r.rows as any[];
         }),
       ]);
