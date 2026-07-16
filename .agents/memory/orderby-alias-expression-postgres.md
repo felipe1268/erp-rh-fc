@@ -24,6 +24,13 @@ ORDER BY allowance; expressions are evaluated in the input scope.
 aggregate aliases. Validate raw SQL directly against Neon (`node ./script.cjs`) — the
 error only surfaces at execution, so `tsc` won't catch it.
 
+## Also applies to UNION ALL ORDER BY
+`CASE status WHEN 'em_uso' THEN 0 … END` at the end of a `UNION ALL` is the same
+failure mode: `status` is an output alias, but inside the CASE expression it resolves
+against the input scope → "column status does not exist". Scorecard locações query
+(scorecard.ts) was silently returning `[]` because `safe()` caught this error.
+Fix: wrap the entire UNION in `SELECT * FROM (…) _loc` and apply ORDER BY outside.
+
 ## Amplifier — sequential queries without try/catch empty the WHOLE dashboard
 `getConciliacaoDashExtra` (server/routers/financial.ts) runs ~6 sub-queries with
 sequential `await` and NO per-query try/catch. A throw in any ONE of them (e.g. the

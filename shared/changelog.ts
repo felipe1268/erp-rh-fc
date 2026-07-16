@@ -1,4 +1,28 @@
 /**
+ * Rev. 4306 - SCORECARD: FIX LOCAÇÕES INVISÍVEIS — ORDER BY CASE ALIAS EM UNION SEM SUBQUERY
+ *
+ * CONTEXTO:
+ *   Rev. 4305 aplicou NULLIF para empty strings mas locações continuavam invisíveis.
+ *   A query ainda falhava silenciosamente (safe() → []).
+ *
+ * CAUSA-RAIZ REAL:
+ *   PostgreSQL não permite usar aliases de coluna DENTRO de expressões no ORDER BY
+ *   de um UNION direto. A query terminava com:
+ *     ORDER BY CASE status WHEN 'em_uso' THEN 0 ... END, descricao
+ *   mas `status` e `descricao` são aliases de saída do UNION, não colunas de tabela.
+ *   PostgreSQL lança erro "column status does not exist" e safe() captura silenciosamente.
+ *   (Ver memória: orderby-alias-expression-postgres.md)
+ *
+ * FIX:
+ *   Envolvido o UNION ALL (Ramos A+B+C) em subquery `SELECT * FROM (...) _loc`.
+ *   O ORDER BY externo usa os aliases do subquery sem ambiguidade.
+ *   Também: `NULL AS quantidade_atual` → `NULL::numeric AS quantidade_atual`
+ *   para evitar type-resolution warning nos Ramos B e C.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4305 - SCORECARD: FIX LOCAÇÕES INVISÍVEIS — data_fim_real/data_inicio EMPTY STRING → DATE CAST FAILURE
  *
  * CONTEXTO:

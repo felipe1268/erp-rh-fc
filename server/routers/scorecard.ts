@@ -1310,7 +1310,8 @@ export const scorecardRouter = router({
       if (!db) return null;
       const safe = async (label: string, fn: () => Promise<any[]>) => {
         try { return await fn(); } catch (e: any) {
-          console.warn(`[Scorecard.getAnalise] ${label}:`, e?.message);
+          const pg = (e as any)?.cause?.message ?? (e as any)?.cause ?? e?.message ?? String(e);
+          console.warn(`[Scorecard.getAnalise] ${label} ERROR:`, pg);
           return [];
         }
       };
@@ -1482,147 +1483,146 @@ export const scorecardRouter = router({
           // Isso garante que qualquer item marcado como locado no almox apareça aqui,
           // independentemente do obra_id em equipamentos_locados.
           const r = await db.execute(sql`
-            SELECT
-              ai.id,
-              ai.nome                                                   AS descricao,
-              ai.categoria,
-              COALESCE(el.status, 'em_uso')                             AS status,
-              COALESCE(el.foto_url, ai.foto_url)                        AS foto_url,
-              -- Retorna TEXT para manter consistência com Ramo B (VARCHAR)
-              COALESCE(el.data_inicio, to_char(ai.criado_em, 'YYYY-MM-DD')) AS data_inicio,
-              el.data_fim_prevista,
-              el.data_fim_real,
-              el.valor_mensal,
-              el.valor_diario,
-              el.funcionario_responsavel_nome,
-              el.numero_contrato_fornecedor,
-              el.fornecedor_nome,
-              ai.quantidade_atual,
-              CASE
-                WHEN NULLIF(el.data_fim_real, '') IS NOT NULL
-                THEN (NULLIF(el.data_fim_real, '')::date - COALESCE(NULLIF(el.data_inicio, '')::date, ai.criado_em::date))
-                ELSE (CURRENT_DATE - COALESCE(NULLIF(el.data_inicio, '')::date, ai.criado_em::date))
-              END AS dias_locado,
-              CASE
-                WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
-                THEN ROUND(
-                  el.valor_mensal *
-                  (
-                    COALESCE(NULLIF(el.data_fim_real, '')::date, CURRENT_DATE)
-                    - COALESCE(NULLIF(el.data_inicio, '')::date, ai.criado_em::date)
-                  ) / 30.0, 2)
-                ELSE NULL
-              END AS custo_estimado,
-              'locado' AS tipo_vinculo
-            FROM almoxarifado_itens ai
-            LEFT JOIN equipamentos_locados el
-              ON el.id          = ai.equipamento_vinculado_id
-             AND el.company_id  = ${input.companyId}
-            WHERE ai.obra_id    = ${input.obraId}
-              AND ai.company_id = ${input.companyId}
-              AND ai.ativo      = true
-              AND (
-                ai.equipamento_vinculado_tipo = 'locado'
-                OR ai.origem = 'alugado'
-              )
+            SELECT * FROM (
+              -- Ramo A: almoxarifado_itens marcados como 'locado' ou origem='alugado' nesta obra
+              SELECT
+                ai.id,
+                ai.nome                                                   AS descricao,
+                ai.categoria,
+                COALESCE(el.status, 'em_uso')                             AS status,
+                COALESCE(el.foto_url, ai.foto_url)                        AS foto_url,
+                COALESCE(el.data_inicio, to_char(ai.criado_em, 'YYYY-MM-DD')) AS data_inicio,
+                el.data_fim_prevista,
+                el.data_fim_real,
+                el.valor_mensal,
+                el.valor_diario,
+                el.funcionario_responsavel_nome,
+                el.numero_contrato_fornecedor,
+                el.fornecedor_nome,
+                ai.quantidade_atual,
+                CASE
+                  WHEN NULLIF(el.data_fim_real, '') IS NOT NULL
+                  THEN (NULLIF(el.data_fim_real, '')::date - COALESCE(NULLIF(el.data_inicio, '')::date, ai.criado_em::date))
+                  ELSE (CURRENT_DATE - COALESCE(NULLIF(el.data_inicio, '')::date, ai.criado_em::date))
+                END AS dias_locado,
+                CASE
+                  WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
+                  THEN ROUND(
+                    el.valor_mensal *
+                    (
+                      COALESCE(NULLIF(el.data_fim_real, '')::date, CURRENT_DATE)
+                      - COALESCE(NULLIF(el.data_inicio, '')::date, ai.criado_em::date)
+                    ) / 30.0, 2)
+                  ELSE NULL
+                END AS custo_estimado,
+                'locado' AS tipo_vinculo
+              FROM almoxarifado_itens ai
+              LEFT JOIN equipamentos_locados el
+                ON el.id          = ai.equipamento_vinculado_id
+               AND el.company_id  = ${input.companyId}
+              WHERE ai.obra_id    = ${input.obraId}
+                AND ai.company_id = ${input.companyId}
+                AND ai.ativo      = true
+                AND (
+                  ai.equipamento_vinculado_tipo = 'locado'
+                  OR ai.origem = 'alugado'
+                )
 
-            UNION ALL
+              UNION ALL
 
-            -- Ramo B: equipamentos_locados com obra_id direto que não têm
-            -- almoxarifado_itens vinculado nesta obra (evita duplicatas)
-            SELECT
-              el.id,
-              el.descricao,
-              el.categoria,
-              el.status,
-              el.foto_url,
-              el.data_inicio,
-              el.data_fim_prevista,
-              el.data_fim_real,
-              el.valor_mensal,
-              el.valor_diario,
-              el.funcionario_responsavel_nome,
-              el.numero_contrato_fornecedor,
-              el.fornecedor_nome,
-              NULL AS quantidade_atual,
-              CASE
-                WHEN NULLIF(el.data_fim_real, '') IS NOT NULL
-                THEN (NULLIF(el.data_fim_real, '')::date - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
-                ELSE (CURRENT_DATE - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
-              END AS dias_locado,
-              CASE
-                WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
-                THEN ROUND(
-                  el.valor_mensal *
-                  (
-                    COALESCE(NULLIF(el.data_fim_real, '')::date, CURRENT_DATE) - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE)
-                  ) / 30.0, 2)
-                ELSE NULL
-              END AS custo_estimado,
-              'locado' AS tipo_vinculo
-            FROM equipamentos_locados el
-            WHERE el.company_id = ${input.companyId}
-              AND el.obra_id    = ${input.obraId}
-              AND el.status    != 'devolvido'
-              AND NOT EXISTS (
-                SELECT 1 FROM almoxarifado_itens ai2
-                WHERE ai2.equipamento_vinculado_id   = el.id
-                  AND ai2.equipamento_vinculado_tipo  = 'locado'
-                  AND ai2.obra_id    = ${input.obraId}
-                  AND ai2.company_id = ${input.companyId}
-                  AND ai2.ativo      = true
-              )
+              -- Ramo B: equipamentos_locados com obra_id direto sem vínculo de almoxarifado
+              SELECT
+                el.id,
+                el.descricao,
+                el.categoria,
+                el.status,
+                el.foto_url,
+                el.data_inicio,
+                el.data_fim_prevista,
+                el.data_fim_real,
+                el.valor_mensal,
+                el.valor_diario,
+                el.funcionario_responsavel_nome,
+                el.numero_contrato_fornecedor,
+                el.fornecedor_nome,
+                NULL::numeric AS quantidade_atual,
+                CASE
+                  WHEN NULLIF(el.data_fim_real, '') IS NOT NULL
+                  THEN (NULLIF(el.data_fim_real, '')::date - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
+                  ELSE (CURRENT_DATE - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
+                END AS dias_locado,
+                CASE
+                  WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
+                  THEN ROUND(
+                    el.valor_mensal *
+                    (
+                      COALESCE(NULLIF(el.data_fim_real, '')::date, CURRENT_DATE)
+                      - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE)
+                    ) / 30.0, 2)
+                  ELSE NULL
+                END AS custo_estimado,
+                'locado' AS tipo_vinculo
+              FROM equipamentos_locados el
+              WHERE el.company_id = ${input.companyId}
+                AND el.obra_id    = ${input.obraId}
+                AND el.status    != 'devolvido'
+                AND NOT EXISTS (
+                  SELECT 1 FROM almoxarifado_itens ai2
+                  WHERE ai2.equipamento_vinculado_id   = el.id
+                    AND ai2.equipamento_vinculado_tipo  = 'locado'
+                    AND ai2.obra_id    = ${input.obraId}
+                    AND ai2.company_id = ${input.companyId}
+                    AND ai2.ativo      = true
+                )
 
-            UNION ALL
+              UNION ALL
 
-            -- Ramo C (Rev. 4303): equipamentos_locados sem obra_id direto mas vinculados
-            -- a uma OC (ordem de compra) que pertence a esta obra.
-            -- Captura locações criadas via OC sem preenchimento manual do campo obra.
-            SELECT
-              el.id,
-              el.descricao,
-              el.categoria,
-              el.status,
-              el.foto_url,
-              el.data_inicio,
-              el.data_fim_prevista,
-              el.data_fim_real,
-              el.valor_mensal,
-              el.valor_diario,
-              el.funcionario_responsavel_nome,
-              el.numero_contrato_fornecedor,
-              el.fornecedor_nome,
-              NULL AS quantidade_atual,
-              CASE
-                WHEN NULLIF(el.data_fim_real, '') IS NOT NULL
-                THEN (NULLIF(el.data_fim_real, '')::date - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
-                ELSE (CURRENT_DATE - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
-              END AS dias_locado,
-              CASE
-                WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
-                THEN ROUND(
-                  el.valor_mensal *
-                  (COALESCE(NULLIF(el.data_fim_real, '')::date, CURRENT_DATE) - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
-                  / 30.0, 2)
-                ELSE NULL
-              END AS custo_estimado,
-              'locado' AS tipo_vinculo
-            FROM equipamentos_locados el
-            JOIN compras_ordens co ON co.id = el.ordem_compra_id
-              AND co.company_id = ${input.companyId}
-              AND co.obra_id    = ${input.obraId}
-            WHERE el.company_id = ${input.companyId}
-              AND el.status    != 'devolvido'
-              AND (el.obra_id IS NULL OR el.obra_id <> ${input.obraId})
-              AND NOT EXISTS (
-                SELECT 1 FROM almoxarifado_itens ai3
-                WHERE ai3.equipamento_vinculado_id   = el.id
-                  AND ai3.equipamento_vinculado_tipo  = 'locado'
-                  AND ai3.obra_id    = ${input.obraId}
-                  AND ai3.company_id = ${input.companyId}
-                  AND ai3.ativo      = true
-              )
-
+              -- Ramo C: equipamentos_locados via OC da obra (sem obra_id direto)
+              SELECT
+                el.id,
+                el.descricao,
+                el.categoria,
+                el.status,
+                el.foto_url,
+                el.data_inicio,
+                el.data_fim_prevista,
+                el.data_fim_real,
+                el.valor_mensal,
+                el.valor_diario,
+                el.funcionario_responsavel_nome,
+                el.numero_contrato_fornecedor,
+                el.fornecedor_nome,
+                NULL::numeric AS quantidade_atual,
+                CASE
+                  WHEN NULLIF(el.data_fim_real, '') IS NOT NULL
+                  THEN (NULLIF(el.data_fim_real, '')::date - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
+                  ELSE (CURRENT_DATE - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
+                END AS dias_locado,
+                CASE
+                  WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
+                  THEN ROUND(
+                    el.valor_mensal *
+                    (COALESCE(NULLIF(el.data_fim_real, '')::date, CURRENT_DATE) - COALESCE(NULLIF(el.data_inicio, '')::date, CURRENT_DATE))
+                    / 30.0, 2)
+                  ELSE NULL
+                END AS custo_estimado,
+                'locado' AS tipo_vinculo
+              FROM equipamentos_locados el
+              JOIN compras_ordens co ON co.id = el.ordem_compra_id
+                AND co.company_id = ${input.companyId}
+                AND co.obra_id    = ${input.obraId}
+              WHERE el.company_id = ${input.companyId}
+                AND el.status    != 'devolvido'
+                AND (el.obra_id IS NULL OR el.obra_id <> ${input.obraId})
+                AND NOT EXISTS (
+                  SELECT 1 FROM almoxarifado_itens ai3
+                  WHERE ai3.equipamento_vinculado_id   = el.id
+                    AND ai3.equipamento_vinculado_tipo  = 'locado'
+                    AND ai3.obra_id    = ${input.obraId}
+                    AND ai3.company_id = ${input.companyId}
+                    AND ai3.ativo      = true
+                )
+            ) _loc
             ORDER BY
               CASE status WHEN 'em_uso' THEN 0 WHEN 'atrasado' THEN 1 ELSE 2 END,
               descricao

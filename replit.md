@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4305** — **SCORECARD: FIX LOCAÇÕES INVISÍVEIS — data_fim_real EMPTY STRING QUEBRAVA DATE CAST.** `safe("locacoes")` retornava `[]` porque `data_fim_real=''` (não NULL) passava pelo `IS NOT NULL` mas `''::date` lançava erro. Fix: `NULLIF(col, '')::date` e `NULLIF(col, '') IS NOT NULL` em todos os 3 Ramos (A/B/C). Log de diagnóstico adicionado. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4306** — **SCORECARD: FIX LOCAÇÕES INVISÍVEIS — ORDER BY CASE ALIAS EM UNION SEM SUBQUERY.** PostgreSQL não permite aliases de saída em expressões no `ORDER BY` direto de `UNION ALL`. `safe()` capturava "column status does not exist" silenciosamente → `[]`. Fix: UNION envolvido em `SELECT * FROM (...) _loc`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4304** — **SCORECARD: FIX CRÍTICO getCustosRH — CAST NUMÉRICO COM SEPARADOR DE MILHAR BR.** `getCustosRH` lançava "invalid input syntax for type numeric: '2.918.67'" porque salários VARCHAR no formato BR ("2.918,67") eram convertidos com apenas `REPLACE(',','.')` → dois pontos. Fix: duplo REPLACE em todas as 11 colunas. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4305** — **SCORECARD: FIX LOCAÇÕES — NULLIF EMPTY STRING + SAFE() LOG MELHORADO.** `data_fim_real=''` → `NULLIF(col,'')::date`; `safe()` agora loga `e.cause.message` (erro Postgres real). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4304** — **SCORECARD: FIX CRÍTICO getCustosRH — CAST NUMÉRICO COM SEPARADOR DE MILHAR BR.** Duplo REPLACE em 11 colunas VARCHAR salário. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4303** — **SCORECARD: FIX CUSTO MO INVISÍVEL + LOCAÇÕES VIA OC.** Ramo B `site_periods` COALESCE fix + Ramo C UNION para locações via compras_ordens. ZERO DELETE · ZERO ALTER destrutivo.
 
