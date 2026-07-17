@@ -1221,30 +1221,25 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                   const qtdFunc      = analiseRH.data!.resumo.totalFuncionarios;
                   const valorExibido = custoPeriodo === "dia" ? custoDia : custoPeriodo === "semana" ? custoSemana : custoMes;
                   const labelPeriodo = custoPeriodo === "dia" ? "dia útil" : custoPeriodo === "semana" ? "semana (5 dias úteis)" : rhMes === "all" ? "ano" : "mês";
+                  const fmtBRL = (v: number) =>
+                    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(v);
                   return (
-                    <div className="rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white p-4 shadow-md">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200 mb-1">
-                            Custo da Equipe
-                          </p>
-                          <p className="text-3xl font-extrabold leading-none tracking-tight">
-                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(valorExibido)}
-                          </p>
-                          <p className="text-sm text-indigo-200 mt-1">
-                            por {labelPeriodo} · {qtdFunc} {qtdFunc === 1 ? "pessoa" : "pessoas"} · {diasUteis} dias úteis
-                          </p>
-                        </div>
+                    <div className="rounded-2xl border border-yellow-200 bg-yellow-50 shadow-sm overflow-hidden">
+                      {/* Cabeçalho */}
+                      <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-yellow-700">
+                          Custo da Equipe
+                        </p>
                         {/* Toggle Dia / Semana / Mês */}
-                        <div className="flex flex-col gap-1 shrink-0">
+                        <div className="flex gap-1">
                           {(["dia","semana","mes"] as const).map(p => (
                             <button
                               key={p}
                               onClick={() => setCustoPeriodo(p)}
-                              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors border ${
                                 custoPeriodo === p
-                                  ? "bg-white text-indigo-700"
-                                  : "bg-white/20 text-white hover:bg-white/30"
+                                  ? "bg-yellow-400 border-yellow-400 text-yellow-900"
+                                  : "bg-transparent border-yellow-300 text-yellow-600 hover:bg-yellow-100"
                               }`}
                             >
                               {p === "dia" ? "Dia" : p === "semana" ? "Semana" : "Mês"}
@@ -1252,24 +1247,50 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                           ))}
                         </div>
                       </div>
+
+                      {/* Valor principal */}
+                      <div className="px-4 pb-1">
+                        <p className="text-5xl font-black tracking-tight text-gray-900 leading-none">
+                          {fmtBRL(valorExibido)}
+                        </p>
+                        <p className="text-xs text-yellow-700 mt-1.5">
+                          por {labelPeriodo} &nbsp;·&nbsp; {qtdFunc} {qtdFunc === 1 ? "pessoa" : "pessoas"} &nbsp;·&nbsp; {diasUteis} dias úteis
+                        </p>
+                      </div>
+
                       {/* Barra de decomposição */}
-                      <div className="mt-3 flex gap-1 text-[10px] text-indigo-200">
-                        {[
-                          { label: "Salário", v: analiseRH.data!.resumo.salarioBrutoTotal },
-                          { label: "VR/VA",   v: analiseRH.data!.resumo.vaTotal },
-                          { label: "FGTS",    v: analiseRH.data!.resumo.fgtsTotal },
-                          { label: "Férias",  v: analiseRH.data!.resumo.feriasTotal ?? 0 },
-                          { label: "Outros",  v: (analiseRH.data!.resumo.seguroVidaTotal ?? 0) + analiseRH.data!.resumo.heTotal },
-                        ].map(({ label, v }) => {
-                          const pct = custoMes > 0 ? Math.round((v / custoMes) * 100) : 0;
-                          if (pct === 0) return null;
-                          return (
-                            <div key={label} style={{ width: `${pct}%` }} className="overflow-hidden" title={`${label}: ${pct}%`}>
-                              <div className="h-1.5 rounded-full bg-white/40 mb-0.5" />
-                              <span className="truncate block">{label}</span>
-                            </div>
-                          );
-                        })}
+                      <div className="px-4 pb-3 mt-2">
+                        <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
+                          {[
+                            { label: "Salário", v: analiseRH.data!.resumo.salarioBrutoTotal, color: "bg-yellow-400" },
+                            { label: "VR/VA",   v: analiseRH.data!.resumo.vaTotal,           color: "bg-teal-400" },
+                            { label: "FGTS",    v: analiseRH.data!.resumo.fgtsTotal,          color: "bg-blue-400" },
+                            { label: "Férias",  v: analiseRH.data!.resumo.feriasTotal ?? 0,   color: "bg-orange-400" },
+                            { label: "Outros",  v: (analiseRH.data!.resumo.seguroVidaTotal ?? 0) + analiseRH.data!.resumo.heTotal, color: "bg-rose-400" },
+                          ].map(({ label, v, color }) => {
+                            const pct = custoMes > 0 ? (v / custoMes) * 100 : 0;
+                            if (pct < 0.5) return null;
+                            return <div key={label} style={{ width: `${pct}%` }} className={`${color} rounded-full`} title={`${label}: ${pct.toFixed(0)}%`} />;
+                          })}
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
+                          {[
+                            { label: "Salário", v: analiseRH.data!.resumo.salarioBrutoTotal, color: "bg-yellow-400" },
+                            { label: "VR/VA",   v: analiseRH.data!.resumo.vaTotal,           color: "bg-teal-400" },
+                            { label: "FGTS",    v: analiseRH.data!.resumo.fgtsTotal,          color: "bg-blue-400" },
+                            { label: "Férias",  v: analiseRH.data!.resumo.feriasTotal ?? 0,   color: "bg-orange-400" },
+                            { label: "Outros",  v: (analiseRH.data!.resumo.seguroVidaTotal ?? 0) + analiseRH.data!.resumo.heTotal, color: "bg-rose-400" },
+                          ].map(({ label, v, color }) => {
+                            const pct = custoMes > 0 ? (v / custoMes) * 100 : 0;
+                            if (pct < 0.5) return null;
+                            return (
+                              <span key={label} className="flex items-center gap-1 text-[10px] text-gray-500">
+                                <span className={`w-1.5 h-1.5 rounded-full ${color} inline-block`} />
+                                {label} {pct.toFixed(0)}%
+                              </span>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   );

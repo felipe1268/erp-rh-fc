@@ -1,4 +1,18 @@
 /**
+ * Rev. 4331 - SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — REDESIGN AMARELO PÁLIDO + VALOR DESTAQUE
+ *
+ * PROBLEMA: card anterior (gradiente escuro) não destacava bem o valor; sem centavos.
+ *
+ * SOLUÇÃO:
+ *   - Fundo amarelo pálido (bg-yellow-50, border-yellow-200, rounded-2xl).
+ *   - Valor em text-5xl font-black com formatação completa (R$ X.XXX,XX — centavos incluídos).
+ *   - Toggle pills horizontais no cabeçalho (amarelo sólido = selecionado, contorno = inativo).
+ *   - Barra colorida de decomposição + legenda com % de cada componente.
+ *   - ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4330 - SCORECARD RH/FOLHA: CARD "CUSTO DIÁRIO DA EQUIPE" COM TOGGLE DIA/SEMANA/MÊS
  *
  * PROBLEMA: não havia visão de custo unitário por período para o gestor de obra.

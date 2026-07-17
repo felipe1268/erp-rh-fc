@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4330** — **SCORECARD RH/FOLHA: CARD "CUSTO DIÁRIO DA EQUIPE" COM TOGGLE DIA/SEMANA/MÊS.** Card gradiente indigo→violet no topo da aba Folha/Custos. Toggle pills Dia/Semana/Mês; `custoPeriodo` state. Fórmula: `diasUteisDoMes` seg–sex; Custo Dia=total÷dias; Semana=dia×5; barra de decomposição Salário/VR/FGTS/Férias/Outros. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4331** — **SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — REDESIGN AMARELO PÁLIDO + VALOR DESTAQUE.** bg-yellow-50, border-yellow-200, rounded-2xl. Valor text-5xl font-black com R$ + centavos. Toggle pills horizontais; barra de decomposição colorida + legenda %. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4329** — **SCORECARD BH: AVATAR CLICÁVEL + Nº INTERNO + MINI-PERFIL EXPANDIDO.** `f.matricula` (COL...) → `Nº {f.employeeId}` limpo. Avatar vira `<button>` com ring:hover; clique alterna `bhExpanded`. Linha expandida (colSpan=3): foto 64×64, nome, cargo, nº, resumo BH. `<React.Fragment key>` no `.map`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4330** — **SCORECARD RH/FOLHA: CARD "CUSTO DIÁRIO DA EQUIPE" COM TOGGLE DIA/SEMANA/MÊS.** Card gradiente indigo→violet; custoPeriodo state; diasUteisDoMes; barra decomposição. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
