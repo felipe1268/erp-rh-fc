@@ -1,4 +1,22 @@
 /**
+ * Rev. 4314 - PORTAL CLIENTE ADMIN: FILTRO "COM/SEM ACESSO" NA ABA ACESSOS
+ *
+ * CONTEXTO:
+ *   A lista de clientes do Portal Admin exibia todos os 47+ clientes juntos,
+ *   misturando quem já tem acesso com quem nunca teve — tela pesada de ler.
+ *
+ * ADICIONADO:
+ *   - State `filtroAcesso: "todos" | "com_acesso" | "sem_acesso"`
+ *   - Pills de filtro coloridas: "Todos" (cinza), "Com acesso" (verde), "Sem acesso" (vermelho)
+ *   - Cada pill exibe o contador: ex. "Com acesso  5"
+ *   - `filtrados` useMemo atualizado para respeitar filtro de acesso + texto
+ *   - Contadores pré-computados: `totalComAcesso`, `totalSemAcesso`
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo (só frontend).
+ * Arquivo: client/src/pages/ClientesPortalAdmin.tsx
+ */
+
+/**
  * Rev. 4313 - PLANEJAMENTO: BOTÃO "IMPORTAR CUSTOS MO" REMOVIDO
  *
  * CONTEXTO:

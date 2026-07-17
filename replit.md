@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4314** — **PORTAL CLIENTE ADMIN: FILTRO "COM/SEM ACESSO" NA ABA ACESSOS.** Pills de filtro coloridas (Todos/Com acesso/Sem acesso) com contador em cada uma. `filtrados` useMemo atualizado para respeitar filtro + texto. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4313** — **PLANEJAMENTO: BOTÃO "IMPORTAR CUSTOS MO" REMOVIDO.** Com o Scorecard calculando MO automaticamente (CLT + PJ proporcionais), o import manual tornou-se redundante. Removidos: botão, modal, states e queries de `moAlocacao`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4312** — **SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA.** Query PJ passou a espelhar a lógica CLT: nova CTE `pj_site_periods`; `efetivo_inicio/fim` = interseção contrato × alocação × filtro; `dias_na_obra/dias_no_mes` pro-rateia custo; `WHERE dias_na_obra > 0` exclui meses sem presença. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4312** — **SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA.** Nova CTE `pj_site_periods`; `efetivo_inicio/fim` = interseção contrato × alocação × filtro; `dias_na_obra/dias_no_mes` pro-rateia custo. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4311** — **SCORECARD RH/FOLHA: RE-INIT AO TROCAR DE OBRA.** `useRef` passa a guardar o `obraId` já inicializado. Ao navegar para outra obra, `rhAno`/`rhMes` são re-inicializados pelo cronograma da nova obra. ZERO DELETE · ZERO ALTER destrutivo.
 

@@ -94,6 +94,7 @@ export default function ClientesPortalAdmin() {
     return () => window.removeEventListener("navParamsUpdated", handler);
   }, [applyNavParams]);
   const [busca, setBusca] = useState("");
+  const [filtroAcesso, setFiltroAcesso] = useState<"todos" | "com_acesso" | "sem_acesso">("todos");
 
   const utils = trpc.useUtils();
   const { user } = useAuth();
@@ -539,15 +540,25 @@ export default function ClientesPortalAdmin() {
   };
 
   // ===== Filtragem clientes =====
+  const totalComAcesso = useMemo(() =>
+    (clientesList as any[]).filter((c) => (acessosPorCliente.get(c.id) || []).some((a: any) => a.ativo === 1)).length,
+  [clientesList, acessosPorCliente]);
+  const totalSemAcesso = useMemo(() =>
+    (clientesList as any[]).filter((c) => !(acessosPorCliente.get(c.id) || []).some((a: any) => a.ativo === 1)).length,
+  [clientesList, acessosPorCliente]);
+
   const filtrados = useMemo(() => (clientesList as any[]).filter((c) => {
+    const acs = acessosPorCliente.get(c.id) || [];
+    const temAcesso = acs.some((a: any) => a.ativo === 1);
+    if (filtroAcesso === "com_acesso" && !temAcesso) return false;
+    if (filtroAcesso === "sem_acesso" && temAcesso) return false;
     const t = busca.toLowerCase();
     if (!t) return true;
-    const acs = acessosPorCliente.get(c.id) || [];
     return [
       c.razaoSocial, c.nomeFantasia, c.cnpj, c.cpf, c.contatoEmail, c.email,
       ...acs.flatMap((a: any) => [a.nomeResponsavel, a.emailResponsavel]),
     ].some((v) => v?.toLowerCase().includes(t));
-  }), [clientesList, busca, acessosPorCliente]);
+  }), [clientesList, busca, filtroAcesso, acessosPorCliente]);
 
   const naoLidos = useMemo(() => (comentarios as any[]).filter((c) => c.autorTipo === "cliente" && !c.lidoEm).length, [comentarios]);
 
@@ -607,13 +618,36 @@ export default function ClientesPortalAdmin() {
         {/* TAB ACESSOS */}
         {tab === "acessos" && (
           <div>
-            <div className="flex items-center justify-between mb-4 gap-2">
-              <div className="relative w-72">
+            <div className="flex flex-col gap-3 mb-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Pills de filtro */}
+                {([
+                  { key: "todos",      label: "Todos",       count: clientesList.length,  color: "slate" },
+                  { key: "com_acesso", label: "Com acesso",  count: totalComAcesso,        color: "emerald" },
+                  { key: "sem_acesso", label: "Sem acesso",  count: totalSemAcesso,        color: "rose" },
+                ] as const).map(({ key, label, count, color }) => {
+                  const active = filtroAcesso === key;
+                  const base = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer select-none";
+                  const style = active
+                    ? color === "emerald" ? "bg-emerald-600 text-white border-emerald-600"
+                    : color === "rose"    ? "bg-rose-500 text-white border-rose-500"
+                    :                      "bg-slate-700 text-white border-slate-700"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50";
+                  return (
+                    <button key={key} className={`${base} ${style}`} onClick={() => setFiltroAcesso(key)}>
+                      {label}
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-white/25" : "bg-slate-100 text-slate-500"}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+                <div className="flex-1" />
+                <span className="text-xs text-slate-400">{totalAcessosAtivos} acesso(s) ativo(s)</span>
+              </div>
+              <div className="relative w-full max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input className="pl-9" placeholder="Buscar por nome, CNPJ, e-mail..." value={busca} onChange={(e) => setBusca(e.target.value)} />
-              </div>
-              <div className="text-xs text-slate-500">
-                {totalAcessosAtivos} acesso(s) ativo(s) · {clientesList.length} cliente(s) cadastrado(s)
               </div>
             </div>
             {loadingClientes ? (
