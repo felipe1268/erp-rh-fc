@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4339** — **ALMOXARIFADO: RECEBER MATERIAL EXCLUI OCs DE LOCAÇÃO.** `listPendingOCs` ganha filtro `isLocacao IS NULL OR isLocacao = false`. OCs de equipamento/locação somem do "Receber Material" e ficam exclusivamente em "RECEBER LOCAÇÃO". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4338** — **ALMOXARIFADO: SELECIONAR = TODOS MARCADOS + TOGGLE TODOS/NENHUM.** Clicar "Selecionar" entra no modo seleção com TODOS os itens visíveis já marcados. Barra inferior: contador clicável alterna todos/nenhum; texto "todos — limpar" ou "N selecionados · todos". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `listForAlmoxarifado` ganha `forTransfer?: boolean`; quando true bypassa filtro por usuário → `getObrasByCompanyActive`. Nova query `obrasParaTransferir` usada nos selects de destino (lote + individual) e label lookups. `obrasAtivas` (restrita) mantida para contexto de visualização e origem. ZERO DELETE · ZERO ALTER destrutivo.

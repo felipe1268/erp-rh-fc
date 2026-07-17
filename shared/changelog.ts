@@ -1,4 +1,22 @@
 /**
+ * Rev. 4339 - ALMOXARIFADO: RECEBER MATERIAL EXCLUI OCS DE LOCAÇÃO (equipamentos)
+ *
+ * PROBLEMA: o modal "Receber Material" (SmartEntry → warehouse.listPendingOCs) listava
+ *   TODAS as OCs pendentes, incluindo OCs de locação de equipamentos (isLocacao=true).
+ *   Ex: OC-695-2026 da "J ALVES LOCAÇÃO DE ANDAIMES E EQUIPAMENTOS LTDA" aparecia
+ *   no "Receber Material", quando seu fluxo correto é "RECEBER LOCAÇÃO"
+ *   (/equipamentos/locados?action=receber). Duplicidade confundia o usuário.
+ *
+ * SOLUÇÃO (server/routers/warehouse.ts — listPendingOCs):
+ *   Adicionar condição `isLocacao IS NULL OR isLocacao = false` no array de filtros.
+ *   OCs de locação (equipamentos) ficam exclusivamente no módulo Equipamentos Locados.
+ *   OCs de compra de material (isLocacao=false/null) permanecem em "Receber Material".
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: server/routers/warehouse.ts
+ */
+
+/**
  * Rev. 4338 - ALMOXARIFADO: SELECIONAR = TODOS MARCADOS + TOGGLE TODOS/NENHUM NA BARRA
  *
  * PROBLEMA: ao clicar "Selecionar", o usuário entrava no modo seleção com 0 itens marcados

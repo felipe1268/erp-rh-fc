@@ -2092,6 +2092,10 @@ REGRAS:
       const conditions: any[] = [
         eq(comprasOrdens.companyId, input.companyId),
         sql`${comprasOrdens.status} IN ('pendente', 'aprovada', 'parcial')`,
+        // Rev. 4339 — excluir OCs de locação: equipamentos têm fluxo próprio
+        // em "RECEBER LOCAÇÃO" (/equipamentos/locados). "Receber Material" só mostra
+        // OCs de compra de material.
+        sql`(${comprasOrdens.isLocacao} IS NULL OR ${comprasOrdens.isLocacao} = false)`,
       ];
       // Rev. 2384 — autorização por obra (admin/admin_master = null = todas).
       // Aplica em AMBOS os caminhos (com ou sem obraId explícito) pra evitar
