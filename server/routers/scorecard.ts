@@ -2032,12 +2032,21 @@ export const scorecardRouter = router({
                 '1 day'::interval
               ) d WHERE EXTRACT(DOW FROM d) BETWEEN 1 AND 5)                                    AS dias_no_mes,
               -- Dias úteis que este PJ ficou nesta obra dentro do mês:
-              -- interseção de (alocação real ∩ contrato ∩ mês), contando Seg-Sex
-              (SELECT COUNT(*)::int FROM generate_series(
-                GREATEST(pp.alocado_inicio, pp.efetivo_inicio, DATE_TRUNC('month', m)::date),
-                LEAST(pp.alocado_fim, pp.efetivo_fim, (DATE_TRUNC('month', m) + INTERVAL '1 month' - INTERVAL '1 day')::date),
-                '1 day'::interval
-              ) d WHERE EXTRACT(DOW FROM d) BETWEEN 1 AND 5)                                    AS dias_na_obra
+              -- Prioridade 1: cartão de ponto (presença real registrada)
+              -- Fallback:     interseção de (alocação real ∩ contrato ∩ mês) em dias úteis Seg-Sex
+              COALESCE(
+                NULLIF((SELECT COUNT(DISTINCT tr.data)::int
+                        FROM time_records tr
+                        WHERE tr."companyId"     = ${input.companyId}
+                          AND tr."obraId"        = ${input.obraId}
+                          AND tr."employeeId"    = pp.employee_id
+                          AND tr."mesReferencia" = TO_CHAR(m, 'YYYY-MM')), 0),
+                (SELECT COUNT(*)::int FROM generate_series(
+                  GREATEST(pp.alocado_inicio, pp.efetivo_inicio, DATE_TRUNC('month', m)::date),
+                  LEAST(pp.alocado_fim, pp.efetivo_fim, (DATE_TRUNC('month', m) + INTERVAL '1 month' - INTERVAL '1 day')::date),
+                  '1 day'::interval
+                ) d WHERE EXTRACT(DOW FROM d) BETWEEN 1 AND 5)
+              )                                                                                  AS dias_na_obra
             FROM pj_periods pp
             CROSS JOIN LATERAL generate_series(
               DATE_TRUNC('month', pp.efetivo_inicio),

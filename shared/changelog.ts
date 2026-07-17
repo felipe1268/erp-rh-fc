@@ -1,4 +1,33 @@
 /**
+ * Rev. 4350 - SCORECARD OBRA — FOLHA/CUSTOS: PJ DIAS = PONTO REAL (time_records) + DISPLAY DIAS REAIS
+ *
+ * PROBLEMA:
+ * PJ exibia "1m" (meses ativos) na coluna DIAS e calculava dias_na_obra pelo período de alocação
+ * (obra_funcionarios.createdAt → hoje). Isso inflava o custo: se um PJ ficou 1 dia mas foi adicionado
+ * à equipe da obra há 13 dias úteis atrás, o sistema cobrava 13 dias.
+ *
+ * SOLUÇÃO:
+ * 1. SQL (pj_meses): COALESCE com time_records como PRIORIDADE 1:
+ *    - Se existem registros de ponto (time_records) para o PJ nesta obra/mês → usa COUNT(DISTINCT data)
+ *    - Fallback: interseção de (alocação ∩ contrato ∩ mês) em dias úteis Seg-Sex (comportamento anterior)
+ *    Resultado: João com 1 registro de ponto em julho → 1 dia → custo = contrato/23
+ *
+ * 2. Frontend (ScorecardTab): PJ agora exibe total_dias_na_obra (número real de dias) na coluna DIAS,
+ *    igual ao CLT. Antes exibia "Xm" (meses ativos), que confundia o usuário fazendo parecer custo cheio.
+ *
+ * REGRA:
+ * - PJ com ponto registrado → días baseados em ponto (mais preciso)
+ * - PJ sem ponto → dias pelo período de alocação na obra (fallback)
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (getCustosRH, pj_meses CTE, ~linha 2037)
+ * - client/src/pages/planejamento/ScorecardTab.tsx (~linha 1514)
+ * - shared/version.ts → Rev. 4350
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4349 - SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE REGRESSÃO (rnd2 antes da declaração)
  *
  * PROBLEMA:

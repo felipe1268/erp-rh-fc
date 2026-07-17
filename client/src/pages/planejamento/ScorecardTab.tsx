@@ -1509,9 +1509,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                     </div>
                                   </td>
                                   <td className="text-center px-2 py-1.5 text-gray-600">
-                                    {f.tipo_pessoa === 'PJ'
-                                      ? <span>{f.meses_na_obra}<span className="text-[8px] text-purple-400 ml-0.5">m</span></span>
-                                      : f.total_dias_na_obra}
+                                    {f.total_dias_na_obra ?? (f.tipo_pessoa === 'PJ' ? '—' : 0)}
                                   </td>
                                   <td className="text-right px-2 py-1.5 text-gray-700">
                                     {f.tipo_pessoa === 'PJ'
