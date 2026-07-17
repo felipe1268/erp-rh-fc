@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4320** — **SCORECARD RH/FOLHA: FIX PJ PHANTOM — FILTRAR POR `pj_contracts.obraId`.** Bug: query usava `employeeId IN (relevantEmpSql)` incluindo PJ de outras obras cujo employeeId coincidia com CLT desta obra. Fix: filtrar por `pc."obraId" = obraId` diretamente; remove CTE `pj_site_periods` desnecessária. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4319** — **SCORECARD RH/FOLHA: ORDENAÇÃO ALFABÉTICA NA TABELA DE FUNCIONÁRIOS.** Botão toggle "A → Z / Custo ↓"; `rhSortBy` state; `rhFuncsFiltrados` usa `localeCompare(pt-BR)` em modo nome. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4318** — **SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS.** Meses sem payroll mostravam ponto azul. Guard `qtdFuncionarios > 0` garante só meses com funcionários ativos ficam azuis. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4318** — **SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS.** Guard `qtdFuncionarios > 0` garante só meses com funcionários ativos ficam azuis. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4316** — **SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA DE FUNCIONÁRIOS.** Select cargos únicos + contagem; `rhFuncsFiltrados` + `rhResumoFiltrado`; tfoot vira "SUBTOTAL — cargo". ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -62,9 +64,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4314** — **PORTAL CLIENTE ADMIN: FILTRO "COM/SEM ACESSO".** Pills coloridas (Todos/Com acesso/Sem acesso) com contador. `filtrados` useMemo atualizado. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4313** — **PLANEJAMENTO: BOTÃO "IMPORTAR CUSTOS MO" REMOVIDO.** Com o Scorecard calculando MO automaticamente (CLT + PJ proporcionais), o import manual tornou-se redundante. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4312** — **SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA.** Nova CTE `pj_site_periods`; interseção contrato × alocação × filtro; pro-rateia custo. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4313** — **PLANEJAMENTO: BOTÃO "IMPORTAR CUSTOS MO" REMOVIDO.** Import manual tornou-se redundante com Scorecard calculando MO automaticamente. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

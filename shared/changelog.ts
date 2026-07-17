@@ -1,4 +1,35 @@
 /**
+ * Rev. 4320 - SCORECARD RH/FOLHA: FIX PJ PHANTOM — FILTRAR POR pj_contracts.obraId
+ *
+ * PROBLEMA:
+ *   André Figueiredo Augusto (PJ-2026-0021) aparecia no Scorecard RH/Folha de
+ *   julho mesmo com Efetivo mostrando "0 PJ" nesta obra.
+ *
+ *   A query PJ filtrava por:
+ *     WHERE pc."employeeId" IN (relevantEmpSql)
+ *   onde relevantEmpSql = UNION(employee_site_history, obra_funcionarios) desta obra.
+ *   Isso incluía qualquer funcionário que já foi alocado nesta obra — mesmo que o
+ *   contrato PJ fosse de OUTRA obra. O employeeId de André coincidia com um registro
+ *   em obra_funcionarios desta obra (como CLT ou histórico), e seu contrato PJ
+ *   ativo passou o filtro de datas → aparecia como PJ "fantasma".
+ *
+ * CAUSA RAIZ:
+ *   pj_contracts tem coluna obraId (obra_id) que NÃO estava sendo usada para filtrar.
+ *   A CTE pj_site_periods inferia a obra via obra_funcionarios/ESH, mas esse
+ *   mecanismo indireto não garante que o contrato PJ pertença a ESTA obra.
+ *
+ * FIX (Rev. 4320):
+ *   - Remover CTE pj_site_periods (inferência indireta desnecessária)
+ *   - Filtrar pj_contracts diretamente: pc."obraId" = obraId AND pc."companyId" = companyId
+ *   - Período efetivo = GREATEST(obra.dataInicio, pc.dataInicio, filterStart)
+ *                       LEAST(pc.dataFim, filterEnd)
+ *   - Apenas contratos com obraId correto aparecem no scorecard
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo (só query SQL no backend).
+ * Arquivo: server/routers/scorecard.ts — getCustosRH, CTE pj_periods (~linha 1927)
+ */
+
+/**
  * Rev. 4319 - SCORECARD RH/FOLHA: ORDENAÇÃO ALFABÉTICA NA TABELA DE FUNCIONÁRIOS
  *
  * ADICIONADO:

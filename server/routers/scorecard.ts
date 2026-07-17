@@ -1911,61 +1911,15 @@ export const scorecardRouter = router({
             AND svc.employee_id IN (${relevantEmpSql})
         `),
 
-        // Rev. 4312 — PJ: proration by actual days in obra (mirrors CLT site_periods logic)
+        // Rev. 4320 — PJ: filtrar por pj_contracts."obraId" diretamente.
+        // Antes usava employeeId IN (relevantEmpSql) o que incluía PJ cujo
+        // employeeId aparecia em obra_funcionarios de OUTRO contexto nesta obra.
+        // pj_contracts tem obra_id — use-o como fonte de verdade (única).
         db.execute(sql`
           WITH
           obra_ini_pj AS (
             SELECT COALESCE("dataInicio"::date, '2000-01-01'::date) AS data_inicio
             FROM obras WHERE id = ${input.obraId}
-          ),
-          -- Mirrors the CLT site_periods CTE: determines exact period each PJ was in THIS obra
-          pj_site_periods AS (
-            -- Ramo A: formal transfer records via employee_site_history
-            SELECT
-              esh."employeeId"                                                 AS employee_id,
-              GREATEST(
-                MIN(esh."dataInicio"::date),
-                (SELECT data_inicio FROM obra_ini_pj)
-              )                                                                AS periodo_inicio,
-              CASE
-                WHEN BOOL_OR(esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL)
-                  THEN MAX(CASE WHEN esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL
-                                THEN esh."dataFim"::date END)
-                WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
-                ELSE MAX(esh."dataFim"::date)
-              END                                                              AS periodo_fim
-            FROM employee_site_history esh
-            WHERE esh."obraId"    = ${input.obraId}
-              AND esh."companyId" = ${input.companyId}
-            GROUP BY esh."employeeId"
-
-            UNION ALL
-
-            -- Ramo B: obra_funcionarios without ESH history
-            SELECT
-              of2."employeeId"                                                 AS employee_id,
-              GREATEST(
-                of2."createdAt"::date,
-                (SELECT data_inicio FROM obra_ini_pj)
-              )                                                                AS periodo_inicio,
-              COALESCE(
-                (SELECT MIN(of3."createdAt"::date)
-                 FROM obra_funcionarios of3
-                 WHERE of3."employeeId" = of2."employeeId"
-                   AND of3."companyId"  = of2."companyId"
-                   AND of3."obraId"    <> of2."obraId"
-                   AND of3."createdAt"  > of2."createdAt"),
-                CURRENT_DATE
-              )                                                                AS periodo_fim
-            FROM obra_funcionarios of2
-            WHERE of2."obraId"    = ${input.obraId}
-              AND of2."companyId" = ${input.companyId}
-              AND NOT EXISTS (
-                SELECT 1 FROM employee_site_history esh2
-                WHERE esh2."employeeId" = of2."employeeId"
-                  AND esh2."obraId"     = ${input.obraId}
-                  AND esh2."companyId"  = ${input.companyId}
-              )
           ),
           pj_periods AS (
             SELECT
@@ -1973,25 +1927,24 @@ export const scorecardRouter = router({
               REPLACE(REPLACE(COALESCE(pc."valorMensal",'0'), '.', ''), ',', '.')::numeric AS valor_mensal,
               pc."numeroContrato"                                                          AS numero_contrato,
               pc."razaoSocialPrestador"                                                    AS razao_social,
-              -- Effective start: latest of (obra allocation, contract start, filter start)
+              -- Effective start: latest of (obra start, contract start, filter start)
               GREATEST(
-                COALESCE(sp.periodo_inicio, (${mesFeriasIni} || '-01')::date),
+                (SELECT data_inicio FROM obra_ini_pj),
                 COALESCE(pc."dataInicio"::date, '2000-01-01'::date),
                 (${mesFeriasIni} || '-01')::date
               )                                                                            AS efetivo_inicio,
-              -- Effective end: earliest of (obra departure, contract end, filter end)
+              -- Effective end: earliest of (contract end, filter end)
               LEAST(
-                COALESCE(sp.periodo_fim, CURRENT_DATE),
                 COALESCE(pc."dataFim"::date, CURRENT_DATE),
                 ((${mesFeriasFim} || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
               )                                                                            AS efetivo_fim
             FROM pj_contracts pc
-            LEFT JOIN pj_site_periods sp ON sp.employee_id = pc."employeeId"
-            WHERE pc."employeeId" IN (${relevantEmpSql})
+            WHERE pc."obraId"    = ${input.obraId}
+              AND pc."companyId" = ${input.companyId}
               AND pc.status       IN ('ativo','pendente_assinatura')
               AND pc."deletedAt"  IS NULL
-              AND (pc."dataFim"    IS NULL OR pc."dataFim"::date    >= (${mesFeriasIni} || '-01')::date)
-              AND (pc."dataInicio" IS NULL OR pc."dataInicio"::date <= (${mesFeriasFim} || '-28')::date)
+              AND pc."dataFim"::date    >= (${mesFeriasIni} || '-01')::date
+              AND pc."dataInicio"::date <= (${mesFeriasFim} || '-28')::date
           ),
           pj_meses AS (
             SELECT
