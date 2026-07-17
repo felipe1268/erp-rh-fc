@@ -10011,6 +10011,9 @@ export const equipamentosLocados = pgTable("equipamentos_locados", {
   funcionarioResponsavelId:    integer("funcionario_responsavel_id"),
   funcionarioResponsavelNome:  varchar("funcionario_responsavel_nome", { length: 255 }),
   observacoes:                 text(),
+  // Rev. 4345 — quantidade de unidades físicas neste registro (padrão = 1).
+  // Permite "5 Andaimes" como um único registro em vez de 5 registros separados.
+  quantidade:                  integer("quantidade").notNull().default(1),
   // Cadeia de renovações: aponta para a unidade locada anterior (caso seja renovação)
   ocAnteriorId:                integer("oc_anterior_id"),
   // Último check-in semanal (controle de "ainda está na obra")

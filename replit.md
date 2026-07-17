@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4345** — **ALMOXARIFADO: 5 MELHORIAS LISTA LEONARDO/17-07.** Item 2: seleção múltipla de locados para devolução em lote (checkbox + sticky bar âmbar + modal progresso 0→100%). Item 5: campo `quantidade` em `equipamentos_locados` (ColFix + schema + server + Locados.tsx). Item 6: botão Renovar Locação (CalendarPlus → modal com input date → `atualizarItem`). Item 7: badge vencimento colorido no modal Devolver (vermelho/laranja/âmbar). Item 8: `onError` em `proprioCriar` para exibir erros do servidor em toast. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4344** — **ALMOXARIFADO: CORREÇÃO — PAINEL DE VALOR TOTAL NÃO ATUALIZAVA APÓS OPERAÇÕES.** 4 mutations (`registerExit`, `returnLoan`, `criarMut`, `atualizarMut`) chamavam só `refetch()` e esqueciam `utils.warehouse.getDashboard.invalidate()`. Resultado: lista de itens refrescava mas o card R$ total ficava desatualizado. Fix: adicionado `getDashboard.invalidate()` nas 4 mutations. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4343** — **EQUIPAMENTOS PRÓPRIOS: SELEÇÃO MÚLTIPLA + TRANSFERÊNCIA EM LOTE.** Checkbox em cada card (aparece no hover, azul quando marcado, card fica com ring azul). Barra sticky azul escura no rodapé mostra contagem + botão "Transferir N". Modal atualizado: lista todos os equipamentos selecionados com checkbox animado de progresso, barra 0→100% no botão durante o envio em lote (`confirmarTransferencia` loop com `mutateAsync`). `modalTransf` passou de `{ equipamento }` para `{ equipamentos: any[] }` (botão individual usa `[p]`). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4343** — **EQUIPAMENTOS PRÓPRIOS: SELEÇÃO MÚLTIPLA + TRANSFERÊNCIA EM LOTE.** Checkbox em cada card + sticky bar azul + modal progresso. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4342** — **RECEBER LOCAÇÃO: REDESENHO COMPLETO DO MODAL.** Tela 0 = seleção de OC. Tela 1 = conferência ESPERADO vs. RECEBIDO, semáforo, banner divergência. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4340** — **EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS.** Nova tabela + coluna `transferencia_pendente_id`. 5 procedures tRPC. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4339** — **ALMOXARIFADO: RECEBER MATERIAL EXCLUI OCs DE LOCAÇÃO.** `listPendingOCs` filtra `isLocacao IS NULL OR isLocacao = false`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4338** — **ALMOXARIFADO: SELECIONAR = TODOS MARCADOS + TOGGLE TODOS/NENHUM.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

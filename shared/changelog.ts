@@ -1,4 +1,44 @@
 /**
+ * Rev. 4345 - ALMOXARIFADO: MELHORIAS COMPLETAS DA LISTA LEONARDO/17-07
+ *
+ * ITENS IMPLEMENTADOS:
+ *
+ * Item 2 — SELEÇÃO MÚLTIPLA DEVOLUÇÃO DE LOCADOS: Cards com `origem:"alugado"` ganharam
+ *   checkbox de seleção (Square/CheckSquare icon) na barra de ações. Quando ≥1 selecionado,
+ *   aparece sticky bar âmbar no rodapé ("N locados selecionados · Limpar · Devolver N").
+ *   Confirmação em modal com campo de observação + botão de progresso 0→100% (padrão REGRA
+ *   DE OURO). Loop de `devolverLocacaoMutSilent.mutateAsync` por item. Borda amber ring no
+ *   card selecionado.
+ *   ARQUIVOS: client/src/pages/almoxarifado/index.tsx
+ *
+ * Item 5 — CAMPO QUANTIDADE EM EQUIPAMENTOS LOCADOS: Nova coluna `quantidade INTEGER NOT
+ *   NULL DEFAULT 1` na tabela `equipamentos_locados`. ColFix Rev.4345 garante a coluna via
+ *   `ALTER TABLE IF NOT EXISTS`. Campo adicionado ao input de `locadoCriar` e `locadoAtualizar`
+ *   (server). Formulário de recebimento (Locados.tsx) exibe "Quantidade (unidades)".
+ *   ARQUIVOS: drizzle/schema.ts, server/_core/index.ts, server/routers/equipamentos.ts,
+ *             client/src/pages/equipamentos/Locados.tsx
+ *
+ * Item 6 — BOTÃO RENOVAR LOCAÇÃO: Ícone CalendarPlus (verde) adicionado na barra de ações
+ *   dos cards `origem:"alugado"`. Abre modal "Renovar Locação" com input type=date para nova
+ *   `dataVencimentoLocacao`. Chama `compras.atualizarItem` (aceita `dataVencimentoLocacao`).
+ *   ARQUIVOS: client/src/pages/almoxarifado/index.tsx
+ *
+ * Item 7 — BADGE DE VENCIMENTO NO MODAL DEVOLVER LOCAÇÃO: O modal "Devolver Equipamento
+ *   Locado" passou a exibir, ao lado da data de vencimento, um badge colorido:
+ *   - Vermelho: "⚠ VENCIDO há Nd" (dias <= 0)
+ *   - Laranja: "Vence em Nd" (dias 1–7)
+ *   - Âmbar: "Vence em Nd" (dias > 7)
+ *   ARQUIVOS: client/src/pages/almoxarifado/index.tsx
+ *
+ * Item 8 — ERRO CADASTRO PRÓPRIO SEM FEEDBACK: `criar` mutation em Proprios.tsx não tinha
+ *   `onError` — erros de servidor eram silenciosos no console. Adicionado handler que exibe
+ *   toast.error com a mensagem completa do servidor por 10s.
+ *   ARQUIVOS: client/src/pages/equipamentos/Proprios.tsx
+ *
+ * PADRÕES: ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4344 - ALMOXARIFADO: CORREÇÃO DE ATUALIZAÇÃO DO PAINEL DE VALOR TOTAL
  *
  * PROBLEMA: Após qualquer operação que altera o estoque (saída, devolução de ferramenta,

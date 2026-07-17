@@ -5449,7 +5449,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4340-2026-07-17-equip-transferencia";
+    const COLFIX_VERSION = "v4345-2026-07-17-locados-quantidade";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7245,6 +7245,14 @@ REGRAS DE EXTRAÇÃO:
         `);
         console.log("[ColFix Rev.4340] equipamentos_proprios_transferencias + transferencia_pendente_id garantidas.");
       } catch (e: any) { console.error("[ColFix Rev.4340] FALHA equip transferencia:", e?.message ?? e); }
+
+      // Rev. 4345 — quantidade de unidades físicas por registro de equipamento locado.
+      try {
+        const _db4345 = await getDb();
+        if (!_db4345) throw new Error("db indisponível");
+        await _db4345.$client.query(`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS quantidade INTEGER NOT NULL DEFAULT 1`);
+        console.log("[ColFix Rev.4345] equipamentos_locados: coluna quantidade garantida.");
+      } catch (e: any) { console.error("[ColFix Rev.4345] FALHA quantidade locados:", e?.message ?? e); }
 
       // Rev. 4042 — Stripe: inicializar (schema stripe.* + webhook gerenciado)
       // Envolvido em try/catch isolado: falha na configuração do Stripe NÃO

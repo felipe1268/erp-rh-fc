@@ -56,6 +56,8 @@ const EMPTY = {
   dataInicio: new Date().toISOString().slice(0, 10),
   dataFimPrevista: "",
   valorDiario: "", valorMensal: "",
+  // Rev. 4345 — quantidade de unidades físicas no mesmo registro.
+  quantidade: 1,
   funcionarioResponsavelNome: "",
   observacoes: "",
 };
@@ -1131,6 +1133,7 @@ export default function EquipamentosLocados() {
       funcionarioResponsavelNome: form.funcionarioResponsavelNome || undefined,
       observacoes: obsComDivergencia || undefined,
       fotosRecebimento: fotos,
+      quantidade: form.quantidade || 1, // Rev. 4345 — quantidade de unidades físicas.
       ordemCompraId: ocSelecionada?.id, // Rev. 2371 — vincula OC quando o user clicou em "Receber esta OC"
       // Rev. 2465 — assinaturas só quando não é fluxo de importação em lote.
       ...(!noFluxoImport && recEntSig && recRecSig ? {
@@ -2971,6 +2974,10 @@ export default function EquipamentosLocados() {
                 <Field label="Patrim. do fornecedor"><input value={form.codigoPatrimonioFornecedor} onChange={e => setForm(p => ({ ...p, codigoPatrimonioFornecedor: e.target.value }))} className="inp" /></Field>
                 <Field label="N° de série"><input value={form.numeroSerie} onChange={e => setForm(p => ({ ...p, numeroSerie: e.target.value }))} className="inp" /></Field>
                 <Field label="Código interno ERP"><input value={form.codigoInternoErp} onChange={e => setForm(p => ({ ...p, codigoInternoErp: e.target.value }))} className="inp" /></Field>
+                {/* Rev. 4345 — campo quantidade */}
+                <Field label="Quantidade (unidades)">
+                  <input type="number" min={1} value={form.quantidade} onChange={e => setForm(p => ({ ...p, quantidade: parseInt(e.target.value) || 1 }))} className="inp" />
+                </Field>
               </div>
             </Section>
 

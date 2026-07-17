@@ -379,6 +379,10 @@ export default function EquipamentosProprios() {
   }
 
   const criar = trpc.equipamentos.proprioCriar.useMutation({
+    onError: (e: any) => {
+      const msg = e?.message ?? "Erro desconhecido";
+      toast.error(`Erro ao cadastrar equipamento: ${msg}`, { duration: 10000 });
+    },
     onSuccess: (res: any) => {
       utils.equipamentos.propriosListar.invalidate();
       // Rev. 2364 — segunda query (auto-ID) também precisa refrescar pra o

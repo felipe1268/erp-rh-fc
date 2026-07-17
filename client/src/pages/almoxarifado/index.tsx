@@ -10,7 +10,7 @@ import {
   LayoutGrid, List, Camera, Trash2, ImageOff, Barcode,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft, ChevronDown,
   Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight, Truck,
-  CheckSquare, Square, Globe, Check, Tag, Layers,
+  CheckSquare, Square, Globe, Check, Tag, Layers, CalendarPlus,
 } from "lucide-react";
 import SmartEntry from "./SmartEntry";
 import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
@@ -1217,6 +1217,15 @@ export default function AlmoxarifadoPage() {
   const [obsDevolucaoLocacao, setObsDevolucaoLocacao] = useState("");
   // Rev. 2567 — modal aberto ao clicar no alerta "N locações a vencer".
   const [modalLocacoesVencendo, setModalLocacoesVencendo] = useState(false);
+  // Rev. 4345 — seleção múltipla de locados para devolução em lote.
+  const [selecionadosLocacao, setSelecionadosLocacao] = useState<Set<number>>(new Set());
+  const [modalDevolverLocacaoLote, setModalDevolverLocacaoLote] = useState(false);
+  const [obsDevolucaoLocacaoLote, setObsDevolucaoLocacaoLote] = useState("");
+  const [devolverLocacaoLoteProgress, setDevolverLocacaoLoteProgress] = useState(0);
+  const [isDevolvendoLote, setIsDevolvendoLote] = useState(false);
+  // Rev. 4345 — renovar locação: extender dataVencimentoLocacao.
+  const [modalRenovarLocacao, setModalRenovarLocacao] = useState<{ item: any } | null>(null);
+  const [novaDataVencLocacao, setNovaDataVencLocacao] = useState("");
 
   const criarMut = trpc.compras.criarItem.useMutation({
     onSuccess: () => { refetch(); utils.warehouse.getDashboard.invalidate(); setModalItem(false); toast.success("Item criado!"); },
@@ -1286,6 +1295,31 @@ export default function AlmoxarifadoPage() {
   const devolverLocacaoMut = trpc.compras.devolverLocacaoItem.useMutation({
     onSuccess: () => { refetch(); setModalDevolverLocacao(false); setItemDevolverLocacao(null); setObsDevolucaoLocacao(""); toast.success("Equipamento devolvido ao fornecedor. Item desativado."); },
   });
+  // Rev. 4345 — mutation silenciosa para uso no loop de lote.
+  const devolverLocacaoMutSilent = trpc.compras.devolverLocacaoItem.useMutation();
+
+  async function confirmarDevolverLocacaoLote() {
+    const ids = Array.from(selecionadosLocacao);
+    if (ids.length === 0) return;
+    setIsDevolvendoLote(true);
+    setDevolverLocacaoLoteProgress(0);
+    let ok = 0;
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await devolverLocacaoMutSilent.mutateAsync({ id: ids[i], observacao: obsDevolucaoLocacaoLote });
+        ok++;
+      } catch {}
+      setDevolverLocacaoLoteProgress(Math.round(((i + 1) / ids.length) * 100));
+    }
+    setTimeout(() => setDevolverLocacaoLoteProgress(0), 800);
+    setIsDevolvendoLote(false);
+    setModalDevolverLocacaoLote(false);
+    setObsDevolucaoLocacaoLote("");
+    setSelecionadosLocacao(new Set());
+    refetch();
+    utils.warehouse.getDashboard.invalidate();
+    toast.success(`${ok} equipamento${ok !== 1 ? "s" : ""} devolvido${ok !== 1 ? "s" : ""} ao fornecedor.`);
+  }
 
   function abrirDevolverLocacao(item: any) { setItemDevolverLocacao(item); setObsDevolucaoLocacao(""); setModalDevolverLocacao(true); }
 
@@ -2767,7 +2801,7 @@ export default function AlmoxarifadoPage() {
                   <div
                     key={item.id}
                     data-card-id={item.id}
-                    className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${isSel ? "border-indigo-500 ring-2 ring-indigo-300" : abaixo ? "border-red-200" : "border-gray-100"} ${modoSelecao ? "cursor-pointer" : ""}`}
+                    className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${selecionadosLocacao.has(item.id) ? "border-amber-500 ring-2 ring-amber-300" : isSel ? "border-indigo-500 ring-2 ring-indigo-300" : abaixo ? "border-red-200" : "border-gray-100"} ${modoSelecao ? "cursor-pointer" : ""}`}
                     onClick={modoSelecao ? () => toggleSelecionado(item.id) : undefined}
                   >
                     {/* Foto */}
@@ -2907,9 +2941,26 @@ export default function AlmoxarifadoPage() {
                           </button>
                         )}
                         {(item as any).origem === "alugado" && (
-                          <button onClick={() => abrirDevolverLocacao(item)} title="Devolver ao fornecedor" className="px-1.5 py-1 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded transition">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                          </button>
+                          <>
+                            {/* Rev. 4345 — checkbox seleção lote devolução */}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setSelecionadosLocacao(prev => { const n = new Set(prev); if (n.has(item.id)) n.delete(item.id); else n.add(item.id); return n; }); }}
+                              title={selecionadosLocacao.has(item.id) ? "Desmarcar" : "Selecionar para devolução em lote"}
+                              className={`px-1.5 py-1 rounded transition ${selecionadosLocacao.has(item.id) ? "text-amber-700 bg-amber-100" : "text-gray-300 hover:text-amber-500 hover:bg-amber-50"}`}
+                            >
+                              {selecionadosLocacao.has(item.id) ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => { setModalRenovarLocacao({ item }); setNovaDataVencLocacao((item as any).dataVencimentoLocacao ?? ""); }}
+                              title="Renovar locação (nova data de vencimento)"
+                              className="px-1.5 py-1 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded transition"
+                            >
+                              <CalendarPlus className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => abrirDevolverLocacao(item)} title="Devolver ao fornecedor" className="px-1.5 py-1 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded transition">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
                         )}
                         <button onClick={() => { setHistItem(resolveRealItem(item)); setModalHist(true); }} title="Histórico" className="px-1.5 py-1 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded transition">
                           <History className="h-3.5 w-3.5" />
@@ -4866,14 +4917,22 @@ export default function AlmoxarifadoPage() {
               <button onClick={() => setModalDevolverLocacao(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
             </div>
             <div className="p-5 space-y-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
                 <p className="text-sm font-semibold text-amber-800">{itemDevolverLocacao.nome}</p>
                 {itemDevolverLocacao.fornecedorLocacao && (
-                  <p className="text-xs text-amber-600 mt-0.5">Fornecedor: {itemDevolverLocacao.fornecedorLocacao}</p>
+                  <p className="text-xs text-amber-600">Fornecedor: {itemDevolverLocacao.fornecedorLocacao}</p>
                 )}
-                {itemDevolverLocacao.dataVencimentoLocacao && (
-                  <p className="text-xs text-amber-600">Vencimento: {new Date(itemDevolverLocacao.dataVencimentoLocacao + "T00:00:00").toLocaleDateString("pt-BR")}</p>
-                )}
+                {itemDevolverLocacao.dataVencimentoLocacao && (() => {
+                  const dias = Math.ceil((new Date(itemDevolverLocacao.dataVencimentoLocacao + "T00:00:00").getTime() - Date.now()) / 86400000);
+                  return (
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-xs text-amber-600">Vencimento: {new Date(itemDevolverLocacao.dataVencimentoLocacao + "T00:00:00").toLocaleDateString("pt-BR")}</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${dias <= 0 ? "bg-red-600 text-white" : dias <= 7 ? "bg-orange-500 text-white" : "bg-amber-200 text-amber-800"}`}>
+                        {dias <= 0 ? `⚠ VENCIDO há ${Math.abs(dias)}d` : `Vence em ${dias}d`}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
               <p className="text-sm text-gray-600">
                 Ao confirmar, o equipamento será marcado como devolvido ao fornecedor e o item será <strong>desativado</strong> do almoxarifado.
@@ -5951,6 +6010,110 @@ export default function AlmoxarifadoPage() {
           </div>
         </div>
       )}
+      {/* ── Rev. 4345 — Sticky bar devolução em lote de locados ───────── */}
+      {selecionadosLocacao.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-3 px-6 py-3 bg-amber-900 text-white shadow-2xl">
+          <div className="flex items-center gap-3">
+            <CheckSquare className="h-5 w-5 text-amber-300" />
+            <span className="text-sm font-semibold">{selecionadosLocacao.size} locado{selecionadosLocacao.size !== 1 ? "s" : ""} selecionado{selecionadosLocacao.size !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSelecionadosLocacao(new Set())} className="px-3 py-1.5 text-xs font-medium text-amber-200 hover:text-white border border-amber-700 rounded-lg transition">Limpar</button>
+            <button onClick={() => setModalDevolverLocacaoLote(true)} className="px-4 py-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 rounded-lg transition flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4" /> Devolver {selecionadosLocacao.size}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Rev. 4345 — Modal devolução em lote de locados ─────────────── */}
+      {modalDevolverLocacaoLote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => !isDevolvendoLote && setModalDevolverLocacaoLote(false)} />
+          <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-amber-500" /> Devolver {selecionadosLocacao.size} Equipamento{selecionadosLocacao.size !== 1 ? "s" : ""}
+              </h2>
+              {!isDevolvendoLote && <button onClick={() => setModalDevolverLocacaoLote(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>}
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-gray-600">
+                Os {selecionadosLocacao.size} equipamento{selecionadosLocacao.size !== 1 ? "s" : ""} selecionado{selecionadosLocacao.size !== 1 ? "s" : ""} serão marcados como devolvidos ao fornecedor e <strong>desativados</strong> do almoxarifado.
+              </p>
+              <div>
+                <label className="text-xs font-medium text-gray-700">Observação (opcional)</label>
+                <textarea rows={2} placeholder="Ex: Devolvidos ao término do contrato"
+                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400 resize-none"
+                  value={obsDevolucaoLocacaoLote}
+                  onChange={e => setObsDevolucaoLocacaoLote(e.target.value)}
+                  disabled={isDevolvendoLote} />
+              </div>
+              <div className="flex gap-3 pt-1 border-t border-gray-100">
+                <button onClick={() => setModalDevolverLocacaoLote(false)} disabled={isDevolvendoLote} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition disabled:opacity-50">Cancelar</button>
+                <button
+                  onClick={confirmarDevolverLocacaoLote}
+                  disabled={isDevolvendoLote}
+                  className="relative flex-1 h-9 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition disabled:opacity-60 overflow-hidden flex items-center justify-center gap-2"
+                >
+                  <span className="absolute inset-0 left-0 bg-white/15 transition-all" style={{ width: `${devolverLocacaoLoteProgress}%` }} />
+                  {isDevolvendoLote ? `Devolvendo… ${devolverLocacaoLoteProgress}%` : `Confirmar Devolução`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Rev. 4345 — Modal Renovar Locação ───────────────────────────── */}
+      {modalRenovarLocacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setModalRenovarLocacao(null)} />
+          <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <CalendarPlus className="h-5 w-5 text-emerald-500" /> Renovar Locação
+              </h2>
+              <button onClick={() => setModalRenovarLocacao(null)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                <p className="text-sm font-semibold text-emerald-800">{modalRenovarLocacao.item.nome}</p>
+                {modalRenovarLocacao.item.fornecedorLocacao && (
+                  <p className="text-xs text-emerald-600 mt-0.5">Fornecedor: {modalRenovarLocacao.item.fornecedorLocacao}</p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700">Nova data de vencimento da locação</label>
+                <input
+                  type="date"
+                  value={novaDataVencLocacao}
+                  onChange={e => setNovaDataVencLocacao(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
+                />
+              </div>
+              <div className="flex gap-3 pt-1 border-t border-gray-100">
+                <button onClick={() => setModalRenovarLocacao(null)} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition">Cancelar</button>
+                <button
+                  onClick={() => {
+                    if (!novaDataVencLocacao) { toast.error("Selecione a nova data de vencimento."); return; }
+                    atualizarMut.mutate(
+                      { id: modalRenovarLocacao.item.id, companyId, dataVencimentoLocacao: novaDataVencLocacao } as any,
+                      { onSuccess: () => { setModalRenovarLocacao(null); toast.success("Locação renovada!"); } }
+                    );
+                  }}
+                  disabled={atualizarMut.isPending}
+                  className="flex-1 h-9 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {atualizarMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Confirmar Renovação
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </DashboardLayout>
   );
 }

@@ -978,6 +978,8 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       assinaturaEntregadorUrl:  z.string().optional(),
       assinaturaRecebedorNome:  z.string().min(1).max(255).optional(),
       assinaturaRecebedorUrl:   z.string().optional(),
+      // Rev. 4345 — quantidade de unidades físicas (padrão 1).
+      quantidade: z.number().int().min(1).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1015,6 +1017,7 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
         funcionarioResponsavelNome: input.funcionarioResponsavelNome ?? null,
         observacoes: input.observacoes ?? null,
         ocAnteriorId: input.ocAnteriorId ?? null,
+        quantidade: input.quantidade ?? 1,
       }).returning({ id: equipamentosLocados.id });
 
       // Rev. 2465 — Token HMAC pro comprovante PDF público (só quando há
@@ -1096,6 +1099,8 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       // (ex.: item importado/cadastrado com locadora errada — "nosso" em vez
       // de "Minas Locc"). Diferente do rename em lote, atinge só este item.
       fornecedorNome: z.string().max(255).nullable().optional(),
+      // Rev. 4345 — quantidade de unidades físicas.
+      quantidade: z.number().int().min(1).nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1118,6 +1123,8 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       map("observacoes", input.observacoes);
       map("codigoInternoErp", input.codigoInternoErp);
       map("codigoPatrimonioFornecedor", input.codigoPatrimonioFornecedor);
+      // Rev. 4345 — quantidade de unidades físicas.
+      if (input.quantidade != null) map("quantidade", input.quantidade);
       // Rev. 2553 — normaliza fornecedor: trim, ou null quando vazio.
       if (input.fornecedorNome !== undefined) {
         update.fornecedorNome = input.fornecedorNome && input.fornecedorNome.trim()
