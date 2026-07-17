@@ -1508,7 +1508,7 @@ function PTDetalheDialog({
   const [liberarOpen, setLiberarOpen] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
   const [concluirForm, setConcluirForm] = useState({
-    conclusaoSolicitanteNome: "", conclusaoData: new Date().toISOString().slice(0, 10),
+    conclusaoSolicitanteNome: "", conclusaoData: new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }),
     conclusaoHoraInicio: "", conclusaoHoraFim: "",
   });
   const [liberarForm, setLiberarForm] = useState({
@@ -1952,7 +1952,7 @@ function PTDetalheDialog({
                                     {env.funcao && <p className="text-xs text-slate-400 truncate">{env.funcao}</p>}
                                     {signed && assSig?.assinadoEm ? (
                                       <p className="text-xs text-emerald-600 mt-0.5 font-medium">
-                                        ✓ {new Date(assSig.assinadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                        ✓ {new Date(assSig.assinadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
                                       </p>
                                     ) : (
                                       <p className="text-xs text-amber-500 mt-0.5">⏳ Aguardando assinatura</p>
@@ -2015,7 +2015,7 @@ function PTDetalheDialog({
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {[
                           { label: "Solicitante", val: pt.conclusaoSolicitanteNome },
-                          { label: "Data", val: pt.conclusaoData },
+                          { label: "Data", val: pt.conclusaoData ? pt.conclusaoData.slice(0,10).split("-").reverse().join("/") : undefined },
                           { label: "Início", val: pt.conclusaoHoraInicio },
                           { label: "Fim", val: pt.conclusaoHoraFim },
                         ].map(({ label, val }) => val ? (
@@ -2066,7 +2066,7 @@ function PTDetalheDialog({
                   </>)}
                   {pt.status === "liberada" && (
                     <Button onClick={() => {
-                      setConcluirForm({ conclusaoSolicitanteNome: pt.solicitanteNome ?? "", conclusaoData: new Date().toISOString().slice(0, 10), conclusaoHoraInicio: "", conclusaoHoraFim: "" });
+                      setConcluirForm({ conclusaoSolicitanteNome: pt.solicitanteNome ?? "", conclusaoData: new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }), conclusaoHoraInicio: "", conclusaoHoraFim: "" });
                       setConcluirOpen(true);
                     }} className="bg-blue-600 hover:bg-blue-700 text-white">
                       <CheckCircle2 className="h-4 w-4 mr-1.5" /> Concluir PT

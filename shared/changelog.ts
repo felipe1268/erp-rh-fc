@@ -1,4 +1,26 @@
 /**
+ * Rev. 4326 - PT DE SERVIÇO: FIX HORÁRIO UTC → BRASÍLIA + DATA ISO → BR
+ *
+ * PROBLEMA:
+ *   Na tela de Permissão de Trabalho (PermissaoTrabalho.tsx), duas falhas de exibição:
+ *   1. Horário de assinatura (✓ 02/07, 00:43) era UTC em vez de Brasília (UTC-3):
+ *      `toLocaleString("pt-BR", {...})` sem timeZone converte na TZ local do ambiente
+ *      (UTC no servidor/iOS Safari), exibindo 3h a menos que o horário real.
+ *   2. Data de conclusão exibida no formato ISO "2026-07-02" em vez de "02/07/2026".
+ *   3. Default do formulário "Concluir PT" usava `new Date().toISOString().slice(0,10)`
+ *      (data UTC), que pode mostrar dia errado quando chamado antes da meia-noite de Brasília.
+ *
+ * SOLUÇÃO (Rev. 4326):
+ *   1. `assSig.assinadoEm` → adiciona `timeZone: "America/Sao_Paulo"` no `toLocaleString`.
+ *   2. `pt.conclusaoData` → `.slice(0,10).split("-").reverse().join("/")` converte "YYYY-MM-DD" → "DD/MM/YYYY".
+ *   3. Dois `new Date().toISOString().slice(0,10)` → `new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })`.
+ *      (padrão já usado para `today` na linha 385 do mesmo arquivo)
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/sst/PermissaoTrabalho.tsx (3 pontos)
+ */
+
+/**
  * Rev. 4325 - SCORECARD RH/FOLHA: BH FILTRADO POR ALOCAÇÃO REAL (site_periods) — MESMO PADRÃO DA FOLHA
  *
  * PROBLEMA:
