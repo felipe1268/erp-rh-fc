@@ -1760,6 +1760,15 @@ export const scorecardRouter = router({
             -- de dias na subquery de payroll_frac abaixo, mas não puxa novos funcionários.
             SELECT DISTINCT employee_id FROM site_periods
           ),
+          -- Rev. 4333: efetivo do período — funcionários alocados com sobreposição com o filtro
+          -- escolhido pelo usuário. É a âncora do LEFT JOIN em custos (garante que todos aparecem,
+          -- mesmo sem lançamento de folha processado).
+          period_emps AS (
+            SELECT DISTINCT sp.employee_id
+            FROM site_periods sp
+            WHERE sp.periodo_fim   >= (${mesFeriasIni} || '-01')::date
+              AND sp.periodo_inicio <= (${mesFeriasFim} || '-28')::date
+          ),
           payroll_frac AS (
             SELECT
               pp."employeeId"                                        AS employee_id,
@@ -1829,55 +1838,61 @@ export const scorecardRouter = router({
             WHERE vr."employeeId" IN (SELECT employee_id FROM relevant_emp)
           ),
           custos AS (
+            -- Rev. 4333: âncora = period_emps (efetivo do período), LEFT JOIN no payroll.
+            -- Garante que TODO funcionário alocado aparece, mesmo sem folha processada.
             SELECT
-              pf.employee_id,
+              pe.employee_id,
               e."nomeCompleto"                                      AS nome,
               e."fotoUrl"                                           AS foto_url,
               e.matricula,
               e.cargo,
               e."salarioBase"                                       AS salario_base_cadastro,
-              COUNT(DISTINCT pf.mes_referencia)                    AS meses_na_obra,
-              SUM(pf.dias_na_obra)                                 AS total_dias_na_obra,
-              SUM(ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS salario_bruto_total,
-              SUM(ROUND(pf.he_valor      * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS he_total,
-              SUM(ROUND(pf.adicionais    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS adicionais_total,
-              SUM(ROUND(pf.inss_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS inss_total,
-              SUM(ROUND(pf.fgts_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS fgts_total,
-              SUM(ROUND(pf.liquido       * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS liquido_total,
-              SUM(ROUND(COALESCE(v.va_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS va_total,
-              SUM(ROUND(
+              e."tipoContrato"                                      AS tipo_contrato,
+              COALESCE(COUNT(DISTINCT pf.mes_referencia), 0)       AS meses_na_obra,
+              COALESCE(SUM(pf.dias_na_obra), 0)                    AS total_dias_na_obra,
+              COALESCE(SUM(ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS salario_bruto_total,
+              COALESCE(SUM(ROUND(pf.he_valor      * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS he_total,
+              COALESCE(SUM(ROUND(pf.adicionais    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS adicionais_total,
+              COALESCE(SUM(ROUND(pf.inss_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS inss_total,
+              COALESCE(SUM(ROUND(pf.fgts_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS fgts_total,
+              COALESCE(SUM(ROUND(pf.liquido       * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS liquido_total,
+              COALESCE(SUM(ROUND(COALESCE(v.va_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS va_total,
+              COALESCE(SUM(ROUND(
                 (pf.salario_bruto + pf.fgts_valor + pf.he_valor + pf.adicionais
                  + COALESCE(v.va_total,0))
                 * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2
-              )) AS custo_folha_empresa,
-              JSON_AGG(
-                JSON_BUILD_OBJECT(
-                  'mes',          pf.mes_referencia,
-                  'diasNaObra',   pf.dias_na_obra,
-                  'diasNoMes',    pf.dias_no_mes,
-                  'fracao',       ROUND(pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 3),
-                  'salarioBruto', ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
-                  'horasExtras',  ROUND(pf.he_valor      * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
-                  'adicionais',   ROUND(pf.adicionais    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
-                  'va',           ROUND(COALESCE(v.va_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
-                  'fgts',         ROUND(pf.fgts_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
-                  'inss',         ROUND(pf.inss_valor     * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
-                  'liquido',      ROUND(pf.liquido        * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
-                  'custoEmpresa', ROUND(
-                    (pf.salario_bruto + pf.fgts_valor + pf.he_valor + pf.adicionais
-                     + COALESCE(v.va_total,0))
-                    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2
-                  ),
-                  'folhaStatus',  pf.folha_status
-                ) ORDER BY pf.mes_referencia
-              ) AS historico_mensal
-            FROM pf
-            -- Rev. 4303: sem filtro de companyId — o funcionário pode ser de empresa diferente da obra
-            JOIN employees e ON e.id = pf.employee_id
+              )), 0)                                               AS custo_folha_empresa,
+              COALESCE(
+                JSON_AGG(
+                  JSON_BUILD_OBJECT(
+                    'mes',          pf.mes_referencia,
+                    'diasNaObra',   pf.dias_na_obra,
+                    'diasNoMes',    pf.dias_no_mes,
+                    'fracao',       ROUND(pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 3),
+                    'salarioBruto', ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                    'horasExtras',  ROUND(pf.he_valor      * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                    'adicionais',   ROUND(pf.adicionais    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                    'va',           ROUND(COALESCE(v.va_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                    'fgts',         ROUND(pf.fgts_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                    'inss',         ROUND(pf.inss_valor     * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                    'liquido',      ROUND(pf.liquido        * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                    'custoEmpresa', ROUND(
+                      (pf.salario_bruto + pf.fgts_valor + pf.he_valor + pf.adicionais
+                       + COALESCE(v.va_total,0))
+                      * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2
+                    ),
+                    'folhaStatus',  pf.folha_status
+                  ) ORDER BY pf.mes_referencia
+                ) FILTER (WHERE pf.employee_id IS NOT NULL),
+                '[]'::json
+              )                                                    AS historico_mensal
+            FROM period_emps pe
+            JOIN employees e ON e.id = pe.employee_id
+            LEFT JOIN pf ON pf.employee_id = pe.employee_id
             LEFT JOIN vr_data v ON v.employee_id = pf.employee_id AND v.mes_referencia = pf.mes_referencia
-            GROUP BY pf.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase"
+            GROUP BY pe.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase", e."tipoContrato"
           )
-          SELECT * FROM custos ORDER BY custo_folha_empresa DESC NULLS LAST
+          SELECT * FROM custos ORDER BY custo_folha_empresa DESC NULLS LAST, nome ASC
         `),
 
         db.execute(sql`
@@ -2047,31 +2062,48 @@ export const scorecardRouter = router({
         f.historico_mensal = hist;
       }
 
-      // Rev. 4307 — push PJ contractors into funcs array
+      // Rev. 4333 — push PJ contractors into funcs array.
+      // Com o novo period_emps LEFT JOIN, um PJ que também esteja em obra_funcionarios /
+      // employee_site_history já aparece em funcs com custo_folha_empresa = 0.
+      // Nesse caso ATUALIZAMOS o registro existente em vez de duplicar.
       for (const pj of pjRows) {
-        funcs.push({
-          employee_id:         pj.employee_id,
-          nome:                pj.nome,
-          foto_url:            pj.foto_url,
-          matricula:           pj.numero_contrato ?? pj.matricula,
-          cargo:               pj.cargo,
-          tipo_pessoa:         'PJ',
-          razao_social:        pj.razao_social,
-          meses_na_obra:       pj.meses_ativos,
-          total_dias_na_obra:  n(pj.meses_ativos) * 30,
-          salario_bruto_total: n(pj.custo_total),
-          he_total:            0,
-          va_total:            0,
-          adicionais_total:    0,
-          inss_total:          0,
-          fgts_total:          0,
-          liquido_total:       0,
-          ferias_total:        0,
-          seguro_vida_total:   0,
-          custo_folha_empresa: 0,
-          custo_total_empresa: n(pj.custo_total),
-          historico_mensal:    Array.isArray(pj.historico_mensal) ? pj.historico_mensal : [],
-        });
+        const existingIdx = funcs.findIndex((f: any) => n(f.employee_id) === n(pj.employee_id));
+        if (existingIdx >= 0) {
+          const ex = funcs[existingIdx];
+          ex.tipo_pessoa         = 'PJ';
+          ex.razao_social        = pj.razao_social;
+          ex.matricula           = pj.numero_contrato ?? ex.matricula;
+          ex.meses_na_obra       = pj.meses_ativos;
+          ex.total_dias_na_obra  = n(pj.meses_ativos) * 30;
+          ex.salario_bruto_total = n(pj.custo_total);
+          ex.custo_folha_empresa = 0;
+          ex.custo_total_empresa = n(pj.custo_total);
+          ex.historico_mensal    = Array.isArray(pj.historico_mensal) ? pj.historico_mensal : [];
+        } else {
+          funcs.push({
+            employee_id:         pj.employee_id,
+            nome:                pj.nome,
+            foto_url:            pj.foto_url,
+            matricula:           pj.numero_contrato ?? pj.matricula,
+            cargo:               pj.cargo,
+            tipo_pessoa:         'PJ',
+            razao_social:        pj.razao_social,
+            meses_na_obra:       pj.meses_ativos,
+            total_dias_na_obra:  n(pj.meses_ativos) * 30,
+            salario_bruto_total: n(pj.custo_total),
+            he_total:            0,
+            va_total:            0,
+            adicionais_total:    0,
+            inss_total:          0,
+            fgts_total:          0,
+            liquido_total:       0,
+            ferias_total:        0,
+            seguro_vida_total:   0,
+            custo_folha_empresa: 0,
+            custo_total_empresa: n(pj.custo_total),
+            historico_mensal:    Array.isArray(pj.historico_mensal) ? pj.historico_mensal : [],
+          });
+        }
       }
 
       const mensalMap = new Map<string, any>();

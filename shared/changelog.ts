@@ -1,4 +1,29 @@
 /**
+ * Rev. 4333 - SCORECARD RH/FOLHA: EFETIVO COMPLETO — period_emps LEFT JOIN + badge "Sem folha"
+ *
+ * PROBLEMA: a CTE `custos` começava de `payroll_payments` (INNER JOIN implícito).
+ *   Funcionários alocados na obra sem folha processada (ex: admitido recentemente, ou
+ *   engenheiro PJ sem pj_contract no período) sumiam completamente do relatório.
+ *
+ * SOLUÇÃO:
+ *   BACKEND (scorecard.ts — getCustosRH):
+ *   - Nova CTE `period_emps`: todos os funcionários de `site_periods` com sobreposição
+ *     com o período filtrado (periodo_fim >= ini AND periodo_inicio <= fim).
+ *   - `custos` reescrita: FROM period_emps LEFT JOIN pf (payroll).
+ *     Todos os agregados com COALESCE(..., 0); JSON_AGG usa FILTER (WHERE pf.employee_id IS NOT NULL).
+ *     Adicionado `e."tipoContrato" AS tipo_contrato` no SELECT e GROUP BY.
+ *   - PJ dedup: se PJ já aparece em funcs via period_emps (com custo=0), ATUALIZA o registro
+ *     em vez de duplicar (findIndex + update in-place).
+ *
+ *   FRONTEND (ScorecardTab.tsx):
+ *   - Badge ⚠ "Sem folha" (amber) para funcionário CLT com meses_na_obra = 0.
+ *     Indica: "está no efetivo da obra mas sem lançamento de folha no período".
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers/scorecard.ts, client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4332 - SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — TOGGLE MINUTO / HORA / DIA / SEMANA / MÊS
  *
  * PROBLEMA: toggle só tinha Dia/Semana/Mês; usuário queria granularidade de hora e minuto.

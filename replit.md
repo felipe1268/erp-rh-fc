@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4332** — **SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — TOGGLE MIN/HORA/DIA/SEMANA/MÊS.** 5 pills: custoHora=custoDia÷8; custoMinuto=custoHora÷60. labelPeriodo contextual. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4333** — **SCORECARD RH/FOLHA: EFETIVO COMPLETO — `period_emps` LEFT JOIN + badge "Sem folha".** `custos` CTE ancorando em `period_emps` (efetivo do período) LEFT JOIN payroll. PJ dedup update in-place. Badge ⚠ amber para CLT sem folha. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4331** — **SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — REDESIGN AMARELO PÁLIDO + VALOR DESTAQUE.** bg-yellow-50, border-yellow-200, rounded-2xl. Valor text-5xl font-black com R$ + centavos. Toggle pills horizontais; barra de decomposição colorida + legenda %. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4332** — **SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — TOGGLE MIN/HORA/DIA/SEMANA/MÊS.** 5 pills: custoHora=custoDia÷8; custoMinuto=custoHora÷60. labelPeriodo contextual. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

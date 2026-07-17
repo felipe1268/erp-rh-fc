@@ -1491,10 +1491,14 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                         );
                                       })()}
                                       <div>
-                                        <div className="flex items-center gap-1 leading-tight">
+                                        <div className="flex items-center gap-1 leading-tight flex-wrap">
                                           <p className="font-medium text-gray-800">{f.nome}</p>
                                           {f.tipo_pessoa === 'PJ' && (
                                             <span className="px-1 py-0 rounded text-[8px] font-bold bg-purple-100 text-purple-700 border border-purple-200">PJ</span>
+                                          )}
+                                          {/* Rev. 4333: badge para quem está no efetivo mas sem folha processada */}
+                                          {f.tipo_pessoa !== 'PJ' && Number(f.meses_na_obra ?? 0) === 0 && (
+                                            <span className="px-1 py-0 rounded text-[8px] font-bold bg-amber-100 text-amber-700 border border-amber-300" title="Alocado na obra, mas sem lançamento de folha no período">⚠ Sem folha</span>
                                           )}
                                         </div>
                                         <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
