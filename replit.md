@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4346** — **FOLHA DE PAGAMENTO: CORREÇÃO — FUNCIONÁRIOS "NÃO PAGAR" VOLTAVAM AO PAINEL DE ALERTA.** `sincronizarValeJson` persistia `status` ('rejeitado'/'calculado') no snapshot mas nunca limpava `temAlerta`/`bloqueado`. Na próxima leitura de `getPeriod`, o snapshot ainda tinha `temAlerta: true` → funcionários reapareciam. Fix: mapear `temAlerta: status === 'bloqueado'` e `bloqueado: status === 'bloqueado'` dentro de `sincronizarValeJson`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4345** — **ALMOXARIFADO: 5 MELHORIAS LISTA LEONARDO/17-07.** Item 2: seleção múltipla de locados para devolução em lote (checkbox + sticky bar âmbar + modal progresso 0→100%). Item 5: campo `quantidade` em `equipamentos_locados` (ColFix + schema + server + Locados.tsx). Item 6: botão Renovar Locação (CalendarPlus → modal com input date → `atualizarItem`). Item 7: badge vencimento colorido no modal Devolver (vermelho/laranja/âmbar). Item 8: `onError` em `proprioCriar` para exibir erros do servidor em toast. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4344** — **ALMOXARIFADO: CORREÇÃO — PAINEL DE VALOR TOTAL NÃO ATUALIZAVA APÓS OPERAÇÕES.** 4 mutations (`registerExit`, `returnLoan`, `criarMut`, `atualizarMut`) chamavam só `refetch()` e esqueciam `utils.warehouse.getDashboard.invalidate()`. Resultado: lista de itens refrescava mas o card R$ total ficava desatualizado. Fix: adicionado `getDashboard.invalidate()` nas 4 mutations. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4344** — **ALMOXARIFADO: CORREÇÃO — PAINEL DE VALOR TOTAL NÃO ATUALIZAVA APÓS OPERAÇÕES.** 4 mutations esqueciam `getDashboard.invalidate()`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4343** — **EQUIPAMENTOS PRÓPRIOS: SELEÇÃO MÚLTIPLA + TRANSFERÊNCIA EM LOTE.** Checkbox em cada card + sticky bar azul + modal progresso. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4341** — **EQUIPAMENTOS PRÓPRIOS: AGRUPAMENTO POR NOME (accordion inline).** `dataAgrupada`, grupos expandíveis com count badge + chips de localização. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4340** — **EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS.** Nova tabela + coluna `transferencia_pendente_id`. 5 procedures tRPC. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4339** — **ALMOXARIFADO: RECEBER MATERIAL EXCLUI OCs DE LOCAÇÃO.** `listPendingOCs` filtra `isLocacao IS NULL OR isLocacao = false`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

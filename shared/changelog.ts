@@ -1,4 +1,28 @@
 /**
+ * Rev. 4346 - FOLHA DE PAGAMENTO: CORREÇÃO — FUNCIONÁRIOS "NÃO PAGAR" VOLTAVAM AO PAINEL DE ALERTA
+ *
+ * CAUSA-RAIZ:
+ * `sincronizarValeJson` (chamada ao fim de `decidirVale`) persistia o novo `status`
+ * ('calculado' ou 'rejeitado') no snapshot `payroll_periods.valeResultJson`, mas NUNCA
+ * atualizava os campos `temAlerta` e `bloqueado`. Resultado: ao recarregar a página,
+ * `getPeriod` lia o snapshot com `temAlerta: true` original → todos os funcionários
+ * decididos reapareciam no painel âmbar "Decisão Necessária", como se a decisão nunca
+ * tivesse sido salva.
+ *
+ * FIX:
+ * Em `sincronizarValeJson` (payrollEngine.ts ~linha 448), adicionados dois campos ao
+ * objeto retornado no map de funcionários:
+ *   - `temAlerta: status === 'bloqueado'`   (false p/ calculado/rejeitado)
+ *   - `bloqueado: status === 'bloqueado'`   (false p/ calculado/rejeitado)
+ * Agora o snapshot persiste corretamente a decisão do usuário; na próxima leitura
+ * os funcionários aprovados/rejeitados não reaparecem no painel de alertas.
+ *
+ * ARQUIVOS: server/routers/payrollEngine.ts
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4345 - ALMOXARIFADO: MELHORIAS COMPLETAS DA LISTA LEONARDO/17-07
  *
  * ITENS IMPLEMENTADOS:

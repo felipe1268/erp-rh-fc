@@ -449,6 +449,8 @@ async function sincronizarValeJson(db: any, companyId: number, mesReferencia: st
         irRetido: ir,
         valorLiquido: liq,
         status,
+        temAlerta: status === 'bloqueado',
+        bloqueado: status === 'bloqueado',
         editadoManualmente: editado || !!f.editadoManualmente,
       };
     });
