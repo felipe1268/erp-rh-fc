@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, ZoomIn, Undo2, Pencil, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, ChevronRight, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, ZoomIn, Undo2, Pencil, Package, PackageCheck, type LucideIcon } from "lucide-react";
 import { ModalConfirmacaoAuditoria } from "@/components/almoxarifado/ModalConfirmacaoAuditoria";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
@@ -492,6 +492,10 @@ export default function EquipamentosLocados() {
     { enabled: !!companyId }
   );
   const [ocSelecionada, setOcSelecionada] = useState<{ id: number; numeroOc: string } | null>(null);
+  // Rev. 4342 — dados completos da OC selecionada (itens com quantidade esperada)
+  const [ocSelecionadaFull, setOcSelecionadaFull] = useState<any | null>(null);
+  // Rev. 4342 — quantidade recebida por item (idx → valor digitado pelo operador)
+  const [qtdRecebidaPorItem, setQtdRecebidaPorItem] = useState<Record<number, string>>({});
   // Rev. 2372 — Picker visual de devolução (cards grandes com foto). Aberto
   // pelo botão "DEVOLVER LOCAÇÃO" do Almoxarifado (?action=devolver) ou pelo
   // botão hero da própria página. Operador clica no card → abre direto o
@@ -1093,6 +1097,25 @@ export default function EquipamentosLocados() {
       if (!recRecNome.trim()) return toast.error("Nome do recebedor (FC) é obrigatório.");
       if (!recRecSig)         return toast.error("Assinatura do recebedor é obrigatória.");
     }
+    // Rev. 4342 — Auto-appenda divergências de quantidade nas observações.
+    let obsComDivergencia = form.observacoes || "";
+    if (ocSelecionadaFull && (ocSelecionadaFull.itens || []).length > 0) {
+      const linhasDivergencia: string[] = [];
+      (ocSelecionadaFull.itens as any[]).forEach((it: any, idx: number) => {
+        const esperado = Number(it.quantidade) || 0;
+        const recStr = qtdRecebidaPorItem[idx];
+        const recebido = recStr === undefined || recStr === "" ? esperado : (Number(recStr.replace(",", ".")) || 0);
+        const diff = recebido - esperado;
+        if (diff !== 0) {
+          const sinal = diff < 0 ? "FALTANDO" : "EXCESSO";
+          linhasDivergencia.push(`${sinal} ${Math.abs(diff)} ${it.unidade || "un"} de "${it.descricao}" (esperado ${esperado}, recebido ${recebido})`);
+        }
+      });
+      if (linhasDivergencia.length > 0) {
+        const bloco = `[DIVERGÊNCIA NO RECEBIMENTO]\n${linhasDivergencia.join("\n")}`;
+        obsComDivergencia = obsComDivergencia ? `${obsComDivergencia}\n\n${bloco}` : bloco;
+      }
+    }
     criar.mutate({
       companyId,
       descricao: form.descricao,
@@ -1106,7 +1129,7 @@ export default function EquipamentosLocados() {
       valorDiario: parseFloat(form.valorDiario.replace(",", ".")) || undefined,
       valorMensal: parseFloat(form.valorMensal.replace(",", ".")) || undefined,
       funcionarioResponsavelNome: form.funcionarioResponsavelNome || undefined,
-      observacoes: form.observacoes || undefined,
+      observacoes: obsComDivergencia || undefined,
       fotosRecebimento: fotos,
       ordemCompraId: ocSelecionada?.id, // Rev. 2371 — vincula OC quando o user clicou em "Receber esta OC"
       // Rev. 2465 — assinaturas só quando não é fluxo de importação em lote.
@@ -1142,6 +1165,9 @@ export default function EquipamentosLocados() {
       observacoes: `Recebimento referente à OC ${oc.numeroOc}`,
     });
     setOcSelecionada({ id: oc.id, numeroOc: oc.numeroOc });
+    // Rev. 4342 — guarda OC completa (itens com quantidade esperada) e zera conferência
+    setOcSelecionadaFull(oc);
+    setQtdRecebidaPorItem({});
   }
   function fazerDevolucao() {
     if (devFotos.length === 0) return toast.error("Foto de devolução é obrigatória.");
@@ -2651,160 +2677,346 @@ export default function EquipamentosLocados() {
         const noFluxoImport = importQueue.length > 0 || importTotal > 0;
         const titulo = noFluxoImport
           ? `Cadastrar Equipamento Alugado (${importTotal - importQueue.length} de ${importTotal})`
-          : `Receber Locação na Obra · Etapa ${recEtapa}/2`;
+          : ocSelecionada
+            ? `Receber Locação · Etapa ${recEtapa}/2`
+            : "Selecionar Pedido de Locação";
         const saveLbl = noFluxoImport
           ? (importQueue.length > 0 ? "Salvar e próximo" : "Confirmar recebimento")
           : (recEtapa === 1 ? "Avançar para assinaturas →" : "Confirmar recebimento");
         return (
-        <Modal title={titulo} onClose={() => { setModal(false); setOcSelecionada(null); resetRecAssinaturas(); }} onSave={salvar} loading={criar.isPending} saveLabel={saveLbl}>
+        <Modal title={titulo} onClose={() => { setModal(false); setOcSelecionada(null); setOcSelecionadaFull(null); setQtdRecebidaPorItem({}); resetRecAssinaturas(); }} onSave={salvar} loading={criar.isPending} saveLabel={saveLbl}>
+          {/* Rev. 4342 — indicador de progresso com labels de etapa */}
           {!noFluxoImport && (
-            <div className="flex items-center gap-2 mb-3 text-xs">
-              <div className={`flex-1 h-1.5 rounded-full ${recEtapa >= 1 ? "bg-emerald-500" : "bg-slate-200"}`} />
-              <div className={`flex-1 h-1.5 rounded-full ${recEtapa >= 2 ? "bg-emerald-500" : "bg-slate-200"}`} />
+            <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-1.5">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${recEtapa >= 1 ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500"}`}>1</div>
+                <span className={`text-xs font-semibold ${recEtapa === 1 ? "text-emerald-700" : "text-slate-400"}`}>Conferência</span>
+              </div>
+              <div className={`flex-1 h-1 rounded-full ${recEtapa >= 2 ? "bg-emerald-500" : "bg-slate-200"}`} />
+              <div className="flex items-center gap-1.5">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${recEtapa >= 2 ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500"}`}>2</div>
+                <span className={`text-xs font-semibold ${recEtapa === 2 ? "text-emerald-700" : "text-slate-400"}`}>Assinaturas</span>
+              </div>
             </div>
           )}
-          {/* ───── ETAPA 1 (dados+fotos) ou modo importação em lote ───── */}
+
+          {/* ───── ETAPA 1 (conferência + fotos) ou modo importação em lote ───── */}
           {(noFluxoImport || recEtapa === 1) && (<>
-          {/* Rev. 2374 — Banner da fila de importação do Almoxarifado */}
+
+          {/* Banner fila de importação */}
           {importTotal > 0 && (
-            <div className="bg-orange-50 border-2 border-orange-300 rounded-lg px-3 py-2 flex items-center gap-3 -mt-1 mb-2">
+            <div className="bg-orange-50 border-2 border-orange-300 rounded-xl px-3 py-2 flex items-center gap-3 mb-3">
               <Truck className="h-5 w-5 text-orange-700 shrink-0" />
               <div className="flex-1">
-                <p className="text-sm font-bold text-orange-900">
-                  Importando do Almoxarifado · {importTotal - importQueue.length} de {importTotal}
-                </p>
-                <p className="text-[11px] text-orange-700/90 leading-tight">
-                  Preencha fornecedor, datas e ajuste a foto. Restam {importQueue.length} equipamento{importQueue.length !== 1 ? "s" : ""} na fila.
-                </p>
+                <p className="text-sm font-bold text-orange-900">Importando do Almoxarifado · {importTotal - importQueue.length} de {importTotal}</p>
+                <p className="text-[11px] text-orange-700/90 leading-tight">Preencha fornecedor, datas e ajuste a foto. Restam {importQueue.length} equipamento{importQueue.length !== 1 ? "s" : ""} na fila.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => { setImportQueue([]); setImportTotal(0); toast.info("Importação cancelada."); }}
-                className="text-xs text-orange-700 hover:text-orange-900 font-medium underline"
-              >
-                Parar fila
-              </button>
+              <button type="button" onClick={() => { setImportQueue([]); setImportTotal(0); toast.info("Importação cancelada."); }} className="text-xs text-orange-700 hover:text-orange-900 font-medium underline">Parar fila</button>
             </div>
           )}
-          {/* Rev. 2371 — OCs de locação pendentes de recebimento. Almoxarife clica
-              numa OC pra pré-preencher o form (descrição, fornecedor, datas, valor)
-              e vincular o equipamento à OC via ordemCompraId. */}
-          {(() => {
+
+          {/* ── Rev. 4342 ── SELEÇÃO DE OC (quando nenhuma está selecionada) */}
+          {!ocSelecionada && !noFluxoImport && (() => {
             const ocs = (ocsPendentesQ.data || []) as any[];
-            if (ocsPendentesQ.isLoading) {
-              return (
-                <Section icon={FileText} title="Ordens de Compra pendentes de recebimento" tint="violet">
-                  <div className="text-xs text-slate-500 flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Buscando OCs de locação aprovadas…</div>
-                </Section>
-              );
-            }
-            if (ocs.length === 0 && !ocSelecionada) return null; // sem OCs e sem seleção → esconde seção, fluxo manual normal
+            if (ocsPendentesQ.isLoading) return (
+              <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-500">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+                <p className="text-sm">Buscando Ordens de Compra…</p>
+              </div>
+            );
+            if (ocs.length === 0) return null;
             return (
-              <Section icon={FileText} title={`Ordens de Compra pendentes${ocs.length ? ` (${ocs.length})` : ""}`} tint="violet">
-                {ocSelecionada ? (
-                  <div className="rounded-lg border-2 border-emerald-400 bg-emerald-50/60 p-3 flex items-start gap-3">
-                    <div className="rounded-full bg-emerald-500 text-white p-1.5 flex-shrink-0"><Check className="h-3.5 w-3.5" /></div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold text-emerald-900">Recebendo OC <span className="font-mono">{formatNumeroOcDisplay(ocSelecionada.numeroOc)}</span></div>
-                      <div className="text-[11px] text-emerald-700 mt-0.5">Os campos abaixo foram pré-preenchidos a partir da OC. Confira, anexe a(s) foto(s) e confirme.</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { setOcSelecionada(null); setForm({ ...EMPTY }); }}
-                      className="text-xs text-emerald-700 hover:text-emerald-900 underline whitespace-nowrap"
-                      title="Limpar OC selecionada e voltar ao modo manual">
-                      Trocar OC
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-[11px] text-slate-500 mb-2">Clique numa OC pra preencher automaticamente os dados do equipamento abaixo.</p>
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                      {ocs.map((oc: any) => {
-                        const it0 = (oc.itens || [])[0];
-                        const qtdItens = (oc.itens || []).length;
-                        return (
-                          <button
-                            key={oc.id}
-                            type="button"
-                            onClick={() => receberDaOC(oc)}
-                            className="w-full text-left rounded-lg border border-violet-200 hover:border-violet-400 hover:bg-violet-50/60 bg-white p-3 transition group">
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 text-[10px] font-bold uppercase tracking-wider">
-                                  <FileText className="h-2.5 w-2.5" /> OC {formatNumeroOcDisplay(oc.numeroOc)}
-                                </span>
-                                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
-                                  {oc.status}
-                                </span>
-                              </div>
-                              {oc.total != null && (
-                                <span className="text-xs font-bold text-emerald-700 whitespace-nowrap">{fmtMoney(Number(oc.total))}</span>
-                              )}
+              <div>
+                {/* Instrução grande e clara */}
+                <div className="text-center mb-4 py-3 bg-blue-50 rounded-xl border border-blue-100">
+                  <Package className="h-8 w-8 text-blue-500 mx-auto mb-1" />
+                  <p className="text-base font-bold text-blue-900">Qual pedido está chegando agora?</p>
+                  <p className="text-sm text-blue-600 mt-0.5">Toque no pedido que você vai receber</p>
+                </div>
+
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                  {ocs.map((oc: any) => {
+                    const totalEsperado = (oc.itens || []).reduce((s: number, it: any) => s + (Number(it.quantidade) || 0), 0);
+                    return (
+                      <button
+                        key={oc.id}
+                        type="button"
+                        onClick={() => receberDaOC(oc)}
+                        className="w-full bg-white rounded-2xl border-2 border-slate-200 hover:border-blue-400 active:scale-[0.98] p-4 text-left transition-all shadow-sm group"
+                      >
+                        {/* Cabeçalho OC */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-3 py-1 rounded-full bg-violet-100 text-violet-800 font-bold text-sm">
+                              OC {formatNumeroOcDisplay(oc.numeroOc)}
+                            </span>
+                            {oc.total != null && (
+                              <span className="text-sm font-bold text-emerald-700">{fmtMoney(Number(oc.total))}</span>
+                            )}
+                          </div>
+                          <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-blue-400 transition-colors" />
+                        </div>
+
+                        {/* Fornecedor */}
+                        {oc.fornecedorNome && (
+                          <div className="flex items-center gap-1.5 text-sm text-slate-600 mb-3">
+                            <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
+                            <span className="font-semibold">{oc.fornecedorNome}</span>
+                          </div>
+                        )}
+
+                        {/* Itens com quantidade esperada */}
+                        <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Itens do pedido</p>
+                          {(oc.itens || []).map((it: any, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold text-slate-700 flex-1 min-w-0 truncate">{it.descricao || "(sem descrição)"}</span>
+                              <span className="shrink-0 text-sm font-black text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-lg">
+                                {Number(it.quantidade) || 0} {it.unidade || "un"}
+                              </span>
                             </div>
-                            <div className="text-sm font-semibold text-slate-800 truncate">
-                              {it0?.descricao || "(sem descrição de item)"}
-                              {qtdItens > 1 && <span className="text-[11px] font-normal text-slate-500"> +{qtdItens - 1} item(s)</span>}
+                          ))}
+                          {(oc.itens || []).length > 1 && (
+                            <div className="pt-1 border-t border-slate-200 flex justify-between text-xs text-slate-500">
+                              <span>Total esperado</span>
+                              <span className="font-bold text-slate-700">{totalEsperado} unidades</span>
                             </div>
-                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-600">
-                              {oc.fornecedorNome && (
-                                <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" /> {oc.fornecedorNome}</span>
-                              )}
-                              {(oc.locacaoDataInicio || oc.locacaoDataFim) && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" /> {oc.locacaoDataInicio ? fmtDate(oc.locacaoDataInicio) : "—"} → {oc.locacaoDataFim ? fmtDate(oc.locacaoDataFim) : "—"}
-                                </span>
-                              )}
-                              {oc.locacaoDuracaoDias && (
-                                <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {oc.locacaoDuracaoDias}d</span>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </Section>
+                          )}
+                        </div>
+
+                        {/* Datas */}
+                        {(oc.locacaoDataInicio || oc.locacaoDataFim) && (
+                          <div className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>{oc.locacaoDataInicio ? fmtDate(oc.locacaoDataInicio) : "—"}</span>
+                            <span>→</span>
+                            <span>{oc.locacaoDataFim ? fmtDate(oc.locacaoDataFim) : "—"}</span>
+                            {oc.locacaoDuracaoDias && <span className="ml-1 text-slate-400">({oc.locacaoDuracaoDias} dias)</span>}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })()}
 
-          <Section icon={Truck} title="Equipamento" tint="emerald">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Field label="Descrição *"><input value={form.descricao} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} className="inp" placeholder="Ex: Betoneira 400L" /></Field>
-              <Field label="Categoria"><input value={form.categoria} onChange={e => setForm(p => ({ ...p, categoria: e.target.value }))} className="inp" placeholder="Ex: Equipamento de concretagem" /></Field>
-              <Field label="Patrim. do fornecedor"><input value={form.codigoPatrimonioFornecedor} onChange={e => setForm(p => ({ ...p, codigoPatrimonioFornecedor: e.target.value }))} className="inp" /></Field>
-              <Field label="N° de série"><input value={form.numeroSerie} onChange={e => setForm(p => ({ ...p, numeroSerie: e.target.value }))} className="inp" /></Field>
-              <Field label="Código interno ERP"><input value={form.codigoInternoErp} onChange={e => setForm(p => ({ ...p, codigoInternoErp: e.target.value }))} className="inp" /></Field>
+          {/* ── Rev. 4342 ── TELA PRINCIPAL: conferência + form (quando OC selecionada ou fluxo importação) */}
+          {(ocSelecionada || noFluxoImport) && (<>
+
+            {/* Banner OC selecionada */}
+            {ocSelecionada && (
+              <div className="rounded-2xl bg-emerald-600 text-white p-3 flex items-center gap-3 mb-4">
+                <div className="rounded-full bg-white/20 p-2 shrink-0">
+                  <PackageCheck className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-emerald-100 uppercase tracking-wide">Pedido selecionado</p>
+                  <p className="font-black text-lg leading-tight">OC {formatNumeroOcDisplay(ocSelecionada.numeroOc)}</p>
+                  {ocSelecionadaFull?.fornecedorNome && (
+                    <p className="text-sm text-emerald-100 truncate">{ocSelecionadaFull.fornecedorNome}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setOcSelecionada(null); setOcSelecionadaFull(null); setQtdRecebidaPorItem({}); setForm({ ...EMPTY }); }}
+                  className="text-xs text-emerald-200 hover:text-white underline whitespace-nowrap shrink-0"
+                >
+                  Trocar OC
+                </button>
+              </div>
+            )}
+
+            {/* ── CONFERÊNCIA DE ITENS ── seção principal */}
+            {ocSelecionadaFull && (ocSelecionadaFull.itens || []).length > 0 && (() => {
+              const itens = ocSelecionadaFull.itens as any[];
+              const divergencias = itens.map((it: any, idx: number) => {
+                const esperado = Number(it.quantidade) || 0;
+                const recStr = qtdRecebidaPorItem[idx];
+                const recebido = recStr === undefined || recStr === "" ? esperado : (Number(recStr.replace(",", ".")) || 0);
+                return { esperado, recebido, diff: recebido - esperado };
+              });
+              const temDivergencia = divergencias.some(d => d.diff !== 0);
+              const totalEsperado = divergencias.reduce((s, d) => s + d.esperado, 0);
+              const totalRecebido = divergencias.reduce((s, d) => s + d.recebido, 0);
+
+              return (
+                <div className="mb-4">
+                  {/* Header da seção */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex-1 h-px bg-slate-200" />
+                    <div className="flex items-center gap-1.5 bg-slate-100 rounded-full px-3 py-1">
+                      <ClipboardCheck className="h-3.5 w-3.5 text-slate-600" />
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Conferência dos itens</span>
+                    </div>
+                    <div className="flex-1 h-px bg-slate-200" />
+                  </div>
+
+                  {/* Instrução */}
+                  <p className="text-sm text-slate-600 mb-3 text-center">
+                    Digite a <strong>quantidade que você recebeu</strong> de cada item.<br />
+                    <span className="text-slate-400 text-xs">Se bateu com o esperado, não precisa mudar nada.</span>
+                  </p>
+
+                  {/* Cabeçalho das colunas */}
+                  <div className="grid grid-cols-[1fr_88px_88px] gap-2 px-1 mb-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Item</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Esperado</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-blue-500 text-center">Recebido</span>
+                  </div>
+
+                  {/* Linhas de conferência */}
+                  <div className="space-y-2">
+                    {itens.map((it: any, idx: number) => {
+                      const { esperado, recebido, diff } = divergencias[idx];
+                      const status = diff === 0 ? "ok" : diff < 0 ? "falta" : "excesso";
+                      return (
+                        <div
+                          key={idx}
+                          className={`grid grid-cols-[1fr_88px_88px] gap-2 items-center rounded-2xl border-2 p-3 transition-colors ${
+                            status === "ok"
+                              ? "bg-emerald-50 border-emerald-200"
+                              : status === "falta"
+                              ? "bg-red-50 border-red-300"
+                              : "bg-amber-50 border-amber-300"
+                          }`}
+                        >
+                          {/* Nome do item */}
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-800 text-sm leading-tight break-words">{it.descricao || "(sem descrição)"}</p>
+                            {it.unidade && <p className="text-xs text-slate-400 mt-0.5">{it.unidade}</p>}
+                            {status === "falta" && (
+                              <p className="text-xs font-bold text-red-600 mt-1">
+                                ⚠ Faltando {Math.abs(diff)} {it.unidade || "un"}
+                              </p>
+                            )}
+                            {status === "excesso" && (
+                              <p className="text-xs font-bold text-amber-600 mt-1">
+                                ⚠ {diff} {it.unidade || "un"} a mais
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Esperado — só leitura */}
+                          <div className="text-center">
+                            <p className="text-3xl font-black text-slate-500 leading-none">{esperado}</p>
+                            <p className="text-[10px] text-slate-400 uppercase mt-0.5">esperado</p>
+                          </div>
+
+                          {/* Recebido — campo editável */}
+                          <div className="text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              inputMode="numeric"
+                              value={qtdRecebidaPorItem[idx] ?? String(esperado)}
+                              onChange={e => setQtdRecebidaPorItem(p => ({ ...p, [idx]: e.target.value }))}
+                              className={`w-full text-center text-3xl font-black rounded-xl border-2 p-1 outline-none focus:ring-2 transition-colors ${
+                                status === "ok"
+                                  ? "border-emerald-400 text-emerald-700 bg-white focus:ring-emerald-200"
+                                  : status === "falta"
+                                  ? "border-red-400 text-red-700 bg-white focus:ring-red-200"
+                                  : "border-amber-400 text-amber-700 bg-white focus:ring-amber-200"
+                              }`}
+                            />
+                            <p className="text-[10px] text-blue-500 uppercase mt-0.5 font-bold">recebido</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Resumo total (quando múltiplos itens) */}
+                  {itens.length > 1 && (
+                    <div className={`mt-3 rounded-xl p-3 flex items-center justify-between ${temDivergencia ? "bg-red-50 border border-red-200" : "bg-emerald-50 border border-emerald-200"}`}>
+                      <span className="text-sm font-semibold text-slate-700">Total</span>
+                      <div className="flex items-center gap-3 text-sm font-bold">
+                        <span className="text-slate-500">Esperado: <span className="text-slate-800">{totalEsperado}</span></span>
+                        <span className={temDivergencia ? "text-red-600" : "text-emerald-600"}>Recebido: <span>{totalRecebido}</span></span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Alerta de divergência */}
+                  {temDivergencia && (
+                    <div className="mt-3 rounded-xl bg-red-100 border-2 border-red-400 p-4 flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-black text-red-800 text-sm">ATENÇÃO — DIVERGÊNCIA!</p>
+                        <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                          A quantidade recebida <strong>não bate</strong> com o pedido.<br />
+                          Avise o responsável antes de assinar. A diferença será registrada automaticamente.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Confirmação sem divergência */}
+                  {!temDivergencia && (
+                    <div className="mt-3 rounded-xl bg-emerald-50 border-2 border-emerald-300 p-3 flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                      <p className="text-sm font-semibold text-emerald-800">Tudo certo! Quantidade bate com o pedido.</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── DETALHES DO EQUIPAMENTO ── */}
+            <Section icon={Truck} title="Equipamento" tint="emerald">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Descrição *"><input value={form.descricao} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} className="inp" placeholder="Ex: Betoneira 400L" /></Field>
+                <Field label="Categoria"><input value={form.categoria} onChange={e => setForm(p => ({ ...p, categoria: e.target.value }))} className="inp" placeholder="Ex: Equipamento de concretagem" /></Field>
+                <Field label="Patrim. do fornecedor"><input value={form.codigoPatrimonioFornecedor} onChange={e => setForm(p => ({ ...p, codigoPatrimonioFornecedor: e.target.value }))} className="inp" /></Field>
+                <Field label="N° de série"><input value={form.numeroSerie} onChange={e => setForm(p => ({ ...p, numeroSerie: e.target.value }))} className="inp" /></Field>
+                <Field label="Código interno ERP"><input value={form.codigoInternoErp} onChange={e => setForm(p => ({ ...p, codigoInternoErp: e.target.value }))} className="inp" /></Field>
+              </div>
+            </Section>
+
+            <Section icon={Building2} title="Fornecedor (locadora)" tint="blue">
+              <Field label="Nome do fornecedor"><input value={form.fornecedorNome} onChange={e => setForm(p => ({ ...p, fornecedorNome: e.target.value }))} className="inp" placeholder="Ex: Jalves Locações" /></Field>
+            </Section>
+
+            <Section icon={Calendar} title="Período & Valores" tint="amber">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Data início *"><input type="date" value={form.dataInicio} onChange={e => setForm(p => ({ ...p, dataInicio: e.target.value }))} className="inp" /></Field>
+                <Field label="Data fim prevista *"><input type="date" value={form.dataFimPrevista} onChange={e => setForm(p => ({ ...p, dataFimPrevista: e.target.value }))} className="inp" /></Field>
+                <Field label="Valor diário (R$)"><input value={form.valorDiario} onChange={e => setForm(p => ({ ...p, valorDiario: e.target.value }))} placeholder="0,00" className="inp" /></Field>
+                <Field label="Valor mensal (R$)"><input value={form.valorMensal} onChange={e => setForm(p => ({ ...p, valorMensal: e.target.value }))} placeholder="0,00" className="inp" /></Field>
+              </div>
+            </Section>
+
+            {/* ── FOTOS — seção destaque (obrigatória) ── */}
+            <div className="rounded-2xl border-2 border-dashed border-blue-300 bg-blue-50/60 p-4 mb-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="rounded-full bg-blue-600 text-white p-2 shrink-0">
+                  <Camera className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="font-black text-blue-900 text-base">📷 TIRAR FOTO AGORA</p>
+                  <p className="text-xs text-blue-600">Obrigatória — fotografe o equipamento que chegou</p>
+                </div>
+              </div>
+              <FotosUploader fotos={fotos} onChange={setFotos} label="" required />
+              {fotos.length === 0 && (
+                <p className="text-xs text-red-500 font-semibold mt-2 text-center">⚠ Você precisa tirar pelo menos 1 foto para continuar</p>
+              )}
+              {fotos.length > 0 && (
+                <p className="text-xs text-emerald-600 font-semibold mt-2 text-center">✅ {fotos.length} foto{fotos.length !== 1 ? "s" : ""} adicionada{fotos.length !== 1 ? "s" : ""}</p>
+              )}
             </div>
-          </Section>
 
-          <Section icon={Building2} title="Fornecedor (locadora)" tint="blue">
-            <Field label="Nome do fornecedor"><input value={form.fornecedorNome} onChange={e => setForm(p => ({ ...p, fornecedorNome: e.target.value }))} className="inp" placeholder="Ex: Jalves Locações" /></Field>
-          </Section>
+            <Section icon={UserIcon} title="Responsável & Observações" tint="slate">
+              <Field label="Funcionário responsável">
+                <input value={form.funcionarioResponsavelNome} onChange={e => setForm(p => ({ ...p, funcionarioResponsavelNome: e.target.value }))} className="inp" placeholder="Nome de quem está recebendo" />
+              </Field>
+              <Field label="Observações">
+                <textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} rows={3} className="inp" placeholder="Estado de conservação, acessórios recebidos, divergências encontradas, etc." />
+              </Field>
+            </Section>
 
-          <Section icon={Calendar} title="Período & Valores" tint="amber">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Field label="Data início *"><input type="date" value={form.dataInicio} onChange={e => setForm(p => ({ ...p, dataInicio: e.target.value }))} className="inp" /></Field>
-              <Field label="Data fim prevista *"><input type="date" value={form.dataFimPrevista} onChange={e => setForm(p => ({ ...p, dataFimPrevista: e.target.value }))} className="inp" /></Field>
-              <Field label="Valor diário (R$)"><input value={form.valorDiario} onChange={e => setForm(p => ({ ...p, valorDiario: e.target.value }))} placeholder="0,00" className="inp" /></Field>
-              <Field label="Valor mensal (R$)"><input value={form.valorMensal} onChange={e => setForm(p => ({ ...p, valorMensal: e.target.value }))} placeholder="0,00" className="inp" /></Field>
-            </div>
-          </Section>
-
-          <Section icon={UserIcon} title="Responsabilidade & Observações" tint="slate">
-            <Field label="Funcionário responsável">
-              <input value={form.funcionarioResponsavelNome} onChange={e => setForm(p => ({ ...p, funcionarioResponsavelNome: e.target.value }))} className="inp" />
-            </Field>
-            <Field label="Observações">
-              <textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} rows={2} className="inp" placeholder="Estado de conservação, acessórios recebidos, etc." />
-            </Field>
-          </Section>
-
-          <Section icon={Camera} title="Fotos do recebimento *" tint="red">
-            <p className="text-xs text-slate-500 mb-2">Foto obrigatória — comprovação visual do estado do equipamento ao chegar na obra.</p>
-            <FotosUploader fotos={fotos} onChange={setFotos} label="" required />
-          </Section>
+          </>)}
           </>)}
 
           {/* ───── ETAPA 2 (assinaturas + comprovante PDF) — Rev. 2465 ───── */}

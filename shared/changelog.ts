@@ -1,4 +1,47 @@
 /**
+ * Rev. 4342 - RECEBER LOCAÇÃO: REDESENHO COMPLETO DO MODAL (conferência de itens + divergência)
+ *
+ * PROBLEMA: modal era uma lista de campos técnicos (formulário denso) — confuso para
+ *   um operador de baixa instrução (servente). Não mostrava quantidade esperada vs.
+ *   recebida, nem alertava sobre divergências de forma clara.
+ *
+ * SOLUÇÃO (Etapa 1 completamente redesenhada):
+ *
+ *   TELA 0 — SELEÇÃO DE OC (quando nenhuma OC está selecionada):
+ *     · Header azul com ícone Package e instrução grande: "Qual pedido está chegando agora?"
+ *     · Cada OC = card 2xl com: número da OC, fornecedor, lista de itens com quantidade
+ *       esperada (badge azul "24 un"), datas e valor. Tap para selecionar.
+ *
+ *   TELA 1 — CONFERÊNCIA (após selecionar OC):
+ *     · Banner verde (PackageCheck) com OC + fornecedor + "Trocar OC" pequeno
+ *     · Seção "CONFERÊNCIA DOS ITENS":
+ *         - Instrução em linguagem simples: "Digite a quantidade que você recebeu"
+ *         - Cada item = card com 3 colunas: [nome] | [ESPERADO: número grande] | [RECEBIDO: input grande]
+ *         - Card muda de cor: verde (ok) / vermelho (falta) / âmbar (excesso)
+ *         - Aviso inline: "⚠ Faltando 3 un" ou "⚠ 2 un a mais"
+ *     · Resumo total (quando múltiplos itens): Esperado X / Recebido Y
+ *     · Banner de divergência: vermelho com mensagem clara + orientação
+ *     · Banner de ok: verde quando tudo bate
+ *     · Seções colapsadas: Equipamento, Locadora, Período & Valores
+ *     · Seção FOTOS redesenhada: destaque azul dashed + contador de fotos
+ *     · Observações: placeholder menciona divergências
+ *
+ *   FUNÇÃO salvar():
+ *     · Auto-appenda "[DIVERGÊNCIA NO RECEBIMENTO]\nFALTANDO N un de X..."
+ *       nas observações quando há divergência (sem alterar o campo manual do user).
+ *
+ *   ESTADO novo:
+ *     · `ocSelecionadaFull: any | null` — OC completa para exibir itens
+ *     · `qtdRecebidaPorItem: Record<number, string>` — qty digitada por idx
+ *
+ *   TÍTULO do modal muda para "Selecionar Pedido de Locação" quando sem OC,
+ *   e "Receber Locação · Etapa X/2" quando OC selecionada.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/equipamentos/Locados.tsx
+ */
+
+/**
  * Rev. 4341 - EQUIPAMENTOS PRÓPRIOS: AGRUPAMENTO POR NOME (accordion inline)
  *
  * PROBLEMA: itens com o mesmo nome (ex: "PAINEL 1,5M") apareciam como cards

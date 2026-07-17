@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4342** — **RECEBER LOCAÇÃO: REDESENHO COMPLETO DO MODAL.** Tela 0 = seleção de OC com cards grandes (itens + qtd esperada). Tela 1 = conferência item a item: coluna ESPERADO (leitura) vs. RECEBIDO (input grande), semáforo verde/vermelho/âmbar, banner de divergência, auto-inject obs. `ocSelecionadaFull` + `qtdRecebidaPorItem`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4341** — **EQUIPAMENTOS PRÓPRIOS: AGRUPAMENTO POR NOME (accordion inline).** `dataAgrupada` agrupa por `descricao` normalizada. Grupos >1: card-header full-width com count badge, chips de localização por obra (MapPin), total de valor, chevron expandível. Sub-grid com cards individuais ao clicar. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4340** — **EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS (dois passos).** Nova tabela `equipamentos_proprios_transferencias` + coluna `transferencia_pendente_id`. Remetente inicia via ⇌; destinatário aceita/rejeita via botão "ACEITAR FERRAM." no Almoxarifado. 5 procedures tRPC. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4340** — **EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS.** Nova tabela + coluna `transferencia_pendente_id`. 5 procedures tRPC. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4339** — **ALMOXARIFADO: RECEBER MATERIAL EXCLUI OCs DE LOCAÇÃO.** `listPendingOCs` filtra `isLocacao IS NULL OR isLocacao = false`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `forTransfer?: boolean` bypassa filtro por usuário. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4336** — **SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4335** — **SCORECARD RH/FOLHA: PJ — DISTINCT ON + badge "Sem contrato PJ".** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
