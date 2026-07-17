@@ -2109,22 +2109,25 @@ export const scorecardRouter = router({
       }
 
       for (const f of funcs) {
-        const empId    = n(f.employee_id);
-        const meses    = Math.max(parseInt(String(f.meses_na_obra ?? 1)) || 1, 1);
-        const fTotal   = feriasEmpMap.get(empId) ?? 0;
-        const sMensal  = seguroMensalMap.get(empId) ?? 0;
-        const sTotal   = sMensal * meses;
-        f.ferias_total      = fTotal;
-        f.seguro_vida_total = sTotal;
-        f.custo_total_empresa = n(f.custo_folha_empresa) + fTotal + sTotal;
+        const empId   = n(f.employee_id);
+        const fTotal  = feriasEmpMap.get(empId) ?? 0;
+        const sMensal = seguroMensalMap.get(empId) ?? 0;
+        f.ferias_total = fTotal;
 
+        // Seguro de vida proporcional: sMensal × fração de dias úteis de cada mês
+        // (sem forçar mínimo de 1 mês — Gledson com 0 dias fica com R$0)
         const hist = Array.isArray(f.historico_mensal) ? f.historico_mensal : [];
+        let seguroTotal = 0;
         for (const h of hist) {
           h.ferias     = feriasKeyMap.get(`${empId}|${h.mes}`) ?? 0;
-          h.seguroVida = sMensal;
+          const frac   = n(h.fracao) || 0; // fração de dias úteis na obra neste mês
+          h.seguroVida = rnd2(sMensal * frac);
+          seguroTotal += h.seguroVida;
           h.custoTotal = n(h.custoEmpresa) + h.ferias + h.seguroVida;
         }
-        f.historico_mensal = hist;
+        f.seguro_vida_total   = rnd2(seguroTotal);
+        f.custo_total_empresa = rnd2(n(f.custo_folha_empresa) + fTotal + f.seguro_vida_total);
+        f.historico_mensal    = hist;
       }
 
       // Rev. 4333 — push PJ contractors into funcs array.
@@ -2265,10 +2268,12 @@ export const scorecardRouter = router({
         }
 
         if (syntheticHist.length > 0) {
-          // Seguro de vida com contagem de meses correta (não mais forçado para 1)
+          // Seguro de vida proporcional aos dias úteis de cada mês sintético
           const sMensalEmp = seguroMensalMap.get(n(f.employee_id)) ?? 0;
+          let segSintetico = 0;
           for (const h of syntheticHist) {
-            h.seguroVida = sMensalEmp;
+            h.seguroVida = rnd2(sMensalEmp * (h.fracao || 0));
+            segSintetico += h.seguroVida;
             h.custoTotal = rnd2(h.custoEmpresa + h.ferias + h.seguroVida);
           }
 
@@ -2278,7 +2283,7 @@ export const scorecardRouter = router({
           f.salario_bruto_total = syntheticHist.reduce((s: number, h: any) => s + h.salarioBruto, 0);
           f.fgts_total          = syntheticHist.reduce((s: number, h: any) => s + h.fgts, 0);
           f.custo_folha_empresa = rnd2(f.salario_bruto_total + f.fgts_total);
-          f.seguro_vida_total   = rnd2(sMensalEmp * syntheticHist.length);
+          f.seguro_vida_total   = rnd2(segSintetico);
           f.custo_total_empresa = rnd2(f.custo_folha_empresa + n(f.ferias_total) + f.seguro_vida_total);
         }
       }
