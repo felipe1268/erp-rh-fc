@@ -1,4 +1,31 @@
 /**
+ * Rev. 4321 - SCORECARD RH/FOLHA: LGPD — VISÃO DE CUSTO POR FUNÇÃO PARA NÃO-ADMIN
+ *
+ * PROBLEMA (LGPD):
+ *   A tabela "Custo por Funcionário" expunha salário individual de cada pessoa para
+ *   qualquer usuário com acesso ao Scorecard (incluindo engenheiros responsáveis da obra).
+ *   Isso viola a privacidade salarial — um encarregado pode ganhar mais que o engenheiro
+ *   e essa informação não deveria ser acessível sem controle de acesso.
+ *
+ * SOLUÇÃO (Rev. 4321):
+ *   - Adicionado `isAdminMaster = user?.role === "admin_master"` no componente.
+ *   - Visão Admin Master (isAdminMaster=true): tabela individual completa, igual a antes.
+ *   - Visão Engenheiro/Gestor (isAdminMaster=false): tabela agregada por FUNÇÃO/CARGO,
+ *     mostrando Função | Qtd | Sal. Bruto | HE | VR/VA | Férias | Seg. | FGTS | Total
+ *     sem expor nomes, matrículas ou fotos individuais.
+ *   - Novo useMemo `rhPorFuncao`: agrupa rhFuncsFiltrados por cargo, soma todos os campos
+ *     financeiros, ordena por custo total desc.
+ *   - Rodapé LGPD: "🔒 Detalhamento individual restrito — valores agrupados por função
+ *     conforme política de privacidade (LGPD)."
+ *   - Banco de Horas: sem mudança (dados de horas não são sensíveis salarialmente).
+ *   - Filtro por função (select) mantido em ambas as visões.
+ *   - Toggle A→Z/Custo só aparece na visão admin_master (irrelevante por função).
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo (só frontend).
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx — linhas ~229, ~351-370, ~1277+
+ */
+
+/**
  * Rev. 4320 - SCORECARD RH/FOLHA: FIX PJ PHANTOM — FILTRAR POR pj_contracts.obraId
  *
  * PROBLEMA:

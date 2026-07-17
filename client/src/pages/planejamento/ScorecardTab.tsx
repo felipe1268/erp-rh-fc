@@ -224,6 +224,7 @@ function NovoRetrabalhoModal({ open, onClose, companyId, obraId, onSaved }: any)
 export default function ScorecardTab({ proj }: { proj: any }) {
   const { user } = useAuth();
   const isAdmin = ["admin", "admin_master"].includes(user?.role ?? "");
+  const isAdminMaster = user?.role === "admin_master";
   const obraId   = proj?.obraId ?? null;
   const companyId = proj?.companyId ?? 0;
 
@@ -342,6 +343,27 @@ export default function ScorecardTab({ proj }: { proj: any }) {
       fgts:         acc.fgts         + Number(f.fgts_total        ?? 0),
       custoTotal:   acc.custoTotal   + Number(f.custo_total_empresa ?? 0),
     }), base);
+  }, [rhFuncsFiltrados]);
+
+  // Agrupamento por função para visão não-admin (LGPD — sem nome/valor individual)
+  const rhPorFuncao = useMemo(() => {
+    const map = new Map<string, { cargo: string; qtd: number; salarioBruto: number; he: number; va: number; ferias: number; seguroVida: number; fgts: number; custoTotal: number }>();
+    for (const f of rhFuncsFiltrados) {
+      const cargo = (f.cargo || f.razao_social || "Sem função").trim();
+      const prev = map.get(cargo) ?? { cargo, qtd: 0, salarioBruto: 0, he: 0, va: 0, ferias: 0, seguroVida: 0, fgts: 0, custoTotal: 0 };
+      map.set(cargo, {
+        cargo,
+        qtd:          prev.qtd          + 1,
+        salarioBruto: prev.salarioBruto + Number(f.salario_bruto_total  ?? 0),
+        he:           prev.he           + Number(f.he_total             ?? 0),
+        va:           prev.va           + Number(f.va_total             ?? 0),
+        ferias:       prev.ferias       + Number(f.ferias_total         ?? 0),
+        seguroVida:   prev.seguroVida   + Number(f.seguro_vida_total    ?? 0),
+        fgts:         prev.fgts         + Number(f.fgts_total           ?? 0),
+        custoTotal:   prev.custoTotal   + Number(f.custo_total_empresa  ?? 0),
+      });
+    }
+    return Array.from(map.values()).sort((a, b) => b.custoTotal - a.custoTotal);
   }, [rhFuncsFiltrados]);
 
   // Query dedicada ao ano inteiro — usada APENAS para calcular quais meses têm dados
@@ -1249,191 +1271,276 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                   VT não incluso (depende de presença diária — consultar Folha).
                 </p>
 
-                {/* Tabela por funcionário */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                      Custo por Funcionário{rhMes !== 'all' ? ` — ${MES_LABELS[parseInt(rhMes)-1]}/${String(rhAno).slice(2)}` : ''}
-                      {' — '}
-                      {rhSortBy === "nome" ? "A → Z" : "ordenado por custo total"}
-                      {filtroFuncao && <span className="ml-1 normal-case text-indigo-500">· {rhFuncsFiltrados.length} func.</span>}
-                    </p>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {/* Toggle ordenação */}
-                      <button
-                        onClick={() => setRhSortBy(s => s === "custo" ? "nome" : "custo")}
-                        className="text-[11px] border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors cursor-pointer select-none"
-                        title={rhSortBy === "custo" ? "Ordenar por nome (A→Z)" : "Ordenar por custo (maior primeiro)"}
-                      >
-                        {rhSortBy === "custo" ? "A → Z" : "Custo ↓"}
-                      </button>
-                    {rhCargoOptions.length > 0 && (
-                      <>
-                        <select
-                          value={filtroFuncao}
-                          onChange={(e) => setFiltroFuncao(e.target.value)}
-                          className="text-[11px] border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer"
+                {/* Tabela: individual (admin_master) ou por função (demais — LGPD) */}
+                {isAdminMaster ? (
+                  /* ── Visão Admin Master: detalhamento individual ── */
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                        Custo por Funcionário{rhMes !== 'all' ? ` — ${MES_LABELS[parseInt(rhMes)-1]}/${String(rhAno).slice(2)}` : ''}
+                        {' — '}
+                        {rhSortBy === "nome" ? "A → Z" : "ordenado por custo total"}
+                        {filtroFuncao && <span className="ml-1 normal-case text-indigo-500">· {rhFuncsFiltrados.length} func.</span>}
+                      </p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => setRhSortBy(s => s === "custo" ? "nome" : "custo")}
+                          className="text-[11px] border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors cursor-pointer select-none"
+                          title={rhSortBy === "custo" ? "Ordenar por nome (A→Z)" : "Ordenar por custo (maior primeiro)"}
                         >
-                          <option value="">Todas as funções ({(analiseRH.data.funcionarios ?? []).length})</option>
-                          {rhCargoOptions.map((c) => {
-                            const cnt = (analiseRH.data.funcionarios ?? []).filter((f: any) =>
-                              (f.cargo || f.razao_social || "Sem função").trim() === c).length;
-                            return <option key={c} value={c}>{c} ({cnt})</option>;
-                          })}
-                        </select>
-                        {filtroFuncao && (
-                          <button onClick={() => setFiltroFuncao("")}
-                            className="text-[11px] text-indigo-500 hover:text-indigo-700 underline">
-                            limpar
-                          </button>
+                          {rhSortBy === "custo" ? "A → Z" : "Custo ↓"}
+                        </button>
+                        {rhCargoOptions.length > 0 && (
+                          <>
+                            <select
+                              value={filtroFuncao}
+                              onChange={(e) => setFiltroFuncao(e.target.value)}
+                              className="text-[11px] border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer"
+                            >
+                              <option value="">Todas as funções ({(analiseRH.data.funcionarios ?? []).length})</option>
+                              {rhCargoOptions.map((c) => {
+                                const cnt = (analiseRH.data.funcionarios ?? []).filter((f: any) =>
+                                  (f.cargo || f.razao_social || "Sem função").trim() === c).length;
+                                return <option key={c} value={c}>{c} ({cnt})</option>;
+                              })}
+                            </select>
+                            {filtroFuncao && (
+                              <button onClick={() => setFiltroFuncao("")}
+                                className="text-[11px] text-indigo-500 hover:text-indigo-700 underline">
+                                limpar
+                              </button>
+                            )}
+                          </>
                         )}
-                      </>
-                    )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="overflow-x-auto rounded border border-gray-200">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500">
-                          <th className="text-left px-2 py-1.5 font-semibold">Funcionário</th>
-                          <th className="text-center px-2 py-1.5 font-semibold">Dias</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">Sal. Bruto</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">HE</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">VR/VA</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">Férias</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">Seg.</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">FGTS</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">Total</th>
-                          <th className="w-6" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rhFuncsFiltrados.map((f: any) => {
-                          const empId = Number(f.employee_id);
-                          const isOpen = expandedRH.has(empId);
-                          const toggle = () => setExpandedRH(prev => {
-                            const ns = new Set(prev);
-                            if (ns.has(empId)) ns.delete(empId); else ns.add(empId);
-                            return ns;
-                          });
-                          const hist: any[] = Array.isArray(f.historico_mensal) ? f.historico_mensal : [];
-                          const histFiltered = rhMes === 'all' ? hist : hist.filter((h: any) => h.mes === `${rhAno}-${rhMes}`);
-                          const va = Number(f.va_total ?? 0);
-                          return (
-                            <React.Fragment key={empId}>
-                              <tr onClick={toggle} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
-                                <td className="px-2 py-1.5">
-                                  <div className="flex items-center gap-1.5">
-                                    {(() => {
-                                      const initials = (f.nome ?? "?").split(" ").slice(0, 2).map((w: string) => w[0]).join("");
-                                      return f.foto_url ? (
-                                        <img
-                                          src={f.foto_url} alt={f.nome}
-                                          className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-gray-200 cursor-zoom-in hover:ring-2 hover:ring-indigo-400 transition-all"
-                                          onClick={(ev) => { ev.stopPropagation(); setSstPhotoLightbox({ url: f.foto_url, nome: f.nome ?? "—", initials }); }}
-                                        />
-                                      ) : (
-                                        <div
-                                          className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 border border-indigo-200 cursor-zoom-in hover:ring-2 hover:ring-indigo-400 transition-all"
-                                          onClick={(ev) => { ev.stopPropagation(); setSstPhotoLightbox({ url: null, nome: f.nome ?? "—", initials }); }}
-                                        >
-                                          <span className="text-[9px] font-bold text-indigo-600">{initials}</span>
+                    <div className="overflow-x-auto rounded border border-gray-200">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500">
+                            <th className="text-left px-2 py-1.5 font-semibold">Funcionário</th>
+                            <th className="text-center px-2 py-1.5 font-semibold">Dias</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">Sal. Bruto</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">HE</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">VR/VA</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">Férias</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">Seg.</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">FGTS</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">Total</th>
+                            <th className="w-6" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rhFuncsFiltrados.map((f: any) => {
+                            const empId = Number(f.employee_id);
+                            const isOpen = expandedRH.has(empId);
+                            const toggle = () => setExpandedRH(prev => {
+                              const ns = new Set(prev);
+                              if (ns.has(empId)) ns.delete(empId); else ns.add(empId);
+                              return ns;
+                            });
+                            const hist: any[] = Array.isArray(f.historico_mensal) ? f.historico_mensal : [];
+                            const histFiltered = rhMes === 'all' ? hist : hist.filter((h: any) => h.mes === `${rhAno}-${rhMes}`);
+                            const va = Number(f.va_total ?? 0);
+                            return (
+                              <React.Fragment key={empId}>
+                                <tr onClick={toggle} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
+                                  <td className="px-2 py-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                      {(() => {
+                                        const initials = (f.nome ?? "?").split(" ").slice(0, 2).map((w: string) => w[0]).join("");
+                                        return f.foto_url ? (
+                                          <img
+                                            src={f.foto_url} alt={f.nome}
+                                            className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-gray-200 cursor-zoom-in hover:ring-2 hover:ring-indigo-400 transition-all"
+                                            onClick={(ev) => { ev.stopPropagation(); setSstPhotoLightbox({ url: f.foto_url, nome: f.nome ?? "—", initials }); }}
+                                          />
+                                        ) : (
+                                          <div
+                                            className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 border border-indigo-200 cursor-zoom-in hover:ring-2 hover:ring-indigo-400 transition-all"
+                                            onClick={(ev) => { ev.stopPropagation(); setSstPhotoLightbox({ url: null, nome: f.nome ?? "—", initials }); }}
+                                          >
+                                            <span className="text-[9px] font-bold text-indigo-600">{initials}</span>
+                                          </div>
+                                        );
+                                      })()}
+                                      <div>
+                                        <div className="flex items-center gap-1 leading-tight">
+                                          <p className="font-medium text-gray-800">{f.nome}</p>
+                                          {f.tipo_pessoa === 'PJ' && (
+                                            <span className="px-1 py-0 rounded text-[8px] font-bold bg-purple-100 text-purple-700 border border-purple-200">PJ</span>
+                                          )}
                                         </div>
-                                      );
-                                    })()}
-                                    <div>
-                                      <div className="flex items-center gap-1 leading-tight">
-                                        <p className="font-medium text-gray-800">{f.nome}</p>
-                                        {f.tipo_pessoa === 'PJ' && (
-                                          <span className="px-1 py-0 rounded text-[8px] font-bold bg-purple-100 text-purple-700 border border-purple-200">PJ</span>
+                                        <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
+                                        {f.tipo_pessoa === 'PJ' && f.razao_social && (
+                                          <p className="text-[8px] text-purple-500 font-medium leading-tight">{f.razao_social}</p>
                                         )}
+                                        {f.tipo_pessoa !== 'PJ' && f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
                                       </div>
-                                      <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
-                                      {f.tipo_pessoa === 'PJ' && f.razao_social && (
-                                        <p className="text-[8px] text-purple-500 font-medium leading-tight">{f.razao_social}</p>
-                                      )}
-                                      {f.tipo_pessoa !== 'PJ' && f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="text-center px-2 py-1.5 text-gray-600">{f.total_dias_na_obra}</td>
-                                <td className="text-right px-2 py-1.5 text-gray-700">{fmt(Number(f.salario_bruto_total))}</td>
-                                <td className="text-right px-2 py-1.5 text-amber-700">{Number(f.he_total) > 0 ? fmt(Number(f.he_total)) : <span className="text-gray-300">—</span>}</td>
-                                <td className="text-right px-2 py-1.5 text-teal-700">{va > 0 ? fmt(va) : <span className="text-gray-300">—</span>}</td>
-                                <td className="text-right px-2 py-1.5 text-orange-700">{Number(f.ferias_total) > 0 ? fmt(Number(f.ferias_total)) : <span className="text-gray-300">—</span>}</td>
-                                <td className="text-right px-2 py-1.5 text-rose-700">{Number(f.seguro_vida_total) > 0 ? fmt(Number(f.seguro_vida_total)) : <span className="text-gray-300">—</span>}</td>
-                                <td className="text-right px-2 py-1.5 text-blue-700">{fmt(Number(f.fgts_total))}</td>
-                                <td className="text-right px-2 py-1.5 font-semibold text-indigo-700">{fmt(Number(f.custo_total_empresa))}</td>
-                                <td className="px-1 py-1.5 text-gray-400">{isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</td>
-                              </tr>
-                              {isOpen && histFiltered.length > 0 && (
-                                <tr className="bg-indigo-50/40">
-                                  <td colSpan={10} className="px-3 py-2">
-                                    <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Detalhamento mensal — {f.nome}</p>
-                                    <div className="overflow-x-auto">
-                                      <table className="w-full text-[10px]">
-                                        <thead>
-                                          <tr className="text-gray-400 border-b border-indigo-100">
-                                            <th className="text-left py-1 pr-3 font-semibold">Mês</th>
-                                            <th className="text-center py-1 pr-3 font-semibold">Dias/Tot</th>
-                                            <th className="text-center py-1 pr-3 font-semibold">Fração</th>
-                                            <th className="text-right py-1 pr-3 font-semibold">Sal. Bruto</th>
-                                            <th className="text-right py-1 pr-3 font-semibold">HE</th>
-                                            <th className="text-right py-1 pr-3 font-semibold">VR/VA</th>
-                                            <th className="text-right py-1 pr-3 font-semibold">Férias</th>
-                                            <th className="text-right py-1 pr-3 font-semibold">Seg.</th>
-                                            <th className="text-right py-1 pr-3 font-semibold">FGTS</th>
-                                            <th className="text-right py-1 font-semibold">Total</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {histFiltered.map((hm: any, mi: number) => (
-                                            <tr key={mi} className="border-b border-indigo-100/50 hover:bg-indigo-100/30">
-                                              <td className="py-1 pr-3 text-gray-700 font-medium">{hm.mes}</td>
-                                              <td className="py-1 pr-3 text-center text-gray-500">{hm.diasNaObra}/{hm.diasNoMes}</td>
-                                              <td className="py-1 pr-3 text-center">
-                                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${Number(hm.fracao) < 1 ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
-                                                  {(Number(hm.fracao) * 100).toFixed(0)}%
-                                                </span>
-                                              </td>
-                                              <td className="py-1 pr-3 text-right text-gray-700">{fmt(Number(hm.salarioBruto))}</td>
-                                              <td className="py-1 pr-3 text-right text-amber-700">{Number(hm.horasExtras) > 0 ? fmt(Number(hm.horasExtras)) : <span className="text-gray-300">—</span>}</td>
-                                              <td className="py-1 pr-3 text-right text-teal-700">{Number(hm.va) > 0 ? fmt(Number(hm.va)) : <span className="text-gray-300">—</span>}</td>
-                                              <td className="py-1 pr-3 text-right text-orange-700">{Number(hm.ferias) > 0 ? fmt(Number(hm.ferias)) : <span className="text-gray-300">—</span>}</td>
-                                              <td className="py-1 pr-3 text-right text-rose-700">{Number(hm.seguroVida) > 0 ? fmt(Number(hm.seguroVida)) : <span className="text-gray-300">—</span>}</td>
-                                              <td className="py-1 pr-3 text-right text-blue-700">{fmt(Number(hm.fgts))}</td>
-                                              <td className="py-1 text-right font-semibold text-indigo-700">{fmt(Number(hm.custoTotal))}</td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
                                     </div>
                                   </td>
+                                  <td className="text-center px-2 py-1.5 text-gray-600">{f.total_dias_na_obra}</td>
+                                  <td className="text-right px-2 py-1.5 text-gray-700">{fmt(Number(f.salario_bruto_total))}</td>
+                                  <td className="text-right px-2 py-1.5 text-amber-700">{Number(f.he_total) > 0 ? fmt(Number(f.he_total)) : <span className="text-gray-300">—</span>}</td>
+                                  <td className="text-right px-2 py-1.5 text-teal-700">{va > 0 ? fmt(va) : <span className="text-gray-300">—</span>}</td>
+                                  <td className="text-right px-2 py-1.5 text-orange-700">{Number(f.ferias_total) > 0 ? fmt(Number(f.ferias_total)) : <span className="text-gray-300">—</span>}</td>
+                                  <td className="text-right px-2 py-1.5 text-rose-700">{Number(f.seguro_vida_total) > 0 ? fmt(Number(f.seguro_vida_total)) : <span className="text-gray-300">—</span>}</td>
+                                  <td className="text-right px-2 py-1.5 text-blue-700">{fmt(Number(f.fgts_total))}</td>
+                                  <td className="text-right px-2 py-1.5 font-semibold text-indigo-700">{fmt(Number(f.custo_total_empresa))}</td>
+                                  <td className="px-1 py-1.5 text-gray-400">{isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</td>
                                 </tr>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-xs text-gray-700">
-                          <td className="px-2 py-2 text-[10px] uppercase tracking-wide">
-                            {filtroFuncao ? <span className="text-indigo-600">SUBTOTAL — {filtroFuncao}</span> : "TOTAL"}
-                          </td>
-                          <td className="text-center px-2 py-2 text-gray-500">{rhFuncsFiltrados.length}</td>
-                          <td className="text-right px-2 py-2">{fmt(rhResumoFiltrado.salarioBruto)}</td>
-                          <td className="text-right px-2 py-2 text-amber-700">{fmt(rhResumoFiltrado.he)}</td>
-                          <td className="text-right px-2 py-2 text-teal-700">{fmt(rhResumoFiltrado.va)}</td>
-                          <td className="text-right px-2 py-2 text-orange-700">{fmt(rhResumoFiltrado.ferias)}</td>
-                          <td className="text-right px-2 py-2 text-rose-700">{fmt(rhResumoFiltrado.seguroVida)}</td>
-                          <td className="text-right px-2 py-2 text-blue-700">{fmt(rhResumoFiltrado.fgts)}</td>
-                          <td className="text-right px-2 py-2 font-bold text-indigo-700">{fmt(rhResumoFiltrado.custoTotal)}</td>
-                          <td />
-                        </tr>
-                      </tfoot>
-                    </table>
+                                {isOpen && histFiltered.length > 0 && (
+                                  <tr className="bg-indigo-50/40">
+                                    <td colSpan={10} className="px-3 py-2">
+                                      <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Detalhamento mensal — {f.nome}</p>
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full text-[10px]">
+                                          <thead>
+                                            <tr className="text-gray-400 border-b border-indigo-100">
+                                              <th className="text-left py-1 pr-3 font-semibold">Mês</th>
+                                              <th className="text-center py-1 pr-3 font-semibold">Dias/Tot</th>
+                                              <th className="text-center py-1 pr-3 font-semibold">Fração</th>
+                                              <th className="text-right py-1 pr-3 font-semibold">Sal. Bruto</th>
+                                              <th className="text-right py-1 pr-3 font-semibold">HE</th>
+                                              <th className="text-right py-1 pr-3 font-semibold">VR/VA</th>
+                                              <th className="text-right py-1 pr-3 font-semibold">Férias</th>
+                                              <th className="text-right py-1 pr-3 font-semibold">Seg.</th>
+                                              <th className="text-right py-1 pr-3 font-semibold">FGTS</th>
+                                              <th className="text-right py-1 font-semibold">Total</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {histFiltered.map((hm: any, mi: number) => (
+                                              <tr key={mi} className="border-b border-indigo-100/50 hover:bg-indigo-100/30">
+                                                <td className="py-1 pr-3 text-gray-700 font-medium">{hm.mes}</td>
+                                                <td className="py-1 pr-3 text-center text-gray-500">{hm.diasNaObra}/{hm.diasNoMes}</td>
+                                                <td className="py-1 pr-3 text-center">
+                                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${Number(hm.fracao) < 1 ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+                                                    {(Number(hm.fracao) * 100).toFixed(0)}%
+                                                  </span>
+                                                </td>
+                                                <td className="py-1 pr-3 text-right text-gray-700">{fmt(Number(hm.salarioBruto))}</td>
+                                                <td className="py-1 pr-3 text-right text-amber-700">{Number(hm.horasExtras) > 0 ? fmt(Number(hm.horasExtras)) : <span className="text-gray-300">—</span>}</td>
+                                                <td className="py-1 pr-3 text-right text-teal-700">{Number(hm.va) > 0 ? fmt(Number(hm.va)) : <span className="text-gray-300">—</span>}</td>
+                                                <td className="py-1 pr-3 text-right text-orange-700">{Number(hm.ferias) > 0 ? fmt(Number(hm.ferias)) : <span className="text-gray-300">—</span>}</td>
+                                                <td className="py-1 pr-3 text-right text-rose-700">{Number(hm.seguroVida) > 0 ? fmt(Number(hm.seguroVida)) : <span className="text-gray-300">—</span>}</td>
+                                                <td className="py-1 pr-3 text-right text-blue-700">{fmt(Number(hm.fgts))}</td>
+                                                <td className="py-1 text-right font-semibold text-indigo-700">{fmt(Number(hm.custoTotal))}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-xs text-gray-700">
+                            <td className="px-2 py-2 text-[10px] uppercase tracking-wide">
+                              {filtroFuncao ? <span className="text-indigo-600">SUBTOTAL — {filtroFuncao}</span> : "TOTAL"}
+                            </td>
+                            <td className="text-center px-2 py-2 text-gray-500">{rhFuncsFiltrados.length}</td>
+                            <td className="text-right px-2 py-2">{fmt(rhResumoFiltrado.salarioBruto)}</td>
+                            <td className="text-right px-2 py-2 text-amber-700">{fmt(rhResumoFiltrado.he)}</td>
+                            <td className="text-right px-2 py-2 text-teal-700">{fmt(rhResumoFiltrado.va)}</td>
+                            <td className="text-right px-2 py-2 text-orange-700">{fmt(rhResumoFiltrado.ferias)}</td>
+                            <td className="text-right px-2 py-2 text-rose-700">{fmt(rhResumoFiltrado.seguroVida)}</td>
+                            <td className="text-right px-2 py-2 text-blue-700">{fmt(rhResumoFiltrado.fgts)}</td>
+                            <td className="text-right px-2 py-2 font-bold text-indigo-700">{fmt(rhResumoFiltrado.custoTotal)}</td>
+                            <td />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  /* ── Visão Engenheiro / Gestor: custo agregado por função (LGPD) ── */
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                        Custo por Função{rhMes !== 'all' ? ` — ${MES_LABELS[parseInt(rhMes)-1]}/${String(rhAno).slice(2)}` : ''}
+                        {' — '}{rhPorFuncao.length} {rhPorFuncao.length === 1 ? "função" : "funções"}
+                      </p>
+                      {rhCargoOptions.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <select
+                            value={filtroFuncao}
+                            onChange={(e) => setFiltroFuncao(e.target.value)}
+                            className="text-[11px] border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer"
+                          >
+                            <option value="">Todas as funções ({(analiseRH.data.funcionarios ?? []).length})</option>
+                            {rhCargoOptions.map((c) => {
+                              const cnt = (analiseRH.data.funcionarios ?? []).filter((f: any) =>
+                                (f.cargo || f.razao_social || "Sem função").trim() === c).length;
+                              return <option key={c} value={c}>{c} ({cnt})</option>;
+                            })}
+                          </select>
+                          {filtroFuncao && (
+                            <button onClick={() => setFiltroFuncao("")}
+                              className="text-[11px] text-indigo-500 hover:text-indigo-700 underline">
+                              limpar
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="overflow-x-auto rounded border border-gray-200">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500">
+                            <th className="text-left px-2 py-1.5 font-semibold">Função / Cargo</th>
+                            <th className="text-center px-2 py-1.5 font-semibold">Qtd</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">Sal. Bruto</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">HE</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">VR/VA</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">Férias</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">Seg.</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">FGTS</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rhPorFuncao.map((g) => (
+                            <tr key={g.cargo} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
+                              <td className="px-2 py-1.5 font-medium text-gray-800">{g.cargo}</td>
+                              <td className="text-center px-2 py-1.5 text-gray-500">{g.qtd}</td>
+                              <td className="text-right px-2 py-1.5 text-gray-700">{fmt(g.salarioBruto)}</td>
+                              <td className="text-right px-2 py-1.5 text-amber-700">{g.he > 0 ? fmt(g.he) : <span className="text-gray-300">—</span>}</td>
+                              <td className="text-right px-2 py-1.5 text-teal-700">{g.va > 0 ? fmt(g.va) : <span className="text-gray-300">—</span>}</td>
+                              <td className="text-right px-2 py-1.5 text-orange-700">{g.ferias > 0 ? fmt(g.ferias) : <span className="text-gray-300">—</span>}</td>
+                              <td className="text-right px-2 py-1.5 text-rose-700">{g.seguroVida > 0 ? fmt(g.seguroVida) : <span className="text-gray-300">—</span>}</td>
+                              <td className="text-right px-2 py-1.5 text-blue-700">{fmt(g.fgts)}</td>
+                              <td className="text-right px-2 py-1.5 font-semibold text-indigo-700">{fmt(g.custoTotal)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-xs text-gray-700">
+                            <td className="px-2 py-2 text-[10px] uppercase tracking-wide">
+                              {filtroFuncao ? <span className="text-indigo-600">SUBTOTAL — {filtroFuncao}</span> : "TOTAL"}
+                            </td>
+                            <td className="text-center px-2 py-2 text-gray-500">{rhFuncsFiltrados.length}</td>
+                            <td className="text-right px-2 py-2">{fmt(rhResumoFiltrado.salarioBruto)}</td>
+                            <td className="text-right px-2 py-2 text-amber-700">{fmt(rhResumoFiltrado.he)}</td>
+                            <td className="text-right px-2 py-2 text-teal-700">{fmt(rhResumoFiltrado.va)}</td>
+                            <td className="text-right px-2 py-2 text-orange-700">{fmt(rhResumoFiltrado.ferias)}</td>
+                            <td className="text-right px-2 py-2 text-rose-700">{fmt(rhResumoFiltrado.seguroVida)}</td>
+                            <td className="text-right px-2 py-2 text-blue-700">{fmt(rhResumoFiltrado.fgts)}</td>
+                            <td className="text-right px-2 py-2 font-bold text-indigo-700">{fmt(rhResumoFiltrado.custoTotal)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-gray-400 italic mt-1.5 flex items-center gap-1">
+                      <span>🔒</span>
+                      Detalhamento individual restrito — valores agrupados por função conforme política de privacidade (LGPD).
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
