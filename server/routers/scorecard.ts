@@ -1911,43 +1911,112 @@ export const scorecardRouter = router({
             AND svc.employee_id IN (${relevantEmpSql})
         `),
 
-        // Rev. 4307 — PJ contracts linked to this obra, pro-rated by active months
+        // Rev. 4312 — PJ: proration by actual days in obra (mirrors CLT site_periods logic)
         db.execute(sql`
-          WITH pj_range AS (
+          WITH
+          obra_ini_pj AS (
+            SELECT COALESCE("dataInicio"::date, '2000-01-01'::date) AS data_inicio
+            FROM obras WHERE id = ${input.obraId}
+          ),
+          -- Mirrors the CLT site_periods CTE: determines exact period each PJ was in THIS obra
+          pj_site_periods AS (
+            -- Ramo A: formal transfer records via employee_site_history
+            SELECT
+              esh."employeeId"                                                 AS employee_id,
+              GREATEST(
+                MIN(esh."dataInicio"::date),
+                (SELECT data_inicio FROM obra_ini_pj)
+              )                                                                AS periodo_inicio,
+              CASE
+                WHEN BOOL_OR(esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL)
+                  THEN MAX(CASE WHEN esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL
+                                THEN esh."dataFim"::date END)
+                WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
+                ELSE MAX(esh."dataFim"::date)
+              END                                                              AS periodo_fim
+            FROM employee_site_history esh
+            WHERE esh."obraId"    = ${input.obraId}
+              AND esh."companyId" = ${input.companyId}
+            GROUP BY esh."employeeId"
+
+            UNION ALL
+
+            -- Ramo B: obra_funcionarios without ESH history
+            SELECT
+              of2."employeeId"                                                 AS employee_id,
+              GREATEST(
+                of2."createdAt"::date,
+                (SELECT data_inicio FROM obra_ini_pj)
+              )                                                                AS periodo_inicio,
+              COALESCE(
+                (SELECT MIN(of3."createdAt"::date)
+                 FROM obra_funcionarios of3
+                 WHERE of3."employeeId" = of2."employeeId"
+                   AND of3."companyId"  = of2."companyId"
+                   AND of3."obraId"    <> of2."obraId"
+                   AND of3."createdAt"  > of2."createdAt"),
+                CURRENT_DATE
+              )                                                                AS periodo_fim
+            FROM obra_funcionarios of2
+            WHERE of2."obraId"    = ${input.obraId}
+              AND of2."companyId" = ${input.companyId}
+              AND NOT EXISTS (
+                SELECT 1 FROM employee_site_history esh2
+                WHERE esh2."employeeId" = of2."employeeId"
+                  AND esh2."obraId"     = ${input.obraId}
+                  AND esh2."companyId"  = ${input.companyId}
+              )
+          ),
+          pj_periods AS (
             SELECT
               pc."employeeId"                                                              AS employee_id,
               REPLACE(REPLACE(COALESCE(pc."valorMensal",'0'), '.', ''), ',', '.')::numeric AS valor_mensal,
               pc."numeroContrato"                                                          AS numero_contrato,
               pc."razaoSocialPrestador"                                                    AS razao_social,
+              -- Effective start: latest of (obra allocation, contract start, filter start)
               GREATEST(
-                DATE_TRUNC('month', pc."dataInicio"::date),
-                DATE_TRUNC('month', (${mesFeriasIni} || '-01')::date)
-              ) AS range_ini,
+                COALESCE(sp.periodo_inicio, (${mesFeriasIni} || '-01')::date),
+                COALESCE(pc."dataInicio"::date, '2000-01-01'::date),
+                (${mesFeriasIni} || '-01')::date
+              )                                                                            AS efetivo_inicio,
+              -- Effective end: earliest of (obra departure, contract end, filter end)
               LEAST(
-                DATE_TRUNC('month', pc."dataFim"::date),
-                DATE_TRUNC('month', (${mesFeriasFim} || '-01')::date)
-              ) AS range_fim
+                COALESCE(sp.periodo_fim, CURRENT_DATE),
+                COALESCE(pc."dataFim"::date, CURRENT_DATE),
+                ((${mesFeriasFim} || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
+              )                                                                            AS efetivo_fim
             FROM pj_contracts pc
-            -- Rev. 4309: usa relevant_emp (obra_funcionarios + employee_site_history)
-            -- como fonte de verdade — os mesmos 4 PJ que aparecem no Efetivo da Obra.
-            -- Mesma lógica do CLT (payroll filtra por employeeId IN relevant_emp).
-            -- dataFim/dataInicio NULL = contrato open-ended → tratado com IS NULL OR.
+            LEFT JOIN pj_site_periods sp ON sp.employee_id = pc."employeeId"
             WHERE pc."employeeId" IN (${relevantEmpSql})
               AND pc.status       IN ('ativo','pendente_assinatura')
               AND pc."deletedAt"  IS NULL
-              AND (pc."dataFim" IS NULL OR pc."dataFim" >= (${mesFeriasIni} || '-01')::date)
-              AND (pc."dataInicio" IS NULL OR pc."dataInicio" <= (${mesFeriasFim} || '-28')::date)
+              AND (pc."dataFim"    IS NULL OR pc."dataFim"::date    >= (${mesFeriasIni} || '-01')::date)
+              AND (pc."dataInicio" IS NULL OR pc."dataInicio"::date <= (${mesFeriasFim} || '-28')::date)
           ),
           pj_meses AS (
             SELECT
-              pr.employee_id,
-              pr.valor_mensal,
-              pr.numero_contrato,
-              pr.razao_social,
-              TO_CHAR(m, 'YYYY-MM') AS mes
-            FROM pj_range pr
-            CROSS JOIN LATERAL generate_series(pr.range_ini, pr.range_fim, '1 month'::interval) AS m
-            WHERE pr.range_ini <= pr.range_fim
+              pp.employee_id,
+              pp.valor_mensal,
+              pp.numero_contrato,
+              pp.razao_social,
+              TO_CHAR(m, 'YYYY-MM')                                                             AS mes,
+              EXTRACT('day' FROM
+                (DATE_TRUNC('month', m) + INTERVAL '1 month' - INTERVAL '1 day')
+              )::int                                                                             AS dias_no_mes,
+              -- Days this PJ was actually in this obra within the month
+              GREATEST(0,
+                (LEAST(
+                  pp.efetivo_fim,
+                  (DATE_TRUNC('month', m) + INTERVAL '1 month' - INTERVAL '1 day')::date
+                ) - GREATEST(pp.efetivo_inicio, DATE_TRUNC('month', m)::date) + 1)
+              )::int                                                                             AS dias_na_obra
+            FROM pj_periods pp
+            CROSS JOIN LATERAL generate_series(
+              DATE_TRUNC('month', pp.efetivo_inicio),
+              DATE_TRUNC('month', pp.efetivo_fim),
+              '1 month'::interval
+            ) AS m
+            WHERE DATE_TRUNC('month', pp.efetivo_inicio) <= DATE_TRUNC('month', pp.efetivo_fim)
           )
           SELECT
             pm.employee_id,
@@ -1955,17 +2024,17 @@ export const scorecardRouter = router({
             e."fotoUrl"         AS foto_url,
             e.matricula,
             e.cargo,
-            COUNT(DISTINCT pm.mes)::int   AS meses_ativos,
-            SUM(pm.valor_mensal)          AS custo_total,
-            MAX(pm.numero_contrato)       AS numero_contrato,
-            MAX(pm.razao_social)          AS razao_social,
+            COUNT(DISTINCT pm.mes)::int                                                                    AS meses_ativos,
+            SUM(ROUND(pm.valor_mensal * pm.dias_na_obra::numeric / NULLIF(pm.dias_no_mes,0), 2))           AS custo_total,
+            MAX(pm.numero_contrato)                                                                        AS numero_contrato,
+            MAX(pm.razao_social)                                                                           AS razao_social,
             JSON_AGG(
               JSON_BUILD_OBJECT(
                 'mes',          pm.mes,
-                'diasNaObra',   30,
-                'diasNoMes',    30,
-                'fracao',       1,
-                'salarioBruto', pm.valor_mensal,
+                'diasNaObra',   pm.dias_na_obra,
+                'diasNoMes',    pm.dias_no_mes,
+                'fracao',       ROUND(pm.dias_na_obra::numeric / NULLIF(pm.dias_no_mes,0), 3),
+                'salarioBruto', ROUND(pm.valor_mensal * pm.dias_na_obra::numeric / NULLIF(pm.dias_no_mes,0), 2),
                 'horasExtras',  0,
                 'adicionais',   0,
                 'va',           0,
@@ -1974,13 +2043,14 @@ export const scorecardRouter = router({
                 'ferias',       0,
                 'seguroVida',   0,
                 'liquido',      0,
-                'custoEmpresa', pm.valor_mensal,
-                'custoTotal',   pm.valor_mensal,
+                'custoEmpresa', ROUND(pm.valor_mensal * pm.dias_na_obra::numeric / NULLIF(pm.dias_no_mes,0), 2),
+                'custoTotal',   ROUND(pm.valor_mensal * pm.dias_na_obra::numeric / NULLIF(pm.dias_no_mes,0), 2),
                 'folhaStatus',  'pj'
               ) ORDER BY pm.mes
-            ) AS historico_mensal
+            )                                                                                              AS historico_mensal
           FROM pj_meses pm
           JOIN employees e ON e.id = pm.employee_id
+          WHERE pm.dias_na_obra > 0
           GROUP BY pm.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo
           ORDER BY custo_total DESC NULLS LAST
         `),

@@ -1,4 +1,37 @@
 /**
+ * Rev. 4312 - SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA
+ *
+ * CONTEXTO:
+ *   A query PJ (Rev. 4307/4309) usava as datas do CONTRATO (dataInicio/dataFim)
+ *   como bounds de geração de meses e hardcodava diasNaObra=30, diasNoMes=30, fracao=1.
+ *   Um PJ com contrato desde Jan e alocado nesta obra apenas em Jun mostrava custo
+ *   de todos os meses desde Janeiro — custo inflado e conceitualmente errado.
+ *   Também meses com apenas alguns dias de presença eram cobrados como mês cheio.
+ *
+ * CAUSA RAIZ:
+ *   A lógica CLT já tinha a CTE site_periods + payroll_frac que calcula
+ *   dias_na_obra por mês e pro-rata o custo. A query PJ não tinha equivalente.
+ *
+ * SOLUÇÃO — mirrors CLT site_periods para PJ:
+ *   1. Nova CTE obra_ini_pj: piso absoluto (dataInicio da obra).
+ *   2. Nova CTE pj_site_periods: idêntica ao site_periods CLT.
+ *      Ramo A: employee_site_history (transferência formal).
+ *      Ramo B: obra_funcionarios sem ESH, fecha período quando vai para outra obra.
+ *   3. pj_periods: efetivo_inicio = MAX(obra_alloc, contrato_ini, filtro_ini)
+ *                  efetivo_fim   = MIN(obra_depart, contrato_fim, filtro_fim)
+ *   4. pj_meses: generate_series sobre efetivo_inicio→efetivo_fim.
+ *      dias_na_obra = interseção dia-a-dia do efetivo_inicio/fim com o mês.
+ *      dias_no_mes = dias totais do mês calendário.
+ *   5. Custo = valor_mensal × dias_na_obra / dias_no_mes (ROUND 2dp).
+ *   6. WHERE dias_na_obra > 0 → exclui meses sem presença na obra.
+ *   Resultado: custo aparece SOMENTE nos meses em que o PJ estava nesta obra,
+ *   e proporcional aos dias efetivos quando entrou/saiu no meio do mês.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: server/routers/scorecard.ts
+ */
+
+/**
  * Rev. 4311 - SCORECARD RH/FOLHA: RE-INIT AO TROCAR DE OBRA
  *
  * CONTEXTO:
