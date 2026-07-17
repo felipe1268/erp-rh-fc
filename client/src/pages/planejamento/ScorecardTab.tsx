@@ -241,12 +241,18 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   // Período da obra — inicializa rhAno com o ano de início da obra
   const obraIniMes = proj?.dataInicio            ? String(proj.dataInicio).slice(0, 7)            : null; // "2026-06"
   const obraFimMes = proj?.dataTerminoContratual ? String(proj.dataTerminoContratual).slice(0, 7) : null; // "2026-12"
-  const _rhPeriodInit = useRef(false);
+  // Rastreia o obraId já inicializado — garante re-init ao trocar de obra
+  const _rhPeriodInit = useRef<number | null>(null);
   useEffect(() => {
-    if (_rhPeriodInit.current || !obraIniMes) return;
+    if (!obraIniMes || !obraId) return;
+    if (_rhPeriodInit.current === obraId) return; // mesma obra, não sobrescreve escolha manual
     const y = parseInt(obraIniMes.slice(0, 4));
-    if (!isNaN(y)) { setRhAno(y); _rhPeriodInit.current = true; }
-  }, [obraIniMes]);
+    if (!isNaN(y)) {
+      setRhAno(y);
+      setRhMes("all");
+      _rhPeriodInit.current = obraId;
+    }
+  }, [obraIniMes, obraId]);
   const [segAno,        setSegAno]        = useState(new Date().getFullYear());
   const [segMes,        setSegMes]        = useState<number | null>(new Date().getMonth() + 1);
   const [sstExpandChart,setSstExpandChart]= useState<string | null>(null);

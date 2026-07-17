@@ -1,4 +1,23 @@
 /**
+ * Rev. 4311 - SCORECARD RH/FOLHA: RE-INIT AO TROCAR DE OBRA
+ *
+ * CONTEXTO:
+ *   Rev. 4310 usava useRef(false) para inicializar rhAno/rhMes apenas 1x.
+ *   Se o componente ScorecardTab for reutilizado sem desmontar ao navegar entre
+ *   obras (possível com Wouter SPA), o período ficaria travado na primeira obra.
+ *
+ * SOLUÇÃO:
+ *   useRef agora armazena o obraId já inicializado (número | null).
+ *   Condição: _rhPeriodInit.current === obraId → pula (preserva escolha manual).
+ *   Quando obraId muda → re-inicializa rhAno + rhMes="all" e grava novo obraId.
+ *   Efeito: lógica de período por cronograma funciona automaticamente para
+ *   TODAS as obras ativas, não apenas a primeira aberta na sessão.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4310 - SCORECARD RH/FOLHA: PERÍODO PADRÃO = CRONOGRAMA DA OBRA
  *
  * CONTEXTO:

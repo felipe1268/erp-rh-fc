@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4310** — **SCORECARD RH/FOLHA: PERÍODO PADRÃO = CRONOGRAMA DA OBRA.** `useEffect` inicializa `rhAno` com o ano de `proj.dataInicio` na 1ª carga. "Ano todo" agora clampa `mesInicio/mesFim` pelos bounds da obra no ano exibido (ex: Jun–Dez/2026 em vez de Jan–Dez). Texto informativo aparece abaixo do seletor quando o período é reduzido. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4311** — **SCORECARD RH/FOLHA: RE-INIT AO TROCAR DE OBRA.** `useRef` passa a guardar o `obraId` já inicializado (antes era `boolean`). Ao navegar para outra obra, `rhAno`/`rhMes` são re-inicializados pelo cronograma da nova obra. Preserva escolha manual dentro da mesma obra. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4309** — **SCORECARD: FIX PJ QUERY — USAR relevant_emp COMO FONTE DE VERDADE.** Os 4 PJ da obra estão em `obra_funcionarios` como CLT. A CTE `relevant_emp` já os contém. Fix: substituir filtro `companyId/obra_id` por `pc."employeeId" IN (relevant_emp)` — mesma lógica do CLT. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4310** — **SCORECARD RH/FOLHA: PERÍODO PADRÃO = CRONOGRAMA DA OBRA.** `useEffect` inicializa `rhAno` com o ano de `proj.dataInicio`. "Ano todo" clampa `mesInicio/mesFim` pelos bounds da obra (Jun–Dez/2026 em vez de Jan–Dez). Texto informativo abaixo do seletor. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4309** — **SCORECARD: FIX PJ QUERY — USAR relevant_emp COMO FONTE DE VERDADE.** `pc."employeeId" IN (relevant_emp)` — mesma lógica do CLT. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4308** — **SCORECARD: FIX PJ QUERY — FILTRO obra_id REMOVIDO + NULL DATE HANDLING.** Fix intermediário: removido obra_id; NULL dates corrigidos; status expandido para `IN ('ativo','pendente_assinatura')`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4306** — **SCORECARD: FIX LOCAÇÕES INVISÍVEIS — ORDER BY CASE ALIAS EM UNION SEM SUBQUERY.** PostgreSQL não permite aliases de saída em expressões no `ORDER BY` direto de `UNION ALL`. Fix: UNION envolvido em `SELECT * FROM (...) _loc`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4305** — **SCORECARD: FIX LOCAÇÕES — NULLIF EMPTY STRING + SAFE() LOG MELHORADO.** `data_fim_real=''` → `NULLIF(col,'')::date`; `safe()` agora loga `e.cause.message` (erro Postgres real). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4304** — **SCORECARD: FIX CRÍTICO getCustosRH — CAST NUMÉRICO COM SEPARADOR DE MILHAR BR.** Duplo REPLACE em 11 colunas VARCHAR salário. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
