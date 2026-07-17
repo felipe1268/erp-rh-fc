@@ -1,4 +1,52 @@
 /**
+ * Rev. 4343 - EQUIPAMENTOS PRÓPRIOS: SELEÇÃO MÚLTIPLA + TRANSFERÊNCIA EM LOTE
+ *
+ * PROBLEMA: o único jeito de transferir equipamento era clicar no botão ⇌ de cada card
+ *   individualmente — impossível transferir vários de uma vez. O botão ficava oculto até
+ *   o hover, tornando o fluxo ainda menos intuitivo num celular/tablet.
+ *
+ * SOLUÇÃO:
+ *
+ *   CHECKBOX EM CADA CARD:
+ *     · Aparece no hover (opacity-0 → group-hover:opacity-100) quando não marcado.
+ *     · Quando marcado: sempre visível, azul sólido (bg-blue-600), com ícone Check.
+ *     · O card inteiro ganha ring azul (ring-2 ring-blue-400) indicando seleção.
+ *     · Clique no checkbox → stopPropagation (não abre o modal de edição).
+ *
+ *   BARRA STICKY DE SELEÇÃO:
+ *     · Surge no rodapé da tela quando selecionados.size > 0.
+ *     · Fundo azul escuro gradiente (1B2A4A → 2E4373), z-40.
+ *     · Esquerda: ícone azul + "N selecionado(s)".
+ *     · Direita: botão "Cancelar" (limpa Set) + botão roxo "Transferir N".
+ *     · Clicar "Transferir N": filtra data[] pelo Set de IDs, abre modalTransf com array.
+ *
+ *   MODAL DE TRANSFERÊNCIA ATUALIZADO:
+ *     · State: `modalTransf` passou de `{ equipamento: any }` para `{ equipamentos: any[] }`.
+ *     · Botão individual (⇌ no card): abre com `{ equipamentos: [p] }` (sem quebra).
+ *     · Quando equipamentos.length === 1: exibe card de 1 equipamento (layout antigo).
+ *     · Quando > 1: exibe lista scrollável com cada item + checkbox de progresso.
+ *     · Durante o envio: checkboxes animam conforme cada item é confirmado.
+ *
+ *   PROGRESSO 0→100% NO BOTÃO (REGRA DE OURO):
+ *     · `confirmarTransferencia()` é async, faz loop com `mutateAsync` item a item.
+ *     · `bulkTransfProgress: { done, total }` controla a barra branca e o texto "XX%".
+ *     · Barra bg-white/15 cresce via style.width; texto "Enviando... XX%".
+ *     · Ao finalizar: invalida query, limpa Set, fecha modal, toast de sucesso.
+ *
+ * ARQUIVOS:
+ *   · client/src/pages/equipamentos/Proprios.tsx
+ *     - Imports: adiciona `Check`
+ *     - State: `selecionados: Set<number>`, `bulkTransfProgress`, `modalTransf` novo tipo
+ *     - `toggleSel(id, e)`: toggle do Set + stopPropagation
+ *     - `confirmarTransferencia()`: loop async com mutateAsync
+ *     - `renderItemCard`: `relative` no container + checkbox absoluto top-left
+ *     - Modal: lista de itens, progresso por item, botão com barra
+ *   · shared/version.ts → Rev. 4343
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4342 - RECEBER LOCAÇÃO: REDESENHO COMPLETO DO MODAL (conferência de itens + divergência)
  *
  * PROBLEMA: modal era uma lista de campos técnicos (formulário denso) — confuso para

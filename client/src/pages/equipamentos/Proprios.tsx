@@ -5,7 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import {
   Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp,
-  Sparkles, Trash2, Boxes, Wrench, CheckCircle2, Layers, Hash,
+  Sparkles, Trash2, Boxes, Wrench, CheckCircle2, Check, Layers, Hash,
   Building2, User as UserIcon, Loader2, ListChecks, Database, DollarSign,
   ArrowRightLeft, Clock, ChevronRight, MapPin,
 } from "lucide-react";
@@ -113,25 +113,60 @@ export default function EquipamentosProprios() {
   const [confirmPrecos, setConfirmPrecos] = useState<{ semValor: number } | null>(null);
 
   // Rev. 4340 — Transferência de equipamentos próprios entre obras
-  const [modalTransf, setModalTransf] = useState<{ equipamento: any } | null>(null);
+  // Rev. 4343 — modalTransf agora suporta lote (array de equipamentos)
+  const [modalTransf, setModalTransf] = useState<{ equipamentos: any[] } | null>(null);
   const [transfDestinoId, setTransfDestinoId] = useState<number>(0);
   const [transfMotivo, setTransfMotivo] = useState("");
+  // Rev. 4343 — seleção múltipla para transferência em lote
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  function toggleSel(id: number, e: React.MouseEvent) {
+    e.stopPropagation();
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  // Progresso do envio em lote (done/total)
+  const [bulkTransfProgress, setBulkTransfProgress] = useState<{ done: number; total: number } | null>(null);
   const { data: obrasParaTransferir = [] } = trpc.obras.listForAlmoxarifado.useQuery(
     { companyId, forTransfer: true },
     { enabled: !!companyId }
   );
   const iniciarTransf = trpc.equipamentos.iniciarTransferenciaObra.useMutation({
-    onSuccess: () => {
-      utils.equipamentos.propriosListar.invalidate();
-      setModalTransf(null); setTransfDestinoId(0); setTransfMotivo("");
-      toast.success("Transferência enviada! O almoxarifado de destino precisa confirmar o recebimento.");
-    },
     onError: (e) => toast.error(e.message),
   });
   const cancelarTransf = trpc.equipamentos.cancelarTransferenciaObra.useMutation({
     onSuccess: () => { utils.equipamentos.propriosListar.invalidate(); toast.success("Transferência cancelada."); },
     onError: (e) => toast.error(e.message),
   });
+  async function confirmarTransferencia() {
+    if (!modalTransf || !transfDestinoId) return;
+    const equipamentos = modalTransf.equipamentos;
+    const obra = (obrasParaTransferir as any[]).find((o: any) => o.id === transfDestinoId);
+    setBulkTransfProgress({ done: 0, total: equipamentos.length });
+    let ok = 0;
+    for (let i = 0; i < equipamentos.length; i++) {
+      try {
+        await iniciarTransf.mutateAsync({
+          companyId,
+          equipamentoId: equipamentos[i].id,
+          destinoObraId: transfDestinoId,
+          destinoObraNome: obra?.nome,
+          motivo: transfMotivo || undefined,
+        });
+        ok++;
+      } catch {
+        toast.error(`Erro ao transferir "${equipamentos[i].descricao}"`);
+      }
+      setBulkTransfProgress({ done: i + 1, total: equipamentos.length });
+    }
+    setBulkTransfProgress(null);
+    utils.equipamentos.propriosListar.invalidate();
+    setSelecionados(new Set());
+    setModalTransf(null); setTransfDestinoId(0); setTransfMotivo("");
+    if (ok > 0) toast.success(`${ok} equipamento${ok !== 1 ? "s" : ""} enviado${ok !== 1 ? "s" : ""} para transferência! O almoxarifado de destino precisa confirmar.`);
+  }
   // Rev. 3026 — progresso fase a fase do "Gerar preços com IA". A geração roda
   // em lotes (loop client-driven) e esta UI mostra a evolução 0→100%.
   const [precoRun, setPrecoRun] = useState<{
@@ -910,15 +945,30 @@ export default function EquipamentosProprios() {
               const renderItemCard = (p: any, inGroup = false) => {
                 const pFotos = (p.fotosJson as FotoItem[]) || [];
                 const foto = pFotos[0];
+                const isSel = selecionados.has(p.id);
                 return (
                   <div
                     key={p.id}
-                    className="group bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-xl overflow-hidden shadow-sm transition cursor-pointer flex"
+                    className={`group relative bg-white border hover:shadow-md rounded-xl overflow-hidden shadow-sm transition cursor-pointer flex ${isSel ? "border-blue-500 ring-2 ring-blue-400 shadow-blue-100" : "border-slate-200 hover:border-blue-400"}`}
                     onClick={() => abrirEdit(p)}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === "Enter") abrirEdit(p); }}
                   >
+                    {/* Rev. 4343 — Checkbox de seleção múltipla */}
+                    <button
+                      type="button"
+                      onClick={(e) => toggleSel(p.id, e)}
+                      aria-label={isSel ? "Desmarcar equipamento" : "Selecionar equipamento"}
+                      title={isSel ? "Desmarcar" : "Selecionar para transferência"}
+                      className={`absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center transition-all shadow-sm ${
+                        isSel
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-white border-slate-300 opacity-0 group-hover:opacity-100 hover:border-blue-400"
+                      }`}
+                    >
+                      {isSel && <Check className="h-3 w-3" />}
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -971,7 +1021,7 @@ export default function EquipamentosProprios() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setTransfDestinoId(0); setTransfMotivo("");
-                                setModalTransf({ equipamento: p });
+                                setModalTransf({ equipamentos: [p] });
                               }}
                               title="Transferir para outra obra"
                               className="p-1 rounded text-slate-400 hover:text-violet-600 hover:bg-violet-50 opacity-0 group-hover:opacity-100 transition"
@@ -1670,42 +1720,116 @@ export default function EquipamentosProprios() {
         </div>
       )}
 
-      {/* ── Rev. 4340 — Modal Transferência de Equipamento Próprio ───────── */}
+      {/* ── Rev. 4343 — Barra sticky de seleção múltipla ─────────────────── */}
+      {selecionados.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between gap-3 px-4 py-3 shadow-2xl" style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#2E4373 100%)" }}>
+          <div className="flex items-center gap-2 text-white">
+            <div className="w-6 h-6 rounded bg-blue-500 flex items-center justify-center">
+              <Check className="h-3.5 w-3.5" />
+            </div>
+            <span className="text-sm font-semibold">{selecionados.size} selecionado{selecionados.size !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelecionados(new Set())}
+              className="text-xs text-white/70 hover:text-white underline px-2 py-1"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => {
+                const itens = (data as any[]).filter((p: any) => selecionados.has(p.id));
+                setTransfDestinoId(0); setTransfMotivo("");
+                setModalTransf({ equipamentos: itens });
+              }}
+              className="flex items-center gap-2 bg-violet-500 hover:bg-violet-400 px-4 py-2 rounded-lg text-sm font-bold text-white transition"
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+              Transferir {selecionados.size}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Rev. 4340/4343 — Modal Transferência (suporta lote) ───────────── */}
       {modalTransf && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setModalTransf(null)} />
+          <div className="fixed inset-0 bg-black/50" onClick={() => !bulkTransfProgress && setModalTransf(null)} />
           <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-md mx-4">
             <div
               className="flex items-center justify-between px-5 py-4 rounded-t-xl text-white"
               style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#2E4373 100%)" }}
             >
               <h2 className="text-base font-bold flex items-center gap-2">
-                <ArrowRightLeft className="h-5 w-5" /> Transferir Equipamento
+                <ArrowRightLeft className="h-5 w-5" />
+                {modalTransf.equipamentos.length > 1 ? `Transferir ${modalTransf.equipamentos.length} Equipamentos` : "Transferir Equipamento"}
               </h2>
-              <button onClick={() => setModalTransf(null)} className="text-white/70 hover:text-white">
-                <X className="h-5 w-5" />
-              </button>
+              {!bulkTransfProgress && (
+                <button onClick={() => setModalTransf(null)} className="text-white/70 hover:text-white">
+                  <X className="h-5 w-5" />
+                </button>
+              )}
             </div>
             <div className="p-5 space-y-4">
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Equipamento</p>
-                <p className="text-sm font-semibold text-slate-800 mt-0.5">{modalTransf.equipamento.descricao}</p>
-                <p className="text-[11px] text-slate-500 font-mono">{modalTransf.equipamento.codigoPatrimonio}</p>
-              </div>
+              {/* Lista de equipamentos selecionados */}
+              {modalTransf.equipamentos.length === 1 ? (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Equipamento</p>
+                  <p className="text-sm font-semibold text-slate-800 mt-0.5">{modalTransf.equipamentos[0].descricao}</p>
+                  <p className="text-[11px] text-slate-500 font-mono">{modalTransf.equipamentos[0].codigoPatrimonio}</p>
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Equipamentos selecionados</p>
+                    <span className="text-[10px] font-bold bg-[#1B2A4A] text-white px-2 py-0.5 rounded-full">{modalTransf.equipamentos.length}</span>
+                  </div>
+                  <div className="max-h-36 overflow-y-auto divide-y divide-slate-100">
+                    {modalTransf.equipamentos.map((eq: any, idx: number) => (
+                      <div key={eq.id} className="px-3 py-2 flex items-center gap-2">
+                        {bulkTransfProgress && bulkTransfProgress.done > idx ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        ) : (
+                          <span className="w-3.5 h-3.5 rounded border border-slate-300 shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 truncate">{eq.descricao}</p>
+                          <p className="text-[10px] text-slate-500 font-mono">{eq.codigoPatrimonio}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Progresso do envio em lote */}
+              {bulkTransfProgress && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-slate-600">
+                    <span>Enviando transferências...</span>
+                    <span className="font-bold">{bulkTransfProgress.done}/{bulkTransfProgress.total}</span>
+                  </div>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-violet-500 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round((bulkTransfProgress.done / bulkTransfProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Obra de destino *</label>
                 <select
                   value={transfDestinoId}
                   onChange={(e) => setTransfDestinoId(Number(e.target.value))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-violet-400 focus:outline-none"
+                  disabled={!!bulkTransfProgress}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-violet-400 focus:outline-none disabled:opacity-50"
                 >
                   <option value={0}>Selecione a obra...</option>
-                  {(obrasParaTransferir as any[])
-                    .filter((o: any) => o.id !== modalTransf.equipamento.localizacaoAtualObraId)
-                    .map((o: any) => (
-                      <option key={o.id} value={o.id}>{o.nome}</option>
-                    ))
-                  }
+                  {(obrasParaTransferir as any[]).map((o: any) => (
+                    <option key={o.id} value={o.id}>{o.nome}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -1713,36 +1837,41 @@ export default function EquipamentosProprios() {
                 <textarea
                   value={transfMotivo}
                   onChange={(e) => setTransfMotivo(e.target.value)}
+                  disabled={!!bulkTransfProgress}
                   rows={2}
                   placeholder="Ex: equipamento necessário na nova frente de trabalho..."
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-violet-400 focus:outline-none"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-violet-400 focus:outline-none disabled:opacity-50"
                 />
               </div>
             </div>
             <div className="flex gap-2 px-5 pb-5">
               <button
                 onClick={() => setModalTransf(null)}
-                className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition"
+                disabled={!!bulkTransfProgress}
+                className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition disabled:opacity-40"
               >
                 Cancelar
               </button>
               <button
-                disabled={!transfDestinoId || iniciarTransf.isPending}
-                onClick={() => {
-                  if (!transfDestinoId) return;
-                  const obra = (obrasParaTransferir as any[]).find((o: any) => o.id === transfDestinoId);
-                  iniciarTransf.mutate({
-                    companyId,
-                    equipamentoId: modalTransf.equipamento.id,
-                    destinoObraId: transfDestinoId,
-                    destinoObraNome: obra?.nome,
-                    motivo: transfMotivo || undefined,
-                  });
-                }}
-                className="flex-1 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2"
+                disabled={!transfDestinoId || !!bulkTransfProgress}
+                onClick={confirmarTransferencia}
+                className="relative flex-1 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2 overflow-hidden"
               >
-                {iniciarTransf.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
-                Enviar Transferência
+                {bulkTransfProgress ? (
+                  <>
+                    <div
+                      className="absolute left-0 top-0 h-full bg-white/15 transition-all duration-300"
+                      style={{ width: `${Math.round((bulkTransfProgress.done / bulkTransfProgress.total) * 100)}%` }}
+                    />
+                    <Loader2 className="h-4 w-4 animate-spin relative z-10" />
+                    <span className="relative z-10">Enviando... {Math.round((bulkTransfProgress.done / bulkTransfProgress.total) * 100)}%</span>
+                  </>
+                ) : (
+                  <>
+                    <ArrowRightLeft className="h-4 w-4" />
+                    {modalTransf.equipamentos.length > 1 ? `Enviar ${modalTransf.equipamentos.length} Transferências` : "Enviar Transferência"}
+                  </>
+                )}
               </button>
             </div>
           </div>

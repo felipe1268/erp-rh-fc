@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4343** — **EQUIPAMENTOS PRÓPRIOS: SELEÇÃO MÚLTIPLA + TRANSFERÊNCIA EM LOTE.** Checkbox em cada card (aparece no hover, azul quando marcado, card fica com ring azul). Barra sticky azul escura no rodapé mostra contagem + botão "Transferir N". Modal atualizado: lista todos os equipamentos selecionados com checkbox animado de progresso, barra 0→100% no botão durante o envio em lote (`confirmarTransferencia` loop com `mutateAsync`). `modalTransf` passou de `{ equipamento }` para `{ equipamentos: any[] }` (botão individual usa `[p]`). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4342** — **RECEBER LOCAÇÃO: REDESENHO COMPLETO DO MODAL.** Tela 0 = seleção de OC com cards grandes (itens + qtd esperada). Tela 1 = conferência item a item: coluna ESPERADO (leitura) vs. RECEBIDO (input grande), semáforo verde/vermelho/âmbar, banner de divergência, auto-inject obs. `ocSelecionadaFull` + `qtdRecebidaPorItem`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4341** — **EQUIPAMENTOS PRÓPRIOS: AGRUPAMENTO POR NOME (accordion inline).** `dataAgrupada` agrupa por `descricao` normalizada. Grupos >1: card-header full-width com count badge, chips de localização por obra (MapPin), total de valor, chevron expandível. Sub-grid com cards individuais ao clicar. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4341** — **EQUIPAMENTOS PRÓPRIOS: AGRUPAMENTO POR NOME (accordion inline).** `dataAgrupada`, grupos expandíveis com count badge + chips de localização. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4340** — **EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS.** Nova tabela + coluna `transferencia_pendente_id`. 5 procedures tRPC. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4338** — **ALMOXARIFADO: SELECIONAR = TODOS MARCADOS + TOGGLE TODOS/NENHUM.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `forTransfer?: boolean` bypassa filtro por usuário. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4336** — **SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
