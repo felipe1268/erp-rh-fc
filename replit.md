@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4329** — **SCORECARD BH: AVATAR CLICÁVEL + Nº INTERNO + MINI-PERFIL EXPANDIDO.** `f.matricula` (COL...) → `Nº {f.employeeId}` limpo. Avatar vira `<button>` com ring:hover; clique alterna `bhExpanded`. Linha expandida (colSpan=3): foto 64×64, nome, cargo, nº, resumo BH. `<React.Fragment key>` no `.map`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4330** — **SCORECARD RH/FOLHA: CARD "CUSTO DIÁRIO DA EQUIPE" COM TOGGLE DIA/SEMANA/MÊS.** Card gradiente indigo→violet no topo da aba Folha/Custos. Toggle pills Dia/Semana/Mês; `custoPeriodo` state. Fórmula: `diasUteisDoMes` seg–sex; Custo Dia=total÷dias; Semana=dia×5; barra de decomposição Salário/VR/FGTS/Férias/Outros. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4328** — **SCORECARD BH: FILTRO "ALOCADO ATUALMENTE" — `periodo_fim >= CURRENT_DATE`.** `emp_obra` usa `periodo_fim >= CURRENT_DATE`; transferido para outra obra fecha `periodo_fim` → sai da lista. Saldo BH é global do funcionário — confirmado com usuário. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4329** — **SCORECARD BH: AVATAR CLICÁVEL + Nº INTERNO + MINI-PERFIL EXPANDIDO.** `f.matricula` (COL...) → `Nº {f.employeeId}` limpo. Avatar vira `<button>` com ring:hover; clique alterna `bhExpanded`. Linha expandida (colSpan=3): foto 64×64, nome, cargo, nº, resumo BH. `<React.Fragment key>` no `.map`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

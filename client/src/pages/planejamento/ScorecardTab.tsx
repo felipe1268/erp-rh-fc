@@ -235,6 +235,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [tabScore,      setTabScore]      = useState<"resultado"|"metas"|"rh"|"seguranca"|"compras"|"operacional">("resultado");
   const [abaAnalise,    setAbaAnalise]    = useState<"compras"|"ferramentas"|"locacoes">("compras");
   const [abaRH,         setAbaRH]         = useState<"folha"|"banco">("folha");
+  const [custoPeriodo,  setCustoPeriodo]  = useState<"dia"|"semana"|"mes">("dia");
   const [expandedRH,    setExpandedRH]    = useState<Set<number>>(new Set());
   const [filtroFuncao,  setFiltroFuncao]  = useState<string>("");
   const [rhSortBy,      setRhSortBy]      = useState<"custo" | "nome">("custo");
@@ -1190,6 +1191,90 @@ export default function ScorecardTab({ proj }: { proj: any }) {
               <p className="text-xs text-gray-400 py-8 text-center">Sem dados de folha para esta obra no período selecionado.</p>
             ) : (
               <div className="space-y-4">
+                {/* ── Card: Custo da Equipe por Período ── */}
+                {(() => {
+                  // helper: dias úteis num mês (seg–sex)
+                  const diasUteisDoMes = (a: number, m: number) => {
+                    const tot = new Date(a, m, 0).getDate();
+                    let u = 0;
+                    for (let d = 1; d <= tot; d++) {
+                      const dow = new Date(a, m - 1, d).getDay();
+                      if (dow !== 0 && dow !== 6) u++;
+                    }
+                    return u;
+                  };
+                  const custoMes = analiseRH.data!.resumo.custoTotalEmpresa;
+                  let diasUteis: number;
+                  if (rhMes === "all") {
+                    // soma dias úteis de todos os meses do ano com dados
+                    const mesesComDados = (analiseRH.data!.mensal as any[])
+                      .filter(e => (e.qtdFuncionarios ?? 0) > 0)
+                      .map(e => parseInt((e.mes as string).split('-')[1]));
+                    diasUteis = mesesComDados.length > 0
+                      ? mesesComDados.reduce((s, m) => s + diasUteisDoMes(rhAno, m), 0)
+                      : diasUteisDoMes(rhAno, new Date().getMonth() + 1);
+                  } else {
+                    diasUteis = diasUteisDoMes(rhAno, parseInt(rhMes));
+                  }
+                  const custoDia     = diasUteis > 0 ? custoMes / diasUteis : 0;
+                  const custoSemana  = custoDia * 5;
+                  const qtdFunc      = analiseRH.data!.resumo.totalFuncionarios;
+                  const valorExibido = custoPeriodo === "dia" ? custoDia : custoPeriodo === "semana" ? custoSemana : custoMes;
+                  const labelPeriodo = custoPeriodo === "dia" ? "dia útil" : custoPeriodo === "semana" ? "semana (5 dias úteis)" : rhMes === "all" ? "ano" : "mês";
+                  return (
+                    <div className="rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white p-4 shadow-md">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200 mb-1">
+                            Custo da Equipe
+                          </p>
+                          <p className="text-3xl font-extrabold leading-none tracking-tight">
+                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(valorExibido)}
+                          </p>
+                          <p className="text-sm text-indigo-200 mt-1">
+                            por {labelPeriodo} · {qtdFunc} {qtdFunc === 1 ? "pessoa" : "pessoas"} · {diasUteis} dias úteis
+                          </p>
+                        </div>
+                        {/* Toggle Dia / Semana / Mês */}
+                        <div className="flex flex-col gap-1 shrink-0">
+                          {(["dia","semana","mes"] as const).map(p => (
+                            <button
+                              key={p}
+                              onClick={() => setCustoPeriodo(p)}
+                              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                                custoPeriodo === p
+                                  ? "bg-white text-indigo-700"
+                                  : "bg-white/20 text-white hover:bg-white/30"
+                              }`}
+                            >
+                              {p === "dia" ? "Dia" : p === "semana" ? "Semana" : "Mês"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Barra de decomposição */}
+                      <div className="mt-3 flex gap-1 text-[10px] text-indigo-200">
+                        {[
+                          { label: "Salário", v: analiseRH.data!.resumo.salarioBrutoTotal },
+                          { label: "VR/VA",   v: analiseRH.data!.resumo.vaTotal },
+                          { label: "FGTS",    v: analiseRH.data!.resumo.fgtsTotal },
+                          { label: "Férias",  v: analiseRH.data!.resumo.feriasTotal ?? 0 },
+                          { label: "Outros",  v: (analiseRH.data!.resumo.seguroVidaTotal ?? 0) + analiseRH.data!.resumo.heTotal },
+                        ].map(({ label, v }) => {
+                          const pct = custoMes > 0 ? Math.round((v / custoMes) * 100) : 0;
+                          if (pct === 0) return null;
+                          return (
+                            <div key={label} style={{ width: `${pct}%` }} className="overflow-hidden" title={`${label}: ${pct}%`}>
+                              <div className="h-1.5 rounded-full bg-white/40 mb-0.5" />
+                              <span className="truncate block">{label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* KPI resumo */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[

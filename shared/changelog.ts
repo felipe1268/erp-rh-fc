@@ -1,4 +1,22 @@
 /**
+ * Rev. 4330 - SCORECARD RH/FOLHA: CARD "CUSTO DIÁRIO DA EQUIPE" COM TOGGLE DIA/SEMANA/MÊS
+ *
+ * PROBLEMA: não havia visão de custo unitário por período para o gestor de obra.
+ *
+ * SOLUÇÃO:
+ *   - Card em destaque (gradiente indigo→violet) no topo da aba Folha/Custos.
+ *   - Toggle de 3 pills (Dia / Semana / Mês) — estado `custoPeriodo`.
+ *   - Fórmula: diasUteisDoMes (seg–sex); Ano todo = soma dos meses com dados.
+ *     · Custo Dia    = custoTotal ÷ diasUteis
+ *     · Custo Semana = custoDia × 5
+ *     · Custo Mês    = custoTotal (direto)
+ *   - Sub-texto: "por X período · N pessoas · M dias úteis".
+ *   - Barra de decomposição proporcional (Salário / VR·VA / FGTS / Férias / Outros).
+ *   - ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4329 - SCORECARD BH: AVATAR CLICÁVEL + Nº INTERNO + MINI-PERFIL EXPANDIDO
  *
  * PROBLEMA: tabela Banco de Horas exibia "COL41942838894" (matricula bruta) como identificador;
