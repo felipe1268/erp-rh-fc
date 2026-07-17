@@ -1954,12 +1954,22 @@ export const scorecardRouter = router({
                 ((${mesFeriasFim} || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
               )                                                                            AS efetivo_fim
             FROM pj_contracts pc
-            WHERE pc.obra_id     = ${input.obraId}
-              AND pc."companyId" = ${input.companyId}
+            WHERE pc."companyId" = ${input.companyId}
               AND pc.status       IN ('ativo','pendente_assinatura')
               AND pc."deletedAt"  IS NULL
               AND pc."dataFim"::date    >= (${mesFeriasIni} || '-01')::date
               AND pc."dataInicio"::date <= (${mesFeriasFim} || '-28')::date
+              AND (
+                -- Contrato vinculado explicitamente à obra
+                pc.obra_id = ${input.obraId}
+                OR
+                -- Contrato sem obra específica, mas o funcionário está alocado nessa obra
+                (pc.obra_id IS NULL AND pc."employeeId" IN (
+                  SELECT "employeeId" FROM obra_funcionarios
+                  WHERE "obraId" = ${input.obraId}
+                    AND "companyId" = ${input.companyId}
+                ))
+              )
           ),
           pj_meses AS (
             SELECT

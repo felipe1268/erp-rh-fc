@@ -1,4 +1,22 @@
 /**
+ * Rev. 4334 - SCORECARD RH/FOLHA: PJ — CUSTO VIA MÓDULO TERCEIROS (obra_id NULL fallback)
+ *
+ * PROBLEMA: query PJ filtrava `pj_contracts.obra_id = obraId` (estrito).
+ *   Contratos PJ criados sem vínculo de obra específica (obra_id IS NULL) não eram encontrados.
+ *   Resultado: todos PJ do efetivo apareciam com R$ 0,00 e badge "Sem folha".
+ *
+ * SOLUÇÃO (scorecard.ts — getCustosRH / pjR query):
+ *   WHERE agora aceita dois casos:
+ *   1. pc.obra_id = obraId              → contrato vinculado explicitamente à obra (caso ideal)
+ *   2. pc.obra_id IS NULL AND employee IN obra_funcionarios(obraId) → contrato de empresa;
+ *      funcionário alocado nessa obra → custo atribuído à obra via efetivo
+ *   Contratos com obra_id de outra obra continuam excluídos (sem dupla contagem).
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers/scorecard.ts
+ */
+
+/**
  * Rev. 4333 - SCORECARD RH/FOLHA: EFETIVO COMPLETO — period_emps LEFT JOIN + badge "Sem folha"
  *
  * PROBLEMA: a CTE `custos` começava de `payroll_payments` (INNER JOIN implícito).
