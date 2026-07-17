@@ -1847,7 +1847,7 @@ export const appRouter = router({
       `, [input.companyId]);
       return rows.rows as { obraId: number; clienteId: number }[];
     }),
-    listForAlmoxarifado: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
+    listForAlmoxarifado: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), forTransfer: z.boolean().optional() })).query(async ({ input, ctx }) => {
       const isAdmin = ctx.user.role === 'admin' || ctx.user.role === 'admin_master';
       if (isAdmin) return getObrasByCompanyActive(input.companyId, input.companyIds);
 
@@ -1857,6 +1857,13 @@ export const appRouter = router({
       const allowedCompanyIds = userCompanies.map((c: any) => c.id);
       if (allowedCompanyIds.length > 0 && !allowedCompanyIds.includes(input.companyId)) {
         return [];
+      }
+
+      // forTransfer=true: destino de transferência → mostrar TODAS as obras ativas da empresa.
+      // O operador de almoxarifado precisa poder enviar material a qualquer canteiro,
+      // mesmo que seu acesso de visualização seja restrito a obras específicas.
+      if (input.forTransfer) {
+        return getObrasByCompanyActive(input.companyId);
       }
 
       const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);

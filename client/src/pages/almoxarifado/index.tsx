@@ -425,6 +425,11 @@ export default function AlmoxarifadoPage() {
   const { data: obrasAtivas = [] } = trpc.obras.listForAlmoxarifado.useQuery(
     { companyId }, { enabled: !!companyId }
   );
+  // Para o DESTINO de transferência: sempre mostra TODAS as obras ativas da empresa,
+  // independente das restrições de acesso do operador ao seu próprio almoxarifado.
+  const { data: obrasParaTransferir = [] } = trpc.obras.listForAlmoxarifado.useQuery(
+    { companyId, forTransfer: true }, { enabled: !!companyId }
+  );
 
   useEffect(() => {
     if (obrasAtivas.length === 1 && obraContexto === null) {
@@ -843,7 +848,7 @@ export default function AlmoxarifadoPage() {
     setModalTransfLote(s => s ? { ...s, aplicando: true } : s);
     try {
       const destinoObraSel = m.destinoTipo === "obra"
-        ? (obrasAtivas as any[]).find((o: any) => o.id === m.destinoObraId)
+        ? (obrasParaTransferir as any[]).find((o: any) => o.id === m.destinoObraId)
         : null;
       const r = await createTransferenciaLoteMut.mutateAsync({
         companyId,
@@ -1480,7 +1485,7 @@ export default function AlmoxarifadoPage() {
     onSuccess: (d: any) => {
       refetch();
       const origemLabel = transfOrigemTipo === "central" ? "Central" : (obrasAtivas as any[]).find((o: any) => o.id === transfOrigemObraId)?.nome ?? "Obra";
-      const destinoLabel = transfDestinoTipo === "central" ? "Central" : (obrasAtivas as any[]).find((o: any) => o.id === transfDestinoObraId)?.nome ?? "Obra";
+      const destinoLabel = transfDestinoTipo === "central" ? "Central" : (obrasParaTransferir as any[]).find((o: any) => o.id === transfDestinoObraId)?.nome ?? "Obra";
       setTransfOk({ item: d.itemNome, origem: origemLabel, destino: destinoLabel });
       setTransfErr(null);
     },
@@ -4126,7 +4131,7 @@ export default function AlmoxarifadoPage() {
                       }}
                     >
                       <option value="central">🏢 Almoxarifado Central</option>
-                      {(obrasAtivas as any[]).map((o: any) => <option key={o.id} value={o.id}>🏗️ {o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>)}
+                      {(obrasParaTransferir as any[]).map((o: any) => <option key={o.id} value={o.id}>🏗️ {o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>)}
                     </select>
                     {/* Aviso se origem = destino */}
                     {transfOrigemTipo === transfDestinoTipo && (transfOrigemTipo === "central" || transfOrigemObraId === transfDestinoObraId) && (
@@ -5202,7 +5207,7 @@ export default function AlmoxarifadoPage() {
                   }}
                 >
                   <option value="central">🏢 Almoxarifado Central</option>
-                  {(obrasAtivas as any[]).map((o: any) => (
+                  {(obrasParaTransferir as any[]).map((o: any) => (
                     <option key={o.id} value={o.id}>🏗️ {o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>
                   ))}
                 </select>

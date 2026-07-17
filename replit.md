@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `listForAlmoxarifado` ganha `forTransfer?: boolean`; quando true bypassa filtro por usuário → `getObrasByCompanyActive`. Nova query `obrasParaTransferir` usada nos selects de destino (lote + individual) e label lookups. `obrasAtivas` (restrita) mantida para contexto de visualização e origem. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4336** — **SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL (não acumulado).** SQL: `valor_mensal_medio = custo_total / meses_ativos`. Merge JS: `salario_bruto_total = valor_mensal_medio` (display); `custo_total_empresa = custo_total` (KPIs/TOTAL). Frontend: coluna DIAS mostra "Nm" (meses), badge "/mês" no valor, totais usam custo real. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4335** — **SCORECARD RH/FOLHA: PJ — DISTINCT ON (melhor contrato por funcionário) + badge "Sem contrato PJ".** `pj_best` CTE usa `DISTINCT ON (employeeId)` priorizando obra-específico → sem obra → qualquer; inclui TODOS funcionários do efetivo independente do `obra_id` do contrato. Badge laranja "⚠ Sem contrato PJ" para PJ sem contrato ativo vs amber "⚠ Sem folha" para CLT. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4335** — **SCORECARD RH/FOLHA: PJ — DISTINCT ON (melhor contrato por funcionário) + badge "Sem contrato PJ".** `pj_best` CTE usa `DISTINCT ON (employeeId)` priorizando obra-específico → sem obra → qualquer. Badge laranja "⚠ Sem contrato PJ" vs amber "⚠ Sem folha" para CLT. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4334** — **SCORECARD RH/FOLHA: PJ — CUSTO VIA MÓDULO TERCEIROS (obra_id NULL fallback).** Query PJ ampliada: aceita `pj_contracts.obra_id = obraId` OU `obra_id IS NULL` com funcionário em `obra_funcionarios`. Contratos de outra obra excluídos. ZERO DELETE · ZERO ALTER destrutivo.
 

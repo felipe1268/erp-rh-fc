@@ -1,4 +1,34 @@
 /**
+ * Rev. 4337 - ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS ATIVAS
+ *
+ * PROBLEMA: o select "Almoxarifado de Destino" nos modais de transferência (individual
+ *   e em lote) usava `listForAlmoxarifado` sem flag, que filtra obras pelo `allowed_obra_ids`
+ *   do usuário. Operadores com acesso restrito a uma ou poucas obras não conseguiam
+ *   transferir material para outras obras da empresa.
+ *
+ * SOLUÇÃO:
+ *   Backend (routers.ts — obras.listForAlmoxarifado):
+ *     Novo parâmetro opcional `forTransfer?: boolean`.
+ *     Quando true, bypassa o filtro por usuário e retorna `getObrasByCompanyActive`
+ *     (todas as obras Em_Andamento da empresa). O guard de companyId permanece.
+ *
+ *   Frontend (almoxarifado/index.tsx):
+ *     Nova query `obrasParaTransferir = listForAlmoxarifado({ forTransfer: true })`.
+ *     Usada em:
+ *       - Modal "Transferir em lote" → select de destino
+ *       - Modal "Transferência individual" → select de destino
+ *       - Label lookup do destino no onSuccess
+ *       - destinoObraSel lookup no submit do lote
+ *     `obrasAtivas` (sem forTransfer) continua usada para:
+ *       - Selector de obra de contexto (qual almox está visualizando)
+ *       - Select de ORIGEM na transferência individual
+ *       - Demais filtros de visualização
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers.ts, client/src/pages/almoxarifado/index.tsx
+ */
+
+/**
  * Rev. 4336 - SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL (não acumulado do período)
  *
  * PROBLEMA: coluna "Sal. Bruto" da tabela individual exibia o total acumulado do período (ex.: R$51.000
