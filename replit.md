@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4328** — **SCORECARD BH: FILTRO "ALOCADO ATUALMENTE" — `periodo_fim >= CURRENT_DATE`.** `emp_obra` passa a usar `periodo_fim >= CURRENT_DATE` (não sobreposição com período selecionado). Funcionário transferido para outra obra → `periodo_fim` fecha na data da nova alocação → sai da lista. Saldo BH exibido é o global do funcionário (não por obra) — confirmado com usuário. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4329** — **SCORECARD BH: AVATAR CLICÁVEL + Nº INTERNO + MINI-PERFIL EXPANDIDO.** `f.matricula` (COL...) → `Nº {f.employeeId}` limpo. Avatar vira `<button>` com ring:hover; clique alterna `bhExpanded`. Linha expandida (colSpan=3): foto 64×64, nome, cargo, nº, resumo BH. `<React.Fragment key>` no `.map`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4327** — **SCORECARD RH/FOLHA: BANCO DE HORAS — FOTO DO FUNCIONÁRIO NA TABELA.** Avatar circular 32×32: foto real via `fotoUrl` ou iniciais indigo como fallback. Nome/matrícula/cargo ao lado em div `min-w-0/truncate`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4328** — **SCORECARD BH: FILTRO "ALOCADO ATUALMENTE" — `periodo_fim >= CURRENT_DATE`.** `emp_obra` usa `periodo_fim >= CURRENT_DATE`; transferido para outra obra fecha `periodo_fim` → sai da lista. Saldo BH é global do funcionário — confirmado com usuário. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

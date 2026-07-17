@@ -258,6 +258,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   }, [obraIniMes, obraId]);
   const [bhAno,         setBhAno]         = useState(new Date().getFullYear());
   const [bhMes,         setBhMes]         = useState<number | null>(null);
+  const [bhExpanded,    setBhExpanded]    = useState<number | null>(null);
   const [segAno,        setSegAno]        = useState(new Date().getFullYear());
   const [segMes,        setSegMes]        = useState<number | null>(new Date().getMonth() + 1);
   const [sstExpandChart,setSstExpandChart]= useState<string | null>(null);
@@ -1630,42 +1631,87 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                           const movH      = (Math.abs(movimento) / 60).toFixed(1);
                           const saldoPos  = saldo >= 0;
                           const movPos    = movimento >= 0;
+                          const isExpanded = bhExpanded === f.employeeId;
+                          const initials = (f.nome ?? "?").split(" ").slice(0,2).map((n: string) => n[0]).join("");
                           return (
-                            <tr key={f.employeeId} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                              <td className="px-2 py-1.5">
-                                <div className="flex items-center gap-2">
-                                  {/* Avatar */}
-                                  <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center">
-                                    {f.fotoUrl ? (
-                                      <img src={f.fotoUrl} alt={f.nome} className="w-full h-full object-cover" />
-                                    ) : (
-                                      <span className="text-[10px] font-bold text-indigo-600">
-                                        {(f.nome ?? "?").split(" ").slice(0,2).map((n: string) => n[0]).join("")}
-                                      </span>
-                                    )}
+                            <React.Fragment key={f.employeeId}>
+                              <tr className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
+                                <td className="px-2 py-1.5">
+                                  <div className="flex items-center gap-2">
+                                    {/* Avatar clicável */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setBhExpanded(isExpanded ? null : f.employeeId)}
+                                      className="flex-shrink-0 w-9 h-9 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center ring-2 ring-transparent hover:ring-indigo-400 transition-all focus:outline-none"
+                                      title="Clique para expandir"
+                                    >
+                                      {f.fotoUrl ? (
+                                        <img src={f.fotoUrl} alt={f.nome} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <span className="text-[10px] font-bold text-indigo-600">{initials}</span>
+                                      )}
+                                    </button>
+                                    <div className="min-w-0">
+                                      <p className="font-medium text-gray-800 leading-tight text-xs truncate">{f.nome}</p>
+                                      <p className="text-[8px] text-gray-400 font-mono leading-tight">Nº {f.employeeId}</p>
+                                      {f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
+                                    </div>
                                   </div>
-                                  <div className="min-w-0">
-                                    <p className="font-medium text-gray-800 leading-tight text-xs truncate">{f.nome}</p>
-                                    <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
-                                    {f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="text-right px-2 py-1.5">
-                                {movimento !== 0 ? (
-                                  <span className={`text-xs font-medium ${movPos ? "text-blue-700" : "text-green-700"}`}>
-                                    {movPos ? "+" : "−"}{movH}h
-                                  </span>
-                                ) : <span className="text-gray-300 text-[10px]">—</span>}
-                              </td>
-                              <td className="text-right px-2 py-1.5">
-                                {saldo !== 0 ? (
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${saldoPos ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}>
-                                    {saldoPos ? "+" : "−"}{saldoH}h
-                                  </span>
-                                ) : <span className="text-gray-300 text-[10px]">Zerado</span>}
-                              </td>
-                            </tr>
+                                </td>
+                                <td className="text-right px-2 py-1.5">
+                                  {movimento !== 0 ? (
+                                    <span className={`text-xs font-medium ${movPos ? "text-blue-700" : "text-green-700"}`}>
+                                      {movPos ? "+" : "−"}{movH}h
+                                    </span>
+                                  ) : <span className="text-gray-300 text-[10px]">—</span>}
+                                </td>
+                                <td className="text-right px-2 py-1.5">
+                                  {saldo !== 0 ? (
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${saldoPos ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}>
+                                      {saldoPos ? "+" : "−"}{saldoH}h
+                                    </span>
+                                  ) : <span className="text-gray-300 text-[10px]">Zerado</span>}
+                                </td>
+                              </tr>
+                              {/* Linha expandida — mini-perfil */}
+                              {isExpanded && (
+                                <tr key={`${f.employeeId}-exp`} className="bg-indigo-50 border-t border-indigo-100">
+                                  <td colSpan={3} className="px-3 py-3">
+                                    <div className="flex items-center gap-4">
+                                      {/* Foto maior */}
+                                      <div className="flex-shrink-0 w-16 h-16 rounded-full overflow-hidden bg-indigo-200 flex items-center justify-center shadow-md">
+                                        {f.fotoUrl ? (
+                                          <img src={f.fotoUrl} alt={f.nome} className="w-full h-full object-cover" />
+                                        ) : (
+                                          <span className="text-xl font-bold text-indigo-600">{initials}</span>
+                                        )}
+                                      </div>
+                                      {/* Dados */}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-sm text-gray-900 leading-tight">{f.nome}</p>
+                                        {f.cargo && <p className="text-xs text-indigo-600 font-medium mt-0.5">{f.cargo}</p>}
+                                        <p className="text-[10px] text-gray-500 font-mono mt-0.5">Nº interno: {f.employeeId}</p>
+                                      </div>
+                                      {/* Resumo BH */}
+                                      <div className="flex-shrink-0 text-right space-y-1">
+                                        <div>
+                                          <p className="text-[9px] text-gray-500 uppercase tracking-wide">{bhMes ? "Mov. Mês" : "Mov. Ano"}</p>
+                                          <p className={`text-sm font-bold ${movPos ? "text-blue-700" : "text-green-700"}`}>
+                                            {movimento !== 0 ? `${movPos ? "+" : "−"}${movH}h` : "—"}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-[9px] text-gray-500 uppercase tracking-wide">Saldo Acum.</p>
+                                          <p className={`text-sm font-bold ${saldoPos ? "text-orange-600" : "text-green-700"}`}>
+                                            {saldo !== 0 ? `${saldoPos ? "+" : "−"}${saldoH}h` : "Zerado"}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           );
                         })}
                       </tbody>

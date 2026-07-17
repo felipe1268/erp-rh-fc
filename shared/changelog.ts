@@ -1,4 +1,22 @@
 /**
+ * Rev. 4329 - SCORECARD BH: AVATAR CLICÁVEL + Nº INTERNO + MINI-PERFIL EXPANDIDO
+ *
+ * PROBLEMA: tabela Banco de Horas exibia "COL41942838894" (matricula bruta) como identificador;
+ *   sem identificação visual expandida; avatar não era interativo.
+ *
+ * SOLUÇÃO:
+ *   - `f.matricula` substituído por `Nº {f.employeeId}` (ID interno limpo, sem prefixo COL).
+ *   - Avatar passa a ser <button> com ring:hover; clique alterna `bhExpanded` state.
+ *   - Linha expandida (<React.Fragment> com 2 <tr>): quando bhExpanded === f.employeeId,
+ *     renderiza <tr> colSpan=3 com foto grande (64×64), nome completo, cargo, Nº interno,
+ *     e resumo de BH (Mov. Mês/Ano + Saldo Acum.) alinhado à direita.
+ *   - Fecha expandido clicando novamente na mesma foto; troca de funcionário fecha o anterior.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx (bhExpanded state + tabela BH)
+ */
+
+/**
  * Rev. 4328 - SCORECARD BH: FILTRO "ALOCADO ATUALMENTE" — periodo_fim >= CURRENT_DATE
  *
  * PROBLEMA:
