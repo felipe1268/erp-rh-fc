@@ -2241,16 +2241,20 @@ export const scorecardRouter = router({
         }
       }
 
-      // Deduplica por CPF: remove cadastros duplicados (mesmo funcionário, dois employee_ids).
-      // Mantém o registro com mais meses de folha real; descarta o outro para não duplicar custo.
+      // Deduplica por CPF+TIPO: remove cadastros duplicados do MESMO tipo (CLT+CLT ou PJ+PJ).
+      // CLT→PJ com mesmo CPF = recontratação legítima — mantém os dois registros.
+      // Mantém o registro com mais meses de folha real; descarta o outro.
       {
-        const cpfSeen    = new Map<string, number>(); // CPF limpo → índice em funcs
-        const dropIdxSet = new Set<number>();
+        // Chave: CPF limpo + "|CLT" ou "|PJ" (tipo de vínculo)
+        const cpfTypeSeen = new Map<string, number>(); // chave → índice em funcs
+        const dropIdxSet  = new Set<number>();
         for (let i = 0; i < funcs.length; i++) {
-          const cpf = String(funcs[i].cpf ?? '').replace(/[^0-9]/g, '');
+          const cpf  = String(funcs[i].cpf ?? '').replace(/[^0-9]/g, '');
           if (!cpf || cpf === '00000000000') continue;
-          if (cpfSeen.has(cpf)) {
-            const prevIdx = cpfSeen.get(cpf)!;
+          const tipo = funcs[i].tipo_pessoa === 'PJ' ? 'PJ' : 'CLT';
+          const key  = `${cpf}|${tipo}`;
+          if (cpfTypeSeen.has(key)) {
+            const prevIdx = cpfTypeSeen.get(key)!;
             const prev    = funcs[prevIdx];
             const cur     = funcs[i];
             // Mantém quem tem mais dados; em empate, mantém o primeiro
@@ -2258,17 +2262,17 @@ export const scorecardRouter = router({
                 (n(cur.meses_na_obra) === n(prev.meses_na_obra) &&
                  n(cur.custo_total_empresa) > n(prev.custo_total_empresa))) {
               dropIdxSet.add(prevIdx);
-              cpfSeen.set(cpf, i);
+              cpfTypeSeen.set(key, i);
             } else {
               dropIdxSet.add(i);
             }
           } else {
-            cpfSeen.set(cpf, i);
+            cpfTypeSeen.set(key, i);
           }
         }
         if (dropIdxSet.size > 0) {
           funcs.splice(0, funcs.length, ...funcs.filter((_: any, idx: number) => !dropIdxSet.has(idx)));
-          console.log(`[getCustosRH] CPF dedup: removidos ${dropIdxSet.size} duplicado(s)`);
+          console.log(`[getCustosRH] CPF dedup: removidos ${dropIdxSet.size} duplicado(s) do mesmo tipo`);
         }
       }
 
