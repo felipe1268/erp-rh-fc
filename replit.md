@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4323** — **SCORECARD RH/FOLHA: BANCO DE HORAS COM DADOS REAIS + PERIOD SELECTOR.** `getBancoHorasObra` reescrito: usa `banco_horas_lancamentos` (dados reais do módulo BH) em vez de `he_period_employees`; novos parâmetros `ano`/`mes` (null=ano todo); CTEs `acumulado` + `movimento` + `mesesComDados` (bolinhas). Frontend: estados `bhAno`/`bhMes`, `PeriodSelectorCard` com bolinhas azuis, tabela simplificada com "Mov. Mês|Ano" + "Saldo Acum.". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4324** — **SCORECARD RH/FOLHA: FIX BH VAZIO — SALDO VIA `banco_horas_saldo`.** Remove CTE `acumulado` (recomputação lenta de lançamentos); usa `LEFT JOIN banco_horas_saldo` diretamente (mesma fonte do módulo BH). CTE `movimento` e `mesesComDados` sem filtro `companyId` em BHL — apenas `employeeId` da emp_obra. Query testada: 39 funcionários retornados para obra 90001. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4322** — **CONTRATOS TERCEIROS: OBRA OBRIGATÓRIA + ALERTA VISÍVEL SEM OBRA.** `ContratoNovo`: campo Obra vira obrigatório (label `*`, validação no handleSalvar, hint vermelho). `ContratosList`: banner vermelho listando contratos ativos sem obraId + badge "⚠️ Sem obra vinculada" em cada card afetado. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4323** — **SCORECARD RH/FOLHA: BANCO DE HORAS COM DADOS REAIS + PERIOD SELECTOR.** `getBancoHorasObra` reescrito: usa `banco_horas_lancamentos` em vez de `he_period_employees`; parâmetros `ano`/`mes` (null=ano todo); `PeriodSelectorCard` com bolinhas azuis; tabela "Mov. Mês|Ano" + "Saldo Acum.". ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4322** — **CONTRATOS TERCEIROS: OBRA OBRIGATÓRIA + ALERTA VISÍVEL SEM OBRA.** `ContratoNovo`: Obra obrigatória (label `*`, validação, hint vermelho). `ContratosList`: banner vermelho + badge "⚠️ Sem obra vinculada". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4321** — **SCORECARD RH/FOLHA: LGPD — VISÃO POR FUNÇÃO PARA NÃO-ADMIN.** `isAdminMaster`: admin_master vê tabela individual completa; engenheiro/gestor vê tabela por função (Função | Qtd | custos agregados) sem nomes/valores individuais. Novo `rhPorFuncao` useMemo. Rodapé LGPD. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4319** — **SCORECARD RH/FOLHA: ORDENAÇÃO ALFABÉTICA NA TABELA DE FUNCIONÁRIOS.** Botão toggle "A → Z / Custo ↓"; `rhSortBy` state; `localeCompare(pt-BR)`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4318** — **SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS.** Guard `qtdFuncionarios > 0` garante só meses com funcionários ativos ficam azuis. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4316** — **SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA DE FUNCIONÁRIOS.** Select cargos únicos + contagem; `rhFuncsFiltrados` + `rhResumoFiltrado`; tfoot vira "SUBTOTAL — cargo". ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

@@ -2396,27 +2396,18 @@ export const scorecardRouter = router({
       const safe = <T>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
 
       const [mainRows, mesesRows] = await Promise.all([
-        // Funcionários da obra + saldo acumulado + movimento do período
+        // Funcionários da obra + saldo atual (banco_horas_saldo) + movimento do período
+        // Não filtra bhl por companyId — evita mismatch empresa-obra vs empresa-empregadora.
+        // emp_obra já garante que os employeeIds pertencem a esta obra/empresa.
         safe(db.execute(sql`
           WITH emp_obra AS (
             SELECT DISTINCT esh."employeeId"
             FROM employee_site_history esh
             WHERE esh."obraId" = ${obraId} AND esh."companyId" = ${companyId}
             UNION
-            SELECT id AS "employeeId"
-            FROM employees
+            SELECT "employeeId"
+            FROM obra_funcionarios
             WHERE "obraId" = ${obraId} AND "companyId" = ${companyId}
-              AND status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
-          ),
-          acumulado AS (
-            -- saldo acumulado até o fim do período (todo histórico anterior incluído)
-            SELECT bhl."employeeId",
-              SUM(CASE WHEN bhl.tipo = 'credito' THEN ABS(bhl.minutos) ELSE -ABS(bhl.minutos) END)::int AS saldo
-            FROM banco_horas_lancamentos bhl
-            WHERE bhl."companyId" = ${companyId}
-              AND bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra)
-              AND bhl.data <= ${dataFim}::date
-            GROUP BY bhl."employeeId"
           ),
           movimento AS (
             -- lançamentos NO período selecionado (mês ou ano todo)
@@ -2424,8 +2415,7 @@ export const scorecardRouter = router({
               SUM(CASE WHEN bhl.tipo = 'credito' THEN ABS(bhl.minutos) ELSE -ABS(bhl.minutos) END)::int AS movimento,
               MAX(bhl."criadoEm") AS "ultimoLancamento"
             FROM banco_horas_lancamentos bhl
-            WHERE bhl."companyId" = ${companyId}
-              AND bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra)
+            WHERE bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra)
               AND bhl.data >= ${dataIni}::date
               AND bhl.data <= ${dataFim}::date
             GROUP BY bhl."employeeId"
@@ -2436,15 +2426,15 @@ export const scorecardRouter = router({
             e.funcao        AS cargo,
             e.matricula,
             e."fotoUrl",
-            COALESCE(a.saldo,      0)::int AS "saldoMinutos",
-            COALESCE(m.movimento,  0)::int AS "movimentoMinutos",
+            COALESCE(bhs."saldoMinutos", 0)::int AS "saldoMinutos",
+            COALESCE(m.movimento, 0)::int        AS "movimentoMinutos",
             m."ultimoLancamento"
           FROM emp_obra eo
           JOIN employees e ON e.id = eo."employeeId"
-          LEFT JOIN acumulado a ON a."employeeId" = eo."employeeId"
+          LEFT JOIN banco_horas_saldo bhs ON bhs."employeeId" = eo."employeeId" AND bhs."companyId" = ${companyId}
           LEFT JOIN movimento m ON m."employeeId" = eo."employeeId"
-          WHERE COALESCE(a.saldo, 0) <> 0 OR m.movimento IS NOT NULL
-          ORDER BY ABS(COALESCE(a.saldo, 0)) DESC, e."nomeCompleto"
+          WHERE COALESCE(bhs."saldoMinutos", 0) <> 0 OR m.movimento IS NOT NULL
+          ORDER BY ABS(COALESCE(bhs."saldoMinutos", 0)) DESC, e."nomeCompleto"
         `)),
 
         // Quais meses do ano têm lançamentos para esta obra (para dots do PeriodSelector)
@@ -2454,15 +2444,13 @@ export const scorecardRouter = router({
             FROM employee_site_history esh
             WHERE esh."obraId" = ${obraId} AND esh."companyId" = ${companyId}
             UNION
-            SELECT id AS "employeeId"
-            FROM employees
+            SELECT "employeeId"
+            FROM obra_funcionarios
             WHERE "obraId" = ${obraId} AND "companyId" = ${companyId}
-              AND status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
           )
           SELECT EXTRACT(MONTH FROM bhl.data)::int AS mes
           FROM banco_horas_lancamentos bhl
-          WHERE bhl."companyId" = ${companyId}
-            AND bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra)
+          WHERE bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra)
             AND EXTRACT(YEAR FROM bhl.data) = ${ano}::int
           GROUP BY EXTRACT(MONTH FROM bhl.data)
         `)),

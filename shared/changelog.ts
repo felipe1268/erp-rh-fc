@@ -1,4 +1,31 @@
 /**
+ * Rev. 4324 - SCORECARD RH/FOLHA: FIX BH VAZIO — SALDO VIA banco_horas_saldo (SEM ACUMULADO CTE)
+ *
+ * PROBLEMA:
+ *   A sub-aba "Banco de Horas" do Scorecard continuava exibindo "Nenhum funcionário"
+ *   mesmo com 82 funcionários na obra e 64 lançamentos na empresa (empObraCount=82,
+ *   bhlTotalCompany=64). A causa raiz era o CTE `acumulado` que somava `banco_horas_lancamentos`
+ *   filtrado por `bhl."companyId" = ${companyId}` — embora os companyIds coincidissem (60002),
+ *   os 64 lançamentos existentes eram TODOS de maio/2026, e a query retornava null via safe()
+ *   silenciosamente em alguns cenários de binding.
+ *
+ * SOLUÇÃO (Rev. 4324):
+ *   Backend — `getBancoHorasObra` em `server/routers/scorecard.ts`:
+ *     - Remove CTE `acumulado` (recomputação do saldo a partir de lancamentos).
+ *     - Usa `banco_horas_saldo` diretamente (LEFT JOIN por employeeId + companyId) — mesma
+ *       fonte de verdade usada pelo módulo Banco de Horas (`getSaldoBancoMensal`).
+ *     - CTE `movimento` mantida mas sem filtro por companyId em BHL (apenas employeeId
+ *       da emp_obra, que já está filtrada por companyId da obra).
+ *     - `mesesComDados` idem: busca por employeeId apenas, sem companyId em BHL.
+ *     - WHERE: `COALESCE(bhs."saldoMinutos", 0) <> 0 OR m.movimento IS NOT NULL`.
+ *   Frontend — diagnóstico temporário removido (_diag / empObraCount / bhlTotalCompany).
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers/scorecard.ts (getBancoHorasObra — CTE acumulado → banco_horas_saldo)
+ *           client/src/pages/planejamento/ScorecardTab.tsx (cleanup _diag)
+ */
+
+/**
  * Rev. 4323 - SCORECARD RH/FOLHA: BANCO DE HORAS — DADOS REAIS COM PERIOD SELECTOR
  *
  * PROBLEMA:
