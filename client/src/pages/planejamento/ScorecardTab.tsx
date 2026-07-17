@@ -235,6 +235,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [abaAnalise,    setAbaAnalise]    = useState<"compras"|"ferramentas"|"locacoes">("compras");
   const [abaRH,         setAbaRH]         = useState<"folha"|"banco">("folha");
   const [expandedRH,    setExpandedRH]    = useState<Set<number>>(new Set());
+  const [filtroFuncao,  setFiltroFuncao]  = useState<string>("");
   const [expandedBanco, setExpandedBanco] = useState<Set<number>>(new Set());
   const [rhAno,         setRhAno]         = useState(new Date().getFullYear());
   const [rhMes,         setRhMes]         = useState<string>("all");
@@ -308,6 +309,33 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     { companyId, obraId: obraId!, mesInicio: rhMesInicio, mesFim: rhMesFim },
     { enabled: enabled && tabScore === "rh", staleTime: 120_000 }
   );
+  // Filtro de cargo para a tabela "Custo por Funcionário"
+  const rhCargoOptions = useMemo(() => {
+    const cargos = (analiseRH.data?.funcionarios ?? [])
+      .map((f: any) => (f.cargo || f.razao_social || "Sem função").trim())
+      .filter(Boolean);
+    return Array.from(new Set(cargos)).sort() as string[];
+  }, [analiseRH.data]);
+
+  const rhFuncsFiltrados = useMemo(() => {
+    const all: any[] = analiseRH.data?.funcionarios ?? [];
+    if (!filtroFuncao) return all;
+    return all.filter((f: any) => (f.cargo || f.razao_social || "Sem função").trim() === filtroFuncao);
+  }, [analiseRH.data, filtroFuncao]);
+
+  const rhResumoFiltrado = useMemo(() => {
+    const base = { salarioBruto: 0, he: 0, va: 0, ferias: 0, seguroVida: 0, fgts: 0, custoTotal: 0 };
+    return rhFuncsFiltrados.reduce((acc: typeof base, f: any) => ({
+      salarioBruto: acc.salarioBruto + Number(f.salario_bruto_total ?? 0),
+      he:           acc.he           + Number(f.he_total          ?? 0),
+      va:           acc.va           + Number(f.va_total          ?? 0),
+      ferias:       acc.ferias       + Number(f.ferias_total      ?? 0),
+      seguroVida:   acc.seguroVida   + Number(f.seguro_vida_total ?? 0),
+      fgts:         acc.fgts         + Number(f.fgts_total        ?? 0),
+      custoTotal:   acc.custoTotal   + Number(f.custo_total_empresa ?? 0),
+    }), base);
+  }, [rhFuncsFiltrados]);
+
   // Query dedicada ao ano inteiro — usada APENAS para calcular quais meses têm dados
   // (bolinhas azuis no seletor de período). Não muda com o filtro de mês selecionado.
   const analiseRHAnoTodo = trpc.scorecard.getCustosRH.useQuery(
@@ -1211,9 +1239,34 @@ export default function ScorecardTab({ proj }: { proj: any }) {
 
                 {/* Tabela por funcionário */}
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
-                    Custo por Funcionário{rhMes !== 'all' ? ` — ${MES_LABELS[parseInt(rhMes)-1]}/${String(rhAno).slice(2)}` : ''} — ordenado por custo total
-                  </p>
+                  <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                      Custo por Funcionário{rhMes !== 'all' ? ` — ${MES_LABELS[parseInt(rhMes)-1]}/${String(rhAno).slice(2)}` : ''} — ordenado por custo total
+                      {filtroFuncao && <span className="ml-1 normal-case text-indigo-500">· {rhFuncsFiltrados.length} func.</span>}
+                    </p>
+                    {rhCargoOptions.length > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          value={filtroFuncao}
+                          onChange={(e) => setFiltroFuncao(e.target.value)}
+                          className="text-[11px] border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer"
+                        >
+                          <option value="">Todas as funções ({(analiseRH.data.funcionarios ?? []).length})</option>
+                          {rhCargoOptions.map((c) => {
+                            const cnt = (analiseRH.data.funcionarios ?? []).filter((f: any) =>
+                              (f.cargo || f.razao_social || "Sem função").trim() === c).length;
+                            return <option key={c} value={c}>{c} ({cnt})</option>;
+                          })}
+                        </select>
+                        {filtroFuncao && (
+                          <button onClick={() => setFiltroFuncao("")}
+                            className="text-[11px] text-indigo-500 hover:text-indigo-700 underline">
+                            limpar
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="overflow-x-auto rounded border border-gray-200">
                     <table className="w-full text-xs">
                       <thead>
@@ -1231,7 +1284,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {analiseRH.data.funcionarios.map((f: any) => {
+                        {rhFuncsFiltrados.map((f: any) => {
                           const empId = Number(f.employee_id);
                           const isOpen = expandedRH.has(empId);
                           const toggle = () => setExpandedRH(prev => {
@@ -1340,15 +1393,17 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                       </tbody>
                       <tfoot>
                         <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-xs text-gray-700">
-                          <td className="px-2 py-2 text-[10px] uppercase tracking-wide">TOTAL</td>
-                          <td className="text-center px-2 py-2 text-gray-500">—</td>
-                          <td className="text-right px-2 py-2">{fmt(analiseRH.data.resumo.salarioBrutoTotal)}</td>
-                          <td className="text-right px-2 py-2 text-amber-700">{fmt(analiseRH.data.resumo.heTotal)}</td>
-                          <td className="text-right px-2 py-2 text-teal-700">{fmt(analiseRH.data.resumo.vaTotal)}</td>
-                          <td className="text-right px-2 py-2 text-orange-700">{fmt(analiseRH.data.resumo.feriasTotal ?? 0)}</td>
-                          <td className="text-right px-2 py-2 text-rose-700">{fmt(analiseRH.data.resumo.seguroVidaTotal ?? 0)}</td>
-                          <td className="text-right px-2 py-2 text-blue-700">{fmt(analiseRH.data.resumo.fgtsTotal)}</td>
-                          <td className="text-right px-2 py-2 font-bold text-indigo-700">{fmt(analiseRH.data.resumo.custoTotalEmpresa)}</td>
+                          <td className="px-2 py-2 text-[10px] uppercase tracking-wide">
+                            {filtroFuncao ? <span className="text-indigo-600">SUBTOTAL — {filtroFuncao}</span> : "TOTAL"}
+                          </td>
+                          <td className="text-center px-2 py-2 text-gray-500">{rhFuncsFiltrados.length}</td>
+                          <td className="text-right px-2 py-2">{fmt(rhResumoFiltrado.salarioBruto)}</td>
+                          <td className="text-right px-2 py-2 text-amber-700">{fmt(rhResumoFiltrado.he)}</td>
+                          <td className="text-right px-2 py-2 text-teal-700">{fmt(rhResumoFiltrado.va)}</td>
+                          <td className="text-right px-2 py-2 text-orange-700">{fmt(rhResumoFiltrado.ferias)}</td>
+                          <td className="text-right px-2 py-2 text-rose-700">{fmt(rhResumoFiltrado.seguroVida)}</td>
+                          <td className="text-right px-2 py-2 text-blue-700">{fmt(rhResumoFiltrado.fgts)}</td>
+                          <td className="text-right px-2 py-2 font-bold text-indigo-700">{fmt(rhResumoFiltrado.custoTotal)}</td>
                           <td />
                         </tr>
                       </tfoot>

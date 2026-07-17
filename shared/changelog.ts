@@ -1,4 +1,27 @@
 /**
+ * Rev. 4316 - SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA "CUSTO POR FUNCIONÁRIO"
+ *
+ * CONTEXTO:
+ *   A tabela "Custo por Funcionário" listava todos os funcionários juntos sem
+ *   possibilidade de isolar por cargo/função. Com 55+ funcionários fica difícil
+ *   comparar custos de um grupo específico.
+ *
+ * ADICIONADO:
+ *   - State `filtroFuncao: string` (vazio = todos)
+ *   - `rhCargoOptions` useMemo — cargos únicos ordenados alfabeticamente;
+ *     PJ usa razao_social como fallback; sem cargo → "Sem função"
+ *   - `rhFuncsFiltrados` useMemo — funcionarios filtrados pelo cargo selecionado
+ *   - `rhResumoFiltrado` useMemo — soma dos 7 campos numéricos do subconjunto
+ *   - Select dropdown acima da tabela com contagem por cargo (ex: "Servente (8)")
+ *   - Botão "limpar" inline para resetar filtro rapidamente
+ *   - Rodapé (tfoot) agora exibe "SUBTOTAL — <cargo>" com os totais do filtro,
+ *     ou "TOTAL" quando sem filtro — todos os valores recalculados no frontend
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo (só frontend).
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4315 - SCORECARD RH/FOLHA: FOTO DO FUNCIONÁRIO CLICÁVEL (LIGHTBOX)
  *
  * CONTEXTO:
