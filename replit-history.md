@@ -1,3 +1,4 @@
+- **Rev. 4320** — **SCORECARD RH/FOLHA: FIX PJ PHANTOM — FILTRAR POR `pj_contracts.obraId`.** Fix: filtrar por `pc."obraId" = obraId` diretamente; remove CTE `pj_site_periods`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4319** — **SCORECARD RH/FOLHA: ORDENAÇÃO ALFABÉTICA NA TABELA DE FUNCIONÁRIOS.** Botão toggle "A → Z / Custo ↓"; `rhSortBy` state; `localeCompare(pt-BR)`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4318** — **SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS.** Guard `qtdFuncionarios > 0` garante só meses com funcionários ativos ficam azuis. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4316** — **SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA DE FUNCIONÁRIOS.** Select cargos únicos + contagem; `rhFuncsFiltrados` + `rhResumoFiltrado`; tfoot vira "SUBTOTAL — cargo". ZERO DELETE · ZERO ALTER destrutivo.

@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4326** — **PT DE SERVIÇO: FIX HORÁRIO UTC → BRASÍLIA + DATA ISO → BR.** Assinatura: `timeZone: "America/Sao_Paulo"` no `toLocaleString` (era UTC). Conclusão: data `"2026-07-02"` → `"02/07/2026"` via split/reverse/join. Default do form "Concluir PT": `toISOString().slice(0,10)` → `toLocaleDateString("sv-SE", {timeZone:"America/Sao_Paulo"})`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4327** — **SCORECARD RH/FOLHA: BANCO DE HORAS — FOTO DO FUNCIONÁRIO NA TABELA.** Avatar circular 32×32: foto real via `fotoUrl` (já retornada pelo backend) ou iniciais indigo como fallback. Nome/matrícula/cargo ao lado em div `min-w-0/truncate`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4325** — **SCORECARD RH/FOLHA: BH FILTRADO POR ALOCAÇÃO REAL — PADRÃO `site_periods`.** `getBancoHorasObra` substitui `emp_obra` simples (histórico inteiro) pelo CTE `site_periods` idêntico ao `getCustosRH`: Ramo A + Ramo B, filtro `periodo_inicio ≤ dataFim AND periodo_fim ≥ dataIni`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4326** — **PT DE SERVIÇO: FIX HORÁRIO UTC → BRASÍLIA + DATA ISO → BR.** Assinatura: `timeZone:"America/Sao_Paulo"` no `toLocaleString`. Conclusão: `"2026-07-02"` → `"02/07/2026"`. Default form: `toISOString().slice(0,10)` → `toLocaleDateString("sv-SE",{timeZone:"America/Sao_Paulo"})`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4325** — **SCORECARD RH/FOLHA: BH FILTRADO POR ALOCAÇÃO REAL — PADRÃO `site_periods`.** Substitui `emp_obra` simples pelo CTE `site_periods` idêntico ao `getCustosRH`: filtro `periodo_inicio ≤ dataFim AND periodo_fim ≥ dataIni`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4324** — **SCORECARD RH/FOLHA: FIX BH VAZIO — SALDO VIA `banco_horas_saldo`.** Remove CTE `acumulado`; usa `LEFT JOIN banco_horas_saldo` diretamente. Query validada: 39 funcionários para obra 90001. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4323** — **SCORECARD RH/FOLHA: BANCO DE HORAS COM DADOS REAIS + PERIOD SELECTOR.** `getBancoHorasObra` reescrito: usa `banco_horas_lancamentos`; parâmetros `ano`/`mes` (null=ano todo); `PeriodSelectorCard` com bolinhas azuis; tabela "Mov. Mês|Ano" + "Saldo Acum.". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4323** — **SCORECARD RH/FOLHA: BANCO DE HORAS COM DADOS REAIS + PERIOD SELECTOR.** `getBancoHorasObra` reescrito; parâmetros `ano`/`mes` (null=ano todo); `PeriodSelectorCard` com bolinhas azuis; tabela "Mov. Mês|Ano" + "Saldo Acum.". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4322** — **CONTRATOS TERCEIROS: OBRA OBRIGATÓRIA + ALERTA VISÍVEL SEM OBRA.** `ContratoNovo`: Obra obrigatória (label `*`, validação, hint vermelho). `ContratosList`: banner vermelho + badge "⚠️ Sem obra vinculada". ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4321** — **SCORECARD RH/FOLHA: LGPD — VISÃO POR FUNÇÃO PARA NÃO-ADMIN.** admin_master vê tabela individual completa; engenheiro/gestor vê tabela por função (Função | Qtd | custos agregados) sem nomes/valores individuais. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4320** — **SCORECARD RH/FOLHA: FIX PJ PHANTOM — FILTRAR POR `pj_contracts.obraId`.** Fix: filtrar por `pc."obraId" = obraId` diretamente; remove CTE `pj_site_periods`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4321** — **SCORECARD RH/FOLHA: LGPD — VISÃO POR FUNÇÃO PARA NÃO-ADMIN.** admin_master vê tabela individual completa; engenheiro/gestor vê tabela por função sem nomes/valores individuais. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

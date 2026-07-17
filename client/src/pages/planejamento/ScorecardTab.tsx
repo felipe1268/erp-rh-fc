@@ -1633,9 +1633,23 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                           return (
                             <tr key={f.employeeId} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
                               <td className="px-2 py-1.5">
-                                <p className="font-medium text-gray-800 leading-tight">{f.nome}</p>
-                                <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
-                                {f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
+                                <div className="flex items-center gap-2">
+                                  {/* Avatar */}
+                                  <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center">
+                                    {f.fotoUrl ? (
+                                      <img src={f.fotoUrl} alt={f.nome} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <span className="text-[10px] font-bold text-indigo-600">
+                                        {(f.nome ?? "?").split(" ").slice(0,2).map((n: string) => n[0]).join("")}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="font-medium text-gray-800 leading-tight text-xs truncate">{f.nome}</p>
+                                    <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
+                                    {f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
+                                  </div>
+                                </div>
                               </td>
                               <td className="text-right px-2 py-1.5">
                                 {movimento !== 0 ? (

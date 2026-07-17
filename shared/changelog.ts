@@ -1,4 +1,19 @@
 /**
+ * Rev. 4327 - SCORECARD RH/FOLHA: BANCO DE HORAS — FOTO DO FUNCIONÁRIO NA TABELA
+ *
+ * PROBLEMA: tabela de funcionários da sub-aba "Banco de Horas" exibia apenas nome/matrícula/cargo,
+ *   sem identificação visual. O backend já retornava `fotoUrl` no SELECT de getBancoHorasObra.
+ *
+ * SOLUÇÃO: célula "Funcionário" passa a renderizar avatar circular (32×32):
+ *   - Com foto: <img src={f.fotoUrl}> com object-cover.
+ *   - Sem foto: círculo indigo com iniciais (2 primeiras palavras do nome).
+ *   Nome, matrícula e cargo ficam ao lado do avatar em coluna min-w-0/truncate.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx (tabela BH, mapa de funcionários)
+ */
+
+/**
  * Rev. 4326 - PT DE SERVIÇO: FIX HORÁRIO UTC → BRASÍLIA + DATA ISO → BR
  *
  * PROBLEMA:
