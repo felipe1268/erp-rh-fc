@@ -1,4 +1,32 @@
 /**
+ * Rev. 4349 - SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE REGRESSÃO (rnd2 antes da declaração)
+ *
+ * PROBLEMA:
+ * Rev. 4348 introduziu cálculo proporcional do Seg. de Vida (sMensal × fracao). Porém, a função
+ * auxiliar `rnd2` era usada nas linhas 2124–2129 do JS, mas declarada como `const rnd2 = ...`
+ * apenas na linha 2187. Em JavaScript, `const` NÃO é hoisted → ReferenceError ao primeiro
+ * chamada → procedure `getCustosRH` caía silenciosamente → tRPC retornava erro → frontend
+ * mostrava "Sem dados de folha para esta obra no período selecionado." em QUALQUER obra.
+ *
+ * FIX:
+ * Moveu `const rnd2 = (v: number) => Math.round(v * 100) / 100;` para logo após `const n`
+ * (linha 2101), antes de qualquer uso. `countWorkingDays` já estava correto (linha 2191,
+ * usada em 2237/2241).
+ *
+ * MELHORIA ADICIONAL (seguro proporcional):
+ * O seguro de vida agora é proporcional à fração de dias úteis na obra em cada mês:
+ *   h.seguroVida = rnd2(sMensal × h.fracao)   (era sMensal × 1 por mês completo)
+ * O mínimo forçado de 1 mês foi removido. Funcionário com 0 dias (ex.: Gledson) → R$0 seguro.
+ * O total do seguro é recalculado como SUM dos valores mensais proporcionais.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (getCustosRH, linhas 2100–2290)
+ * - shared/version.ts → Rev. 4349
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4348 - SCORECARD OBRA — FOLHA/CUSTOS: PROPORCIONAL POR DIAS ÚTEIS (SEG-SEX)
  *
  * PROBLEMA:

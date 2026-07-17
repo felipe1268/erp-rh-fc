@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4349** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE REGRESSÃO.** `rnd2` estava sendo chamado nas linhas 2124–2129 antes de sua declaração `const` na linha 2187 → `ReferenceError` → procedure derrubava silenciosamente → "Sem dados" em qualquer obra. Fix: moveu declaração de `rnd2` para logo após `const n` (linha 2101). Adicionalmente: seguro de vida passa a ser proporcional à fração de dias úteis de cada mês (sMensal × fracao), removendo o antigo mínimo forçado de 1 mês (Gledson 0 dias = R$0 seguro). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4348** — **SCORECARD OBRA — FOLHA/CUSTOS: PROPORCIONAL POR DIAS ÚTEIS (SEG-SEX).** CLT SQL: `dias_no_mes` e `dias_na_obra` passam a contar Seg-Sex via `generate_series + DOW`. PJ SQL: novo CTE `pj_site_periods` (alocação real via `obra_funcionarios`, mesmo Ramo B do CLT); `dias_na_obra` = interseção (alocação real ∩ contrato ∩ mês) em dias úteis. JS sintético CLT: helper `countWorkingDays`. JS merge PJ: `total_dias_na_obra` usa soma real do SQL. Resultado: João (1 dia útil/ago) → ~R$370 em vez de R$8.500. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4347** — **SCORECARD OBRA — FOLHA/CUSTOS: AUDITORIA + CUSTO PROPORCIONAL PARA TODO O EFETIVO.** 4 bugs corrigidos: (1) Dedup por CPF+tipo (CLT→PJ = recontratação legítima, mantém ambos). (2) Seg. de Vida errado para "sem folha" — recalculado após geração sintética. (3) Data parsing frágil `alocado_desde/ate` (PG Date vs string). (4) Custo proporcional via `salarioBase × dias/diasMes` + FGTS 8% para CLT sem folha. Badge "⚠ Sem folha" removido. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4347** — **SCORECARD OBRA — FOLHA/CUSTOS: AUDITORIA + CUSTO PROPORCIONAL PARA TODO O EFETIVO.** 4 bugs corrigidos: dedup CPF+tipo, Seg. de Vida sem folha, date parsing, custo proporcional CLT sem folha. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4346** — **FOLHA DE PAGAMENTO: CORREÇÃO — FUNCIONÁRIOS "NÃO PAGAR" VOLTAVAM AO PAINEL DE ALERTA.** `sincronizarValeJson` não limpava `temAlerta`/`bloqueado`. Fix: mapear ambos dentro de `sincronizarValeJson`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4344** — **ALMOXARIFADO: CORREÇÃO — PAINEL DE VALOR TOTAL NÃO ATUALIZAVA APÓS OPERAÇÕES.** 4 mutations esqueciam `getDashboard.invalidate()`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4343** — **EQUIPAMENTOS PRÓPRIOS: SELEÇÃO MÚLTIPLA + TRANSFERÊNCIA EM LOTE.** Checkbox em cada card + sticky bar azul + modal progresso. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4342** — **RECEBER LOCAÇÃO: REDESENHO COMPLETO DO MODAL.** Tela 0 = seleção de OC. Tela 1 = conferência ESPERADO vs. RECEBIDO, semáforo, banner divergência. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4341** — **EQUIPAMENTOS PRÓPRIOS: AGRUPAMENTO POR NOME (accordion inline).** `dataAgrupada`, grupos expandíveis com count badge + chips de localização. ZERO DELETE · ZERO ALTER destrutivo.
 

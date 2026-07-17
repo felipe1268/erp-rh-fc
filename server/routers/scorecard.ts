@@ -2094,7 +2094,8 @@ export const scorecardRouter = router({
       const seguroRows  = seguroR.rows  as any[];
       const pjRows      = pjR.rows      as any[];
       console.log(`[getCustosRH] obraId=${input.obraId} companyId=${input.companyId} mesInicio=${input.mesInicio} mesFim=${input.mesFim} funcs=${funcs.length} ferias=${feriasRows.length} seguro=${seguroRows.length} pj=${pjRows.length}`);
-      const n = (v: any) => Number(v ?? 0);
+      const n    = (v: any) => Number(v ?? 0);
+      const rnd2 = (v: number) => Math.round(v * 100) / 100;
 
       const feriasKeyMap  = new Map<string, number>();
       const feriasEmpMap  = new Map<number, number>();
@@ -2184,7 +2185,7 @@ export const scorecardRouter = router({
       // Usa alocado_desde / alocado_ate que agora vêm do SQL (subquery de site_periods).
       // Isso garante que TODO funcionário do efetivo aparece com custo proporcional,
       // mesmo quando a folha do mês ainda não foi fechada.
-      const rnd2 = (v: number) => Math.round(v * 100) / 100;
+      // rnd2 já definido antes do loop de seguro — veja linha acima do for(funcs)
 
       // Conta dias úteis (Seg-Sex) entre duas datas inclusive
       const countWorkingDays = (start: Date, end: Date): number => {
