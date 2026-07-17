@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4312** — **SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA.** Query PJ passou a espelhar a lógica CLT: nova CTE `pj_site_periods` determina período exato do PJ nesta obra; `efetivo_inicio/fim` = interseção contrato × alocação × filtro; `dias_na_obra/dias_no_mes` pro-rateia custo; `WHERE dias_na_obra > 0` exclui meses sem presença. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4313** — **PLANEJAMENTO: BOTÃO "IMPORTAR CUSTOS MO" REMOVIDO.** Com o Scorecard calculando MO automaticamente (CLT + PJ proporcionais), o import manual tornou-se redundante. Removidos: botão, modal, states e queries de `moAlocacao`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4311** — **SCORECARD RH/FOLHA: RE-INIT AO TROCAR DE OBRA.** `useRef` passa a guardar o `obraId` já inicializado. Ao navegar para outra obra, `rhAno`/`rhMes` são re-inicializados pelo cronograma da nova obra. Preserva escolha manual dentro da mesma obra. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4312** — **SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA.** Query PJ passou a espelhar a lógica CLT: nova CTE `pj_site_periods`; `efetivo_inicio/fim` = interseção contrato × alocação × filtro; `dias_na_obra/dias_no_mes` pro-rateia custo; `WHERE dias_na_obra > 0` exclui meses sem presença. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4311** — **SCORECARD RH/FOLHA: RE-INIT AO TROCAR DE OBRA.** `useRef` passa a guardar o `obraId` já inicializado. Ao navegar para outra obra, `rhAno`/`rhMes` são re-inicializados pelo cronograma da nova obra. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4310** — **SCORECARD RH/FOLHA: PERÍODO PADRÃO = CRONOGRAMA DA OBRA.** `useEffect` inicializa `rhAno` com o ano de `proj.dataInicio`. "Ano todo" clampa `mesInicio/mesFim` pelos bounds da obra. Texto informativo abaixo do seletor. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,10 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4308** — **SCORECARD: FIX PJ QUERY — FILTRO obra_id REMOVIDO + NULL DATE HANDLING.** Fix intermediário: removido obra_id; NULL dates corrigidos; status expandido para `IN ('ativo','pendente_assinatura')`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4307** — **SCORECARD: RH/FOLHA — PJ CONTRACTORS INCLUÍDOS NO CUSTO.** 4ª query em `getCustosRH` via `pj_contracts` + `generate_series` por mês ativo. PJ pushed no array `funcs` com badge roxo. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4306** — **SCORECARD: FIX LOCAÇÕES INVISÍVEIS — ORDER BY CASE ALIAS EM UNION SEM SUBQUERY.** PostgreSQL não permite aliases de saída em expressões no `ORDER BY` direto de `UNION ALL`. Fix: UNION envolvido em `SELECT * FROM (...) _loc`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4305** — **SCORECARD: FIX LOCAÇÕES — NULLIF EMPTY STRING + SAFE() LOG MELHORADO.** `data_fim_real=''` → `NULLIF(col,'')::date`; `safe()` agora loga `e.cause.message` (erro Postgres real). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

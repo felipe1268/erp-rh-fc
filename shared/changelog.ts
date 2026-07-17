@@ -1,4 +1,24 @@
 /**
+ * Rev. 4313 - PLANEJAMENTO: BOTÃO "IMPORTAR CUSTOS MO" REMOVIDO
+ *
+ * CONTEXTO:
+ *   O botão "Importar Custos MO" permitia alocar manualmente o custo de folha
+ *   fechada nas atividades do cronograma. Com o Scorecard Gestor calculando
+ *   automaticamente o custo de MO (CLT proporcional + PJ proporcional) a partir
+ *   de payroll_payments e pj_contracts com proration por dias na obra, o fluxo
+ *   manual tornou-se redundante e potencialmente confuso.
+ *
+ * REMOVIDO:
+ *   - Botão "Importar Custos MO" no header de PlanejamentoDetalhe
+ *   - Modal completo (Dialog, verificarMoQuery, executarTransferenciaMut)
+ *   - States: showImportarMoModal, mesMoSelecionado
+ *   - Queries: trpc.moAlocacao.verificarTransferenciaMO, executarTransferenciaMO
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo (remoção só de UI/frontend).
+ * Arquivo: client/src/pages/planejamento/PlanejamentoDetalhe.tsx
+ */
+
+/**
  * Rev. 4312 - SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA
  *
  * CONTEXTO:
