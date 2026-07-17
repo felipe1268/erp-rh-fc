@@ -1,4 +1,19 @@
 /**
+ * Rev. 4332 - SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — TOGGLE MINUTO / HORA / DIA / SEMANA / MÊS
+ *
+ * PROBLEMA: toggle só tinha Dia/Semana/Mês; usuário queria granularidade de hora e minuto.
+ *
+ * SOLUÇÃO:
+ *   - Tipo `custoPeriodo` estendido para "minuto"|"hora"|"dia"|"semana"|"mes".
+ *   - Custo/hora  = custoDia ÷ 8 (jornada 8h/dia).
+ *   - Custo/minuto = custoHora ÷ 60.
+ *   - 5 pills horizontais: Min · Hora · Dia · Semana · Mês.
+ *   - labelPeriodo atualizado com texto contextual para cada granularidade.
+ *   - ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4331 - SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — REDESIGN AMARELO PÁLIDO + VALOR DESTAQUE
  *
  * PROBLEMA: card anterior (gradiente escuro) não destacava bem o valor; sem centavos.

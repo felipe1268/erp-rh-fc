@@ -235,7 +235,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [tabScore,      setTabScore]      = useState<"resultado"|"metas"|"rh"|"seguranca"|"compras"|"operacional">("resultado");
   const [abaAnalise,    setAbaAnalise]    = useState<"compras"|"ferramentas"|"locacoes">("compras");
   const [abaRH,         setAbaRH]         = useState<"folha"|"banco">("folha");
-  const [custoPeriodo,  setCustoPeriodo]  = useState<"dia"|"semana"|"mes">("dia");
+  const [custoPeriodo,  setCustoPeriodo]  = useState<"minuto"|"hora"|"dia"|"semana"|"mes">("dia");
   const [expandedRH,    setExpandedRH]    = useState<Set<number>>(new Set());
   const [filtroFuncao,  setFiltroFuncao]  = useState<string>("");
   const [rhSortBy,      setRhSortBy]      = useState<"custo" | "nome">("custo");
@@ -1217,10 +1217,21 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                     diasUteis = diasUteisDoMes(rhAno, parseInt(rhMes));
                   }
                   const custoDia     = diasUteis > 0 ? custoMes / diasUteis : 0;
+                  const custoHora    = custoDia / 8;
+                  const custoMinuto  = custoHora / 60;
                   const custoSemana  = custoDia * 5;
                   const qtdFunc      = analiseRH.data!.resumo.totalFuncionarios;
-                  const valorExibido = custoPeriodo === "dia" ? custoDia : custoPeriodo === "semana" ? custoSemana : custoMes;
-                  const labelPeriodo = custoPeriodo === "dia" ? "dia útil" : custoPeriodo === "semana" ? "semana (5 dias úteis)" : rhMes === "all" ? "ano" : "mês";
+                  const valorExibido =
+                    custoPeriodo === "minuto" ? custoMinuto :
+                    custoPeriodo === "hora"   ? custoHora   :
+                    custoPeriodo === "dia"    ? custoDia    :
+                    custoPeriodo === "semana" ? custoSemana : custoMes;
+                  const labelPeriodo =
+                    custoPeriodo === "minuto" ? "minuto trabalhado" :
+                    custoPeriodo === "hora"   ? "hora trabalhada (8h/dia)" :
+                    custoPeriodo === "dia"    ? "dia útil" :
+                    custoPeriodo === "semana" ? "semana (5 dias úteis)" :
+                    rhMes === "all" ? "ano" : "mês";
                   const fmtBRL = (v: number) =>
                     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(v);
                   return (
@@ -1230,19 +1241,25 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                         <p className="text-[11px] font-bold uppercase tracking-widest text-yellow-700">
                           Custo da Equipe
                         </p>
-                        {/* Toggle Dia / Semana / Mês */}
-                        <div className="flex gap-1">
-                          {(["dia","semana","mes"] as const).map(p => (
+                        {/* Toggle Minuto / Hora / Dia / Semana / Mês */}
+                        <div className="flex gap-1 flex-wrap justify-end">
+                          {([
+                            { k: "minuto", label: "Min" },
+                            { k: "hora",   label: "Hora" },
+                            { k: "dia",    label: "Dia" },
+                            { k: "semana", label: "Semana" },
+                            { k: "mes",    label: "Mês" },
+                          ] as const).map(({ k, label }) => (
                             <button
-                              key={p}
-                              onClick={() => setCustoPeriodo(p)}
+                              key={k}
+                              onClick={() => setCustoPeriodo(k)}
                               className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors border ${
-                                custoPeriodo === p
+                                custoPeriodo === k
                                   ? "bg-yellow-400 border-yellow-400 text-yellow-900"
                                   : "bg-transparent border-yellow-300 text-yellow-600 hover:bg-yellow-100"
                               }`}
                             >
-                              {p === "dia" ? "Dia" : p === "semana" ? "Semana" : "Mês"}
+                              {label}
                             </button>
                           ))}
                         </div>

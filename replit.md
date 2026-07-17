@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4331** — **SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — REDESIGN AMARELO PÁLIDO + VALOR DESTAQUE.** bg-yellow-50, border-yellow-200, rounded-2xl. Valor text-5xl font-black com R$ + centavos. Toggle pills horizontais; barra de decomposição colorida + legenda %. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4332** — **SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — TOGGLE MIN/HORA/DIA/SEMANA/MÊS.** 5 pills: custoHora=custoDia÷8; custoMinuto=custoHora÷60. labelPeriodo contextual. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4330** — **SCORECARD RH/FOLHA: CARD "CUSTO DIÁRIO DA EQUIPE" COM TOGGLE DIA/SEMANA/MÊS.** Card gradiente indigo→violet; custoPeriodo state; diasUteisDoMes; barra decomposição. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4331** — **SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — REDESIGN AMARELO PÁLIDO + VALOR DESTAQUE.** bg-yellow-50, border-yellow-200, rounded-2xl. Valor text-5xl font-black com R$ + centavos. Toggle pills horizontais; barra de decomposição colorida + legenda %. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
