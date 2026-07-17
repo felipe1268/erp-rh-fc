@@ -1219,11 +1219,11 @@ export default function AlmoxarifadoPage() {
   const [modalLocacoesVencendo, setModalLocacoesVencendo] = useState(false);
 
   const criarMut = trpc.compras.criarItem.useMutation({
-    onSuccess: () => { refetch(); setModalItem(false); toast.success("Item criado!"); },
+    onSuccess: () => { refetch(); utils.warehouse.getDashboard.invalidate(); setModalItem(false); toast.success("Item criado!"); },
     onError: (e) => toast.error("Erro ao criar item: " + e.message),
   });
   const atualizarMut = trpc.compras.atualizarItem.useMutation({
-    onSuccess: () => { refetch(); setModalItem(false); toast.success("Item atualizado!"); },
+    onSuccess: () => { refetch(); utils.warehouse.getDashboard.invalidate(); setModalItem(false); toast.success("Item atualizado!"); },
     onError: (e: any) => {
       console.error("[atualizarItem onError]", e, "data:", e?.data, "shape:", e?.shape, "cause:", e?.cause);
       try {
@@ -1417,7 +1417,7 @@ export default function AlmoxarifadoPage() {
   const [saidaObraId, setSaidaObraId] = useState<number>(0);
   const [saidaOk, setSaidaOk] = useState<boolean | null>(null);
   const registerExit = trpc.warehouse.registerExit.useMutation({
-    onSuccess: () => { refetch(); setSaidaOk(true); },
+    onSuccess: () => { refetch(); utils.warehouse.getDashboard.invalidate(); setSaidaOk(true); },
     onError: (e) => { toast.error(e.message); setSaidaOk(false); },
   });
 
@@ -1537,7 +1537,7 @@ export default function AlmoxarifadoPage() {
     .filter((l) => fecharDiaObraFiltro === "todas" || Number(l.obraId) === Number(fecharDiaObraFiltro))
     .sort((a, b) => String(a.dataEmprestimo).localeCompare(String(b.dataEmprestimo)));
   const returnLoan = trpc.warehouse.returnLoanById.useMutation({
-    onSuccess: () => { refetchLoans(); refetchLoansAbertos(); refetch(); toast.success("Ferramenta devolvida!"); },
+    onSuccess: () => { refetchLoans(); refetchLoansAbertos(); refetch(); utils.warehouse.getDashboard.invalidate(); toast.success("Ferramenta devolvida!"); },
     onError: (e) => toast.error(e.message),
   });
   // Rev. 4011 — Assinatura opcional na devolução de ferramenta ("se possível", conforme

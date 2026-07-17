@@ -1,4 +1,38 @@
 /**
+ * Rev. 4344 - ALMOXARIFADO: CORREÇÃO DE ATUALIZAÇÃO DO PAINEL DE VALOR TOTAL
+ *
+ * PROBLEMA: Após qualquer operação que altera o estoque (saída, devolução de ferramenta,
+ *   criar item, atualizar item), o painel de Valor Total do Almoxarifado (getDashboard)
+ *   ficava com o valor DESATUALIZADO — a lista de itens refrescava, mas o card de
+ *   R$ total no topo da tela não. Isso fazia parecer que a operação não alterou o valor.
+ *
+ *   Sintoma 1 (Item 3 Leonardo): "quando alteramos a quantidade da baixa (saída), o
+ *     valor não atualiza no almoxarifado" — registerExit.onSuccess só chamava refetch()
+ *     mas não invalidava getDashboard.
+ *
+ *   Sintoma 2 (Item 1 Leonardo): "quando devolvemos ferramentas, a quantidade existente
+ *     parece aumentar estranhamente" — na verdade o valor do painel ficava inconsistente
+ *     (lista refrescava + quantidade subia corretamente na devolução, mas o R$ total
+ *     ficava congelajdo, causando confusão visual sobre o estado real).
+ *
+ * RAIZ: 4 mutations em almoxarifado/index.tsx chamavam apenas `refetch()` mas esqueciam
+ *   de invocar `utils.warehouse.getDashboard.invalidate()`:
+ *     · registerExit.onSuccess  (saída rápida)
+ *     · returnLoan.onSuccess    (devolução de ferramenta)
+ *     · criarMut.onSuccess      (novo item)
+ *     · atualizarMut.onSuccess  (editar item)
+ *   O SmartEntry (recebimento inteligente) já fazia certo (invalidava getDashboard).
+ *
+ * SOLUÇÃO: Adicionado `utils.warehouse.getDashboard.invalidate()` nas 4 mutations acima.
+ *   O fluxo agora é consistente: qualquer escrita no estoque → lista + painel de valor
+ *   são refrescados atomicamente na mesma resposta.
+ *
+ * ARQUIVOS: client/src/pages/almoxarifado/index.tsx
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4343 - EQUIPAMENTOS PRÓPRIOS: SELEÇÃO MÚLTIPLA + TRANSFERÊNCIA EM LOTE
  *
  * PROBLEMA: o único jeito de transferir equipamento era clicar no botão ⇌ de cada card
