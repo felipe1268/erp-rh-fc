@@ -1848,6 +1848,7 @@ export const scorecardRouter = router({
               e.cargo,
               e."salarioBase"                                       AS salario_base_cadastro,
               e."tipoContrato"                                      AS tipo_contrato,
+              e.cpf                                                 AS cpf,
               COALESCE(COUNT(DISTINCT pf.mes_referencia), 0)       AS meses_na_obra,
               COALESCE(SUM(pf.dias_na_obra), 0)                    AS total_dias_na_obra,
               COALESCE(SUM(ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS salario_bruto_total,
@@ -1893,7 +1894,7 @@ export const scorecardRouter = router({
             JOIN employees e ON e.id = pe.employee_id
             LEFT JOIN pf ON pf.employee_id = pe.employee_id
             LEFT JOIN vr_data v ON v.employee_id = pf.employee_id AND v.mes_referencia = pf.mes_referencia
-            GROUP BY pe.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase", e."tipoContrato"
+            GROUP BY pe.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase", e."tipoContrato", e.cpf
           )
           SELECT * FROM custos ORDER BY custo_folha_empresa DESC NULLS LAST, nome ASC
         `),
@@ -2163,8 +2164,16 @@ export const scorecardRouter = router({
         })();
         if (salBase <= 0) continue;
 
-        const desde = f.alocado_desde ? new Date(String(f.alocado_desde).slice(0, 10) + 'T00:00:00') : null;
-        const ate   = f.alocado_ate   ? new Date(String(f.alocado_ate  ).slice(0, 10) + 'T00:00:00') : null;
+        // Parse seguro de data robusto: aceita JS Date (driver PG) ou string "YYYY-MM-DD"
+        const parseDbDate = (v: any): Date | null => {
+          if (!v) return null;
+          if (v instanceof Date) return new Date(v.toISOString().slice(0, 10) + 'T00:00:00');
+          const iso = String(v).slice(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+          return new Date(iso + 'T00:00:00');
+        };
+        const desde = parseDbDate(f.alocado_desde);
+        const ate   = parseDbDate(f.alocado_ate);
         if (!desde || !ate) continue;
 
         // Itera pelos meses do filtro
@@ -2186,25 +2195,25 @@ export const scorecardRouter = router({
             : 0;
 
           if (diasNaObra > 0) {
-            const frac        = diasNaObra / diasNoMes;
-            const salProrated = rnd2(salBase * frac);
+            const frac         = diasNaObra / diasNoMes;
+            const salProrated  = rnd2(salBase * frac);
             const fgtsProrated = rnd2(salBase * 0.08 * frac);
             syntheticHist.push({
-              mes:         mesStr,
+              mes:          mesStr,
               diasNaObra,
               diasNoMes,
-              fracao:      Math.round(frac * 1000) / 1000,
+              fracao:       Math.round(frac * 1000) / 1000,
               salarioBruto: salProrated,
               horasExtras:  0,
               adicionais:   0,
               va:           0,
               fgts:         fgtsProrated,
               inss:         0,
-              ferias:       0,
-              seguroVida:   0,
+              ferias:       feriasKeyMap.get(`${n(f.employee_id)}|${mesStr}`) ?? 0,
+              seguroVida:   0, // preenchido após loop
               liquido:      0,
               custoEmpresa: rnd2(salProrated + fgtsProrated),
-              custoTotal:   rnd2(salProrated + fgtsProrated),
+              custoTotal:   0, // recalculado após loop
               folhaStatus:  'estimado',
             });
           }
@@ -2214,14 +2223,52 @@ export const scorecardRouter = router({
         }
 
         if (syntheticHist.length > 0) {
-          f.historico_mensal   = syntheticHist;
-          f.meses_na_obra      = syntheticHist.length;
-          f.total_dias_na_obra = syntheticHist.reduce((s: number, h: any) => s + h.diasNaObra, 0);
+          // Seguro de vida com contagem de meses correta (não mais forçado para 1)
+          const sMensalEmp = seguroMensalMap.get(n(f.employee_id)) ?? 0;
+          for (const h of syntheticHist) {
+            h.seguroVida = sMensalEmp;
+            h.custoTotal = rnd2(h.custoEmpresa + h.ferias + h.seguroVida);
+          }
+
+          f.historico_mensal    = syntheticHist;
+          f.meses_na_obra       = syntheticHist.length;
+          f.total_dias_na_obra  = syntheticHist.reduce((s: number, h: any) => s + h.diasNaObra, 0);
           f.salario_bruto_total = syntheticHist.reduce((s: number, h: any) => s + h.salarioBruto, 0);
           f.fgts_total          = syntheticHist.reduce((s: number, h: any) => s + h.fgts, 0);
           f.custo_folha_empresa = rnd2(f.salario_bruto_total + f.fgts_total);
-          // recalcula custo_total_empresa (férias/seguro já foram enriquecidos antes)
-          f.custo_total_empresa = rnd2(f.custo_folha_empresa + n(f.ferias_total) + n(f.seguro_vida_total));
+          f.seguro_vida_total   = rnd2(sMensalEmp * syntheticHist.length);
+          f.custo_total_empresa = rnd2(f.custo_folha_empresa + n(f.ferias_total) + f.seguro_vida_total);
+        }
+      }
+
+      // Deduplica por CPF: remove cadastros duplicados (mesmo funcionário, dois employee_ids).
+      // Mantém o registro com mais meses de folha real; descarta o outro para não duplicar custo.
+      {
+        const cpfSeen    = new Map<string, number>(); // CPF limpo → índice em funcs
+        const dropIdxSet = new Set<number>();
+        for (let i = 0; i < funcs.length; i++) {
+          const cpf = String(funcs[i].cpf ?? '').replace(/[^0-9]/g, '');
+          if (!cpf || cpf === '00000000000') continue;
+          if (cpfSeen.has(cpf)) {
+            const prevIdx = cpfSeen.get(cpf)!;
+            const prev    = funcs[prevIdx];
+            const cur     = funcs[i];
+            // Mantém quem tem mais dados; em empate, mantém o primeiro
+            if (n(cur.meses_na_obra) > n(prev.meses_na_obra) ||
+                (n(cur.meses_na_obra) === n(prev.meses_na_obra) &&
+                 n(cur.custo_total_empresa) > n(prev.custo_total_empresa))) {
+              dropIdxSet.add(prevIdx);
+              cpfSeen.set(cpf, i);
+            } else {
+              dropIdxSet.add(i);
+            }
+          } else {
+            cpfSeen.set(cpf, i);
+          }
+        }
+        if (dropIdxSet.size > 0) {
+          funcs.splice(0, funcs.length, ...funcs.filter((_: any, idx: number) => !dropIdxSet.has(idx)));
+          console.log(`[getCustosRH] CPF dedup: removidos ${dropIdxSet.size} duplicado(s)`);
         }
       }
 

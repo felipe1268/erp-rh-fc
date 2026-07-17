@@ -50,7 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4347** — **SCORECARD OBRA — FOLHA/CUSTOS: REMOVE "SEM FOLHA" E CORRIGE FILTRO DE EXIBIÇÃO.** `period_emps` LEFT JOIN ancorava todos os alocados (mesmo sem folha processada) → apareciam com zeros + badge âmbar "⚠ Sem folha". Fix: filtro JS pós-enriquecimento (`displayFuncs`): CLT só entra se `meses_na_obra > 0`; PJ só entra se `custo_total_empresa > 0`. Resumo/totais recalculados sobre lista filtrada. Badge removido do frontend. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4347** — **SCORECARD OBRA — FOLHA/CUSTOS: AUDITORIA + CUSTO PROPORCIONAL PARA TODO O EFETIVO.** 4 bugs corrigidos: (1) Duplicata de funcionário por CPF — dedup JS após enriquecimento descarta o `employee_id` com menos dados. (2) Seg. de Vida errado para "sem folha" — `meses||1` forçava 1 mês; agora recalculado após geração sintética. (3) Data parsing frágil para `alocado_desde/ate` (PG Date vs string). (4) Custo proporcional via `salarioBase × dias_na_obra/dias_no_mes` + FGTS 8% para CLT sem folha processada. Badge "⚠ Sem folha" removido. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4346** — **FOLHA DE PAGAMENTO: CORREÇÃO — FUNCIONÁRIOS "NÃO PAGAR" VOLTAVAM AO PAINEL DE ALERTA.** `sincronizarValeJson` persistia `status` ('rejeitado'/'calculado') no snapshot mas nunca limpava `temAlerta`/`bloqueado`. Na próxima leitura de `getPeriod`, o snapshot ainda tinha `temAlerta: true` → funcionários reapareciam. Fix: mapear `temAlerta: status === 'bloqueado'` e `bloqueado: status === 'bloqueado'` dentro de `sincronizarValeJson`. ZERO DELETE · ZERO ALTER destrutivo.
 
