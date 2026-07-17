@@ -1501,7 +1501,9 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                             <span className="px-1 py-0 rounded text-[8px] font-bold bg-amber-100 text-amber-700 border border-amber-300" title="Alocado na obra, mas sem lançamento de folha no período">⚠ Sem folha</span>
                                           )}
                                         </div>
-                                        <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
+                                        {(f.numero_interno || f.matricula) && (
+                                          <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.numero_interno ?? f.matricula}</p>
+                                        )}
                                         {f.tipo_pessoa === 'PJ' && f.razao_social && (
                                           <p className="text-[8px] text-purple-500 font-medium leading-tight">{f.razao_social}</p>
                                         )}
@@ -1780,7 +1782,9 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                     </button>
                                     <div className="min-w-0">
                                       <p className="font-medium text-gray-800 leading-tight text-xs truncate">{f.nome}</p>
-                                      <p className="text-[8px] text-gray-400 font-mono leading-tight">Nº {f.employeeId}</p>
+                                      {(f.numeroInterno || f.matricula) && (
+                                        <p className="text-[8px] text-gray-400 font-mono leading-tight">{f.numeroInterno ?? f.matricula}</p>
+                                      )}
                                       {f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
                                     </div>
                                   </div>

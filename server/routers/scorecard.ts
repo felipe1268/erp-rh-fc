@@ -1848,6 +1848,7 @@ export const scorecardRouter = router({
               e.cargo,
               e."salarioBase"                                       AS salario_base_cadastro,
               e."tipoContrato"                                      AS tipo_contrato,
+              e."numeroInterno"                                     AS numero_interno,
               COALESCE(COUNT(DISTINCT pf.mes_referencia), 0)       AS meses_na_obra,
               COALESCE(SUM(pf.dias_na_obra), 0)                    AS total_dias_na_obra,
               COALESCE(SUM(ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS salario_bruto_total,
@@ -1890,7 +1891,7 @@ export const scorecardRouter = router({
             JOIN employees e ON e.id = pe.employee_id
             LEFT JOIN pf ON pf.employee_id = pe.employee_id
             LEFT JOIN vr_data v ON v.employee_id = pf.employee_id AND v.mes_referencia = pf.mes_referencia
-            GROUP BY pe.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase", e."tipoContrato"
+            GROUP BY pe.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase", e."tipoContrato", e."numeroInterno"
           )
           SELECT * FROM custos ORDER BY custo_folha_empresa DESC NULLS LAST, nome ASC
         `),
@@ -2505,10 +2506,11 @@ export const scorecardRouter = router({
             GROUP BY bhl."employeeId"
           )
           SELECT
-            e.id             AS "employeeId",
-            e."nomeCompleto" AS nome,
-            e.funcao         AS cargo,
+            e.id               AS "employeeId",
+            e."nomeCompleto"   AS nome,
+            e.funcao           AS cargo,
             e.matricula,
+            e."numeroInterno"  AS "numeroInterno",
             e."fotoUrl",
             COALESCE(bhs."saldoMinutos", 0)::int AS "saldoMinutos",
             COALESCE(m.movimento, 0)::int        AS "movimentoMinutos",
@@ -2546,6 +2548,7 @@ export const scorecardRouter = router({
         nome:             r.nome,
         cargo:            r.cargo,
         matricula:        r.matricula,
+        numeroInterno:    r.numeroInterno ?? null,
         fotoUrl:          r.fotoUrl,
         saldoMinutos:     Number(r.saldoMinutos),
         movimentoMinutos: Number(r.movimentoMinutos),
