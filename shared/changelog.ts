@@ -1,4 +1,27 @@
 /**
+ * Rev. 4318 - SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS
+ *
+ * PROBLEMA:
+ *   Meses sem folha (Set, Out, Nov, Dez…) exibiam ponto azul "Com dados" no
+ *   PeriodSelectorCard, divergindo da legenda. Ao clicar nesses meses
+ *   aparecia "Sem dados de folha para esta obra no período selecionado."
+ *
+ * CAUSA RAIZ:
+ *   Após Rev. 4317, meses com apenas férias órfãs (sem entrada de payroll)
+ *   passaram a aparecer em `mensal` com `qtdFuncionarios=0`. O loop que
+ *   preenche `rhMonthStatus` marcava qualquer entrada de `mensal` como "data"
+ *   sem checar se havia funcionários com payroll naquele mês.
+ *
+ * FIX (ScorecardTab.tsx):
+ *   Adicionada guarda `&& (entry.qtdFuncionarios ?? 0) > 0` no loop que
+ *   constrói `rhMonthStatus`. Meses com apenas férias órfãs ou sem payroll
+ *   continuam como "none" (ponto cinza).
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo (só frontend).
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4317 - SCORECARD RH/FOLHA: FIX FÉRIAS ÓRFÃS NO AGREGADO POR MÊS
  *
  * PROBLEMA:

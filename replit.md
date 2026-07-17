@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4317** — **SCORECARD RH/FOLHA: FIX FÉRIAS ÓRFÃS NO CUSTO POR MÊS.** Férias com `mes_ref` sem entrada de payroll ficavam "órfãs" (contavam no KPI mas sumiam da tabela por mês). Fix: passa por `feriasKeyMap` pós-loop e injeta meses não cobertos. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4318** — **SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS.** Meses sem payroll mostravam ponto azul. Guard `qtdFuncionarios > 0` no loop de `rhMonthStatus` garante que só meses com funcionários ativos ficam azuis. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4316** — **SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA DE FUNCIONÁRIOS.** Select com cargos únicos + contagem; `rhFuncsFiltrados` + `rhResumoFiltrado` recalculam totais do subconjunto; tfoot vira "SUBTOTAL — cargo". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4317** — **SCORECARD RH/FOLHA: FIX FÉRIAS ÓRFÃS NO CUSTO POR MÊS.** Férias com `mes_ref` sem entrada de payroll ficavam "órfãs". Fix: injeta meses não cobertos via `feriasKeyMap` pós-loop. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4315** — **SCORECARD RH/FOLHA: FOTO DO FUNCIONÁRIO CLICÁVEL.** Foto e avatar de iniciais abrem lightbox; `cursor-zoom-in` + hover ring; `stopPropagation` evita colapsar linha. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4316** — **SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA DE FUNCIONÁRIOS.** Select cargos únicos + contagem; `rhFuncsFiltrados` + `rhResumoFiltrado`; tfoot vira "SUBTOTAL — cargo". ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4315** — **SCORECARD RH/FOLHA: FOTO DO FUNCIONÁRIO CLICÁVEL.** Foto e avatar abrem lightbox; `cursor-zoom-in` + hover ring; `stopPropagation` evita colapsar linha. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4314** — **PORTAL CLIENTE ADMIN: FILTRO "COM/SEM ACESSO".** Pills coloridas (Todos/Com acesso/Sem acesso) com contador. `filtrados` useMemo atualizado. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4313** — **PLANEJAMENTO: BOTÃO "IMPORTAR CUSTOS MO" REMOVIDO.** Com o Scorecard calculando MO automaticamente (CLT + PJ proporcionais), o import manual tornou-se redundante. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4312** — **SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA.** Nova CTE `pj_site_periods`; interseção contrato × alocação × filtro; `dias_na_obra/dias_no_mes` pro-rateia custo. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4311** — **SCORECARD RH/FOLHA: RE-INIT AO TROCAR DE OBRA.** `useRef` guarda o `obraId` já inicializado; ao trocar de obra, `rhAno`/`rhMes` são re-inicializados. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4312** — **SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA.** Nova CTE `pj_site_periods`; interseção contrato × alocação × filtro; pro-rateia custo. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

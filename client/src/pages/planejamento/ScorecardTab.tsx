@@ -1106,9 +1106,13 @@ export default function ScorecardTab({ proj }: { proj: any }) {
             );
             // Usa analiseRHAnoTodo (sempre ano completo) para que as bolinhas
             // permaneçam acesas independentemente do mês filtrado atualmente.
+            // Só marca "data" se houver funcionários com payroll no mês (qtdFuncionarios>0).
+            // Meses com apenas férias órfãs (sem entrada de payroll) ficam como "none".
             for (const entry of (analiseRHAnoTodo.data?.mensal ?? analiseRH.data?.mensal ?? [])) {
               const [y, mm] = (entry.mes as string).split('-');
-              if (y === String(rhAno)) rhMonthStatus[parseInt(mm)] = "data";
+              if (y === String(rhAno) && (entry.qtdFuncionarios ?? 0) > 0) {
+                rhMonthStatus[parseInt(mm)] = "data";
+              }
             }
             return (
           <div className="space-y-4">
