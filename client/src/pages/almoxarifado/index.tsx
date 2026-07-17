@@ -2615,9 +2615,17 @@ export default function AlmoxarifadoPage() {
             </label>
             {/* Rev. 2382 — Toggle modo seleção múltipla */}
             <button
-              onClick={() => { if (modoSelecao) sairModoSelecao(); else setModoSelecao(true); }}
+              onClick={() => {
+                if (modoSelecao) {
+                  sairModoSelecao();
+                } else {
+                  setModoSelecao(true);
+                  // Seleciona todos os itens visíveis automaticamente
+                  setSelecionados(new Set((lista as any[]).map((i: any) => i.id)));
+                }
+              }}
               className={`h-9 px-3 flex items-center gap-2 text-sm font-medium rounded-lg transition shadow-sm ${modoSelecao ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200"}`}
-              title="Selecionar múltiplos itens pra alterar categoria ou unificar"
+              title="Selecionar todos os itens visíveis para transferência em lote"
             >
               {modoSelecao ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
               <span className="hidden sm:inline">{modoSelecao ? "Sair da seleção" : "Selecionar"}</span>
@@ -5015,10 +5023,26 @@ export default function AlmoxarifadoPage() {
       {modoSelecao && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-white shadow-2xl rounded-2xl border border-indigo-200 px-4 py-3 flex items-center gap-3 max-w-[95vw]">
           <div className="flex items-center gap-2 pr-3 border-r border-gray-200">
-            <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+            <button
+              onClick={() => {
+                const todosIds = (lista as any[]).map((i: any) => i.id);
+                if (selecionados.size === todosIds.length) {
+                  setSelecionados(new Set());
+                } else {
+                  setSelecionados(new Set(todosIds));
+                }
+              }}
+              className="w-9 h-9 rounded-full bg-indigo-100 hover:bg-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-sm transition"
+              title={selecionados.size === lista.length ? "Desmarcar todos" : "Selecionar todos"}
+            >
               {selecionados.size}
-            </div>
-            <span className="text-xs text-gray-600 hidden sm:inline">selecionado{selecionados.size !== 1 ? "s" : ""}</span>
+            </button>
+            <span className="text-xs text-gray-600 hidden sm:inline">
+              {selecionados.size === lista.length
+                ? <span className="text-indigo-600 font-semibold cursor-pointer" onClick={() => setSelecionados(new Set())}>todos — limpar</span>
+                : <span className="cursor-pointer" onClick={() => setSelecionados(new Set((lista as any[]).map((i: any) => i.id)))}>selecionado{selecionados.size !== 1 ? "s" : ""} · <span className="text-indigo-600 font-semibold">todos</span></span>
+              }
+            </span>
           </div>
           <button
             onClick={() => {

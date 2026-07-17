@@ -1,4 +1,28 @@
 /**
+ * Rev. 4338 - ALMOXARIFADO: SELECIONAR = TODOS MARCADOS + TOGGLE TODOS/NENHUM NA BARRA
+ *
+ * PROBLEMA: ao clicar "Selecionar", o usuário entrava no modo seleção com 0 itens marcados
+ *   e precisava clicar manualmente em cada card para selecionar, antes de poder transferir.
+ *
+ * SOLUÇÃO (almoxarifado/index.tsx):
+ *   1. Botão "Selecionar": ao entrar no modo seleção, todos os itens visíveis (lista)
+ *      são automaticamente selecionados via setSelecionados(new Set(lista.map(i=>i.id))).
+ *      O usuário pode desmarcar o que não quer e clicar direto em "Transferir".
+ *
+ *   2. Barra sticky inferior: contador de selecionados agora é um botão clicável que
+ *      alterna entre "Selecionar todos" e "Desmarcar todos". Texto ao lado mostra:
+ *      - "todos — limpar" (clicável) quando todos estão selecionados
+ *      - "N selecionados · todos" (clicável p/ selecionar tudo) quando parcial
+ *
+ * FLUXO NOVO:
+ *   Clicar "Selecionar" → todos marcados → "Transferir" → modal de destino
+ *   (1 clique a mais vs 1+N cliques antes)
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/almoxarifado/index.tsx
+ */
+
+/**
  * Rev. 4337 - ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS ATIVAS
  *
  * PROBLEMA: o select "Almoxarifado de Destino" nos modais de transferência (individual

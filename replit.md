@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4338** — **ALMOXARIFADO: SELECIONAR = TODOS MARCADOS + TOGGLE TODOS/NENHUM.** Clicar "Selecionar" entra no modo seleção com TODOS os itens visíveis já marcados. Barra inferior: contador clicável alterna todos/nenhum; texto "todos — limpar" ou "N selecionados · todos". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `listForAlmoxarifado` ganha `forTransfer?: boolean`; quando true bypassa filtro por usuário → `getObrasByCompanyActive`. Nova query `obrasParaTransferir` usada nos selects de destino (lote + individual) e label lookups. `obrasAtivas` (restrita) mantida para contexto de visualização e origem. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4336** — **SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL (não acumulado).** SQL: `valor_mensal_medio = custo_total / meses_ativos`. Merge JS: `salario_bruto_total = valor_mensal_medio` (display); `custo_total_empresa = custo_total` (KPIs/TOTAL). Frontend: coluna DIAS mostra "Nm" (meses), badge "/mês" no valor, totais usam custo real. ZERO DELETE · ZERO ALTER destrutivo.
