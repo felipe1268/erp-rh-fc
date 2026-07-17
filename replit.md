@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4322** — **CONTRATOS TERCEIROS: OBRA OBRIGATÓRIA + ALERTA VISÍVEL SEM OBRA.** `ContratoNovo`: campo Obra vira obrigatório (label `*`, validação no handleSalvar, hint vermelho). `ContratosList`: banner vermelho listando contratos ativos sem obraId + badge "⚠️ Sem obra vinculada" em cada card afetado. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4321** — **SCORECARD RH/FOLHA: LGPD — VISÃO POR FUNÇÃO PARA NÃO-ADMIN.** `isAdminMaster`: admin_master vê tabela individual completa; engenheiro/gestor vê tabela por função (Função | Qtd | custos agregados) sem nomes/valores individuais. Novo `rhPorFuncao` useMemo. Rodapé LGPD. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4320** — **SCORECARD RH/FOLHA: FIX PJ PHANTOM — FILTRAR POR `pj_contracts.obraId`.** Bug: query usava `employeeId IN (relevantEmpSql)` incluindo PJ de outras obras. Fix: filtrar por `pc."obraId" = obraId` diretamente; remove CTE `pj_site_periods`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4320** — **SCORECARD RH/FOLHA: FIX PJ PHANTOM — FILTRAR POR `pj_contracts.obraId`.** Fix: filtrar por `pc."obraId" = obraId` diretamente; remove CTE `pj_site_periods`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4319** — **SCORECARD RH/FOLHA: ORDENAÇÃO ALFABÉTICA NA TABELA DE FUNCIONÁRIOS.** Botão toggle "A → Z / Custo ↓"; `rhSortBy` state; `localeCompare(pt-BR)`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4316** — **SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA DE FUNCIONÁRIOS.** Select cargos únicos + contagem; `rhFuncsFiltrados` + `rhResumoFiltrado`; tfoot vira "SUBTOTAL — cargo". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4315** — **SCORECARD RH/FOLHA: FOTO DO FUNCIONÁRIO CLICÁVEL.** Foto e avatar abrem lightbox; `cursor-zoom-in` + hover ring; `stopPropagation` evita colapsar linha. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4314** — **PORTAL CLIENTE ADMIN: FILTRO "COM/SEM ACESSO".** Pills coloridas (Todos/Com acesso/Sem acesso) com contador. `filtrados` useMemo atualizado. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

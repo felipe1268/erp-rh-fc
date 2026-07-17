@@ -262,6 +262,7 @@ export default function ContratoNovo() {
   const handleSalvar = () => {
     if (!form.empresaTerceiraId) return toast.error("Selecione a empresa terceira");
     if (!form.descricao.trim()) return toast.error("Informe a descrição do contrato");
+    if (!form.obraId) return toast.error("Selecione a obra vinculada ao contrato");
     const obraObj = (obrasAll as any[]).find(o => String(o.id) === form.obraId);
     criarMutation.mutate({
       companyId: companyId ?? 0,
@@ -358,7 +359,7 @@ export default function ContratoNovo() {
 
             {/* Obra */}
             <div className="col-span-2">
-              <Label className="mb-1 block">Obra</Label>
+              <Label className="mb-1 block">Obra *</Label>
               <Combobox
                 placeholder="Busque ou selecione a obra..."
                 value={form.obraId}
@@ -367,9 +368,11 @@ export default function ContratoNovo() {
                 labelKey={o => `${o.codigo ? o.codigo + " — " : ""}${o.nome}`}
                 searchPlaceholder="Digite código ou nome da obra..."
               />
-              {obrasAtivas.length === 0 && (
+              {obrasAtivas.length === 0 ? (
                 <p className="text-xs text-amber-600 mt-1">Nenhuma obra ativa encontrada no sistema.</p>
-              )}
+              ) : !form.obraId ? (
+                <p className="text-xs text-red-500 mt-1 font-medium">⚠️ Obrigatório — sem obra vinculada, o contrato não aparecerá no Scorecard da obra.</p>
+              ) : null}
             </div>
 
             {/* Atividades do Planejamento */}

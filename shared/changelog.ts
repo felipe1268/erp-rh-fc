@@ -1,4 +1,31 @@
 /**
+ * Rev. 4322 - CONTRATOS TERCEIROS: OBRA OBRIGATÓRIA + ALERTA VISÍVEL SEM OBRA
+ *
+ * PROBLEMA:
+ *   O formulário de novo contrato de terceiro (ContratoNovo.tsx) permitia salvar
+ *   sem selecionar uma obra. Um contrato sem obraId ficava invisível no Scorecard
+ *   da obra (query filtra por obraId). O usuário não era alertado sobre isso —
+ *   o problema só aparecia depois, no Scorecard, com dados faltando.
+ *
+ * SOLUÇÃO (Rev. 4322):
+ *   1. ContratoNovo.tsx — Obra agora é OBRIGATÓRIA:
+ *      - Label "Obra *" (asterisco)
+ *      - handleSalvar bloqueia com toast.error se obraId vazio
+ *      - Hint vermelho logo abaixo do campo enquanto nenhuma obra está selecionada:
+ *        "⚠️ Obrigatório — sem obra vinculada, o contrato não aparecerá no Scorecard."
+ *
+ *   2. ContratosList.tsx — Alerta para contratos existentes sem obra:
+ *      - Banner vermelho no topo: "N contrato(s) ativo(s) sem obra vinculada"
+ *        com lista de contratos (número + descrição + empresa) e instrução de ação.
+ *      - Badge "⚠️ Sem obra vinculada" vermelho em cada card de contrato afetado.
+ *      - `semObra` = contratos ativos com obraId null/undefined.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo (só frontend).
+ * Arquivos: client/src/pages/terceiros/contratos/ContratoNovo.tsx
+ *           client/src/pages/terceiros/contratos/ContratosList.tsx
+ */
+
+/**
  * Rev. 4321 - SCORECARD RH/FOLHA: LGPD — VISÃO DE CUSTO POR FUNÇÃO PARA NÃO-ADMIN
  *
  * PROBLEMA (LGPD):

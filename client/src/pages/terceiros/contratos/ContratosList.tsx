@@ -75,6 +75,8 @@ export default function ContratosList() {
     return ok && match;
   });
 
+  const semObra = contratos.filter(c => !c.obraId && c.status === "ativo");
+
   const modoSelecao = selecionados.size > 0;
 
   const toggleSelecao = (id: number) => {
@@ -125,6 +127,31 @@ export default function ContratosList() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {semObra.length > 0 && (
+          <div className="rounded-xl border border-red-300 bg-red-50 p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-red-800">
+                {semObra.length === 1
+                  ? "1 contrato ativo sem obra vinculada"
+                  : `${semObra.length} contratos ativos sem obra vinculada`}
+              </p>
+              <p className="text-xs text-red-700 mt-0.5">
+                Contratos sem obra não aparecem no Scorecard da obra. Abra cada contrato e vincule-o à obra correta.
+              </p>
+              <ul className="mt-2 space-y-0.5">
+                {semObra.map(c => (
+                  <li key={c.id} className="text-xs text-red-700 flex items-center gap-1.5">
+                    <span className="font-mono bg-red-100 px-1.5 py-0.5 rounded">{c.numeroContrato || `#${c.id}`}</span>
+                    <span>{c.descricao}</span>
+                    <span className="text-red-400">— {c.empresaNome}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         )}
 
@@ -222,10 +249,15 @@ export default function ContratosList() {
                     className="flex-1 min-w-0 cursor-pointer"
                     onClick={() => navigate(`/terceiros/contratos/${c.id}`)}
                   >
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       {c.numeroContrato && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">{c.numeroContrato}</span>}
                       <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
                       {(() => { const nt = NATUREZA_CONTRATO[(c as any).naturezaContrato || "mao_de_obra"] || NATUREZA_CONTRATO.mao_de_obra; return <Badge className={`text-xs border ${nt.cls}`}>{nt.label}</Badge>; })()}
+                      {!(c as any).obraId && (
+                        <Badge className="text-xs border bg-red-100 text-red-700 border-red-300 inline-flex items-center gap-1 font-semibold">
+                          <AlertTriangle className="w-3 h-3" /> Sem obra vinculada
+                        </Badge>
+                      )}
                       {(() => {
                         const ass = (c as any).assinaturaStatus as string | null | undefined;
                         if (ass === "concluido") {
