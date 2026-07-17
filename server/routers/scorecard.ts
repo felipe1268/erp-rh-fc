@@ -2187,19 +2187,28 @@ export const scorecardRouter = router({
 
       const mensal = Array.from(mensalMap.values()).sort((a, b) => a.mes.localeCompare(b.mes));
 
+      // Filtra funcionários sem nenhum dado útil no período:
+      // - CLT: precisa ter ao menos 1 mês de folha processada (meses_na_obra > 0)
+      // - PJ: precisa ter custo > 0 no período
+      // Isso elimina os "Sem folha" que apareciam porque period_emps ancorava todos os alocados.
+      const displayFuncs = funcs.filter((f: any) => {
+        if (f.tipo_pessoa === 'PJ') return n(f.custo_total_empresa) > 0;
+        return n(f.meses_na_obra) > 0;
+      });
+
       const resumo = {
-        totalFuncionarios:  funcs.length,
-        custoTotalEmpresa:  funcs.reduce((s, f) => s + n(f.custo_total_empresa), 0),
-        salarioBrutoTotal:  funcs.reduce((s, f) => s + n(f.salario_bruto_total), 0),
-        heTotal:            funcs.reduce((s, f) => s + n(f.he_total),            0),
-        vaTotal:            funcs.reduce((s, f) => s + n(f.va_total),            0),
-        fgtsTotal:          funcs.reduce((s, f) => s + n(f.fgts_total),          0),
-        inssTotal:          funcs.reduce((s, f) => s + n(f.inss_total),          0),
-        liquidoTotal:       funcs.reduce((s, f) => s + n(f.liquido_total),       0),
-        feriasTotal:        funcs.reduce((s, f) => s + n(f.ferias_total),        0),
-        seguroVidaTotal:    funcs.reduce((s, f) => s + n(f.seguro_vida_total),   0),
+        totalFuncionarios:  displayFuncs.length,
+        custoTotalEmpresa:  displayFuncs.reduce((s: number, f: any) => s + n(f.custo_total_empresa), 0),
+        salarioBrutoTotal:  displayFuncs.reduce((s: number, f: any) => s + n(f.salario_bruto_total), 0),
+        heTotal:            displayFuncs.reduce((s: number, f: any) => s + n(f.he_total),            0),
+        vaTotal:            displayFuncs.reduce((s: number, f: any) => s + n(f.va_total),            0),
+        fgtsTotal:          displayFuncs.reduce((s: number, f: any) => s + n(f.fgts_total),          0),
+        inssTotal:          displayFuncs.reduce((s: number, f: any) => s + n(f.inss_total),          0),
+        liquidoTotal:       displayFuncs.reduce((s: number, f: any) => s + n(f.liquido_total),       0),
+        feriasTotal:        displayFuncs.reduce((s: number, f: any) => s + n(f.ferias_total),        0),
+        seguroVidaTotal:    displayFuncs.reduce((s: number, f: any) => s + n(f.seguro_vida_total),   0),
       };
-      return { resumo, mensal, funcionarios: funcs };
+      return { resumo, mensal, funcionarios: displayFuncs };
     }),
 
   ferramentasList: protectedProcedure

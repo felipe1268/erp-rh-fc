@@ -1,4 +1,31 @@
 /**
+ * Rev. 4347 - SCORECARD OBRA — FOLHA/CUSTOS: REMOVE "SEM FOLHA" E CORRIGE FILTRO DE EXIBIÇÃO
+ *
+ * CAUSA-RAIZ:
+ * A CTE `period_emps` (introduzida na Rev. 4333 para ancorar todos os alocados mesmo sem folha)
+ * usava LEFT JOIN com `payroll_frac`, fazendo com que funcionários alocados na obra mas SEM
+ * lançamento processado em `payroll_payments` aparecessem na lista com zeros e o badge âmbar
+ * "⚠ Sem folha". Isso foi agravado pela integração PJ (Rev. 4320), que passou a incluir mais
+ * funcionários via `obra_funcionarios` nessa âncora.
+ *
+ * FIX:
+ * 1. SERVER (scorecard.ts — getCustosRH): após todo o enriquecimento e merge PJ, aplica filtro
+ *    antes de montar resumo e retornar:
+ *    - CLT: só inclui se `meses_na_obra > 0` (tem ao menos 1 mês de folha processada)
+ *    - PJ:  só inclui se `custo_total_empresa > 0` (tem contrato ativo no período)
+ *    Resumo e totais passam a ser calculados sobre `displayFuncs` (lista filtrada).
+ * 2. FRONTEND (ScorecardTab.tsx): remove o bloco de badges "⚠ Sem folha" / "⚠ Sem contrato PJ"
+ *    (Rev. 4335) — desnecessário após o filtro server-side.
+ *
+ * RESULTADO: lista mostra apenas funcionários com dados reais; totais são precisos.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (getCustosRH — displayFuncs filter + resumo)
+ * - client/src/pages/planejamento/ScorecardTab.tsx (remove badge "Sem folha")
+ */
+
+/**
  * Rev. 4346 - FOLHA DE PAGAMENTO: CORREÇÃO — FUNCIONÁRIOS "NÃO PAGAR" VOLTAVAM AO PAINEL DE ALERTA
  *
  * CAUSA-RAIZ:

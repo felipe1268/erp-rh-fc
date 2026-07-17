@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4347** — **SCORECARD OBRA — FOLHA/CUSTOS: REMOVE "SEM FOLHA" E CORRIGE FILTRO DE EXIBIÇÃO.** `period_emps` LEFT JOIN ancorava todos os alocados (mesmo sem folha processada) → apareciam com zeros + badge âmbar "⚠ Sem folha". Fix: filtro JS pós-enriquecimento (`displayFuncs`): CLT só entra se `meses_na_obra > 0`; PJ só entra se `custo_total_empresa > 0`. Resumo/totais recalculados sobre lista filtrada. Badge removido do frontend. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4346** — **FOLHA DE PAGAMENTO: CORREÇÃO — FUNCIONÁRIOS "NÃO PAGAR" VOLTAVAM AO PAINEL DE ALERTA.** `sincronizarValeJson` persistia `status` ('rejeitado'/'calculado') no snapshot mas nunca limpava `temAlerta`/`bloqueado`. Na próxima leitura de `getPeriod`, o snapshot ainda tinha `temAlerta: true` → funcionários reapareciam. Fix: mapear `temAlerta: status === 'bloqueado'` e `bloqueado: status === 'bloqueado'` dentro de `sincronizarValeJson`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4345** — **ALMOXARIFADO: 5 MELHORIAS LISTA LEONARDO/17-07.** Item 2: seleção múltipla de locados para devolução em lote (checkbox + sticky bar âmbar + modal progresso 0→100%). Item 5: campo `quantidade` em `equipamentos_locados` (ColFix + schema + server + Locados.tsx). Item 6: botão Renovar Locação (CalendarPlus → modal com input date → `atualizarItem`). Item 7: badge vencimento colorido no modal Devolver (vermelho/laranja/âmbar). Item 8: `onError` em `proprioCriar` para exibir erros do servidor em toast. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4345** — **ALMOXARIFADO: 5 MELHORIAS LISTA LEONARDO/17-07.** Item 2: seleção múltipla locados em lote. Item 5: campo `quantidade` em `equipamentos_locados`. Item 6: botão Renovar Locação. Item 7: badge vencimento colorido. Item 8: `onError` em `proprioCriar`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4344** — **ALMOXARIFADO: CORREÇÃO — PAINEL DE VALOR TOTAL NÃO ATUALIZAVA APÓS OPERAÇÕES.** 4 mutations esqueciam `getDashboard.invalidate()`. ZERO DELETE · ZERO ALTER destrutivo.
 
