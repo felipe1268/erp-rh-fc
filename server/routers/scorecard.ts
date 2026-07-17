@@ -1777,8 +1777,12 @@ export const scorecardRouter = router({
               (pp."mesReferencia" || '-01')::date                   AS mes_ini,
               ((pp."mesReferencia" || '-01')::date
                 + INTERVAL '1 month' - INTERVAL '1 day')::date     AS mes_fim_d,
-              DATE_PART('day', ((pp."mesReferencia" || '-01')::date
-                + INTERVAL '1 month' - INTERVAL '1 day')::timestamp)::int AS dias_no_mes,
+              -- Dias úteis (Seg-Sex) do mês de referência
+              (SELECT COUNT(*)::int FROM generate_series(
+                (pp."mesReferencia" || '-01')::date,
+                ((pp."mesReferencia" || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date,
+                '1 day'::interval
+              ) d WHERE EXTRACT(DOW FROM d) BETWEEN 1 AND 5)       AS dias_no_mes,
               COALESCE(CASE WHEN pp."salarioBrutoMes"  ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."salarioBrutoMes",  '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS salario_bruto,
               COALESCE(CASE WHEN pp."horasExtrasValor" ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."horasExtrasValor", '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS he_valor,
               COALESCE(CASE WHEN pp."adicionaisValor"  ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."adicionaisValor",  '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS adicionais,
@@ -1788,15 +1792,14 @@ export const scorecardRouter = router({
               COALESCE(CASE WHEN pp."totalDescontos"   ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."totalDescontos",   '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS total_descontos,
               COALESCE(CASE WHEN pp."salarioLiquido"   ~ '^-?[0-9]' THEN REPLACE(REPLACE(pp."salarioLiquido",   '.', ''), ',', '.')::numeric ELSE NULL END, 0) AS liquido,
               GREATEST(
-                -- Dias pela alocação (employee_site_history)
+                -- Dias úteis (Seg-Sex) pela alocação (site_periods)
                 (
                   SELECT COALESCE(SUM(
-                    GREATEST(0,
-                      LEAST(sp.periodo_fim,
-                            ((pp."mesReferencia"||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date)
-                      - GREATEST(sp.periodo_inicio, (pp."mesReferencia"||'-01')::date)
-                      + 1
-                    )
+                    (SELECT COUNT(*)::int FROM generate_series(
+                      GREATEST(sp.periodo_inicio, (pp."mesReferencia"||'-01')::date),
+                      LEAST(sp.periodo_fim, ((pp."mesReferencia"||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date),
+                      '1 day'::interval
+                    ) d WHERE EXTRACT(DOW FROM d) BETWEEN 1 AND 5)
                   ), 0)::int
                   FROM site_periods sp
                   WHERE sp.employee_id = pp."employeeId"
@@ -1930,10 +1933,8 @@ export const scorecardRouter = router({
             AND svc.employee_id IN (${relevantEmpSql})
         `),
 
-        // Rev. 4320 — PJ: filtrar por pj_contracts."obraId" diretamente.
-        // Antes usava employeeId IN (relevantEmpSql) o que incluía PJ cujo
-        // employeeId aparecia em obra_funcionarios de OUTRO contexto nesta obra.
-        // pj_contracts tem obra_id — use-o como fonte de verdade (única).
+        // Rev. 4348 — PJ: dias úteis (Seg-Sex) como denominador; dias_na_obra usa
+        // a alocação real na obra (pj_site_periods, mesmo Ramo B do CLT), não só o contrato.
         db.execute(sql`
           WITH
           obra_ini_pj AS (
@@ -1946,6 +1947,29 @@ export const scorecardRouter = router({
             FROM obra_funcionarios
             WHERE "obraId" = ${input.obraId}
               AND "companyId" = ${input.companyId}
+          ),
+          -- Período real de alocação na obra (igual ao Ramo B do CLT):
+          -- início = createdAt em obra_funcionarios; fim = quando foi p/ outra obra ou hoje
+          pj_site_periods AS (
+            SELECT DISTINCT ON (of2."employeeId")
+              of2."employeeId" AS employee_id,
+              GREATEST(
+                of2."createdAt"::date,
+                (SELECT data_inicio FROM obra_ini_pj)
+              ) AS periodo_inicio,
+              COALESCE(
+                (SELECT MIN(of3."createdAt"::date)
+                 FROM obra_funcionarios of3
+                 WHERE of3."employeeId" = of2."employeeId"
+                   AND of3."companyId"  = of2."companyId"
+                   AND of3."obraId"    <> of2."obraId"
+                   AND of3."createdAt"  > of2."createdAt"),
+                CURRENT_DATE
+              ) AS periodo_fim
+            FROM obra_funcionarios of2
+            WHERE of2."obraId"    = ${input.obraId}
+              AND of2."companyId" = ${input.companyId}
+            ORDER BY of2."employeeId", of2."createdAt" DESC
           ),
           -- Para cada funcionário PJ do efetivo, pega UM contrato ativo:
           -- Prioridade: 1º obra específica → 2º sem obra → 3º qualquer outra obra
@@ -1967,11 +1991,10 @@ export const scorecardRouter = router({
               AND pc."employeeId" IN (SELECT employee_id FROM pj_efetivo)
             ORDER BY
               pc."employeeId",
-              -- Melhor contrato primeiro: vinculado a esta obra > sem obra > outra obra
               CASE WHEN pc.obra_id = ${input.obraId} THEN 0
                    WHEN pc.obra_id IS NULL THEN 1
                    ELSE 2 END ASC,
-              pc.id DESC  -- contrato mais recente ganha em caso de empate
+              pc.id DESC
           ),
           pj_periods AS (
             SELECT
@@ -1979,6 +2002,7 @@ export const scorecardRouter = router({
               pb.valor_mensal,
               pb.numero_contrato,
               pb.razao_social,
+              -- Contrato + filtro (âncora para generate_series de meses)
               GREATEST(
                 (SELECT data_inicio FROM obra_ini_pj),
                 COALESCE(pb.data_inicio::date, '2000-01-01'::date),
@@ -1987,8 +2011,12 @@ export const scorecardRouter = router({
               LEAST(
                 COALESCE(pb.data_fim::date, CURRENT_DATE),
                 ((${mesFeriasFim} || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
-              )                                                                            AS efetivo_fim
+              )                                                                            AS efetivo_fim,
+              -- Período real de alocação na obra (de obra_funcionarios)
+              COALESCE(psp.periodo_inicio, (${mesFeriasIni} || '-01')::date)             AS alocado_inicio,
+              COALESCE(psp.periodo_fim,    CURRENT_DATE)                                  AS alocado_fim
             FROM pj_best pb
+            LEFT JOIN pj_site_periods psp ON psp.employee_id = pb.employee_id
           ),
           pj_meses AS (
             SELECT
@@ -1997,16 +2025,19 @@ export const scorecardRouter = router({
               pp.numero_contrato,
               pp.razao_social,
               TO_CHAR(m, 'YYYY-MM')                                                             AS mes,
-              EXTRACT('day' FROM
-                (DATE_TRUNC('month', m) + INTERVAL '1 month' - INTERVAL '1 day')
-              )::int                                                                             AS dias_no_mes,
-              -- Days this PJ was actually in this obra within the month
-              GREATEST(0,
-                (LEAST(
-                  pp.efetivo_fim,
-                  (DATE_TRUNC('month', m) + INTERVAL '1 month' - INTERVAL '1 day')::date
-                ) - GREATEST(pp.efetivo_inicio, DATE_TRUNC('month', m)::date) + 1)
-              )::int                                                                             AS dias_na_obra
+              -- Dias úteis (Seg-Sex) do mês
+              (SELECT COUNT(*)::int FROM generate_series(
+                DATE_TRUNC('month', m)::date,
+                (DATE_TRUNC('month', m) + INTERVAL '1 month' - INTERVAL '1 day')::date,
+                '1 day'::interval
+              ) d WHERE EXTRACT(DOW FROM d) BETWEEN 1 AND 5)                                    AS dias_no_mes,
+              -- Dias úteis que este PJ ficou nesta obra dentro do mês:
+              -- interseção de (alocação real ∩ contrato ∩ mês), contando Seg-Sex
+              (SELECT COUNT(*)::int FROM generate_series(
+                GREATEST(pp.alocado_inicio, pp.efetivo_inicio, DATE_TRUNC('month', m)::date),
+                LEAST(pp.alocado_fim, pp.efetivo_fim, (DATE_TRUNC('month', m) + INTERVAL '1 month' - INTERVAL '1 day')::date),
+                '1 day'::interval
+              ) d WHERE EXTRACT(DOW FROM d) BETWEEN 1 AND 5)                                    AS dias_na_obra
             FROM pj_periods pp
             CROSS JOIN LATERAL generate_series(
               DATE_TRUNC('month', pp.efetivo_inicio),
@@ -2022,8 +2053,8 @@ export const scorecardRouter = router({
             e.matricula,
             e.cargo,
             COUNT(DISTINCT pm.mes)::int                                                                    AS meses_ativos,
+            SUM(pm.dias_na_obra)::int                                                                      AS total_dias_uteis,
             SUM(ROUND(pm.valor_mensal * pm.dias_na_obra::numeric / NULLIF(pm.dias_no_mes,0), 2))           AS custo_total,
-            -- valor_mensal_medio: custo proporcional ÷ nº de meses = quanto sai do caixa por mês
             ROUND(
               SUM(ROUND(pm.valor_mensal * pm.dias_na_obra::numeric / NULLIF(pm.dias_no_mes,0), 2))
               / NULLIF(COUNT(DISTINCT pm.mes), 0)
@@ -2111,7 +2142,7 @@ export const scorecardRouter = router({
           ex.razao_social        = pj.razao_social;
           ex.matricula           = pj.numero_contrato ?? ex.matricula;
           ex.meses_na_obra       = pj.meses_ativos;
-          ex.total_dias_na_obra  = n(pj.meses_ativos) * 30;
+          ex.total_dias_na_obra  = n(pj.total_dias_uteis);
           // salario_bruto_total = valor mensal proporcional (não acumulado do período)
           ex.salario_bruto_total = valMensal;
           ex.custo_folha_empresa = 0;
@@ -2128,7 +2159,7 @@ export const scorecardRouter = router({
             tipo_pessoa:         'PJ',
             razao_social:        pj.razao_social,
             meses_na_obra:       pj.meses_ativos,
-            total_dias_na_obra:  n(pj.meses_ativos) * 30,
+            total_dias_na_obra:  n(pj.total_dias_uteis),
             salario_bruto_total: valMensal,
             he_total:            0,
             va_total:            0,
@@ -2145,12 +2176,25 @@ export const scorecardRouter = router({
         }
       }
 
-      // Rev. 4347 — Para CLT alocados sem folha processada no período, gera historico_mensal
-      // estimado a partir do salarioBase × (dias alocado na obra / dias no mês).
+      // Rev. 4348 — Para CLT alocados sem folha processada no período, gera historico_mensal
+      // estimado a partir do salarioBase × (dias úteis alocado na obra / dias úteis no mês).
       // Usa alocado_desde / alocado_ate que agora vêm do SQL (subquery de site_periods).
       // Isso garante que TODO funcionário do efetivo aparece com custo proporcional,
       // mesmo quando a folha do mês ainda não foi fechada.
       const rnd2 = (v: number) => Math.round(v * 100) / 100;
+
+      // Conta dias úteis (Seg-Sex) entre duas datas inclusive
+      const countWorkingDays = (start: Date, end: Date): number => {
+        if (start > end) return 0;
+        let count = 0;
+        const d = new Date(start.getTime());
+        while (d <= end) {
+          const dow = d.getDay(); // 0=Dom, 6=Sáb
+          if (dow !== 0 && dow !== 6) count++;
+          d.setDate(d.getDate() + 1);
+        }
+        return count;
+      };
       const filterIni = input.mesInicio ?? mesFeriasIni;
       const filterFim = input.mesFim   ?? mesFeriasFim;
 
@@ -2186,13 +2230,11 @@ export const scorecardRouter = router({
           const mesStr     = `${curY}-${String(curM).padStart(2, '0')}`;
           const monthStart = new Date(curY, curM - 1, 1);
           const monthEnd   = new Date(curY, curM, 0); // último dia do mês
-          const diasNoMes  = monthEnd.getDate();
+          const diasNoMes  = countWorkingDays(monthStart, monthEnd); // dias úteis do mês
 
           const overlapStart = desde > monthStart ? desde : monthStart;
           const overlapEnd   = ate   < monthEnd   ? ate   : monthEnd;
-          const diasNaObra   = overlapStart <= overlapEnd
-            ? Math.floor((overlapEnd.getTime() - overlapStart.getTime()) / 86400000) + 1
-            : 0;
+          const diasNaObra   = countWorkingDays(overlapStart, overlapEnd); // dias úteis na obra
 
           if (diasNaObra > 0) {
             const frac         = diasNaObra / diasNoMes;

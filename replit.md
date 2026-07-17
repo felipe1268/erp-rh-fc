@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4347** — **SCORECARD OBRA — FOLHA/CUSTOS: AUDITORIA + CUSTO PROPORCIONAL PARA TODO O EFETIVO.** 4 bugs corrigidos: (1) Duplicata de funcionário por CPF — dedup JS após enriquecimento descarta o `employee_id` com menos dados. (2) Seg. de Vida errado para "sem folha" — `meses||1` forçava 1 mês; agora recalculado após geração sintética. (3) Data parsing frágil para `alocado_desde/ate` (PG Date vs string). (4) Custo proporcional via `salarioBase × dias_na_obra/dias_no_mes` + FGTS 8% para CLT sem folha processada. Badge "⚠ Sem folha" removido. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4348** — **SCORECARD OBRA — FOLHA/CUSTOS: PROPORCIONAL POR DIAS ÚTEIS (SEG-SEX).** CLT SQL: `dias_no_mes` e `dias_na_obra` passam a contar Seg-Sex via `generate_series + DOW`. PJ SQL: novo CTE `pj_site_periods` (alocação real via `obra_funcionarios`, mesmo Ramo B do CLT); `dias_na_obra` = interseção (alocação real ∩ contrato ∩ mês) em dias úteis. JS sintético CLT: helper `countWorkingDays`. JS merge PJ: `total_dias_na_obra` usa soma real do SQL. Resultado: João (1 dia útil/ago) → ~R$370 em vez de R$8.500. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4346** — **FOLHA DE PAGAMENTO: CORREÇÃO — FUNCIONÁRIOS "NÃO PAGAR" VOLTAVAM AO PAINEL DE ALERTA.** `sincronizarValeJson` persistia `status` ('rejeitado'/'calculado') no snapshot mas nunca limpava `temAlerta`/`bloqueado`. Na próxima leitura de `getPeriod`, o snapshot ainda tinha `temAlerta: true` → funcionários reapareciam. Fix: mapear `temAlerta: status === 'bloqueado'` e `bloqueado: status === 'bloqueado'` dentro de `sincronizarValeJson`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4347** — **SCORECARD OBRA — FOLHA/CUSTOS: AUDITORIA + CUSTO PROPORCIONAL PARA TODO O EFETIVO.** 4 bugs corrigidos: (1) Dedup por CPF+tipo (CLT→PJ = recontratação legítima, mantém ambos). (2) Seg. de Vida errado para "sem folha" — recalculado após geração sintética. (3) Data parsing frágil `alocado_desde/ate` (PG Date vs string). (4) Custo proporcional via `salarioBase × dias/diasMes` + FGTS 8% para CLT sem folha. Badge "⚠ Sem folha" removido. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4346** — **FOLHA DE PAGAMENTO: CORREÇÃO — FUNCIONÁRIOS "NÃO PAGAR" VOLTAVAM AO PAINEL DE ALERTA.** `sincronizarValeJson` não limpava `temAlerta`/`bloqueado`. Fix: mapear ambos dentro de `sincronizarValeJson`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4345** — **ALMOXARIFADO: 5 MELHORIAS LISTA LEONARDO/17-07.** Item 2: seleção múltipla locados em lote. Item 5: campo `quantidade` em `equipamentos_locados`. Item 6: botão Renovar Locação. Item 7: badge vencimento colorido. Item 8: `onError` em `proprioCriar`. ZERO DELETE · ZERO ALTER destrutivo.
 

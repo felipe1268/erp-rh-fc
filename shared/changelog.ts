@@ -1,4 +1,39 @@
 /**
+ * Rev. 4348 - SCORECARD OBRA — FOLHA/CUSTOS: PROPORCIONAL POR DIAS ÚTEIS (SEG-SEX)
+ *
+ * PROBLEMA:
+ * O sistema calculava proporcionalidade por dias corridos (28-31) e, para PJ,
+ * usava o período do contrato como "alocação na obra" — ignorando quando o
+ * funcionário realmente entrou/saiu desta obra. João Montovani (1 dia útil em ago)
+ * aparecia com R$8.500 (mês inteiro) em vez de ~R$370 (1/23 do mês).
+ *
+ * FIX:
+ * 1. CLT SQL (payroll_frac):
+ *    - `dias_no_mes`: de EXTRACT('day'...) para COUNT(Seg-Sex do mês) via generate_series
+ *    - `dias_na_obra`: de interseção em dias corridos para COUNT(Seg-Sex do overlap)
+ * 2. PJ SQL:
+ *    - Novo CTE `pj_site_periods`: alocação real na obra via obra_funcionarios (mesmo
+ *      Ramo B do CLT) com DISTINCT ON pelo createdAt mais recente.
+ *    - `pj_periods`: inclui `alocado_inicio`/`alocado_fim` do site_periods (além do contrato).
+ *    - `pj_meses`: dias_no_mes e dias_na_obra agora contam Seg-Sex via generate_series.
+ *      dias_na_obra = interseção (alocação real ∩ contrato ∩ mês) em dias úteis.
+ *    - SELECT: expõe `total_dias_uteis` (SUM de dias_na_obra por mês).
+ * 3. JS sintético CLT (sem folha):
+ *    - Helper `countWorkingDays(start, end)` conta Seg-Sex inclusive.
+ *    - `diasNoMes` e `diasNaObra` usam o helper em vez de `getDate()` e diff de ms.
+ * 4. JS merge PJ:
+ *    - `total_dias_na_obra` usa `pj.total_dias_uteis` (SQL real) em vez de meses×30.
+ *
+ * RESULTADO:
+ * João (1 dia útil em ago, 23 úteis no mês): 8.500 × 1/23 ≈ R$ 370.
+ * Funcionário mês inteiro: fator ≈ 1,0 (resultado equivalente ao anterior).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (getCustosRH — payroll_frac + PJ CTEs + JS synthetic/merge)
+ */
+
+/**
  * Rev. 4347 - SCORECARD OBRA — FOLHA/CUSTOS: CUSTO PROPORCIONAL PARA TODO O EFETIVO
  *
  * PROBLEMA:
