@@ -1,4 +1,18 @@
 /**
+ * Rev. 4319 - SCORECARD RH/FOLHA: ORDENAÇÃO ALFABÉTICA NA TABELA DE FUNCIONÁRIOS
+ *
+ * ADICIONADO:
+ *   - State `rhSortBy: "custo" | "nome"` (padrão "custo")
+ *   - `rhFuncsFiltrados` aplica `localeCompare("pt-BR")` quando `rhSortBy === "nome"`
+ *   - Botão toggle "A → Z / Custo ↓" no canto direito do cabeçalho da tabela,
+ *     ao lado do filtro de função
+ *   - Rótulo do cabeçalho da tabela alterna entre "A → Z" e "ordenado por custo total"
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo (só frontend).
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4318 - SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS
  *
  * PROBLEMA:

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4318** — **SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS.** Meses sem payroll mostravam ponto azul. Guard `qtdFuncionarios > 0` no loop de `rhMonthStatus` garante que só meses com funcionários ativos ficam azuis. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4319** — **SCORECARD RH/FOLHA: ORDENAÇÃO ALFABÉTICA NA TABELA DE FUNCIONÁRIOS.** Botão toggle "A → Z / Custo ↓"; `rhSortBy` state; `rhFuncsFiltrados` usa `localeCompare(pt-BR)` em modo nome. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4317** — **SCORECARD RH/FOLHA: FIX FÉRIAS ÓRFÃS NO CUSTO POR MÊS.** Férias com `mes_ref` sem entrada de payroll ficavam "órfãs". Fix: injeta meses não cobertos via `feriasKeyMap` pós-loop. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4318** — **SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS.** Meses sem payroll mostravam ponto azul. Guard `qtdFuncionarios > 0` garante só meses com funcionários ativos ficam azuis. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

@@ -236,6 +236,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [abaRH,         setAbaRH]         = useState<"folha"|"banco">("folha");
   const [expandedRH,    setExpandedRH]    = useState<Set<number>>(new Set());
   const [filtroFuncao,  setFiltroFuncao]  = useState<string>("");
+  const [rhSortBy,      setRhSortBy]      = useState<"custo" | "nome">("custo");
   const [expandedBanco, setExpandedBanco] = useState<Set<number>>(new Set());
   const [rhAno,         setRhAno]         = useState(new Date().getFullYear());
   const [rhMes,         setRhMes]         = useState<string>("all");
@@ -319,9 +320,16 @@ export default function ScorecardTab({ proj }: { proj: any }) {
 
   const rhFuncsFiltrados = useMemo(() => {
     const all: any[] = analiseRH.data?.funcionarios ?? [];
-    if (!filtroFuncao) return all;
-    return all.filter((f: any) => (f.cargo || f.razao_social || "Sem função").trim() === filtroFuncao);
-  }, [analiseRH.data, filtroFuncao]);
+    const filtered = filtroFuncao
+      ? all.filter((f: any) => (f.cargo || f.razao_social || "Sem função").trim() === filtroFuncao)
+      : all;
+    if (rhSortBy === "nome") {
+      return [...filtered].sort((a: any, b: any) =>
+        (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" })
+      );
+    }
+    return filtered; // "custo" — servidor já entrega ordenado por custo desc
+  }, [analiseRH.data, filtroFuncao, rhSortBy]);
 
   const rhResumoFiltrado = useMemo(() => {
     const base = { salarioBruto: 0, he: 0, va: 0, ferias: 0, seguroVida: 0, fgts: 0, custoTotal: 0 };
@@ -1245,11 +1253,22 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                 <div>
                   <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                      Custo por Funcionário{rhMes !== 'all' ? ` — ${MES_LABELS[parseInt(rhMes)-1]}/${String(rhAno).slice(2)}` : ''} — ordenado por custo total
+                      Custo por Funcionário{rhMes !== 'all' ? ` — ${MES_LABELS[parseInt(rhMes)-1]}/${String(rhAno).slice(2)}` : ''}
+                      {' — '}
+                      {rhSortBy === "nome" ? "A → Z" : "ordenado por custo total"}
                       {filtroFuncao && <span className="ml-1 normal-case text-indigo-500">· {rhFuncsFiltrados.length} func.</span>}
                     </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* Toggle ordenação */}
+                      <button
+                        onClick={() => setRhSortBy(s => s === "custo" ? "nome" : "custo")}
+                        className="text-[11px] border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors cursor-pointer select-none"
+                        title={rhSortBy === "custo" ? "Ordenar por nome (A→Z)" : "Ordenar por custo (maior primeiro)"}
+                      >
+                        {rhSortBy === "custo" ? "A → Z" : "Custo ↓"}
+                      </button>
                     {rhCargoOptions.length > 0 && (
-                      <div className="flex items-center gap-1.5">
+                      <>
                         <select
                           value={filtroFuncao}
                           onChange={(e) => setFiltroFuncao(e.target.value)}
@@ -1268,8 +1287,9 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                             limpar
                           </button>
                         )}
-                      </div>
+                      </>
                     )}
+                    </div>
                   </div>
                   <div className="overflow-x-auto rounded border border-gray-200">
                     <table className="w-full text-xs">
