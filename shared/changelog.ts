@@ -1,4 +1,28 @@
 /**
+ * Rev. 4328 - SCORECARD BH: FILTRO "ALOCADO ATUALMENTE" — periodo_fim >= CURRENT_DATE
+ *
+ * PROBLEMA:
+ *   Rev. 4325 filtrava por sobreposição com o período selecionado (periodo_inicio ≤ dataFim
+ *   AND periodo_fim ≥ dataIni). Isso incluía funcionários que já foram para outras obras mas
+ *   tinham histórico em 2026 — ex: Luis Gustavo (transferido para outra obra mas aparecia
+ *   no "Ano todo 2026" porque sua alocação original sobrepõe o ano).
+ *
+ * SOLUÇÃO (Rev. 4328):
+ *   `emp_obra` passa a filtrar por `periodo_fim >= CURRENT_DATE`:
+ *   - Ramo A (employee_site_history): só quem não tem saída formal ainda → periodo_fim = CURRENT_DATE.
+ *   - Ramo B (obra_funcionarios): só quem não foi realocado em outra obra depois
+ *     → COALESCE já fecha periodo_fim na data da nova alocação; se essa data < hoje → excluído.
+ *   `emp_obra_ativos` (mesesComDados) usa o mesmo critério: dots só para ativos atuais.
+ *
+ * CONCEITO VALIDADO COM USUÁRIO: saldo BH é global por funcionário, não por obra.
+ *   A tela mostra apenas quem está HOJE alocado nesta obra; o saldo acumulado deles
+ *   (de qualquer obra anterior) é visível aqui para gestão e compensação.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: server/routers/scorecard.ts (getBancoHorasObra — emp_obra + emp_obra_ativos)
+ */
+
+/**
  * Rev. 4327 - SCORECARD RH/FOLHA: BANCO DE HORAS — FOTO DO FUNCIONÁRIO NA TABELA
  *
  * PROBLEMA: tabela de funcionários da sub-aba "Banco de Horas" exibia apenas nome/matrícula/cargo,

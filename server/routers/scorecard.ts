@@ -2456,11 +2456,11 @@ export const scorecardRouter = router({
         safe(db.execute(sql`
           WITH ${sitePeriodsCte},
           emp_obra AS (
-            -- Somente funcionários cuja alocação SOBREPÕE o período selecionado
+            -- Somente funcionários com alocação ATUAL nesta obra (periodo_fim >= hoje)
+            -- Se foi transferido para outra obra, periodo_fim fecha na data da nova alocação → sai da lista
             SELECT DISTINCT employee_id AS "employeeId"
             FROM site_periods
-            WHERE periodo_inicio <= ${dataFim}::date
-              AND periodo_fim    >= ${dataIni}::date
+            WHERE periodo_fim >= CURRENT_DATE
           ),
           movimento AS (
             SELECT bhl."employeeId",
@@ -2490,19 +2490,17 @@ export const scorecardRouter = router({
           ORDER BY ABS(COALESCE(bhs."saldoMinutos", 0)) DESC, e."nomeCompleto"
         `)),
 
-        // Quais meses do ano têm lançamentos de funcionários desta obra (para dots)
-        // Usa o ano inteiro (qualquer alocação no ano) para as bolinhas ficarem corretas
+        // Quais meses do ano têm lançamentos de funcionários ATUALMENTE nesta obra (para dots)
         safe(db.execute(sql`
           WITH ${sitePeriodsCte},
-          emp_obra_ano AS (
+          emp_obra_ativos AS (
             SELECT DISTINCT employee_id AS "employeeId"
             FROM site_periods
-            WHERE periodo_inicio <= ${`${ano}-12-31`}::date
-              AND periodo_fim    >= ${`${ano}-01-01`}::date
+            WHERE periodo_fim >= CURRENT_DATE
           )
           SELECT EXTRACT(MONTH FROM bhl.data)::int AS mes
           FROM banco_horas_lancamentos bhl
-          WHERE bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra_ano)
+          WHERE bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra_ativos)
             AND EXTRACT(YEAR FROM bhl.data) = ${ano}::int
           GROUP BY EXTRACT(MONTH FROM bhl.data)
         `)),
