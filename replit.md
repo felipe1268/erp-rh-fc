@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4323** — **SCORECARD RH/FOLHA: BANCO DE HORAS COM DADOS REAIS + PERIOD SELECTOR.** `getBancoHorasObra` reescrito: usa `banco_horas_lancamentos` (dados reais do módulo BH) em vez de `he_period_employees`; novos parâmetros `ano`/`mes` (null=ano todo); CTEs `acumulado` + `movimento` + `mesesComDados` (bolinhas). Frontend: estados `bhAno`/`bhMes`, `PeriodSelectorCard` com bolinhas azuis, tabela simplificada com "Mov. Mês|Ano" + "Saldo Acum.". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4322** — **CONTRATOS TERCEIROS: OBRA OBRIGATÓRIA + ALERTA VISÍVEL SEM OBRA.** `ContratoNovo`: campo Obra vira obrigatório (label `*`, validação no handleSalvar, hint vermelho). `ContratosList`: banner vermelho listando contratos ativos sem obraId + badge "⚠️ Sem obra vinculada" em cada card afetado. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4321** — **SCORECARD RH/FOLHA: LGPD — VISÃO POR FUNÇÃO PARA NÃO-ADMIN.** `isAdminMaster`: admin_master vê tabela individual completa; engenheiro/gestor vê tabela por função (Função | Qtd | custos agregados) sem nomes/valores individuais. Novo `rhPorFuncao` useMemo. Rodapé LGPD. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4321** — **SCORECARD RH/FOLHA: LGPD — VISÃO POR FUNÇÃO PARA NÃO-ADMIN.** `isAdminMaster`: admin_master vê tabela individual completa; engenheiro/gestor vê tabela por função (Função | Qtd | custos agregados) sem nomes/valores individuais. Novo `rhPorFuncao` useMemo. Rodapé LGPD. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4320** — **SCORECARD RH/FOLHA: FIX PJ PHANTOM — FILTRAR POR `pj_contracts.obraId`.** Fix: filtrar por `pc."obraId" = obraId` diretamente; remove CTE `pj_site_periods`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4318** — **SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS.** Guard `qtdFuncionarios > 0` garante só meses com funcionários ativos ficam azuis. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4316** — **SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA DE FUNCIONÁRIOS.** Select cargos únicos + contagem; `rhFuncsFiltrados` + `rhResumoFiltrado`; tfoot vira "SUBTOTAL — cargo". ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4315** — **SCORECARD RH/FOLHA: FOTO DO FUNCIONÁRIO CLICÁVEL.** Foto e avatar abrem lightbox; `cursor-zoom-in` + hover ring; `stopPropagation` evita colapsar linha. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

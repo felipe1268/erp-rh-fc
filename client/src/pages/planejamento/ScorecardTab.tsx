@@ -256,6 +256,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
       _rhPeriodInit.current = obraId;
     }
   }, [obraIniMes, obraId]);
+  const [bhAno,         setBhAno]         = useState(new Date().getFullYear());
+  const [bhMes,         setBhMes]         = useState<number | null>(null);
   const [segAno,        setSegAno]        = useState(new Date().getFullYear());
   const [segMes,        setSegMes]        = useState<number | null>(new Date().getMonth() + 1);
   const [sstExpandChart,setSstExpandChart]= useState<string | null>(null);
@@ -377,7 +379,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     { enabled: enabled && tabScore === "metas", staleTime: 120_000 }
   );
   const analiseBancoHoras = trpc.scorecard.getBancoHorasObra.useQuery(
-    { companyId, obraId: obraId! },
+    { companyId, obraId: obraId!, ano: bhAno, mes: bhMes },
     { enabled: enabled && tabScore === "rh" && abaRH === "banco", staleTime: 120_000 }
   );
 
@@ -1549,23 +1551,54 @@ export default function ScorecardTab({ proj }: { proj: any }) {
           {/* ── Sub-aba: Banco de Horas ── */}
           {abaRH === "banco" && (
             <div className="space-y-4">
+              {/* Seletor de período — regra de ouro PeriodSelectorCard */}
+              <PeriodSelectorCard
+                ano={bhAno}
+                mes={bhMes}
+                onAno={setBhAno}
+                onMes={setBhMes}
+                onAnoTodo={() => setBhMes(null)}
+                monthStatus={(analiseBancoHoras.data?.mesesComDados ?? []).reduce(
+                  (acc: Record<number,"data"|"none">, m: number) => { acc[m] = "data"; return acc; }, {} as Record<number,"data"|"none">
+                )}
+              />
+
               {analiseBancoHoras.isLoading ? (
                 <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
                   <Loader2 className="w-5 h-5 animate-spin" />Carregando banco de horas…
                 </div>
-              ) : !analiseBancoHoras.data ? (
-                <p className="text-xs text-gray-400 py-8 text-center">Sem dados de horas extras para esta obra.</p>
-              ) : analiseBancoHoras.data.funcionarios.length === 0 ? (
-                <p className="text-xs text-gray-400 py-8 text-center">Nenhum funcionário com horas extras registradas nesta obra.</p>
+              ) : !analiseBancoHoras.data || analiseBancoHoras.data.funcionarios.length === 0 ? (
+                <p className="text-xs text-gray-400 py-8 text-center">
+                  Nenhum funcionário desta obra com saldo ou movimento no banco de horas{bhMes ? ` em ${["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][bhMes-1]}/${bhAno}` : ` em ${bhAno}`}.
+                </p>
               ) : (
                 <div className="space-y-4">
                   {/* KPI strip */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     {[
-                      { label: "Funcionários c/ HE",  v: String(analiseBancoHoras.data.resumo.totalFuncionarios),  color: "text-indigo-700" },
-                      { label: "Total HE (h)",         v: ((analiseBancoHoras.data.resumo.totalHEMins ?? 0) / 60).toFixed(1) + "h",  color: "text-amber-700" },
-                      { label: "HE Pagas (h)",         v: ((analiseBancoHoras.data.resumo.totalHEPagoMins ?? 0) / 60).toFixed(1) + "h",  color: "text-green-700" },
-                      { label: "Saldo Banco (h)",      v: ((analiseBancoHoras.data.resumo.totalSaldoBancoMins ?? 0) / 60).toFixed(1) + "h",  color: analiseBancoHoras.data.resumo.totalSaldoBancoMins > 0 ? "text-orange-700 font-bold" : "text-gray-400" },
+                      {
+                        label: "Funcionários",
+                        v: String(analiseBancoHoras.data.resumo.totalFuncionarios),
+                        color: "text-indigo-700",
+                      },
+                      {
+                        label: bhMes ? "Movimento no Mês" : "Movimento no Ano",
+                        v: (() => {
+                          const m = analiseBancoHoras.data!.resumo.totalMovimentoMins;
+                          const sign = m >= 0 ? "+" : "−";
+                          return `${sign}${(Math.abs(m)/60).toFixed(1)}h`;
+                        })(),
+                        color: analiseBancoHoras.data.resumo.totalMovimentoMins >= 0 ? "text-blue-700" : "text-green-700",
+                      },
+                      {
+                        label: "Saldo Acumulado",
+                        v: (() => {
+                          const s = analiseBancoHoras.data!.resumo.totalSaldoMins;
+                          const sign = s >= 0 ? "+" : "−";
+                          return `${sign}${(Math.abs(s)/60).toFixed(1)}h`;
+                        })(),
+                        color: analiseBancoHoras.data.resumo.totalSaldoMins > 0 ? "text-orange-700 font-bold" : analiseBancoHoras.data.resumo.totalSaldoMins < 0 ? "text-green-700 font-bold" : "text-gray-400",
+                      },
                     ].map((k, i) => (
                       <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2 text-center">
                         <p className={`text-sm font-bold ${k.color}`}>{k.v}</p>
@@ -1573,116 +1606,78 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                       </div>
                     ))}
                   </div>
-                  <p className="text-[10px] text-gray-400 italic bg-amber-50 border border-amber-100 rounded px-2 py-1.5 leading-snug">
-                    Mostra funcionários que aparecem no histórico de obra (transferências) ou que estão atualmente alocados.
-                    Saldo atual = banco de horas vivo (não compensado).
+
+                  <p className="text-[10px] text-gray-400 italic bg-blue-50 border border-blue-100 rounded px-2 py-1.5 leading-snug">
+                    Saldo acumulado = soma de todos os lançamentos até o fim do período. Positivo = deve horas à empresa; Negativo = empresa deve horas.
+                    Filtra funcionários do histórico desta obra (transferências + alocação atual).
                   </p>
+
                   {/* Tabela por funcionário */}
                   <div className="overflow-x-auto rounded border border-gray-200">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500">
                           <th className="text-left px-2 py-1.5 font-semibold">Funcionário</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">Total HE</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">HE Pago</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">HE Banco</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">Saldo Atual</th>
-                          <th className="w-6" />
+                          <th className="text-right px-2 py-1.5 font-semibold">{bhMes ? "Mov. Mês" : "Mov. Ano"}</th>
+                          <th className="text-right px-2 py-1.5 font-semibold">Saldo Acum.</th>
                         </tr>
                       </thead>
                       <tbody>
                         {analiseBancoHoras.data.funcionarios.map((f: any) => {
-                          const isOpen = expandedBanco.has(Number(f.employeeId));
-                          const toggle = () => setExpandedBanco(prev => {
-                            const n = new Set(prev);
-                            if (n.has(Number(f.employeeId))) n.delete(Number(f.employeeId)); else n.add(Number(f.employeeId));
-                            return n;
-                          });
-                          const heTotalH  = (Number(f.heTotalMins)  / 60).toFixed(1);
-                          const hePagoH   = (Number(f.hePagoMins)   / 60).toFixed(1);
-                          const heBancoH  = (Number(f.heBancoMins)  / 60).toFixed(1);
-                          const saldoH    = (Math.abs(Number(f.saldoBancoMins)) / 60).toFixed(1);
-                          const saldoPos  = Number(f.saldoBancoMins) >= 0;
+                          const saldo     = Number(f.saldoMinutos);
+                          const movimento = Number(f.movimentoMinutos);
+                          const saldoH    = (Math.abs(saldo) / 60).toFixed(1);
+                          const movH      = (Math.abs(movimento) / 60).toFixed(1);
+                          const saldoPos  = saldo >= 0;
+                          const movPos    = movimento >= 0;
                           return (
-                            <React.Fragment key={f.employeeId}>
-                              <tr onClick={toggle} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
-                                <td className="px-2 py-1.5">
-                                  <p className="font-medium text-gray-800 leading-tight">{f.nome}</p>
-                                  <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
-                                  {f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
-                                </td>
-                                <td className="text-right px-2 py-1.5 text-amber-700 font-medium">{heTotalH}h</td>
-                                <td className="text-right px-2 py-1.5 text-green-700">{Number(f.hePagoMins) > 0 ? `${hePagoH}h` : <span className="text-gray-300">—</span>}</td>
-                                <td className="text-right px-2 py-1.5 text-blue-700">{Number(f.heBancoMins) > 0 ? `${heBancoH}h` : <span className="text-gray-300">—</span>}</td>
-                                <td className="text-right px-2 py-1.5">
-                                  {Number(f.saldoBancoMins) !== 0 ? (
-                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${saldoPos ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}>
-                                      {saldoPos ? "+" : "−"}{saldoH}h
-                                    </span>
-                                  ) : <span className="text-gray-300 text-[10px]">Zerado</span>}
-                                </td>
-                                <td className="px-1 py-1.5 text-gray-400">{isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</td>
-                              </tr>
-                              {isOpen && (
-                                <tr className="bg-amber-50/30">
-                                  <td colSpan={6} className="px-3 py-2">
-                                    <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Histórico de HE — {f.nome}</p>
-                                    {(!f.historicoHe || f.historicoHe.length === 0) ? (
-                                      <p className="text-[10px] text-gray-400 italic">Sem histórico detalhado disponível.</p>
-                                    ) : (
-                                      <div className="overflow-x-auto">
-                                        <table className="w-full text-[10px]">
-                                          <thead>
-                                            <tr className="text-gray-400 border-b border-amber-100">
-                                              <th className="text-left py-1 pr-3 font-semibold">Mês Ref.</th>
-                                              <th className="text-center py-1 pr-3 font-semibold">Destino</th>
-                                              <th className="text-right py-1 pr-3 font-semibold">HE (h)</th>
-                                              <th className="text-right py-1 pr-3 font-semibold">Valor</th>
-                                              <th className="text-center py-1 font-semibold">Status</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {f.historicoHe.map((h: any, hi: number) => {
-                                              const isPago = h.status === "pago" && h.pagoEm;
-                                              const isBanco = h.destinacao === "banco_horas";
-                                              const heH = (Number(h.heMins) / 60).toFixed(1);
-                                              return (
-                                                <tr key={hi} className="border-b border-amber-100/50">
-                                                  <td className="py-1 pr-3 text-gray-700 font-medium">{h.mes ?? "—"}</td>
-                                                  <td className="py-1 pr-3 text-center">
-                                                    <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${isBanco ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
-                                                      {isBanco ? "Banco" : "Pagamento"}
-                                                    </span>
-                                                  </td>
-                                                  <td className="py-1 pr-3 text-right text-amber-700">{heH}h</td>
-                                                  <td className="py-1 pr-3 text-right text-gray-700">{h.valorHE ? fmt(Number(h.valorHE)) : "—"}</td>
-                                                  <td className="py-1 text-center">
-                                                    <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${isPago ? "bg-green-100 text-green-700" : isBanco ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>
-                                                      {isPago ? "Pago" : isBanco ? "Em Banco" : h.status ?? "—"}
-                                                    </span>
-                                                  </td>
-                                                </tr>
-                                              );
-                                            })}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
+                            <tr key={f.employeeId} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
+                              <td className="px-2 py-1.5">
+                                <p className="font-medium text-gray-800 leading-tight">{f.nome}</p>
+                                <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
+                                {f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
+                              </td>
+                              <td className="text-right px-2 py-1.5">
+                                {movimento !== 0 ? (
+                                  <span className={`text-xs font-medium ${movPos ? "text-blue-700" : "text-green-700"}`}>
+                                    {movPos ? "+" : "−"}{movH}h
+                                  </span>
+                                ) : <span className="text-gray-300 text-[10px]">—</span>}
+                              </td>
+                              <td className="text-right px-2 py-1.5">
+                                {saldo !== 0 ? (
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${saldoPos ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}>
+                                    {saldoPos ? "+" : "−"}{saldoH}h
+                                  </span>
+                                ) : <span className="text-gray-300 text-[10px]">Zerado</span>}
+                              </td>
+                            </tr>
                           );
                         })}
                       </tbody>
                       <tfoot>
                         <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-xs text-gray-700">
                           <td className="px-2 py-2 text-[10px] uppercase tracking-wide">TOTAL OBRA</td>
-                          <td className="text-right px-2 py-2 text-amber-700">{((analiseBancoHoras.data.resumo.totalHEMins ?? 0) / 60).toFixed(1)}h</td>
-                          <td className="text-right px-2 py-2 text-green-700">{((analiseBancoHoras.data.resumo.totalHEPagoMins ?? 0) / 60).toFixed(1)}h</td>
-                          <td className="text-right px-2 py-2 text-blue-700">{((analiseBancoHoras.data.resumo.totalHEBancoMins ?? 0) / 60).toFixed(1)}h</td>
-                          <td className="text-right px-2 py-2 text-orange-700">{((analiseBancoHoras.data.resumo.totalSaldoBancoMins ?? 0) / 60).toFixed(1)}h</td>
-                          <td />
+                          <td className="text-right px-2 py-2">
+                            {(() => {
+                              const m = analiseBancoHoras.data!.resumo.totalMovimentoMins;
+                              return (
+                                <span className={m >= 0 ? "text-blue-700" : "text-green-700"}>
+                                  {m >= 0 ? "+" : "−"}{(Math.abs(m)/60).toFixed(1)}h
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td className="text-right px-2 py-2">
+                            {(() => {
+                              const s = analiseBancoHoras.data!.resumo.totalSaldoMins;
+                              return (
+                                <span className={s > 0 ? "text-orange-700" : s < 0 ? "text-green-700" : "text-gray-400"}>
+                                  {s >= 0 ? "+" : "−"}{(Math.abs(s)/60).toFixed(1)}h
+                                </span>
+                              );
+                            })()}
+                          </td>
                         </tr>
                       </tfoot>
                     </table>

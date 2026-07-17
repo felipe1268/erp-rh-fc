@@ -1,4 +1,48 @@
 /**
+ * Rev. 4323 - SCORECARD RH/FOLHA: BANCO DE HORAS — DADOS REAIS COM PERIOD SELECTOR
+ *
+ * PROBLEMA:
+ *   A sub-aba "Banco de Horas" do Scorecard consultava `he_period_employees`
+ *   (tabela da folha de pagamento de HE) em vez das tabelas reais do módulo
+ *   Banco de Horas (`banco_horas_saldo` e `banco_horas_lancamentos`).
+ *   Resultado: "Nenhum funcionário com horas extras registradas" mesmo para obras
+ *   com dezenas de funcionários com saldo ativo no banco.
+ *   Além disso, não havia filtro de período (ano/mês) — a tab não tinha PeriodSelectorCard.
+ *
+ * SOLUÇÃO (Rev. 4323):
+ *   Backend — `getBancoHorasObra` em `server/routers/scorecard.ts`:
+ *     - Novos parâmetros: `ano: number`, `mes: number | null` (null = ano todo).
+ *     - Query reescrita para usar `banco_horas_lancamentos` (padrão idêntico ao
+ *       `getSaldoBancoMensal` do horasExtras router):
+ *       - CTE `acumulado`: soma créditos/débitos até fim do período selecionado
+ *         → saldo acumulado por funcionário.
+ *       - CTE `movimento`: soma créditos/débitos DENTRO do período selecionado.
+ *       - CTE `mesesComDados`: quais meses do ano têm lançamentos (para bolinhas).
+ *     - Filtro de obra: mesmo CTE `emp_obra` de antes (employee_site_history UNION employees.obraId).
+ *     - Retorna: `funcionarios` (saldoMinutos, movimentoMinutos, nome, cargo, matricula, fotoUrl),
+ *       `resumo` (totalFuncionarios, totalSaldoMins, totalMovimentoMins),
+ *       `mesesComDados` (array de números 1..12).
+ *     - Campo `dataFim` calculado em JS (não CASE WHEN no SQL) para evitar problemas
+ *       de binding de nullable no Postgres.
+ *
+ *   Frontend — `client/src/pages/planejamento/ScorecardTab.tsx`:
+ *     - Novos estados: `bhAno` (número) + `bhMes` (number | null).
+ *     - Query `analiseBancoHoras` recebe `ano: bhAno, mes: bhMes`.
+ *     - PeriodSelectorCard adicionado no topo da tab (regra de ouro):
+ *       `onAno`, `onMes`, `onAnoTodo`, `monthStatus` com bolinhas azuis
+ *       nos meses que têm lançamentos (via `mesesComDados`).
+ *     - Tabela simplificada: colunas "Mov. Mês|Ano" + "Saldo Acum." por funcionário.
+ *     - KPI strip: Funcionários | Movimento no Período | Saldo Acumulado.
+ *     - Texto dinâmico no estado vazio (mês/ano informado).
+ *     - Saldo positivo (empresa deve horas ao funcionário → badge laranja);
+ *       negativo (funcionário deve horas → badge verde).
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers/scorecard.ts (getBancoHorasObra reescrito)
+ *           client/src/pages/planejamento/ScorecardTab.tsx (bhAno/bhMes + PeriodSelectorCard + tabela)
+ */
+
+/**
  * Rev. 4322 - CONTRATOS TERCEIROS: OBRA OBRIGATÓRIA + ALERTA VISÍVEL SEM OBRA
  *
  * PROBLEMA:
