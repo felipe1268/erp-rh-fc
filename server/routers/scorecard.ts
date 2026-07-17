@@ -2399,9 +2399,9 @@ export const scorecardRouter = router({
         // Funcionários da obra + saldo acumulado + movimento do período
         safe(db.execute(sql`
           WITH emp_obra AS (
-            SELECT DISTINCT esh.employee_id AS "employeeId"
+            SELECT DISTINCT esh."employeeId"
             FROM employee_site_history esh
-            WHERE esh.obra_id = ${obraId} AND esh.company_id = ${companyId}
+            WHERE esh."obraId" = ${obraId} AND esh."companyId" = ${companyId}
             UNION
             SELECT id AS "employeeId"
             FROM employees
@@ -2450,9 +2450,9 @@ export const scorecardRouter = router({
         // Quais meses do ano têm lançamentos para esta obra (para dots do PeriodSelector)
         safe(db.execute(sql`
           WITH emp_obra AS (
-            SELECT DISTINCT esh.employee_id AS "employeeId"
+            SELECT DISTINCT esh."employeeId"
             FROM employee_site_history esh
-            WHERE esh.obra_id = ${obraId} AND esh.company_id = ${companyId}
+            WHERE esh."obraId" = ${obraId} AND esh."companyId" = ${companyId}
             UNION
             SELECT id AS "employeeId"
             FROM employees
