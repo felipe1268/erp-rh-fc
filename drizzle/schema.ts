@@ -9963,6 +9963,8 @@ export const equipamentosProprios = pgTable("equipamentos_proprios", {
   // Localização: "almoxarifado" ou "obra" (com obraId)
   localizacaoAtualTipo:    varchar("localizacao_atual_tipo", { length: 20 }).default("almoxarifado"),
   localizacaoAtualObraId:  integer("localizacao_atual_obra_id"),
+  // Rev. 4340 — FK lógica para transferência pendente (null = sem transferência em curso)
+  transferenciaPendenteId: integer("transferencia_pendente_id"),
   // Status: disponivel | em_obra | manutencao | baixado
   status:                  varchar({ length: 20 }).notNull().default("disponivel"),
   fotosJson:               jsonb("fotos_json"),
@@ -10526,6 +10528,30 @@ export const obraScorecardConfig = pgTable("obra_scorecard_config", {
   maxEmergenciaisPct:   integer("max_emergenciais_pct").default(10),
   criadoEm:             timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:         timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+// Rev. 4340 — Transferência de Equipamentos Próprios entre obras (fluxo duplo:
+// remetente envia → destinatário dá aceite de recebimento).
+export const equipamentosPropriasTransferencias = pgTable("equipamentos_proprios_transferencias", {
+  id:                   serial().primaryKey(),
+  companyId:            integer("company_id").notNull(),
+  equipamentoId:        integer("equipamento_id").notNull(),
+  equipamentoPatrimonio:varchar("equipamento_patrimonio", { length: 50 }),
+  equipamentoDescricao: varchar("equipamento_descricao", { length: 255 }),
+  origemObraId:         integer("origem_obra_id"),
+  origemObraNome:       varchar("origem_obra_nome", { length: 255 }),
+  destinoObraId:        integer("destino_obra_id").notNull(),
+  destinoObraNome:      varchar("destino_obra_nome", { length: 255 }),
+  // pendente → aceito | rejeitado | cancelado
+  status:               varchar({ length: 20 }).notNull().default("pendente"),
+  motivo:               text(),
+  remetenteId:          integer("remetente_id"),
+  remetenteNome:        varchar("remetente_nome", { length: 255 }),
+  aceitePorId:          integer("aceite_por_id"),
+  aceitePorNome:        varchar("aceite_por_nome", { length: 255 }),
+  aceiteEm:             timestamp("aceite_em", { mode: "string" }),
+  obsAceite:            text("obs_aceite"),
+  createdAt:            timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
 export const obraRetrabalho = pgTable("obra_retrabalho", {

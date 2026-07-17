@@ -294,6 +294,32 @@ export default function AlmoxarifadoPage() {
   const [porObraSaldo, setPorObraSaldo] = useState<"todos" | "com" | "sem">("todos");
   const [porObraColapsadas, setPorObraColapsadas] = useState<Set<string>>(new Set());
 
+  // Rev. 4340 — Transferências de equipamentos próprios aguardando aceite nesta obra.
+  const equipTransfPendentesQ = trpc.equipamentos.listTransferenciasPendentesParaObra.useQuery(
+    { companyId, obraId: typeof obraContexto === "number" ? obraContexto : 0 },
+    { enabled: !!companyId && typeof obraContexto === "number", refetchInterval: 60_000 }
+  );
+  const equipTransfPendentes = equipTransfPendentesQ.data || [];
+  const qtdEquipTransfPendente = equipTransfPendentes.length;
+
+  const [modalEquipAceite, setModalEquipAceite] = useState<null | { list: any[] }>(null);
+  const [aceiteObs, setAceiteObs] = useState("");
+  const aceitarTransf = trpc.equipamentos.aceitarTransferenciaObra.useMutation({
+    onSuccess: () => {
+      utils.equipamentos.listTransferenciasPendentesParaObra.invalidate();
+      utils.equipamentos.propriosListar.invalidate();
+      toast.success("Equipamento recebido com sucesso!");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const rejeitarTransf = trpc.equipamentos.rejeitarTransferenciaObra.useMutation({
+    onSuccess: () => {
+      utils.equipamentos.listTransferenciasPendentesParaObra.invalidate();
+      toast.success("Transferência rejeitada.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   // Rev. 2375/2384 — alerta visual de OCs de locação aguardando recebimento.
   // Filtra pela obra do contexto quando o user está vendo uma obra específica;
   // no consolidado ("todos"), o backend já restringe às obras permitidas pro user.
@@ -1772,6 +1798,32 @@ export default function AlmoxarifadoPage() {
                 )}
               </span>
             </button>
+            {/* Rev. 4340 — ACEITAR FERRAMENTAS (equipamentos próprios em trânsito para esta obra) */}
+            {typeof obraContexto === "number" && (
+              <button
+                onClick={() => setModalEquipAceite({ list: equipTransfPendentes })}
+                className={`relative flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-violet-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-sm shadow-md transition text-center leading-tight ${qtdEquipTransfPendente > 0 ? "ring-4 ring-amber-300 ring-offset-2 animate-pulse" : ""}`}
+                title={qtdEquipTransfPendente > 0 ? `${qtdEquipTransfPendente} ferramenta(s) própria(s) aguardando aceite` : "Aceitar ferramentas próprias transferidas"}
+              >
+                {qtdEquipTransfPendente > 0 && (
+                  <>
+                    <span className="absolute -top-2 -right-2 z-10 min-w-[28px] h-7 px-2 inline-flex items-center justify-center bg-red-600 text-white text-sm font-extrabold rounded-full border-2 border-white shadow-lg animate-bounce">
+                      {qtdEquipTransfPendente}
+                    </span>
+                    <span className="absolute inset-0 rounded-2xl bg-amber-400/30 animate-ping pointer-events-none" />
+                  </>
+                )}
+                <ArrowLeftRight className="w-7 h-7 relative z-[1]" />
+                <span className="relative z-[1]">
+                  ACEITAR<br />FERRAM.
+                  {qtdEquipTransfPendente > 0 && (
+                    <span className="block text-[10px] font-semibold mt-0.5 bg-white/25 rounded px-1 py-0.5">
+                      {qtdEquipTransfPendente} aguardando
+                    </span>
+                  )}
+                </span>
+              </button>
+            )}
             {/* Rev. 2316 — DEVOLVER/ENTREGAR LOCAÇÃO (baixa de saída do equipamento locado) */}
             {/* Rev. 2452 — passa o contexto atual do almoxarifado pro picker:
                 - Almoxarifado Central NÃO recebe locações (locados são por obra) →
@@ -5823,6 +5875,82 @@ export default function AlmoxarifadoPage() {
         onFechar={() => setModalVincEquip(null)}
         onSucesso={() => { utils.compras.listarItens.invalidate(); }}
       />
+
+      {/* ── Rev. 4340 — Modal Aceite de Transferência de Equipamentos Próprios ── */}
+      {modalEquipAceite && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/60" onClick={() => setModalEquipAceite(null)} />
+          <div className="relative bg-white rounded-xl border border-gray-200 shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] flex flex-col">
+            <div
+              className="flex items-center justify-between px-5 py-4 rounded-t-xl text-white shrink-0"
+              style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#2E4373 100%)" }}
+            >
+              <h2 className="text-base font-bold flex items-center gap-2">
+                <ArrowLeftRight className="h-5 w-5" />
+                Equipamentos Próprios em Trânsito
+              </h2>
+              <button onClick={() => setModalEquipAceite(null)} className="text-white/70 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-5 space-y-4">
+              {modalEquipAceite.list.length === 0 ? (
+                <p className="text-sm text-center text-gray-400 py-8">Nenhuma transferência pendente para esta obra.</p>
+              ) : (
+                modalEquipAceite.list.map((t: any) => (
+                  <div key={t.id} className="border border-violet-200 rounded-xl overflow-hidden">
+                    <div className="bg-violet-50 px-4 py-3 flex items-start gap-3">
+                      {t.fotosJson && (() => {
+                        try { const fs = JSON.parse(t.fotosJson); return fs[0]?.url ? <img src={fs[0].url} className="h-12 w-12 rounded-lg object-cover shrink-0 border border-violet-200" alt="" /> : null; } catch { return null; }
+                      })()}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">{t.equipamentoDescricao}</p>
+                        <p className="text-[11px] font-mono text-slate-500">{t.equipamentoPatrimonio}</p>
+                        <p className="text-xs text-violet-700 mt-0.5">De: <strong>{t.origemObraNome || "—"}</strong></p>
+                        {t.motivo && <p className="text-xs text-slate-500 mt-0.5 italic">"{t.motivo}"</p>}
+                        <p className="text-[10px] text-slate-400 mt-0.5">Enviado por {t.remetenteNome}</p>
+                      </div>
+                    </div>
+                    <div className="px-4 py-3 bg-white space-y-2">
+                      <textarea
+                        placeholder="Observações do aceite (opcional)..."
+                        rows={1}
+                        onChange={(e) => setAceiteObs(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs resize-none focus:ring-2 focus:ring-violet-400 focus:outline-none"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          disabled={rejeitarTransf.isPending}
+                          onClick={() => rejeitarTransf.mutate({ companyId, transferenciaId: t.id })}
+                          className="flex-1 py-2 rounded-lg border border-red-200 text-red-700 text-xs font-semibold hover:bg-red-50 transition disabled:opacity-50"
+                        >
+                          Rejeitar
+                        </button>
+                        <button
+                          disabled={aceitarTransf.isPending}
+                          onClick={() => aceitarTransf.mutate({ companyId, transferenciaId: t.id, obsAceite: aceiteObs || undefined })}
+                          className="flex-2 flex-grow py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold transition disabled:opacity-50 flex items-center justify-center gap-1"
+                        >
+                          {aceitarTransf.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                          Confirmar Recebimento
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="px-5 pb-4 shrink-0">
+              <button
+                onClick={() => setModalEquipAceite(null)}
+                className="w-full py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

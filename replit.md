@@ -50,27 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4340** — **EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS (dois passos).** Nova tabela `equipamentos_proprios_transferencias` + coluna `transferencia_pendente_id` em `equipamentos_proprios`. Remetente inicia via ⇌ no card → badge âmbar "Em transferência". Destinatário aceita/rejeita via botão "ACEITAR FERRAM." (violeta, pulse+badge) no Almoxarifado. 5 procedures tRPC. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4339** — **ALMOXARIFADO: RECEBER MATERIAL EXCLUI OCs DE LOCAÇÃO.** `listPendingOCs` ganha filtro `isLocacao IS NULL OR isLocacao = false`. OCs de equipamento/locação somem do "Receber Material" e ficam exclusivamente em "RECEBER LOCAÇÃO". ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4338** — **ALMOXARIFADO: SELECIONAR = TODOS MARCADOS + TOGGLE TODOS/NENHUM.** Clicar "Selecionar" entra no modo seleção com TODOS os itens visíveis já marcados. Barra inferior: contador clicável alterna todos/nenhum; texto "todos — limpar" ou "N selecionados · todos". ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `listForAlmoxarifado` ganha `forTransfer?: boolean`; quando true bypassa filtro por usuário → `getObrasByCompanyActive`. Nova query `obrasParaTransferir` usada nos selects de destino (lote + individual) e label lookups. `obrasAtivas` (restrita) mantida para contexto de visualização e origem. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4336** — **SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL (não acumulado).** SQL: `valor_mensal_medio = custo_total / meses_ativos`. Merge JS: `salario_bruto_total = valor_mensal_medio` (display); `custo_total_empresa = custo_total` (KPIs/TOTAL). Frontend: coluna DIAS mostra "Nm" (meses), badge "/mês" no valor, totais usam custo real. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4335** — **SCORECARD RH/FOLHA: PJ — DISTINCT ON (melhor contrato por funcionário) + badge "Sem contrato PJ".** `pj_best` CTE usa `DISTINCT ON (employeeId)` priorizando obra-específico → sem obra → qualquer. Badge laranja "⚠ Sem contrato PJ" vs amber "⚠ Sem folha" para CLT. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4338** — **ALMOXARIFADO: SELECIONAR = TODOS MARCADOS + TOGGLE TODOS/NENHUM.** Clicar "Selecionar" entra no modo seleção com TODOS os itens visíveis já marcados. Barra inferior: contador clicável alterna todos/nenhum. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4334** — **SCORECARD RH/FOLHA: PJ — CUSTO VIA MÓDULO TERCEIROS (obra_id NULL fallback).** Query PJ ampliada: aceita `pj_contracts.obra_id = obraId` OU `obra_id IS NULL` com funcionário em `obra_funcionarios`. Contratos de outra obra excluídos. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `listForAlmoxarifado` ganha `forTransfer?: boolean`; quando true bypassa filtro por usuário. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4333** — **SCORECARD RH/FOLHA: EFETIVO COMPLETO — `period_emps` LEFT JOIN + badge "Sem folha".** `custos` CTE ancorando em `period_emps` LEFT JOIN payroll. Badge ⚠ amber para CLT sem folha. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4336** — **SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL.** SQL: `valor_mensal_medio = custo_total / meses_ativos`. Badge "/mês". ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4332** — **SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — TOGGLE MIN/HORA/DIA/SEMANA/MÊS.** 5 pills: custoHora=custoDia÷8; custoMinuto=custoHora÷60. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4335** — **SCORECARD RH/FOLHA: PJ — DISTINCT ON + badge "Sem contrato PJ".** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4326** — **PT DE SERVIÇO: FIX HORÁRIO UTC → BRASÍLIA + DATA ISO → BR.** `timeZone:"America/Sao_Paulo"` no `toLocaleString`; conclusão `"2026-07-02"` → `"02/07/2026"`; default form usa `toLocaleDateString("sv-SE",{timeZone:...})`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4325** — **SCORECARD RH/FOLHA: BH — PADRÃO `site_periods` (Ramo A + B).** Substitui `emp_obra` simples pelo CTE `site_periods` idêntico ao `getCustosRH`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4334** — **SCORECARD RH/FOLHA: PJ — CUSTO VIA MÓDULO TERCEIROS (obra_id NULL fallback).** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

@@ -1,4 +1,58 @@
 /**
+ * Rev. 4340 - EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS (dois passos)
+ *
+ * PROBLEMA: não havia mecanismo para movimentar um equipamento próprio de uma obra
+ *   para outra de forma rastreada. Operadores precisavam editar manualmente o cadastro
+ *   sem controle de aceite pelo destino.
+ *
+ * SOLUÇÃO — Fluxo duplo:
+ *   1. Remetente (obra de origem) clica em ⇌ no card do equipamento em Equipamentos Próprios
+ *      → abre modal "Transferir Equipamento": escolhe obra destino + motivo opcional
+ *      → chama iniciarTransferenciaObra → cria registro em equipamentos_proprios_transferencias
+ *        (status=pendente) e seta transferencia_pendente_id no equipamento.
+ *      → badge "Em transferência" (âmbar) substitui o badge de status no card.
+ *      → botão ⇌ vira ✕ (cancelar transferência).
+ *
+ *   2. Destinatário entra no Almoxarifado com contexto da obra de destino
+ *      → botão "ACEITAR FERRAM." (violeta) aparece na grade de ações (pulse + badge contador
+ *        vermelho) quando há transferências pendentes.
+ *      → clica, abre modal com lista das transferências: foto, patrimônio, descrição,
+ *        obra de origem, remetente, motivo, campo obs aceite.
+ *      → "Confirmar Recebimento" → aceitarTransferenciaObra: atualiza localização do
+ *        equipamento pra obra destino, status=em_obra, limpa transferencia_pendente_id,
+ *        e marca transferência como aceita.
+ *      → "Rejeitar" → rejeitarTransferenciaObra: devolve equipamento ao estado anterior
+ *        (limpa transferencia_pendente_id, marca transferência como rejeitada).
+ *
+ * SCHEMA:
+ *   - nova tabela `equipamentos_proprios_transferencias` (company_id, equipamento_id,
+ *     equipamento_patrimonio, equipamento_descricao, origem_obra_id, origem_obra_nome,
+ *     destino_obra_id, destino_obra_nome, status pendente|aceito|rejeitado|cancelado,
+ *     motivo, remetente_id/nome, aceite_por_id/nome, aceite_em, obs_aceite, created_at).
+ *   - coluna `transferencia_pendente_id INTEGER` adicionada em `equipamentos_proprios`
+ *     (FK nullable para a transferência ativa).
+ *   - COLFIX_VERSION bumped para "v4340-2026-07-17-equip-transferencia".
+ *
+ * PROCEDURES (server/routers/equipamentos.ts):
+ *   - iniciarTransferenciaObra
+ *   - aceitarTransferenciaObra
+ *   - rejeitarTransferenciaObra
+ *   - cancelarTransferenciaObra
+ *   - listTransferenciasPendentesParaObra
+ *
+ * FRONTEND:
+ *   - client/src/pages/equipamentos/Proprios.tsx:
+ *       ícone ⇌ por card (hover), modal de transferência, badge âmbar "Em transferência".
+ *   - client/src/pages/almoxarifado/index.tsx:
+ *       botão "ACEITAR FERRAM." (violeta, só quando obraContexto=number),
+ *       pulse + badge contador vermelho animado, modal de aceite/rejeição por item.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: drizzle/schema.ts, server/_core/index.ts, server/routers/equipamentos.ts,
+ *           client/src/pages/equipamentos/Proprios.tsx, client/src/pages/almoxarifado/index.tsx
+ */
+
+/**
  * Rev. 4339 - ALMOXARIFADO: RECEBER MATERIAL EXCLUI OCS DE LOCAÇÃO (equipamentos)
  *
  * PROBLEMA: o modal "Receber Material" (SmartEntry → warehouse.listPendingOCs) listava

@@ -7,6 +7,7 @@ import {
   Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp,
   Sparkles, Trash2, Boxes, Wrench, CheckCircle2, Layers, Hash,
   Building2, User as UserIcon, Loader2, ListChecks, Database, DollarSign,
+  ArrowRightLeft, Clock,
 } from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 import {
@@ -110,6 +111,27 @@ export default function EquipamentosProprios() {
 
   const [modal, setModal] = useState(false);
   const [confirmPrecos, setConfirmPrecos] = useState<{ semValor: number } | null>(null);
+
+  // Rev. 4340 — Transferência de equipamentos próprios entre obras
+  const [modalTransf, setModalTransf] = useState<{ equipamento: any } | null>(null);
+  const [transfDestinoId, setTransfDestinoId] = useState<number>(0);
+  const [transfMotivo, setTransfMotivo] = useState("");
+  const { data: obrasParaTransferir = [] } = trpc.obras.listForAlmoxarifado.useQuery(
+    { companyId, forTransfer: true },
+    { enabled: !!companyId }
+  );
+  const iniciarTransf = trpc.equipamentos.iniciarTransferenciaObra.useMutation({
+    onSuccess: () => {
+      utils.equipamentos.propriosListar.invalidate();
+      setModalTransf(null); setTransfDestinoId(0); setTransfMotivo("");
+      toast.success("Transferência enviada! O almoxarifado de destino precisa confirmar o recebimento.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const cancelarTransf = trpc.equipamentos.cancelarTransferenciaObra.useMutation({
+    onSuccess: () => { utils.equipamentos.propriosListar.invalidate(); toast.success("Transferência cancelada."); },
+    onError: (e) => toast.error(e.message),
+  });
   // Rev. 3026 — progresso fase a fase do "Gerar preços com IA". A geração roda
   // em lotes (loop client-driven) e esta UI mostra a evolução 0→100%.
   const [precoRun, setPrecoRun] = useState<{
@@ -914,19 +936,53 @@ export default function EquipamentosProprios() {
                       <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                         <Hash className="h-3 w-3" /> {p.codigoPatrimonio}
                       </span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); abrirEdit(p); }}
-                        aria-label="Editar"
-                        className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {(p as any).transferenciaPendenteId ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Cancelar a transferência pendente de "${p.descricao}"?`)) {
+                                cancelarTransf.mutate({ companyId, transferenciaId: (p as any).transferenciaPendenteId });
+                              }
+                            }}
+                            title="Cancelar transferência pendente"
+                            className="p-1 rounded text-amber-600 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTransfDestinoId(0); setTransfMotivo("");
+                              setModalTransf({ equipamento: p });
+                            }}
+                            title="Transferir para outra obra"
+                            className="p-1 rounded text-slate-400 hover:text-violet-600 hover:bg-violet-50 opacity-0 group-hover:opacity-100 transition"
+                          >
+                            <ArrowRightLeft className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); abrirEdit(p); }}
+                          aria-label="Editar"
+                          className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                     <h3 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2 uppercase">{p.descricao}</h3>
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[p.status] || "bg-slate-100 ring-1 ring-slate-200"}`}>
-                        {STATUS_LABELS[p.status] || p.status}
-                      </span>
+                      {(p as any).transferenciaPendenteId ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 ring-1 ring-amber-300">
+                          <Clock className="h-2.5 w-2.5" /> Em transferência
+                        </span>
+                      ) : (
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[p.status] || "bg-slate-100 ring-1 ring-slate-200"}`}>
+                          {STATUS_LABELS[p.status] || p.status}
+                        </span>
+                      )}
                       <span className="text-[11px] text-slate-500 truncate uppercase">
                         {p.categoria || "—"}
                       </span>
@@ -1499,6 +1555,85 @@ export default function EquipamentosProprios() {
             style={{ imageOrientation: "from-image", maxWidth: "96vw", maxHeight: "96vh" }}
             className="object-contain rounded shadow-2xl"
           />
+        </div>
+      )}
+
+      {/* ── Rev. 4340 — Modal Transferência de Equipamento Próprio ───────── */}
+      {modalTransf && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setModalTransf(null)} />
+          <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-md mx-4">
+            <div
+              className="flex items-center justify-between px-5 py-4 rounded-t-xl text-white"
+              style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#2E4373 100%)" }}
+            >
+              <h2 className="text-base font-bold flex items-center gap-2">
+                <ArrowRightLeft className="h-5 w-5" /> Transferir Equipamento
+              </h2>
+              <button onClick={() => setModalTransf(null)} className="text-white/70 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Equipamento</p>
+                <p className="text-sm font-semibold text-slate-800 mt-0.5">{modalTransf.equipamento.descricao}</p>
+                <p className="text-[11px] text-slate-500 font-mono">{modalTransf.equipamento.codigoPatrimonio}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Obra de destino *</label>
+                <select
+                  value={transfDestinoId}
+                  onChange={(e) => setTransfDestinoId(Number(e.target.value))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-violet-400 focus:outline-none"
+                >
+                  <option value={0}>Selecione a obra...</option>
+                  {(obrasParaTransferir as any[])
+                    .filter((o: any) => o.id !== modalTransf.equipamento.localizacaoAtualObraId)
+                    .map((o: any) => (
+                      <option key={o.id} value={o.id}>{o.nome}</option>
+                    ))
+                  }
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Motivo (opcional)</label>
+                <textarea
+                  value={transfMotivo}
+                  onChange={(e) => setTransfMotivo(e.target.value)}
+                  rows={2}
+                  placeholder="Ex: equipamento necessário na nova frente de trabalho..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-violet-400 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 px-5 pb-5">
+              <button
+                onClick={() => setModalTransf(null)}
+                className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={!transfDestinoId || iniciarTransf.isPending}
+                onClick={() => {
+                  if (!transfDestinoId) return;
+                  const obra = (obrasParaTransferir as any[]).find((o: any) => o.id === transfDestinoId);
+                  iniciarTransf.mutate({
+                    companyId,
+                    equipamentoId: modalTransf.equipamento.id,
+                    destinoObraId: transfDestinoId,
+                    destinoObraNome: obra?.nome,
+                    motivo: transfMotivo || undefined,
+                  });
+                }}
+                className="flex-1 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2"
+              >
+                {iniciarTransf.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
+                Enviar Transferência
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </DashboardLayout>

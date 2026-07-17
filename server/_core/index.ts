@@ -5449,7 +5449,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4133-2026-07-10-banco-horas-vigencia";
+    const COLFIX_VERSION = "v4340-2026-07-17-equip-transferencia";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7207,6 +7207,44 @@ REGRAS DE EXTRAÇÃO:
         await _db4109.$client.query(`ALTER TABLE financial_accounts ADD COLUMN IF NOT EXISTS codigo_contabilidade VARCHAR(50)`);
         console.log("[ColFix Rev.4109] financial_accounts.codigo_contabilidade garantida.");
       } catch (e: any) { console.error("[ColFix Rev.4109] FALHA financial_accounts.codigo_contabilidade:", e?.message ?? e); }
+
+      // Rev. 4340 — Transferência de Equipamentos Próprios entre obras (fluxo duplo:
+      // remetente envia → destinatário dá aceite). CREATE TABLE + ADD COLUMN — aditivos.
+      try {
+        const _db4340 = await getDb();
+        if (!_db4340) throw new Error("db indisponível");
+        await _db4340.$client.query(`
+          CREATE TABLE IF NOT EXISTS equipamentos_proprios_transferencias (
+            id                      SERIAL PRIMARY KEY,
+            company_id              INTEGER NOT NULL,
+            equipamento_id          INTEGER NOT NULL,
+            equipamento_patrimonio  VARCHAR(50),
+            equipamento_descricao   VARCHAR(255),
+            origem_obra_id          INTEGER,
+            origem_obra_nome        VARCHAR(255),
+            destino_obra_id         INTEGER NOT NULL,
+            destino_obra_nome       VARCHAR(255),
+            status                  VARCHAR(20) NOT NULL DEFAULT 'pendente',
+            motivo                  TEXT,
+            remetente_id            INTEGER,
+            remetente_nome          VARCHAR(255),
+            aceite_por_id           INTEGER,
+            aceite_por_nome         VARCHAR(255),
+            aceite_em               TIMESTAMP,
+            obs_aceite              TEXT,
+            created_at              TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await _db4340.$client.query(`
+          CREATE INDEX IF NOT EXISTS idx_equip_prop_transf_destino
+            ON equipamentos_proprios_transferencias(company_id, destino_obra_id, status)
+        `);
+        await _db4340.$client.query(`
+          ALTER TABLE equipamentos_proprios
+            ADD COLUMN IF NOT EXISTS transferencia_pendente_id INTEGER
+        `);
+        console.log("[ColFix Rev.4340] equipamentos_proprios_transferencias + transferencia_pendente_id garantidas.");
+      } catch (e: any) { console.error("[ColFix Rev.4340] FALHA equip transferencia:", e?.message ?? e); }
 
       // Rev. 4042 — Stripe: inicializar (schema stripe.* + webhook gerenciado)
       // Envolvido em try/catch isolado: falha na configuração do Stripe NÃO

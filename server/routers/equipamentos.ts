@@ -25,6 +25,7 @@ import {
   comprasOrdens,
   comprasOrdensItens,
   almoxarifadoItens,
+  equipamentosPropriasTransferencias,
 } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 
@@ -367,7 +368,8 @@ export const equipamentosRouter = router({
         criadoPorNome: r.criado_por_nome,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
-        obraNome: r.obra_nome, // Rev. 2514 — campo novo derivado do JOIN
+        obraNome: r.obra_nome,
+        transferenciaPendenteId: r.transferencia_pendente_id ?? null,
       }));
     }),
 
@@ -3464,6 +3466,188 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         } as any)
         .where(and(eq(almoxarifadoItens.id, input.itemId), eq(almoxarifadoItens.companyId, input.companyId)));
       return { ok: true };
+    }),
+
+  // ── Rev. 4340 — Transferência de Equipamentos Próprios entre obras ─────────
+  // Fluxo duplo: remetente inicia → destinatário dá aceite de recebimento.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  iniciarTransferenciaObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      equipamentoId: z.number(),
+      destinoObraId: z.number(),
+      destinoObraNome: z.string().optional(),
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [equip] = await db.select().from(equipamentosProprios)
+        .where(and(eq(equipamentosProprios.id, input.equipamentoId), eq(equipamentosProprios.companyId, input.companyId)))
+        .limit(1);
+      if (!equip) throw new TRPCError({ code: "NOT_FOUND", message: "Equipamento não encontrado." });
+      if ((equip as any).transferencia_pendente_id) {
+        throw new TRPCError({ code: "CONFLICT", message: "Já há uma transferência pendente para este equipamento." });
+      }
+      if (equip.status === "baixado") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Equipamento baixado não pode ser transferido." });
+      }
+      // Busca nome da obra origem
+      const [origemObra] = equip.localizacaoAtualObraId
+        ? (await db.execute(sql`SELECT nome FROM obras WHERE id = ${equip.localizacaoAtualObraId} LIMIT 1`) as any)?.rows ?? []
+        : [];
+      const [transf] = await db.insert(equipamentosPropriasTransferencias).values({
+        companyId: input.companyId,
+        equipamentoId: input.equipamentoId,
+        equipamentoPatrimonio: equip.codigoPatrimonio,
+        equipamentoDescricao: equip.descricao,
+        origemObraId: equip.localizacaoAtualObraId ?? null,
+        origemObraNome: origemObra?.nome ?? null,
+        destinoObraId: input.destinoObraId,
+        destinoObraNome: input.destinoObraNome ?? null,
+        status: "pendente",
+        motivo: input.motivo ?? null,
+        remetenteId: ctx.user.id,
+        remetenteNome: ctx.user.name || String(ctx.user.id),
+      } as any).returning();
+      // Marca transferência pendente no equipamento
+      await db.execute(sql`
+        UPDATE equipamentos_proprios
+           SET transferencia_pendente_id = ${(transf as any).id}
+         WHERE id = ${input.equipamentoId} AND company_id = ${input.companyId}
+      `);
+      return { ok: true, transferenciaId: (transf as any).id };
+    }),
+
+  aceitarTransferenciaObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      transferenciaId: z.number(),
+      obsAceite: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [transf] = ((await db.execute(sql`
+        SELECT * FROM equipamentos_proprios_transferencias
+         WHERE id = ${input.transferenciaId} AND company_id = ${input.companyId} AND status = 'pendente'
+        LIMIT 1
+      `)) as any)?.rows ?? [];
+      if (!transf) throw new TRPCError({ code: "NOT_FOUND", message: "Transferência não encontrada ou já concluída." });
+      // Busca nome da obra destino para garantir
+      const [obraDestino] = ((await db.execute(sql`SELECT nome FROM obras WHERE id = ${transf.destino_obra_id} LIMIT 1`)) as any)?.rows ?? [];
+      // Atualiza equipamento: nova localização = destino
+      await db.execute(sql`
+        UPDATE equipamentos_proprios
+           SET localizacao_atual_obra_id = ${transf.destino_obra_id},
+               localizacao_atual_tipo = 'obra',
+               status = 'em_obra',
+               transferencia_pendente_id = NULL,
+               updated_at = NOW()
+         WHERE id = ${transf.equipamento_id} AND company_id = ${input.companyId}
+      `);
+      await db.execute(sql`
+        UPDATE equipamentos_proprios_transferencias
+           SET status = 'aceito',
+               aceite_por_id = ${ctx.user.id},
+               aceite_por_nome = ${ctx.user.name || String(ctx.user.id)},
+               aceite_em = NOW(),
+               obs_aceite = ${input.obsAceite ?? null},
+               destino_obra_nome = COALESCE(destino_obra_nome, ${obraDestino?.nome ?? null})
+         WHERE id = ${input.transferenciaId}
+      `);
+      return { ok: true };
+    }),
+
+  rejeitarTransferenciaObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      transferenciaId: z.number(),
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [transf] = ((await db.execute(sql`
+        SELECT * FROM equipamentos_proprios_transferencias
+         WHERE id = ${input.transferenciaId} AND company_id = ${input.companyId} AND status = 'pendente'
+        LIMIT 1
+      `)) as any)?.rows ?? [];
+      if (!transf) throw new TRPCError({ code: "NOT_FOUND", message: "Transferência não encontrada ou já concluída." });
+      await db.execute(sql`
+        UPDATE equipamentos_proprios
+           SET transferencia_pendente_id = NULL
+         WHERE id = ${transf.equipamento_id} AND company_id = ${input.companyId}
+      `);
+      await db.execute(sql`
+        UPDATE equipamentos_proprios_transferencias
+           SET status = 'rejeitado',
+               aceite_por_id = ${ctx.user.id},
+               aceite_por_nome = ${ctx.user.name || String(ctx.user.id)},
+               aceite_em = NOW(),
+               obs_aceite = ${input.motivo ?? null}
+         WHERE id = ${input.transferenciaId}
+      `);
+      return { ok: true };
+    }),
+
+  cancelarTransferenciaObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      transferenciaId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [transf] = ((await db.execute(sql`
+        SELECT * FROM equipamentos_proprios_transferencias
+         WHERE id = ${input.transferenciaId} AND company_id = ${input.companyId} AND status = 'pendente'
+        LIMIT 1
+      `)) as any)?.rows ?? [];
+      if (!transf) throw new TRPCError({ code: "NOT_FOUND", message: "Transferência não encontrada ou já concluída." });
+      await db.execute(sql`
+        UPDATE equipamentos_proprios
+           SET transferencia_pendente_id = NULL
+         WHERE id = ${transf.equipamento_id} AND company_id = ${input.companyId}
+      `);
+      await db.execute(sql`
+        UPDATE equipamentos_proprios_transferencias SET status = 'cancelado'
+         WHERE id = ${input.transferenciaId}
+      `);
+      return { ok: true };
+    }),
+
+  listTransferenciasPendentesParaObra: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rows = ((await db.execute(sql`
+        SELECT t.*,
+               ep.fotos_json
+          FROM equipamentos_proprios_transferencias t
+          LEFT JOIN equipamentos_proprios ep ON ep.id = t.equipamento_id
+         WHERE t.company_id = ${input.companyId}
+           AND t.destino_obra_id = ${input.obraId}
+           AND t.status = 'pendente'
+         ORDER BY t.created_at DESC
+      `)) as any)?.rows ?? [];
+      return rows.map((r: any) => ({
+        id: r.id,
+        equipamentoId: r.equipamento_id,
+        equipamentoPatrimonio: r.equipamento_patrimonio,
+        equipamentoDescricao: r.equipamento_descricao,
+        fotosJson: r.fotos_json,
+        origemObraId: r.origem_obra_id,
+        origemObraNome: r.origem_obra_nome,
+        destinoObraId: r.destino_obra_id,
+        destinoObraNome: r.destino_obra_nome,
+        status: r.status,
+        motivo: r.motivo,
+        remetenteNome: r.remetente_nome,
+        createdAt: r.created_at,
+      }));
     }),
 });
 
