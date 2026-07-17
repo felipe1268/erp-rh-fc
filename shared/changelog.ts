@@ -1,4 +1,26 @@
 /**
+ * Rev. 4308 - SCORECARD: FIX PJ QUERY — FILTRO obra_id REMOVIDO + NULL DATE HANDLING
+ *
+ * CONTEXTO:
+ *   Rev. 4307 adicionou a 4ª query para PJ contractors mas retornava pj=0.
+ *   Root cause: (1) filtro `obra_id = obraId OR obra_id IS NULL` excluía todos os
+ *   contratos PJ pois eles são vínculos de EMPRESA, não de obra — os 9 contratos
+ *   ativos (R$46.500/mês) tinham obra_id apontando para outra obra ou para um ID
+ *   diferente do scorecard. (2) condição `dataFim >= mesFeriasIni` excluía contratos
+ *   com dataFim NULL (open-ended) pois NULL comparado via >= retorna NULL (falso).
+ *
+ * SOLUÇÃO:
+ *   - Removido filtro `(pc.obra_id = obraId OR pc.obra_id IS NULL)` — PJ são
+ *     vinculados à empresa, não à obra; todos os ativos da empresa devem aparecer.
+ *   - Corrigidas condições de data: `(pc."dataFim" IS NULL OR pc."dataFim" >= ...)` e
+ *     `(pc."dataInicio" IS NULL OR pc."dataInicio" <= ...)`.
+ *   - Expandido status para `IN ('ativo','pendente_assinatura')` além de só 'ativo'.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers/scorecard.ts
+ */
+
+/**
  * Rev. 4307 - SCORECARD: RH/FOLHA — PJ CONTRACTORS INCLUÍDOS NO CUSTO
  *
  * CONTEXTO:

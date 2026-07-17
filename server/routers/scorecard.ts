@@ -1928,12 +1928,14 @@ export const scorecardRouter = router({
                 DATE_TRUNC('month', (${mesFeriasFim} || '-01')::date)
               ) AS range_fim
             FROM pj_contracts pc
-            WHERE pc.obra_id      = ${input.obraId}
-              AND pc."companyId"  = ${input.companyId}
-              AND pc.status       = 'ativo'
+            -- Rev. 4308: filtro obra_id REMOVIDO — contratos PJ são vínculos de empresa,
+            -- não de obra específica. Busca todos os ativos/pendentes da empresa no período.
+            -- dataFim/dataInicio podem ser NULL (contrato open-ended) → tratado com IS NULL OR.
+            WHERE pc."companyId"  = ${input.companyId}
+              AND pc.status       IN ('ativo','pendente_assinatura')
               AND pc."deletedAt"  IS NULL
-              AND pc."dataFim"    >= (${mesFeriasIni} || '-01')::date
-              AND pc."dataInicio" <= (${mesFeriasFim} || '-28')::date
+              AND (pc."dataFim" IS NULL OR pc."dataFim" >= (${mesFeriasIni} || '-01')::date)
+              AND (pc."dataInicio" IS NULL OR pc."dataInicio" <= (${mesFeriasFim} || '-28')::date)
           ),
           pj_meses AS (
             SELECT

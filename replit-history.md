@@ -1,3 +1,5 @@
+- **Rev. 4301** — **FCSIGN: BOTÃO "SOLICITAR REVISÃO" PARA O ASSINANTE NA TELA DE ASSINATURA.** Nova procedure pública `requestRevision`. Botão amber inline + card de confirmação em `AssinarDocumento.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4299** — **NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING.** `parseDateBR` retornava `"0"` → `"0"::date` explodindo no PostgreSQL. Fix: retorna `null`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4289** — **FIX: MAPA DE COTAÇÃO — INPUTS MAT/MO COM FORMATO BR.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4288** — **FEATURE: LEITOR IA EXTRAI MAT/MO EM COTAÇÕES TIPO PACOTE.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4287** — **FIX: MAPA DE COTAÇÃO (PACOTE) — COLUNAS MAT/MO NÃO EDITÁVEIS E MO ZERADA.** ZERO DELETE · ZERO ALTER destrutivo.
