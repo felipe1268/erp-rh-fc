@@ -2141,6 +2141,30 @@ export const scorecardRouter = router({
           m.custoTotal   += n(h.custoTotal);
         }
       }
+      // Fix: férias cujo mes_ref não coincide com nenhum mês de payroll ficam
+      // "órfãs" — contam no ferias_total do funcionário (via feriasEmpMap) mas
+      // nunca chegam a mensalMap (que só é alimentado via historico_mensal).
+      // Percorremos feriasKeyMap e injetamos apenas os meses ainda não cobertos.
+      const funcsById = new Map<number, any>();
+      for (const f of funcs) funcsById.set(n(f.employee_id), f);
+
+      for (const [key, valor] of feriasKeyMap) {
+        const pipeIdx = key.indexOf('|');
+        const empId   = parseInt(key.slice(0, pipeIdx));
+        const mes     = key.slice(pipeIdx + 1);
+        const f       = funcsById.get(empId);
+        if (!f) continue;
+        const hist: any[] = Array.isArray(f.historico_mensal) ? f.historico_mensal : [];
+        const alreadyCounted = hist.some((h: any) => h.mes === mes);
+        if (alreadyCounted) continue; // já contabilizado via h.ferias no loop acima
+        if (!mensalMap.has(mes)) {
+          mensalMap.set(mes, { mes, qtdFuncionarios: 0, salarioBruto: 0, he: 0, va: 0, fgts: 0, inss: 0, ferias: 0, seguroVida: 0, custoEmpresa: 0, custoTotal: 0 });
+        }
+        const m = mensalMap.get(mes)!;
+        m.ferias    += valor;
+        m.custoTotal += valor;
+      }
+
       const mensal = Array.from(mensalMap.values()).sort((a, b) => a.mes.localeCompare(b.mes));
 
       const resumo = {

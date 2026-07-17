@@ -1,4 +1,27 @@
 /**
+ * Rev. 4317 - SCORECARD RH/FOLHA: FIX FÉRIAS ÓRFÃS NO AGREGADO POR MÊS
+ *
+ * PROBLEMA:
+ *   A tabela "Custo por Mês" mostrava ~R$34k em Férias enquanto os KPIs e o
+ *   TOTAL mostravam R$105k — os meses individuais não somavam ao total.
+ *
+ *   Causa raiz: `mensalMap` é alimentado exclusivamente via `historico_mensal`
+ *   (entradas de payroll). Férias com `mes_ref` que não possui entrada de
+ *   payroll correspondente ficavam "órfãs" — eram contadas em `ferias_total`
+ *   por funcionário (via `feriasEmpMap`) mas nunca chegavam ao `mensalMap`.
+ *
+ * FIX (server/routers/scorecard.ts — getCustosRH):
+ *   Após montar `mensalMap` pelo caminho normal, percorremos `feriasKeyMap`
+ *   (`${empId}|${mes_ref}` → total) e para cada par que NÃO aparece em
+ *   nenhum `h.mes` do `historico_mensal` do funcionário, injetamos o valor
+ *   diretamente no `mensalMap` (criando o mês se necessário).
+ *   Resultado: `mensal[*].ferias` agora soma exatamente `resumo.feriasTotal`.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo (só lógica de agregação JS).
+ * Arquivo: server/routers/scorecard.ts
+ */
+
+/**
  * Rev. 4316 - SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA "CUSTO POR FUNCIONÁRIO"
  *
  * CONTEXTO:

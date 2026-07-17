@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4317** — **SCORECARD RH/FOLHA: FIX FÉRIAS ÓRFÃS NO CUSTO POR MÊS.** Férias com `mes_ref` sem entrada de payroll ficavam "órfãs" (contavam no KPI mas sumiam da tabela por mês). Fix: passa por `feriasKeyMap` pós-loop e injeta meses não cobertos. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4316** — **SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA DE FUNCIONÁRIOS.** Select com cargos únicos + contagem; `rhFuncsFiltrados` + `rhResumoFiltrado` recalculam totais do subconjunto; tfoot vira "SUBTOTAL — cargo". ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4315** — **SCORECARD RH/FOLHA: FOTO DO FUNCIONÁRIO CLICÁVEL.** Foto e avatar de iniciais abrem lightbox `sstPhotoLightbox` (já existente no SST). `cursor-zoom-in` + hover ring; `stopPropagation` evita colapsar linha. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4315** — **SCORECARD RH/FOLHA: FOTO DO FUNCIONÁRIO CLICÁVEL.** Foto e avatar de iniciais abrem lightbox; `cursor-zoom-in` + hover ring; `stopPropagation` evita colapsar linha. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4314** — **PORTAL CLIENTE ADMIN: FILTRO "COM/SEM ACESSO".** Pills coloridas (Todos/Com acesso/Sem acesso) com contador. `filtrados` useMemo atualizado. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4312** — **SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA.** Nova CTE `pj_site_periods`; interseção contrato × alocação × filtro; `dias_na_obra/dias_no_mes` pro-rateia custo. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4311** — **SCORECARD RH/FOLHA: RE-INIT AO TROCAR DE OBRA.** `useRef` guarda o `obraId` já inicializado; ao trocar de obra, `rhAno`/`rhMes` são re-inicializados. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4310** — **SCORECARD RH/FOLHA: PERÍODO PADRÃO = CRONOGRAMA DA OBRA.** `useEffect` inicializa `rhAno` com o ano de `proj.dataInicio`. "Ano todo" clampa pelos bounds da obra. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
