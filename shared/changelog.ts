@@ -1,4 +1,22 @@
 /**
+ * Rev. 4315 - SCORECARD RH/FOLHA: FOTO DO FUNCIONÁRIO CLICÁVEL (LIGHTBOX)
+ *
+ * CONTEXTO:
+ *   As fotos na tabela "Custo por Funcionário" eram pequenas (28px) e não
+ *   tinham interação. O lightbox `sstPhotoLightbox` já existia para SST —
+ *   reutilizado sem novo estado.
+ *
+ * ADICIONADO:
+ *   - Foto e avatar (iniciais) clicáveis com cursor-zoom-in + hover ring indigo
+ *   - onClick chama setSstPhotoLightbox com url/nome/initials
+ *   - ev.stopPropagation() evita colapsar/expandir a linha ao clicar na foto
+ *   - Funciona tanto para quem TEM foto quanto para quem NÃO TEM (mostra iniciais ampliadas)
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo (só frontend).
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4314 - PORTAL CLIENTE ADMIN: FILTRO "COM/SEM ACESSO" NA ABA ACESSOS
  *
  * CONTEXTO:

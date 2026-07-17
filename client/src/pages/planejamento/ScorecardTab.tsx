@@ -1247,15 +1247,23 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                               <tr onClick={toggle} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
                                 <td className="px-2 py-1.5">
                                   <div className="flex items-center gap-1.5">
-                                    {f.foto_url ? (
-                                      <img src={f.foto_url} alt={f.nome} className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-gray-200" />
-                                    ) : (
-                                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 border border-indigo-200">
-                                        <span className="text-[9px] font-bold text-indigo-600">
-                                          {(f.nome ?? "?").split(" ").slice(0, 2).map((w: string) => w[0]).join("")}
-                                        </span>
-                                      </div>
-                                    )}
+                                    {(() => {
+                                      const initials = (f.nome ?? "?").split(" ").slice(0, 2).map((w: string) => w[0]).join("");
+                                      return f.foto_url ? (
+                                        <img
+                                          src={f.foto_url} alt={f.nome}
+                                          className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-gray-200 cursor-zoom-in hover:ring-2 hover:ring-indigo-400 transition-all"
+                                          onClick={(ev) => { ev.stopPropagation(); setSstPhotoLightbox({ url: f.foto_url, nome: f.nome ?? "—", initials }); }}
+                                        />
+                                      ) : (
+                                        <div
+                                          className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 border border-indigo-200 cursor-zoom-in hover:ring-2 hover:ring-indigo-400 transition-all"
+                                          onClick={(ev) => { ev.stopPropagation(); setSstPhotoLightbox({ url: null, nome: f.nome ?? "—", initials }); }}
+                                        >
+                                          <span className="text-[9px] font-bold text-indigo-600">{initials}</span>
+                                        </div>
+                                      );
+                                    })()}
                                     <div>
                                       <div className="flex items-center gap-1 leading-tight">
                                         <p className="font-medium text-gray-800">{f.nome}</p>

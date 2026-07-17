@@ -50,23 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4314** — **PORTAL CLIENTE ADMIN: FILTRO "COM/SEM ACESSO" NA ABA ACESSOS.** Pills de filtro coloridas (Todos/Com acesso/Sem acesso) com contador em cada uma. `filtrados` useMemo atualizado para respeitar filtro + texto. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4315** — **SCORECARD RH/FOLHA: FOTO DO FUNCIONÁRIO CLICÁVEL.** Foto e avatar de iniciais abrem lightbox `sstPhotoLightbox` (já existente no SST). `cursor-zoom-in` + hover ring; `stopPropagation` evita colapsar linha. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4313** — **PLANEJAMENTO: BOTÃO "IMPORTAR CUSTOS MO" REMOVIDO.** Com o Scorecard calculando MO automaticamente (CLT + PJ proporcionais), o import manual tornou-se redundante. Removidos: botão, modal, states e queries de `moAlocacao`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4314** — **PORTAL CLIENTE ADMIN: FILTRO "COM/SEM ACESSO" NA ABA ACESSOS.** Pills de filtro coloridas (Todos/Com acesso/Sem acesso) com contador em cada uma. `filtrados` useMemo atualizado para respeitar filtro + texto. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4313** — **PLANEJAMENTO: BOTÃO "IMPORTAR CUSTOS MO" REMOVIDO.** Com o Scorecard calculando MO automaticamente (CLT + PJ proporcionais), o import manual tornou-se redundante. Removidos: botão, modal, states e queries de `moAlocacao`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4312** — **SCORECARD RH/FOLHA: PJ — CUSTO PROPORCIONAL AO TEMPO NA OBRA.** Nova CTE `pj_site_periods`; `efetivo_inicio/fim` = interseção contrato × alocação × filtro; `dias_na_obra/dias_no_mes` pro-rateia custo. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4311** — **SCORECARD RH/FOLHA: RE-INIT AO TROCAR DE OBRA.** `useRef` passa a guardar o `obraId` já inicializado. Ao navegar para outra obra, `rhAno`/`rhMes` são re-inicializados pelo cronograma da nova obra. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4311** — **SCORECARD RH/FOLHA: RE-INIT AO TROCAR DE OBRA.** `useRef` guarda o `obraId` já inicializado; ao navegar para outra obra, `rhAno`/`rhMes` são re-inicializados pelo cronograma da nova obra. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4310** — **SCORECARD RH/FOLHA: PERÍODO PADRÃO = CRONOGRAMA DA OBRA.** `useEffect` inicializa `rhAno` com o ano de `proj.dataInicio`. "Ano todo" clampa `mesInicio/mesFim` pelos bounds da obra. Texto informativo abaixo do seletor. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4310** — **SCORECARD RH/FOLHA: PERÍODO PADRÃO = CRONOGRAMA DA OBRA.** `useEffect` inicializa `rhAno` com o ano de `proj.dataInicio`. "Ano todo" clampa `mesInicio/mesFim` pelos bounds da obra. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4309** — **SCORECARD: FIX PJ QUERY — USAR relevant_emp COMO FONTE DE VERDADE.** `pc."employeeId" IN (relevant_emp)` — mesma lógica do CLT. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4308** — **SCORECARD: FIX PJ QUERY — FILTRO obra_id REMOVIDO + NULL DATE HANDLING.** Fix intermediário: removido obra_id; NULL dates corrigidos; status expandido para `IN ('ativo','pendente_assinatura')`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4307** — **SCORECARD: RH/FOLHA — PJ CONTRACTORS INCLUÍDOS NO CUSTO.** 4ª query em `getCustosRH` via `pj_contracts` + `generate_series` por mês ativo. PJ pushed no array `funcs` com badge roxo. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
