@@ -1185,6 +1185,9 @@ export const fechamentoPontoRouter = router({
         const { timeRecordsToInsert, inconsistencies, unmatchedNames, unmatchedRecordsToInsert } = processRecords(
           records, empList as any, obraId, input.companyId, criteria, activeAvisos, memMappings, activeFeriasGozo as any, obraJornadaLote
         );
+        // [DIXI-DEBUG] after processRecords
+        const _dbgKelly = timeRecordsToInsert.filter((r: any) => r.employeeId === 141);
+        console.log(`[DIXI-DEBUG] processRecords → total=${timeRecordsToInsert.length} | kelly(141)=${_dbgKelly.length} registros | datas=${_dbgKelly.map((r:any)=>r.data).join(',')} | fileSharedSn=${fileSharedSnObras.length}`);
 
         // ===== SHARED SN: Reassign obraId by employee→obra assignment =====
         const skippedEmployeeIds = new Set<number>();
@@ -1255,6 +1258,9 @@ export const fechamentoPontoRouter = router({
             inconsistencies.push(...resolvedIncons);
           }
         }
+        // [DIXI-DEBUG] after routing
+        const _dbgKelly2 = timeRecordsToInsert.filter((r: any) => r.employeeId === 141);
+        console.log(`[DIXI-DEBUG] pós-routing → kelly(141)=${_dbgKelly2.length} | skipped=${[...skippedEmployeeIds].join(',')} | empObraMap[141]=${JSON.stringify((empObraMap as any)[141])}`);
 
         // ===== FILTRO DE PERÍODO DO USUÁRIO =====
         // Se o usuário informou periodoInicio/periodoFim, descartar registros fora do intervalo.
@@ -1278,6 +1284,8 @@ export const fechamentoPontoRouter = router({
           if (ignorados > 0) {
             console.log(`[DIXI período ${de}→${ate}] ${ignorados} registro(s) ignorados por estar fora do período (${beforeInc - filteredInc.length} inconsistências também descartadas)`);
           }
+          const _dbgKelly3 = timeRecordsToInsert.filter((r: any) => r.employeeId === 141);
+          console.log(`[DIXI-DEBUG] pós-período ${de}→${ate} → kelly(141)=${_dbgKelly3.length} | datas=${_dbgKelly3.map((r:any)=>r.data).join(',')}`);
         }
 
         // Salvar registros não identificados para vinculação posterior
@@ -1319,10 +1327,12 @@ export const fechamentoPontoRouter = router({
         const isSelective = input.mode === "selective" && input.selectedEmployeeIds && input.selectedEmployeeIds.length > 0;
         const selectedSet = isSelective ? new Set(input.selectedEmployeeIds) : null;
 
+        console.log(`[DIXI-DEBUG] grupos recordsByMesObra: ${Object.keys(recordsByMesObra).join(' | ')} | mode=${input.mode} | selectedIds=${input.selectedEmployeeIds?.join(',')}`);
         for (const [mesObraKey, allRecs] of Object.entries(recordsByMesObra)) {
           const [mesRef, groupObraIdStr] = mesObraKey.split("|");
           const groupObraId = Number(groupObraIdStr);
           const recs = selectedSet ? allRecs.filter((r: any) => selectedSet.has(r.employeeId)) : allRecs;
+          console.log(`[DIXI-DEBUG] grupo ${mesObraKey}: allRecs=${allRecs.length} recs(pós-seletivo)=${recs.length} | kelly=${recs.filter((r:any)=>r.employeeId===141).length}`);
           if (recs.length === 0) continue;
           mesesAfetados.add(mesRef);
 
@@ -1428,6 +1438,7 @@ export const fechamentoPontoRouter = router({
             const manualSet = new Set((manuaisExistentes.rows as any[]).map((r: any) => `${r.employeeId}|${r.data}`));
             recsParaInserir = recsParaInserir.filter((r: any) => !manualSet.has(`${r.employeeId}|${r.data}`));
           }
+          console.log(`[DIXI-DEBUG] grupo ${mesObraKey}: recsParaInserir=${recsParaInserir.length} | kelly=${recsParaInserir.filter((r:any)=>r.employeeId===141).length}`);
           if (recsParaInserir.length > 0) {
             const batchSize = 50;
             for (let i = 0; i < recsParaInserir.length; i += batchSize) {
