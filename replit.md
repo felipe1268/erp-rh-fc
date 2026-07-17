@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4308** — **SCORECARD: FIX PJ QUERY — FILTRO obra_id REMOVIDO + NULL DATE HANDLING.** Root cause do `pj=0`: filtro `obra_id = 13` excluía todos (contratos PJ são vínculos de empresa, não de obra). Fix: removido filtro obra_id; condições de data corrigidas para NULL (`IS NULL OR dataFim >= ...`); status expandido para `IN ('ativo','pendente_assinatura')`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4309** — **SCORECARD: FIX PJ QUERY — USAR relevant_emp COMO FONTE DE VERDADE.** Os 4 PJ da obra estão em `obra_funcionarios` como CLT. A CTE `relevant_emp` já os contém. Fix: substituir filtro `companyId/obra_id` por `pc."employeeId" IN (relevant_emp)` — mesma lógica do CLT. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4307** — **SCORECARD: RH/FOLHA — PJ CONTRACTORS INCLUÍDOS NO CUSTO.** 4ª query em `getCustosRH` via `pj_contracts` + `generate_series` por mês ativo. PJ pushed no array `funcs` com badge roxo no frontend. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4308** — **SCORECARD: FIX PJ QUERY — FILTRO obra_id REMOVIDO + NULL DATE HANDLING.** Root cause do `pj=0`: filtro `obra_id = 13` excluía todos. Fix intermediário: removido obra_id; NULL dates corrigidos; status expandido para `IN ('ativo','pendente_assinatura')`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4307** — **SCORECARD: RH/FOLHA — PJ CONTRACTORS INCLUÍDOS NO CUSTO.** 4ª query em `getCustosRH` via `pj_contracts` + `generate_series` por mês ativo. PJ pushed no array `funcs` com badge roxo. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4306** — **SCORECARD: FIX LOCAÇÕES INVISÍVEIS — ORDER BY CASE ALIAS EM UNION SEM SUBQUERY.** PostgreSQL não permite aliases de saída em expressões no `ORDER BY` direto de `UNION ALL`. `safe()` capturava "column status does not exist" silenciosamente → `[]`. Fix: UNION envolvido em `SELECT * FROM (...) _loc`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4303** — **SCORECARD: FIX CUSTO MO INVISÍVEL + LOCAÇÕES VIA OC.** Ramo B `site_periods` COALESCE fix + Ramo C UNION para locações via compras_ordens. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4302** — **SMO: CUSTOS ÚNICOS DE ADMISSÃO (EPI COMPLETO, UNIFORME, JOGO INICIAL) NO CARD DE IMPACTO FINANCEIRO.** `computeCustoSMO` expõe `epiCompletoUnico/uniformeUnico/jogoInicialUnico`; nova seção âmbar no card. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4301 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4302 e anteriores.
 
 ## User preferences
 

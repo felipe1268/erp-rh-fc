@@ -1928,10 +1928,11 @@ export const scorecardRouter = router({
                 DATE_TRUNC('month', (${mesFeriasFim} || '-01')::date)
               ) AS range_fim
             FROM pj_contracts pc
-            -- Rev. 4308: filtro obra_id REMOVIDO — contratos PJ são vínculos de empresa,
-            -- não de obra específica. Busca todos os ativos/pendentes da empresa no período.
-            -- dataFim/dataInicio podem ser NULL (contrato open-ended) → tratado com IS NULL OR.
-            WHERE pc."companyId"  = ${input.companyId}
+            -- Rev. 4309: usa relevant_emp (obra_funcionarios + employee_site_history)
+            -- como fonte de verdade — os mesmos 4 PJ que aparecem no Efetivo da Obra.
+            -- Mesma lógica do CLT (payroll filtra por employeeId IN relevant_emp).
+            -- dataFim/dataInicio NULL = contrato open-ended → tratado com IS NULL OR.
+            WHERE pc."employeeId" IN (${relevantEmpSql})
               AND pc.status       IN ('ativo','pendente_assinatura')
               AND pc."deletedAt"  IS NULL
               AND (pc."dataFim" IS NULL OR pc."dataFim" >= (${mesFeriasIni} || '-01')::date)

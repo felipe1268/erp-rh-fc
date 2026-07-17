@@ -1,4 +1,29 @@
 /**
+ * Rev. 4309 - SCORECARD: FIX PJ QUERY — USAR relevant_emp COMO FONTE DE VERDADE
+ *
+ * CONTEXTO:
+ *   Rev. 4308 removeu o filtro obra_id e passou a trazer TODOS os 9 PJ ativos
+ *   da empresa — incorreto pois o scorecard de uma obra específica deve mostrar
+ *   apenas os PJ alocados nela (4, neste caso).
+ *
+ * CAUSA RAIZ COMPLETA:
+ *   A aba "Efetivo da Obra" (EfetivoObraTab → getEquipeObra → obra_funcionarios
+ *   WHERE isActive=1) já conhece os 4 PJ desta obra. Eles estão em obra_funcionarios
+ *   como qualquer CLT. O getCustosRH já monta `relevant_emp` (obra_funcionarios +
+ *   employee_site_history) para filtrar o payroll CLT — os 4 PJ estão nessa mesma
+ *   CTE.
+ *
+ * SOLUÇÃO:
+ *   Substituir WHERE pc."companyId" = X / pc.obra_id = Y por
+ *   WHERE pc."employeeId" IN (relevant_emp) — mesma fonte usada pelo CLT.
+ *   Mantidos: status IN ('ativo','pendente_assinatura'), deletedAt IS NULL,
+ *   condições de data com NULL handling.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers/scorecard.ts
+ */
+
+/**
  * Rev. 4308 - SCORECARD: FIX PJ QUERY — FILTRO obra_id REMOVIDO + NULL DATE HANDLING
  *
  * CONTEXTO:
