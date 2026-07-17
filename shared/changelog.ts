@@ -1,4 +1,31 @@
 /**
+ * Rev. 4335 - SCORECARD RH/FOLHA: PJ — DISTINCT ON (melhor contrato por funcionário) + badge "Sem contrato PJ"
+ *
+ * PROBLEMA: query PJ excluía contratos cujo obra_id apontava para outra obra — mesmo que o
+ *   funcionário estivesse no efetivo desta obra. Funcionários como Antonio Wagner e Geraldo
+ *   podiam ter contrato PJ ativo mas com obra_id diferente e ficavam invisíveis.
+ *
+ * SOLUÇÃO (scorecard.ts — getCustosRH / pjR query):
+ *   Nova lógica via pj_efetivo + pj_best CTEs:
+ *   1. pj_efetivo: todos os employeeIds alocados nesta obra (obra_funcionarios).
+ *   2. pj_best: DISTINCT ON (employeeId) — pega UM contrato ativo por funcionário em prioridade:
+ *      0 → obra_id = esta obra (mais específico)
+ *      1 → obra_id IS NULL (empresa geral)
+ *      2 → qualquer outra obra (fallback)
+ *      Desempate: id DESC (contrato mais recente ganha).
+ *   Resultado: nenhum PJ do efetivo fica sem valor, sem dupla contagem.
+ *
+ * BADGE (ScorecardTab.tsx):
+ *   Antes: todo "meses_na_obra = 0 e tipo_pessoa ≠ PJ" → "⚠ Sem folha".
+ *   Agora: distingue tipo_contrato do employees:
+ *   - PJ sem contrato ativo → "⚠ Sem contrato PJ" (laranja)
+ *   - CLT sem folha processada → "⚠ Sem folha" (âmbar, como antes)
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers/scorecard.ts, client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4334 - SCORECARD RH/FOLHA: PJ — CUSTO VIA MÓDULO TERCEIROS (obra_id NULL fallback)
  *
  * PROBLEMA: query PJ filtrava `pj_contracts.obra_id = obraId` (estrito).

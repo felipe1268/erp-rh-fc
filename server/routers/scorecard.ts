@@ -1936,40 +1936,55 @@ export const scorecardRouter = router({
             SELECT COALESCE("dataInicio"::date, '2000-01-01'::date) AS data_inicio
             FROM obras WHERE id = ${input.obraId}
           ),
-          pj_periods AS (
-            SELECT
+          -- Funcionários PJ alocados nesta obra
+          pj_efetivo AS (
+            SELECT DISTINCT "employeeId" AS employee_id
+            FROM obra_funcionarios
+            WHERE "obraId" = ${input.obraId}
+              AND "companyId" = ${input.companyId}
+          ),
+          -- Para cada funcionário PJ do efetivo, pega UM contrato ativo:
+          -- Prioridade: 1º obra específica → 2º sem obra → 3º qualquer outra obra
+          -- DISTINCT ON garante no máximo 1 contrato por funcionário (sem dupla contagem)
+          pj_best AS (
+            SELECT DISTINCT ON (pc."employeeId")
               pc."employeeId"                                                              AS employee_id,
               REPLACE(REPLACE(COALESCE(pc."valorMensal",'0'), '.', ''), ',', '.')::numeric AS valor_mensal,
               pc."numeroContrato"                                                          AS numero_contrato,
               pc."razaoSocialPrestador"                                                    AS razao_social,
-              -- Effective start: latest of (obra start, contract start, filter start)
-              GREATEST(
-                (SELECT data_inicio FROM obra_ini_pj),
-                COALESCE(pc."dataInicio"::date, '2000-01-01'::date),
-                (${mesFeriasIni} || '-01')::date
-              )                                                                            AS efetivo_inicio,
-              -- Effective end: earliest of (contract end, filter end)
-              LEAST(
-                COALESCE(pc."dataFim"::date, CURRENT_DATE),
-                ((${mesFeriasFim} || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
-              )                                                                            AS efetivo_fim
+              pc."dataInicio"                                                              AS data_inicio,
+              pc."dataFim"                                                                 AS data_fim
             FROM pj_contracts pc
             WHERE pc."companyId" = ${input.companyId}
-              AND pc.status       IN ('ativo','pendente_assinatura')
-              AND pc."deletedAt"  IS NULL
+              AND pc.status        IN ('ativo','pendente_assinatura')
+              AND pc."deletedAt"   IS NULL
               AND pc."dataFim"::date    >= (${mesFeriasIni} || '-01')::date
               AND pc."dataInicio"::date <= (${mesFeriasFim} || '-28')::date
-              AND (
-                -- Contrato vinculado explicitamente à obra
-                pc.obra_id = ${input.obraId}
-                OR
-                -- Contrato sem obra específica, mas o funcionário está alocado nessa obra
-                (pc.obra_id IS NULL AND pc."employeeId" IN (
-                  SELECT "employeeId" FROM obra_funcionarios
-                  WHERE "obraId" = ${input.obraId}
-                    AND "companyId" = ${input.companyId}
-                ))
-              )
+              AND pc."employeeId" IN (SELECT employee_id FROM pj_efetivo)
+            ORDER BY
+              pc."employeeId",
+              -- Melhor contrato primeiro: vinculado a esta obra > sem obra > outra obra
+              CASE WHEN pc.obra_id = ${input.obraId} THEN 0
+                   WHEN pc.obra_id IS NULL THEN 1
+                   ELSE 2 END ASC,
+              pc.id DESC  -- contrato mais recente ganha em caso de empate
+          ),
+          pj_periods AS (
+            SELECT
+              pb.employee_id,
+              pb.valor_mensal,
+              pb.numero_contrato,
+              pb.razao_social,
+              GREATEST(
+                (SELECT data_inicio FROM obra_ini_pj),
+                COALESCE(pb.data_inicio::date, '2000-01-01'::date),
+                (${mesFeriasIni} || '-01')::date
+              )                                                                            AS efetivo_inicio,
+              LEAST(
+                COALESCE(pb.data_fim::date, CURRENT_DATE),
+                ((${mesFeriasFim} || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
+              )                                                                            AS efetivo_fim
+            FROM pj_best pb
           ),
           pj_meses AS (
             SELECT

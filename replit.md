@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4335** — **SCORECARD RH/FOLHA: PJ — DISTINCT ON (melhor contrato por funcionário) + badge "Sem contrato PJ".** `pj_best` CTE usa `DISTINCT ON (employeeId)` priorizando obra-específico → sem obra → qualquer; inclui TODOS funcionários do efetivo independente do `obra_id` do contrato. Badge laranja "⚠ Sem contrato PJ" para PJ sem contrato ativo vs amber "⚠ Sem folha" para CLT. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4334** — **SCORECARD RH/FOLHA: PJ — CUSTO VIA MÓDULO TERCEIROS (obra_id NULL fallback).** Query PJ ampliada: aceita `pj_contracts.obra_id = obraId` OU `obra_id IS NULL` com funcionário em `obra_funcionarios`. Contratos de outra obra excluídos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4333** — **SCORECARD RH/FOLHA: EFETIVO COMPLETO — `period_emps` LEFT JOIN + badge "Sem folha".** `custos` CTE ancorando em `period_emps` (efetivo do período) LEFT JOIN payroll. PJ dedup update in-place. Badge ⚠ amber para CLT sem folha. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4333** — **SCORECARD RH/FOLHA: EFETIVO COMPLETO — `period_emps` LEFT JOIN + badge "Sem folha".** `custos` CTE ancorando em `period_emps` LEFT JOIN payroll. Badge ⚠ amber para CLT sem folha. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4332** — **SCORECARD RH/FOLHA: CARD CUSTO EQUIPE — TOGGLE MIN/HORA/DIA/SEMANA/MÊS.** 5 pills: custoHora=custoDia÷8; custoMinuto=custoHora÷60. ZERO DELETE · ZERO ALTER destrutivo.
 
