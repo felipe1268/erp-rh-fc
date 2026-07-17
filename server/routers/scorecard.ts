@@ -2019,6 +2019,11 @@ export const scorecardRouter = router({
             e.cargo,
             COUNT(DISTINCT pm.mes)::int                                                                    AS meses_ativos,
             SUM(ROUND(pm.valor_mensal * pm.dias_na_obra::numeric / NULLIF(pm.dias_no_mes,0), 2))           AS custo_total,
+            -- valor_mensal_medio: custo proporcional ÷ nº de meses = quanto sai do caixa por mês
+            ROUND(
+              SUM(ROUND(pm.valor_mensal * pm.dias_na_obra::numeric / NULLIF(pm.dias_no_mes,0), 2))
+              / NULLIF(COUNT(DISTINCT pm.mes), 0)
+            , 2)                                                                                           AS valor_mensal_medio,
             MAX(pm.numero_contrato)                                                                        AS numero_contrato,
             MAX(pm.razao_social)                                                                           AS razao_social,
             JSON_AGG(
@@ -2093,6 +2098,9 @@ export const scorecardRouter = router({
       // Nesse caso ATUALIZAMOS o registro existente em vez de duplicar.
       for (const pj of pjRows) {
         const existingIdx = funcs.findIndex((f: any) => n(f.employee_id) === n(pj.employee_id));
+        // valor_mensal_medio = custo proporcional ÷ nº meses = quanto sai do caixa por mês
+        const valMensal = n(pj.valor_mensal_medio);
+        const custoTotal = n(pj.custo_total);
         if (existingIdx >= 0) {
           const ex = funcs[existingIdx];
           ex.tipo_pessoa         = 'PJ';
@@ -2100,9 +2108,11 @@ export const scorecardRouter = router({
           ex.matricula           = pj.numero_contrato ?? ex.matricula;
           ex.meses_na_obra       = pj.meses_ativos;
           ex.total_dias_na_obra  = n(pj.meses_ativos) * 30;
-          ex.salario_bruto_total = n(pj.custo_total);
+          // salario_bruto_total = valor mensal proporcional (não acumulado do período)
+          ex.salario_bruto_total = valMensal;
           ex.custo_folha_empresa = 0;
-          ex.custo_total_empresa = n(pj.custo_total);
+          // custo_total_empresa = acumulado real do período (para KPIs e TOTAL da tabela)
+          ex.custo_total_empresa = custoTotal;
           ex.historico_mensal    = Array.isArray(pj.historico_mensal) ? pj.historico_mensal : [];
         } else {
           funcs.push({
@@ -2115,7 +2125,7 @@ export const scorecardRouter = router({
             razao_social:        pj.razao_social,
             meses_na_obra:       pj.meses_ativos,
             total_dias_na_obra:  n(pj.meses_ativos) * 30,
-            salario_bruto_total: n(pj.custo_total),
+            salario_bruto_total: valMensal,
             he_total:            0,
             va_total:            0,
             adicionais_total:    0,
@@ -2125,7 +2135,7 @@ export const scorecardRouter = router({
             ferias_total:        0,
             seguro_vida_total:   0,
             custo_folha_empresa: 0,
-            custo_total_empresa: n(pj.custo_total),
+            custo_total_empresa: custoTotal,
             historico_mensal:    Array.isArray(pj.historico_mensal) ? pj.historico_mensal : [],
           });
         }

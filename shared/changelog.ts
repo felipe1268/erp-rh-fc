@@ -1,4 +1,33 @@
 /**
+ * Rev. 4336 - SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL (não acumulado do período)
+ *
+ * PROBLEMA: coluna "Sal. Bruto" da tabela individual exibia o total acumulado do período (ex.: R$51.000
+ *   para 6 meses × R$8.500/mês). O usuário esperava ver o custo mensal — "quanto o caixa desembolsa
+ *   por mês para esse colaborador PJ" (proporcional ao nº de dias na obra naquele mês).
+ *
+ * SOLUÇÃO (scorecard.ts — getCustosRH / pjR query):
+ *   Nova coluna calculada no SQL: `valor_mensal_medio = ROUND(custo_total / meses_ativos, 2)`.
+ *   No merge JS:
+ *   - `salario_bruto_total = valor_mensal_medio`  → display mensal proporcional na tabela individual.
+ *   - `custo_total_empresa = custo_total`          → acumulado real do período (KPIs + TOTAL da tabela).
+ *
+ * FRONTEND (ScorecardTab.tsx):
+ *   - Coluna DIAS para PJ: mostra "Nm" (nº de meses ativos) em vez de dias totais.
+ *   - Coluna SAL. BRUTO para PJ: mostra valor com badge "/mês" + tooltip explicativo.
+ *   - rhResumoFiltrado e rhPorFuncao: PJ usa custo_total_empresa na soma de salarioBruto
+ *     (para que o TOTAL e agrupamentos mostrem o custo real do período, não a taxa mensal).
+ *
+ * LÓGICA DA PROPORÇÃO:
+ *   custo_total / meses_ativos = média mensal proporcional.
+ *   Mês completo (30 dias): ≈ valor_mensal do contrato.
+ *   Mês parcial (15 dias): ≈ valor_mensal / 2.
+ *   "Ano todo" (8 meses cheios): ≈ valor_mensal (média dos 8 meses).
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers/scorecard.ts, client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4335 - SCORECARD RH/FOLHA: PJ — DISTINCT ON (melhor contrato por funcionário) + badge "Sem contrato PJ"
  *
  * PROBLEMA: query PJ excluía contratos cujo obra_id apontava para outra obra — mesmo que o

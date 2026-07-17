@@ -1,3 +1,5 @@
+- **Rev. 4323** — **SCORECARD RH/FOLHA: BANCO DE HORAS COM DADOS REAIS + PERIOD SELECTOR.** `getBancoHorasObra` reescrito; `PeriodSelectorCard` com bolinhas azuis; tabela "Mov. Mês|Ano" + "Saldo Acum.". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4322** — **CONTRATOS TERCEIROS: OBRA OBRIGATÓRIA + ALERTA VISÍVEL SEM OBRA.** `ContratoNovo`: Obra obrigatória; `ContratosList`: banner vermelho. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4328** — **SCORECARD BH: FILTRO "ALOCADO ATUALMENTE" — `periodo_fim >= CURRENT_DATE`.** `emp_obra` usa `periodo_fim >= CURRENT_DATE`; saldo BH é global. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4327** — **SCORECARD RH/FOLHA: BANCO DE HORAS — FOTO DO FUNCIONÁRIO NA TABELA.** Avatar circular 32×32: foto real via `fotoUrl` ou iniciais indigo como fallback. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4321** — **SCORECARD RH/FOLHA: LGPD — VISÃO POR FUNÇÃO PARA NÃO-ADMIN.** admin_master vê tabela individual completa; engenheiro/gestor vê tabela por função sem nomes/valores individuais. ZERO DELETE · ZERO ALTER destrutivo.

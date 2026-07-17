@@ -339,7 +339,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const rhResumoFiltrado = useMemo(() => {
     const base = { salarioBruto: 0, he: 0, va: 0, ferias: 0, seguroVida: 0, fgts: 0, custoTotal: 0 };
     return rhFuncsFiltrados.reduce((acc: typeof base, f: any) => ({
-      salarioBruto: acc.salarioBruto + Number(f.salario_bruto_total ?? 0),
+      // PJ: salario_bruto_total = valor mensal (display); usar custo_total_empresa para TOTAL real do período
+      salarioBruto: acc.salarioBruto + (f.tipo_pessoa === 'PJ' ? Number(f.custo_total_empresa ?? 0) : Number(f.salario_bruto_total ?? 0)),
       he:           acc.he           + Number(f.he_total          ?? 0),
       va:           acc.va           + Number(f.va_total          ?? 0),
       ferias:       acc.ferias       + Number(f.ferias_total      ?? 0),
@@ -358,7 +359,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
       map.set(cargo, {
         cargo,
         qtd:          prev.qtd          + 1,
-        salarioBruto: prev.salarioBruto + Number(f.salario_bruto_total  ?? 0),
+        salarioBruto: prev.salarioBruto + (f.tipo_pessoa === 'PJ' ? Number(f.custo_total_empresa ?? 0) : Number(f.salario_bruto_total ?? 0)),
         he:           prev.he           + Number(f.he_total             ?? 0),
         va:           prev.va           + Number(f.va_total             ?? 0),
         ferias:       prev.ferias       + Number(f.ferias_total         ?? 0),
@@ -1513,8 +1514,16 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="text-center px-2 py-1.5 text-gray-600">{f.total_dias_na_obra}</td>
-                                  <td className="text-right px-2 py-1.5 text-gray-700">{fmt(Number(f.salario_bruto_total))}</td>
+                                  <td className="text-center px-2 py-1.5 text-gray-600">
+                                    {f.tipo_pessoa === 'PJ'
+                                      ? <span>{f.meses_na_obra}<span className="text-[8px] text-purple-400 ml-0.5">m</span></span>
+                                      : f.total_dias_na_obra}
+                                  </td>
+                                  <td className="text-right px-2 py-1.5 text-gray-700">
+                                    {f.tipo_pessoa === 'PJ'
+                                      ? <span title="Valor mensal proporcional ao período na obra (contrato ÷ dias úteis)">{fmt(Number(f.salario_bruto_total))}<span className="text-[8px] text-purple-500 font-semibold ml-0.5">/mês</span></span>
+                                      : fmt(Number(f.salario_bruto_total))}
+                                  </td>
                                   <td className="text-right px-2 py-1.5 text-amber-700">{Number(f.he_total) > 0 ? fmt(Number(f.he_total)) : <span className="text-gray-300">—</span>}</td>
                                   <td className="text-right px-2 py-1.5 text-teal-700">{va > 0 ? fmt(va) : <span className="text-gray-300">—</span>}</td>
                                   <td className="text-right px-2 py-1.5 text-orange-700">{Number(f.ferias_total) > 0 ? fmt(Number(f.ferias_total)) : <span className="text-gray-300">—</span>}</td>

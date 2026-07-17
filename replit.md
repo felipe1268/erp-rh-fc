@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4336** — **SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL (não acumulado).** SQL: `valor_mensal_medio = custo_total / meses_ativos`. Merge JS: `salario_bruto_total = valor_mensal_medio` (display); `custo_total_empresa = custo_total` (KPIs/TOTAL). Frontend: coluna DIAS mostra "Nm" (meses), badge "/mês" no valor, totais usam custo real. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4335** — **SCORECARD RH/FOLHA: PJ — DISTINCT ON (melhor contrato por funcionário) + badge "Sem contrato PJ".** `pj_best` CTE usa `DISTINCT ON (employeeId)` priorizando obra-específico → sem obra → qualquer; inclui TODOS funcionários do efetivo independente do `obra_id` do contrato. Badge laranja "⚠ Sem contrato PJ" para PJ sem contrato ativo vs amber "⚠ Sem folha" para CLT. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4334** — **SCORECARD RH/FOLHA: PJ — CUSTO VIA MÓDULO TERCEIROS (obra_id NULL fallback).** Query PJ ampliada: aceita `pj_contracts.obra_id = obraId` OU `obra_id IS NULL` com funcionário em `obra_funcionarios`. Contratos de outra obra excluídos. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4334** — **SCORECARD RH/FOLHA: PJ — CUSTO VIA MÓDULO TERCEIROS (obra_id NULL fallback).** Query PJ ampliada: aceita `pj_contracts.obra_id = obraId` OU `obra_id IS NULL` com funcionário em `obra_funcionarios`. Contratos de outra obra excluídos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4333** — **SCORECARD RH/FOLHA: EFETIVO COMPLETO — `period_emps` LEFT JOIN + badge "Sem folha".** `custos` CTE ancorando em `period_emps` LEFT JOIN payroll. Badge ⚠ amber para CLT sem folha. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,15 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4325** — **SCORECARD RH/FOLHA: BH — PADRÃO `site_periods` (Ramo A + B).** Substitui `emp_obra` simples pelo CTE `site_periods` idêntico ao `getCustosRH`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4324** — **SCORECARD RH/FOLHA: FIX BH VAZIO — SALDO VIA `banco_horas_saldo`.** Remove CTE `acumulado`; usa `LEFT JOIN banco_horas_saldo`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4323** — **SCORECARD RH/FOLHA: BANCO DE HORAS COM DADOS REAIS + PERIOD SELECTOR.** `getBancoHorasObra` reescrito; `PeriodSelectorCard` com bolinhas azuis; tabela "Mov. Mês|Ano" + "Saldo Acum.". ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4322** — **CONTRATOS TERCEIROS: OBRA OBRIGATÓRIA + ALERTA VISÍVEL SEM OBRA.** `ContratoNovo`: Obra obrigatória; `ContratosList`: banner vermelho. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4302 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4322 e anteriores.
 
 ## User preferences
 
