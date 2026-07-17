@@ -1885,7 +1885,10 @@ export const scorecardRouter = router({
                   ) ORDER BY pf.mes_referencia
                 ) FILTER (WHERE pf.employee_id IS NOT NULL),
                 '[]'::json
-              )                                                    AS historico_mensal
+              )                                                    AS historico_mensal,
+              -- Período de alocação na obra (usado para estimar custo quando folha não processada)
+              (SELECT MIN(sp2.periodo_inicio) FROM site_periods sp2 WHERE sp2.employee_id = pe.employee_id) AS alocado_desde,
+              (SELECT MAX(sp2.periodo_fim)    FROM site_periods sp2 WHERE sp2.employee_id = pe.employee_id) AS alocado_ate
             FROM period_emps pe
             JOIN employees e ON e.id = pe.employee_id
             LEFT JOIN pf ON pf.employee_id = pe.employee_id
@@ -2141,6 +2144,87 @@ export const scorecardRouter = router({
         }
       }
 
+      // Rev. 4347 — Para CLT alocados sem folha processada no período, gera historico_mensal
+      // estimado a partir do salarioBase × (dias alocado na obra / dias no mês).
+      // Usa alocado_desde / alocado_ate que agora vêm do SQL (subquery de site_periods).
+      // Isso garante que TODO funcionário do efetivo aparece com custo proporcional,
+      // mesmo quando a folha do mês ainda não foi fechada.
+      const rnd2 = (v: number) => Math.round(v * 100) / 100;
+      const filterIni = input.mesInicio ?? mesFeriasIni;
+      const filterFim = input.mesFim   ?? mesFeriasFim;
+
+      for (const f of funcs) {
+        // Só aplica a CLT sem nenhum mês de folha encontrado
+        if (f.tipo_pessoa === 'PJ' || n(f.meses_na_obra) > 0) continue;
+
+        const salBase = (() => {
+          const raw = String(f.salario_base_cadastro ?? '0');
+          return parseFloat(raw.replace(/\./g, '').replace(',', '.')) || 0;
+        })();
+        if (salBase <= 0) continue;
+
+        const desde = f.alocado_desde ? new Date(String(f.alocado_desde).slice(0, 10) + 'T00:00:00') : null;
+        const ate   = f.alocado_ate   ? new Date(String(f.alocado_ate  ).slice(0, 10) + 'T00:00:00') : null;
+        if (!desde || !ate) continue;
+
+        // Itera pelos meses do filtro
+        const [iniY, iniM] = filterIni.split('-').map(Number);
+        const [fimY, fimM] = filterFim.split('-').map(Number);
+        const syntheticHist: any[] = [];
+        let curY = iniY, curM = iniM;
+
+        while (curY < fimY || (curY === fimY && curM <= fimM)) {
+          const mesStr     = `${curY}-${String(curM).padStart(2, '0')}`;
+          const monthStart = new Date(curY, curM - 1, 1);
+          const monthEnd   = new Date(curY, curM, 0); // último dia do mês
+          const diasNoMes  = monthEnd.getDate();
+
+          const overlapStart = desde > monthStart ? desde : monthStart;
+          const overlapEnd   = ate   < monthEnd   ? ate   : monthEnd;
+          const diasNaObra   = overlapStart <= overlapEnd
+            ? Math.floor((overlapEnd.getTime() - overlapStart.getTime()) / 86400000) + 1
+            : 0;
+
+          if (diasNaObra > 0) {
+            const frac        = diasNaObra / diasNoMes;
+            const salProrated = rnd2(salBase * frac);
+            const fgtsProrated = rnd2(salBase * 0.08 * frac);
+            syntheticHist.push({
+              mes:         mesStr,
+              diasNaObra,
+              diasNoMes,
+              fracao:      Math.round(frac * 1000) / 1000,
+              salarioBruto: salProrated,
+              horasExtras:  0,
+              adicionais:   0,
+              va:           0,
+              fgts:         fgtsProrated,
+              inss:         0,
+              ferias:       0,
+              seguroVida:   0,
+              liquido:      0,
+              custoEmpresa: rnd2(salProrated + fgtsProrated),
+              custoTotal:   rnd2(salProrated + fgtsProrated),
+              folhaStatus:  'estimado',
+            });
+          }
+
+          curM++;
+          if (curM > 12) { curM = 1; curY++; }
+        }
+
+        if (syntheticHist.length > 0) {
+          f.historico_mensal   = syntheticHist;
+          f.meses_na_obra      = syntheticHist.length;
+          f.total_dias_na_obra = syntheticHist.reduce((s: number, h: any) => s + h.diasNaObra, 0);
+          f.salario_bruto_total = syntheticHist.reduce((s: number, h: any) => s + h.salarioBruto, 0);
+          f.fgts_total          = syntheticHist.reduce((s: number, h: any) => s + h.fgts, 0);
+          f.custo_folha_empresa = rnd2(f.salario_bruto_total + f.fgts_total);
+          // recalcula custo_total_empresa (férias/seguro já foram enriquecidos antes)
+          f.custo_total_empresa = rnd2(f.custo_folha_empresa + n(f.ferias_total) + n(f.seguro_vida_total));
+        }
+      }
+
       const mensalMap = new Map<string, any>();
       for (const f of funcs) {
         for (const h of (f.historico_mensal as any[] || [])) {
@@ -2187,28 +2271,19 @@ export const scorecardRouter = router({
 
       const mensal = Array.from(mensalMap.values()).sort((a, b) => a.mes.localeCompare(b.mes));
 
-      // Filtra funcionários sem nenhum dado útil no período:
-      // - CLT: precisa ter ao menos 1 mês de folha processada (meses_na_obra > 0)
-      // - PJ: precisa ter custo > 0 no período
-      // Isso elimina os "Sem folha" que apareciam porque period_emps ancorava todos os alocados.
-      const displayFuncs = funcs.filter((f: any) => {
-        if (f.tipo_pessoa === 'PJ') return n(f.custo_total_empresa) > 0;
-        return n(f.meses_na_obra) > 0;
-      });
-
       const resumo = {
-        totalFuncionarios:  displayFuncs.length,
-        custoTotalEmpresa:  displayFuncs.reduce((s: number, f: any) => s + n(f.custo_total_empresa), 0),
-        salarioBrutoTotal:  displayFuncs.reduce((s: number, f: any) => s + n(f.salario_bruto_total), 0),
-        heTotal:            displayFuncs.reduce((s: number, f: any) => s + n(f.he_total),            0),
-        vaTotal:            displayFuncs.reduce((s: number, f: any) => s + n(f.va_total),            0),
-        fgtsTotal:          displayFuncs.reduce((s: number, f: any) => s + n(f.fgts_total),          0),
-        inssTotal:          displayFuncs.reduce((s: number, f: any) => s + n(f.inss_total),          0),
-        liquidoTotal:       displayFuncs.reduce((s: number, f: any) => s + n(f.liquido_total),       0),
-        feriasTotal:        displayFuncs.reduce((s: number, f: any) => s + n(f.ferias_total),        0),
-        seguroVidaTotal:    displayFuncs.reduce((s: number, f: any) => s + n(f.seguro_vida_total),   0),
+        totalFuncionarios:  funcs.length,
+        custoTotalEmpresa:  funcs.reduce((s: number, f: any) => s + n(f.custo_total_empresa), 0),
+        salarioBrutoTotal:  funcs.reduce((s: number, f: any) => s + n(f.salario_bruto_total), 0),
+        heTotal:            funcs.reduce((s: number, f: any) => s + n(f.he_total),            0),
+        vaTotal:            funcs.reduce((s: number, f: any) => s + n(f.va_total),            0),
+        fgtsTotal:          funcs.reduce((s: number, f: any) => s + n(f.fgts_total),          0),
+        inssTotal:          funcs.reduce((s: number, f: any) => s + n(f.inss_total),          0),
+        liquidoTotal:       funcs.reduce((s: number, f: any) => s + n(f.liquido_total),       0),
+        feriasTotal:        funcs.reduce((s: number, f: any) => s + n(f.ferias_total),        0),
+        seguroVidaTotal:    funcs.reduce((s: number, f: any) => s + n(f.seguro_vida_total),   0),
       };
-      return { resumo, mensal, funcionarios: displayFuncs };
+      return { resumo, mensal, funcionarios: funcs };
     }),
 
   ferramentasList: protectedProcedure

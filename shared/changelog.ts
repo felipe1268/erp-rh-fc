@@ -1,27 +1,29 @@
 /**
- * Rev. 4347 - SCORECARD OBRA — FOLHA/CUSTOS: REMOVE "SEM FOLHA" E CORRIGE FILTRO DE EXIBIÇÃO
+ * Rev. 4347 - SCORECARD OBRA — FOLHA/CUSTOS: CUSTO PROPORCIONAL PARA TODO O EFETIVO
  *
- * CAUSA-RAIZ:
- * A CTE `period_emps` (introduzida na Rev. 4333 para ancorar todos os alocados mesmo sem folha)
- * usava LEFT JOIN com `payroll_frac`, fazendo com que funcionários alocados na obra mas SEM
- * lançamento processado em `payroll_payments` aparecessem na lista com zeros e o badge âmbar
- * "⚠ Sem folha". Isso foi agravado pela integração PJ (Rev. 4320), que passou a incluir mais
- * funcionários via `obra_funcionarios` nessa âncora.
+ * PROBLEMA:
+ * 1. Funcionários alocados mas sem folha processada apareciam com zeros (e badge "⚠ Sem folha").
+ *    Usuário quer ver custo proporcional de TODOS os alocados, mesmo sem folha fechada.
+ * 2. Badge "⚠ Sem folha" removido — todo alocado deve aparecer com valor, não com aviso.
  *
  * FIX:
- * 1. SERVER (scorecard.ts — getCustosRH): após todo o enriquecimento e merge PJ, aplica filtro
- *    antes de montar resumo e retornar:
- *    - CLT: só inclui se `meses_na_obra > 0` (tem ao menos 1 mês de folha processada)
- *    - PJ:  só inclui se `custo_total_empresa > 0` (tem contrato ativo no período)
- *    Resumo e totais passam a ser calculados sobre `displayFuncs` (lista filtrada).
- * 2. FRONTEND (ScorecardTab.tsx): remove o bloco de badges "⚠ Sem folha" / "⚠ Sem contrato PJ"
- *    (Rev. 4335) — desnecessário após o filtro server-side.
+ * 1. SQL (custos CTE): adiciona subqueries `alocado_desde` / `alocado_ate` (MIN/MAX de
+ *    site_periods) para que o JS saiba o período real de alocação de cada funcionário.
+ * 2. JS (getCustosRH): para cada CLT com `meses_na_obra = 0` (sem payroll processado):
+ *    - Itera pelos meses do filtro e calcula `dias_na_obra` = sobreposição com [alocado_desde, alocado_ate]
+ *    - Estima salário = `salarioBase × (dias_na_obra / dias_no_mes)`
+ *    - Estima FGTS = `salarioBase × 8% × frac`
+ *    - Preenche `historico_mensal` sintético (folhaStatus='estimado')
+ *    - Atualiza `custo_folha_empresa` e `custo_total_empresa` do registro
+ * 3. Reverte filtro `displayFuncs` da Rev. anterior — todos os alocados voltam a aparecer.
+ * 4. FRONTEND: badge "⚠ Sem folha" removido.
  *
- * RESULTADO: lista mostra apenas funcionários com dados reais; totais são precisos.
+ * RESULTADO: 100% do efetivo aparece com custo proporcional. Estimativas são marcadas
+ * com `folhaStatus='estimado'` no historico_mensal (visível no detalhamento por mês).
  * ZERO DELETE · ZERO ALTER destrutivo.
  *
  * ARQUIVOS:
- * - server/routers/scorecard.ts (getCustosRH — displayFuncs filter + resumo)
+ * - server/routers/scorecard.ts (getCustosRH — alocado_desde/ate + geração sintética)
  * - client/src/pages/planejamento/ScorecardTab.tsx (remove badge "Sem folha")
  */
 
