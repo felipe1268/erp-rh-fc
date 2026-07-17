@@ -1,4 +1,28 @@
 /**
+ * Rev. 4310 - SCORECARD RH/FOLHA: PERÍODO PADRÃO = CRONOGRAMA DA OBRA
+ *
+ * CONTEXTO:
+ *   O seletor de período da aba RH/Folha iniciava sempre em "Ano todo" com
+ *   Jan–Dez, independente do cronograma da obra. Uma obra que começa em Jun/2026
+ *   e termina em Dez/2026 mostrava custos de Jan–Mai (meses sem equipe) no total.
+ *
+ * SOLUÇÃO (Opção A — período visível, usuário pode alterar):
+ *   1. useEffect inicializa rhAno com o ano de proj.dataInicio quando o projeto
+ *      carrega pela primeira vez (via ref para rodar só 1x).
+ *   2. Quando "Ano todo" está selecionado, rhMesInicio/rhMesFim são clampados
+ *      pelos bounds da obra (obraIniMes/obraFimMes) para o ano exibido:
+ *        - Se a obra iniciou em Jun/2026, "Ano todo 2026" → Jun–Dez/2026
+ *        - Se o usuário navegar para 2025 (antes da obra), usa Jan–Dez completo
+ *        - Meses individuais não são afetados pelo clamp
+ *   3. Texto informativo abaixo do seletor: "Exibindo Jun/26 → Dez/26 (período da obra)"
+ *      aparece apenas quando o clamp efetivamente reduz o período (oculto se for
+ *      ano completo ou se não há datas da obra).
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: client/src/pages/planejamento/ScorecardTab.tsx
+ */
+
+/**
  * Rev. 4309 - SCORECARD: FIX PJ QUERY — USAR relevant_emp COMO FONTE DE VERDADE
  *
  * CONTEXTO:

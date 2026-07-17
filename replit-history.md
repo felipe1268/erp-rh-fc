@@ -1,3 +1,4 @@
+- **Rev. 4303** — **SCORECARD: FIX CUSTO MO INVISÍVEL + LOCAÇÕES VIA OC.** Ramo B `site_periods` COALESCE fix + Ramo C UNION para locações via compras_ordens. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4302** — **SMO: CUSTOS ÚNICOS DE ADMISSÃO (EPI COMPLETO, UNIFORME, JOGO INICIAL) NO CARD DE IMPACTO FINANCEIRO.** `computeCustoSMO` expõe `epiCompletoUnico/uniformeUnico/jogoInicialUnico`; nova seção âmbar no card. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4301** — **FCSIGN: BOTÃO "SOLICITAR REVISÃO" PARA O ASSINANTE NA TELA DE ASSINATURA.** Nova procedure pública `requestRevision`. Botão amber inline + card de confirmação em `AssinarDocumento.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4299** — **NFS-e: FIX IMPORT XML — DATAS INVÁLIDAS + SUPORTE ListaNfse + LOGGING.** `parseDateBR` retornava `"0"` → `"0"::date` explodindo no PostgreSQL. Fix: retorna `null`. ZERO DELETE · ZERO ALTER destrutivo.

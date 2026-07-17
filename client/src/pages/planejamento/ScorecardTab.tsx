@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -238,6 +238,15 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [expandedBanco, setExpandedBanco] = useState<Set<number>>(new Set());
   const [rhAno,         setRhAno]         = useState(new Date().getFullYear());
   const [rhMes,         setRhMes]         = useState<string>("all");
+  // Período da obra — inicializa rhAno com o ano de início da obra
+  const obraIniMes = proj?.dataInicio            ? String(proj.dataInicio).slice(0, 7)            : null; // "2026-06"
+  const obraFimMes = proj?.dataTerminoContratual ? String(proj.dataTerminoContratual).slice(0, 7) : null; // "2026-12"
+  const _rhPeriodInit = useRef(false);
+  useEffect(() => {
+    if (_rhPeriodInit.current || !obraIniMes) return;
+    const y = parseInt(obraIniMes.slice(0, 4));
+    if (!isNaN(y)) { setRhAno(y); _rhPeriodInit.current = true; }
+  }, [obraIniMes]);
   const [segAno,        setSegAno]        = useState(new Date().getFullYear());
   const [segMes,        setSegMes]        = useState<number | null>(new Date().getMonth() + 1);
   const [sstExpandChart,setSstExpandChart]= useState<string | null>(null);
@@ -281,8 +290,14 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     });
     return result;
   }, [analiseSeguranca.data, segAno]);
-  const rhMesInicio = rhMes === "all" ? `${rhAno}-01` : `${rhAno}-${rhMes}`;
-  const rhMesFim    = rhMes === "all" ? `${rhAno}-12` : `${rhAno}-${rhMes}`;
+  // "Ano todo" respeita os limites da obra para o ano selecionado
+  const _anoStr = String(rhAno);
+  const rhMesInicio = rhMes === "all"
+    ? (obraIniMes?.startsWith(_anoStr) ? obraIniMes : `${_anoStr}-01`)
+    : `${_anoStr}-${rhMes}`;
+  const rhMesFim = rhMes === "all"
+    ? (obraFimMes?.startsWith(_anoStr) ? obraFimMes : `${_anoStr}-12`)
+    : `${_anoStr}-${rhMes}`;
   const analiseRH = trpc.scorecard.getCustosRH.useQuery(
     { companyId, obraId: obraId!, mesInicio: rhMesInicio, mesFim: rhMesFim },
     { enabled: enabled && tabScore === "rh", staleTime: 120_000 }
@@ -1078,6 +1093,23 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                 </div>
               }
             />
+            {/* Info: período efetivo da obra quando "Ano todo" está ativo */}
+            {rhMes === "all" && (obraIniMes || obraFimMes) && (() => {
+              const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+              const fmtMes = (ym: string) => {
+                const [y, m] = ym.split("-");
+                return `${MESES_ABREV[parseInt(m)-1]}/${String(y).slice(2)}`;
+              };
+              const de  = obraIniMes?.startsWith(_anoStr) ? obraIniMes : `${_anoStr}-01`;
+              const ate = obraFimMes?.startsWith(_anoStr) ? obraFimMes : `${_anoStr}-12`;
+              const isFullYear = de === `${_anoStr}-01` && ate === `${_anoStr}-12`;
+              if (isFullYear) return null;
+              return (
+                <p className="text-xs text-muted-foreground text-center -mt-2">
+                  Exibindo <strong>{fmtMes(de)} → {fmtMes(ate)}</strong> (período da obra)
+                </p>
+              );
+            })()}
 
             {analiseRH.isLoading ? (
               <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
