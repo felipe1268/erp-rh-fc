@@ -1,4 +1,31 @@
 /**
+ * Rev. 4341 - EQUIPAMENTOS PRÓPRIOS: AGRUPAMENTO POR NOME (accordion inline)
+ *
+ * PROBLEMA: itens com o mesmo nome (ex: "PAINEL 1,5M") apareciam como cards
+ *   separados, dificultando visualizar onde cada unidade está distribuída.
+ *
+ * SOLUÇÃO:
+ *   - `dataAgrupada` (useMemo) agrupa `dataFiltrada` por `descricao.trim().toLowerCase()`.
+ *   - Grupos com 1 item → renderizam o card individual exatamente como antes.
+ *   - Grupos com >1 itens → card-header de grupo expandível (full-width, col-span-3):
+ *       · Foto da primeira unidade + badge "N unid." azul-escuro
+ *       · Nome do equipamento + categoria
+ *       · Chips de localização consolidada: "Nx Almox." + pills por obra (MapPin)
+ *       · Total de valor do grupo + badge âmbar "X em transferência" se houver
+ *       · Chevron que rotaciona 90° ao expandir
+ *   - Ao clicar no card-header: abre/fecha um sub-grid com os cards individuais
+ *     (mesmo layout do card simples, com pat-number, badge de status, localização,
+ *      botões de transferir/editar). Cards individuais no sub-grid omitem o
+ *     nome redundante (prop `inGroup=true`).
+ *   - Expandir um grupo fecha o anterior automaticamente (estado `expandedGroup`).
+ *
+ * ESTADO: `expandedGroup: string | null` — chave do grupo aberto (ou null).
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/equipamentos/Proprios.tsx
+ */
+
+/**
  * Rev. 4340 - EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS (dois passos)
  *
  * PROBLEMA: não havia mecanismo para movimentar um equipamento próprio de uma obra

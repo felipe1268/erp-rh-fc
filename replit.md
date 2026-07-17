@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4340** — **EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS (dois passos).** Nova tabela `equipamentos_proprios_transferencias` + coluna `transferencia_pendente_id` em `equipamentos_proprios`. Remetente inicia via ⇌ no card → badge âmbar "Em transferência". Destinatário aceita/rejeita via botão "ACEITAR FERRAM." (violeta, pulse+badge) no Almoxarifado. 5 procedures tRPC. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4341** — **EQUIPAMENTOS PRÓPRIOS: AGRUPAMENTO POR NOME (accordion inline).** `dataAgrupada` agrupa por `descricao` normalizada. Grupos >1: card-header full-width com count badge, chips de localização por obra (MapPin), total de valor, chevron expandível. Sub-grid com cards individuais ao clicar. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4339** — **ALMOXARIFADO: RECEBER MATERIAL EXCLUI OCs DE LOCAÇÃO.** `listPendingOCs` ganha filtro `isLocacao IS NULL OR isLocacao = false`. OCs de equipamento/locação somem do "Receber Material" e ficam exclusivamente em "RECEBER LOCAÇÃO". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4340** — **EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS (dois passos).** Nova tabela `equipamentos_proprios_transferencias` + coluna `transferencia_pendente_id`. Remetente inicia via ⇌; destinatário aceita/rejeita via botão "ACEITAR FERRAM." no Almoxarifado. 5 procedures tRPC. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4338** — **ALMOXARIFADO: SELECIONAR = TODOS MARCADOS + TOGGLE TODOS/NENHUM.** Clicar "Selecionar" entra no modo seleção com TODOS os itens visíveis já marcados. Barra inferior: contador clicável alterna todos/nenhum. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4339** — **ALMOXARIFADO: RECEBER MATERIAL EXCLUI OCs DE LOCAÇÃO.** `listPendingOCs` filtra `isLocacao IS NULL OR isLocacao = false`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `listForAlmoxarifado` ganha `forTransfer?: boolean`; quando true bypassa filtro por usuário. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4338** — **ALMOXARIFADO: SELECIONAR = TODOS MARCADOS + TOGGLE TODOS/NENHUM.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4336** — **SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL.** SQL: `valor_mensal_medio = custo_total / meses_ativos`. Badge "/mês". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `forTransfer?: boolean` bypassa filtro por usuário. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4336** — **SCORECARD RH/FOLHA: PJ — SAL. BRUTO = VALOR MENSAL PROPORCIONAL.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4335** — **SCORECARD RH/FOLHA: PJ — DISTINCT ON + badge "Sem contrato PJ".** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4334** — **SCORECARD RH/FOLHA: PJ — CUSTO VIA MÓDULO TERCEIROS (obra_id NULL fallback).** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

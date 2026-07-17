@@ -7,7 +7,7 @@ import {
   Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp,
   Sparkles, Trash2, Boxes, Wrench, CheckCircle2, Layers, Hash,
   Building2, User as UserIcon, Loader2, ListChecks, Database, DollarSign,
-  ArrowRightLeft, Clock,
+  ArrowRightLeft, Clock, ChevronRight, MapPin,
 } from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 import {
@@ -551,6 +551,21 @@ export default function EquipamentosProprios() {
     return (data as any[]).filter(p => String(p.localizacaoAtualObraId) === filtroObra);
   }, [data, filtroObra]);
 
+  // Rev. 4341 — Agrupa por nome (descricao normalizada). Grupos com >1 item
+  // mostram um card resumo; ao clicar expande lista de itens individuais.
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const dataAgrupada = useMemo(() => {
+    const map = new Map<string, { key: string; descricao: string; categoria: string; items: any[] }>();
+    for (const p of dataFiltrada) {
+      const key = String(p.descricao || "").trim().toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { key, descricao: String(p.descricao || ""), categoria: String(p.categoria || ""), items: [] });
+      }
+      map.get(key)!.items.push(p);
+    }
+    return Array.from(map.values());
+  }, [dataFiltrada]);
+
   // Valor total dos equipamentos visíveis (respeita filtro de obra).
   const valorFiltrado = useMemo(() => {
     const lista = filtroObra ? dataFiltrada : (totalList as any[]);
@@ -887,142 +902,239 @@ export default function EquipamentosProprios() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {dataFiltrada.map(p => {
-              const pFotos = (p.fotosJson as FotoItem[]) || [];
-              const foto = pFotos[0];
-              return (
-                <div
-                  key={p.id}
-                  className="group bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-xl overflow-hidden shadow-sm transition cursor-pointer flex"
-                  onClick={() => abrirEdit(p)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === "Enter") abrirEdit(p); }}
-                >
-                  {/* Rev. 2515 — Foto clicável: amplia em lightbox em vez
-                      de abrir edição. stopPropagation impede que o click
-                      borbulhe pro card. Aria-label pra acessibilidade. */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (pFotos.length > 0) openLightbox(pFotos.map(f => f.url), 0);
-                    }}
-                    disabled={pFotos.length === 0}
-                    aria-label={pFotos.length > 0 ? `Ampliar foto de ${p.descricao}` : "Sem foto"}
-                    className="w-28 sm:w-32 shrink-0 bg-gradient-to-br from-slate-100 to-slate-200 relative group/foto disabled:cursor-default"
+            {dataAgrupada.map(group => {
+              const isSingle = group.items.length === 1;
+              const isExpanded = !isSingle && expandedGroup === group.key;
+
+              // ── Helper: renderiza um card individual ────────────────────
+              const renderItemCard = (p: any, inGroup = false) => {
+                const pFotos = (p.fotosJson as FotoItem[]) || [];
+                const foto = pFotos[0];
+                return (
+                  <div
+                    key={p.id}
+                    className="group bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-xl overflow-hidden shadow-sm transition cursor-pointer flex"
+                    onClick={() => abrirEdit(p)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter") abrirEdit(p); }}
                   >
-                    {foto ? (
-                      <>
-                        <img src={foto.url} alt={p.descricao} className="w-full h-full object-cover transition group-hover/foto:opacity-90" />
-                        {/* hint visual ao passar o mouse */}
-                        <span className="absolute inset-0 bg-black/0 group-hover/foto:bg-black/20 transition flex items-center justify-center opacity-0 group-hover/foto:opacity-100">
-                          <span className="bg-white/95 text-slate-800 text-[10px] font-semibold px-2 py-1 rounded-full shadow">Ampliar</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (pFotos.length > 0) openLightbox(pFotos.map(f => f.url), 0);
+                      }}
+                      disabled={pFotos.length === 0}
+                      aria-label={pFotos.length > 0 ? `Ampliar foto de ${p.descricao}` : "Sem foto"}
+                      className="w-28 sm:w-32 shrink-0 bg-gradient-to-br from-slate-100 to-slate-200 relative group/foto disabled:cursor-default"
+                    >
+                      {foto ? (
+                        <>
+                          <img src={foto.url} alt={p.descricao} className="w-full h-full object-cover transition group-hover/foto:opacity-90" />
+                          <span className="absolute inset-0 bg-black/0 group-hover/foto:bg-black/20 transition flex items-center justify-center opacity-0 group-hover/foto:opacity-100">
+                            <span className="bg-white/95 text-slate-800 text-[10px] font-semibold px-2 py-1 rounded-full shadow">Ampliar</span>
+                          </span>
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-400">
+                          <HardHat className="h-10 w-10" />
+                        </div>
+                      )}
+                      {pFotos.length > 1 && (
+                        <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                          +{pFotos.length - 1}
                         </span>
-                      </>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400">
-                        <HardHat className="h-10 w-10" />
+                      )}
+                    </button>
+                    <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                          <Hash className="h-3 w-3" /> {p.codigoPatrimonio}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {(p as any).transferenciaPendenteId ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Cancelar a transferência pendente de "${p.descricao}"?`)) {
+                                  cancelarTransf.mutate({ companyId, transferenciaId: (p as any).transferenciaPendenteId });
+                                }
+                              }}
+                              title="Cancelar transferência pendente"
+                              className="p-1 rounded text-amber-600 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTransfDestinoId(0); setTransfMotivo("");
+                                setModalTransf({ equipamento: p });
+                              }}
+                              title="Transferir para outra obra"
+                              className="p-1 rounded text-slate-400 hover:text-violet-600 hover:bg-violet-50 opacity-0 group-hover:opacity-100 transition"
+                            >
+                              <ArrowRightLeft className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); abrirEdit(p); }}
+                            aria-label="Editar"
+                            className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    )}
-                    {pFotos.length > 1 && (
-                      <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                        +{pFotos.length - 1}
-                      </span>
-                    )}
-                  </button>
-                  <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                        <Hash className="h-3 w-3" /> {p.codigoPatrimonio}
-                      </span>
-                      <div className="flex items-center gap-1">
+                      {!inGroup && (
+                        <h3 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2 uppercase">{p.descricao}</h3>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
                         {(p as any).transferenciaPendenteId ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (window.confirm(`Cancelar a transferência pendente de "${p.descricao}"?`)) {
-                                cancelarTransf.mutate({ companyId, transferenciaId: (p as any).transferenciaPendenteId });
-                              }
-                            }}
-                            title="Cancelar transferência pendente"
-                            className="p-1 rounded text-amber-600 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 ring-1 ring-amber-300">
+                            <Clock className="h-2.5 w-2.5" /> Em transferência
+                          </span>
                         ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setTransfDestinoId(0); setTransfMotivo("");
-                              setModalTransf({ equipamento: p });
-                            }}
-                            title="Transferir para outra obra"
-                            className="p-1 rounded text-slate-400 hover:text-violet-600 hover:bg-violet-50 opacity-0 group-hover:opacity-100 transition"
-                          >
-                            <ArrowRightLeft className="h-3.5 w-3.5" />
-                          </button>
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[p.status] || "bg-slate-100 ring-1 ring-slate-200"}`}>
+                            {STATUS_LABELS[p.status] || p.status}
+                          </span>
                         )}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); abrirEdit(p); }}
-                          aria-label="Editar"
-                          className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
+                        <span className="text-[11px] text-slate-500 truncate uppercase">
+                          {p.categoria || "—"}
+                        </span>
                       </div>
-                    </div>
-                    <h3 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2 uppercase">{p.descricao}</h3>
-                    <div className="flex items-center justify-between gap-2">
-                      {(p as any).transferenciaPendenteId ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 ring-1 ring-amber-300">
-                          <Clock className="h-2.5 w-2.5" /> Em transferência
+                      <div className="flex items-center gap-1.5">
+                        {p.status === "em_obra" && p.obraNome ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-800 ring-1 ring-blue-200 truncate max-w-full">
+                            <Building2 className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate uppercase">OBRA: {p.obraNome}</span>
+                          </span>
+                        ) : p.status === "em_obra" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 ring-1 ring-amber-200">
+                            <Building2 className="h-2.5 w-2.5" /> OBRA NÃO DEFINIDA
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 ring-1 ring-slate-200">
+                            <Boxes className="h-2.5 w-2.5" /> ALMOX.
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-auto pt-1.5 border-t border-slate-100">
+                        <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 truncate uppercase">
+                          <UserIcon className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate">{p.criadoPorNome || "—"}</span>
                         </span>
-                      ) : (
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[p.status] || "bg-slate-100 ring-1 ring-slate-200"}`}>
-                          {STATUS_LABELS[p.status] || p.status}
-                        </span>
-                      )}
-                      <span className="text-[11px] text-slate-500 truncate uppercase">
-                        {p.categoria || "—"}
-                      </span>
-                    </div>
-                    {/* Rev. 2514 — LOCALIZAÇÃO: badge azul "OBRA: <nome>" quando
-                        em_obra; senão chip cinza "ALMOX." pra ficar rastreável
-                        sem precisar abrir o modal. */}
-                    <div className="flex items-center gap-1.5">
-                      {p.status === "em_obra" && p.obraNome ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-800 ring-1 ring-blue-200 truncate max-w-full">
-                          <Building2 className="h-2.5 w-2.5 shrink-0" />
-                          <span className="truncate uppercase">OBRA: {p.obraNome}</span>
-                        </span>
-                      ) : p.status === "em_obra" ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 ring-1 ring-amber-200">
-                          <Building2 className="h-2.5 w-2.5" /> OBRA NÃO DEFINIDA
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 ring-1 ring-slate-200">
-                          <Boxes className="h-2.5 w-2.5" /> ALMOX.
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between gap-2 mt-auto pt-1.5 border-t border-slate-100">
-                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 truncate uppercase">
-                        <UserIcon className="h-2.5 w-2.5 shrink-0" />
-                        <span className="truncate">{p.criadoPorNome || "—"}</span>
-                      </span>
-                      {(p.valorAquisicao || p.dataAquisicao) && (
-                        <span className="flex flex-col items-end shrink-0">
-                          {p.valorAquisicao && (
-                            <span className="text-xs font-semibold text-slate-700">{fmtMoney(p.valorAquisicao)}</span>
-                          )}
-                          {p.dataAquisicao && (
-                            <span className="text-[10px] text-slate-400">{fmtDate(p.dataAquisicao)}</span>
-                          )}
-                        </span>
-                      )}
+                        {(p.valorAquisicao || p.dataAquisicao) && (
+                          <span className="flex flex-col items-end shrink-0">
+                            {p.valorAquisicao && (
+                              <span className="text-xs font-semibold text-slate-700">{fmtMoney(p.valorAquisicao)}</span>
+                            )}
+                            {p.dataAquisicao && (
+                              <span className="text-[10px] text-slate-400">{fmtDate(p.dataAquisicao)}</span>
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
+                );
+              };
+
+              if (isSingle) {
+                return renderItemCard(group.items[0]);
+              }
+
+              // ── Card de GRUPO (>1 itens com mesmo nome) ─────────────────
+              const allFotos: string[] = [];
+              for (const p of group.items) {
+                const fs = (p.fotosJson as FotoItem[]) || [];
+                for (const f of fs) allFotos.push(f.url);
+              }
+              const fotoGrupo = allFotos[0];
+              const totalGrupo = group.items.reduce((s, p) => s + (Number(p.valorAquisicao) || 0), 0);
+              // Localização consolidada: obras distintas onde os itens estão
+              const locacoesMap = new Map<string, string>(); // obraId -> obraNome
+              let qtdAlmox = 0;
+              let qtdTransf = 0;
+              for (const p of group.items) {
+                if ((p as any).transferenciaPendenteId) { qtdTransf++; continue; }
+                if (p.status === "em_obra" && p.obraNome) {
+                  locacoesMap.set(String(p.localizacaoAtualObraId), p.obraNome);
+                } else {
+                  qtdAlmox++;
+                }
+              }
+              const obras = Array.from(locacoesMap.values());
+
+              return (
+                <div key={group.key} className="col-span-1 md:col-span-2 xl:col-span-3">
+                  {/* ── Cabeçalho do grupo — clicável ── */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedGroup(isExpanded ? null : group.key)}
+                    className={`w-full text-left flex items-center gap-3 bg-white border rounded-xl shadow-sm hover:shadow-md transition overflow-hidden ${isExpanded ? "border-blue-400 shadow-blue-100" : "border-slate-200 hover:border-blue-300"}`}
+                  >
+                    {/* Foto */}
+                    <div className="w-20 sm:w-24 shrink-0 bg-gradient-to-br from-slate-100 to-slate-200 self-stretch relative">
+                      {fotoGrupo ? (
+                        <img src={fotoGrupo} alt={group.descricao} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-400 min-h-[72px]">
+                          <HardHat className="h-8 w-8" />
+                        </div>
+                      )}
+                      {allFotos.length > 1 && (
+                        <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                          +{allFotos.length - 1}
+                        </span>
+                      )}
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0 py-3 pr-3">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#1B2A4A] text-white">
+                          <Layers className="h-2.5 w-2.5" /> {group.items.length} unid.
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-500 uppercase truncate">{group.categoria || "—"}</span>
+                        {qtdTransf > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 ring-1 ring-amber-300">
+                            <Clock className="h-2.5 w-2.5" /> {qtdTransf} em transferência
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-bold text-slate-800 text-sm leading-snug uppercase line-clamp-1">{group.descricao}</h3>
+                      {/* Localização resumida */}
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {qtdAlmox > 0 && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 ring-1 ring-slate-200">
+                            <Boxes className="h-2.5 w-2.5" /> {qtdAlmox}× Almox.
+                          </span>
+                        )}
+                        {obras.map(nome => (
+                          <span key={nome} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-800 ring-1 ring-blue-200 max-w-[160px]">
+                            <MapPin className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate uppercase">{nome}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Valor + chevron */}
+                    <div className="flex flex-col items-end gap-1 pr-3 shrink-0">
+                      {totalGrupo > 0 && (
+                        <span className="text-xs font-bold text-slate-700 whitespace-nowrap">{fmtMoney(totalGrupo)}</span>
+                      )}
+                      <ChevronRight className={`h-5 w-5 text-slate-400 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                    </div>
+                  </button>
+
+                  {/* ── Itens expandidos ── */}
+                  {isExpanded && (
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 pl-2 border-l-4 border-blue-300">
+                      {group.items.map(p => renderItemCard(p, true))}
+                    </div>
+                  )}
                 </div>
               );
             })}
