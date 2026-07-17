@@ -1939,7 +1939,7 @@ export const scorecardRouter = router({
                 ((${mesFeriasFim} || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
               )                                                                            AS efetivo_fim
             FROM pj_contracts pc
-            WHERE pc."obraId"    = ${input.obraId}
+            WHERE pc.obra_id     = ${input.obraId}
               AND pc."companyId" = ${input.companyId}
               AND pc.status       IN ('ativo','pendente_assinatura')
               AND pc."deletedAt"  IS NULL
