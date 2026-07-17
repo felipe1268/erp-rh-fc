@@ -1,4 +1,30 @@
 /**
+ * Rev. 4325 - SCORECARD RH/FOLHA: BH FILTRADO POR ALOCAÇÃO REAL (site_periods) — MESMO PADRÃO DA FOLHA
+ *
+ * PROBLEMA:
+ *   A sub-aba "Banco de Horas" exibia funcionários de TODO o histórico da obra (emp_obra = UNION
+ *   simples de employee_site_history + obra_funcionarios sem filtro de período), mostrando gente
+ *   que já saiu há anos. O usuário quer ver SOMENTE os alocados no período selecionado — o mesmo
+ *   critério que a aba "Folha/Custos" usa via getCustosRH.
+ *
+ * SOLUÇÃO (Rev. 4325):
+ *   Backend — `getBancoHorasObra` em `server/routers/scorecard.ts`:
+ *   Substitui o CTE `emp_obra` simples pelo padrão `site_periods` idêntico ao de `getCustosRH`:
+ *     - CTE `obra_inicio`: piso absoluto = obras.dataInicio.
+ *     - CTE `site_periods` Ramo A: employee_site_history com GREATEST(min dataInicio, obra.dataInicio)
+ *       e periodo_fim via lógica de saída/aberto (igual a getCustosRH).
+ *     - CTE `site_periods` Ramo B: obra_funcionarios SEM histórico formal; fecha periodo_fim
+ *       na data de nova alocação em outra obra (se existir), senão CURRENT_DATE.
+ *     - CTE `emp_obra`: DISTINCT employee_id WHERE periodo_inicio <= dataFim AND periodo_fim >= dataIni.
+ *       Só inclui funcionários cuja alocação SOBREPÕE o período selecionado.
+ *     - `mesesComDados` usa `emp_obra_ano` (ano inteiro) para dots corretos no PeriodSelector.
+ *   O CTE é extraído em `sitePeriodsCte` e reutilizado nas duas queries do Promise.all.
+ *
+ * IMPACTO: ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: server/routers/scorecard.ts (getBancoHorasObra — emp_obra → site_periods filtrado)
+ */
+
+/**
  * Rev. 4324 - SCORECARD RH/FOLHA: FIX BH VAZIO — SALDO VIA banco_horas_saldo (SEM ACUMULADO CTE)
  *
  * PROBLEMA:

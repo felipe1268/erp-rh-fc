@@ -1,3 +1,4 @@
+- **Rev. 4318** — **SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS.** Guard `qtdFuncionarios > 0` garante só meses com funcionários ativos ficam azuis. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4316** — **SCORECARD RH/FOLHA: FILTRO POR FUNÇÃO NA TABELA DE FUNCIONÁRIOS.** Select cargos únicos + contagem; `rhFuncsFiltrados` + `rhResumoFiltrado`; tfoot vira "SUBTOTAL — cargo". ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4304** — **SCORECARD: FIX CRÍTICO getCustosRH — CAST NUMÉRICO COM SEPARADOR DE MILHAR BR.** Duplo REPLACE em 11 colunas VARCHAR salário. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4303** — **SCORECARD: FIX CUSTO MO INVISÍVEL + LOCAÇÕES VIA OC.** Ramo B `site_periods` COALESCE fix + Ramo C UNION para locações via compras_ordens. ZERO DELETE · ZERO ALTER destrutivo.

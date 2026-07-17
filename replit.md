@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4325** — **SCORECARD RH/FOLHA: BH FILTRADO POR ALOCAÇÃO REAL — PADRÃO `site_periods`.** `getBancoHorasObra` substitui `emp_obra` simples (histórico inteiro) pelo CTE `site_periods` idêntico ao `getCustosRH`: Ramo A (employee_site_history com GREATEST piso obra) + Ramo B (obra_funcionarios sem history, fecha período ao migrar de obra). `emp_obra` final: `periodo_inicio ≤ dataFim AND periodo_fim ≥ dataIni`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4324** — **SCORECARD RH/FOLHA: FIX BH VAZIO — SALDO VIA `banco_horas_saldo`.** Remove CTE `acumulado` (recomputação lenta de lançamentos); usa `LEFT JOIN banco_horas_saldo` diretamente (mesma fonte do módulo BH). CTE `movimento` e `mesesComDados` sem filtro `companyId` em BHL — apenas `employeeId` da emp_obra. Query testada: 39 funcionários retornados para obra 90001. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4323** — **SCORECARD RH/FOLHA: BANCO DE HORAS COM DADOS REAIS + PERIOD SELECTOR.** `getBancoHorasObra` reescrito: usa `banco_horas_lancamentos` em vez de `he_period_employees`; parâmetros `ano`/`mes` (null=ano todo); `PeriodSelectorCard` com bolinhas azuis; tabela "Mov. Mês|Ano" + "Saldo Acum.". ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4323** — **SCORECARD RH/FOLHA: BANCO DE HORAS COM DADOS REAIS + PERIOD SELECTOR.** `getBancoHorasObra` reescrito: usa `banco_horas_lancamentos`; parâmetros `ano`/`mes` (null=ano todo); `PeriodSelectorCard` com bolinhas azuis; tabela "Mov. Mês|Ano" + "Saldo Acum.". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4322** — **CONTRATOS TERCEIROS: OBRA OBRIGATÓRIA + ALERTA VISÍVEL SEM OBRA.** `ContratoNovo`: Obra obrigatória (label `*`, validação, hint vermelho). `ContratosList`: banner vermelho + badge "⚠️ Sem obra vinculada". ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4320** — **SCORECARD RH/FOLHA: FIX PJ PHANTOM — FILTRAR POR `pj_contracts.obraId`.** Fix: filtrar por `pc."obraId" = obraId` diretamente; remove CTE `pj_site_periods`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4319** — **SCORECARD RH/FOLHA: ORDENAÇÃO ALFABÉTICA NA TABELA DE FUNCIONÁRIOS.** Botão toggle "A → Z / Custo ↓"; `rhSortBy` state; `localeCompare(pt-BR)`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4318** — **SCORECARD RH/FOLHA: FIX BOLINHAS "COM DADOS" NO SELETOR DE MÊS.** Guard `qtdFuncionarios > 0` garante só meses com funcionários ativos ficam azuis. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

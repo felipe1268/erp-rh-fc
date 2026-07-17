@@ -2395,22 +2395,74 @@ export const scorecardRouter = router({
 
       const safe = <T>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
 
+      // CTE site_periods reutilizável — mesmo padrão de getCustosRH.
+      // Calcula periodo_inicio/periodo_fim de cada funcionário nesta obra.
+      const sitePeriodsCte = sql`
+        obra_inicio AS (
+          SELECT COALESCE("dataInicio"::date, '2000-01-01'::date) AS data_inicio
+          FROM obras WHERE id = ${obraId}
+        ),
+        site_periods AS (
+          -- Ramo A: funcionários com registro em employee_site_history
+          SELECT
+            esh."employeeId"                                               AS employee_id,
+            GREATEST(
+              MIN(esh."dataInicio"::date),
+              (SELECT data_inicio FROM obra_inicio)
+            )                                                              AS periodo_inicio,
+            CASE
+              WHEN BOOL_OR(esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL)
+                THEN MAX(CASE WHEN esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL
+                              THEN esh."dataFim"::date END)
+              WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
+              ELSE MAX(esh."dataFim"::date)
+            END                                                            AS periodo_fim
+          FROM employee_site_history esh
+          WHERE esh."obraId" = ${obraId} AND esh."companyId" = ${companyId}
+          GROUP BY esh."employeeId"
+
+          UNION ALL
+
+          -- Ramo B: obra_funcionarios sem histórico formal
+          SELECT
+            of2."employeeId"                                               AS employee_id,
+            GREATEST(
+              of2."createdAt"::date,
+              (SELECT data_inicio FROM obra_inicio)
+            )                                                              AS periodo_inicio,
+            COALESCE(
+              (SELECT MIN(of3."createdAt"::date)
+               FROM obra_funcionarios of3
+               WHERE of3."employeeId" = of2."employeeId"
+                 AND of3."companyId"  = of2."companyId"
+                 AND of3."obraId"    <> of2."obraId"
+                 AND of3."createdAt"  > of2."createdAt"),
+              CURRENT_DATE
+            )                                                              AS periodo_fim
+          FROM obra_funcionarios of2
+          WHERE of2."obraId"    = ${obraId}
+            AND of2."companyId" = ${companyId}
+            AND NOT EXISTS (
+              SELECT 1 FROM employee_site_history esh2
+              WHERE esh2."employeeId" = of2."employeeId"
+                AND esh2."obraId"     = ${obraId}
+                AND esh2."companyId"  = ${companyId}
+            )
+        )
+      `;
+
       const [mainRows, mesesRows] = await Promise.all([
-        // Funcionários da obra + saldo atual (banco_horas_saldo) + movimento do período
-        // Não filtra bhl por companyId — evita mismatch empresa-obra vs empresa-empregadora.
-        // emp_obra já garante que os employeeIds pertencem a esta obra/empresa.
+        // Funcionários ativos na obra NO período + saldo BH atual + movimento do período
         safe(db.execute(sql`
-          WITH emp_obra AS (
-            SELECT DISTINCT esh."employeeId"
-            FROM employee_site_history esh
-            WHERE esh."obraId" = ${obraId} AND esh."companyId" = ${companyId}
-            UNION
-            SELECT "employeeId"
-            FROM obra_funcionarios
-            WHERE "obraId" = ${obraId} AND "companyId" = ${companyId}
+          WITH ${sitePeriodsCte},
+          emp_obra AS (
+            -- Somente funcionários cuja alocação SOBREPÕE o período selecionado
+            SELECT DISTINCT employee_id AS "employeeId"
+            FROM site_periods
+            WHERE periodo_inicio <= ${dataFim}::date
+              AND periodo_fim    >= ${dataIni}::date
           ),
           movimento AS (
-            -- lançamentos NO período selecionado (mês ou ano todo)
             SELECT bhl."employeeId",
               SUM(CASE WHEN bhl.tipo = 'credito' THEN ABS(bhl.minutos) ELSE -ABS(bhl.minutos) END)::int AS movimento,
               MAX(bhl."criadoEm") AS "ultimoLancamento"
@@ -2421,9 +2473,9 @@ export const scorecardRouter = router({
             GROUP BY bhl."employeeId"
           )
           SELECT
-            e.id            AS "employeeId",
+            e.id             AS "employeeId",
             e."nomeCompleto" AS nome,
-            e.funcao        AS cargo,
+            e.funcao         AS cargo,
             e.matricula,
             e."fotoUrl",
             COALESCE(bhs."saldoMinutos", 0)::int AS "saldoMinutos",
@@ -2431,26 +2483,26 @@ export const scorecardRouter = router({
             m."ultimoLancamento"
           FROM emp_obra eo
           JOIN employees e ON e.id = eo."employeeId"
-          LEFT JOIN banco_horas_saldo bhs ON bhs."employeeId" = eo."employeeId" AND bhs."companyId" = ${companyId}
+          LEFT JOIN banco_horas_saldo bhs
+            ON bhs."employeeId" = eo."employeeId" AND bhs."companyId" = ${companyId}
           LEFT JOIN movimento m ON m."employeeId" = eo."employeeId"
           WHERE COALESCE(bhs."saldoMinutos", 0) <> 0 OR m.movimento IS NOT NULL
           ORDER BY ABS(COALESCE(bhs."saldoMinutos", 0)) DESC, e."nomeCompleto"
         `)),
 
-        // Quais meses do ano têm lançamentos para esta obra (para dots do PeriodSelector)
+        // Quais meses do ano têm lançamentos de funcionários desta obra (para dots)
+        // Usa o ano inteiro (qualquer alocação no ano) para as bolinhas ficarem corretas
         safe(db.execute(sql`
-          WITH emp_obra AS (
-            SELECT DISTINCT esh."employeeId"
-            FROM employee_site_history esh
-            WHERE esh."obraId" = ${obraId} AND esh."companyId" = ${companyId}
-            UNION
-            SELECT "employeeId"
-            FROM obra_funcionarios
-            WHERE "obraId" = ${obraId} AND "companyId" = ${companyId}
+          WITH ${sitePeriodsCte},
+          emp_obra_ano AS (
+            SELECT DISTINCT employee_id AS "employeeId"
+            FROM site_periods
+            WHERE periodo_inicio <= ${`${ano}-12-31`}::date
+              AND periodo_fim    >= ${`${ano}-01-01`}::date
           )
           SELECT EXTRACT(MONTH FROM bhl.data)::int AS mes
           FROM banco_horas_lancamentos bhl
-          WHERE bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra)
+          WHERE bhl."employeeId" IN (SELECT "employeeId" FROM emp_obra_ano)
             AND EXTRACT(YEAR FROM bhl.data) = ${ano}::int
           GROUP BY EXTRACT(MONTH FROM bhl.data)
         `)),
