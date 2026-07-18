@@ -148,6 +148,12 @@ export default function ModuloPJ() {
     { companyId, ano: pjAno },
     { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" }
   );
+  // Rev. 4373 — lê forma de pagamento padrão PJ das Configurações (seção Terceiros)
+  const { data: criteriaData = [] } = trpc.criteria.getAll.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const defaultFormaPgto = (criteriaData as any[]).find(c => c.chave === "terceiros_pj_forma_pagamento")?.valor || "PIX";
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   // IDs com contrato ativo — não podem aparecer para criação de novo contrato
   const empIdsComContratoAtivo = useMemo(
@@ -423,6 +429,7 @@ export default function ModuloPJ() {
         agenciaPrestador: form.agenciaPrestador || undefined,
         contaPrestador: form.contaPrestador || undefined,
         pixPrestador: form.pixPrestador || undefined,
+        formaPagamento: form.formaPagamento || undefined,
       });
     } else {
       if (!form.employeeId) { toast.error("Selecione o prestador"); return; }
@@ -443,6 +450,7 @@ export default function ModuloPJ() {
         agenciaPrestador: form.agenciaPrestador || undefined,
         contaPrestador: form.contaPrestador || undefined,
         pixPrestador: form.pixPrestador || undefined,
+        formaPagamento: form.formaPagamento || undefined,
       });
     }
   };
@@ -569,7 +577,7 @@ export default function ModuloPJ() {
                   <SelectItem value="encerrado">Encerrado</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={() => { setForm({}); setCreatedContratoId(null); setMotivoAlteracao(""); setEditingContratoId(null); setShowContratoDialog(true); }}>
+              <Button onClick={() => { setForm({ formaPagamento: defaultFormaPgto }); setCreatedContratoId(null); setMotivoAlteracao(""); setEditingContratoId(null); setShowContratoDialog(true); }}>
                 <Plus className="h-4 w-4 mr-2" /> Novo Contrato
               </Button>
             </div>

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4373** — **CONFIGURAÇÕES TERCEIROS: PARÂMETRO "PJ FORMA DE PAGAMENTO".** Novo parâmetro `terceiros_pj_forma_pagamento` (seletor PIX/TED/Boleto/Depósito/Cheque, padrão PIX) na seção Terceiros. Módulo PJ pré-preenche o form com o valor configurado. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4372** — **MÓDULO PJ — CONTRATOS PJ: FORMA DE PAGAMENTO.** Campo `formaPagamento` (PIX/TED/Boleto/Depósito/Cheque) em `pj_contracts` + `pj_payments`. Formulário de contrato, geração de previsões, lançamento manual e tabela Folha PJ atualizados. SyncSchema+ Rev. 4372. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4371** — **MÓDULO PJ — FOLHA PJ: PERIOD SELECTOR COM DOTS E LEGENDA.** Substituiu `<Input type="month">` pelo PeriodSelectorCard padrão (ano + 12 pills + "Ano todo"). Dots: azul=com lançamento, verde=todos pagos, cinza=sem dados. Novo endpoint `pj.pagamentos.statusAnual`. PDF desabilitado em "Ano todo". ZERO DELETE · ZERO ALTER destrutivo.

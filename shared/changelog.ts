@@ -1,4 +1,22 @@
 /**
+ * Rev. 4373 - CONFIGURAÇÕES TERCEIROS: PARÂMETRO "PJ FORMA DE PAGAMENTO"
+ *
+ * Adicionado parâmetro `terceiros_pj_forma_pagamento` na seção Terceiros
+ * da tela de Configurações. Tipo: select (PIX/TED/Boleto/Depósito/Cheque).
+ * Valor padrão CLT: PIX.
+ *
+ * Fluxo:
+ *   - Configurações → seção "Terceiros" exibe o novo campo (seletor).
+ *   - Módulo PJ: ao abrir "Novo Contrato", a forma de pagamento é pré-preenchida
+ *     com o valor definido nas Configurações via `criteria.getAll` query.
+ *   - `updateContrato` e `createContrato` já propagam `formaPagamento` (Rev. 4372).
+ *   - O critério é semeado via `initDefaults` (ON CONFLICT DO NOTHING).
+ *
+ * ARQUIVOS: server/routers.ts, client/src/pages/ModuloPJ.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4372 - MÓDULO PJ — CONTRATOS PJ: FORMA DE PAGAMENTO
  *
  * Adicionado campo `formaPagamento` (PIX/TED/Boleto/Depósito/Cheque) em:

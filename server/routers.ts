@@ -3520,6 +3520,8 @@ export const appRouter = router({
         { categoria: "terceiros", chave: "terceiros_exigir_folha", valor: "1", descricao: "Exigir folha de pagamento mensal (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         { categoria: "terceiros", chave: "terceiros_validacao_ia_auto", valor: "0", descricao: "Validar documentos automaticamente com IA ao receber (0=Não, 1=Sim)", valorPadraoClt: "0", unidade: "bool" },
         { categoria: "terceiros", chave: "terceiros_portal_expiracao_link_dias", valor: "30", descricao: "Dias de validade do link do portal externo", valorPadraoClt: "30", unidade: "dias" },
+        // Rev. 4373 — Forma de pagamento padrão dos contratos PJ
+        { categoria: "terceiros", chave: "terceiros_pj_forma_pagamento", valor: "PIX", descricao: "Forma de pagamento padrão para contratos PJ (PIX, TED, Boleto, Depósito, Cheque)", valorPadraoClt: "PIX", unidade: "tipo" },
         // PARCEIROS CONVENIADOS
         { categoria: "parceiros", chave: "parceiros_limite_desconto_folha_pct", valor: "30", descricao: "Limite máximo de desconto em folha por convênios (%)", valorPadraoClt: "30", unidade: "%" },
         { categoria: "parceiros", chave: "parceiros_aprovacao_obrigatoria", valor: "1", descricao: "Exigir aprovação do RH para lançamentos (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
