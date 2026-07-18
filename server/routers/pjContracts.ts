@@ -503,6 +503,7 @@ export const pjContractsRouter = router({
           revisao: pjContracts.revisao,
           createdAt: pjContracts.createdAt,
           employeeName: employees.nomeCompleto,
+          employeeFotoUrl: employees.fotoUrl,
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
         })

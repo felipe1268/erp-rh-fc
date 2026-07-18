@@ -663,8 +663,19 @@ export default function ModuloPJ() {
                               <span className="text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">Rev.{c.revisao || '01'}</span>
                             </td>
                             <td className="p-3">
-                              <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(c.employeeId)}>{c.employeeName}</div>
-                              <div className="text-xs text-muted-foreground">{c.razaoSocialPrestador || c.employeeCargo}</div>
+                              <div className="flex items-center gap-2">
+                                {c.employeeFotoUrl ? (
+                                  <img src={c.employeeFotoUrl} alt={c.employeeName} className="h-7 w-7 rounded-full object-cover flex-shrink-0 ring-1 ring-muted" />
+                                ) : (
+                                  <div className="h-7 w-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0 ring-1 ring-muted">
+                                    {(c.employeeName || "?").charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(c.employeeId)}>{c.employeeName}</div>
+                                  <div className="text-xs text-muted-foreground">{c.razaoSocialPrestador || c.employeeCargo}</div>
+                                </div>
+                              </div>
                             </td>
                             <td className="p-3 text-xs font-mono">{formatCNPJ(c.cnpjPrestador)}</td>
                             <td className="p-3 text-xs">{formatDate(c.dataInicio)} — {formatDate(c.dataFim)}</td>
