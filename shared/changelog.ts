@@ -1,4 +1,29 @@
 /**
+ * Rev. 4383 - TEMPLATES ISO: FICHA AUTO-COMPUTADA E LAYOUT CORRIGIDO
+ *
+ * Problema: campos "Elaborado por", "Data de vigência" e "Próxima revisão"
+ * não eram preenchidos automaticamente (dependiam de useEffect com timing frágil)
+ * e o layout 4-colunas transbordava em mobile.
+ *
+ * Solução — valores computed (sem dependência de useEffect):
+ *   effectiveElaboradoPor  = elaboradoPorNome || user?.name || user?.username
+ *   effectiveDataVigencia  = dataVigencia     || hoje (ISO)
+ *   effectiveProximaRevisao= proximaRevisao   || vigência + 1 ano
+ * Estes valores são usados no JSX, em isoPayload() e em handleAprovar().
+ *
+ * useEffects simplificados:
+ *   - tipo-change: reseta elaboradoPorNome/dataVigencia/proximaRevisao/codigo
+ *     além das outras resets — assim computed values tomam conta p/ novos templates.
+ *   - selRow: simplificado (apenas sincroniza quando template existente carrega).
+ *
+ * Layout: grid 4-colunas → grid 2×2 (grid-cols-2 gap-x-4 gap-y-2.5) com
+ *   min-w-0 em cada célula. Campos auto marcados com "● auto" (azul).
+ *   Fundo levemente azulado (bg-blue-50/40) sinaliza preenchimento automático.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4382 - TEMPLATES ISO: AUTO-PREENCHIMENTO DE "ELABORADO POR" E DATA DE VIGÊNCIA
  *
  * Quando um tipo de template ainda não foi criado (selRow=null, query carregada),

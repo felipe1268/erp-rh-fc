@@ -310,7 +310,7 @@ export default function TemplatesDocsTab() {
     if (defaultModel) setConteudoEditado(defaultModel);
   }, [tipoSelecionado, getQuery.isLoading, getQuery.data, modeloPjQuery.isLoading, modeloPjQuery.data]);
 
-  // Quando muda o tipo, reseta versão/comentário/IA e ressincroniza a ficha ISO
+  // Quando muda o tipo, reseta versão/comentário/IA e todos os campos da ficha
   useEffect(() => {
     setVersaoVisualizada(undefined);
     setComentario("");
@@ -318,25 +318,21 @@ export default function TemplatesDocsTab() {
     setIaInstrucoes("");
     setMostrarPreview(false);
     setIaSugestoes([]);
-    setConteudoEditado(""); // limpa o editor ao trocar de tipo (evita conteúdo obsoleto)
+    setConteudoEditado("");
+    setElaboradoPorNome("");
+    setDataVigencia("");
+    setProximaRevisao("");
+    setCodigo("");
   }, [tipoSelecionado]);
 
+  // Quando o selRow carrega (template existente) → sincroniza ficha ISO
   useEffect(() => {
-    if (!selRow) {
-      // Nenhum template ainda — auto-preenche com usuário logado e data de hoje
-      if (!listAllQuery.isLoading) {
-        setElaboradoPorNome(user?.name || (user as any)?.username || "");
-        setDataVigencia(new Date().toISOString().split("T")[0]);
-        setCodigo("");
-        setProximaRevisao("");
-      }
-      return;
-    }
+    if (!selRow) return;
     setCodigo(selRow.codigo || "");
     setDataVigencia(selRow.dataVigencia || "");
     setProximaRevisao(selRow.proximaRevisao || "");
     setElaboradoPorNome(selRow.elaboradoPorNome || "");
-  }, [selRow, listAllQuery.isLoading, user]);
+  }, [selRow]);
 
   const invalidarTudo = () => {
     utils.systemDocumentTemplates.listAll.invalidate();
@@ -470,11 +466,25 @@ export default function TemplatesDocsTab() {
     editorRef.current?.insertText(`{{${chave}}}`);
   };
 
+  // ── Valores auto-computados para a ficha ISO ────────────────────────────────
+  // Pré-preenchidos automaticamente; o usuário pode sobrescrever se quiser.
+  const todayIso = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const effectiveElaboradoPor = elaboradoPorNome || user?.name || (user as any)?.username || "";
+  const effectiveDataVigencia = dataVigencia || todayIso;
+  const effectiveProximaRevisao = useMemo(() => {
+    if (proximaRevisao) return proximaRevisao;
+    const base = dataVigencia || todayIso;
+    const d = new Date(base + "T00:00:00");
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().split("T")[0];
+  }, [proximaRevisao, dataVigencia, todayIso]);
+  // ────────────────────────────────────────────────────────────────────────────
+
   const isoPayload = () => ({
     codigo: codigo || undefined,
-    dataVigencia: dataVigencia || null,
-    proximaRevisao: proximaRevisao || null,
-    elaboradoPorNome: elaboradoPorNome || null,
+    dataVigencia: effectiveDataVigencia || null,
+    proximaRevisao: effectiveProximaRevisao || null,
+    elaboradoPorNome: effectiveElaboradoPor || null,
   });
 
   const handleSalvar = () => {
@@ -493,7 +503,7 @@ export default function TemplatesDocsTab() {
   const handleAprovar = () => {
     if (!selRow?.existe) { toast.error("Salve o template antes de aprovar."); return; }
     if (!confirm(`Aprovar "${meta.titulo}" e torná-lo VIGENTE? Os módulos passarão a consumir este texto.`)) return;
-    aprovarMut.mutate({ tipo: tipoSelecionado, dataVigencia: dataVigencia || null, proximaRevisao: proximaRevisao || null });
+    aprovarMut.mutate({ tipo: tipoSelecionado, dataVigencia: effectiveDataVigencia || null, proximaRevisao: effectiveProximaRevisao || null });
   };
 
   const handlePdfSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -761,22 +771,36 @@ export default function TemplatesDocsTab() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div>
-                <label className="text-[11px] font-medium text-gray-600">Código ISO</label>
-                <Input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder="FC-RH-001" className="h-8 text-sm font-mono" />
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+              <div className="min-w-0">
+                <label className="text-[11px] font-medium text-gray-500 block mb-1">Código ISO</label>
+                <Input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder="FC-RH-001" className="h-8 text-sm font-mono w-full" />
               </div>
-              <div>
-                <label className="text-[11px] font-medium text-gray-600">Elaborado por</label>
-                <Input value={elaboradoPorNome} onChange={e => setElaboradoPorNome(e.target.value)} placeholder="Nome" className="h-8 text-sm" />
+              <div className="min-w-0">
+                <label className="text-[11px] font-medium text-gray-500 block mb-1">
+                  Elaborado por
+                  <span className="ml-1 text-[10px] text-blue-500 font-normal">● auto</span>
+                </label>
+                <Input
+                  value={effectiveElaboradoPor}
+                  onChange={e => setElaboradoPorNome(e.target.value)}
+                  placeholder="Nome"
+                  className="h-8 text-sm w-full bg-blue-50/40"
+                />
               </div>
-              <div>
-                <label className="text-[11px] font-medium text-gray-600">Data de vigência</label>
-                <Input type="date" value={dataVigencia} onChange={e => setDataVigencia(e.target.value)} className="h-8 text-sm" />
+              <div className="min-w-0">
+                <label className="text-[11px] font-medium text-gray-500 block mb-1">
+                  Data de vigência
+                  <span className="ml-1 text-[10px] text-blue-500 font-normal">● auto</span>
+                </label>
+                <Input type="date" value={effectiveDataVigencia} onChange={e => setDataVigencia(e.target.value)} className="h-8 text-sm w-full bg-blue-50/40" />
               </div>
-              <div>
-                <label className="text-[11px] font-medium text-gray-600">Próxima revisão</label>
-                <Input type="date" value={proximaRevisao} onChange={e => setProximaRevisao(e.target.value)} className="h-8 text-sm" />
+              <div className="min-w-0">
+                <label className="text-[11px] font-medium text-gray-500 block mb-1">
+                  Próxima revisão
+                  <span className="ml-1 text-[10px] text-blue-500 font-normal">● auto</span>
+                </label>
+                <Input type="date" value={effectiveProximaRevisao} onChange={e => setProximaRevisao(e.target.value)} className="h-8 text-sm w-full bg-blue-50/40" />
               </div>
             </div>
             <div className="mt-2 text-[11px] text-gray-500 flex flex-wrap gap-x-4 gap-y-0.5">
