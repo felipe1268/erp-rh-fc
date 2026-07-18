@@ -337,8 +337,8 @@ export default function ModuloPJ() {
     
     // Resumo geral
     html += `<div style="text-align:center;margin:16px 0;">`;
-    html += `<div class="resumo-box"><div class="resumo-label">Adiantamento (40%)</div><div class="resumo-valor">${fmt(relatorio.totais.adiantamento)}</div></div>`;
-    html += `<div class="resumo-box"><div class="resumo-label">Fechamento (60%)</div><div class="resumo-valor">${fmt(relatorio.totais.fechamento)}</div></div>`;
+    html += `<div class="resumo-box"><div class="resumo-label">1ª Medição (40%)</div><div class="resumo-valor">${fmt(relatorio.totais.adiantamento)}</div></div>`;
+    html += `<div class="resumo-box"><div class="resumo-label">2ª Medição (60%)</div><div class="resumo-valor">${fmt(relatorio.totais.fechamento)}</div></div>`;
     if (relatorio.totais.bonificacao > 0) html += `<div class="resumo-box"><div class="resumo-label">Bonificações</div><div class="resumo-valor">${fmt(relatorio.totais.bonificacao)}</div></div>`;
     html += `<div class="resumo-box" style="background:#1e3a5f;"><div class="resumo-label" style="color:#aaa;">TOTAL GERAL</div><div class="resumo-valor" style="color:white;font-size:20px;">${fmt(relatorio.totais.geral)}</div></div>`;
     html += `</div>`;
@@ -348,7 +348,7 @@ export default function ModuloPJ() {
       html += `<div class="prestador-header"><strong>${p.nome}</strong> — ${p.razaoSocial} • CNPJ: ${p.cnpj} • CPF: ${fmtCPF(p.cpf)} • Valor Mensal: ${fmt(parseFloat(p.valorMensal || "0"))}</div>`;
       html += `<table><thead><tr><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Status</th><th>Dt. Pagamento</th></tr></thead><tbody>`;
       for (const pg of p.pagamentos) {
-        const tipoLabel = pg.tipo === "adiantamento" ? "Adiantamento" : pg.tipo === "fechamento" ? "Fechamento" : "Bonificação";
+        const tipoLabel = pg.tipo === "adiantamento" ? "1ª Medição" : pg.tipo === "fechamento" ? "2ª Medição" : "Bonificação";
         const statusLabel = pg.status === "pago" ? "✓ Pago" : pg.status === "pendente" ? "○ Pendente" : pg.status;
         html += `<tr><td>${tipoLabel}</td><td>${pg.descricao || "-"}</td><td style="text-align:right">${fmt(parseFloat(pg.valor || "0"))}</td><td>${statusLabel}</td><td>${pg.dataPagamento ? new Date(pg.dataPagamento + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td></tr>`;
       }
@@ -721,7 +721,7 @@ export default function ModuloPJ() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                 <Card className="bg-amber-50 border-amber-200">
                   <CardContent className="p-4 text-center">
-                    <p className="text-xs text-amber-600 uppercase font-semibold">Adiantamentos</p>
+                    <p className="text-xs text-amber-600 uppercase font-semibold">1ª Medição</p>
                     <p className="text-xl font-bold text-amber-700">
                       {formatMoeda((pagamentos as any[]).filter(p => p.tipo === "adiantamento").reduce((s: number, p: any) => s + parseFloat(p.valor || "0"), 0))}
                     </p>
@@ -729,7 +729,7 @@ export default function ModuloPJ() {
                 </Card>
                 <Card className="bg-green-50 border-green-200">
                   <CardContent className="p-4 text-center">
-                    <p className="text-xs text-green-600 uppercase font-semibold">Fechamentos</p>
+                    <p className="text-xs text-green-600 uppercase font-semibold">2ª Medição</p>
                     <p className="text-xl font-bold text-green-700">
                       {formatMoeda((pagamentos as any[]).filter(p => p.tipo === "fechamento").reduce((s: number, p: any) => s + parseFloat(p.valor || "0"), 0))}
                     </p>
@@ -792,7 +792,7 @@ export default function ModuloPJ() {
                   <CardHeader className={`pb-2 pt-3 px-4 ${isAdiant ? "bg-amber-50" : "bg-green-50"} rounded-t-lg`}>
                     <div className="flex items-center justify-between">
                       <CardTitle className={`text-sm font-semibold ${isAdiant ? "text-amber-800" : "text-green-800"}`}>
-                        {isAdiant ? "📋 1ª Medição do Mês — Adiantamentos" : "📋 2ª Medição do Mês — Fechamentos / Bonificações"}
+                        {isAdiant ? "📋 1ª Medição do Mês" : "📋 2ª Medição do Mês"}
                       </CardTitle>
                       <span className={`text-base font-bold ${isAdiant ? "text-amber-700" : "text-green-700"}`}>{formatMoeda(totalGrupo)}</span>
                     </div>
@@ -997,13 +997,13 @@ export default function ModuloPJ() {
                         <p className="text-lg font-bold text-amber-600">
                           {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualAdiantamento ?? 50) / 100)}
                         </p>
-                        <p className="text-xs text-muted-foreground">Adiantamento ({selectedContrato.percentualAdiantamento ?? 50}%) — Dia {selectedContrato.diaAdiantamento ?? 15}</p>
+                        <p className="text-xs text-muted-foreground">1ª Medição ({selectedContrato.percentualAdiantamento ?? 50}%) — Dia {selectedContrato.diaAdiantamento ?? 15}</p>
                       </div>
                       <div>
                         <p className="text-lg font-bold text-green-600">
                           {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualFechamento ?? 50) / 100)}
                         </p>
-                        <p className="text-xs text-muted-foreground">Fechamento ({selectedContrato.percentualFechamento ?? 50}%) — Dia {selectedContrato.diaFechamento ?? 5}</p>
+                        <p className="text-xs text-muted-foreground">2ª Medição ({selectedContrato.percentualFechamento ?? 50}%) — Dia {selectedContrato.diaFechamento ?? 5}</p>
                       </div>
                     </div>
                   </div>
@@ -1297,7 +1297,7 @@ export default function ModuloPJ() {
                 <p className="text-sm font-semibold text-purple-800 mb-3">Regra de Pagamento (Folha PJ)</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="text-xs font-medium">% Adiantamento</label>
+                    <label className="text-xs font-medium">% 1ª Medição</label>
                     <Input type="number" min={0} max={100} value={form.percentualAdiantamento ?? ""} placeholder="50"
                       onChange={e => {
                         const v = parseInt(e.target.value);
@@ -1307,17 +1307,17 @@ export default function ModuloPJ() {
                       }} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium">Dia Adiantamento</label>
+                    <label className="text-xs font-medium">Dia 1ª Medição</label>
                     <Input type="number" min={1} max={31} value={form.diaAdiantamento ?? ""} placeholder="15"
                       onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaAdiantamento: isNaN(v) ? undefined : v }); }} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium">% Fechamento <span className="text-muted-foreground font-normal">(auto)</span></label>
+                    <label className="text-xs font-medium">% 2ª Medição <span className="text-muted-foreground font-normal">(auto)</span></label>
                     <Input type="number" min={0} max={100} value={form.percentualFechamento ?? ""} placeholder="50" readOnly
-                      className="bg-muted/40 cursor-not-allowed" title="Calculado automaticamente: 100% − % Adiantamento" />
+                      className="bg-muted/40 cursor-not-allowed" title="Calculado automaticamente: 100% − % 1ª Medição" />
                   </div>
                   <div>
-                    <label className="text-xs font-medium">Dia Fechamento</label>
+                    <label className="text-xs font-medium">Dia 2ª Medição</label>
                     <Input type="number" min={1} max={31} value={form.diaFechamento ?? ""} placeholder="5"
                       onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaFechamento: isNaN(v) ? undefined : v }); }} />
                   </div>
@@ -1337,8 +1337,8 @@ export default function ModuloPJ() {
                 </div>
                 {form.valorMensal && (
                   <div className="mt-3 text-xs text-purple-700 flex gap-4 flex-wrap">
-                    <span>Adiantamento: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualAdiantamento ?? 50) / 100)}</strong> — dia {form.diaAdiantamento ?? 15}</span>
-                    <span>Fechamento: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualFechamento ?? 50) / 100)}</strong> — dia {form.diaFechamento ?? 5} (mês seguinte)</span>
+                    <span>1ª Medição: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualAdiantamento ?? 50) / 100)}</strong> — dia {form.diaAdiantamento ?? 15}</span>
+                    <span>2ª Medição: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualFechamento ?? 50) / 100)}</strong> — dia {form.diaFechamento ?? 5} (mês seguinte)</span>
                   </div>
                 )}
               </div>
@@ -1447,8 +1447,8 @@ export default function ModuloPJ() {
                 <Select value={pagForm.tipo || ""} onValueChange={v => setPagForm({ ...pagForm, tipo: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="adiantamento">Adiantamento</SelectItem>
-                    <SelectItem value="fechamento">Fechamento</SelectItem>
+                    <SelectItem value="adiantamento">1ª Medição</SelectItem>
+                    <SelectItem value="fechamento">2ª Medição</SelectItem>
                     <SelectItem value="bonificacao">Bonificação</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1574,7 +1574,7 @@ export default function ModuloPJ() {
               <p className="text-sm text-muted-foreground">Define os percentuais e datas de pagamento e aplica a <strong>todos os contratos ativos</strong> da empresa.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium">% Adiantamento</label>
+                  <label className="text-xs font-medium">% 1ª Medição</label>
                   <Input type="number" min={0} max={100} value={ajusteForm.percAdiant ?? ""} placeholder="50"
                     onChange={e => {
                       const v = parseInt(e.target.value);
@@ -1582,17 +1582,17 @@ export default function ModuloPJ() {
                     }} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium">% Fechamento <span className="text-muted-foreground">(auto)</span></label>
+                  <label className="text-xs font-medium">% 2ª Medição <span className="text-muted-foreground">(auto)</span></label>
                   <Input type="number" readOnly className="bg-muted/40 cursor-not-allowed"
                     value={ajusteForm.percAdiant !== undefined ? 100 - ajusteForm.percAdiant : ""} placeholder="50" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium">Dia Adiantamento</label>
+                  <label className="text-xs font-medium">Dia 1ª Medição</label>
                   <Input type="number" min={1} max={31} value={ajusteForm.diaAdiant ?? ""} placeholder="15"
                     onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaAdiant: isNaN(v) ? undefined : v }); }} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium">Dia Fechamento</label>
+                  <label className="text-xs font-medium">Dia 2ª Medição</label>
                   <Input type="number" min={1} max={31} value={ajusteForm.diaFech ?? ""} placeholder="5"
                     onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaFech: isNaN(v) ? undefined : v }); }} />
                 </div>
