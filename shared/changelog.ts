@@ -1,4 +1,34 @@
 /**
+ * Rev. 4362 - SCORECARD OBRA — FOLHA/CUSTOS: BOLINHAS BASEADAS EM DADOS REAIS (CLT + PJ)
+ *
+ * PROBLEMA (Rev. 4361 introduziu bug):
+ * A query de mesesComDados usava employee_site_history + obra_funcionarios para verificar
+ * se havia funcionário alocado — mas obra_funcionarios não tem data de saída, então
+ * TODOS os meses futuros ganhavam bolinha azul (Ago/Set/Out/Nov/Dez projetados).
+ *
+ * CAUSA RAIZ:
+ * Confundiu "funcionário alocado" (projeção) com "dado processado" (real).
+ *
+ * SOLUÇÃO (Rev. 4362):
+ * mesesComDados agora é UNION de dois ramos baseados em dados reais:
+ * 1. CLT: SELECT DISTINCT mes FROM payroll_payments WHERE vínculo com a obra no mês
+ *    + filtros de elegibilidade (desligado, férias mês inteiro, afastado > 15d).
+ *    payroll_payments só existe para meses já processados → sem meses futuros.
+ * 2. PJ: SELECT DISTINCT mes FROM pj_payments JOIN pj_contracts WHERE obra
+ *    AND status <> 'pendente' (pagamento aprovado = "fechar mês" no fluxo PJ).
+ *    pj_payments pendentes não contam → sem meses não fechados.
+ *
+ * RESULTADO: bolinha azul ↔ folha CLT processada OU pagamento PJ aprovado.
+ * Meses futuros e meses PJ só pendentes ficam cinza.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (query mesesComDados substituída)
+ * - shared/version.ts → Rev. 4362
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4361 - SCORECARD OBRA — FOLHA/CUSTOS: BOLINHAS DO SELETOR REFLETEM CRITÉRIOS RÍGIDOS
  *
  * PROBLEMA:

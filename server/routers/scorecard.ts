@@ -2269,52 +2269,76 @@ export const scorecardRouter = router({
             AND vp."employeeId" IN (${relevantEmpSql})
         `),
 
-        // Rev. 4361: mesesComDados — aplica os critérios rígidos (desligado, férias mês inteiro,
-        // afastado > 15 dias) POR MÊS para que as bolinhas do seletor reflitam exatamente
-        // o que a query mensal retornará, evitando meses com bolinha azul mas "Sem dados".
+        // Rev. 4362: mesesComDados — bolinha azul = dado REAL processado, nunca projeção.
+        // CLT: payroll_payments com vínculo à obra (employee_site_history ou obra_funcionarios).
+        // PJ:  pj_payments aprovados/pagos (status <> 'pendente') com contrato desta obra.
+        // Isso elimina meses futuros (sem folha processada) e meses só com PJ pendente.
         db.execute(sql`
-          SELECT EXTRACT(MONTH FROM gs_date)::int AS mes
-          FROM generate_series(
-            (${mesFeriasIni} || '-01')::date,
-            (${mesFeriasFim} || '-01')::date,
-            '1 month'::interval
-          ) AS gs_date
-          WHERE EXISTS (
-            SELECT 1
-            FROM (
-              SELECT DISTINCT esh2."employeeId" AS employee_id
-              FROM employee_site_history esh2
-              WHERE esh2."obraId"    = ${input.obraId}
-                AND esh2."companyId" = ${input.companyId}
-                AND esh2."dataInicio"::date <= (gs_date + INTERVAL '1 month' - INTERVAL '1 day')::date
-                AND COALESCE(esh2."dataFim"::date, CURRENT_DATE) >= gs_date::date
-              UNION
-              SELECT DISTINCT of2."employeeId" AS employee_id
-              FROM obra_funcionarios of2
-              WHERE of2."obraId"    = ${input.obraId}
-                AND of2."companyId" = ${input.companyId}
-                AND of2."createdAt"::date <= (gs_date + INTERVAL '1 month' - INTERVAL '1 day')::date
-            ) emp
-            JOIN employees e ON e.id = emp.employee_id
-              AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
-            WHERE
-              -- Férias mês inteiro: custo já contabilizado no mês de saída
-              NOT EXISTS (
-                SELECT 1 FROM vacation_periods vp2
-                WHERE vp2."employeeId" = emp.employee_id
-                  AND vp2.status IN ('em_gozo', 'agendada', 'concluida', 'paga', 'pago')
-                  AND vp2."dataInicio"::date <= gs_date::date
-                  AND vp2."dataFim"::date    >= (gs_date + INTERVAL '1 month' - INTERVAL '1 day')::date
+          -- CLT: meses com folha real processada na obra
+          SELECT DISTINCT
+            EXTRACT(MONTH FROM (pp2."mesReferencia" || '-01')::date)::int AS mes
+          FROM payroll_payments pp2
+          WHERE pp2."companyId" = ${input.companyId}
+            AND pp2."mesReferencia" >= ${mesFeriasIni}
+            AND pp2."mesReferencia" <= ${mesFeriasFim}
+            -- Funcionário não desligado
+            AND NOT EXISTS (
+              SELECT 1 FROM employees ed
+              WHERE ed.id = pp2."employeeId"
+                AND ed.status IN ('Desligado','Lista_Negra','Inativo')
+            )
+            -- Vínculo com a obra no mês da folha
+            AND (
+              EXISTS (
+                SELECT 1 FROM employee_site_history esh3
+                WHERE esh3."employeeId" = pp2."employeeId"
+                  AND esh3."obraId"    = ${input.obraId}
+                  AND esh3."companyId" = ${input.companyId}
+                  AND esh3."dataInicio"::date <= (pp2."mesReferencia" || '-28')::date
+                  AND COALESCE(esh3."dataFim"::date, CURRENT_DATE)
+                        >= (pp2."mesReferencia" || '-01')::date
               )
-              -- Afastado > 15 dias antes do mês: INSS/Previdência paga, não a empresa
-              AND NOT EXISTS (
-                SELECT 1 FROM employees ea2
-                WHERE ea2.id = emp.employee_id
-                  AND ea2.status = 'Afastado'
-                  AND ea2."licencaDataInicio" IS NOT NULL
-                  AND ea2."licencaDataInicio"::date + INTERVAL '15 days' < gs_date::date
+              OR EXISTS (
+                SELECT 1 FROM obra_funcionarios of5
+                WHERE of5."employeeId" = pp2."employeeId"
+                  AND of5."obraId"    = ${input.obraId}
+                  AND of5."companyId" = ${input.companyId}
+                  AND of5."createdAt"::date <= (pp2."mesReferencia" || '-28')::date
               )
-          )
+            )
+            -- Férias mês inteiro: custo já no mês de saída, não conta aqui
+            AND NOT EXISTS (
+              SELECT 1 FROM vacation_periods vp3
+              WHERE vp3."employeeId" = pp2."employeeId"
+                AND vp3.status IN ('em_gozo','agendada','concluida','paga','pago')
+                AND vp3."dataInicio"::date <= (pp2."mesReferencia" || '-01')::date
+                AND vp3."dataFim"::date
+                      >= ((pp2."mesReferencia" || '-01')::date
+                          + INTERVAL '1 month' - INTERVAL '1 day')::date
+            )
+            -- Afastado INSS > 15 dias antes do mês: INSS paga, empresa não
+            AND NOT EXISTS (
+              SELECT 1 FROM employees ea3
+              WHERE ea3.id = pp2."employeeId"
+                AND ea3.status = 'Afastado'
+                AND ea3."licencaDataInicio" IS NOT NULL
+                AND ea3."licencaDataInicio"::date + INTERVAL '15 days'
+                      < (pp2."mesReferencia" || '-01')::date
+            )
+
+          UNION
+
+          -- PJ: meses com pagamento aprovado/pago (fechar mês → status <> 'pendente')
+          SELECT DISTINCT
+            EXTRACT(MONTH FROM (pjp2."mesReferencia" || '-01')::date)::int AS mes
+          FROM pj_payments pjp2
+          JOIN pj_contracts pjc2 ON pjc2.id = pjp2."contractId"
+            AND pjc2.obra_id = ${input.obraId}
+          WHERE pjp2."companyId" = ${input.companyId}
+            AND pjp2."mesReferencia" >= ${mesFeriasIni}
+            AND pjp2."mesReferencia" <= ${mesFeriasFim}
+            AND pjp2.status <> 'pendente'
+
           ORDER BY mes
         `),
 

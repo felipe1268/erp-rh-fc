@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4361** — **SCORECARD OBRA — FOLHA/CUSTOS: BOLINHAS DO SELETOR REFLETEM CRITÉRIOS RÍGIDOS.** Query paralela `mesesComDados` em `getCustosRH` usa `generate_series` + mesmos 3 critérios de elegibilidade (desligado/férias-mês-inteiro/afastado>15d) por mês. Frontend usa `mesesComDados` em vez de derivar dos `mensal` da query anual. Sem mais pontos azuis enganosos. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4362** — **SCORECARD OBRA — FOLHA/CUSTOS: BOLINHAS BASEADAS EM DADOS REAIS (CLT + PJ).** `mesesComDados` = UNION: CLT via `payroll_payments` processado (vínculo obra + filtros elegibilidade); PJ via `pj_payments status <> 'pendente'` (fechar mês). Sem mais meses futuros ou projeções com bolinha azul. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4361** — **SCORECARD OBRA — FOLHA/CUSTOS: BOLINHAS DO SELETOR REFLETEM CRITÉRIOS RÍGIDOS.** (supersedida pela 4362 — usava employee_site_history sem data de saída → meses futuros ficavam azuis). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4360** — **SCORECARD OBRA — FOLHA/CUSTOS: CRITÉRIOS DE ELEGIBILIDADE DO EFETIVO.** 3 critérios: (1) Desligado/Inativo excluído em bridge_emps + period_emps + JOIN custos. (2) Férias mês inteiro excluído (custo já no mês de saída). (3) Afastado INSS > 15 dias antes do mês excluído (licencaDataInicio + 15d < mes_inicio). Férias parcial e afastado ≤ 15 dias: permanecem proporcionais. ZERO DELETE · ZERO ALTER destrutivo.
 
