@@ -1706,12 +1706,14 @@ export const scorecardRouter = router({
                 (SELECT data_inicio FROM obra_inicio)
               )                                                              AS periodo_inicio,
               CASE
-                -- Prioridade 1: saída com dataFim preenchido → funcionário saiu nessa data
+                -- Prioridade 1: registro em aberto (dataFim IS NULL) → ainda está na obra AGORA.
+                -- Deve ganhar de qualquer saída anterior (funcionário saiu e foi re-alocado aqui).
+                WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
+                -- Prioridade 2: todas as entradas fechadas + saída formal → usa a data da saída
                 WHEN BOOL_OR(esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL)
                   THEN MAX(CASE WHEN esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL
                                 THEN esh."dataFim"::date END)
-                -- Prioridade 2: sem saída e algum registro em aberto → ainda está na obra
-                WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
+                -- Prioridade 3: tudo fechado, sem saída formal → usa o maior dataFim
                 ELSE MAX(esh."dataFim"::date)
               END                                                            AS periodo_fim
             FROM employee_site_history esh

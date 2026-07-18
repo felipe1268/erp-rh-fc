@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4353** — **SCORECARD OBRA — FOLHA/CUSTOS: AFASTADO E RECLUSO — BADGE + ZERO SINTÉTICO.** 6ª query paralela `atestados` (diasAfastamento≥1, tipo='dia') → `afastamentoMap + isAfastado`. `emReclusoSet` via `employees.status`. `zeroSal = emGozo||emAfastMes||emRecluso` no sintético. Badges amarelo/vermelho. `e.status` nas queries CLT e PJ. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4354** — **SCORECARD OBRA — FOLHA/CUSTOS: LACUNA DE MÊS POR HISTÓRICO NÃO-LINEAR (SAIU E VOLTOU).** `site_periods` Ramo A: CASE invertido — `dataFim IS NULL` (registro aberto) agora tem prioridade sobre `saída` anterior. Fix: funcionário saído em maio e re-alocado em julho deixava junho sem dados. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4352** — **SCORECARD OBRA — FOLHA/CUSTOS: ZERAR SALÁRIO SINTÉTICO NO MÊS DE GOZO.** `feriasGozoR` retorna datas de gozo completas. `feriasGozoMap + isInVacation(empId, mês)`. Loop sintético: `emGozo → salário = 0, FGTS = 0`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4353** — **SCORECARD OBRA — FOLHA/CUSTOS: AFASTADO E RECLUSO — BADGE + ZERO SINTÉTICO.** 6ª query paralela `atestados` → `afastamentoMap + isAfastado`. `emReclusoSet` via `employees.status`. `zeroSal = emGozo||emAfastMes||emRecluso`. Badges amarelo/vermelho. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

@@ -1,4 +1,38 @@
 /**
+ * Rev. 4354 - SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO DE LACUNA DE JUNHO (SITE_PERIODS RAMO A)
+ *
+ * PROBLEMA:
+ * Funcionário saído formalmente de uma obra (saída com dataFim = 31/05) e re-alocado na mesma
+ * obra em julho (nova entrada com dataFim IS NULL) ficava sem dados em junho no scorecard.
+ *
+ * CAUSA RAIZ:
+ * `site_periods` Ramo A usa GROUP BY employeeId com CASE na seguinte ordem:
+ *   1. BOOL_OR(tipo='saida' AND dataFim IS NOT NULL) → pega a data da saída
+ *   2. BOOL_OR(dataFim IS NULL) → CURRENT_DATE
+ * Quando existem AMBOS (saída de maio + nova entrada aberta de julho), o CASE tomava a saída
+ * de maio como periodo_fim = May 31. `period_emps` para junho exige periodo_fim >= June 1
+ * → employee excluído → junho "Sem dados".
+ *
+ * FIX:
+ * Inverter a prioridade:
+ *   1. BOOL_OR(dataFim IS NULL) → CURRENT_DATE   ← registro aberto = está aqui AGORA
+ *   2. BOOL_OR(tipo='saida' AND dataFim IS NOT NULL) → data da saída
+ *   3. ELSE MAX(dataFim)
+ * Fundamento: se existe registro aberto, o funcionário está atualmente alocado nesta obra —
+ * qualquer saída anterior foi superada pela nova entrada.
+ *
+ * IMPACTO: apenas para funcionários com histórico não-linear na mesma obra (saiu e voltou).
+ * Para os demais (só entradas fechadas, ou só saída, ou só registro aberto), o comportamento
+ * é idêntico ao anterior.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (CASE do periodo_fim em site_periods Ramo A)
+ * - shared/version.ts → Rev. 4354
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4353 - SCORECARD OBRA — FOLHA/CUSTOS: AFASTADO E RECLUSO — BADGE + ZERAR SALÁRIO SINTÉTICO
  *
  * PROBLEMA:
