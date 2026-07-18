@@ -241,22 +241,20 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [rhSortBy,      setRhSortBy]      = useState<"custo" | "nome">("custo");
   const [expandedBanco, setExpandedBanco] = useState<Set<number>>(new Set());
   const [rhAno,         setRhAno]         = useState(new Date().getFullYear());
-  const [rhMes,         setRhMes]         = useState<string>("all");
-  // Período da obra — inicializa rhAno com o ano de início da obra
+  const [rhMes,         setRhMes]         = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'));
+  // Período da obra — inicializa rhAno e rhMes com o mês vigente ao trocar de obra
   const obraIniMes = proj?.dataInicio            ? String(proj.dataInicio).slice(0, 7)            : null; // "2026-06"
   const obraFimMes = proj?.dataTerminoContratual ? String(proj.dataTerminoContratual).slice(0, 7) : null; // "2026-12"
   // Rastreia o obraId já inicializado — garante re-init ao trocar de obra
   const _rhPeriodInit = useRef<number | null>(null);
   useEffect(() => {
-    if (!obraIniMes || !obraId) return;
+    if (!obraId) return;
     if (_rhPeriodInit.current === obraId) return; // mesma obra, não sobrescreve escolha manual
-    const y = parseInt(obraIniMes.slice(0, 4));
-    if (!isNaN(y)) {
-      setRhAno(y);
-      setRhMes("all");
-      _rhPeriodInit.current = obraId;
-    }
-  }, [obraIniMes, obraId]);
+    const now = new Date();
+    setRhAno(now.getFullYear());
+    setRhMes(String(now.getMonth() + 1).padStart(2, '0'));
+    _rhPeriodInit.current = obraId;
+  }, [obraId]);
   const [bhAno,         setBhAno]         = useState(new Date().getFullYear());
   const [bhMes,         setBhMes]         = useState<number | null>(null);
   const [bhExpanded,    setBhExpanded]    = useState<number | null>(null);
