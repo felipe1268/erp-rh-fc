@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4374** — **MÓDULO PJ — CONTRATOS: PADRÃO 50/50 E INPUT LIBERADO.** Padrão % Adiantamento/Fechamento alterado de 40/60 → 50/50 em todos os pontos (frontend + server). Fix do bug "trava ao apagar": `parseInt("") || 40` substituído por `isNaN(v) ? undefined : v` + `value ?? ""`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4373** — **CONFIGURAÇÕES TERCEIROS: PARÂMETRO "PJ FORMA DE PAGAMENTO".** Novo parâmetro `terceiros_pj_forma_pagamento` (seletor PIX/TED/Boleto/Depósito/Cheque, padrão PIX) na seção Terceiros. Módulo PJ pré-preenche o form com o valor configurado. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4372** — **MÓDULO PJ — CONTRATOS PJ: FORMA DE PAGAMENTO.** Campo `formaPagamento` (PIX/TED/Boleto/Depósito/Cheque) em `pj_contracts` + `pj_payments`. Formulário de contrato, geração de previsões, lançamento manual e tabela Folha PJ atualizados. SyncSchema+ Rev. 4372. ZERO DELETE · ZERO ALTER destrutivo.

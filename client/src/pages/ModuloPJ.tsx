@@ -390,8 +390,8 @@ export default function ModuloPJ() {
       dataFim: c.dataFim?.slice(0, 10) || "",
       renovacaoAutomatica: c.renovacaoAutomatica || 0,
       valorMensal: c.valorMensal || "",
-      percentualAdiantamento: c.percentualAdiantamento || 40,
-      percentualFechamento: c.percentualFechamento || 60,
+      percentualAdiantamento: c.percentualAdiantamento ?? 50,
+      percentualFechamento: c.percentualFechamento ?? 50,
       diaAdiantamento: c.diaAdiantamento || 15,
       diaFechamento: c.diaFechamento || 5,
       formaPagamento: c.formaPagamento || "",
@@ -419,10 +419,10 @@ export default function ModuloPJ() {
         dataFim: form.dataFim,
         renovacaoAutomatica: form.renovacaoAutomatica || 0,
         valorMensal: form.valorMensal,
-        percentualAdiantamento: form.percentualAdiantamento || 40,
-        percentualFechamento: form.percentualFechamento || 60,
-        diaAdiantamento: form.diaAdiantamento || 15,
-        diaFechamento: form.diaFechamento || 5,
+        percentualAdiantamento: form.percentualAdiantamento ?? 50,
+        percentualFechamento: form.percentualFechamento ?? 50,
+        diaAdiantamento: form.diaAdiantamento ?? 15,
+        diaFechamento: form.diaFechamento ?? 5,
         observacoes: form.observacoes,
         motivoAlteracao: motivoAlteracao || undefined,
         bancoPrestador: form.bancoPrestador || undefined,
@@ -441,10 +441,10 @@ export default function ModuloPJ() {
         dataFim: form.dataFim,
         renovacaoAutomatica: form.renovacaoAutomatica || 0,
         valorMensal: form.valorMensal,
-        percentualAdiantamento: form.percentualAdiantamento || 40,
-        percentualFechamento: form.percentualFechamento || 60,
-        diaAdiantamento: form.diaAdiantamento || 15,
-        diaFechamento: form.diaFechamento || 5,
+        percentualAdiantamento: form.percentualAdiantamento ?? 50,
+        percentualFechamento: form.percentualFechamento ?? 50,
+        diaAdiantamento: form.diaAdiantamento ?? 15,
+        diaFechamento: form.diaFechamento ?? 5,
         observacoes: form.observacoes,
         bancoPrestador: form.bancoPrestador || undefined,
         agenciaPrestador: form.agenciaPrestador || undefined,
@@ -618,9 +618,9 @@ export default function ModuloPJ() {
                             <td className="p-3 text-xs">{formatDate(c.dataInicio)} — {formatDate(c.dataFim)}</td>
                             <td className="p-3 text-right font-bold">{formatMoeda(c.valorMensal)}</td>
                             <td className="p-3 text-center text-xs">
-                              <span className="text-amber-600">{c.percentualAdiantamento || 40}%</span>
+                              <span className="text-amber-600">{c.percentualAdiantamento ?? 50}%</span>
                               <span className="mx-1">/</span>
-                              <span className="text-green-600">{c.percentualFechamento || 60}%</span>
+                              <span className="text-green-600">{c.percentualFechamento ?? 50}%</span>
                             </td>
                             <td className="p-3 text-center">
                               <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
@@ -905,15 +905,15 @@ export default function ModuloPJ() {
                       </div>
                       <div>
                         <p className="text-lg font-bold text-amber-600">
-                          {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualAdiantamento || 40) / 100)}
+                          {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualAdiantamento ?? 50) / 100)}
                         </p>
-                        <p className="text-xs text-muted-foreground">Adiantamento ({selectedContrato.percentualAdiantamento || 40}%) — Dia {selectedContrato.diaAdiantamento || 15}</p>
+                        <p className="text-xs text-muted-foreground">Adiantamento ({selectedContrato.percentualAdiantamento ?? 50}%) — Dia {selectedContrato.diaAdiantamento ?? 15}</p>
                       </div>
                       <div>
                         <p className="text-lg font-bold text-green-600">
-                          {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualFechamento || 60) / 100)}
+                          {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualFechamento ?? 50) / 100)}
                         </p>
-                        <p className="text-xs text-muted-foreground">Fechamento ({selectedContrato.percentualFechamento || 60}%) — Dia {selectedContrato.diaFechamento || 5}</p>
+                        <p className="text-xs text-muted-foreground">Fechamento ({selectedContrato.percentualFechamento ?? 50}%) — Dia {selectedContrato.diaFechamento ?? 5}</p>
                       </div>
                     </div>
                   </div>
@@ -1208,19 +1208,23 @@ export default function ModuloPJ() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs font-medium">% Adiantamento</label>
-                    <Input type="number" value={form.percentualAdiantamento || 40} onChange={e => setForm({ ...form, percentualAdiantamento: parseInt(e.target.value) || 40 })} />
+                    <Input type="number" min={0} max={100} value={form.percentualAdiantamento ?? ""} placeholder="50"
+                      onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, percentualAdiantamento: isNaN(v) ? undefined : v }); }} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">Dia Adiantamento</label>
-                    <Input type="number" min={1} max={31} value={form.diaAdiantamento || 15} onChange={e => setForm({ ...form, diaAdiantamento: parseInt(e.target.value) || 15 })} />
+                    <Input type="number" min={1} max={31} value={form.diaAdiantamento ?? ""} placeholder="15"
+                      onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaAdiantamento: isNaN(v) ? undefined : v }); }} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">% Fechamento</label>
-                    <Input type="number" value={form.percentualFechamento || 60} onChange={e => setForm({ ...form, percentualFechamento: parseInt(e.target.value) || 60 })} />
+                    <Input type="number" min={0} max={100} value={form.percentualFechamento ?? ""} placeholder="50"
+                      onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, percentualFechamento: isNaN(v) ? undefined : v }); }} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">Dia Fechamento</label>
-                    <Input type="number" min={1} max={31} value={form.diaFechamento || 5} onChange={e => setForm({ ...form, diaFechamento: parseInt(e.target.value) || 5 })} />
+                    <Input type="number" min={1} max={31} value={form.diaFechamento ?? ""} placeholder="5"
+                      onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaFechamento: isNaN(v) ? undefined : v }); }} />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="text-xs font-medium">Forma de Pagamento</label>
@@ -1238,8 +1242,8 @@ export default function ModuloPJ() {
                 </div>
                 {form.valorMensal && (
                   <div className="mt-3 text-xs text-purple-700 flex gap-4 flex-wrap">
-                    <span>Adiantamento: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualAdiantamento || 40) / 100)}</strong> — dia {form.diaAdiantamento || 15}</span>
-                    <span>Fechamento: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualFechamento || 60) / 100)}</strong> — dia {form.diaFechamento || 5} (mês seguinte)</span>
+                    <span>Adiantamento: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualAdiantamento ?? 50) / 100)}</strong> — dia {form.diaAdiantamento ?? 15}</span>
+                    <span>Fechamento: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualFechamento ?? 50) / 100)}</strong> — dia {form.diaFechamento ?? 5} (mês seguinte)</span>
                   </div>
                 )}
               </div>

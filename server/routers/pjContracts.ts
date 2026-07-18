@@ -98,8 +98,8 @@ async function gerarPrevisoesDoContrato(
   if (!contrato?.dataInicio || !contrato?.dataFim) return 0;
 
   const valorMensal = parseFloat(contrato.valorMensal || "0") || 0;
-  const percAdiant = contrato.percentualAdiantamento ?? 40;
-  const percFech = contrato.percentualFechamento ?? 60;
+  const percAdiant = contrato.percentualAdiantamento ?? 50;
+  const percFech = contrato.percentualFechamento ?? 50;
   const diaAdiant = contrato.diaAdiantamento ?? 15;
   const diaFech = contrato.diaFechamento ?? 5;
   const formaPag = contrato.formaPagamento ?? null;
@@ -657,8 +657,8 @@ export const pjContractsRouter = router({
         if (!emp || !empresa) throw new TRPCError({ code: "NOT_FOUND" });
         
         const valorMensal = parseFloat(contrato.valorMensal || "0");
-        const percAdiant = contrato.percentualAdiantamento || 40;
-        const percFech = contrato.percentualFechamento || 60;
+        const percAdiant = contrato.percentualAdiantamento ?? 50;
+        const percFech = contrato.percentualFechamento ?? 50;
         
         let texto = MODELO_CONTRATO_PJ;
         texto = texto.replace(/\[EMPRESA_RAZAO_SOCIAL\]/g, empresa.razaoSocial || '');
@@ -699,8 +699,8 @@ export const pjContractsRouter = router({
         dataFim: z.string(),
         renovacaoAutomatica: z.number().default(0),
         valorMensal: z.string(),
-        percentualAdiantamento: z.number().default(40),
-        percentualFechamento: z.number().default(60),
+        percentualAdiantamento: z.number().default(50),
+        percentualFechamento: z.number().default(50),
         diaAdiantamento: z.number().default(15),
         diaFechamento: z.number().default(5),
         formaPagamento: z.string().optional(),

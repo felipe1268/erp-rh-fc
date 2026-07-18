@@ -1,4 +1,18 @@
 /**
+ * Rev. 4374 - MÓDULO PJ — CONTRATOS: PADRÃO 50/50 E INPUT LIBERADO
+ *
+ * Dois problemas corrigidos nos campos % Adiantamento / % Fechamento:
+ *   1. Padrão alterado de 40/60 → 50/50 em TODOS os pontos (frontend + server).
+ *   2. Bug "trava ao apagar": `parseInt("") || 40` voltava ao padrão impedindo
+ *      digitação livre. Corrigido para `isNaN(v) ? undefined : v` + `value ?? ""`.
+ *      Agora o campo aceita ficar vazio (placeholder mostra o padrão) e o usuário
+ *      digita livremente sem o campo "pular" de volta.
+ *
+ * ARQUIVOS: client/src/pages/ModuloPJ.tsx, server/routers/pjContracts.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4373 - CONFIGURAÇÕES TERCEIROS: PARÂMETRO "PJ FORMA DE PAGAMENTO"
  *
  * Adicionado parâmetro `terceiros_pj_forma_pagamento` na seção Terceiros
