@@ -2038,7 +2038,7 @@ export const scorecardRouter = router({
               AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
             LEFT JOIN pf ON pf.employee_id = pe.employee_id
             LEFT JOIN vr_data v ON v.employee_id = pf.employee_id AND v.mes_referencia = pf.mes_referencia
-            GROUP BY pe.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase", e."tipoContrato", e.cpf, e.status
+            GROUP BY pe.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase", e."tipoContrato", e.cpf, e.status, e."licencaDataInicio"
           )
           SELECT * FROM custos ORDER BY custo_folha_empresa DESC NULLS LAST, nome ASC
         `),
