@@ -810,6 +810,12 @@ export default function ModuloPJ() {
               const itens = (pagamentos as any[]).filter(p => isAdiant ? p.tipo === "adiantamento" : p.tipo !== "adiantamento");
               const totalGrupo = itens.reduce((s: number, p: any) => s + parseFloat(p.valor || "0"), 0);
               const allSelected = itens.length > 0 && itens.every((p: any) => selectedIds.has(p.id));
+              // Mapa: contractId+mesReferencia → tem NF na 1ª medição?
+              const primeiraComNF = new Set<string>(
+                (pagamentos as any[])
+                  .filter((p: any) => p.tipo === "adiantamento" && p.nfUrl)
+                  .map((p: any) => `${p.contractId}_${p.mesReferencia}`)
+              );
               return (
                 <Card className={`border-2 ${isAdiant ? "border-amber-200" : "border-green-200"}`}>
                   <CardHeader className={`pb-3 pt-3 px-4 ${isAdiant ? "bg-amber-50" : "bg-green-50"} rounded-t-lg`}>
@@ -848,6 +854,7 @@ export default function ModuloPJ() {
                             <th className="p-3 text-left font-medium">Data</th>
                             <th className="p-3 text-left font-medium">Forma Pgto</th>
                             <th className="p-3 text-center font-medium">Status</th>
+                            <th className="p-3 text-center font-medium">NF</th>
                             <th className="p-3 text-center font-medium">Ações</th>
                           </tr>
                         </thead>
@@ -885,17 +892,27 @@ export default function ModuloPJ() {
                                 <td className="p-3 text-center">
                                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
                                 </td>
+                                <td className="p-3 text-center">
+                                  {p.nfUrl ? (
+                                    <a href={p.nfUrl} target="_blank" rel="noreferrer" title={p.nfNome || "Ver NF"} className="inline-flex items-center justify-center gap-1 text-xs text-purple-700 font-medium hover:underline">
+                                      <Paperclip className="h-3 w-3" /> NF
+                                    </a>
+                                  ) : !isAdiant && !primeiraComNF.has(`${p.contractId}_${p.mesReferencia}`) ? (
+                                    <span className="inline-flex items-center gap-1 text-xs text-red-600 font-semibold" title="Nem a 1ª nem a 2ª medição tem NF — obrigatória em pelo menos uma">
+                                      ⚠️ NF necessária
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-amber-600 font-medium" title="Nota fiscal não anexada">
+                                      Sem NF
+                                    </span>
+                                  )}
+                                </td>
                                 <td className="p-3">
                                   <div className="flex items-center justify-center gap-1">
                                     {p.status === "pendente" && (
                                       <Button size="sm" variant="ghost" className="h-7 text-xs text-blue-600" title="Aprovar e enviar para Contas a Pagar" onClick={() => { setAprovarTarget(p); setAprovarNfFile(null); setAprovarEnviarFin(true); setShowAprovarDialog(true); }}>
                                         <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Aprovar
                                       </Button>
-                                    )}
-                                    {p.nfUrl && (
-                                      <a href={p.nfUrl} target="_blank" rel="noreferrer" title={p.nfNome || "Ver NF"} className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-muted text-purple-600">
-                                        <Paperclip className="h-3.5 w-3.5" />
-                                      </a>
                                     )}
                                     <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir?")) deletePagamento.mutate({ id: p.id }); }}>
                                       <Trash2 className="h-3.5 w-3.5" />
