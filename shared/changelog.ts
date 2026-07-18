@@ -1,4 +1,30 @@
 /**
+ * Rev. 4368 - SCORECARD OBRA — FOLHA/CUSTOS: GUARD "ESTÁ ALOCADO" NO CRUZAMENTO DE PONTO
+ *
+ * Refinamento final do ciclo ponto×locação (Rev. 4366/4367):
+ *
+ * REGRA COMPLETA:
+ *   1. Locação (ESH/OF) → define a equipe formal da obra
+ *   2. Ponto (time_records) → confirma presença real de CLT, mesmo sem locação
+ *      cobrindo aquele mês específico
+ *   3. Guard "está alocado": ponto só puxa funcionário se ele tiver algum registro
+ *      formal na obra (ESH ou OF em qualquer época) — impede ponto em obra errada
+ *      puxar funcionários que nunca foram alocados lá
+ *   4. PJ → exclusivamente pela locação (sem cruzamento de ponto)
+ *
+ * ESCOPO: 27 combinações mês×obra identificadas no banco onde CLT tem ponto mas
+ * alocação formal não cobre o mês. Maior impacto: jan/2026 Hotel Qiu 2 (62 funcs,
+ * 571 dias de ponto sem cobertura de locação). Todos resolvidos dinamicamente.
+ *
+ * Guard EXISTS (ESH ou OF na obra) adicionado em AMBAS as UNIONs:
+ *   - relevant_emp (pool do payroll_frac)
+ *   - period_emps  (âncora do LEFT JOIN em custos)
+ *
+ * ARQUIVOS: server/routers/scorecard.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4367 - SCORECARD OBRA — FOLHA/CUSTOS: PJ EXCLUÍDO DO CRUZAMENTO DE PONTO
  *
  * Refinamento da Rev. 4366: PJ nunca entra pela âncora de ponto (time_records),

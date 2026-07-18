@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4367** — **SCORECARD OBRA — FOLHA/CUSTOS: PJ EXCLUÍDO DO CRUZAMENTO DE PONTO.** Refinamento da Rev. 4366: filtro `tipoContrato <> 'PJ'` em `relevant_emp` + `period_emps`. Ciclo: CLT com ponto→ponto principal; CLT sem ponto→locação fallback; PJ→exclusivamente locação. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4368** — **SCORECARD OBRA — FOLHA/CUSTOS: GUARD "ESTÁ ALOCADO" NO CRUZAMENTO DE PONTO.** Ciclo final: locação define equipe → ponto confirma presença CLT → guard EXISTS(ESH ou OF na obra) impede ponto em obra errada puxar estranho → PJ exclusivamente por locação. 27 combinações mês×obra resolvidas dinamicamente. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4366** — **SCORECARD OBRA — FOLHA/CUSTOS: PONTO COMO CONFIRMAÇÃO DE PRESENÇA.** `relevant_emp` + `period_emps` ganham UNION com `time_records`: CLT que bateu ponto na obra aparece na equipe mesmo sem alocação formal cobrindo o mês. Resolve "Sem dados" de junho (20 funcionários com ponto, 0 na alocação). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4367** — **SCORECARD OBRA — FOLHA/CUSTOS: PJ EXCLUÍDO DO CRUZAMENTO DE PONTO.** Filtro `tipoContrato <> 'PJ'` em `relevant_emp` + `period_emps`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4364** — **FOLHA DE PAGAMENTO: BOTÃO "LIMPAR MÊS" (ADMIN MASTER).** Nova procedure `folha.limparMes` em transação: apaga payroll_payments/advances/adjustments/rounding_ledger + reset payroll_periods + exclui lançamentos legados PDF. ZERO ALTER destrutivo no schema.
 

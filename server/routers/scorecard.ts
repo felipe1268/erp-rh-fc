@@ -1859,8 +1859,9 @@ export const scorecardRouter = router({
             SELECT employee_id, periodo_inicio, periodo_fim FROM bridge_emps
           ),
           relevant_emp AS (
-            -- Rev. 4366: ponto confirma presença física para CLT — PJ permanece exclusivamente
-            -- pela locação (site_periods). CLT com ponto entra no pool para payroll_frac.
+            -- Rev. 4366/4368: ponto confirma presença para CLT — PJ só via locação.
+            -- Guard "está alocado": só entra via ponto quem tem ESH ou OF na obra
+            -- (em qualquer época), impedindo ponto lançado na obra errada puxar estranhos.
             SELECT DISTINCT employee_id FROM site_periods
             UNION
             SELECT DISTINCT tr."employeeId"
@@ -1871,6 +1872,21 @@ export const scorecardRouter = router({
               AND tr."obraId"        = ${input.obraId}
               AND tr."mesReferencia" >= ${mesFeriasIni}
               AND tr."mesReferencia" <= ${mesFeriasFim}
+              -- Guard: funcionário deve ter alguma locação formal na obra (em qualquer época)
+              AND (
+                EXISTS (
+                  SELECT 1 FROM employee_site_history esh_g
+                  WHERE esh_g."employeeId" = tr."employeeId"
+                    AND esh_g."obraId"     = ${input.obraId}
+                    AND esh_g."companyId"  = ${input.companyId}
+                )
+                OR EXISTS (
+                  SELECT 1 FROM obra_funcionarios of_g
+                  WHERE of_g."employeeId" = tr."employeeId"
+                    AND of_g."obraId"     = ${input.obraId}
+                    AND of_g."companyId"  = ${input.companyId}
+                )
+              )
           ),
           -- Rev. 4366: ponto como confirmação de presença — funcionário com cartão de ponto
           -- na obra no período aparece na equipe mesmo sem alocação formal (ESH/OF) cobrindo o mês.
@@ -1919,6 +1935,7 @@ export const scorecardRouter = router({
             -- Ponto como âncora secundária para CLT: quem bateu ponto na obra no período
             -- mas não tem alocação formal cobrindo o mês (ex.: transferência anterior ao mês).
             -- PJ NUNCA entra aqui — exclusivamente pela locação (site_periods).
+            -- Guard "está alocado": exige ESH ou OF na obra em qualquer época.
             SELECT DISTINCT tr."employeeId"
             FROM time_records tr
             JOIN employees ep ON ep.id = tr."employeeId"
@@ -1928,6 +1945,20 @@ export const scorecardRouter = router({
               AND tr."mesReferencia" <= ${mesFeriasFim}
               AND ep.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
               AND ep."tipoContrato" <> 'PJ'
+              AND (
+                EXISTS (
+                  SELECT 1 FROM employee_site_history esh_g2
+                  WHERE esh_g2."employeeId" = tr."employeeId"
+                    AND esh_g2."obraId"     = ${input.obraId}
+                    AND esh_g2."companyId"  = ${input.companyId}
+                )
+                OR EXISTS (
+                  SELECT 1 FROM obra_funcionarios of_g2
+                  WHERE of_g2."employeeId" = tr."employeeId"
+                    AND of_g2."obraId"     = ${input.obraId}
+                    AND of_g2."companyId"  = ${input.companyId}
+                )
+              )
           ),
           payroll_frac AS (
             SELECT
