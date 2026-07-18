@@ -1,4 +1,20 @@
 /**
+ * Rev. 4382 - TEMPLATES ISO: AUTO-PREENCHIMENTO DE "ELABORADO POR" E DATA DE VIGÊNCIA
+ *
+ * Quando um tipo de template ainda não foi criado (selRow=null, query carregada),
+ * o formulário agora preenche automaticamente:
+ * - "Elaborado por" → nome do usuário logado (user.name || user.username)
+ * - "Data de vigência" → data de hoje (ISO: YYYY-MM-DD)
+ *
+ * Mudança: useEffect de sincronia da ficha ISO (selRow) agora tem um ramo
+ * else para !selRow: quando a query finalizou sem encontrar linha no DB,
+ * chama setElaboradoPorNome + setDataVigencia com valores padrão.
+ * Dependências atualizadas: [selRow, listAllQuery.isLoading, user].
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4381 - CONTRATO PJ: PRÉ-POPULAÇÃO DO EDITOR ISO COM MODELO PADRÃO
  *
  * O editor de "Contrato PJ" em Configurações → Templates de Documentos ficava

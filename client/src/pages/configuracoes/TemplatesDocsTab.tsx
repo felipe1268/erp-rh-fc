@@ -322,12 +322,21 @@ export default function TemplatesDocsTab() {
   }, [tipoSelecionado]);
 
   useEffect(() => {
-    if (!selRow) return;
+    if (!selRow) {
+      // Nenhum template ainda — auto-preenche com usuário logado e data de hoje
+      if (!listAllQuery.isLoading) {
+        setElaboradoPorNome(user?.name || (user as any)?.username || "");
+        setDataVigencia(new Date().toISOString().split("T")[0]);
+        setCodigo("");
+        setProximaRevisao("");
+      }
+      return;
+    }
     setCodigo(selRow.codigo || "");
     setDataVigencia(selRow.dataVigencia || "");
     setProximaRevisao(selRow.proximaRevisao || "");
     setElaboradoPorNome(selRow.elaboradoPorNome || "");
-  }, [selRow]);
+  }, [selRow, listAllQuery.isLoading, user]);
 
   const invalidarTudo = () => {
     utils.systemDocumentTemplates.listAll.invalidate();
