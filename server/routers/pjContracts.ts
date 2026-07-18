@@ -1044,6 +1044,7 @@ export const pjContractsRouter = router({
           aprovadoPorNome: pjPayments.aprovadoPorNome,
           enviadoFinanceiro: pjPayments.enviadoFinanceiro,
           employeeName: employees.nomeCompleto,
+          employeeFotoUrl: employees.fotoUrl,
           cnpjPrestador: pjContracts.cnpjPrestador,
           razaoSocialPrestador: pjContracts.razaoSocialPrestador,
         })

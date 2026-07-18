@@ -892,7 +892,18 @@ export default function ModuloPJ() {
                                       setSelectedIds(next);
                                     }} />
                                 </td>
-                                <td className="p-3 font-medium">{p.employeeName}</td>
+                                <td className="p-3">
+                                  <div className="flex items-center gap-2">
+                                    {p.employeeFotoUrl ? (
+                                      <img src={p.employeeFotoUrl} alt={p.employeeName} className="h-7 w-7 rounded-full object-cover flex-shrink-0 ring-1 ring-muted" />
+                                    ) : (
+                                      <div className="h-7 w-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0 ring-1 ring-muted">
+                                        {(p.employeeName || "?").charAt(0).toUpperCase()}
+                                      </div>
+                                    )}
+                                    <span className="font-medium leading-tight">{p.employeeName}</span>
+                                  </div>
+                                </td>
                                 <td className="p-3">
                                   <FornecedorCadastroBadge status={p.fornecedorStatus} nome={p.fornecedorNome} cnpj={p.cnpjPrestador} />
                                 </td>
