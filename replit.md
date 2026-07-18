@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4390** — **CONTRATO PJ: FONTE ÚNICA — APENAS TEMPLATE DE CONFIGURAÇÕES.** `plainTextModelToHtmlServer` removida. `modeloContrato` retorna só o vigente de `systemDocumentTemplates` (sem fallback hardcoded). `ContratoPJView` e `ModuloPJ` limpos: sem "Editar Cláusulas", sem fallback plain-text. Única fonte: Configurações → Templates de Documentos → Contrato PJ. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4389** — **MÓDULO PJ: BOTÃO IMPRIMIR CONTRATO → CONTRATOPJVIEW (TEMPLATE ISO).** Botão 🖨️ (verde) na coluna Ações navega para `/contrato-pj/:id`. ContratoPJView usa `pj.modeloContrato` que retorna o template vigente de `systemDocumentTemplates`. Controle de edição permanece em Configurações → Templates de Documentos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4388** — **MÓDULO PJ: REMOÇÃO DO BOTÃO FCSIGN DA LISTA DE CONTRATOS.** Botão "Enviar para assinatura digital (FCSign)" removido completamente da coluna Ações + import/states/dialog/banner associados. Nova instrução de fluxo de assinatura será fornecida. ZERO DELETE · ZERO ALTER destrutivo.

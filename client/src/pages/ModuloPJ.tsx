@@ -19,7 +19,7 @@ import {
   Briefcase, Plus, Search, DollarSign, AlertTriangle, FileText,
   Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar, Pencil,
   Users, TrendingUp, FileSignature, Ban, Printer, Upload, FolderOpen,
-  ExternalLink, File, XCircle, Award, Loader2, RotateCcw, Check, Settings2,
+  ExternalLink, File, XCircle, Award, Loader2, Check, Settings2,
   ShieldCheck, Paperclip,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
@@ -112,8 +112,6 @@ export default function ModuloPJ() {
   const [novoDocTipo, setNovoDocTipo] = useState("outro");
   const [motivoAlteracao, setMotivoAlteracao] = useState("");
   const [createdContratoId, setCreatedContratoId] = useState<number | null>(null);
-  const [showEditClausulas, setShowEditClausulas] = useState(false);
-  const [editClausulasTexto, setEditClausulasTexto] = useState("");
 
   // Mês referência para pagamentos — PeriodSelectorCard (padrão de ouro)
   const [pjAno, setPjAno] = useState(() => new Date().getFullYear());
@@ -258,18 +256,6 @@ export default function ModuloPJ() {
         : aprovarEnviarFin ? "Medição aprovada e enviada para o financeiro!" : "Medição aprovada!");
     },
     onError: (e: any) => toast.error(e.message),
-  });
-  const { data: modeloPadrao } = trpc.pj.modeloContrato.useQuery({ companyId });
-  const salvarClausulasMut = (trpc as any).pj.salvarClausulas.useMutation({
-    onSuccess: () => {
-      toast.success("Cláusulas salvas com sucesso!");
-      setShowEditClausulas(false);
-      refetchContratos();
-      if (selectedContrato) {
-        setSelectedContrato((prev: any) => ({ ...prev, clausulasCustomizadas: editClausulasTexto }));
-      }
-    },
-    onError: (e: any) => toast.error(e.message || "Erro ao salvar cláusulas"),
   });
 
   const uploadContratoAssinado = trpc.pj.contratos.uploadContrato.useMutation({
@@ -1058,15 +1044,7 @@ export default function ModuloPJ() {
           <FullScreenDialog open={showDetailDialog} onClose={() => { setShowDetailDialog(false); setSelectedContrato(null); setDetailTab("info"); }} title={`Contrato ${selectedContrato.numeroContrato}`} icon={<FileSignature className="h-5 w-5 text-white" />}>
             <div className="w-full max-w-3xl mx-auto space-y-4">
 
-              {/* Botão Gerar Contrato */}
               <div className="flex justify-end gap-2 flex-wrap">
-                <Button variant="outline" size="sm" className="gap-2 border-green-300 text-green-700 hover:bg-green-50" onClick={() => {
-                  const textoAtual = selectedContrato?.clausulasCustomizadas || modeloPadrao?.modelo || "";
-                  setEditClausulasTexto(textoAtual);
-                  setShowEditClausulas(true);
-                }}>
-                  <Pencil className="h-4 w-4" /> Editar Cláusulas
-                </Button>
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => { setShowDetailDialog(false); openEditContrato(selectedContrato); }}>
                   <Pencil className="h-4 w-4" /> Editar
                 </Button>
@@ -1483,64 +1461,6 @@ export default function ModuloPJ() {
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 
 
-      {/* DIALOG EDITAR CLÁUSULAS */}
-      <Dialog open={showEditClausulas} onOpenChange={setShowEditClausulas}>
-        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] flex flex-col" style={{ background: '#ffffff', color: '#111827' }}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg text-gray-900">
-              <Pencil className="h-5 w-5 text-green-600" />
-              Editar Cláusulas — Contrato {selectedContrato?.numeroContrato}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 flex-1 overflow-y-auto min-h-0">
-            <div className="rounded-lg border-2 border-green-200 bg-green-50 p-3">
-              <p className="text-sm text-green-800">
-                Edite o texto das cláusulas diretamente abaixo. Placeholders como <code className="bg-green-100 px-1 rounded">[VALOR_MENSAL]</code>, <code className="bg-green-100 px-1 rounded">[DATA_INICIO]</code> etc. são substituídos automaticamente ao visualizar/imprimir.
-              </p>
-            </div>
-            {selectedContrato?.clausulasCustomizadas && (
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setEditClausulasTexto(modeloPadrao?.modelo || "")}
-                  className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-800 hover:underline"
-                >
-                  <RotateCcw className="h-3 w-3" /> Restaurar modelo padrão
-                </button>
-              </div>
-            )}
-            <textarea
-              value={editClausulasTexto}
-              onChange={e => setEditClausulasTexto(e.target.value)}
-              rows={22}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-y"
-              placeholder="Cole ou edite o texto das cláusulas aqui..."
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-3 border-t border-gray-100 shrink-0">
-            <Button variant="outline" onClick={() => setShowEditClausulas(false)} className="text-gray-600">
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                const textoFinal = editClausulasTexto.trim();
-                if (!textoFinal) { toast.error("O texto das cláusulas não pode ser vazio."); return; }
-                salvarClausulasMut.mutate({
-                  contractId: selectedContrato?.id,
-                  companyId,
-                  clausulasTexto: textoFinal,
-                });
-              }}
-              disabled={salvarClausulasMut.isPending}
-              className="bg-green-600 hover:bg-green-700 text-white gap-2"
-            >
-              {salvarClausulasMut.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
-                : <><Check className="h-4 w-4" /> Salvar Cláusulas</>}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
           <PrintFooterLGPD />
 

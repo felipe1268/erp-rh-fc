@@ -1,4 +1,33 @@
 /**
+ * Rev. 4390 - CONTRATO PJ: FONTE ÚNICA — APENAS TEMPLATE DE CONFIGURAÇÕES
+ *
+ * Removidos completamente todos os caminhos alternativos de geração de contrato.
+ * A única fonte agora é systemDocumentTemplates (tipo='contrato_pj', status='vigente').
+ *
+ * Servidor (pjContracts.ts):
+ * - `plainTextModelToHtmlServer()` removida
+ * - `MODELO_CONTRATO_PJ` mantido apenas como comentário de referência de placeholders
+ * - `modeloContrato` simplificada: retorna APENAS o template vigente do banco;
+ *   sem fallback para hardcoded, sem auto-heal, sem documentTemplates legados.
+ *   Retorna { modeloHtml: string|null } — null se nenhum vigente encontrado.
+ *
+ * ContratoPJView.tsx:
+ * - Removidos: estados showEditClausulas/editClausulasTexto, salvarClausulasMut,
+ *   useEffect de pré-carga, renderContractText(), formatBoldText(), banner de
+ *   cláusulas customizadas, botão "Editar Cláusulas" da barra, dialog
+ *   "MODAL EDITAR CLÁUSULAS", imports RotateCcw/Pencil/Check/utils.
+ * - Renderização simplificada: modeloHtmlIso direto → replacePlaceholders(); se
+ *   null → mensagem "configure o template em Configurações".
+ *
+ * ModuloPJ.tsx:
+ * - Removidos: modeloPadrao query, salvarClausulasMut, estados showEditClausulas/
+ *   editClausulasTexto, botão "Editar Cláusulas" no detail dialog, dialog completo
+ *   "DIALOG EDITAR CLÁUSULAS", import RotateCcw.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4389 - MÓDULO PJ: BOTÃO IMPRIMIR CONTRATO → CONTRATOPJVIEW (TEMPLATE ISO)
  *
  * Adicionado botão 🖨️ "Imprimir / Ver contrato" (ícone verde, Printer) na
