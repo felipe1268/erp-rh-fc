@@ -58,9 +58,9 @@ async function sincronizarPagamentosPendentesInterno(db: any, employeeId: number
         END,
         descricao = CASE
           WHEN pp.tipo = 'adiantamento'
-            THEN 'Adiantamento ' || pjc."percentualAdiantamento"::text || '% — Serviços de engenharia'
+            THEN '1ª Medição ' || pjc."percentualAdiantamento"::text || '% — ' || to_char(to_date(pp."mesReferencia", 'YYYY-MM'), 'MM/YYYY')
           WHEN pp.tipo = 'fechamento'
-            THEN 'Fechamento ' || pjc."percentualFechamento"::text || '% — Serviços de engenharia'
+            THEN '2ª Medição ' || pjc."percentualFechamento"::text || '% — ' || to_char(to_date(pp."mesReferencia", 'YYYY-MM'), 'MM/YYYY')
           ELSE pp.descricao
         END,
         "updatedAt" = NOW()
@@ -153,7 +153,7 @@ async function gerarPrevisoesDoContrato(
           mesReferencia: mesRef,
           tipo: "adiantamento",
           valor: valorAdiant,
-          descricao: `Adiantamento ${percAdiant}% — ${mesRef}`,
+          descricao: `1ª Medição ${percAdiant}% — ${mesRef.split('-').reverse().join('/')}`,
           dataPrevista: dataIsoSegura(ano, mes, diaAdiant),
           status: "pendente",
           formaPagamento: formaPag,
@@ -176,7 +176,7 @@ async function gerarPrevisoesDoContrato(
           mesReferencia: mesRef,
           tipo: "fechamento",
           valor: valorFech,
-          descricao: `Fechamento ${percFech}% — ${mesRef}`,
+          descricao: `2ª Medição ${percFech}% — ${mesRef.split('-').reverse().join('/')}`,
           dataPrevista: dataIsoSegura(prox.ano, prox.mes, diaFech),
           status: "pendente",
           formaPagamento: formaPag,
