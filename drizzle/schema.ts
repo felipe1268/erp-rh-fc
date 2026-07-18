@@ -2823,6 +2823,8 @@ export const pjContracts = pgTable("pj_contracts", {
         agenciaPrestador: varchar("agencia_prestador", { length: 20 }),
         contaPrestador: varchar("conta_prestador", { length: 30 }),
         pixPrestador: varchar("pix_prestador", { length: 150 }),
+        // Rev. 4372 — Forma de pagamento padrão do contrato (PIX, TED, Boleto, Depósito, Cheque)
+        formaPagamento: varchar("forma_pagamento", { length: 30 }),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         deletedAt: timestamp({ mode: 'string' }),
@@ -2942,6 +2944,8 @@ export const pjPayments = pgTable("pj_payments", {
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataPagamento: date({ mode: 'string' }),
         status: text().default('pendente').notNull(),
+        // Rev. 4372 — Forma de pagamento do lançamento (herda do contrato, editável por lançamento)
+        formaPagamento: varchar("forma_pagamento", { length: 30 }),
         comprovanteUrl: text(),
         observacoes: text(),
         criadoPor: varchar({ length: 255 }),

@@ -1,4 +1,32 @@
 /**
+ * Rev. 4372 - MÓDULO PJ — CONTRATOS PJ: FORMA DE PAGAMENTO
+ *
+ * Adicionado campo `formaPagamento` (PIX/TED/Boleto/Depósito/Cheque) em:
+ *   - `pj_contracts`: forma padrão definida no contrato
+ *   - `pj_payments`: forma por lançamento (herda do contrato, editável)
+ *
+ * Fluxo:
+ *   - Formulário de contrato → seção "Regra de Pagamento" agora inclui
+ *     o Select de forma de pagamento (ao lado dos campos dias).
+ *   - Geração de previsões (`gerarPrevisoesDoContrato`): propaga
+ *     `formaPagamento` do contrato para cada pj_payment gerado.
+ *   - Lançamento manual: inclui campo "Forma de Pagamento" + "Data Prevista"
+ *     no dialog de criação.
+ *   - Tabela Folha PJ: nova coluna "Forma Pgto" exibe o valor por linha.
+ *   - Editar contrato: `formaPagamento` é pré-preenchido do contrato existente.
+ *
+ * Preview de valores na seção "Regra de Pagamento" agora mostra também
+ * os dias: "Adiantamento: R$ X — dia 15 / Fechamento: R$ X — dia 5 (mês seguinte)".
+ *
+ * SyncSchema+ Rev. 4372: `ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS
+ * forma_pagamento VARCHAR(30)` + idem em `pj_payments`.
+ *
+ * ARQUIVOS: drizzle/schema.ts, server/_core/index.ts, server/routers/pjContracts.ts,
+ *           client/src/pages/ModuloPJ.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4371 - MÓDULO PJ — FOLHA PJ: PERIOD SELECTOR COM DOTS E LEGENDA
  *
  * Tela /modulo-pj aba "Folha PJ": substituiu o campo `<Input type="month">` pelo

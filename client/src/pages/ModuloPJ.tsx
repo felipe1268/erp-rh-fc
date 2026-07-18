@@ -388,6 +388,7 @@ export default function ModuloPJ() {
       percentualFechamento: c.percentualFechamento || 60,
       diaAdiantamento: c.diaAdiantamento || 15,
       diaFechamento: c.diaFechamento || 5,
+      formaPagamento: c.formaPagamento || "",
       observacoes: c.observacoes || "",
       bancoPrestador: c.bancoPrestador || "",
       agenciaPrestador: c.agenciaPrestador || "",
@@ -718,13 +719,14 @@ export default function ModuloPJ() {
                         <th className="p-3 text-left font-medium">Descrição</th>
                         <th className="p-3 text-right font-medium">Valor</th>
                         <th className="p-3 text-left font-medium">Data</th>
+                        <th className="p-3 text-left font-medium">Forma Pgto</th>
                         <th className="p-3 text-center font-medium">Status</th>
                         <th className="p-3 text-center font-medium">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(pagamentos as any[]).length === 0 ? (
-                        <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">
+                        <tr><td colSpan={9} className="py-12 text-center text-muted-foreground">
                           Nenhuma medição para {pjMes != null ? mesRef : String(pjAno)}. Novos contratos já geram as previsões automaticamente — para contratos antigos use "Sincronizar Previsões".
                         </td></tr>
                       ) : (pagamentos as any[]).map((p: any) => {
@@ -750,6 +752,9 @@ export default function ModuloPJ() {
                               ) : (
                                 <span className="text-muted-foreground">—</span>
                               )}
+                            </td>
+                            <td className="p-3 text-xs text-muted-foreground">
+                              {p.formaPagamento || <span className="text-muted-foreground/50">—</span>}
                             </td>
                             <td className="p-3 text-center">
                               <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
@@ -1199,7 +1204,7 @@ export default function ModuloPJ() {
                   </div>
                   <div>
                     <label className="text-xs font-medium">Dia Adiantamento</label>
-                    <Input type="number" value={form.diaAdiantamento || 15} onChange={e => setForm({ ...form, diaAdiantamento: parseInt(e.target.value) || 15 })} />
+                    <Input type="number" min={1} max={31} value={form.diaAdiantamento || 15} onChange={e => setForm({ ...form, diaAdiantamento: parseInt(e.target.value) || 15 })} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">% Fechamento</label>
@@ -1207,13 +1212,26 @@ export default function ModuloPJ() {
                   </div>
                   <div>
                     <label className="text-xs font-medium">Dia Fechamento</label>
-                    <Input type="number" value={form.diaFechamento || 5} onChange={e => setForm({ ...form, diaFechamento: parseInt(e.target.value) || 5 })} />
+                    <Input type="number" min={1} max={31} value={form.diaFechamento || 5} onChange={e => setForm({ ...form, diaFechamento: parseInt(e.target.value) || 5 })} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium">Forma de Pagamento</label>
+                    <Select value={form.formaPagamento || ""} onValueChange={v => setForm({ ...form, formaPagamento: v || undefined })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PIX">PIX</SelectItem>
+                        <SelectItem value="TED">TED</SelectItem>
+                        <SelectItem value="Boleto">Boleto</SelectItem>
+                        <SelectItem value="Depósito">Depósito</SelectItem>
+                        <SelectItem value="Cheque">Cheque</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 {form.valorMensal && (
-                  <div className="mt-3 text-xs text-purple-700 flex gap-4">
-                    <span>Adiantamento: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualAdiantamento || 40) / 100)}</strong></span>
-                    <span>Fechamento: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualFechamento || 60) / 100)}</strong></span>
+                  <div className="mt-3 text-xs text-purple-700 flex gap-4 flex-wrap">
+                    <span>Adiantamento: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualAdiantamento || 40) / 100)}</strong> — dia {form.diaAdiantamento || 15}</span>
+                    <span>Fechamento: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualFechamento || 60) / 100)}</strong> — dia {form.diaFechamento || 5} (mês seguinte)</span>
                   </div>
                 )}
               </div>
@@ -1331,6 +1349,23 @@ export default function ModuloPJ() {
               <div>
                 <label className="text-sm font-medium">Valor (R$) *</label>
                 <Input type="number" step="0.01" value={pagForm.valor || ""} onChange={e => setPagForm({ ...pagForm, valor: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Data Prevista</label>
+                <Input type="date" value={pagForm.dataPrevista || ""} onChange={e => setPagForm({ ...pagForm, dataPrevista: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Forma de Pagamento</label>
+                <Select value={pagForm.formaPagamento || ""} onValueChange={v => setPagForm({ ...pagForm, formaPagamento: v || undefined })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PIX">PIX</SelectItem>
+                    <SelectItem value="TED">TED</SelectItem>
+                    <SelectItem value="Boleto">Boleto</SelectItem>
+                    <SelectItem value="Depósito">Depósito</SelectItem>
+                    <SelectItem value="Cheque">Cheque</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="col-span-2">
                 <label className="text-sm font-medium">Descrição</label>

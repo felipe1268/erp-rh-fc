@@ -5445,6 +5445,14 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4293: dados bancários do prestador garantidos em pj_contracts.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4293 dados bancários prestador:", e?.message || e); }
 
+        try {
+          await db.execute(sql.raw(`
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(30);
+            ALTER TABLE pj_payments  ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(30);
+          `));
+          console.log("[SyncSchema+] Rev. 4372: forma_pagamento garantida em pj_contracts + pj_payments.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4372 forma_pagamento:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

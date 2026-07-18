@@ -102,6 +102,7 @@ async function gerarPrevisoesDoContrato(
   const percFech = contrato.percentualFechamento ?? 60;
   const diaAdiant = contrato.diaAdiantamento ?? 15;
   const diaFech = contrato.diaFechamento ?? 5;
+  const formaPag = contrato.formaPagamento ?? null;
 
   const valorAdiant = (valorMensal * percAdiant / 100).toFixed(2);
   const valorFech = (valorMensal * percFech / 100).toFixed(2);
@@ -155,6 +156,7 @@ async function gerarPrevisoesDoContrato(
           descricao: `Adiantamento ${percAdiant}% — ${mesRef}`,
           dataPrevista: dataIsoSegura(ano, mes, diaAdiant),
           status: "pendente",
+          formaPagamento: formaPag,
           criadoPor,
         });
         somaExistentePorMes.set(mesRef, somaAcum + vAdiant);
@@ -177,6 +179,7 @@ async function gerarPrevisoesDoContrato(
           descricao: `Fechamento ${percFech}% — ${mesRef}`,
           dataPrevista: dataIsoSegura(prox.ano, prox.mes, diaFech),
           status: "pendente",
+          formaPagamento: formaPag,
           criadoPor,
         });
         somaExistentePorMes.set(mesRef, somaAcumFech + vFech);
@@ -544,6 +547,7 @@ export const pjContractsRouter = router({
           agenciaPrestador: pjContracts.agenciaPrestador,
           contaPrestador: pjContracts.contaPrestador,
           pixPrestador: pjContracts.pixPrestador,
+          formaPagamento: pjContracts.formaPagamento,
           createdAt: pjContracts.createdAt,
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
@@ -699,6 +703,7 @@ export const pjContractsRouter = router({
         percentualFechamento: z.number().default(60),
         diaAdiantamento: z.number().default(15),
         diaFechamento: z.number().default(5),
+        formaPagamento: z.string().optional(),
         observacoes: z.string().optional(),
         bancoPrestador: z.string().optional(),
         agenciaPrestador: z.string().optional(),
@@ -740,6 +745,7 @@ export const pjContractsRouter = router({
           agenciaPrestador: input.agenciaPrestador || null,
           contaPrestador: input.contaPrestador || null,
           pixPrestador: input.pixPrestador || null,
+          formaPagamento: input.formaPagamento || null,
         }).returning({ id: pjContracts.id, employeeId: pjContracts.employeeId, companyId: pjContracts.companyId });
 
         // Criar registro inicial de revisão ISO
@@ -801,6 +807,7 @@ export const pjContractsRouter = router({
         agenciaPrestador: z.string().optional(),
         contaPrestador: z.string().optional(),
         pixPrestador: z.string().optional(),
+        formaPagamento: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
@@ -1124,6 +1131,8 @@ export const pjContractsRouter = router({
         tipo: z.enum(['adiantamento','fechamento','bonificacao']),
         valor: z.string(),
         descricao: z.string().optional(),
+        formaPagamento: z.string().optional(),
+        dataPrevista: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
@@ -1170,6 +1179,8 @@ export const pjContractsRouter = router({
         await db.insert(pjPayments).values({
           ...input,
           descricao: input.descricao || null,
+          formaPagamento: input.formaPagamento || null,
+          dataPrevista: input.dataPrevista || null,
           status: 'pendente',
           criadoPor: ctx.user.name ?? 'Sistema',
         });

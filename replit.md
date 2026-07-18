@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4372** — **MÓDULO PJ — CONTRATOS PJ: FORMA DE PAGAMENTO.** Campo `formaPagamento` (PIX/TED/Boleto/Depósito/Cheque) em `pj_contracts` + `pj_payments`. Formulário de contrato, geração de previsões, lançamento manual e tabela Folha PJ atualizados. SyncSchema+ Rev. 4372. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4371** — **MÓDULO PJ — FOLHA PJ: PERIOD SELECTOR COM DOTS E LEGENDA.** Substituiu `<Input type="month">` pelo PeriodSelectorCard padrão (ano + 12 pills + "Ano todo"). Dots: azul=com lançamento, verde=todos pagos, cinza=sem dados. Novo endpoint `pj.pagamentos.statusAnual`. PDF desabilitado em "Ano todo". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4370** — **SCORECARD OBRA — FOLHA/CUSTOS: NORMALIZAÇÃO ZERO-PAD NO SERVIDOR.** Complemento da Rev. 4369: iOS Safari não recebe HMR → browser enviava "2026-6". Fix: `_pad()` server-side em `getCustosRH` antes de qualquer SQL. Defesa permanente independente do cliente. ZERO DELETE · ZERO ALTER destrutivo.
