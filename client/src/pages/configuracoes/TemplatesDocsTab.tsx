@@ -39,6 +39,10 @@ import {
   type PlaceholderDef,
 } from "@shared/documentTemplates";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import XlsxTemplateTab from "./XlsxTemplateTab";
+import DocxTemplateTab from "./DocxTemplateTab";
+import ExtratoTemplateTab from "./ExtratoTemplateTab";
+import { FileSpreadsheet, Landmark } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
   FileSignature, ShieldCheck, Megaphone, AlertTriangle, BellRing, UserX, Hammer, Handshake,
@@ -179,9 +183,20 @@ function StatusBadge({ status, size = "sm" }: { status: string; size?: "sm" | "x
   return <span className={`inline-flex items-center rounded font-semibold ${pad} ${it.cls}`}>{it.label}</span>;
 }
 
+type Secao = "iso" | "planilha" | "word" | "extrato";
+
+const SECOES: { id: Secao; label: string; icon: any }[] = [
+  { id: "iso",      label: "Documentos ISO",     icon: FileText },
+  { id: "planilha", label: "Template de Planilha", icon: FileSpreadsheet },
+  { id: "word",     label: "Template de Word",    icon: FileText },
+  { id: "extrato",  label: "Templates de Extrato", icon: Landmark },
+];
+
 export default function TemplatesDocsTab() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
+
+  const [secaoAtiva, setSecaoAtiva] = useState<Secao>("iso");
 
   // string (não DocumentTemplateTipo): aceita também os tipos custom (custom_<slug>).
   const [tipoSelecionado, setTipoSelecionado] = useState<string>("contrato_experiencia");
@@ -544,6 +559,29 @@ export default function TemplatesDocsTab() {
 
   return (
     <div className="space-y-4">
+      {/* ── Seletor de seção ─────────────────────────────────────────── */}
+      <div className="flex gap-1.5 flex-wrap border-b pb-3">
+        {SECOES.map(s => {
+          const Icon = s.icon;
+          return (
+            <button
+              key={s.id}
+              onClick={() => setSecaoAtiva(s.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                secaoAtiva === s.id
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Seção: Documentos ISO ────────────────────────────────────── */}
+      {secaoAtiva === "iso" && (<>
       <div className="bg-white border rounded-lg p-4">
         <div className="flex items-start gap-3">
           <FileText className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -1078,6 +1116,22 @@ export default function TemplatesDocsTab() {
             </div>
           </div>
         </div>
+      )}
+      </>)}
+
+      {/* ── Seção: Template de Planilha ──────────────────────────────── */}
+      {secaoAtiva === "planilha" && (
+        <XlsxTemplateTab userName={user?.name || user?.username || ""} />
+      )}
+
+      {/* ── Seção: Template de Word ──────────────────────────────────── */}
+      {secaoAtiva === "word" && (
+        <DocxTemplateTab userName={user?.name || user?.username || ""} />
+      )}
+
+      {/* ── Seção: Templates de Extrato ──────────────────────────────── */}
+      {secaoAtiva === "extrato" && (
+        <ExtratoTemplateTab />
       )}
     </div>
   );

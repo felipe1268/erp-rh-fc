@@ -1,4 +1,21 @@
 /**
+ * Rev. 4380 - CONFIGURAÇÕES: TEMPLATE DE PLANILHA, WORD E EXTRATO → TEMPLATES DE DOCUMENTOS
+ *
+ * Consolida TODOS os templates de arquivo no hub único "Templates de Documentos".
+ *
+ * 1. TemplatesDocsTab.tsx — novo seletor de seção no topo com 4 pills:
+ *    "Documentos ISO" | "Template de Planilha" | "Template de Word" | "Templates de Extrato"
+ *    Os 3 componentes (XlsxTemplateTab / DocxTemplateTab / ExtratoTemplateTab) são
+ *    importados e renderizados condicionalmente dentro do mesmo componente.
+ *
+ * 2. Configuracoes.tsx:
+ *    - Removidos tabs "template_planilha", "template_word", "template_extrato" de TabKey e allTabs.
+ *    - Removidos blocos de renderização e imports dos 3 componentes.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4379 - CONFIGURAÇÕES: CONTRATO PJ E CONTRATO TERCEIROS → TEMPLATES DE DOCUMENTOS
  *
  * Remove os botões "Contrato PJ" e "Contrato Terceiros" do grid de Configurações
