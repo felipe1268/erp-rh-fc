@@ -896,7 +896,13 @@ export default function ModuloPJ() {
                                 <td className="p-3">
                                   <FornecedorCadastroBadge status={p.fornecedorStatus} nome={p.fornecedorNome} cnpj={p.cnpjPrestador} />
                                 </td>
-                                <td className="p-3 text-xs">{p.descricao || "-"}</td>
+                                <td className="p-3 text-xs">{
+                                  p.tipo === 'adiantamento'
+                                    ? `1ª Medição — ${(p.mesReferencia ?? '').split('-').reverse().join('/')}`
+                                    : p.tipo === 'fechamento'
+                                    ? `2ª Medição — ${(p.mesReferencia ?? '').split('-').reverse().join('/')}`
+                                    : p.descricao || '-'
+                                }</td>
                                 <td className="p-3 text-right font-bold">{formatMoeda(p.valor)}</td>
                                 <td className="p-3 text-xs">
                                   {p.dataPagamento ? (
