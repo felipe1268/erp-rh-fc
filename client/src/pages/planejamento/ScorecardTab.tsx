@@ -304,12 +304,15 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   }, [analiseSeguranca.data, segAno]);
   // "Ano todo" respeita os limites da obra para o ano selecionado
   const _anoStr = String(rhAno);
+  // Rev. 4369: zero-pad obrigatório — "2026-6" faz comparação string falhar
+  // contra mesReferencia "2026-06" no payroll_payments (ASCII '0' < '6').
+  const _mesPad = rhMes === "all" ? "" : String(rhMes).padStart(2, "0");
   const rhMesInicio = rhMes === "all"
     ? (obraIniMes?.startsWith(_anoStr) ? obraIniMes : `${_anoStr}-01`)
-    : `${_anoStr}-${rhMes}`;
+    : `${_anoStr}-${_mesPad}`;
   const rhMesFim = rhMes === "all"
     ? (obraFimMes?.startsWith(_anoStr) ? obraFimMes : `${_anoStr}-12`)
-    : `${_anoStr}-${rhMes}`;
+    : `${_anoStr}-${_mesPad}`;
   const analiseRH = trpc.scorecard.getCustosRH.useQuery(
     { companyId, obraId: obraId!, mesInicio: rhMesInicio, mesFim: rhMesFim },
     { enabled: enabled && tabScore === "rh", staleTime: 120_000 }

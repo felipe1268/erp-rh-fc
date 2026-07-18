@@ -1,4 +1,22 @@
 /**
+ * Rev. 4369 - SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE MÊS SEM ZERO-PAD
+ *
+ * CAUSA RAIZ: ScorecardTab.tsx construía o string de mês como `${ano}-${mes}` sem
+ * zero-pad (ex.: "2026-6" em vez de "2026-06"). Como `payroll_payments.mesReferencia`
+ * é guardado como "2026-06", a comparação string no banco falhava silenciosamente:
+ *   "2026-06" >= "2026-6" → FALSE (ASCII '0'=48 < '6'=54)
+ * → `payroll_frac` vazio → `pf` vazio → `custos` com todos zeros e `historico_mensal`=[]
+ * → frontend mostra "Sem dados de folha" mesmo com folha processada no banco.
+ *
+ * FIX: `String(rhMes).padStart(2, "0")` em `rhMesInicio` e `rhMesFim`.
+ * Meses 1-9 ganham zero à esquerda; meses 10-12 ficam inalterados.
+ * Afetava qualquer mês de jan (1) a set (9) ao selecionar mês individual.
+ *
+ * ARQUIVOS: client/src/pages/planejamento/ScorecardTab.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4368 - SCORECARD OBRA — FOLHA/CUSTOS: GUARD "ESTÁ ALOCADO" NO CRUZAMENTO DE PONTO
  *
  * Refinamento final do ciclo ponto×locação (Rev. 4366/4367):
