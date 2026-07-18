@@ -1,4 +1,30 @@
 /**
+ * Rev. 4360 - SCORECARD OBRA — FOLHA/CUSTOS: CRITÉRIOS DE ELEGIBILIDADE DO EFETIVO
+ *
+ * PROBLEMA:
+ * Lista de custo exibia funcionários que não deveriam aparecer:
+ * (a) Desligados/inativos trazidos pela bridge CTE (ex: "RAI" que não existe mais).
+ * (b) Afastados INSS (afastamento > 15 dias antes do mês) mostravam salário da empresa.
+ * (c) Funcionários em férias o mês inteiro apareciam (custo já foi pago no mês de saída).
+ *
+ * CRITÉRIOS IMPLEMENTADOS:
+ * 1. DESLIGADO/INATIVO: excluído de bridge_emps, period_emps e JOIN custos.
+ *    status NOT IN ('Desligado','Lista_Negra','Inativo').
+ * 2. FÉRIAS MÊS INTEIRO (consulta mês único): excluído de period_emps.
+ *    vacation_periods.dataInicio <= mes_inicio AND dataFim >= mes_fim.
+ * 3. AFASTADO > 15 DIAS antes do mês (consulta mês único): excluído de period_emps.
+ *    licencaDataInicio + 15 dias < mes_inicio → INSS paga, empresa não.
+ * Férias parcial (entrou/voltou no mês) e afastado nos primeiros 15 dias: aparecem
+ * proporcional aos dias trabalhados.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (bridge_emps + period_emps + custos JOIN)
+ * - shared/version.ts → Rev. 4360
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4358 - SCORECARD OBRA — FOLHA/CUSTOS: RAMO A DETECTA RETORNO VIA obra_funcionarios
  *
  * PROBLEMA (continuação do Rev. 4357):

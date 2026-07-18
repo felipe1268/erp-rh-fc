@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4359** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO C — BRIDGE DE LACUNA DE REGISTRO.** Novo CTE `bridge_emps` + Ramo C em `site_periods`: detecta funcionários com history fechado antes do mês alvo que voltaram depois (sem transferência no intervalo) e cria período sintético cobrindo exatamente o mês consultado. Ativa só em consulta de mês único (guard: mesFeriasIni = mesFeriasFim). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4360** — **SCORECARD OBRA — FOLHA/CUSTOS: CRITÉRIOS DE ELEGIBILIDADE DO EFETIVO.** 3 critérios: (1) Desligado/Inativo excluído em bridge_emps + period_emps + JOIN custos. (2) Férias mês inteiro excluído (custo já no mês de saída). (3) Afastado INSS > 15 dias antes do mês excluído (licencaDataInicio + 15d < mes_inicio). Férias parcial e afastado ≤ 15 dias: permanecem proporcionais. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4358** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO A DETECTA RETORNO VIA obra_funcionarios.** Prioridade 2 no CASE do Ramo A: se todos os history fechados + obra_funcionarios ativo → CURRENT_DATE. Cobre saída formal em mai + retorno via OF em jul sem novo history. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4359** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO C — BRIDGE DE LACUNA DE REGISTRO.** Novo CTE `bridge_emps` + Ramo C em `site_periods`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4358** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO A DETECTA RETORNO VIA obra_funcionarios.** Prioridade 2 CASE Ramo A: history fechados + OF ativo → CURRENT_DATE. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4357** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO B AGRUPA PERÍODOS CONTÍNUOS NA MESMA OBRA.** `site_periods` Ramo B: `GROUP BY employeeId` (MIN/MAX createdAt). ZERO DELETE · ZERO ALTER destrutivo.
 

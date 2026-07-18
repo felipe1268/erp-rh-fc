@@ -1760,6 +1760,12 @@ export const scorecardRouter = router({
                   AND esh_gap."dataInicio"::date >  esh_b."dataFim"::date
                   AND esh_gap."dataInicio"::date <= (${mesFeriasFim} || '-28')::date
               )
+              -- Critério: funcionário ainda vínculo ativo na empresa (não desligado/inativo)
+              AND EXISTS (
+                SELECT 1 FROM employees e_br
+                WHERE e_br.id = esh_b."employeeId"
+                  AND e_br.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+              )
           ),
           site_periods AS (
             -- Ramo A: funcionários com registro formal de transferência/alocação
@@ -1866,6 +1872,40 @@ export const scorecardRouter = router({
             FROM site_periods sp
             WHERE sp.periodo_fim   >= (${mesFeriasIni} || '-01')::date
               AND sp.periodo_inicio <= (${mesFeriasFim} || '-28')::date
+              -- Critério 1: exclui desligados / inativos
+              AND EXISTS (
+                SELECT 1 FROM employees ep
+                WHERE ep.id = sp.employee_id
+                  AND ep.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+              )
+              -- Critério 2 (mês único): exclui quem está em férias o mês INTEIRO
+              -- (o custo de férias já foi computado no mês em que o funcionário saiu)
+              AND (
+                ${mesFeriasIni} <> ${mesFeriasFim}
+                OR NOT EXISTS (
+                  SELECT 1 FROM vacation_periods vp_ex
+                  JOIN employees evp ON evp.id = vp_ex."employeeId"
+                    AND vp_ex."companyId" = evp."companyId"
+                  WHERE vp_ex."employeeId" = sp.employee_id
+                    AND vp_ex.status IN ('em_gozo', 'agendada', 'concluida', 'paga', 'pago')
+                    AND vp_ex."dataInicio"::date <= (${mesFeriasIni} || '-01')::date
+                    AND vp_ex."dataFim"::date    >= ((${mesFeriasFim} || '-01')::date
+                                                     + INTERVAL '1 month' - INTERVAL '1 day')::date
+                )
+              )
+              -- Critério 3 (mês único): exclui afastados cujo afastamento passou dos 15 dias
+              -- ANTES do início do mês → INSS/Previdência é quem paga, não a empresa
+              AND (
+                ${mesFeriasIni} <> ${mesFeriasFim}
+                OR NOT EXISTS (
+                  SELECT 1 FROM employees ea
+                  WHERE ea.id = sp.employee_id
+                    AND ea.status = 'Afastado'
+                    AND ea."licencaDataInicio" IS NOT NULL
+                    AND ea."licencaDataInicio"::date + INTERVAL '15 days'
+                          < (${mesFeriasIni} || '-01')::date
+                )
+              )
           ),
           payroll_frac AS (
             SELECT
@@ -1994,6 +2034,7 @@ export const scorecardRouter = router({
               (SELECT MAX(sp2.periodo_fim)    FROM site_periods sp2 WHERE sp2.employee_id = pe.employee_id) AS alocado_ate
             FROM period_emps pe
             JOIN employees e ON e.id = pe.employee_id
+              AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
             LEFT JOIN pf ON pf.employee_id = pe.employee_id
             LEFT JOIN vr_data v ON v.employee_id = pf.employee_id AND v.mes_referencia = pf.mes_referencia
             GROUP BY pe.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase", e."tipoContrato", e.cpf, e.status
