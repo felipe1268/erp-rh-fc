@@ -1,4 +1,33 @@
 /**
+ * Rev. 4379 - CONFIGURAÇÕES: CONTRATO PJ E CONTRATO TERCEIROS → TEMPLATES DE DOCUMENTOS
+ *
+ * Remove os botões "Contrato PJ" e "Contrato Terceiros" do grid de Configurações
+ * e integra ambos à Central de Documentos Institucionais (aba "Templates de Documentos").
+ *
+ * 1. TIPOS ADICIONADOS AO SISTEMA ISO (shared/documentTemplates.ts):
+ *    - `contrato_pj` (categoria: contratos) — placeholders: empresa, representante legal,
+ *      contratada PJ (razão social / CNPJ / endereço), objeto, valor mensal, valor por extenso,
+ *      data início/fim, foro/comarca.
+ *    - `contrato_terceiros` (categoria: contratos) — placeholders: empresa, obra, contratada
+ *      (nome / CNPJ / endereço / representante), descrição do serviço, valor total,
+ *      data início/término, foro/comarca.
+ *    - Ícone `Handshake` adicionado ao ICON_MAP do TemplatesDocsTab para "Contrato Terceiros".
+ *
+ * 2. CONFIGURAÇÕES.TSX:
+ *    - Removidas entradas "contrato_pj" e "contrato_terceiros" de `TabKey` e `allTabs`.
+ *    - Removidos blocos de renderização dos tabs dedicados.
+ *    - Removido import órfão de `ContratoTemplate`.
+ *
+ * 3. COMPATIBILIDADE MANTIDA:
+ *    - `pj.modeloContrato` já lê de `doc_templates` (tipo='contrato_pj') — agora a edição
+ *      via Templates de Documentos reflete diretamente nos contratos gerados.
+ *    - `ContratoTemplate` (edição inline do template de terceiros) continua acessível
+ *      pelo módulo Terceiros/Contratos; a aba de Configurações era duplicata.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4377 - MÓDULO PJ: APROVAÇÃO DE MEDIÇÕES COM NF → CONTAS A PAGAR
  *
  * Integração completa entre Folha PJ e Contas a Pagar:

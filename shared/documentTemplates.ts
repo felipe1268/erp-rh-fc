@@ -28,7 +28,9 @@ export type DocumentTemplateTipo =
   | "ata_reuniao"
   // Contratos
   | "ordem_servico"
-  | "proposta_comercial";
+  | "proposta_comercial"
+  | "contrato_pj"
+  | "contrato_terceiros";
 
 // ── Categorias canônicas ─────────────────────────────────────────────────────
 export const CATEGORIAS_DOCS = [
@@ -328,6 +330,48 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
       ...PH_DOCUMENTO,
       ...PH_OBRA,
       ...PH_OS,
+    ],
+  },
+  {
+    tipo: "contrato_pj",
+    titulo: "Contrato PJ",
+    descricao: "Contrato de prestação de serviços PJ (pessoa jurídica / autônomo).",
+    icone: "FileText",
+    categoria: "contratos",
+    placeholders: [
+      ...PH_EMPRESA,
+      ...PH_DOCUMENTO,
+      { chave: "representanteLegal",    rotulo: "Representante Legal (Contratante)", exemplo: "FELIPE COSTA ALVES",             grupo: "Contratante" },
+      { chave: "contratadaRazaoSocial", rotulo: "Razão Social da Contratada",        exemplo: "JOÃO SILVA SERVIÇOS LTDA",        grupo: "Contratada PJ" },
+      { chave: "contratadaCnpj",        rotulo: "CNPJ da Contratada",                exemplo: "12.345.678/0001-99",              grupo: "Contratada PJ" },
+      { chave: "contratadaEndereco",    rotulo: "Endereço da Contratada",            exemplo: "RUA A, 100 - GUARATINGUETÁ/SP",   grupo: "Contratada PJ" },
+      { chave: "objetoContrato",        rotulo: "Objeto do Contrato",                exemplo: "Execução de serviços de topografia", grupo: "Específicos" },
+      { chave: "valorMensal",           rotulo: "Valor Mensal (R$)",                 exemplo: "R$ 10.000,00",                    grupo: "Específicos" },
+      { chave: "valorExtenso",          rotulo: "Valor por Extenso",                 exemplo: "dez mil reais",                   grupo: "Específicos" },
+      { chave: "dataInicio",            rotulo: "Data de Início",                    exemplo: "01/07/2026",                      grupo: "Específicos" },
+      { chave: "dataFim",               rotulo: "Data de Término",                   exemplo: "31/12/2026",                      grupo: "Específicos" },
+      { chave: "foroComarca",           rotulo: "Foro / Comarca",                    exemplo: "Guaratinguetá/SP",                 grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "contrato_terceiros",
+    titulo: "Contrato Terceiros",
+    descricao: "Contrato de prestação de serviços de empresa terceira (empreiteira, fornecedor).",
+    icone: "Handshake",
+    categoria: "contratos",
+    placeholders: [
+      ...PH_EMPRESA,
+      ...PH_DOCUMENTO,
+      ...PH_OBRA,
+      { chave: "contratadaNome",          rotulo: "Razão Social da Contratada",    exemplo: "EMPREITEIRA ALPHA LTDA",          grupo: "Contratada" },
+      { chave: "contratadaCnpj",          rotulo: "CNPJ da Contratada",            exemplo: "12.345.678/0001-99",             grupo: "Contratada" },
+      { chave: "contratadaEndereco",      rotulo: "Endereço da Contratada",        exemplo: "RUA B, 200 - GUARATINGUETÁ/SP",  grupo: "Contratada" },
+      { chave: "contratadaRepresentante", rotulo: "Representante da Contratada",   exemplo: "NOME DO RESPONSÁVEL",            grupo: "Contratada" },
+      { chave: "descricaoServico",        rotulo: "Descrição do Serviço",          exemplo: "Execução de alvenaria e reboco", grupo: "Específicos" },
+      { chave: "valorTotal",              rotulo: "Valor Total (R$)",              exemplo: "R$ 150.000,00",                  grupo: "Específicos" },
+      { chave: "dataInicio",              rotulo: "Data de Início",                exemplo: "01/07/2026",                     grupo: "Específicos" },
+      { chave: "dataTermino",             rotulo: "Data de Término",               exemplo: "31/12/2026",                     grupo: "Específicos" },
+      { chave: "foroComarca",             rotulo: "Foro / Comarca",                exemplo: "Guaratinguetá/SP",                grupo: "Específicos" },
     ],
   },
 ];

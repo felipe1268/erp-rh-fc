@@ -25,7 +25,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   FileSignature, ShieldCheck, Megaphone, AlertTriangle, BellRing,
   UserX, Hammer, Save, History, RotateCcw, Eye, FileText, Search, Info, Loader2,
-  XCircle, Sparkles, Upload, BadgeCheck, FilePlus2, Undo2, Printer, Trash2,
+  XCircle, Sparkles, Upload, BadgeCheck, FilePlus2, Undo2, Printer, Trash2, Handshake,
 } from "lucide-react";
 import RichTextEditor, { type RichTextEditorHandle } from "@/components/RichTextEditor";
 import {
@@ -41,7 +41,7 @@ import {
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
 
 const ICON_MAP: Record<string, any> = {
-  FileSignature, ShieldCheck, Megaphone, AlertTriangle, BellRing, UserX, Hammer,
+  FileSignature, ShieldCheck, Megaphone, AlertTriangle, BellRing, UserX, Hammer, Handshake,
 };
 
 // XSS hardening do corpo antes de injetar no documento institucional.
