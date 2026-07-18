@@ -1,4 +1,11 @@
 /**
+ * Rev. 4356 - SCORECARD — METAS & DESVIOS: DATA DO GRÁFICO MENSAL EM PADRÃO BR
+ *
+ * "2026-05" → "Mai/26" no Acompanhamento Mensal de Compras (ScorecardTab.tsx linha 944).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4355 - SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO DE BADGES AFASTADO/FÉRIAS
  *
  * PROBLEMAS:

@@ -938,7 +938,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                         const isThis    = i === all.length - 1;
                         return (
                           <div key={m.mes} className="flex items-center gap-2 text-xs">
-                            <span className="w-14 text-right text-gray-500 shrink-0 text-[10px] font-mono">{m.mes}</span>
+                            <span className="w-14 text-right text-gray-500 shrink-0 text-[10px] font-mono">{(() => { const [y,mo] = (m.mes as string).split('-'); return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(mo)-1] + '/' + y.slice(2); })()}</span>
                             <div className="relative flex-1 h-5 bg-gray-100 rounded overflow-hidden">
                               <div className={`h-full rounded ${barColor} transition-all flex items-center pl-1.5`} style={{ width: `${pct}%` }}>
                                 {pct > 25 && <span className="text-white text-[9px] font-semibold">{fmt(m.total_compras)}</span>}

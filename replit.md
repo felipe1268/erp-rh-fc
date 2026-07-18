@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4355** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO BADGES AFASTADO/FÉRIAS.** PJ nunca recebe badges CLT (`em_ferias=false`, `em_afastado=false`). `emAfastadoSet` migrado de atestados → `employees.status='Afastado'`. `zeroSal` sintético: removido `emAfastMes`. 6ª query paralela removida. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4356** — **SCORECARD — METAS & DESVIOS: DATA DO GRÁFICO MENSAL EM PADRÃO BR.** `"2026-05"` → `"Mai/26"` no Acompanhamento Mensal de Compras. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4354** — **SCORECARD OBRA — FOLHA/CUSTOS: LACUNA DE MÊS POR HISTÓRICO NÃO-LINEAR (SAIU E VOLTOU).** `site_periods` Ramo A: CASE invertido — `dataFim IS NULL` tem prioridade sobre `saída` anterior. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4355** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO BADGES AFASTADO/FÉRIAS.** PJ nunca recebe badges CLT. `emAfastadoSet` → `employees.status='Afastado'`. `zeroSal` sintético: removido `emAfastMes`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
