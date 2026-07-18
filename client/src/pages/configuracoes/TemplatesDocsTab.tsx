@@ -17,6 +17,7 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -195,6 +196,7 @@ const SECOES: { id: Secao; label: string; icon: any }[] = [
 export default function TemplatesDocsTab() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
+  const { selectedCompanyId } = useCompany();
 
   const [secaoAtiva, setSecaoAtiva] = useState<Secao>("iso");
 
@@ -241,6 +243,11 @@ export default function TemplatesDocsTab() {
   const getQuery = trpc.systemDocumentTemplates.get.useQuery(
     { tipo: tipoSelecionado, versao: versaoVisualizada },
     { enabled: !!tipoSelecionado }
+  );
+  // Modelo padrão PJ (fallback com placeholders [PLACEHOLDER]) — só buscado quando contrato_pj está selecionado
+  const modeloPjQuery = trpc.pj.modeloContrato.useQuery(
+    { companyId: Number(selectedCompanyId) || 0 },
+    { enabled: tipoSelecionado === "contrato_pj" && Number(selectedCompanyId) > 0 }
   );
   const versionsQuery = trpc.systemDocumentTemplates.listVersions.useQuery(
     { tipo: tipoSelecionado },
@@ -294,6 +301,15 @@ export default function TemplatesDocsTab() {
     }
   }, [getQuery.data]);
 
+  // Pré-popula o editor com o modelo padrão quando contrato_pj ainda não tem template no DB
+  useEffect(() => {
+    if (tipoSelecionado !== "contrato_pj") return;
+    if (getQuery.isLoading || modeloPjQuery.isLoading) return;
+    if (getQuery.data?.conteudoHtml) return; // já tem template customizado — useEffect acima cuidou
+    const defaultModel = modeloPjQuery.data?.modelo;
+    if (defaultModel) setConteudoEditado(defaultModel);
+  }, [tipoSelecionado, getQuery.isLoading, getQuery.data, modeloPjQuery.isLoading, modeloPjQuery.data]);
+
   // Quando muda o tipo, reseta versão/comentário/IA e ressincroniza a ficha ISO
   useEffect(() => {
     setVersaoVisualizada(undefined);
@@ -302,6 +318,7 @@ export default function TemplatesDocsTab() {
     setIaInstrucoes("");
     setMostrarPreview(false);
     setIaSugestoes([]);
+    setConteudoEditado(""); // limpa o editor ao trocar de tipo (evita conteúdo obsoleto)
   }, [tipoSelecionado]);
 
   useEffect(() => {

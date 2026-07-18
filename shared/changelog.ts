@@ -1,4 +1,30 @@
 /**
+ * Rev. 4381 - CONTRATO PJ: PRÉ-POPULAÇÃO DO EDITOR ISO COM MODELO PADRÃO
+ *
+ * O editor de "Contrato PJ" em Configurações → Templates de Documentos ficava
+ * em branco ("Não criado") mesmo quando o sistema já tinha o MODELO_CONTRATO_PJ
+ * completo como fallback. O template inclui todos os placeholders:
+ * [CONTRATANTE_NOME/CNPJ/ENDERECO/CIDADE/ESTADO/REPRESENTANTE],
+ * [CONTRATADA_RAZAO_SOCIAL/CNPJ/ENDERECO/CIDADE/ESTADO],
+ * [OBJETO_CONTRATO], [VALOR_MENSAL], [VALOR_EXTENSO],
+ * [PERCENTUAL_ADIANTAMENTO/%], [DIA_ADIANTAMENTO/FECHAMENTO],
+ * [DADOS_BANCARIOS_CONTRATADA], [DATA_INICIO], [PRAZO_VIGENCIA],
+ * [FORO_COMARCA], [DATA_ASSINATURA].
+ *
+ * Mudanças em TemplatesDocsTab.tsx:
+ * - Importa useCompany para obter selectedCompanyId.
+ * - Adiciona modeloPjQuery (trpc.pj.modeloContrato) — ativado só quando
+ *   tipoSelecionado === "contrato_pj".
+ * - Novo useEffect: quando contrato_pj é selecionado e não há template no DB
+ *   (getQuery.data?.conteudoHtml vazio), pré-popula o editor com o modelo
+ *   padrão (incluindo todos os placeholders de banco/datas/valores).
+ * - useEffect de troca de tipo agora também chama setConteudoEditado("") para
+ *   evitar conteúdo obsoleto ao navegar entre tipos.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4380 - CONFIGURAÇÕES: TEMPLATE DE PLANILHA, WORD E EXTRATO → TEMPLATES DE DOCUMENTOS
  *
  * Consolida TODOS os templates de arquivo no hub único "Templates de Documentos".
