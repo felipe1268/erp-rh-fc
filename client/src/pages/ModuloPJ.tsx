@@ -218,6 +218,16 @@ export default function ModuloPJ() {
   const [showAjusteDialog, setShowAjusteDialog] = useState(false);
   const [ajusteForm, setAjusteForm] = useState<{ percAdiant?: number; diaAdiant?: number; diaFech?: number }>({});
   const [ajusteConfirming, setAjusteConfirming] = useState(false);
+  // Rev. 4376 — descrição por medição (persistida em localStorage por empresa+mês)
+  const obsKey = `pj_obs_${companyId}_${mesRef}`;
+  const [obs1a, setObs1a] = useState(() => {
+    try { return localStorage.getItem(`${obsKey}_1`) || ""; } catch { return ""; }
+  });
+  const [obs2a, setObs2a] = useState(() => {
+    try { return localStorage.getItem(`${obsKey}_2`) || ""; } catch { return ""; }
+  });
+  useEffect(() => { try { localStorage.setItem(`${obsKey}_1`, obs1a); } catch {} }, [obs1a, obsKey]);
+  useEffect(() => { try { localStorage.setItem(`${obsKey}_2`, obs2a); } catch {} }, [obs2a, obsKey]);
   const bulkUpdatePercentuais = trpc.pj.contratos.bulkUpdatePercentuais.useMutation({
     onSuccess: (d: any) => {
       refetchContratos();
@@ -790,13 +800,21 @@ export default function ModuloPJ() {
               const allSelected = itens.every((p: any) => selectedIds.has(p.id));
               return (
                 <Card key={grupo} className={`mb-4 border-2 ${isAdiant ? "border-amber-200" : "border-green-200"}`}>
-                  <CardHeader className={`pb-2 pt-3 px-4 ${isAdiant ? "bg-amber-50" : "bg-green-50"} rounded-t-lg`}>
-                    <div className="flex items-center justify-between">
+                  <CardHeader className={`pb-3 pt-3 px-4 ${isAdiant ? "bg-amber-50" : "bg-green-50"} rounded-t-lg`}>
+                    <div className="flex items-center justify-between mb-2">
                       <CardTitle className={`text-sm font-semibold ${isAdiant ? "text-amber-800" : "text-green-800"}`}>
                         {isAdiant ? "📋 1ª Medição do Mês" : "📋 2ª Medição do Mês"}
                       </CardTitle>
                       <span className={`text-base font-bold ${isAdiant ? "text-amber-700" : "text-green-700"}`}>{formatMoeda(totalGrupo)}</span>
                     </div>
+                    <input
+                      type="text"
+                      maxLength={120}
+                      value={isAdiant ? obs1a : obs2a}
+                      onChange={e => isAdiant ? setObs1a(e.target.value) : setObs2a(e.target.value)}
+                      placeholder={isAdiant ? "Ex: Serviços referentes à semana 1..." : "Ex: Fechamento mensal julho 2026..."}
+                      className={`w-full text-xs rounded-lg border px-3 py-1.5 bg-white/70 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 ${isAdiant ? "border-amber-200 focus:ring-amber-400 text-amber-900" : "border-green-200 focus:ring-green-400 text-green-900"}`}
+                    />
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="overflow-x-auto">
