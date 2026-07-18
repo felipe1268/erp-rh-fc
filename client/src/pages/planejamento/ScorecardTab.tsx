@@ -235,7 +235,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [tabScore,      setTabScore]      = useState<"resultado"|"metas"|"rh"|"seguranca"|"compras"|"operacional">("resultado");
   const [abaAnalise,    setAbaAnalise]    = useState<"compras"|"ferramentas"|"locacoes">("compras");
   const [abaRH,         setAbaRH]         = useState<"folha"|"banco">("folha");
-  const [custoPeriodo,  setCustoPeriodo]  = useState<"minuto"|"hora"|"dia"|"semana"|"mes">("dia");
+  const [custoPeriodo,  setCustoPeriodo]  = useState<"minuto"|"hora"|"dia"|"semana"|"mes">("mes");
   const [expandedRH,    setExpandedRH]    = useState<Set<number>>(new Set());
   const [filtroFuncao,  setFiltroFuncao]  = useState<string>("");
   const [rhSortBy,      setRhSortBy]      = useState<"custo" | "nome">("custo");
