@@ -1688,7 +1688,7 @@ export const scorecardRouter = router({
         WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
       `;
 
-      const [r, feriasR, seguroR, pjR, feriasGozoR] = await Promise.all([
+      const [r, feriasR, seguroR, pjR, feriasGozoR, mesesComDadosR] = await Promise.all([
         db.execute(sql`
           WITH
           -- Piso absoluto: nenhum custo pode ser anterior à data de início da obra
@@ -2269,6 +2269,55 @@ export const scorecardRouter = router({
             AND vp."employeeId" IN (${relevantEmpSql})
         `),
 
+        // Rev. 4361: mesesComDados — aplica os critérios rígidos (desligado, férias mês inteiro,
+        // afastado > 15 dias) POR MÊS para que as bolinhas do seletor reflitam exatamente
+        // o que a query mensal retornará, evitando meses com bolinha azul mas "Sem dados".
+        db.execute(sql`
+          SELECT EXTRACT(MONTH FROM gs_date)::int AS mes
+          FROM generate_series(
+            (${mesFeriasIni} || '-01')::date,
+            (${mesFeriasFim} || '-01')::date,
+            '1 month'::interval
+          ) AS gs_date
+          WHERE EXISTS (
+            SELECT 1
+            FROM (
+              SELECT DISTINCT esh2."employeeId" AS employee_id
+              FROM employee_site_history esh2
+              WHERE esh2."obraId"    = ${input.obraId}
+                AND esh2."companyId" = ${input.companyId}
+                AND esh2."dataInicio"::date <= (gs_date + INTERVAL '1 month' - INTERVAL '1 day')::date
+                AND COALESCE(esh2."dataFim"::date, CURRENT_DATE) >= gs_date::date
+              UNION
+              SELECT DISTINCT of2."employeeId" AS employee_id
+              FROM obra_funcionarios of2
+              WHERE of2."obraId"    = ${input.obraId}
+                AND of2."companyId" = ${input.companyId}
+                AND of2."createdAt"::date <= (gs_date + INTERVAL '1 month' - INTERVAL '1 day')::date
+            ) emp
+            JOIN employees e ON e.id = emp.employee_id
+              AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+            WHERE
+              -- Férias mês inteiro: custo já contabilizado no mês de saída
+              NOT EXISTS (
+                SELECT 1 FROM vacation_periods vp2
+                WHERE vp2."employeeId" = emp.employee_id
+                  AND vp2.status IN ('em_gozo', 'agendada', 'concluida', 'paga', 'pago')
+                  AND vp2."dataInicio"::date <= gs_date::date
+                  AND vp2."dataFim"::date    >= (gs_date + INTERVAL '1 month' - INTERVAL '1 day')::date
+              )
+              -- Afastado > 15 dias antes do mês: INSS/Previdência paga, não a empresa
+              AND NOT EXISTS (
+                SELECT 1 FROM employees ea2
+                WHERE ea2.id = emp.employee_id
+                  AND ea2.status = 'Afastado'
+                  AND ea2."licencaDataInicio" IS NOT NULL
+                  AND ea2."licencaDataInicio"::date + INTERVAL '15 days' < gs_date::date
+              )
+          )
+          ORDER BY mes
+        `),
+
       ]);
 
       const funcs = r.rows as any[];
@@ -2624,7 +2673,8 @@ export const scorecardRouter = router({
         feriasTotal:        funcs.reduce((s: number, f: any) => s + n(f.ferias_total),        0),
         seguroVidaTotal:    funcs.reduce((s: number, f: any) => s + n(f.seguro_vida_total),   0),
       };
-      return { resumo, mensal, funcionarios: funcs };
+      const mesesComDados: number[] = (mesesComDadosR.rows as any[]).map((r: any) => Number(r.mes));
+      return { resumo, mensal, funcionarios: funcs, mesesComDados };
     }),
 
   ferramentasList: protectedProcedure

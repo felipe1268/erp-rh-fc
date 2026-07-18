@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4361** — **SCORECARD OBRA — FOLHA/CUSTOS: BOLINHAS DO SELETOR REFLETEM CRITÉRIOS RÍGIDOS.** Query paralela `mesesComDados` em `getCustosRH` usa `generate_series` + mesmos 3 critérios de elegibilidade (desligado/férias-mês-inteiro/afastado>15d) por mês. Frontend usa `mesesComDados` em vez de derivar dos `mensal` da query anual. Sem mais pontos azuis enganosos. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4360** — **SCORECARD OBRA — FOLHA/CUSTOS: CRITÉRIOS DE ELEGIBILIDADE DO EFETIVO.** 3 critérios: (1) Desligado/Inativo excluído em bridge_emps + period_emps + JOIN custos. (2) Férias mês inteiro excluído (custo já no mês de saída). (3) Afastado INSS > 15 dias antes do mês excluído (licencaDataInicio + 15d < mes_inicio). Férias parcial e afastado ≤ 15 dias: permanecem proporcionais. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4359** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO C — BRIDGE DE LACUNA DE REGISTRO.** Novo CTE `bridge_emps` + Ramo C em `site_periods`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4359** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO C — BRIDGE DE LACUNA DE REGISTRO.** Novo CTE `bridge_emps` + Ramo C em `site_periods`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4358** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO A DETECTA RETORNO VIA obra_funcionarios.** Prioridade 2 CASE Ramo A: history fechados + OF ativo → CURRENT_DATE. ZERO DELETE · ZERO ALTER destrutivo.
 

@@ -1137,15 +1137,14 @@ export default function ScorecardTab({ proj }: { proj: any }) {
             const rhMonthStatus: Record<number, "data" | "none"> = Object.fromEntries(
               Array.from({ length: 12 }, (_, i) => [i + 1, "none" as const])
             );
-            // Usa analiseRHAnoTodo (sempre ano completo) para que as bolinhas
-            // permaneçam acesas independentemente do mês filtrado atualmente.
-            // Só marca "data" se houver funcionários com payroll no mês (qtdFuncionarios>0).
-            // Meses com apenas férias órfãs (sem entrada de payroll) ficam como "none".
-            for (const entry of (analiseRHAnoTodo.data?.mensal ?? analiseRH.data?.mensal ?? [])) {
-              const [y, mm] = (entry.mes as string).split('-');
-              if (y === String(rhAno) && (entry.qtdFuncionarios ?? 0) > 0) {
-                rhMonthStatus[parseInt(mm)] = "data";
-              }
+            // Rev. 4361: usa mesesComDados (calculado com critérios rígidos por mês)
+            // para que os pontos azuis reflitam exatamente o que a query mensal retornará.
+            // Evita o caso de ponto azul → clicar → "Sem dados".
+            const mesesComDadosSet = new Set<number>(
+              analiseRHAnoTodo.data?.mesesComDados ?? []
+            );
+            for (const mes of mesesComDadosSet) {
+              rhMonthStatus[mes] = "data";
             }
             return (
           <div className="space-y-4">

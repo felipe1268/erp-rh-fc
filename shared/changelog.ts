@@ -1,4 +1,32 @@
 /**
+ * Rev. 4361 - SCORECARD OBRA — FOLHA/CUSTOS: BOLINHAS DO SELETOR REFLETEM CRITÉRIOS RÍGIDOS
+ *
+ * PROBLEMA:
+ * Os pontos azuis do seletor de mês vinham da query anual (sem filtros de férias/afastado).
+ * Ao clicar num mês com bolinha azul, a query mensal aplicava os critérios rígidos (desligado,
+ * férias mês inteiro, afastado > 15 dias) e retornava "Sem dados" — inconsistência visual.
+ *
+ * SOLUÇÃO:
+ * Adicionada query paralela `mesesComDados` em `getCustosRH`:
+ * - Usa generate_series para testar cada mês do intervalo solicitado
+ * - Para cada mês, verifica se existe ao menos 1 funcionário elegível após aplicar os
+ *   mesmos 3 critérios rígidos da query mensal (Rev. 4360)
+ * - Retornado como `mesesComDados: number[]` na resposta da procedure
+ * Frontend: `rhMonthStatus` agora consome `analiseRHAnoTodo.data?.mesesComDados` em vez
+ * de derivar dos `mensal` da query anual (que incluía funcionários excluídos).
+ *
+ * EFEITO:
+ * Bolinha azul ↔ query mensal daquele mês retorna dados. Sem mais pontos enganosos.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (nova query mesesComDados no Promise.all + retorno)
+ * - client/src/pages/planejamento/ScorecardTab.tsx (rhMonthStatus via mesesComDados)
+ * - shared/version.ts → Rev. 4361
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4360 - SCORECARD OBRA — FOLHA/CUSTOS: CRITÉRIOS DE ELEGIBILIDADE DO EFETIVO
  *
  * PROBLEMA:
