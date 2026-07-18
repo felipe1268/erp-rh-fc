@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4375** — **FOLHA PJ: MULTI-SELEÇÃO E CONSOLIDAR PERÍODO COMO PAGO.** Checkboxes na tabela (individual + selecionar tudo) + barra de ação em lote (Marcar Pago / Excluir). Botão "Consolidar período como pago" com dialog de intervalo de meses (padrão Jan–Jun 2026). Procedures: bulkDelete, bulkMarcarPago, consolidarPeriodo. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4374** — **MÓDULO PJ — CONTRATOS: PADRÃO 50/50 E INPUT LIBERADO.** Padrão % Adiantamento/Fechamento alterado de 40/60 → 50/50 em todos os pontos (frontend + server). Fix do bug "trava ao apagar": `parseInt("") || 40` substituído por `isNaN(v) ? undefined : v` + `value ?? ""`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4373** — **CONFIGURAÇÕES TERCEIROS: PARÂMETRO "PJ FORMA DE PAGAMENTO".** Novo parâmetro `terceiros_pj_forma_pagamento` (seletor PIX/TED/Boleto/Depósito/Cheque, padrão PIX) na seção Terceiros. Módulo PJ pré-preenche o form com o valor configurado. ZERO DELETE · ZERO ALTER destrutivo.

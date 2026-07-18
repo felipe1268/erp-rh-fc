@@ -211,6 +211,22 @@ export default function ModuloPJ() {
     onSuccess: () => { refetchPagamentos(); toast.success("Lançamento excluído!"); },
   });
 
+  // Rev. 4375 — operações em lote
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showConsolidarDialog, setShowConsolidarDialog] = useState(false);
+  const bulkDelete = trpc.pj.pagamentos.bulkDelete.useMutation({
+    onSuccess: (d: any) => { refetchPagamentos(); setSelectedIds(new Set()); toast.success(`${d.deleted} lançamento(s) excluído(s).`); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const bulkMarcarPago = trpc.pj.pagamentos.bulkMarcarPago.useMutation({
+    onSuccess: (d: any) => { refetchPagamentos(); setSelectedIds(new Set()); toast.success(`${d.updated} lançamento(s) marcado(s) como pago.`); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const consolidarPeriodo = trpc.pj.pagamentos.consolidarPeriodo.useMutation({
+    onSuccess: (d: any) => { refetchPagamentos(); setShowConsolidarDialog(false); toast.success(`${d.updated} lançamento(s) consolidado(s) como pago.`); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const { data: modeloPadrao } = trpc.pj.modeloContrato.useQuery();
   const salvarClausulasMut = (trpc as any).pj.salvarClausulas.useMutation({
     onSuccess: () => {
@@ -666,9 +682,9 @@ export default function ModuloPJ() {
             {/* Rev. 4371: PeriodSelectorCard — padrão de ouro mês/ano */}
             <PeriodSelectorCard
               ano={pjAno} mes={pjMes}
-              onAno={setPjAno}
-              onMes={setPjMes}
-              onAnoTodo={() => setPjMes(null)}
+              onAno={v => { setPjAno(v); setSelectedIds(new Set()); }}
+              onMes={v => { setPjMes(v); setSelectedIds(new Set()); }}
+              onAnoTodo={() => { setPjMes(null); setSelectedIds(new Set()); }}
               monthStatus={monthStatus}
               showLegend
               className="mb-4"
@@ -715,12 +731,45 @@ export default function ModuloPJ() {
               </div>
             )}
 
+            {/* Rev. 4375 — Barra de ações em lote */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-3">
+                <span className="text-sm font-medium text-blue-800">{selectedIds.size} selecionado(s)</span>
+                <Button size="sm" variant="outline" className="h-8 text-xs text-green-700 border-green-300 hover:bg-green-50"
+                  onClick={() => { if (confirm(`Marcar ${selectedIds.size} lançamento(s) como pago?`)) bulkMarcarPago.mutate({ ids: Array.from(selectedIds) }); }}>
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Marcar como Pago
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs text-red-700 border-red-300 hover:bg-red-50"
+                  onClick={() => { if (confirm(`Excluir ${selectedIds.size} lançamento(s)?`)) bulkDelete.mutate({ ids: Array.from(selectedIds) }); }}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir selecionados
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 text-xs ml-auto" onClick={() => setSelectedIds(new Set())}>
+                  Limpar seleção
+                </Button>
+              </div>
+            )}
+
+            {/* Rev. 4375 — Botão consolidar período passado */}
+            {selectedIds.size === 0 && (
+              <div className="flex justify-end mb-3">
+                <Button size="sm" variant="outline" className="h-8 text-xs text-purple-700 border-purple-300 hover:bg-purple-50"
+                  onClick={() => setShowConsolidarDialog(true)}>
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Consolidar período como pago
+                </Button>
+              </div>
+            )}
+
             <Card>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/30">
+                        <th className="p-3 w-8">
+                          <input type="checkbox" className="rounded"
+                            checked={(pagamentos as any[]).length > 0 && selectedIds.size === (pagamentos as any[]).length}
+                            onChange={e => setSelectedIds(e.target.checked ? new Set((pagamentos as any[]).map((p: any) => p.id)) : new Set())} />
+                        </th>
                         <th className="p-3 text-left font-medium">Prestador</th>
                         <th className="p-3 text-left font-medium">Fornecedor cadastrado</th>
                         <th className="p-3 text-left font-medium">Tipo</th>
@@ -734,13 +783,21 @@ export default function ModuloPJ() {
                     </thead>
                     <tbody>
                       {(pagamentos as any[]).length === 0 ? (
-                        <tr><td colSpan={9} className="py-12 text-center text-muted-foreground">
+                        <tr><td colSpan={10} className="py-12 text-center text-muted-foreground">
                           Nenhuma medição para {pjMes != null ? mesRef : String(pjAno)}. Novos contratos já geram as previsões automaticamente — para contratos antigos use "Sincronizar Previsões".
                         </td></tr>
                       ) : (pagamentos as any[]).map((p: any) => {
                         const st = STATUS_PAGAMENTO[p.status] || STATUS_PAGAMENTO.pendente;
                         return (
-                          <tr key={p.id} className="border-b last:border-0 hover:bg-muted/20">
+                          <tr key={p.id} className={`border-b last:border-0 hover:bg-muted/20 ${selectedIds.has(p.id) ? "bg-blue-50" : ""}`}>
+                            <td className="p-3">
+                              <input type="checkbox" className="rounded" checked={selectedIds.has(p.id)}
+                                onChange={e => {
+                                  const next = new Set(selectedIds);
+                                  if (e.target.checked) next.add(p.id); else next.delete(p.id);
+                                  setSelectedIds(next);
+                                }} />
+                            </td>
                             <td className="p-3 font-medium">{p.employeeName}</td>
                             <td className="p-3">
                               <FornecedorCadastroBadge status={p.fornecedorStatus} nome={p.fornecedorNome} cnpj={p.cnpjPrestador} />
@@ -1468,6 +1525,44 @@ export default function ModuloPJ() {
       </Dialog>
 
           <PrintFooterLGPD />
+
+        {/* Rev. 4375 — Dialog: Consolidar período como pago */}
+        <Dialog open={showConsolidarDialog} onOpenChange={setShowConsolidarDialog}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Consolidar período como pago</DialogTitle>
+            </DialogHeader>
+            <ConsolidarPeriodoForm
+              companyId={companyId}
+              onConsolidar={(mesInicio, mesFim) => consolidarPeriodo.mutate({ companyId, mesInicio, mesFim })}
+              isLoading={consolidarPeriodo.isPending}
+            />
+          </DialogContent>
+        </Dialog>
     </DashboardLayout>
+  );
+}
+
+function ConsolidarPeriodoForm({ companyId, onConsolidar, isLoading }: { companyId: number; onConsolidar: (mesInicio: string, mesFim: string) => void; isLoading: boolean }) {
+  const [mesInicio, setMesInicio] = useState("2026-01");
+  const [mesFim, setMesFim] = useState("2026-06");
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">Marca todos os pagamentos <strong>pendentes</strong> no período como <strong>pago</strong>. Ação irreversível.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-medium">Mês início</label>
+          <Input type="month" value={mesInicio} onChange={e => setMesInicio(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-medium">Mês fim</label>
+          <Input type="month" value={mesFim} onChange={e => setMesFim(e.target.value)} />
+        </div>
+      </div>
+      <Button className="w-full" disabled={isLoading || !mesInicio || !mesFim || mesInicio > mesFim}
+        onClick={() => { if (confirm(`Consolidar como PAGO todos os pendentes de ${mesInicio} a ${mesFim}?`)) onConsolidar(mesInicio, mesFim); }}>
+        {isLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Consolidando...</> : <><CheckCircle2 className="h-4 w-4 mr-2" />Consolidar como Pago</>}
+      </Button>
+    </div>
   );
 }

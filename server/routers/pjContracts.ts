@@ -1213,6 +1213,49 @@ export const pjContractsRouter = router({
         return { success: true };
       }),
 
+    // Rev. 4375 — Operações em lote: apagar múltiplos / marcar pago em lote
+    bulkDelete: protectedProcedure
+      .input(z.object({ ids: z.array(z.number()).min(1) }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.delete(pjPayments).where(inArray(pjPayments.id, input.ids));
+        return { deleted: input.ids.length };
+      }),
+
+    bulkMarcarPago: protectedProcedure
+      .input(z.object({ ids: z.array(z.number()).min(1), dataPagamento: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const hoje = input.dataPagamento || new Date().toISOString().split("T")[0];
+        await db.update(pjPayments)
+          .set({ status: "pago", dataPagamento: hoje } as any)
+          .where(inArray(pjPayments.id, input.ids));
+        return { updated: input.ids.length };
+      }),
+
+    // Rev. 4375 — Consolidar todos os pagamentos de um intervalo de meses como pago
+    consolidarPeriodo: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        mesInicio: z.string(), // "2026-01"
+        mesFim: z.string(),    // "2026-06"
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const { companyId, mesInicio, mesFim } = input;
+        const result = await db.update(pjPayments)
+          .set({ status: "pago" } as any)
+          .where(
+            and(
+              eq(pjPayments.companyId, companyId),
+              sql`${pjPayments.mesReferencia} >= ${mesInicio}`,
+              sql`${pjPayments.mesReferencia} <= ${mesFim}`,
+              eq(pjPayments.status, "pendente")
+            )
+          );
+        return { updated: (result as any).rowCount ?? 0 };
+      }),
+
     /**
      * Rev. 3262 — Ranking por fornecedor (READ-ONLY).
      * Soma histórica em BRL por prestador (employee), destacando quanto já foi

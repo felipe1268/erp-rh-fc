@@ -1,4 +1,27 @@
 /**
+ * Rev. 4375 - FOLHA PJ: MULTI-SELEÇÃO E CONSOLIDAR PERÍODO COMO PAGO
+ *
+ * Dois recursos adicionados na aba Folha PJ:
+ *
+ * 1. Multi-seleção na tabela:
+ *    - Checkbox em cada linha + "selecionar tudo" no header
+ *    - Barra de ação contextual (aparece quando há seleção):
+ *      "Marcar como Pago" (bulkMarcarPago) e "Excluir selecionados" (bulkDelete)
+ *    - Seleção limpa ao trocar mês/ano
+ *
+ * 2. Consolidar período como pago:
+ *    - Botão "Consolidar período como pago" (visível quando sem seleção)
+ *    - Dialog com seletor mês início / mês fim (padrão: Jan-Jun 2026)
+ *    - Procedure `pj.pagamentos.consolidarPeriodo`: marca todos os pagamentos
+ *      PENDENTES da empresa no intervalo de meses como "pago" em um só UPDATE
+ *
+ * Procedures server adicionadas: bulkDelete, bulkMarcarPago, consolidarPeriodo
+ *
+ * ARQUIVOS: client/src/pages/ModuloPJ.tsx, server/routers/pjContracts.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4374 - MÓDULO PJ — CONTRATOS: PADRÃO 50/50 E INPUT LIBERADO
  *
  * Dois problemas corrigidos nos campos % Adiantamento / % Fechamento:
