@@ -739,9 +739,6 @@ export default function ModuloPJ() {
               <Button variant="outline" onClick={() => gerarMensal.mutate({ companyId, companyIds })} disabled={gerarMensal.isPending} title="Sincroniza previsões de medições para todos os contratos PJ ativos (idempotente).">
                 <RefreshCw className={`h-4 w-4 mr-2 ${gerarMensal.isPending ? "animate-spin" : ""}`} /> Sincronizar Previsões
               </Button>
-              <Button onClick={() => { setPagForm({ mesReferencia: mesRefFallback }); setShowPagamentoDialog(true); }}>
-                <Plus className="h-4 w-4 mr-2" /> Lançamento Manual
-              </Button>
               <Button variant="outline" onClick={() => exportarPDF()} disabled={!(pagamentos as any[]).length || pjMes == null} title={pjMes == null ? "Selecione um mês para exportar PDF" : ""}>
                 <Printer className="h-4 w-4 mr-2" /> Exportar PDF
               </Button>
@@ -1496,76 +1493,6 @@ export default function ModuloPJ() {
           </div>
         </FullScreenDialog>
 
-        {/* Create Pagamento Dialog */}
-        <FullScreenDialog open={showPagamentoDialog} onClose={() => { setShowPagamentoDialog(false); setPagForm({}); }} title="Lançamento Manual PJ" icon={<DollarSign className="h-5 w-5 text-white" />}>
-          <div className="w-full max-w-2xl mx-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Contrato *</label>
-                <Select value={String(pagForm.contractId || "")} onValueChange={v => {
-                  const c = (contratos as any[]).find(c => c.id === parseInt(v));
-                  setPagForm({ ...pagForm, contractId: parseInt(v), employeeId: c?.employeeId });
-                }}>
-                  <SelectTrigger><SelectValue placeholder="Selecione um contrato" /></SelectTrigger>
-                  <SelectContent>
-                    {(contratos as any[]).filter(c => c.status === "ativo").map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.numeroContrato} — {c.employeeName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Mês Referência *</label>
-                <Input type="month" value={pagForm.mesReferencia || mesRefFallback} onChange={e => setPagForm({ ...pagForm, mesReferencia: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Tipo *</label>
-                <Select value={pagForm.tipo || ""} onValueChange={v => setPagForm({ ...pagForm, tipo: v })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="adiantamento">1ª Medição</SelectItem>
-                    <SelectItem value="fechamento">2ª Medição</SelectItem>
-                    <SelectItem value="bonificacao">Bonificação</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Valor (R$) *</label>
-                <Input type="number" step="0.01" value={pagForm.valor || ""} onChange={e => setPagForm({ ...pagForm, valor: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Data Prevista</label>
-                <Input type="date" value={pagForm.dataPrevista || ""} onChange={e => setPagForm({ ...pagForm, dataPrevista: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Forma de Pagamento</label>
-                <Select value={pagForm.formaPagamento || ""} onValueChange={v => setPagForm({ ...pagForm, formaPagamento: v || undefined })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PIX">PIX</SelectItem>
-                    <SelectItem value="TED">TED</SelectItem>
-                    <SelectItem value="Boleto">Boleto</SelectItem>
-                    <SelectItem value="Depósito">Depósito</SelectItem>
-                    <SelectItem value="Cheque">Cheque</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Descrição</label>
-                <Input value={pagForm.descricao || ""} onChange={e => setPagForm({ ...pagForm, descricao: e.target.value })} />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-              <Button variant="outline" onClick={() => { setShowPagamentoDialog(false); setPagForm({}); }}>Cancelar</Button>
-              <Button onClick={() => {
-                if (!pagForm.contractId || !pagForm.tipo || !pagForm.valor) { toast.error("Preencha os campos obrigatórios"); return; }
-                createPagamento.mutate({ companyId, companyIds, ...pagForm });
-              }} disabled={createPagamento.isPending}>
-                {createPagamento.isPending ? "Salvando..." : "Criar Lançamento"}
-              </Button>
-            </div>
-          </div>
-        </FullScreenDialog>
       </div>
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
