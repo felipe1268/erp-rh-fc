@@ -2933,11 +2933,11 @@ export const folhaPagamentoRouter = router({
             eq(payrollAdvances.mesReferencia, mesReferencia),
           ));
 
-        // 3. payroll_adjustments (tipo automático: falta/atraso/sem_registro)
+        // 3. payroll_adjustments — coluna é mesOrigem (não mesReferencia)
         await tx.delete(payrollAdjustments)
           .where(and(
             eq(payrollAdjustments.companyId, companyId),
-            eq(payrollAdjustments.mesReferencia, mesReferencia),
+            eq(payrollAdjustments.mesOrigem, mesReferencia),
           ));
 
         // 4. payroll_rounding_ledger
