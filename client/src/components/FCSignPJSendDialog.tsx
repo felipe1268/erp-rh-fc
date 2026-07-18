@@ -43,10 +43,13 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
   const [copied, setCopied] = useState<string | null>(null);
 
   const contratoQ = (trpc as any).pj.contratos.getById.useQuery({ id: contratoId }, { enabled: open && contratoId > 0 });
-  const modeloQ = trpc.pj.modeloContrato.useQuery(undefined, { enabled: open });
+  const contrato = contratoQ.data;
+  const modeloQ = trpc.pj.modeloContrato.useQuery(
+    { companyId: Number((contrato as any)?.companyId || 0) },
+    { enabled: open && !!(contrato as any)?.companyId }
+  );
   const createMut = trpc.signatures.create.useMutation();
 
-  const contrato = contratoQ.data;
   const prestadorNome = contrato?.razaoSocialPrestador || contrato?.employeeName || "Prestador";
   const prestadorCnpj = contrato?.cnpjPrestador || "";
 

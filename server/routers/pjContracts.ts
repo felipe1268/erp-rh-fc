@@ -1,7 +1,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, pjContractAditivos, employees, companies, comprasOrdens, fornecedores } from "../../drizzle/schema";
+import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, pjContractAditivos, employees, companies, comprasOrdens, fornecedores, documentTemplates } from "../../drizzle/schema";
 import { eq, and, sql, isNull, desc, asc, lte, gte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -1626,10 +1626,23 @@ export const pjContractsRouter = router({
       };
     }),
 
-  /** Modelo de contrato */
-  modeloContrato: protectedProcedure.query(() => {
-    return { modelo: MODELO_CONTRATO_PJ };
-  }),
+  /** Modelo de contrato — lê do doc_templates (Configurações → Contrato PJ) com fallback ao padrão */
+  modeloContrato: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      try {
+        const db = (await getDb())!;
+        const rows = await db.select({ conteudo: documentTemplates.conteudo })
+          .from(documentTemplates)
+          .where(and(
+            eq(documentTemplates.companyId, input.companyId),
+            eq(documentTemplates.tipo, 'contrato_pj' as any),
+            eq(documentTemplates.ativo, 1),
+          ));
+        if (rows.length > 0 && rows[0].conteudo) return { modelo: rows[0].conteudo };
+      } catch { /* fallback */ }
+      return { modelo: MODELO_CONTRATO_PJ };
+    }),
 
   salvarClausulas: protectedProcedure
     .input(z.object({

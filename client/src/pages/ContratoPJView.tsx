@@ -109,7 +109,7 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
     { enabled: !!contratoId }
   );
 
-  const { data: modeloPadrao } = trpc.pj.modeloContrato.useQuery();
+  const { data: modeloPadrao } = trpc.pj.modeloContrato.useQuery({ companyId });
 
   const [showAditivoModal, setShowAditivoModal] = useState(false);
   const [selectedClausulas, setSelectedClausulas] = useState<Record<string, boolean>>({});

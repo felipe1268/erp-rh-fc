@@ -260,7 +260,7 @@ export default function ModuloPJ() {
     },
     onError: (e: any) => toast.error(e.message),
   });
-  const { data: modeloPadrao } = trpc.pj.modeloContrato.useQuery();
+  const { data: modeloPadrao } = trpc.pj.modeloContrato.useQuery({ companyId });
   const salvarClausulasMut = (trpc as any).pj.salvarClausulas.useMutation({
     onSuccess: () => {
       toast.success("Cláusulas salvas com sucesso!");
