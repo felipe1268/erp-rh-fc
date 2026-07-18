@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4366** — **SCORECARD OBRA — FOLHA/CUSTOS: PONTO COMO CONFIRMAÇÃO DE PRESENÇA.** `relevant_emp` + `period_emps` ganham UNION com `time_records`: funcionário que bateu ponto na obra no mês aparece na equipe mesmo sem alocação formal cobrindo o período. Resolve "Sem dados" de junho na obra 90004 (20 funcionários com ponto, 0 na alocação). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4367** — **SCORECARD OBRA — FOLHA/CUSTOS: PJ EXCLUÍDO DO CRUZAMENTO DE PONTO.** Refinamento da Rev. 4366: filtro `tipoContrato <> 'PJ'` em `relevant_emp` + `period_emps`. Ciclo: CLT com ponto→ponto principal; CLT sem ponto→locação fallback; PJ→exclusivamente locação. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4365** — **PAGAR CONSOLIDADO: LAYOUT REFORMULADO + VALOR BRL FORMATADO.** Redesign completo do `PagarConsolidadoDialog`: cabeçalho gradiente indigo, campo valor mascarado (11.115,48 em vez de 11115.48), badge soma verde/vermelho, vencimento com data legível em pt-BR, parcelas com badge numerado, cheques terceiro com radio visual. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4366** — **SCORECARD OBRA — FOLHA/CUSTOS: PONTO COMO CONFIRMAÇÃO DE PRESENÇA.** `relevant_emp` + `period_emps` ganham UNION com `time_records`: CLT que bateu ponto na obra aparece na equipe mesmo sem alocação formal cobrindo o mês. Resolve "Sem dados" de junho (20 funcionários com ponto, 0 na alocação). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4364** — **FOLHA DE PAGAMENTO: BOTÃO "LIMPAR MÊS" (ADMIN MASTER).** Nova procedure `folha.limparMes` em transação: apaga payroll_payments/advances/adjustments/rounding_ledger + reset payroll_periods + exclui lançamentos legados PDF. ZERO ALTER destrutivo no schema.
 

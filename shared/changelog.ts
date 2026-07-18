@@ -1,4 +1,21 @@
 /**
+ * Rev. 4367 - SCORECARD OBRA — FOLHA/CUSTOS: PJ EXCLUÍDO DO CRUZAMENTO DE PONTO
+ *
+ * Refinamento da Rev. 4366: PJ nunca entra pela âncora de ponto (time_records),
+ * mantendo o ciclo correto:
+ *   - CLT com ponto → ponto é confirmação principal de presença
+ *   - CLT sem ponto → locação (site_periods) como fallback
+ *   - PJ           → exclusivamente pela locação (sem cartão de ponto)
+ *
+ * Filtro `AND ep."tipoContrato" <> 'PJ'` adicionado em AMBAS as UNIONs:
+ *   - relevant_emp (pool do payroll_frac)
+ *   - period_emps  (âncora do LEFT JOIN em custos)
+ *
+ * ARQUIVOS: server/routers/scorecard.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4366 - SCORECARD OBRA — FOLHA/CUSTOS: PONTO COMO CONFIRMAÇÃO DE PRESENÇA
  *
  * Mudança de abordagem: time_records (cartão de ponto) passa a ser âncora

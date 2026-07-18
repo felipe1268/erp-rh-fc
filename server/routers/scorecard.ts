@@ -1859,12 +1859,14 @@ export const scorecardRouter = router({
             SELECT employee_id, periodo_inicio, periodo_fim FROM bridge_emps
           ),
           relevant_emp AS (
-            -- Rev. 4366: ponto confirma presença física — funcionários com time_records
-            -- na obra/período também entram no pool (folha é puxada via payroll_frac).
+            -- Rev. 4366: ponto confirma presença física para CLT — PJ permanece exclusivamente
+            -- pela locação (site_periods). CLT com ponto entra no pool para payroll_frac.
             SELECT DISTINCT employee_id FROM site_periods
             UNION
             SELECT DISTINCT tr."employeeId"
             FROM time_records tr
+            JOIN employees ep_tr ON ep_tr.id = tr."employeeId"
+              AND ep_tr."tipoContrato" <> 'PJ'
             WHERE tr."companyId"     = ${input.companyId}
               AND tr."obraId"        = ${input.obraId}
               AND tr."mesReferencia" >= ${mesFeriasIni}
@@ -1914,8 +1916,9 @@ export const scorecardRouter = router({
                 )
               )
             UNION
-            -- Ponto como âncora secundária: quem bateu ponto na obra no período
-            -- mas não tem alocação formal cobrindo o mês (ex.: transferência anterior ao mês)
+            -- Ponto como âncora secundária para CLT: quem bateu ponto na obra no período
+            -- mas não tem alocação formal cobrindo o mês (ex.: transferência anterior ao mês).
+            -- PJ NUNCA entra aqui — exclusivamente pela locação (site_periods).
             SELECT DISTINCT tr."employeeId"
             FROM time_records tr
             JOIN employees ep ON ep.id = tr."employeeId"
@@ -1924,6 +1927,7 @@ export const scorecardRouter = router({
               AND tr."mesReferencia" >= ${mesFeriasIni}
               AND tr."mesReferencia" <= ${mesFeriasFim}
               AND ep.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+              AND ep."tipoContrato" <> 'PJ'
           ),
           payroll_frac AS (
             SELECT
