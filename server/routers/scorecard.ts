@@ -1859,14 +1859,21 @@ export const scorecardRouter = router({
             SELECT employee_id, periodo_inicio, periodo_fim FROM bridge_emps
           ),
           relevant_emp AS (
-            -- Apenas funcionários formalmente alocados (site_periods).
-            -- time_records NÃO define "quem está na equipe": serve só como fallback
-            -- de dias na subquery de payroll_frac abaixo, mas não puxa novos funcionários.
+            -- Rev. 4366: ponto confirma presença física — funcionários com time_records
+            -- na obra/período também entram no pool (folha é puxada via payroll_frac).
             SELECT DISTINCT employee_id FROM site_periods
+            UNION
+            SELECT DISTINCT tr."employeeId"
+            FROM time_records tr
+            WHERE tr."companyId"     = ${input.companyId}
+              AND tr."obraId"        = ${input.obraId}
+              AND tr."mesReferencia" >= ${mesFeriasIni}
+              AND tr."mesReferencia" <= ${mesFeriasFim}
           ),
-          -- Rev. 4333: efetivo do período — funcionários alocados com sobreposição com o filtro
-          -- escolhido pelo usuário. É a âncora do LEFT JOIN em custos (garante que todos aparecem,
-          -- mesmo sem lançamento de folha processado).
+          -- Rev. 4366: ponto como confirmação de presença — funcionário com cartão de ponto
+          -- na obra no período aparece na equipe mesmo sem alocação formal (ESH/OF) cobrindo o mês.
+          -- Âncora do LEFT JOIN em custos. Critérios de férias/afastado aplicam-se só à âncora
+          -- via site_periods; ponto é evidência direta de trabalho, não é filtrado nesses critérios.
           period_emps AS (
             SELECT DISTINCT sp.employee_id
             FROM site_periods sp
@@ -1906,6 +1913,17 @@ export const scorecardRouter = router({
                           < (${mesFeriasIni} || '-01')::date
                 )
               )
+            UNION
+            -- Ponto como âncora secundária: quem bateu ponto na obra no período
+            -- mas não tem alocação formal cobrindo o mês (ex.: transferência anterior ao mês)
+            SELECT DISTINCT tr."employeeId"
+            FROM time_records tr
+            JOIN employees ep ON ep.id = tr."employeeId"
+            WHERE tr."companyId"     = ${input.companyId}
+              AND tr."obraId"        = ${input.obraId}
+              AND tr."mesReferencia" >= ${mesFeriasIni}
+              AND tr."mesReferencia" <= ${mesFeriasFim}
+              AND ep.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
           ),
           payroll_frac AS (
             SELECT

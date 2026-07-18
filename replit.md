@@ -50,13 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4366** — **SCORECARD OBRA — FOLHA/CUSTOS: PONTO COMO CONFIRMAÇÃO DE PRESENÇA.** `relevant_emp` + `period_emps` ganham UNION com `time_records`: funcionário que bateu ponto na obra no mês aparece na equipe mesmo sem alocação formal cobrindo o período. Resolve "Sem dados" de junho na obra 90004 (20 funcionários com ponto, 0 na alocação). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4365** — **PAGAR CONSOLIDADO: LAYOUT REFORMULADO + VALOR BRL FORMATADO.** Redesign completo do `PagarConsolidadoDialog`: cabeçalho gradiente indigo, campo valor mascarado (11.115,48 em vez de 11115.48), badge soma verde/vermelho, vencimento com data legível em pt-BR, parcelas com badge numerado, cheques terceiro com radio visual. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4364** — **FOLHA DE PAGAMENTO: BOTÃO "LIMPAR MÊS" (ADMIN MASTER).** Nova procedure `folha.limparMes` em transação: apaga payroll_payments/advances/adjustments/rounding_ledger + reset payroll_periods + exclui lançamentos legados PDF. Frontend: botão vermelho outline só para Admin Master + dialog de confirmação com lista do que é apagado. ZERO ALTER destrutivo no schema.
+- **Rev. 4364** — **FOLHA DE PAGAMENTO: BOTÃO "LIMPAR MÊS" (ADMIN MASTER).** Nova procedure `folha.limparMes` em transação: apaga payroll_payments/advances/adjustments/rounding_ledger + reset payroll_periods + exclui lançamentos legados PDF. ZERO ALTER destrutivo no schema.
 
-- **Rev. 4363** — **SCORECARD OBRA — FOLHA/CUSTOS: mesesComDados DERIVADO DA QUERY PRINCIPAL.** Remove query SQL paralela (incompleta — não tinha bridge_emps). mesesComDados calculado em JS sobre `funcs` (resultado da query com site_periods completo) + filtros férias/afastado por mês via `feriasGozoMap` + `licencaDataInicio` adicionado ao SELECT. PJ: só meses passados. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4360** — **SCORECARD OBRA — FOLHA/CUSTOS: CRITÉRIOS DE ELEGIBILIDADE DO EFETIVO.** 3 critérios: (1) Desligado/Inativo excluído em bridge_emps + period_emps + JOIN custos. (2) Férias mês inteiro excluído (custo já no mês de saída). (3) Afastado INSS > 15 dias antes do mês excluído (licencaDataInicio + 15d < mes_inicio). Férias parcial e afastado ≤ 15 dias: permanecem proporcionais. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4363** — **SCORECARD OBRA — FOLHA/CUSTOS: mesesComDados DERIVADO DA QUERY PRINCIPAL.** Remove query SQL paralela (incompleta). mesesComDados calculado em JS sobre `funcs` + filtros férias/afastado por mês. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

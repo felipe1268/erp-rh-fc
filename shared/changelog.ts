@@ -1,4 +1,30 @@
 /**
+ * Rev. 4366 - SCORECARD OBRA — FOLHA/CUSTOS: PONTO COMO CONFIRMAÇÃO DE PRESENÇA
+ *
+ * Mudança de abordagem: time_records (cartão de ponto) passa a ser âncora
+ * secundária de period_emps e relevant_emp no getCustosRH.
+ *
+ * PROBLEMA RESOLVIDO:
+ * - Funcionários alocados via obra_funcionarios (Ramo B) tinham seu período
+ *   fechado quando eram cadastrados em outra obra (ex.: obra 90004 → obra 12).
+ *   No mês seguinte, mesmo batendo ponto na obra original, não apareciam no
+ *   scorecard ("Sem dados de folha").
+ * - Verificação no banco confirmou: 20 funcionários bateram ponto na obra 90004
+ *   em junho/2026, mas a alocação formal dizia que saíram em maio.
+ *
+ * SOLUÇÃO:
+ * - relevant_emp: UNION com time_records da obra/período → folha é puxada para
+ *   quem tem ponto, mesmo sem alocação formal cobrindo o mês.
+ * - period_emps: UNION com time_records filtrado por status (exclui Desligado/
+ *   Lista_Negra/Inativo) → funcionário aparece na equipe do mês se bateu ponto.
+ * - Critérios de férias/afastado continuam aplicados apenas à âncora via
+ *   site_periods; ponto é evidência direta de trabalho.
+ *
+ * ARQUIVOS: server/routers/scorecard.ts (relevant_emp + period_emps CTEs)
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4365 - PAGAR CONSOLIDADO: LAYOUT REFORMULADO + VALOR BRL FORMATADO
  *
  * Redesign completo do PagarConsolidadoDialog.tsx:
