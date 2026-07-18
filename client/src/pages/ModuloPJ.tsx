@@ -239,6 +239,15 @@ export default function ModuloPJ() {
     onSuccess: (d: any) => { refetchPagamentos(); setSelectedIds(new Set()); toast.success(`${d.deleted} lançamento(s) excluído(s).`); },
     onError: (e: any) => toast.error(e.message),
   });
+  const bulkAprovar = (trpc as any).pj.pagamentos.bulkAprovar.useMutation({
+    onSuccess: (d: any) => {
+      refetchPagamentos();
+      setSelectedIds(new Set());
+      if (d.errors?.length) toast.error(`${d.approved} aprovado(s), ${d.errors.length} erro(s).`);
+      else toast.success(`${d.approved} medição(ões) aprovada(s) e enviada(s) para Contas a Pagar!`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   const aprovarComNF = (trpc as any).pj.pagamentos.aprovarComNF.useMutation({
     onSuccess: (d: any) => {
       refetchPagamentos();
@@ -755,10 +764,22 @@ export default function ModuloPJ() {
               </div>
             )}
 
-            {/* Barra de ações em lote (excluir apenas) */}
+            {/* Barra de ações em lote */}
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-3">
                 <span className="text-sm font-medium text-blue-800">{selectedIds.size} selecionado(s)</span>
+                <Button size="sm" variant="outline" className="h-8 text-xs text-blue-700 border-blue-300 hover:bg-blue-50"
+                  disabled={bulkAprovar.isPending}
+                  onClick={() => {
+                    const pendentes = Array.from(selectedIds).filter(id =>
+                      (pagamentos as any[]).find((p: any) => p.id === id && p.status === 'pendente')
+                    );
+                    if (!pendentes.length) { toast.error("Nenhum lançamento pendente selecionado."); return; }
+                    bulkAprovar.mutate({ ids: pendentes, companyId });
+                  }}>
+                  <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+                  {bulkAprovar.isPending ? "Aprovando..." : `Aprovar selecionados`}
+                </Button>
                 <Button size="sm" variant="outline" className="h-8 text-xs text-red-700 border-red-300 hover:bg-red-50"
                   onClick={() => { if (confirm(`Excluir ${selectedIds.size} lançamento(s)?`)) bulkDelete.mutate({ ids: Array.from(selectedIds) }); }}>
                   <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir selecionados

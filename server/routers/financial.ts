@@ -10461,6 +10461,23 @@ export const financialRouter = router({
       userId: ctx.user?.id, companyId: input.companyId,
       details: `Baixa ${roll.quitado ? "TOTAL" : "PARCIAL"}${input.quitarTotal ? " (quitação manual)" : ""} ${tipo} ${input.id}: +R$${input.valor} (acum. R$${roll.acumulado}/${roll.previsto})`,
     });
+    // Rev. 4378 — Sync: quando Contas a Pagar quita um lançamento de pagamento_pj,
+    // reflete automaticamente em pj_payments.status = 'pago'.
+    if (roll.quitado) {
+      try {
+        const meta = rows(await dbExecute(db as any,
+          `SELECT origem_modulo, origem_id FROM financial_entries WHERE id=$1 AND company_id=$2`,
+          [input.id, input.companyId]
+        ))[0] as any;
+        if (meta?.origem_modulo === 'pagamento_pj' && meta?.origem_id) {
+          await dbExecute(db as any,
+            `UPDATE pj_payments SET status='pago', "dataPagamento"=$1, "updatedAt"=NOW()
+             WHERE id=$2 AND "companyId"=$3 AND status<>'pago'`,
+            [dataBaixa, meta.origem_id, input.companyId]
+          );
+        }
+      } catch (_) { /* não bloqueia a baixa principal */ }
+    }
     return { ok: true, quitado: roll.quitado, acumulado: roll.acumulado, saldo: roll.saldo, status: roll.status };
   }),
 

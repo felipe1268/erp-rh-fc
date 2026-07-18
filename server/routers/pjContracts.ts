@@ -1441,6 +1441,82 @@ export const pjContractsRouter = router({
 
         return { success: true, nfUrl };
       }),
+
+    /**
+     * Rev. 4378 — Aprovação em lote: aprova vários pj_payments de uma vez,
+     * criando um financial_entry individual para cada um (sem NF — NF pode ser
+     * anexada depois no Contas a Pagar).
+     */
+    bulkAprovar: protectedProcedure
+      .input(z.object({
+        ids: z.array(z.number()).min(1).max(100),
+        companyId: z.number(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        let approved = 0;
+        const errors: string[] = [];
+
+        for (const id of input.ids) {
+          try {
+            await db.execute(sql`
+              UPDATE pj_payments
+              SET aprovado_em        = NOW(),
+                  aprovado_por_nome  = ${ctx.user.name ?? 'Sistema'},
+                  enviado_financeiro = true,
+                  "updatedAt"        = NOW()
+              WHERE id = ${id} AND "companyId" = ${input.companyId}
+                AND status = 'pendente'
+            `);
+
+            const existing = await db.execute(sql`
+              SELECT id FROM financial_entries
+              WHERE origem_modulo = 'pagamento_pj'
+                AND origem_id     = ${id}
+                AND company_id    = ${input.companyId}
+              LIMIT 1
+            `);
+
+            if ((existing.rows ?? []).length === 0) {
+              const pjRow = await db.execute(sql`
+                SELECT pp.id, pp.valor, pp."dataPrevista", pp."dataPagamento",
+                       pp.descricao, pp.status, pp."mesReferencia",
+                       e."nomeCompleto" AS employee_name
+                FROM pj_payments pp
+                JOIN employees e ON e.id = pp."employeeId"
+                WHERE pp.id = ${id}
+              `);
+              if ((pjRow.rows ?? []).length > 0) {
+                const pj = pjRow.rows[0] as any;
+                const [ano, mes] = (pj.mesReferencia as string).split('-');
+                const valor = parseFloat(pj.valor ?? '0');
+                await db.execute(sql`
+                  INSERT INTO financial_entries
+                    (company_id, conta_id, conta_nome, tipo, natureza,
+                     valor_previsto, valor_realizado,
+                     data_competencia, data_vencimento, data_pagamento,
+                     status, origem_modulo, origem_id,
+                     origem_descricao, descricao,
+                     created_at, updated_at)
+                  VALUES
+                    (${input.companyId}, 391, 'Serviços PJ / Terceirizados', 'despesa', 'variavel',
+                     ${valor}, ${pj.status === 'pago' ? valor : null},
+                     ${`${ano}-${mes}-01`}, ${pj.dataPrevista ?? null}, ${pj.dataPagamento ?? null},
+                     ${'a_pagar'},
+                     'pagamento_pj', ${id},
+                     ${`PJ ${pj.mesReferencia} - ${pj.employee_name ?? 'Serviço PJ'}`},
+                     ${pj.descricao ?? `Pagamento PJ ${pj.mesReferencia}`},
+                     NOW(), NOW())
+                `);
+              }
+            }
+            approved++;
+          } catch (e: any) {
+            errors.push(`ID ${id}: ${e?.message ?? 'Erro'}`);
+          }
+        }
+        return { approved, errors };
+      }),
   }),
 
   /** Relatório consolidado PJ para exportação PDF (retorna HTML formatado) */
