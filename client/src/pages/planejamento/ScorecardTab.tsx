@@ -13,7 +13,7 @@ import {
   Settings, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle,
   CheckCircle2, ChevronDown, ChevronUp, DollarSign, Loader2, Wrench,
   Users, HardHat, RefreshCw, Info, Calendar, Activity, FileText,
-  ClipboardCheck, Heart, Shield, UserCheck, Maximize2,
+  ClipboardCheck, Heart, Shield, UserCheck, Maximize2, X,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RcTooltip, ResponsiveContainer, Cell,
@@ -239,6 +239,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [expandedRH,    setExpandedRH]    = useState<Set<number>>(new Set());
   const [filtroFuncao,  setFiltroFuncao]  = useState<string>("");
   const [rhSortBy,      setRhSortBy]      = useState<"custo" | "nome">("custo");
+  const [hiddenEmpIds,  setHiddenEmpIds]  = useState<Set<number>>(new Set());
   const [expandedBanco, setExpandedBanco] = useState<Set<number>>(new Set());
   const [rhAno,         setRhAno]         = useState(new Date().getFullYear());
   const [rhMes,         setRhMes]         = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'));
@@ -323,16 +324,17 @@ export default function ScorecardTab({ proj }: { proj: any }) {
 
   const rhFuncsFiltrados = useMemo(() => {
     const all: any[] = analiseRH.data?.funcionarios ?? [];
-    const filtered = filtroFuncao
+    const filtered = (filtroFuncao
       ? all.filter((f: any) => (f.cargo || f.razao_social || "Sem função").trim() === filtroFuncao)
-      : all;
+      : all
+    ).filter((f: any) => !hiddenEmpIds.has(Number(f.employee_id)));
     if (rhSortBy === "nome") {
       return [...filtered].sort((a: any, b: any) =>
         (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" })
       );
     }
     return filtered; // "custo" — servidor já entrega ordenado por custo desc
-  }, [analiseRH.data, filtroFuncao, rhSortBy]);
+  }, [analiseRH.data, filtroFuncao, rhSortBy, hiddenEmpIds]);
 
   const rhResumoFiltrado = useMemo(() => {
     const base = { salarioBruto: 0, he: 0, va: 0, ferias: 0, seguroVida: 0, fgts: 0, custoTotal: 0 };
@@ -1414,6 +1416,15 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                         >
                           {rhSortBy === "custo" ? "A → Z" : "Custo ↓"}
                         </button>
+                        {isAdminMaster && hiddenEmpIds.size > 0 && (
+                          <button
+                            onClick={() => setHiddenEmpIds(new Set())}
+                            className="text-[11px] border border-red-200 rounded-md px-2 py-1 bg-red-50 text-red-600 hover:bg-red-100 transition-colors cursor-pointer select-none"
+                            title="Restaurar todos os funcionários ocultos"
+                          >
+                            Restaurar {hiddenEmpIds.size} ocult{hiddenEmpIds.size === 1 ? "o" : "os"}
+                          </button>
+                        )}
                         {rhCargoOptions.length > 0 && (
                           <>
                             <select
@@ -1528,7 +1539,20 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                   <td className="text-right px-2 py-1.5 text-rose-700">{Number(f.seguro_vida_total) > 0 ? fmt(Number(f.seguro_vida_total)) : <span className="text-gray-300">—</span>}</td>
                                   <td className="text-right px-2 py-1.5 text-blue-700">{fmt(Number(f.fgts_total))}</td>
                                   <td className="text-right px-2 py-1.5 font-semibold text-indigo-700">{fmt(Number(f.custo_total_empresa))}</td>
-                                  <td className="px-1 py-1.5 text-gray-400">{isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</td>
+                                  <td className="px-1 py-1.5">
+                                    <div className="flex items-center gap-0.5">
+                                      <span className="text-gray-400">{isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</span>
+                                      {isAdminMaster && (
+                                        <button
+                                          onClick={(ev) => { ev.stopPropagation(); setHiddenEmpIds(prev => { const s = new Set(prev); s.add(empId); return s; }); }}
+                                          title={`Ocultar ${f.nome} desta lista`}
+                                          className="ml-1 p-0.5 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
                                 </tr>
                                 {isOpen && histFiltered.length > 0 && (
                                   <tr className="bg-indigo-50/40">
