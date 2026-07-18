@@ -1,4 +1,29 @@
 /**
+ * Rev. 4376 - MÓDULO PJ: AUTO-LINK %, AJUSTE EM LOTE, FOLHA DIVIDIDA
+ *
+ * 1. Auto-link % adiantamento ↔ fechamento no formulário de contrato:
+ *    - Digitar % Adiantamento → % Fechamento = 100 − valor automaticamente
+ *    - Campo % Fechamento vira read-only (calculado, cinza, tooltip explicativo)
+ *    - Previne que o usuário some mais de 100% por engano
+ *
+ * 2. Botão ⚙️ "Ajustar regra de pagamento" na toolbar da aba Contratos:
+ *    - Dialog com % Adiantamento (% Fechamento auto) + Dia Adiantamento + Dia Fechamento
+ *    - "Aplicar a todos os contratos ativos" → procedure `pj.contratos.bulkUpdatePercentuais`
+ *      (UPDATE WHERE status='ativo' AND companyId) com confirmação
+ *    - Permite corrigir de uma vez todos os 13 contratos ativos
+ *
+ * 3. Folha PJ dividida em duas seções visuais:
+ *    - Card âmbar "📅 Folha do Dia 15 — Adiantamentos" (total + tabela)
+ *    - Card verde "📅 Folha do Final do Mês — Fechamentos / Bonificações" (total + tabela)
+ *    - Cada seção tem checkbox individual + "selecionar tudo do grupo"
+ *    - Facilita repasse correto para o financeiro (dois pagamentos distintos)
+ *
+ * Backend: pj.contratos.bulkUpdatePercentuais adicionado.
+ * ARQUIVOS: client/src/pages/ModuloPJ.tsx, server/routers/pjContracts.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4375 - FOLHA PJ: MULTI-SELEÇÃO E CONSOLIDAR PERÍODO COMO PAGO
  *
  * Dois recursos adicionados na aba Folha PJ:

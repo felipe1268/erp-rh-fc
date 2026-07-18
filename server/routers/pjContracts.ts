@@ -947,6 +947,29 @@ export const pjContractsRouter = router({
         return { success: true };
       }),
 
+    // Rev. 4376 — Ajuste em lote: percentuais e dias de todos os contratos ativos
+    bulkUpdatePercentuais: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        percentualAdiantamento: z.number().min(0).max(100),
+        percentualFechamento: z.number().min(0).max(100),
+        diaAdiantamento: z.number().min(1).max(31).optional(),
+        diaFechamento: z.number().min(1).max(31).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const updateData: any = {
+          percentualAdiantamento: input.percentualAdiantamento,
+          percentualFechamento: input.percentualFechamento,
+        };
+        if (input.diaAdiantamento !== undefined) updateData.diaAdiantamento = input.diaAdiantamento;
+        if (input.diaFechamento !== undefined) updateData.diaFechamento = input.diaFechamento;
+        const result = await db.update(pjContracts)
+          .set(updateData)
+          .where(and(eq(pjContracts.companyId, input.companyId), eq(pjContracts.status, "ativo" as any)));
+        return { updated: (result as any).rowCount ?? 0 };
+      }),
+
     /** Buscar último contrato do prestador (para auto-preenchimento de CNPJ/Razão Social) */
     getLastByEmployee: protectedProcedure
       .input(z.object({ employeeId: z.number(), companyId: z.number() }))

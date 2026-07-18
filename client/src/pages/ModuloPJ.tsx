@@ -20,7 +20,7 @@ import {
   Briefcase, Plus, Search, DollarSign, AlertTriangle, FileText,
   Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar, Pencil,
   Users, TrendingUp, FileSignature, Ban, Printer, Upload, FolderOpen,
-  ExternalLink, File, XCircle, Award, Loader2, RotateCcw, Check,
+  ExternalLink, File, XCircle, Award, Loader2, RotateCcw, Check, Settings2,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -214,6 +214,18 @@ export default function ModuloPJ() {
   // Rev. 4375 — operações em lote
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showConsolidarDialog, setShowConsolidarDialog] = useState(false);
+  // Rev. 4376 — ajuste de percentuais em lote (todos os contratos ativos)
+  const [showAjusteDialog, setShowAjusteDialog] = useState(false);
+  const [ajusteForm, setAjusteForm] = useState<{ percAdiant?: number; diaAdiant?: number; diaFech?: number }>({});
+  const bulkUpdatePercentuais = trpc.pj.contratos.bulkUpdatePercentuais.useMutation({
+    onSuccess: (d: any) => {
+      refetchContratos();
+      setShowAjusteDialog(false);
+      toast.success(`${d.updated} contrato(s) atualizado(s).`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const bulkDelete = trpc.pj.pagamentos.bulkDelete.useMutation({
     onSuccess: (d: any) => { refetchPagamentos(); setSelectedIds(new Set()); toast.success(`${d.deleted} lançamento(s) excluído(s).`); },
     onError: (e: any) => toast.error(e.message),
@@ -593,6 +605,9 @@ export default function ModuloPJ() {
                   <SelectItem value="encerrado">Encerrado</SelectItem>
                 </SelectContent>
               </Select>
+              <Button variant="outline" size="icon" title="Ajustar percentuais de todos os contratos ativos" onClick={() => { setAjusteForm({}); setShowAjusteDialog(true); }}>
+                <Settings2 className="h-4 w-4" />
+              </Button>
               <Button onClick={() => { setForm({ formaPagamento: defaultFormaPgto }); setCreatedContratoId(null); setMotivoAlteracao(""); setEditingContratoId(null); setShowContratoDialog(true); }}>
                 <Plus className="h-4 w-4 mr-2" /> Novo Contrato
               </Button>
@@ -759,91 +774,109 @@ export default function ModuloPJ() {
               </div>
             )}
 
-            <Card>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/30">
-                        <th className="p-3 w-8">
-                          <input type="checkbox" className="rounded"
-                            checked={(pagamentos as any[]).length > 0 && selectedIds.size === (pagamentos as any[]).length}
-                            onChange={e => setSelectedIds(e.target.checked ? new Set((pagamentos as any[]).map((p: any) => p.id)) : new Set())} />
-                        </th>
-                        <th className="p-3 text-left font-medium">Prestador</th>
-                        <th className="p-3 text-left font-medium">Fornecedor cadastrado</th>
-                        <th className="p-3 text-left font-medium">Tipo</th>
-                        <th className="p-3 text-left font-medium">Descrição</th>
-                        <th className="p-3 text-right font-medium">Valor</th>
-                        <th className="p-3 text-left font-medium">Data</th>
-                        <th className="p-3 text-left font-medium">Forma Pgto</th>
-                        <th className="p-3 text-center font-medium">Status</th>
-                        <th className="p-3 text-center font-medium">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(pagamentos as any[]).length === 0 ? (
-                        <tr><td colSpan={10} className="py-12 text-center text-muted-foreground">
-                          Nenhuma medição para {pjMes != null ? mesRef : String(pjAno)}. Novos contratos já geram as previsões automaticamente — para contratos antigos use "Sincronizar Previsões".
-                        </td></tr>
-                      ) : (pagamentos as any[]).map((p: any) => {
-                        const st = STATUS_PAGAMENTO[p.status] || STATUS_PAGAMENTO.pendente;
-                        return (
-                          <tr key={p.id} className={`border-b last:border-0 hover:bg-muted/20 ${selectedIds.has(p.id) ? "bg-blue-50" : ""}`}>
-                            <td className="p-3">
-                              <input type="checkbox" className="rounded" checked={selectedIds.has(p.id)}
+            {/* Rev. 4376 — Folha dividida: Dia 15 (adiantamentos) + Final do mês (fechamentos) */}
+            {(pagamentos as any[]).length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  Nenhuma medição para {pjMes != null ? mesRef : String(pjAno)}. Novos contratos já geram as previsões automaticamente — para contratos antigos use "Sincronizar Previsões".
+                </CardContent>
+              </Card>
+            ) : (["adiantamento", "fechamento_bonificacao"] as const).map(grupo => {
+              const itens = (pagamentos as any[]).filter(p => grupo === "adiantamento" ? p.tipo === "adiantamento" : p.tipo !== "adiantamento");
+              if (itens.length === 0) return null;
+              const totalGrupo = itens.reduce((s: number, p: any) => s + parseFloat(p.valor || "0"), 0);
+              const isAdiant = grupo === "adiantamento";
+              const allSelected = itens.every((p: any) => selectedIds.has(p.id));
+              return (
+                <Card key={grupo} className={`mb-4 border-2 ${isAdiant ? "border-amber-200" : "border-green-200"}`}>
+                  <CardHeader className={`pb-2 pt-3 px-4 ${isAdiant ? "bg-amber-50" : "bg-green-50"} rounded-t-lg`}>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className={`text-sm font-semibold ${isAdiant ? "text-amber-800" : "text-green-800"}`}>
+                        {isAdiant ? "📋 1ª Medição do Mês — Adiantamentos" : "📋 2ª Medição do Mês — Fechamentos / Bonificações"}
+                      </CardTitle>
+                      <span className={`text-base font-bold ${isAdiant ? "text-amber-700" : "text-green-700"}`}>{formatMoeda(totalGrupo)}</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/30">
+                            <th className="p-3 w-8">
+                              <input type="checkbox" className="rounded" checked={allSelected}
                                 onChange={e => {
                                   const next = new Set(selectedIds);
-                                  if (e.target.checked) next.add(p.id); else next.delete(p.id);
+                                  if (e.target.checked) itens.forEach((p: any) => next.add(p.id));
+                                  else itens.forEach((p: any) => next.delete(p.id));
                                   setSelectedIds(next);
                                 }} />
-                            </td>
-                            <td className="p-3 font-medium">{p.employeeName}</td>
-                            <td className="p-3">
-                              <FornecedorCadastroBadge status={p.fornecedorStatus} nome={p.fornecedorNome} cnpj={p.cnpjPrestador} />
-                            </td>
-                            <td className="p-3">
-                              <Badge variant={p.tipo === "adiantamento" ? "secondary" : p.tipo === "bonificacao" ? "default" : "outline"}>
-                                {p.tipo === "adiantamento" ? "Adiantamento" : p.tipo === "bonificacao" ? "Bonificação" : "Fechamento"}
-                              </Badge>
-                            </td>
-                            <td className="p-3 text-xs">{p.descricao || "-"}</td>
-                            <td className="p-3 text-right font-bold">{formatMoeda(p.valor)}</td>
-                            <td className="p-3 text-xs">
-                              {p.dataPagamento ? (
-                                <span className="text-green-700">Pago em {formatDate(p.dataPagamento)}</span>
-                              ) : p.dataPrevista ? (
-                                <span className="text-muted-foreground">Previsto: {formatDate(p.dataPrevista)}</span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </td>
-                            <td className="p-3 text-xs text-muted-foreground">
-                              {p.formaPagamento || <span className="text-muted-foreground/50">—</span>}
-                            </td>
-                            <td className="p-3 text-center">
-                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
-                            </td>
-                            <td className="p-3">
-                              <div className="flex items-center justify-center gap-1">
-                                {p.status === "pendente" && (
-                                  <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => updatePagamento.mutate({ id: p.id, status: "pago", dataPagamento: new Date().toISOString().split("T")[0] })}>
-                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Pagar
-                                  </Button>
-                                )}
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir?")) deletePagamento.mutate({ id: p.id }); }}>
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </td>
+                            </th>
+                            <th className="p-3 text-left font-medium">Prestador</th>
+                            <th className="p-3 text-left font-medium">Fornecedor</th>
+                            <th className="p-3 text-left font-medium">Descrição</th>
+                            <th className="p-3 text-right font-medium">Valor</th>
+                            <th className="p-3 text-left font-medium">Data</th>
+                            <th className="p-3 text-left font-medium">Forma Pgto</th>
+                            <th className="p-3 text-center font-medium">Status</th>
+                            <th className="p-3 text-center font-medium">Ações</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+                        </thead>
+                        <tbody>
+                          {itens.map((p: any) => {
+                            const st = STATUS_PAGAMENTO[p.status] || STATUS_PAGAMENTO.pendente;
+                            return (
+                              <tr key={p.id} className={`border-b last:border-0 hover:bg-muted/20 ${selectedIds.has(p.id) ? "bg-blue-50" : ""}`}>
+                                <td className="p-3">
+                                  <input type="checkbox" className="rounded" checked={selectedIds.has(p.id)}
+                                    onChange={e => {
+                                      const next = new Set(selectedIds);
+                                      if (e.target.checked) next.add(p.id); else next.delete(p.id);
+                                      setSelectedIds(next);
+                                    }} />
+                                </td>
+                                <td className="p-3 font-medium">{p.employeeName}</td>
+                                <td className="p-3">
+                                  <FornecedorCadastroBadge status={p.fornecedorStatus} nome={p.fornecedorNome} cnpj={p.cnpjPrestador} />
+                                </td>
+                                <td className="p-3 text-xs">{p.descricao || "-"}</td>
+                                <td className="p-3 text-right font-bold">{formatMoeda(p.valor)}</td>
+                                <td className="p-3 text-xs">
+                                  {p.dataPagamento ? (
+                                    <span className="text-green-700">Pago em {formatDate(p.dataPagamento)}</span>
+                                  ) : p.dataPrevista ? (
+                                    <span className="text-muted-foreground">Previsto: {formatDate(p.dataPrevista)}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                  )}
+                                </td>
+                                <td className="p-3 text-xs text-muted-foreground">
+                                  {p.formaPagamento || <span className="text-muted-foreground/50">—</span>}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex items-center justify-center gap-1">
+                                    {p.status === "pendente" && (
+                                      <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => updatePagamento.mutate({ id: p.id, status: "pago", dataPagamento: new Date().toISOString().split("T")[0] })}>
+                                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Pagar
+                                      </Button>
+                                    )}
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir?")) deletePagamento.mutate({ id: p.id }); }}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
 
             {/* Rev. 3262 — Ranking por fornecedor (somatório histórico em BRL) */}
             {(rankingFornecedores as any[]).length > 0 && (
@@ -1266,7 +1299,12 @@ export default function ModuloPJ() {
                   <div>
                     <label className="text-xs font-medium">% Adiantamento</label>
                     <Input type="number" min={0} max={100} value={form.percentualAdiantamento ?? ""} placeholder="50"
-                      onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, percentualAdiantamento: isNaN(v) ? undefined : v }); }} />
+                      onChange={e => {
+                        const v = parseInt(e.target.value);
+                        const adiant = isNaN(v) ? undefined : Math.min(100, Math.max(0, v));
+                        const fech = adiant !== undefined ? 100 - adiant : undefined;
+                        setForm({ ...form, percentualAdiantamento: adiant, percentualFechamento: fech });
+                      }} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">Dia Adiantamento</label>
@@ -1274,9 +1312,9 @@ export default function ModuloPJ() {
                       onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaAdiantamento: isNaN(v) ? undefined : v }); }} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium">% Fechamento</label>
-                    <Input type="number" min={0} max={100} value={form.percentualFechamento ?? ""} placeholder="50"
-                      onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, percentualFechamento: isNaN(v) ? undefined : v }); }} />
+                    <label className="text-xs font-medium">% Fechamento <span className="text-muted-foreground font-normal">(auto)</span></label>
+                    <Input type="number" min={0} max={100} value={form.percentualFechamento ?? ""} placeholder="50" readOnly
+                      className="bg-muted/40 cursor-not-allowed" title="Calculado automaticamente: 100% − % Adiantamento" />
                   </div>
                   <div>
                     <label className="text-xs font-medium">Dia Fechamento</label>
@@ -1525,6 +1563,60 @@ export default function ModuloPJ() {
       </Dialog>
 
           <PrintFooterLGPD />
+
+        {/* Rev. 4376 — Dialog: Ajuste de percentuais em lote */}
+        <Dialog open={showAjusteDialog} onOpenChange={setShowAjusteDialog}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Ajustar regra de pagamento</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Define os percentuais e datas de pagamento e aplica a <strong>todos os contratos ativos</strong> da empresa.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium">% Adiantamento</label>
+                  <Input type="number" min={0} max={100} value={ajusteForm.percAdiant ?? ""} placeholder="50"
+                    onChange={e => {
+                      const v = parseInt(e.target.value);
+                      setAjusteForm({ ...ajusteForm, percAdiant: isNaN(v) ? undefined : v });
+                    }} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">% Fechamento <span className="text-muted-foreground">(auto)</span></label>
+                  <Input type="number" readOnly className="bg-muted/40 cursor-not-allowed"
+                    value={ajusteForm.percAdiant !== undefined ? 100 - ajusteForm.percAdiant : ""} placeholder="50" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Dia Adiantamento</label>
+                  <Input type="number" min={1} max={31} value={ajusteForm.diaAdiant ?? ""} placeholder="15"
+                    onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaAdiant: isNaN(v) ? undefined : v }); }} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Dia Fechamento</label>
+                  <Input type="number" min={1} max={31} value={ajusteForm.diaFech ?? ""} placeholder="5"
+                    onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaFech: isNaN(v) ? undefined : v }); }} />
+                </div>
+              </div>
+              <Button className="w-full" disabled={bulkUpdatePercentuais.isPending || ajusteForm.percAdiant === undefined}
+                onClick={() => {
+                  const perc = ajusteForm.percAdiant!;
+                  if (confirm(`Aplicar ${perc}% / ${100 - perc}% a TODOS os contratos ativos?`)) {
+                    bulkUpdatePercentuais.mutate({
+                      companyId,
+                      percentualAdiantamento: perc,
+                      percentualFechamento: 100 - perc,
+                      diaAdiantamento: ajusteForm.diaAdiant,
+                      diaFechamento: ajusteForm.diaFech,
+                    });
+                  }
+                }}>
+                {bulkUpdatePercentuais.isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Aplicando...</>
+                  : <><Settings2 className="h-4 w-4 mr-2" />Aplicar a todos os contratos ativos</>}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Rev. 4375 — Dialog: Consolidar período como pago */}
         <Dialog open={showConsolidarDialog} onOpenChange={setShowConsolidarDialog}>
