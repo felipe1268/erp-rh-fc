@@ -1567,114 +1567,137 @@ export default function ModuloPJ() {
 
         {/* Rev. 4376 — Dialog: Ajuste de percentuais em lote */}
         <Dialog open={showAjusteDialog} onOpenChange={v => { setShowAjusteDialog(v); if (!v) setAjusteConfirming(false); }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Settings2 className="h-5 w-5 text-purple-600" />
-                Ajustar regra de pagamento
-              </DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-muted-foreground -mt-1">
-              Aplica a <strong>todos os contratos ativos</strong> da empresa.
-            </p>
-
-            {/* Percentuais */}
-            <div className="bg-muted/40 rounded-lg p-4 space-y-3">
-              <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Percentuais</p>
+          <DialogContent className="max-w-md p-0 overflow-hidden rounded-2xl">
+            {/* Header com gradiente */}
+            <div className="bg-gradient-to-br from-purple-600 to-purple-800 px-6 pt-6 pb-5">
               <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <label className="text-xs font-medium mb-1 block">1ª Medição</label>
-                  <div className="relative">
-                    <Input type="number" min={0} max={100} value={ajusteForm.percAdiant ?? ""} placeholder="50"
-                      className="pr-8"
-                      onChange={e => {
-                        const v = parseInt(e.target.value);
-                        setAjusteForm({ ...ajusteForm, percAdiant: isNaN(v) ? undefined : Math.min(100, Math.max(0, v)) });
-                      }} />
-                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                <div className="bg-white/20 rounded-xl p-2">
+                  <Settings2 className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-white font-semibold text-lg leading-tight">Regra de pagamento</h2>
+                  <p className="text-purple-200 text-xs mt-0.5">Aplica a todos os contratos ativos</p>
+                </div>
+              </div>
+
+              {/* Mini preview dos percentuais no header */}
+              {ajusteForm.percAdiant !== undefined && (
+                <div className="mt-4 flex items-center gap-2 bg-white/10 rounded-xl px-4 py-2.5">
+                  <div className="flex-1 text-center">
+                    <p className="text-purple-200 text-xs">1ª Medição</p>
+                    <p className="text-white font-bold text-xl">{ajusteForm.percAdiant}%</p>
+                  </div>
+                  <div className="w-px h-8 bg-white/20" />
+                  <div className="flex-1 text-center">
+                    <p className="text-purple-200 text-xs">2ª Medição</p>
+                    <p className="text-white font-bold text-xl">{100 - ajusteForm.percAdiant}%</p>
+                  </div>
+                  <div className="w-px h-8 bg-white/20" />
+                  <div className="flex-1 text-center">
+                    <p className="text-purple-200 text-xs">Total</p>
+                    <p className="text-green-300 font-bold text-xl">100%</p>
                   </div>
                 </div>
-                <span className="text-lg text-muted-foreground mt-5">+</span>
-                <div className="flex-1">
-                  <label className="text-xs font-medium mb-1 block">2ª Medição <span className="text-muted-foreground">(auto)</span></label>
-                  <div className="relative">
-                    <Input type="number" readOnly className="pr-8 bg-muted/60 cursor-not-allowed"
-                      value={ajusteForm.percAdiant !== undefined ? 100 - ajusteForm.percAdiant : ""} placeholder="50" />
-                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+              )}
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              {/* Percentuais */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Percentuais</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">1ª Medição</label>
+                    <div className="relative">
+                      <Input type="number" min={0} max={100} value={ajusteForm.percAdiant ?? ""} placeholder="50"
+                        className="h-12 text-base pr-9 rounded-xl border-2 focus:border-purple-400"
+                        onChange={e => {
+                          const v = parseInt(e.target.value);
+                          setAjusteForm({ ...ajusteForm, percAdiant: isNaN(v) ? undefined : Math.min(100, Math.max(0, v)) });
+                        }} />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">%</span>
+                    </div>
                   </div>
-                </div>
-                <span className="text-lg text-muted-foreground mt-5">=</span>
-                <div className="flex-1">
-                  <label className="text-xs font-medium mb-1 block">Total</label>
-                  <div className={`h-9 flex items-center justify-center rounded-md border text-sm font-bold ${ajusteForm.percAdiant !== undefined ? "bg-green-50 border-green-200 text-green-700" : "bg-muted/40 text-muted-foreground"}`}>
-                    {ajusteForm.percAdiant !== undefined ? "100%" : "—"}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-muted-foreground">2ª Medição <span className="text-xs">(auto)</span></label>
+                    <div className="relative">
+                      <Input readOnly value={ajusteForm.percAdiant !== undefined ? 100 - ajusteForm.percAdiant : ""}
+                        placeholder="50"
+                        className="h-12 text-base pr-9 rounded-xl border-2 bg-muted/50 cursor-not-allowed text-muted-foreground" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">%</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Datas */}
-            <div className="bg-muted/40 rounded-lg p-4 space-y-3">
-              <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Dias de pagamento</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium mb-1 block">Dia — 1ª Medição</label>
-                  <Input type="number" min={1} max={31} value={ajusteForm.diaAdiant ?? ""} placeholder="15"
-                    onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaAdiant: isNaN(v) ? undefined : v }); }} />
-                </div>
-                <div>
-                  <label className="text-xs font-medium mb-1 block">Dia — 2ª Medição</label>
+              {/* Separador */}
+              <div className="border-t border-dashed" />
+
+              {/* Dias */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Dias de pagamento</p>
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <div className="flex gap-1.5">
-                      <Input type="number" min={1} max={31}
-                        value={ajusteForm.diaFech === 31 ? "" : (ajusteForm.diaFech ?? "")}
-                        placeholder={ajusteForm.diaFech === 31 ? "—" : "5"}
-                        disabled={ajusteForm.diaFech === 31}
-                        className={ajusteForm.diaFech === 31 ? "bg-muted/60 cursor-not-allowed" : ""}
-                        onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaFech: isNaN(v) ? undefined : v }); }} />
-                    </div>
-                    <button
-                      type="button"
+                    <label className="text-sm font-medium text-foreground">Dia — 1ª Medição</label>
+                    <Input type="number" min={1} max={31} value={ajusteForm.diaAdiant ?? ""} placeholder="15"
+                      className="h-12 text-base rounded-xl border-2 focus:border-purple-400"
+                      onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaAdiant: isNaN(v) ? undefined : v }); }} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Dia — 2ª Medição</label>
+                    <Input type="number" min={1} max={31}
+                      value={ajusteForm.diaFech === 31 ? "" : (ajusteForm.diaFech ?? "")}
+                      placeholder={ajusteForm.diaFech === 31 ? "—" : "5"}
+                      disabled={ajusteForm.diaFech === 31}
+                      className={`h-12 text-base rounded-xl border-2 focus:border-purple-400 ${ajusteForm.diaFech === 31 ? "bg-muted/50 cursor-not-allowed" : ""}`}
+                      onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaFech: isNaN(v) ? undefined : v }); }} />
+                    <button type="button"
                       onClick={() => setAjusteForm({ ...ajusteForm, diaFech: ajusteForm.diaFech === 31 ? undefined : 31 })}
-                      className={`w-full text-xs px-2 py-1 rounded border transition-colors ${ajusteForm.diaFech === 31 ? "bg-green-100 border-green-400 text-green-700 font-semibold" : "bg-white border-muted-foreground/30 text-muted-foreground hover:border-green-400 hover:text-green-700"}`}>
+                      className={`w-full text-xs px-3 py-2 rounded-lg border-2 font-medium transition-all ${ajusteForm.diaFech === 31 ? "bg-green-50 border-green-400 text-green-700" : "bg-white border-dashed border-muted-foreground/30 text-muted-foreground hover:border-green-400 hover:text-green-700 hover:bg-green-50"}`}>
                       {ajusteForm.diaFech === 31 ? "✓ Último dia do mês" : "Último dia do mês"}
                     </button>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {ajusteConfirming ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
-                <p className="text-sm font-medium text-amber-800 text-center">
-                  Aplicar {ajusteForm.percAdiant}% / {100 - ajusteForm.percAdiant!}% a <strong>todos os contratos ativos</strong>?
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => setAjusteConfirming(false)}>
-                    Cancelar
-                  </Button>
-                  <Button className="flex-1 bg-purple-600 hover:bg-purple-700" disabled={bulkUpdatePercentuais.isPending}
-                    onClick={() => {
-                      bulkUpdatePercentuais.mutate({
-                        companyId,
-                        percentualAdiantamento: ajusteForm.percAdiant!,
-                        percentualFechamento: 100 - ajusteForm.percAdiant!,
-                        diaAdiantamento: ajusteForm.diaAdiant,
-                        diaFechamento: ajusteForm.diaFech,
-                      });
-                    }}>
-                    {bulkUpdatePercentuais.isPending
-                      ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Aplicando...</>
-                      : "Confirmar"}
-                  </Button>
+              {/* Botão / Confirmação */}
+              {ajusteConfirming ? (
+                <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-amber-800 text-center">
+                    Confirmar aplicação para todos os contratos ativos?
+                  </p>
+                  <p className="text-xs text-amber-700 text-center">
+                    {ajusteForm.percAdiant}% + {100 - ajusteForm.percAdiant!}% · Dia {ajusteForm.diaAdiant ?? 15} e {ajusteForm.diaFech === 31 ? "último dia" : `dia ${ajusteForm.diaFech ?? 5}`}
+                  </p>
+                  <div className="flex gap-2 pt-1">
+                    <Button variant="outline" className="flex-1 h-10 rounded-xl" onClick={() => setAjusteConfirming(false)}>
+                      Voltar
+                    </Button>
+                    <Button className="flex-1 h-10 rounded-xl bg-purple-600 hover:bg-purple-700" disabled={bulkUpdatePercentuais.isPending}
+                      onClick={() => {
+                        bulkUpdatePercentuais.mutate({
+                          companyId,
+                          percentualAdiantamento: ajusteForm.percAdiant!,
+                          percentualFechamento: 100 - ajusteForm.percAdiant!,
+                          diaAdiantamento: ajusteForm.diaAdiant,
+                          diaFechamento: ajusteForm.diaFech,
+                        });
+                      }}>
+                      {bulkUpdatePercentuais.isPending
+                        ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Aplicando...</>
+                        : "Confirmar"}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <Button className="w-full h-10" disabled={ajusteForm.percAdiant === undefined}
-                onClick={() => setAjusteConfirming(true)}>
-                <Settings2 className="h-4 w-4 mr-2" />Aplicar a todos os contratos ativos
-              </Button>
-            )}
+              ) : (
+                <Button className="w-full h-12 rounded-xl bg-purple-600 hover:bg-purple-700 text-base font-semibold shadow-md shadow-purple-200"
+                  disabled={ajusteForm.percAdiant === undefined}
+                  onClick={() => setAjusteConfirming(true)}>
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Aplicar a todos os contratos ativos
+                </Button>
+              )}
+            </div>
           </DialogContent>
         </Dialog>
 
