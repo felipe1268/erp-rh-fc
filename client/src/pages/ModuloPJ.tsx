@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
-import FCSignPJSendDialog from "@/components/FCSignPJSendDialog";
 import { formatCPF, formatMoeda, fmtNum, formatMoedaInput, parseMoedaBR } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
 import {
@@ -104,8 +103,6 @@ export default function ModuloPJ() {
   const [form, setForm] = useState<any>({});
   const [editingContratoId, setEditingContratoId] = useState<number | null>(null);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
-  const [signContratoId, setSignContratoId] = useState<number | null>(null);
-  const [showSignDialog, setShowSignDialog] = useState(false);
   const [uploadingAssinado, setUploadingAssinado] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [detailTab, setDetailTab] = useState("info");
@@ -714,11 +711,6 @@ export default function ModuloPJ() {
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" title="Editar contrato" onClick={() => openEditContrato(c)}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
-                                {c.status !== "encerrado" && c.status !== "cancelado" && (
-                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-indigo-600" title="Enviar para assinatura digital (link FCSign)" onClick={() => { setSignContratoId(c.id); setShowSignDialog(true); }}>
-                                    <FileSignature className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
                                 {c.status === "pendente_assinatura" && (
                                   <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => { updateContrato.mutate({ id: c.id, status: "ativo" }); }}>
                                     Ativar
@@ -1461,7 +1453,7 @@ export default function ModuloPJ() {
                 <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-green-800">Contrato criado com sucesso!</p>
-                  <p className="text-xs text-green-600 mt-0.5">Use o botão FCSign (ícone de assinatura) na lista de contratos para enviar o link de assinatura digital.</p>
+                  <p className="text-xs text-green-600 mt-0.5">Contrato criado. Adicione documentos na aba Documentos conforme necessário.</p>
                 </div>
               </div>
             )}
@@ -1485,14 +1477,6 @@ export default function ModuloPJ() {
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 
-      {signContratoId != null && (
-        <FCSignPJSendDialog
-          open={showSignDialog}
-          onOpenChange={(v) => { setShowSignDialog(v); if (!v) setSignContratoId(null); }}
-          contratoId={signContratoId}
-          geradoPor={user?.name || undefined}
-        />
-      )}
 
       {/* DIALOG EDITAR CLÁUSULAS */}
       <Dialog open={showEditClausulas} onOpenChange={setShowEditClausulas}>

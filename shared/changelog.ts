@@ -1,4 +1,15 @@
 /**
+ * Rev. 4388 - MÓDULO PJ: REMOÇÃO DO BOTÃO FCSIGN DA LISTA DE CONTRATOS
+ *
+ * Botão "Enviar para assinatura digital (FCSign)" removido completamente
+ * da coluna Ações da lista de contratos PJ. Removidos também: import de
+ * FCSignPJSendDialog, states signContratoId/showSignDialog, rendering do
+ * dialog, e texto do banner pós-criação que referenciava o botão.
+ * Nova instrução de fluxo de assinatura será fornecida posteriormente.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4387 - CONTRATO PJ: AUTO-CURA SERVER-SIDE DO TEMPLATE VAZIO
  *
  * Problema: o template "Contrato PJ" foi aprovado com `conteudo_html = ""`

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4388** — **MÓDULO PJ: REMOÇÃO DO BOTÃO FCSIGN DA LISTA DE CONTRATOS.** Botão "Enviar para assinatura digital (FCSign)" removido completamente da coluna Ações + import/states/dialog/banner associados. Nova instrução de fluxo de assinatura será fornecida. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4387** — **CONTRATO PJ: AUTO-CURA SERVER-SIDE DO TEMPLATE VAZIO.** Template vigente aprovado com `conteudo_html=""` (race condition anterior à Rev. 4385) → `pj.modeloContrato` detecta vazio, chama `plainTextModelToHtmlServer()` (réplica server da função TipTap), grava no banco e retorna HTML. Próxima chamada já encontra o banco curado. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4386** — **CONTRATO PJ: TEMPLATE ISO INTEGRADO NA VIEW E FCSign.** `pj.modeloContrato` agora consulta `systemDocumentTemplates` vigente primeiro → retorna `{ modelo, modeloHtml }`. `ContratoPJView.tsx` renderiza via `dangerouslySetInnerHTML` com `replacePlaceholders()` aplicado. `FCSignPJSendDialog.tsx` passa `modeloHtml` para `buildContratoPjSignHtml()` (pula `corpoFromTemplate()`). CSS `.pj-iso-template` em `index.css`. ZERO DELETE · ZERO ALTER destrutivo.
