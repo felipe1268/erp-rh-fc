@@ -1,4 +1,33 @@
 /**
+ * Rev. 4387 - CONTRATO PJ: AUTO-CURA SERVER-SIDE DO TEMPLATE VAZIO
+ *
+ * Problema: o template "Contrato PJ" foi aprovado com `conteudo_html = ""`
+ * (consequência da race condition anterior à Rev. 4385). O endpoint
+ * `pj.modeloContrato` encontrava a entrada vigente no banco, mas o guard
+ * `?.trim()` detectava string vazia e caía no fallback hardcoded em
+ * plain-text — resultado: o contrato exibido na view/FCSign continuava
+ * sendo o modelo antigo formatado via `renderContractText()`, não o
+ * template da Central de Documentos.
+ *
+ * Correção: `plainTextModelToHtmlServer()` — réplica server-side da função
+ * `plainTextModelToHtml()` de `TemplatesDocsTab.tsx` — converte o
+ * `MODELO_CONTRATO_PJ` plain-text em HTML estruturado (h2/h3/p com
+ * indentação, negrito em CONTRATANTE/CONTRATADA e tokens financeiros).
+ *
+ * Quando `pj.modeloContrato` encontra um template vigente com `conteudo_html`
+ * vazio, ele:
+ * 1. Chama `plainTextModelToHtmlServer(MODELO_CONTRATO_PJ)` → gera o HTML
+ * 2. Faz UPDATE no banco (auto-cura permanente da linha vigente)
+ * 3. Retorna `{ modelo, modeloHtml: healed }` imediatamente
+ *
+ * A partir da próxima chamada o banco já tem o conteúdo correto e o UPDATE
+ * não é mais executado. O editor na aba Configurações também passa a mostrar
+ * o HTML correto (sem necessidade de ação manual do usuário).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4386 - CONTRATO PJ: TEMPLATE ISO INTEGRADO NA VIEW E FCSign
  *
  * Objetivo: `ContratoPJView.tsx` (Imprimir/PDF) e `FCSignPJSendDialog.tsx` (assinatura)

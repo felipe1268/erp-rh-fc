@@ -192,6 +192,41 @@ async function gerarPrevisoesDoContrato(
   return linhas.length;
 }
 
+/**
+ * Converte o MODELO_CONTRATO_PJ (plain-text com \n) em HTML estruturado —
+ * mesma lógica da função `plainTextModelToHtml` em TemplatesDocsTab.tsx.
+ * Usado para auto-cura de templates vigentes aprovados com conteúdo vazio.
+ */
+function plainTextModelToHtmlServer(text: string): string {
+  const FINANCIAL_RE = /(\[VALOR_MENSAL\]|\[VALOR_EXTENSO\]|\[VALOR_ADIANTAMENTO\]|\[VALOR_FECHAMENTO\]|\[DIA_ADIANTAMENTO\]|\[DIA_FECHAMENTO\]|\[PERCENTUAL_ADIANTAMENTO\]|\[PERCENTUAL_FECHAMENTO\]|\[DADOS_BANCARIOS_CONTRATADA\])/g;
+  function wrapF(s: string) { return s.replace(FINANCIAL_RE, "<strong>$1</strong>"); }
+  function wrapP(s: string) { return s.replace(/\b(CONTRATANTE|CONTRATADA)\b/g, "<strong>$1</strong>"); }
+  function proc(s: string) { return wrapF(wrapP(s)); }
+  const lines = text.split("\n");
+  const out: string[] = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) { out.push("<p><br></p>"); continue; }
+    if (/^_{4,}/.test(line)) continue;
+    if (line === line.toUpperCase() && line.length > 20 && !/^\d/.test(line) && !/^\[/.test(line)) {
+      out.push(`<h2 style="text-align:center">${proc(line)}</h2>`);
+      continue;
+    }
+    if (/^CL[ÁA]USULA\s/i.test(line)) { out.push(`<h3>${proc(line)}</h3>`); continue; }
+    if (/^\d+\.\d/.test(line)) { out.push(`<p style="margin-left:24px">${proc(line)}</p>`); continue; }
+    if (/^[a-z]\)\s/.test(line)) { out.push(`<p style="margin-left:48px">${proc(line)}</p>`); continue; }
+    if (/^\([IVX]+\)\s/.test(line)) { out.push(`<p style="margin-left:24px">${proc(line)}</p>`); continue; }
+    if (/^Par[áa]grafo\s[ÚU]nico/i.test(line)) {
+      out.push(`<p style="margin-left:24px"><em><strong>Parágrafo Único</strong>${proc(line.replace(/^Par[áa]grafo\s[ÚU]nico\.?/i, ""))}</em></p>`);
+      continue;
+    }
+    if (/^(CONSIDERANDO|RESOLVEM)\b/i.test(line)) { out.push(`<p><strong>${proc(line)}</strong></p>`); continue; }
+    if (/^CONTRATANTE:|^CONTRATADA:/i.test(line)) { out.push(`<p><strong>${proc(line)}</strong></p>`); continue; }
+    out.push(`<p>${proc(line)}</p>`);
+  }
+  return out.join("");
+}
+
 // Modelo de contrato PJ padrão (FC Engenharia)
 const MODELO_CONTRATO_PJ = `CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS E COMPROMISSO DE CONFIDENCIALIDADE E NÃO CONCORRÊNCIA ENTRE SI
 
@@ -1633,7 +1668,10 @@ export const pjContractsRouter = router({
       try {
         const db = (await getDb())!;
         // Prioridade 1: template vigente na Central de Documentos ISO
-        const isoRows = await db.select({ conteudoHtml: systemDocumentTemplates.conteudoHtml })
+        const isoRows = await db.select({
+          id: systemDocumentTemplates.id,
+          conteudoHtml: systemDocumentTemplates.conteudoHtml,
+        })
           .from(systemDocumentTemplates)
           .where(and(
             eq(systemDocumentTemplates.tipo, 'contrato_pj'),
@@ -1641,8 +1679,19 @@ export const pjContractsRouter = router({
             isNull(systemDocumentTemplates.deletedAt),
           ))
           .limit(1);
-        if (isoRows.length > 0 && isoRows[0].conteudoHtml?.trim()) {
-          return { modelo: MODELO_CONTRATO_PJ, modeloHtml: isoRows[0].conteudoHtml };
+        if (isoRows.length > 0) {
+          const html = isoRows[0].conteudoHtml?.trim() || '';
+          if (html) return { modelo: MODELO_CONTRATO_PJ, modeloHtml: html };
+          // Auto-cura: template vigente existe mas foi aprovado com conteúdo vazio
+          // (race condition anterior à Rev. 4385). Gera o HTML do modelo padrão e
+          // salva no banco para que tudo fique consistente.
+          const healed = plainTextModelToHtmlServer(MODELO_CONTRATO_PJ);
+          try {
+            await db.update(systemDocumentTemplates)
+              .set({ conteudoHtml: healed, updatedAt: new Date().toISOString() })
+              .where(eq(systemDocumentTemplates.id, isoRows[0].id));
+          } catch { /* não bloqueia — próxima chamada vai tentar de novo */ }
+          return { modelo: MODELO_CONTRATO_PJ, modeloHtml: healed };
         }
         // Prioridade 2: modelo customizado legado (document_templates por empresa)
         const rows = await db.select({ conteudo: documentTemplates.conteudo })
