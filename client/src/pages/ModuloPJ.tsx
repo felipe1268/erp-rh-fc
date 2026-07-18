@@ -714,9 +714,6 @@ export default function ModuloPJ() {
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" title="Editar contrato" onClick={() => openEditContrato(c)}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-600" title="Visualizar / Imprimir Contrato" onClick={() => window.open(`/contrato-pj/${c.id}`, "_blank")}>
-                                  <FileText className="h-3.5 w-3.5" />
-                                </Button>
                                 {c.status !== "encerrado" && c.status !== "cancelado" && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7 text-indigo-600" title="Enviar para assinatura digital (link FCSign)" onClick={() => { setSignContratoId(c.id); setShowSignDialog(true); }}>
                                     <FileSignature className="h-3.5 w-3.5" />
@@ -1073,9 +1070,6 @@ export default function ModuloPJ() {
                 }}>
                   <Pencil className="h-4 w-4" /> Editar Cláusulas
                 </Button>
-                <Button variant="outline" size="sm" className="gap-2 border-purple-300 text-purple-700 hover:bg-purple-50" onClick={() => window.open(`/contrato-pj/${selectedContrato.id}`, "_blank")}>
-                  <FileText className="h-4 w-4" /> Gerar / Imprimir Contrato
-                </Button>
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => { setShowDetailDialog(false); openEditContrato(selectedContrato); }}>
                   <Pencil className="h-4 w-4" /> Editar
                 </Button>
@@ -1085,7 +1079,7 @@ export default function ModuloPJ() {
               <Tabs value={detailTab} onValueChange={setDetailTab}>
                 <TabsList className="w-full">
                   <TabsTrigger value="info" className="flex-1">Informações</TabsTrigger>
-                  <TabsTrigger value="assinatura" className="flex-1">Contrato Assinado</TabsTrigger>
+
                   <TabsTrigger value="documentos" className="flex-1"><FolderOpen className="h-3.5 w-3.5 mr-1" />Documentos</TabsTrigger>
                   <TabsTrigger value="revisoes" className="flex-1">Revisões ISO</TabsTrigger>
                 </TabsList>
@@ -1138,54 +1132,6 @@ export default function ModuloPJ() {
                       <p className="text-sm mt-1">{selectedContrato.observacoes}</p>
                     </div>
                   )}
-                </TabsContent>
-
-                {/* Aba Contrato Assinado */}
-                <TabsContent value="assinatura" className="space-y-4 mt-4">
-                  <div className="border rounded-lg p-5 space-y-4">
-                    <div>
-                      <p className="text-sm font-semibold mb-1">Contrato Assinado</p>
-                      <p className="text-xs text-muted-foreground mb-3">Após assinar o contrato gerado, envie aqui o arquivo assinado (PDF, DOCX, imagem).</p>
-
-                      {selectedContrato.contratoAssinadoUrl && (
-                        <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
-                          <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-green-800">Contrato assinado enviado</p>
-                          </div>
-                          <Button size="sm" variant="outline" className="gap-1.5 border-green-300 text-green-700 shrink-0" onClick={() => window.open(selectedContrato.contratoAssinadoUrl, "_blank")}>
-                            <ExternalLink className="h-3.5 w-3.5" /> Visualizar
-                          </Button>
-                        </div>
-                      )}
-
-                      <label className="cursor-pointer">
-                        <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setUploadingAssinado(true);
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            const base64 = (reader.result as string).split(",")[1];
-                            uploadContratoAssinado.mutate({
-                              id: selectedContrato.id,
-                              fileBase64: base64,
-                              fileName: file.name,
-                              tipoAssinatura: "digital",
-                            });
-                          };
-                          reader.readAsDataURL(file);
-                        }} />
-                        <div className={`flex items-center justify-center gap-3 border-2 border-dashed rounded-lg p-6 transition-colors ${uploadingAssinado ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-blue-50/50 cursor-pointer"}`}>
-                          {uploadingAssinado ? (
-                            <><RefreshCw className="h-5 w-5 animate-spin text-blue-500" /><span className="text-sm text-blue-600">Enviando...</span></>
-                          ) : (
-                            <><Upload className="h-5 w-5 text-gray-400" /><span className="text-sm text-gray-600">{selectedContrato.contratoAssinadoUrl ? "Substituir contrato assinado" : "Clique para enviar o contrato assinado"}</span></>
-                          )}
-                        </div>
-                      </label>
-                    </div>
-                  </div>
                 </TabsContent>
 
                 {/* Aba Documentos */}
@@ -1509,18 +1455,14 @@ export default function ModuloPJ() {
               )}
             </div>
 
-            {/* Banner pós-criação: botão Gerar Contrato */}
+            {/* Banner pós-criação */}
             {createdContratoId && !editingContratoId && (
-              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between gap-4">
+              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
                 <div>
-                  <p className="text-sm font-semibold text-green-800 flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4" /> Contrato criado com sucesso!
-                  </p>
-                  <p className="text-xs text-green-600 mt-0.5">Visualize, imprima e assine o contrato gerado. Depois, envie o arquivo assinado pelo botão "Detalhes".</p>
+                  <p className="text-sm font-semibold text-green-800">Contrato criado com sucesso!</p>
+                  <p className="text-xs text-green-600 mt-0.5">Use o botão FCSign (ícone de assinatura) na lista de contratos para enviar o link de assinatura digital.</p>
                 </div>
-                <Button variant="default" className="shrink-0 bg-green-700 hover:bg-green-800" onClick={() => window.open(`/contrato-pj/${createdContratoId}`, "_blank")}>
-                  <FileText className="h-4 w-4 mr-2" /> Gerar / Imprimir Contrato
-                </Button>
               </div>
             )}
 
