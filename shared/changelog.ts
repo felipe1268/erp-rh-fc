@@ -1,4 +1,32 @@
 /**
+ * Rev. 4352 - SCORECARD OBRA — FOLHA/CUSTOS: ZERAR SALÁRIO SINTÉTICO NO MÊS DE GOZO DE FÉRIAS
+ *
+ * PROBLEMA:
+ * Funcionário com adiantamento de férias pago em junho → gozo em julho.
+ * O caminho sintético (CLT sem folha processada) estimava salário normal pelos dias alocados,
+ * mesmo que o funcionário estivesse 100% em gozo. Resultado: double-count (férias + salário estimado).
+ *
+ * SOLUÇÃO:
+ * 1. Query feriasGozoR passa a retornar as datas completas de gozo (não só employee_id):
+ *    dataInicio/dataFim + periodo2Inicio/Fim + periodo3Inicio/Fim.
+ * 2. JS: `feriasGozoMap: Map<empId, [{ini,fim}]>` — consolida todos os intervalos por funcionário.
+ * 3. Helper `isInVacation(empId, "YYYY-MM")`: retorna true se algum intervalo sobrepõe o mês.
+ * 4. Loop sintético: se `isInVacation` → salarioBruto = 0, fgts = 0 para aquele mês.
+ *    (O custo real de férias já aparece na coluna FÉRIAS via feriasEmpMap.)
+ *
+ * OBSERVAÇÃO:
+ * Para funcionários COM folha processada (meses_na_obra > 0), o valor já vem correto do RH.
+ * Se a folha do mês de gozo foi encerrada com R$0 (correto), não há nada a fazer.
+ * Se foi encerrada com valor errado, é questão de dados de RH, não de scorecard.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (feriasGozoR query, feriasGozoMap, isInVacation, loop sintético)
+ * - shared/version.ts → Rev. 4352
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4351 - SCORECARD OBRA — FOLHA/CUSTOS: BADGE "FÉRIAS" POR GOZO NO PERÍODO
  *
  * PROBLEMA:

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4351** — **SCORECARD OBRA — FOLHA/CUSTOS: BADGE "FÉRIAS" POR GOZO NO PERÍODO.** 5ª query paralela detecta employees em gozo (dataInicio/dataFim + fracionamentos 2/3) no intervalo filtrado. `emFeriasSet` propagado para CLT e PJ. Badge laranja "Férias" ao lado do nome. Custo/salário não alterado (folha já correta). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4352** — **SCORECARD OBRA — FOLHA/CUSTOS: ZERAR SALÁRIO SINTÉTICO NO MÊS DE GOZO.** `feriasGozoR` retorna datas de gozo completas (período principal + fracionamentos 2/3). `feriasGozoMap + isInVacation(empId, mês)`. Loop sintético: `emGozo → salário = 0, FGTS = 0` → sem double-count com adiantamento pago no mês anterior. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4350** — **SCORECARD OBRA — FOLHA/CUSTOS: PJ DIAS = PONTO REAL + DISPLAY CORRIGIDO.** `pj_meses` agora usa `time_records` como prioridade para `dias_na_obra` (COALESCE: COUNT(DISTINCT ponto) se >0, senão interseção alocação×contrato×mês). Frontend: coluna DIAS exibe número de dias reais para PJ (igual CLT), não mais "Xm". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4351** — **SCORECARD OBRA — FOLHA/CUSTOS: BADGE "FÉRIAS" POR GOZO NO PERÍODO.** 5ª query paralela + `emFeriasSet`. Badge laranja "Férias" ao lado do nome. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

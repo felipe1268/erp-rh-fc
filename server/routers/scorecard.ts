@@ -2097,11 +2097,18 @@ export const scorecardRouter = router({
           ORDER BY custo_total DESC NULLS LAST
         `),
 
-        // 5ª query: detecta quais funcionários estão em GOZO de férias no período filtrado
-        // (dataInicio/dataFim ou fracionamentos 2 e 3).
-        // Tag "Férias" é exibida na linha; custo de folha já é R$0 na folha (receberam antecipado).
+        // 5ª query: detecta funcionários em GOZO de férias + retorna todos os intervalos de gozo.
+        // Usado para: (a) badge "Férias" na linha; (b) zerar salário sintético no mês de gozo
+        // (funcionário recebeu adiantamento no mês anterior → folha do gozo = R$0).
         db.execute(sql`
-          SELECT DISTINCT vp."employeeId" AS employee_id
+          SELECT
+            vp."employeeId"            AS employee_id,
+            vp."dataInicio"::text      AS data_inicio,
+            vp."dataFim"::text         AS data_fim,
+            vp."periodo2Inicio"::text  AS periodo2_inicio,
+            vp."periodo2Fim"::text     AS periodo2_fim,
+            vp."periodo3Inicio"::text  AS periodo3_inicio,
+            vp."periodo3Fim"::text     AS periodo3_fim
           FROM vacation_periods vp
           WHERE vp."companyId" = ${input.companyId}
             AND vp.status IN ('em_gozo', 'concluida', 'agendada', 'pago', 'paga')
@@ -2126,7 +2133,36 @@ export const scorecardRouter = router({
       const feriasRows = feriasR.rows as any[];
       const seguroRows  = seguroR.rows  as any[];
       const pjRows      = pjR.rows      as any[];
-      const emFeriasSet = new Set<number>((feriasGozoR.rows as any[]).map((row: any) => Number(row.employee_id)));
+      // Mapa empId → lista de intervalos de gozo {ini, fim} (todos os fracionamentos)
+      const feriasGozoMap = new Map<number, Array<{ini: Date; fim: Date}>>();
+      for (const row of feriasGozoR.rows as any[]) {
+        const empId = Number(row.employee_id);
+        const parseDt = (s: string | null): Date | null => {
+          if (!s) return null;
+          const iso = String(s).slice(0, 10);
+          return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(iso + 'T00:00:00') : null;
+        };
+        const pairs: Array<[string|null, string|null]> = [
+          [row.data_inicio,      row.data_fim],
+          [row.periodo2_inicio,  row.periodo2_fim],
+          [row.periodo3_inicio,  row.periodo3_fim],
+        ];
+        const existing = feriasGozoMap.get(empId) ?? [];
+        for (const [iS, fS] of pairs) {
+          const ini = parseDt(iS), fim = parseDt(fS);
+          if (ini && fim) existing.push({ ini, fim });
+        }
+        feriasGozoMap.set(empId, existing);
+      }
+      // Helper: retorna true se empId está em gozo de férias em qualquer dia do mês "YYYY-MM"
+      const isInVacation = (empId: number, monthStr: string): boolean => {
+        const periods = feriasGozoMap.get(empId);
+        if (!periods?.length) return false;
+        const mStart = new Date(monthStr + '-01T00:00:00');
+        const mEnd   = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0, 23, 59, 59);
+        return periods.some(p => p.ini <= mEnd && p.fim >= mStart);
+      };
+      const emFeriasSet = new Set<number>(feriasGozoMap.keys());
       console.log(`[getCustosRH] obraId=${input.obraId} companyId=${input.companyId} mesInicio=${input.mesInicio} mesFim=${input.mesFim} funcs=${funcs.length} ferias=${feriasRows.length} seguro=${seguroRows.length} pj=${pjRows.length} emFerias=${emFeriasSet.size}`);
       const n    = (v: any) => Number(v ?? 0);
       const rnd2 = (v: number) => Math.round(v * 100) / 100;
@@ -2279,8 +2315,11 @@ export const scorecardRouter = router({
 
           if (diasNaObra > 0) {
             const frac         = diasNaObra / diasNoMes;
-            const salProrated  = rnd2(salBase * frac);
-            const fgtsProrated = rnd2(salBase * 0.08 * frac);
+            // Se o funcionário está em gozo de férias neste mês, o salário é R$0
+            // (recebeu adiantamento no mês anterior — não duplicar na folha do gozo)
+            const emGozo       = isInVacation(n(f.employee_id), mesStr);
+            const salProrated  = emGozo ? 0 : rnd2(salBase * frac);
+            const fgtsProrated = emGozo ? 0 : rnd2(salBase * 0.08 * frac);
             syntheticHist.push({
               mes:          mesStr,
               diasNaObra,
