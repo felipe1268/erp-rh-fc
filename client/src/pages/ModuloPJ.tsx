@@ -118,12 +118,11 @@ export default function ModuloPJ() {
   const [editClausulasTexto, setEditClausulasTexto] = useState("");
 
   // Mês referência para pagamentos — PeriodSelectorCard (padrão de ouro)
-  const _now = nowBrasilia();
-  const [pjAno, setPjAno] = useState(_now.getFullYear());
-  const [pjMes, setPjMes] = useState<number | null>(_now.getMonth() + 1);
+  const [pjAno, setPjAno] = useState(() => new Date().getFullYear());
+  const [pjMes, setPjMes] = useState<number | null>(() => new Date().getMonth() + 1);
   const mesRef = pjMes != null ? `${pjAno}-${String(pjMes).padStart(2, "0")}` : undefined;
   // Fallback de mês para dialogs e PDF (usa mês corrente quando "Ano todo" está ativo)
-  const mesRefFallback = mesRef ?? `${pjAno}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
+  const mesRefFallback = mesRef ?? `${pjAno}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
   // Queries
   // Sempre busca a lista completa do servidor — o filtro de status é aplicado
