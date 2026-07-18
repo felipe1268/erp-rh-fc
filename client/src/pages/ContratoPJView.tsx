@@ -362,8 +362,12 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
     });
   }
 
-  const templateText = (contrato as any)?.clausulasCustomizadas || modeloPadrao?.modelo || '';
-  const temClausulasCustomizadas = !!(contrato as any)?.clausulasCustomizadas;
+  const clausulasCustomizadas: string = (contrato as any)?.clausulasCustomizadas || '';
+  // Template HTML vigente da Central de Documentos (prioridade sobre modelo plain text)
+  const modeloHtmlIso: string | null = !clausulasCustomizadas ? (modeloPadrao?.modeloHtml || null) : null;
+  // Fallback: modelo plain text legado
+  const templateText = clausulasCustomizadas || (!modeloHtmlIso ? (modeloPadrao?.modelo || '') : '');
+  const temClausulasCustomizadas = !!clausulasCustomizadas;
 
   return (
     <>
@@ -446,11 +450,20 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
             </div>
           )}
           <div className="contract-content">
-            {templateText ? (
+            {clausulasCustomizadas ? (
+              renderContractText(clausulasCustomizadas)
+            ) : modeloHtmlIso ? (
+              /* Template vigente da Central de Documentos — HTML com placeholders substituídos */
+              <div
+                className="pj-iso-template text-[11pt] leading-[1.8]"
+                style={{ fontFamily: "'Times New Roman', 'Georgia', serif" }}
+                dangerouslySetInnerHTML={{ __html: replacePlaceholders(modeloHtmlIso) }}
+              />
+            ) : templateText ? (
               renderContractText(templateText)
             ) : (
               <p className="text-center text-gray-500 py-8">
-                Nenhum modelo de contrato configurado. Acesse Configurações → Contrato PJ para definir o modelo.
+                Nenhum modelo de contrato configurado. Acesse Configurações → Templates de Documentos → Contrato PJ para criar o template.
               </p>
             )}
           </div>

@@ -65,11 +65,14 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
 
   const handleSubmit = async () => {
     if (!contrato) { toast.error("Contrato ainda carregando."); return; }
-    if (!modeloQ.data?.modelo) { toast.error("Modelo de contrato não configurado."); return; }
+    const modeloHtml = modeloQ.data?.modeloHtml || null;
+    const modelo = modeloQ.data?.modelo || "";
+    if (!modeloHtml && !modelo) { toast.error("Modelo de contrato não configurado. Configure em Configurações → Templates de Documentos → Contrato PJ."); return; }
     try {
       const documentHtml = buildContratoPjSignHtml({
         contrato,
-        modelo: modeloQ.data.modelo,
+        modelo,
+        modeloHtml,
         contratanteNome: FELIPE_SOCIO.nome,
         geradoPor: geradoPor || "Sistema",
       });

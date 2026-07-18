@@ -1,7 +1,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, pjContractAditivos, employees, companies, comprasOrdens, fornecedores, documentTemplates } from "../../drizzle/schema";
+import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, pjContractAditivos, employees, companies, comprasOrdens, fornecedores, documentTemplates, systemDocumentTemplates } from "../../drizzle/schema";
 import { eq, and, sql, isNull, desc, asc, lte, gte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -1632,6 +1632,19 @@ export const pjContractsRouter = router({
     .query(async ({ input }) => {
       try {
         const db = (await getDb())!;
+        // Prioridade 1: template vigente na Central de Documentos ISO
+        const isoRows = await db.select({ conteudoHtml: systemDocumentTemplates.conteudoHtml })
+          .from(systemDocumentTemplates)
+          .where(and(
+            eq(systemDocumentTemplates.tipo, 'contrato_pj'),
+            eq(systemDocumentTemplates.status, 'vigente'),
+            isNull(systemDocumentTemplates.deletedAt),
+          ))
+          .limit(1);
+        if (isoRows.length > 0 && isoRows[0].conteudoHtml?.trim()) {
+          return { modelo: MODELO_CONTRATO_PJ, modeloHtml: isoRows[0].conteudoHtml };
+        }
+        // Prioridade 2: modelo customizado legado (document_templates por empresa)
         const rows = await db.select({ conteudo: documentTemplates.conteudo })
           .from(documentTemplates)
           .where(and(
@@ -1639,9 +1652,9 @@ export const pjContractsRouter = router({
             eq(documentTemplates.tipo, 'contrato_pj' as any),
             eq(documentTemplates.ativo, 1),
           ));
-        if (rows.length > 0 && rows[0].conteudo) return { modelo: rows[0].conteudo };
+        if (rows.length > 0 && rows[0].conteudo) return { modelo: rows[0].conteudo, modeloHtml: null };
       } catch { /* fallback */ }
-      return { modelo: MODELO_CONTRATO_PJ };
+      return { modelo: MODELO_CONTRATO_PJ, modeloHtml: null };
     }),
 
   salvarClausulas: protectedProcedure

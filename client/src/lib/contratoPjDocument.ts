@@ -251,8 +251,14 @@ function corpoFromTemplate(replaced: string): string {
 
 export interface BuildContratoPjSignHtmlArgs {
   contrato: ContratoPjForDoc;
-  /** Texto do modelo (`pj.modeloContrato` → `modelo`). */
+  /** Texto do modelo legado (plain text com \n). Fallback quando modeloHtml ausente. */
   modelo: string;
+  /**
+   * HTML do template vigente da Central de Documentos ISO (`systemDocumentTemplates`).
+   * Quando fornecido, é usado diretamente como corpo (substitui placeholders inline
+   * no HTML, sem passar por `corpoFromTemplate`). Tem prioridade sobre `modelo`.
+   */
+  modeloHtml?: string | null;
   /** Nome do sócio CONTRATANTE (assinatura FC). */
   contratanteNome: string;
   /** Nome de quem está gerando (rodapé). */
@@ -264,9 +270,17 @@ export interface BuildContratoPjSignHtmlArgs {
  * assinaturas com slots `contratado`/`contratante`) pronto pro FCSign.
  */
 export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): string {
-  const { contrato: c, modelo, contratanteNome, geradoPor } = args;
-  const replaced = replacePlaceholders(modelo || "", c);
-  const corpoHtml = corpoFromTemplate(replaced);
+  const { contrato: c, modelo, modeloHtml, contratanteNome, geradoPor } = args;
+
+  // Prioridade: HTML do template ISO (já estruturado) > plain text legado
+  let corpoHtml: string;
+  if (modeloHtml && modeloHtml.trim()) {
+    // Template é HTML com placeholders [TOKEN] — substitui inline e usa direto
+    corpoHtml = replacePlaceholders(modeloHtml, c);
+  } else {
+    const replaced = replacePlaceholders(modelo || "", c);
+    corpoHtml = corpoFromTemplate(replaced);
+  }
 
   const nomeEmpresa = c.companyRazaoSocial || c.companyNomeFantasia || "FC ENGENHARIA";
   const nomePrestador = c.razaoSocialPrestador || c.employeeName || "Prestador";

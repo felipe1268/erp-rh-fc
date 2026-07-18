@@ -1,4 +1,41 @@
 /**
+ * Rev. 4386 - CONTRATO PJ: TEMPLATE ISO INTEGRADO NA VIEW E FCSign
+ *
+ * Objetivo: `ContratoPJView.tsx` (Imprimir/PDF) e `FCSignPJSendDialog.tsx` (assinatura)
+ * passam a consumir o template **vigente** da Central de Documentos ISO
+ * (Configurações → Templates de Documentos → Contrato PJ) em vez do texto
+ * plain-text hardcoded `MODELO_CONTRATO_PJ`.
+ *
+ * Mudanças:
+ * (1) **Server `pj.modeloContrato`** — Antes consultava apenas `document_templates`
+ *     (legado por empresa) com fallback ao hardcoded. Agora consulta PRIMEIRO
+ *     `system_document_templates` para `tipo='contrato_pj'` + `status='vigente'` +
+ *     `deleted_at IS NULL`. Retorna `{ modelo, modeloHtml }` onde `modeloHtml` é o
+ *     HTML do template ISO ou `null`.
+ *
+ * (2) **`contratoPjDocument.ts` — `buildContratoPjSignHtml()`** — Novo campo
+ *     `modeloHtml?: string | null`. Quando presente, aplica `replacePlaceholders()`
+ *     diretamente no HTML (simples string replace, tokens `[PLACEHOLDER]` inline no
+ *     HTML) e usa o resultado como `corpoHtml` sem passar por `corpoFromTemplate()`.
+ *     Fallback para o fluxo legado (plain text → `corpoFromTemplate()`) quando
+ *     `modeloHtml` é null.
+ *
+ * (3) **`ContratoPJView.tsx`** — Prioridade: cláusulas customizadas → template HTML
+ *     ISO (`dangerouslySetInnerHTML` + `replacePlaceholders()`) → plain text legado.
+ *     CSS `.pj-iso-template` adicionado em `index.css` para estilizar tags TipTap
+ *     (h1/h2/h3/p/ul/li/strong/em) no contexto do contrato.
+ *
+ * (4) **`FCSignPJSendDialog.tsx`** — Passa `modeloHtml` para `buildContratoPjSignHtml`.
+ *     Guard atualizado: aceita contrato sem `modelo` desde que `modeloHtml` exista.
+ *     Mensagem de erro direciona ao template correto.
+ *
+ * Sem DELETE, sem ALTER destrutivo. `MODELO_CONTRATO_PJ` e a tabela legada
+ * `document_templates` continuam intactos como fallback.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4385 - TEMPLATES ISO: CORREÇÃO CRÍTICA — CONTEÚDO SUMIA AO APROVAR
  *
  * Problema: ao clicar em "Aprovar (Vigente)" pela primeira vez (template novo),
