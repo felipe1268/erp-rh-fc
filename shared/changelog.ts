@@ -1,4 +1,32 @@
 /**
+ * Rev. 4351 - SCORECARD OBRA — FOLHA/CUSTOS: BADGE "FÉRIAS" POR GOZO NO PERÍODO
+ *
+ * PROBLEMA:
+ * Funcionário em gozo de férias no mês selecionado aparecia na tabela sem nenhuma indicação visual.
+ * O usuário não conseguia distinguir se o salário baixo/zero era por férias (recebido antecipado)
+ * ou outro motivo. Pedido: "colocar a tag que é férias e fazer esta consideração".
+ *
+ * SOLUÇÃO:
+ * 5ª query paralela na Promise.all: detecta employees cujo período de GOZO (dataInicio/dataFim
+ * ou fracionamentos periodo2/periodo3) sobrepõe com o intervalo filtrado.
+ * - Status aceitos: em_gozo, concluida, agendada, pago, paga
+ * - `emFeriasSet: Set<number>` propagado para CLT (loop funcs) e PJ (update + push)
+ * - Flag `em_ferias: boolean` no payload de cada funcionário
+ * - Frontend: badge laranja "Férias" ao lado do nome (igual ao badge roxo "PJ")
+ *
+ * CUSTO/SALÁRIO:
+ * O salary de férias já vem correto via payroll (recebimento antecipado → folha do mês = R$0
+ * ou proporcional). A tag é INFORMATIVA — não altera o cálculo (que já está correto via folha).
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (getCustosRH: Promise.all, emFeriasSet, loop CLT, loop PJ)
+ * - client/src/pages/planejamento/ScorecardTab.tsx (badge Férias ~linha 1503)
+ * - shared/version.ts → Rev. 4351
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4350 - SCORECARD OBRA — FOLHA/CUSTOS: PJ DIAS = PONTO REAL (time_records) + DISPLAY DIAS REAIS
  *
  * PROBLEMA:

@@ -1688,7 +1688,7 @@ export const scorecardRouter = router({
         WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
       `;
 
-      const [r, feriasR, seguroR, pjR] = await Promise.all([
+      const [r, feriasR, seguroR, pjR, feriasGozoR] = await Promise.all([
         db.execute(sql`
           WITH
           -- Piso absoluto: nenhum custo pode ser anterior à data de início da obra
@@ -2096,13 +2096,38 @@ export const scorecardRouter = router({
           GROUP BY pm.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo
           ORDER BY custo_total DESC NULLS LAST
         `),
+
+        // 5ª query: detecta quais funcionários estão em GOZO de férias no período filtrado
+        // (dataInicio/dataFim ou fracionamentos 2 e 3).
+        // Tag "Férias" é exibida na linha; custo de folha já é R$0 na folha (receberam antecipado).
+        db.execute(sql`
+          SELECT DISTINCT vp."employeeId" AS employee_id
+          FROM vacation_periods vp
+          WHERE vp."companyId" = ${input.companyId}
+            AND vp.status IN ('em_gozo', 'concluida', 'agendada', 'pago', 'paga')
+            AND (
+              (vp."dataInicio" IS NOT NULL AND vp."dataFim" IS NOT NULL
+               AND vp."dataInicio"::date <= (${mesFeriasFim} || '-31')::date
+               AND vp."dataFim"::date    >= (${mesFeriasIni} || '-01')::date)
+              OR
+              (vp."periodo2Inicio" IS NOT NULL AND vp."periodo2Fim" IS NOT NULL
+               AND vp."periodo2Inicio"::date <= (${mesFeriasFim} || '-31')::date
+               AND vp."periodo2Fim"::date    >= (${mesFeriasIni} || '-01')::date)
+              OR
+              (vp."periodo3Inicio" IS NOT NULL AND vp."periodo3Fim" IS NOT NULL
+               AND vp."periodo3Inicio"::date <= (${mesFeriasFim} || '-31')::date
+               AND vp."periodo3Fim"::date    >= (${mesFeriasIni} || '-01')::date)
+            )
+            AND vp."employeeId" IN (${relevantEmpSql})
+        `),
       ]);
 
       const funcs = r.rows as any[];
       const feriasRows = feriasR.rows as any[];
       const seguroRows  = seguroR.rows  as any[];
       const pjRows      = pjR.rows      as any[];
-      console.log(`[getCustosRH] obraId=${input.obraId} companyId=${input.companyId} mesInicio=${input.mesInicio} mesFim=${input.mesFim} funcs=${funcs.length} ferias=${feriasRows.length} seguro=${seguroRows.length} pj=${pjRows.length}`);
+      const emFeriasSet = new Set<number>((feriasGozoR.rows as any[]).map((row: any) => Number(row.employee_id)));
+      console.log(`[getCustosRH] obraId=${input.obraId} companyId=${input.companyId} mesInicio=${input.mesInicio} mesFim=${input.mesFim} funcs=${funcs.length} ferias=${feriasRows.length} seguro=${seguroRows.length} pj=${pjRows.length} emFerias=${emFeriasSet.size}`);
       const n    = (v: any) => Number(v ?? 0);
       const rnd2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -2122,6 +2147,7 @@ export const scorecardRouter = router({
         const empId   = n(f.employee_id);
         const fTotal  = feriasEmpMap.get(empId) ?? 0;
         const sMensal = seguroMensalMap.get(empId) ?? 0;
+        f.em_ferias    = emFeriasSet.has(empId);
         f.ferias_total = fTotal;
 
         // Seguro de vida proporcional: sMensal × fração de dias úteis de cada mês
@@ -2162,6 +2188,7 @@ export const scorecardRouter = router({
           // custo_total_empresa = acumulado real do período (para KPIs e TOTAL da tabela)
           ex.custo_total_empresa = custoTotal;
           ex.historico_mensal    = Array.isArray(pj.historico_mensal) ? pj.historico_mensal : [];
+          ex.em_ferias           = emFeriasSet.has(n(pj.employee_id));
         } else {
           funcs.push({
             employee_id:         pj.employee_id,
@@ -2171,6 +2198,7 @@ export const scorecardRouter = router({
             cargo:               pj.cargo,
             tipo_pessoa:         'PJ',
             razao_social:        pj.razao_social,
+            em_ferias:           emFeriasSet.has(n(pj.employee_id)),
             meses_na_obra:       pj.meses_ativos,
             total_dias_na_obra:  n(pj.total_dias_uteis),
             salario_bruto_total: valMensal,

@@ -1497,6 +1497,9 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                           {f.tipo_pessoa === 'PJ' && (
                                             <span className="px-1 py-0 rounded text-[8px] font-bold bg-purple-100 text-purple-700 border border-purple-200">PJ</span>
                                           )}
+                                          {f.em_ferias && (
+                                            <span className="px-1 py-0 rounded text-[8px] font-bold bg-orange-100 text-orange-700 border border-orange-200">Férias</span>
+                                          )}
                                         </div>
                                         {(f.numero_interno || f.matricula) && (
                                           <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.numero_interno ?? f.matricula}</p>

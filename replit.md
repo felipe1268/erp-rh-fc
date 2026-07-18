@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4350** — **SCORECARD OBRA — FOLHA/CUSTOS: PJ DIAS = PONTO REAL + DISPLAY CORRIGIDO.** `pj_meses` agora usa `time_records` como prioridade para `dias_na_obra` (COALESCE: COUNT(DISTINCT ponto) se >0, senão interseção alocação×contrato×mês). Frontend: coluna DIAS exibe número de dias reais para PJ (igual CLT), não mais "Xm" que induzia leitura de mês completo. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4351** — **SCORECARD OBRA — FOLHA/CUSTOS: BADGE "FÉRIAS" POR GOZO NO PERÍODO.** 5ª query paralela detecta employees em gozo (dataInicio/dataFim + fracionamentos 2/3) no intervalo filtrado. `emFeriasSet` propagado para CLT e PJ. Badge laranja "Férias" ao lado do nome. Custo/salário não alterado (folha já correta). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4349** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE REGRESSÃO.** `rnd2` estava sendo chamado antes de sua declaração `const` → `ReferenceError` → "Sem dados" em qualquer obra. Fix: moveu declaração para logo após `const n`. Seguro de vida proporcional à fração de dias úteis de cada mês (sMensal × fracao). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4350** — **SCORECARD OBRA — FOLHA/CUSTOS: PJ DIAS = PONTO REAL + DISPLAY CORRIGIDO.** `pj_meses` agora usa `time_records` como prioridade para `dias_na_obra` (COALESCE: COUNT(DISTINCT ponto) se >0, senão interseção alocação×contrato×mês). Frontend: coluna DIAS exibe número de dias reais para PJ (igual CLT), não mais "Xm". ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4349** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE REGRESSÃO.** `rnd2` antes da declaração `const` → ReferenceError → "Sem dados". Fix: moveu declaração. Seguro de vida proporcional (sMensal × fracao). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4348** — **SCORECARD OBRA — FOLHA/CUSTOS: PROPORCIONAL POR DIAS ÚTEIS (SEG-SEX).** CLT SQL + PJ SQL: `generate_series + DOW`. JS sintético CLT: `countWorkingDays`. ZERO DELETE · ZERO ALTER destrutivo.
 
