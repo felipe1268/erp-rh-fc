@@ -217,6 +217,7 @@ export default function ModuloPJ() {
   // Rev. 4376 — ajuste de percentuais em lote (todos os contratos ativos)
   const [showAjusteDialog, setShowAjusteDialog] = useState(false);
   const [ajusteForm, setAjusteForm] = useState<{ percAdiant?: number; diaAdiant?: number; diaFech?: number }>({});
+  const [ajusteConfirming, setAjusteConfirming] = useState(false);
   const bulkUpdatePercentuais = trpc.pj.contratos.bulkUpdatePercentuais.useMutation({
     onSuccess: (d: any) => {
       refetchContratos();
@@ -1565,7 +1566,7 @@ export default function ModuloPJ() {
           <PrintFooterLGPD />
 
         {/* Rev. 4376 — Dialog: Ajuste de percentuais em lote */}
-        <Dialog open={showAjusteDialog} onOpenChange={setShowAjusteDialog}>
+        <Dialog open={showAjusteDialog} onOpenChange={v => { setShowAjusteDialog(v); if (!v) setAjusteConfirming(false); }}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -1643,23 +1644,37 @@ export default function ModuloPJ() {
               </div>
             </div>
 
-            <Button className="w-full h-10" disabled={bulkUpdatePercentuais.isPending || ajusteForm.percAdiant === undefined}
-              onClick={() => {
-                const perc = ajusteForm.percAdiant!;
-                if (confirm(`Aplicar ${perc}% / ${100 - perc}% a TODOS os contratos ativos?`)) {
-                  bulkUpdatePercentuais.mutate({
-                    companyId,
-                    percentualAdiantamento: perc,
-                    percentualFechamento: 100 - perc,
-                    diaAdiantamento: ajusteForm.diaAdiant,
-                    diaFechamento: ajusteForm.diaFech,
-                  });
-                }
-              }}>
-              {bulkUpdatePercentuais.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Aplicando...</>
-                : <><Settings2 className="h-4 w-4 mr-2" />Aplicar a todos os contratos ativos</>}
-            </Button>
+            {ajusteConfirming ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+                <p className="text-sm font-medium text-amber-800 text-center">
+                  Aplicar {ajusteForm.percAdiant}% / {100 - ajusteForm.percAdiant!}% a <strong>todos os contratos ativos</strong>?
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setAjusteConfirming(false)}>
+                    Cancelar
+                  </Button>
+                  <Button className="flex-1 bg-purple-600 hover:bg-purple-700" disabled={bulkUpdatePercentuais.isPending}
+                    onClick={() => {
+                      bulkUpdatePercentuais.mutate({
+                        companyId,
+                        percentualAdiantamento: ajusteForm.percAdiant!,
+                        percentualFechamento: 100 - ajusteForm.percAdiant!,
+                        diaAdiantamento: ajusteForm.diaAdiant,
+                        diaFechamento: ajusteForm.diaFech,
+                      });
+                    }}>
+                    {bulkUpdatePercentuais.isPending
+                      ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Aplicando...</>
+                      : "Confirmar"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button className="w-full h-10" disabled={ajusteForm.percAdiant === undefined}
+                onClick={() => setAjusteConfirming(true)}>
+                <Settings2 className="h-4 w-4 mr-2" />Aplicar a todos os contratos ativos
+              </Button>
+            )}
           </DialogContent>
         </Dialog>
 
