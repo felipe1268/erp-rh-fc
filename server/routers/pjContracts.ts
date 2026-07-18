@@ -1035,8 +1035,14 @@ export const pjContractsRouter = router({
           dataPagamento: pjPayments.dataPagamento,
           status: pjPayments.status,
           comprovanteUrl: pjPayments.comprovanteUrl,
+          formaPagamento: pjPayments.formaPagamento,
           observacoes: pjPayments.observacoes,
           createdAt: pjPayments.createdAt,
+          nfUrl: pjPayments.nfUrl,
+          nfNome: pjPayments.nfNome,
+          aprovadoEm: pjPayments.aprovadoEm,
+          aprovadoPorNome: pjPayments.aprovadoPorNome,
+          enviadoFinanceiro: pjPayments.enviadoFinanceiro,
           employeeName: employees.nomeCompleto,
           cnpjPrestador: pjContracts.cnpjPrestador,
           razaoSocialPrestador: pjContracts.razaoSocialPrestador,
@@ -1333,6 +1339,107 @@ export const pjContractsRouter = router({
         });
         enriched.sort((a, b) => b.totalRecebido - a.totalRecebido || b.totalHistorico - a.totalHistorico);
         return enriched;
+      }),
+
+    /**
+     * Rev. 4377 — Aprovar medição PJ com upload de NF + envio automático para Contas a Pagar.
+     * Fluxo:
+     *   1. Salva NF via storagePut (opcional).
+     *   2. Grava nf_url, nf_nome, aprovado_em, aprovado_por_nome em pj_payments.
+     *   3. Se enviarFinanceiro=true: localiza ou cria financial_entry com origemModulo='pagamento_pj'
+     *      e vincula o anexo da NF.
+     */
+    aprovarComNF: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        companyId: z.number(),
+        nfBase64: z.string().optional(),
+        nfNome: z.string().optional(),
+        enviarFinanceiro: z.boolean().default(true),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+
+        let nfUrl: string | null = null;
+        if (input.nfBase64 && input.nfNome) {
+          const buffer = Buffer.from(input.nfBase64, 'base64');
+          const ext = (input.nfNome.split('.').pop() || 'pdf').toLowerCase();
+          const key = `pj/notas-fiscais/${input.id}-${Date.now()}.${ext}`;
+          const mime = ext === 'pdf' ? 'application/pdf'
+            : ext === 'png' ? 'image/png'
+            : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg'
+            : 'application/octet-stream';
+          const saved = await storagePut(key, buffer, mime);
+          nfUrl = saved.url;
+        }
+
+        await db.execute(sql`
+          UPDATE pj_payments
+          SET nf_url            = ${nfUrl},
+              nf_nome           = ${input.nfNome ?? null},
+              aprovado_em       = NOW(),
+              aprovado_por_nome = ${ctx.user.name ?? 'Sistema'},
+              enviado_financeiro = ${input.enviarFinanceiro},
+              "updatedAt"       = NOW()
+          WHERE id = ${input.id} AND "companyId" = ${input.companyId}
+        `);
+
+        if (input.enviarFinanceiro) {
+          const existing = await db.execute(sql`
+            SELECT id FROM financial_entries
+            WHERE origem_modulo = 'pagamento_pj'
+              AND origem_id     = ${input.id}
+              AND company_id    = ${input.companyId}
+            LIMIT 1
+          `);
+
+          if ((existing.rows ?? []).length > 0) {
+            const entryId = (existing.rows[0] as any).id;
+            if (nfUrl) {
+              await db.execute(sql`
+                UPDATE financial_entries
+                SET anexo_url  = ${nfUrl},
+                    updated_at = NOW()
+                WHERE id = ${entryId}
+              `);
+            }
+          } else {
+            const pjRow = await db.execute(sql`
+              SELECT pp.id, pp.valor, pp."dataPrevista", pp."dataPagamento",
+                     pp.descricao, pp.status, pp."mesReferencia",
+                     e."nomeCompleto" AS employee_name
+              FROM pj_payments pp
+              JOIN employees e ON e.id = pp."employeeId"
+              WHERE pp.id = ${input.id}
+            `);
+            if ((pjRow.rows ?? []).length > 0) {
+              const pj = pjRow.rows[0] as any;
+              const [ano, mes] = (pj.mesReferencia as string).split('-');
+              const valor = parseFloat(pj.valor ?? '0');
+              await db.execute(sql`
+                INSERT INTO financial_entries
+                  (company_id, conta_id, conta_nome, tipo, natureza,
+                   valor_previsto, valor_realizado,
+                   data_competencia, data_vencimento, data_pagamento,
+                   status, origem_modulo, origem_id,
+                   origem_descricao, descricao, anexo_url,
+                   created_at, updated_at)
+                VALUES
+                  (${input.companyId}, 391, 'Serviços PJ / Terceirizados', 'despesa', 'variavel',
+                   ${valor}, ${pj.status === 'pago' ? valor : null},
+                   ${`${ano}-${mes}-01`}, ${pj.dataPrevista ?? null}, ${pj.dataPagamento ?? null},
+                   ${pj.status === 'pago' ? 'pago' : 'a_pagar'},
+                   'pagamento_pj', ${input.id},
+                   ${`PJ ${pj.mesReferencia} - ${pj.descricao ?? 'Serviço PJ'}`},
+                   ${pj.descricao ?? `Pagamento PJ ${pj.mesReferencia}`},
+                   ${nfUrl},
+                   NOW(), NOW())
+              `);
+            }
+          }
+        }
+
+        return { success: true, nfUrl };
       }),
   }),
 

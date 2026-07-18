@@ -21,6 +21,7 @@ import {
   Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar, Pencil,
   Users, TrendingUp, FileSignature, Ban, Printer, Upload, FolderOpen,
   ExternalLink, File, XCircle, Award, Loader2, RotateCcw, Check, Settings2,
+  ShieldCheck, Paperclip,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -219,6 +220,12 @@ export default function ModuloPJ() {
   const [ajusteForm, setAjusteForm] = useState<{ percAdiant?: number; diaAdiant?: number; diaFech?: number }>({});
   const [ajusteConfirming, setAjusteConfirming] = useState(false);
   const [folhaMedicaoTab, setFolhaMedicaoTab] = useState<"1" | "2">("1");
+  // Rev. 4377 — Aprovação de medições com NF + envio para Contas a Pagar
+  const [showAprovarDialog, setShowAprovarDialog] = useState(false);
+  const [aprovarTarget, setAprovarTarget] = useState<any>(null);
+  const [aprovarNfFile, setAprovarNfFile] = useState<File | null>(null);
+  const [aprovarEnviarFin, setAprovarEnviarFin] = useState(true);
+  const [aprovarDragging, setAprovarDragging] = useState(false);
   // Rev. 4376 — descrição por medição (persistida em localStorage por empresa+mês)
   const obsKey = `pj_obs_${companyId}_${mesRef}`;
   const [obs1a, setObs1a] = useState(() => {
@@ -244,6 +251,18 @@ export default function ModuloPJ() {
   });
   const bulkMarcarPago = trpc.pj.pagamentos.bulkMarcarPago.useMutation({
     onSuccess: (d: any) => { refetchPagamentos(); setSelectedIds(new Set()); toast.success(`${d.updated} lançamento(s) marcado(s) como pago.`); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const aprovarComNF = (trpc as any).pj.pagamentos.aprovarComNF.useMutation({
+    onSuccess: (d: any) => {
+      refetchPagamentos();
+      setShowAprovarDialog(false);
+      setAprovarTarget(null);
+      setAprovarNfFile(null);
+      toast.success(d.nfUrl
+        ? "Medição aprovada com NF e enviada para o financeiro!"
+        : aprovarEnviarFin ? "Medição aprovada e enviada para o financeiro!" : "Medição aprovada!");
+    },
     onError: (e: any) => toast.error(e.message),
   });
   const consolidarPeriodo = trpc.pj.pagamentos.consolidarPeriodo.useMutation({
@@ -905,9 +924,19 @@ export default function ModuloPJ() {
                                 <td className="p-3">
                                   <div className="flex items-center justify-center gap-1">
                                     {p.status === "pendente" && (
+                                      <Button size="sm" variant="ghost" className="h-7 text-xs text-blue-600" title="Aprovar e enviar para Contas a Pagar" onClick={() => { setAprovarTarget(p); setAprovarNfFile(null); setAprovarEnviarFin(true); setShowAprovarDialog(true); }}>
+                                        <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Aprovar
+                                      </Button>
+                                    )}
+                                    {p.status === "pendente" && (
                                       <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => updatePagamento.mutate({ id: p.id, status: "pago", dataPagamento: new Date().toISOString().split("T")[0] })}>
                                         <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Pagar
                                       </Button>
+                                    )}
+                                    {p.nfUrl && (
+                                      <a href={p.nfUrl} target="_blank" rel="noreferrer" title={p.nfNome || "Ver NF"} className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-muted text-purple-600">
+                                        <Paperclip className="h-3.5 w-3.5" />
+                                      </a>
                                     )}
                                     <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir?")) deletePagamento.mutate({ id: p.id }); }}>
                                       <Trash2 className="h-3.5 w-3.5" />
@@ -1758,6 +1787,118 @@ export default function ModuloPJ() {
               onConsolidar={(mesInicio, mesFim) => consolidarPeriodo.mutate({ companyId, mesInicio, mesFim })}
               isLoading={consolidarPeriodo.isPending}
             />
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 4377 — Dialog de aprovação com NF + envio para Contas a Pagar */}
+        <Dialog open={showAprovarDialog} onOpenChange={v => { setShowAprovarDialog(v); if (!v) { setAprovarTarget(null); setAprovarNfFile(null); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-blue-600" />
+                Aprovar Medição
+              </DialogTitle>
+            </DialogHeader>
+            {aprovarTarget && (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                  <div className="font-semibold text-blue-900">{aprovarTarget.employeeName}</div>
+                  <div className="text-blue-700">{aprovarTarget.descricao} — <span className="font-bold">{formatMoeda(parseFloat(aprovarTarget.valor || "0"))}</span></div>
+                </div>
+
+                {/* Upload de NF */}
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">Nota Fiscal (opcional)</label>
+                  <div
+                    onDragOver={e => { e.preventDefault(); setAprovarDragging(true); }}
+                    onDragLeave={() => setAprovarDragging(false)}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setAprovarDragging(false);
+                      const file = e.dataTransfer.files[0];
+                      if (file) setAprovarNfFile(file);
+                    }}
+                    className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${aprovarDragging ? "border-blue-400 bg-blue-50" : "border-muted-foreground/30 hover:border-blue-300"}`}
+                    onClick={() => document.getElementById("aprovar-nf-input")?.click()}
+                  >
+                    {aprovarNfFile ? (
+                      <div className="flex items-center justify-center gap-2 text-sm text-green-700">
+                        <Paperclip className="h-4 w-4" />
+                        <span className="font-medium break-all">{aprovarNfFile.name}</span>
+                        <button type="button" className="text-red-500 hover:text-red-700 ml-1" onClick={e => { e.stopPropagation(); setAprovarNfFile(null); }}>
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground text-sm">
+                        <Paperclip className="h-5 w-5 mx-auto mb-1 opacity-50" />
+                        Clique ou arraste o arquivo da NF aqui
+                        <div className="text-xs mt-0.5">PDF, JPG ou PNG</div>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    id="aprovar-nf-input"
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) setAprovarNfFile(f); e.target.value = ""; }}
+                  />
+                </div>
+
+                {/* Toggle financeiro */}
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <div
+                    onClick={() => setAprovarEnviarFin(v => !v)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${aprovarEnviarFin ? "bg-blue-600" : "bg-muted-foreground/30"}`}
+                  >
+                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${aprovarEnviarFin ? "translate-x-5" : "translate-x-0"}`} />
+                  </div>
+                  <span className="text-sm">Enviar automaticamente para <strong>Contas a Pagar</strong></span>
+                </label>
+                {aprovarEnviarFin && (
+                  <p className="text-xs text-muted-foreground -mt-2">
+                    O lançamento será criado (ou atualizado) no financeiro como <em>A Pagar</em>. A NF ficará disponível para consulta no Contas a Pagar.
+                  </p>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" className="flex-1" onClick={() => setShowAprovarDialog(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    disabled={aprovarComNF.isPending}
+                    onClick={async () => {
+                      let nfBase64: string | undefined;
+                      let nfNome: string | undefined;
+                      if (aprovarNfFile) {
+                        nfNome = aprovarNfFile.name;
+                        nfBase64 = await new Promise<string>((res, rej) => {
+                          const reader = new FileReader();
+                          reader.onload = () => res((reader.result as string).split(",")[1]);
+                          reader.onerror = rej;
+                          reader.readAsDataURL(aprovarNfFile);
+                        });
+                      }
+                      aprovarComNF.mutate({
+                        id: aprovarTarget.id,
+                        companyId,
+                        nfBase64,
+                        nfNome,
+                        enviarFinanceiro: aprovarEnviarFin,
+                      });
+                    }}
+                  >
+                    {aprovarComNF.isPending ? (
+                      <><Loader2 className="h-4 w-4 animate-spin mr-2" />Aprovando...</>
+                    ) : (
+                      <><ShieldCheck className="h-4 w-4 mr-2" />{aprovarEnviarFin ? "Aprovar e Enviar" : "Aprovar"}</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
     </DashboardLayout>

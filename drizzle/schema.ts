@@ -2951,6 +2951,12 @@ export const pjPayments = pgTable("pj_payments", {
         criadoPor: varchar({ length: 255 }),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        // Rev. 4377 — Aprovação com NF + envio automático para Contas a Pagar
+        nfUrl: text("nf_url"),
+        nfNome: text("nf_nome"),
+        aprovadoEm: timestamp("aprovado_em", { mode: "string" }),
+        aprovadoPorNome: text("aprovado_por_nome"),
+        enviadoFinanceiro: boolean("enviado_financeiro").default(false),
 },
 (table) => [
         index("pjp_contract").on(table.contractId),

@@ -1,4 +1,46 @@
 /**
+ * Rev. 4377 - MÓDULO PJ: APROVAÇÃO DE MEDIÇÕES COM NF → CONTAS A PAGAR
+ *
+ * Integração completa entre Folha PJ e Contas a Pagar:
+ *
+ * 1. FLUXO DE APROVAÇÃO (por medição):
+ *    - Botão "Aprovar" (azul, ícone ShieldCheck) aparece para cada medição
+ *      com status "pendente" na Folha PJ.
+ *    - Clicar abre dialog de aprovação com:
+ *      a) Painel azul com nome do prestador + descrição + valor
+ *      b) Área de upload drag-and-drop para a Nota Fiscal (PDF/JPG/PNG, opcional)
+ *      c) Toggle "Enviar automaticamente para Contas a Pagar" (padrão: ON)
+ *      d) Botão "Aprovar e Enviar" / "Aprovar"
+ *
+ * 2. O QUE ACONTECE AO APROVAR:
+ *    - NF é salva via storagePut em pj/notas-fiscais/ (se enviada)
+ *    - pj_payments é atualizado: nf_url, nf_nome, aprovado_em, aprovado_por_nome,
+ *      enviado_financeiro
+ *    - Se "Enviar para Contas a Pagar":
+ *      · Procura financial_entry existente com origemModulo='pagamento_pj'
+ *        e origemId=pj_payment.id
+ *      · Se achou: atualiza anexo_url com a NF
+ *      · Se não achou: cria nova financial_entry (status='a_pagar', conta_id=391
+ *        'Serviços PJ / Terceirizados') com a NF vinculada
+ *    - Toast: "Medição aprovada com NF e enviada para o financeiro!" ou variantes
+ *
+ * 3. INDICADORES VISUAIS:
+ *    - Clipe roxo (Paperclip) aparece na coluna de ações para medições com NF anexada
+ *    - Clicar no clipe abre a NF em nova aba
+ *    - Prestador e valor exibidos no dialog para confirmação visual antes de aprovar
+ *
+ * 4. SCHEMA (SyncSchema+ Rev. 4377 — ZERO ALTER destrutivo):
+ *    - pj_payments: nf_url TEXT, nf_nome TEXT, aprovado_em TIMESTAMP,
+ *      aprovado_por_nome TEXT, enviado_financeiro BOOLEAN DEFAULT FALSE
+ *
+ * Backend: pj.pagamentos.aprovarComNF adicionado; list enriquecido com
+ *   formaPagamento + campos de aprovação.
+ * ARQUIVOS: drizzle/schema.ts, server/_core/index.ts, server/routers/pjContracts.ts,
+ *   client/src/pages/ModuloPJ.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4376 - MÓDULO PJ: AUTO-LINK %, AJUSTE EM LOTE, FOLHA DIVIDIDA
  *
  * 1. Auto-link % adiantamento ↔ fechamento no formulário de contrato:

@@ -5453,6 +5453,20 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4372: forma_pagamento garantida em pj_contracts + pj_payments.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4372 forma_pagamento:", e?.message || e); }
 
+        // Rev. 4377 — Aprovação de medições PJ com NF + envio automático para Contas a Pagar.
+        // nf_url/nf_nome: anexo da nota fiscal; aprovado_em/aprovado_por_nome: auditoria;
+        // enviado_financeiro: flag que indica se o lançamento foi enviado para financial_entries.
+        try {
+          await db.execute(sql.raw(`
+            ALTER TABLE pj_payments ADD COLUMN IF NOT EXISTS nf_url TEXT;
+            ALTER TABLE pj_payments ADD COLUMN IF NOT EXISTS nf_nome TEXT;
+            ALTER TABLE pj_payments ADD COLUMN IF NOT EXISTS aprovado_em TIMESTAMP;
+            ALTER TABLE pj_payments ADD COLUMN IF NOT EXISTS aprovado_por_nome TEXT;
+            ALTER TABLE pj_payments ADD COLUMN IF NOT EXISTS enviado_financeiro BOOLEAN DEFAULT FALSE;
+          `));
+          console.log("[SyncSchema+] Rev. 4377: colunas de aprovação+NF garantidas em pj_payments.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4377 pj_payments aprovação:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

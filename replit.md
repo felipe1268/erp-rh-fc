@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4377** — **MÓDULO PJ: APROVAÇÃO DE MEDIÇÕES COM NF → CONTAS A PAGAR.** Botão "Aprovar" (azul, ShieldCheck) por linha pendente na Folha PJ. Dialog abre com upload drag-and-drop da NF (PDF/JPG/PNG) + toggle "Enviar para Contas a Pagar" (padrão ON). Ao aprovar: salva NF via storagePut, grava aprovado_em/aprovado_por_nome/enviado_financeiro em pj_payments, cria ou atualiza financial_entry com origemModulo='pagamento_pj' + anexo_url. Clipe roxo na tabela indica NF anexada. Schema: 5 colunas novas via SyncSchema+. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4376** — **MÓDULO PJ: AUTO-LINK %, AJUSTE EM LOTE, FOLHA DIVIDIDA.** % Adiantamento auto-calcula % Fechamento (100−valor); campo fechamento read-only. Botão ⚙️ na toolbar abre dialog de ajuste em lote de todos os contratos ativos. Folha PJ dividida em dois cards: "Dia 15" (adiantamentos) + "Final do Mês" (fechamentos). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4375** — **FOLHA PJ: MULTI-SELEÇÃO E CONSOLIDAR PERÍODO COMO PAGO.** Checkboxes na tabela (individual + selecionar tudo) + barra de ação em lote (Marcar Pago / Excluir). Botão "Consolidar período como pago" com dialog de intervalo de meses (padrão Jan–Jun 2026). Procedures: bulkDelete, bulkMarcarPago, consolidarPeriodo. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4375** — **FOLHA PJ: MULTI-SELEÇÃO E CONSOLIDAR PERÍODO COMO PAGO.** Checkboxes + barra de ação em lote (Marcar Pago / Excluir). Botão "Consolidar período como pago". Procedures: bulkDelete, bulkMarcarPago, consolidarPeriodo. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4374** — **MÓDULO PJ — CONTRATOS: PADRÃO 50/50 E INPUT LIBERADO.** Padrão % Adiantamento/Fechamento alterado de 40/60 → 50/50 em todos os pontos (frontend + server). Fix do bug "trava ao apagar": `parseInt("") || 40` substituído por `isNaN(v) ? undefined : v` + `value ?? ""`. ZERO DELETE · ZERO ALTER destrutivo.
 
