@@ -218,6 +218,7 @@ export default function ModuloPJ() {
   const [showAjusteDialog, setShowAjusteDialog] = useState(false);
   const [ajusteForm, setAjusteForm] = useState<{ percAdiant?: number; diaAdiant?: number; diaFech?: number }>({});
   const [ajusteConfirming, setAjusteConfirming] = useState(false);
+  const [folhaMedicaoTab, setFolhaMedicaoTab] = useState<"1" | "2">("1");
   // Rev. 4376 — descrição por medição (persistida em localStorage por empresa+mês)
   const obsKey = `pj_obs_${companyId}_${mesRef}`;
   const [obs1a, setObs1a] = useState(() => {
@@ -785,34 +786,61 @@ export default function ModuloPJ() {
               </div>
             )}
 
-            {/* Rev. 4376 — Folha dividida: Dia 15 (adiantamentos) + Final do mês (fechamentos) */}
+            {/* Rev. 4376 — Sub-abas: 1ª Medição / 2ª Medição */}
+            {/* Seletor de sub-aba */}
+            <div className="flex gap-0 mb-4 rounded-xl overflow-hidden border border-muted bg-muted/30 w-fit">
+              {(["1", "2"] as const).map(tab => {
+                const isActive = folhaMedicaoTab === tab;
+                const isAmbar = tab === "1";
+                const total = (pagamentos as any[])
+                  .filter(p => tab === "1" ? p.tipo === "adiantamento" : p.tipo !== "adiantamento")
+                  .reduce((s: number, p: any) => s + parseFloat(p.valor || "0"), 0);
+                return (
+                  <button key={tab} type="button"
+                    onClick={() => setFolhaMedicaoTab(tab)}
+                    className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium transition-all ${
+                      isActive
+                        ? isAmbar
+                          ? "bg-amber-500 text-white shadow-sm"
+                          : "bg-green-600 text-white shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}>
+                    <span>{tab === "1" ? "1ª Medição" : "2ª Medição"}</span>
+                    {total > 0 && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${isActive ? "bg-white/20 text-white" : isAmbar ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+                        {formatMoeda(total)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
             {(pagamentos as any[]).length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center text-muted-foreground">
                   Nenhuma medição para {pjMes != null ? mesRef : String(pjAno)}. Novos contratos já geram as previsões automaticamente — para contratos antigos use "Sincronizar Previsões".
                 </CardContent>
               </Card>
-            ) : (["adiantamento", "fechamento_bonificacao"] as const).map(grupo => {
-              const itens = (pagamentos as any[]).filter(p => grupo === "adiantamento" ? p.tipo === "adiantamento" : p.tipo !== "adiantamento");
-              if (itens.length === 0) return null;
+            ) : (() => {
+              const isAdiant = folhaMedicaoTab === "1";
+              const itens = (pagamentos as any[]).filter(p => isAdiant ? p.tipo === "adiantamento" : p.tipo !== "adiantamento");
               const totalGrupo = itens.reduce((s: number, p: any) => s + parseFloat(p.valor || "0"), 0);
-              const isAdiant = grupo === "adiantamento";
-              const allSelected = itens.every((p: any) => selectedIds.has(p.id));
+              const allSelected = itens.length > 0 && itens.every((p: any) => selectedIds.has(p.id));
               return (
-                <Card key={grupo} className={`mb-4 border-2 ${isAdiant ? "border-amber-200" : "border-green-200"}`}>
+                <Card className={`border-2 ${isAdiant ? "border-amber-200" : "border-green-200"}`}>
                   <CardHeader className={`pb-3 pt-3 px-4 ${isAdiant ? "bg-amber-50" : "bg-green-50"} rounded-t-lg`}>
                     <div className="flex items-center justify-between mb-2">
                       <CardTitle className={`text-sm font-semibold ${isAdiant ? "text-amber-800" : "text-green-800"}`}>
-                        {isAdiant ? "📋 1ª Medição do Mês" : "📋 2ª Medição do Mês"}
+                        📋 {isAdiant ? "1ª Medição do Mês" : "2ª Medição do Mês"}
+                        <span className="ml-2 font-normal text-xs opacity-70">{itens.length} lançamento(s)</span>
                       </CardTitle>
                       <span className={`text-base font-bold ${isAdiant ? "text-amber-700" : "text-green-700"}`}>{formatMoeda(totalGrupo)}</span>
                     </div>
-                    <input
-                      type="text"
-                      maxLength={120}
+                    <input type="text" maxLength={120}
                       value={isAdiant ? obs1a : obs2a}
                       onChange={e => isAdiant ? setObs1a(e.target.value) : setObs2a(e.target.value)}
-                      placeholder={isAdiant ? "Ex: Serviços referentes à semana 1..." : "Ex: Fechamento mensal julho 2026..."}
+                      placeholder={isAdiant ? "Observação da 1ª medição..." : "Observação da 2ª medição..."}
                       className={`w-full text-xs rounded-lg border px-3 py-1.5 bg-white/70 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 ${isAdiant ? "border-amber-200 focus:ring-amber-400 text-amber-900" : "border-green-200 focus:ring-green-400 text-green-900"}`}
                     />
                   </CardHeader>
@@ -895,7 +923,7 @@ export default function ModuloPJ() {
                   </CardContent>
                 </Card>
               );
-            })}
+            })()}
 
             {/* Rev. 3262 — Ranking por fornecedor (somatório histórico em BRL) */}
             {(rankingFornecedores as any[]).length > 0 && (
