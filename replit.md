@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4357** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO B AGRUPA PERÍODOS CONTÍNUOS NA MESMA OBRA.** `site_periods` Ramo B agora faz `GROUP BY employeeId` (MIN/MAX createdAt) em vez de uma linha por registro. Resolve lacunas de meses entre re-alocações consecutivas na mesma obra (ex.: mai + jul → junho coberto automaticamente). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4358** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO A DETECTA RETORNO VIA obra_funcionarios.** Prioridade 2 no CASE do Ramo A: se todos os history fechados + obra_funcionarios ativo → CURRENT_DATE. Cobre saída formal em mai + retorno via OF em jul sem novo history. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4356** — **SCORECARD — METAS & DESVIOS: DATA DO GRÁFICO MENSAL EM PADRÃO BR.** `"2026-05"` → `"Mai/26"` no Acompanhamento Mensal de Compras. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4357** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO B AGRUPA PERÍODOS CONTÍNUOS NA MESMA OBRA.** `site_periods` Ramo B: `GROUP BY employeeId` (MIN/MAX createdAt). Resolve lacunas entre re-alocações consecutivas na mesma obra. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

@@ -1,4 +1,27 @@
 /**
+ * Rev. 4358 - SCORECARD OBRA — FOLHA/CUSTOS: RAMO A DETECTA RETORNO VIA obra_funcionarios
+ *
+ * PROBLEMA (continuação do Rev. 4357):
+ * Rev. 4357 corrigiu o Ramo B (obra_funcionarios), mas funcionários com employee_site_history
+ * são excluídos do Ramo B pelo NOT EXISTS. Se um funcionário tinha saída formal em history
+ * (ex: mai/31) e foi re-alocado via obra_funcionarios em julho (sem novo history de entrada),
+ * o Ramo A calculava periodo_fim=mai/31 → junho ainda ficava vazio.
+ *
+ * CORREÇÃO (Rev. 4358):
+ * Ramo A (employee_site_history) ganha uma nova Prioridade 2 no CASE do periodo_fim:
+ *   Se todos os registros de history estão fechados MAS existe um obra_funcionarios ativo
+ *   (sem transferência posterior para outra obra) → periodo_fim = CURRENT_DATE.
+ * Isso cobre o caso: saída formal em history em mai + retorno via obra_funcionarios em jul
+ * sem novo registro de history → o período mai→hoje cobre junho automaticamente.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (Ramo A de site_periods: nova Prioridade 2 no CASE)
+ * - shared/version.ts → Rev. 4358
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4357 - SCORECARD OBRA — FOLHA/CUSTOS: RAMO B AGRUPA PERÍODOS CONTÍNUOS NA MESMA OBRA
  *
  * PROBLEMA:

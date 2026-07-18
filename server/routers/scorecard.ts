@@ -1709,11 +1709,28 @@ export const scorecardRouter = router({
                 -- Prioridade 1: registro em aberto (dataFim IS NULL) → ainda está na obra AGORA.
                 -- Deve ganhar de qualquer saída anterior (funcionário saiu e foi re-alocado aqui).
                 WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
-                -- Prioridade 2: todas as entradas fechadas + saída formal → usa a data da saída
+                -- Prioridade 2 (Rev. 4358): todos os registros de history fechados, mas
+                -- obra_funcionarios tem entrada ativa (sem transferência posterior para outra obra).
+                -- Isso cobre o caso: saída formal em history em mai + re-alocado em obra_funcionarios
+                -- em jul sem novo registro de history → junho ficava vazio.
+                WHEN EXISTS (
+                  SELECT 1 FROM obra_funcionarios ofx
+                  WHERE ofx."employeeId" = esh."employeeId"
+                    AND ofx."obraId"     = ${input.obraId}
+                    AND ofx."companyId"  = ${input.companyId}
+                    AND NOT EXISTS (
+                      SELECT 1 FROM obra_funcionarios ofy
+                      WHERE ofy."employeeId" = ofx."employeeId"
+                        AND ofy."companyId"  = ofx."companyId"
+                        AND ofy."obraId"    <> ${input.obraId}
+                        AND ofy."createdAt"  > ofx."createdAt"
+                    )
+                ) THEN CURRENT_DATE
+                -- Prioridade 3: todas as entradas fechadas + saída formal → usa a data da saída
                 WHEN BOOL_OR(esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL)
                   THEN MAX(CASE WHEN esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL
                                 THEN esh."dataFim"::date END)
-                -- Prioridade 3: tudo fechado, sem saída formal → usa o maior dataFim
+                -- Prioridade 4: tudo fechado, sem saída formal → usa o maior dataFim
                 ELSE MAX(esh."dataFim"::date)
               END                                                            AS periodo_fim
             FROM employee_site_history esh
