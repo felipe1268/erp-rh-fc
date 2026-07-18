@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4371** — **MÓDULO PJ — FOLHA PJ: PERIOD SELECTOR COM DOTS E LEGENDA.** Substituiu `<Input type="month">` pelo PeriodSelectorCard padrão (ano + 12 pills + "Ano todo"). Dots: azul=com lançamento, verde=todos pagos, cinza=sem dados. Novo endpoint `pj.pagamentos.statusAnual`. PDF desabilitado em "Ano todo". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4370** — **SCORECARD OBRA — FOLHA/CUSTOS: NORMALIZAÇÃO ZERO-PAD NO SERVIDOR.** Complemento da Rev. 4369: iOS Safari não recebe HMR → browser enviava "2026-6". Fix: `_pad()` server-side em `getCustosRH` antes de qualquer SQL. Defesa permanente independente do cliente. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4369** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE MÊS SEM ZERO-PAD.** `"2026-6"` vs `"2026-06"`: comparação string falhava silenciosamente → "Sem dados". Fix: `padStart(2,"0")` no frontend. ZERO DELETE · ZERO ALTER destrutivo.

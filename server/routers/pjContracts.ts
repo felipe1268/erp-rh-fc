@@ -984,11 +984,12 @@ export const pjContractsRouter = router({
   // ============================================================
   pagamentos: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional(), contractId: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional(), contractId: z.number().optional(), ano: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const conditions = [companyFilter(pjPayments.companyId, input)];
         if (input.mesReferencia) conditions.push(eq(pjPayments.mesReferencia, input.mesReferencia));
+        else if (input.ano) conditions.push(sql`LEFT(${pjPayments.mesReferencia}, 4) = ${String(input.ano)}`);
         if (input.contractId) conditions.push(eq(pjPayments.contractId, input.contractId));
         
         const rows = await db.select({
@@ -1029,6 +1030,35 @@ export const pjContractsRouter = router({
           const m = matchFornecedor(cnpj, nome, idx);
           return { ...r, cnpjPrestador: cnpj, ...m };
         });
+      }),
+
+    /**
+     * Rev. 4371 — Resumo por mês para o PeriodSelectorCard (dots coloridos).
+     * Retorna somente os meses que têm lançamentos; meses ausentes = "none" no frontend.
+     * status "consolidated" = todos os lançamentos do mês estão pagos/consolidados.
+     */
+    statusAnual: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const anoStr = String(input.ano);
+        const rows = await db.select({
+          mes: sql<number>`SUBSTRING(${pjPayments.mesReferencia}, 6, 2)::int`,
+          total: sql<number>`COUNT(*)::int`,
+          pagos: sql<number>`COUNT(CASE WHEN ${pjPayments.status} IN ('pago', 'consolidado') THEN 1 END)::int`,
+        })
+        .from(pjPayments)
+        .where(and(
+          companyFilter(pjPayments.companyId, input),
+          sql`LEFT(${pjPayments.mesReferencia}, 4) = ${anoStr}`
+        ))
+        .groupBy(sql`SUBSTRING(${pjPayments.mesReferencia}, 6, 2)::int`);
+        return rows.map(r => ({
+          mes: Number(r.mes),
+          status: Number(r.pagos) >= Number(r.total) && Number(r.total) > 0
+            ? 'consolidated' as const
+            : 'data' as const,
+        }));
       }),
 
     /**

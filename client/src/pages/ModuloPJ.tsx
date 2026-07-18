@@ -25,6 +25,7 @@ import {
 import { useState, useMemo, useEffect } from "react";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import PeriodSelectorCard, { MonthDotStatus } from "@/components/PeriodSelectorCard";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -116,9 +117,13 @@ export default function ModuloPJ() {
   const [showEditClausulas, setShowEditClausulas] = useState(false);
   const [editClausulasTexto, setEditClausulasTexto] = useState("");
 
-  // Mês referência para pagamentos
-  const now = new Date();
-  const [mesRef, setMesRef] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  // Mês referência para pagamentos — PeriodSelectorCard (padrão de ouro)
+  const _now = nowBrasilia();
+  const [pjAno, setPjAno] = useState(_now.getFullYear());
+  const [pjMes, setPjMes] = useState<number | null>(_now.getMonth() + 1);
+  const mesRef = pjMes != null ? `${pjAno}-${String(pjMes).padStart(2, "0")}` : undefined;
+  // Fallback de mês para dialogs e PDF (usa mês corrente quando "Ano todo" está ativo)
+  const mesRefFallback = mesRef ?? `${pjAno}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
 
   // Queries
   // Sempre busca a lista completa do servidor — o filtro de status é aplicado
@@ -133,11 +138,15 @@ export default function ModuloPJ() {
     { enabled: !!companyId || companyIds?.length > 0 }
   );
   const { data: pagamentos = [], refetch: refetchPagamentos } = trpc.pj.pagamentos.list.useQuery(
-    { companyId, mesReferencia: mesRef },
+    { companyId, mesReferencia: mesRef, ano: pjMes == null ? pjAno : undefined },
     { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" }
   );
   const { data: rankingFornecedores = [] } = trpc.pj.pagamentos.rankingFornecedores.useQuery(
     { companyId, mesReferencia: mesRef },
+    { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" && pjMes != null }
+  );
+  const { data: statusAnualData = [] } = trpc.pj.pagamentos.statusAnual.useQuery(
+    { companyId, ano: pjAno },
     { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" }
   );
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
@@ -155,6 +164,12 @@ export default function ModuloPJ() {
     () => pjEmployees.filter((e: any) => !empIdsComContratoAtivo.has(e.id)),
     [pjEmployees, empIdsComContratoAtivo]
   );
+  // Rev. 4371: dots coloridos do PeriodSelectorCard por status do mês
+  const monthStatus = useMemo((): Record<number, MonthDotStatus> => {
+    const m: Record<number, MonthDotStatus> = {};
+    for (const s of statusAnualData as any[]) m[s.mes] = s.status as MonthDotStatus;
+    return m;
+  }, [statusAnualData]);
 
   // Mutations
   const createContrato = trpc.pj.contratos.create.useMutation({
@@ -250,10 +265,10 @@ export default function ModuloPJ() {
     { enabled: showDetailDialog && !!selectedContrato?.id && detailTab === "revisoes" }
   );
 
-  // Relatório PJ para exportação PDF
+  // Relatório PJ para exportação PDF (só mês específico, não "Ano todo")
   const { data: relatorio } = trpc.pj.relatorioPJ.useQuery(
-    { companyId, mesReferencia: mesRef },
-    { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" }
+    { companyId, mesReferencia: mesRefFallback },
+    { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" && pjMes != null }
   );
 
   function exportarPDF() {
@@ -640,22 +655,26 @@ export default function ModuloPJ() {
 
           {/* Folha PJ (Pagamentos) */}
           <TabsContent value="pagamentos">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-medium">Mês Referência:</label>
-                <Input type="month" value={mesRef} onChange={e => setMesRef(e.target.value)} className="w-48" />
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => gerarMensal.mutate({ companyId, companyIds })} disabled={gerarMensal.isPending} title="Sincroniza previsões de medições para todos os contratos PJ ativos (idempotente).">
-                  <RefreshCw className={`h-4 w-4 mr-2 ${gerarMensal.isPending ? "animate-spin" : ""}`} /> Sincronizar Previsões
-                </Button>
-                <Button onClick={() => { setPagForm({ mesReferencia: mesRef }); setShowPagamentoDialog(true); }}>
-                  <Plus className="h-4 w-4 mr-2" /> Lançamento Manual
-                </Button>
-                <Button variant="outline" onClick={() => exportarPDF()} disabled={!(pagamentos as any[]).length}>
-                  <Printer className="h-4 w-4 mr-2" /> Exportar PDF
-                </Button>
-              </div>
+            {/* Rev. 4371: PeriodSelectorCard — padrão de ouro mês/ano */}
+            <PeriodSelectorCard
+              ano={pjAno} mes={pjMes}
+              onAno={setPjAno}
+              onMes={setPjMes}
+              onAnoTodo={() => setPjMes(null)}
+              monthStatus={monthStatus}
+              showLegend
+              className="mb-4"
+            />
+            <div className="flex gap-2 mb-4 flex-wrap">
+              <Button variant="outline" onClick={() => gerarMensal.mutate({ companyId, companyIds })} disabled={gerarMensal.isPending} title="Sincroniza previsões de medições para todos os contratos PJ ativos (idempotente).">
+                <RefreshCw className={`h-4 w-4 mr-2 ${gerarMensal.isPending ? "animate-spin" : ""}`} /> Sincronizar Previsões
+              </Button>
+              <Button onClick={() => { setPagForm({ mesReferencia: mesRefFallback }); setShowPagamentoDialog(true); }}>
+                <Plus className="h-4 w-4 mr-2" /> Lançamento Manual
+              </Button>
+              <Button variant="outline" onClick={() => exportarPDF()} disabled={!(pagamentos as any[]).length || pjMes == null} title={pjMes == null ? "Selecione um mês para exportar PDF" : ""}>
+                <Printer className="h-4 w-4 mr-2" /> Exportar PDF
+              </Button>
             </div>
 
             {/* Resumo do mês */}
@@ -707,7 +726,7 @@ export default function ModuloPJ() {
                     <tbody>
                       {(pagamentos as any[]).length === 0 ? (
                         <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">
-                          Nenhuma medição para {mesRef}. Novos contratos já geram as previsões automaticamente — para contratos antigos use "Sincronizar Previsões".
+                          Nenhuma medição para {pjMes != null ? mesRef : String(pjAno)}. Novos contratos já geram as previsões automaticamente — para contratos antigos use "Sincronizar Previsões".
                         </td></tr>
                       ) : (pagamentos as any[]).map((p: any) => {
                         const st = STATUS_PAGAMENTO[p.status] || STATUS_PAGAMENTO.pendente;
@@ -1297,7 +1316,7 @@ export default function ModuloPJ() {
               </div>
               <div>
                 <label className="text-sm font-medium">Mês Referência *</label>
-                <Input type="month" value={pagForm.mesReferencia || mesRef} onChange={e => setPagForm({ ...pagForm, mesReferencia: e.target.value })} />
+                <Input type="month" value={pagForm.mesReferencia || mesRefFallback} onChange={e => setPagForm({ ...pagForm, mesReferencia: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-medium">Tipo *</label>

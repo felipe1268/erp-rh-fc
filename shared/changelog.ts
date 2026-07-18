@@ -1,4 +1,27 @@
 /**
+ * Rev. 4371 - MÓDULO PJ — FOLHA PJ: PERIOD SELECTOR COM DOTS E LEGENDA
+ *
+ * Tela /modulo-pj aba "Folha PJ": substituiu o campo `<Input type="month">` pelo
+ * PeriodSelectorCard padrão de ouro (ano+mês+anoTodo) com dots coloridos e legenda.
+ *
+ * Legenda:
+ *   • Azul  (data)        = mês tem lançamentos com ao menos 1 pendente
+ *   • Verde (consolidated)= todos os lançamentos do mês estão pagos/consolidados
+ *   • Cinza (none)        = sem lançamentos no mês
+ *
+ * Backend: novo procedure `pj.pagamentos.statusAnual` que agrega por mês os
+ * lançamentos da empresa para o ano selecionado (GROUP BY mês). `pagamentos.list`
+ * recebeu parâmetro `ano: number` — quando "Ano todo" está selecionado, filtra
+ * por LEFT(mes_referencia,4) = ano em vez de = mesReferencia.
+ *
+ * Exportar PDF desabilitado em "Ano todo" (precisa de mês específico).
+ * mesRefFallback garante que o dialog de lançamento manual sempre tem um mês pré-preenchido.
+ *
+ * ARQUIVOS: server/routers/pjContracts.ts, client/src/pages/ModuloPJ.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4370 - SCORECARD OBRA — FOLHA/CUSTOS: NORMALIZAÇÃO ZERO-PAD NO SERVIDOR
  *
  * Complemento da Rev. 4369: a correção de zero-pad era só no frontend.
