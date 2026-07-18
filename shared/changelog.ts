@@ -1,4 +1,33 @@
 /**
+ * Rev. 4365 - PAGAR CONSOLIDADO: LAYOUT REFORMULADO + VALOR BRL FORMATADO
+ *
+ * Redesign completo do PagarConsolidadoDialog.tsx:
+ *
+ * VISUAL:
+ * - Cabeçalho gradiente indigo com fornecedor, nº títulos e total em destaque.
+ * - Campos Data/Forma numa grid 2 colunas + Conta bancária largura plena abaixo.
+ * - Rodapé fixo com total + botões (sem scroll).
+ *
+ * CHEQUES — principais mudanças:
+ * - Campo "Valor" deixou de ser type=number (mostrava 11115.48).
+ *   Agora é input mascarado: ao digitar "1111548" → mostra "11.115,48".
+ *   maskBRL converte dígitos em centavos → Intl.NumberFormat pt-BR.
+ * - Vencimento: input nativo com ícone Calendar à esquerda e data legível
+ *   em pt-BR abaixo ("Vence em 01/07/2026").
+ * - Badge de soma: pill verde (✓) quando bate, vermelho com diferença quando não.
+ * - Parcela com badge azul "1/5" e label "Parcela N" quando múltiplas.
+ * - Nota informativa em azul suave no rodapé da seção.
+ *
+ * CHEQUES DE TERCEIRO:
+ * - Radio buttons com ponto branco no centro quando selecionados.
+ * - Valor em bold + data "bom para" formatada em pt-BR.
+ * - Badge de total selecionado com cores verde/âmbar/vermelho.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/PagarConsolidadoDialog.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4364 - FOLHA DE PAGAMENTO: BOTÃO "LIMPAR MÊS" (ADMIN MASTER)
  *
  * Nova feature: botão "Limpar mês" visível apenas para Admin Master na tela de Folha
