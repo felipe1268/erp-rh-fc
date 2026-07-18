@@ -1,4 +1,31 @@
 /**
+ * Rev. 4357 - SCORECARD OBRA — FOLHA/CUSTOS: RAMO B AGRUPA PERÍODOS CONTÍNUOS NA MESMA OBRA
+ *
+ * PROBLEMA:
+ * O Ramo B de `site_periods` (obra_funcionarios sem employee_site_history) gerava UMA LINHA
+ * por registro de alocação. Se um funcionário tinha dois registros na mesma obra
+ * (ex.: mai/01 + jul/01 com transferência a outra obra em mai/31), o período do registro de
+ * mai fechava em mai/31 e o de jul começava em jul/01 — deixando junho sem cobertura.
+ * Resultado: "Sem dados de folha para esta obra no período selecionado" em junho, mesmo com
+ * 12 funcionários processados na folha geral da empresa.
+ *
+ * CORREÇÃO (Rev. 4357):
+ * Ramo B agora AGRUPA todos os registros do mesmo funcionário nesta obra em um único período:
+ *   periodo_inicio = MIN(createdAt) — o mais antigo registro do funcionário nesta obra
+ *   periodo_fim    = primeira alocação em OUTRA obra após o MAX(createdAt) aqui, ou CURRENT_DATE
+ * Isso elimina lacunas de meses entre registros consecutivos na mesma obra, cobrindo meses
+ * onde o funcionário estava presente mas não havia registro formal de saída/retorno.
+ * Transferências reais (para outra obra após o último registro aqui) continuam fechando o
+ * período corretamente.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (Ramo B de site_periods: subquery of_grp com GROUP BY employeeId)
+ * - shared/version.ts → Rev. 4357
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4356 - SCORECARD — METAS & DESVIOS: DATA DO GRÁFICO MENSAL EM PADRÃO BR
  *
  * "2026-05" → "Mai/26" no Acompanhamento Mensal de Compras (ScorecardTab.tsx linha 944).

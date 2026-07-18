@@ -1724,37 +1724,45 @@ export const scorecardRouter = router({
             UNION ALL
 
             -- Ramo B: funcionários em obra_funcionarios SEM registro de history
-            -- periodo_inicio = MAX(data que foi cadastrado na obra, dataInicio da obra)
-            -- NÃO usa dataAdmissão (pode ser de anos atrás e infla custo retroativo)
-            -- Rev. 4303 — Anti-duplicata via periodo_fim fechado: em vez de excluir quem se
-            -- moveu para outra obra (o que apagava todo o histórico do funcionário nesta obra),
-            -- fecha o periodo_fim na data da alocação mais recente em outra obra (se existir).
-            -- Assim o custo é proporcionalizado só aos meses em que o funcionário estava aqui.
+            -- Rev. 4357 — Agrupa TODOS os registros do mesmo funcionário nesta obra
+            -- em um único período contínuo (MIN createdAt → MAX createdAt).
+            -- Isso resolve lacunas de registro entre meses consecutivos: se o funcionário
+            -- estava em mai e voltou em jul sem registro formal de saída/retorno em jun,
+            -- o período contínuo mai→hoje cobre junho automaticamente.
+            -- O fechamento usa a primeira alocação em OUTRA obra APÓS o ÚLTIMO registro aqui,
+            -- garantindo que transferências reais ainda fechem o período corretamente.
             SELECT
-              of2."employeeId"                                               AS employee_id,
+              of_grp.employee_id,
               GREATEST(
-                of2."createdAt"::date,
+                of_grp.min_created,
                 (SELECT data_inicio FROM obra_inicio)
               )                                                              AS periodo_inicio,
               COALESCE(
-                -- Se foi alocado em outra obra depois: fecha o período nesta obra
+                -- Fecha na primeira alocação em OUTRA obra após o ÚLTIMO registro nesta obra
                 (SELECT MIN(of3."createdAt"::date)
                  FROM obra_funcionarios of3
-                 WHERE of3."employeeId" = of2."employeeId"
-                   AND of3."companyId"  = of2."companyId"
-                   AND of3."obraId"    <> of2."obraId"
-                   AND of3."createdAt"  > of2."createdAt"),
+                 WHERE of3."employeeId" = of_grp.employee_id
+                   AND of3."companyId"  = ${input.companyId}
+                   AND of3."obraId"    <> ${input.obraId}
+                   AND of3."createdAt"  > of_grp.max_created),
                 CURRENT_DATE
               )                                                              AS periodo_fim
-            FROM obra_funcionarios of2
-            WHERE of2."obraId"    = ${input.obraId}
-              AND of2."companyId" = ${input.companyId}
-              AND NOT EXISTS (
-                SELECT 1 FROM employee_site_history esh2
-                WHERE esh2."employeeId" = of2."employeeId"
-                  AND esh2."obraId"     = ${input.obraId}
-                  AND esh2."companyId"  = ${input.companyId}
-              )
+            FROM (
+              SELECT
+                of2."employeeId"             AS employee_id,
+                MIN(of2."createdAt"::date)   AS min_created,
+                MAX(of2."createdAt"::date)   AS max_created
+              FROM obra_funcionarios of2
+              WHERE of2."obraId"    = ${input.obraId}
+                AND of2."companyId" = ${input.companyId}
+                AND NOT EXISTS (
+                  SELECT 1 FROM employee_site_history esh2
+                  WHERE esh2."employeeId" = of2."employeeId"
+                    AND esh2."obraId"     = ${input.obraId}
+                    AND esh2."companyId"  = ${input.companyId}
+                )
+              GROUP BY of2."employeeId"
+            ) AS of_grp
           ),
           relevant_emp AS (
             -- Apenas funcionários formalmente alocados (site_periods).

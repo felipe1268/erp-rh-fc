@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4357** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO B AGRUPA PERÍODOS CONTÍNUOS NA MESMA OBRA.** `site_periods` Ramo B agora faz `GROUP BY employeeId` (MIN/MAX createdAt) em vez de uma linha por registro. Resolve lacunas de meses entre re-alocações consecutivas na mesma obra (ex.: mai + jul → junho coberto automaticamente). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4356** — **SCORECARD — METAS & DESVIOS: DATA DO GRÁFICO MENSAL EM PADRÃO BR.** `"2026-05"` → `"Mai/26"` no Acompanhamento Mensal de Compras. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4355** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO BADGES AFASTADO/FÉRIAS.** PJ nunca recebe badges CLT. `emAfastadoSet` → `employees.status='Afastado'`. `zeroSal` sintético: removido `emAfastMes`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4355** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO BADGES AFASTADO/FÉRIAS.** PJ nunca recebe badges CLT. `emAfastadoSet` → `employees.status='Afastado'`. `zeroSal` sintético: removido `emAfastMes`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4351** — **SCORECARD OBRA — FOLHA/CUSTOS: BADGE "FÉRIAS" POR GOZO NO PERÍODO.** 5ª query paralela + `emFeriasSet`. Badge laranja "Férias" ao lado do nome. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4348** — **SCORECARD OBRA — FOLHA/CUSTOS: PROPORCIONAL POR DIAS ÚTEIS (SEG-SEX).** CLT SQL + PJ SQL: `generate_series + DOW`. JS sintético CLT: `countWorkingDays`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4347** — **SCORECARD OBRA — FOLHA/CUSTOS: AUDITORIA + CUSTO PROPORCIONAL PARA TODO O EFETIVO.** 4 bugs corrigidos: dedup CPF+tipo, Seg. de Vida sem folha, date parsing, custo proporcional CLT sem folha. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4346** — **FOLHA DE PAGAMENTO: CORREÇÃO — FUNCIONÁRIOS "NÃO PAGAR" VOLTAVAM AO PAINEL DE ALERTA.** `sincronizarValeJson` não limpava `temAlerta`/`bloqueado`. Fix: mapear ambos dentro de `sincronizarValeJson`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4345** — **ALMOXARIFADO: 5 MELHORIAS LISTA LEONARDO/17-07.** Item 2: seleção múltipla locados em lote. Item 5: campo `quantidade` em `equipamentos_locados`. Item 6: botão Renovar Locação. Item 7: badge vencimento colorido. Item 8: `onError` em `proprioCriar`. ZERO DELETE · ZERO ALTER destrutivo.
 
