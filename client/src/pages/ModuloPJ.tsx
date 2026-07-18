@@ -1566,55 +1566,100 @@ export default function ModuloPJ() {
 
         {/* Rev. 4376 — Dialog: Ajuste de percentuais em lote */}
         <Dialog open={showAjusteDialog} onOpenChange={setShowAjusteDialog}>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Ajustar regra de pagamento</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Settings2 className="h-5 w-5 text-purple-600" />
+                Ajustar regra de pagamento
+              </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Define os percentuais e datas de pagamento e aplica a <strong>todos os contratos ativos</strong> da empresa.</p>
+            <p className="text-sm text-muted-foreground -mt-1">
+              Aplica a <strong>todos os contratos ativos</strong> da empresa.
+            </p>
+
+            {/* Percentuais */}
+            <div className="bg-muted/40 rounded-lg p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Percentuais</p>
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="text-xs font-medium mb-1 block">1ª Medição</label>
+                  <div className="relative">
+                    <Input type="number" min={0} max={100} value={ajusteForm.percAdiant ?? ""} placeholder="50"
+                      className="pr-8"
+                      onChange={e => {
+                        const v = parseInt(e.target.value);
+                        setAjusteForm({ ...ajusteForm, percAdiant: isNaN(v) ? undefined : Math.min(100, Math.max(0, v)) });
+                      }} />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                  </div>
+                </div>
+                <span className="text-lg text-muted-foreground mt-5">+</span>
+                <div className="flex-1">
+                  <label className="text-xs font-medium mb-1 block">2ª Medição <span className="text-muted-foreground">(auto)</span></label>
+                  <div className="relative">
+                    <Input type="number" readOnly className="pr-8 bg-muted/60 cursor-not-allowed"
+                      value={ajusteForm.percAdiant !== undefined ? 100 - ajusteForm.percAdiant : ""} placeholder="50" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                  </div>
+                </div>
+                <span className="text-lg text-muted-foreground mt-5">=</span>
+                <div className="flex-1">
+                  <label className="text-xs font-medium mb-1 block">Total</label>
+                  <div className={`h-9 flex items-center justify-center rounded-md border text-sm font-bold ${ajusteForm.percAdiant !== undefined ? "bg-green-50 border-green-200 text-green-700" : "bg-muted/40 text-muted-foreground"}`}>
+                    {ajusteForm.percAdiant !== undefined ? "100%" : "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Datas */}
+            <div className="bg-muted/40 rounded-lg p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Dias de pagamento</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium">% 1ª Medição</label>
-                  <Input type="number" min={0} max={100} value={ajusteForm.percAdiant ?? ""} placeholder="50"
-                    onChange={e => {
-                      const v = parseInt(e.target.value);
-                      setAjusteForm({ ...ajusteForm, percAdiant: isNaN(v) ? undefined : v });
-                    }} />
-                </div>
-                <div>
-                  <label className="text-xs font-medium">% 2ª Medição <span className="text-muted-foreground">(auto)</span></label>
-                  <Input type="number" readOnly className="bg-muted/40 cursor-not-allowed"
-                    value={ajusteForm.percAdiant !== undefined ? 100 - ajusteForm.percAdiant : ""} placeholder="50" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Dia 1ª Medição</label>
+                  <label className="text-xs font-medium mb-1 block">Dia — 1ª Medição</label>
                   <Input type="number" min={1} max={31} value={ajusteForm.diaAdiant ?? ""} placeholder="15"
                     onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaAdiant: isNaN(v) ? undefined : v }); }} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium">Dia 2ª Medição</label>
-                  <Input type="number" min={1} max={31} value={ajusteForm.diaFech ?? ""} placeholder="5"
-                    onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaFech: isNaN(v) ? undefined : v }); }} />
+                  <label className="text-xs font-medium mb-1 block">Dia — 2ª Medição</label>
+                  <div className="space-y-1.5">
+                    <div className="flex gap-1.5">
+                      <Input type="number" min={1} max={31}
+                        value={ajusteForm.diaFech === 31 ? "" : (ajusteForm.diaFech ?? "")}
+                        placeholder={ajusteForm.diaFech === 31 ? "—" : "5"}
+                        disabled={ajusteForm.diaFech === 31}
+                        className={ajusteForm.diaFech === 31 ? "bg-muted/60 cursor-not-allowed" : ""}
+                        onChange={e => { const v = parseInt(e.target.value); setAjusteForm({ ...ajusteForm, diaFech: isNaN(v) ? undefined : v }); }} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAjusteForm({ ...ajusteForm, diaFech: ajusteForm.diaFech === 31 ? undefined : 31 })}
+                      className={`w-full text-xs px-2 py-1 rounded border transition-colors ${ajusteForm.diaFech === 31 ? "bg-green-100 border-green-400 text-green-700 font-semibold" : "bg-white border-muted-foreground/30 text-muted-foreground hover:border-green-400 hover:text-green-700"}`}>
+                      {ajusteForm.diaFech === 31 ? "✓ Último dia do mês" : "Último dia do mês"}
+                    </button>
+                  </div>
                 </div>
               </div>
-              <Button className="w-full" disabled={bulkUpdatePercentuais.isPending || ajusteForm.percAdiant === undefined}
-                onClick={() => {
-                  const perc = ajusteForm.percAdiant!;
-                  if (confirm(`Aplicar ${perc}% / ${100 - perc}% a TODOS os contratos ativos?`)) {
-                    bulkUpdatePercentuais.mutate({
-                      companyId,
-                      percentualAdiantamento: perc,
-                      percentualFechamento: 100 - perc,
-                      diaAdiantamento: ajusteForm.diaAdiant,
-                      diaFechamento: ajusteForm.diaFech,
-                    });
-                  }
-                }}>
-                {bulkUpdatePercentuais.isPending
-                  ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Aplicando...</>
-                  : <><Settings2 className="h-4 w-4 mr-2" />Aplicar a todos os contratos ativos</>}
-              </Button>
             </div>
+
+            <Button className="w-full h-10" disabled={bulkUpdatePercentuais.isPending || ajusteForm.percAdiant === undefined}
+              onClick={() => {
+                const perc = ajusteForm.percAdiant!;
+                if (confirm(`Aplicar ${perc}% / ${100 - perc}% a TODOS os contratos ativos?`)) {
+                  bulkUpdatePercentuais.mutate({
+                    companyId,
+                    percentualAdiantamento: perc,
+                    percentualFechamento: 100 - perc,
+                    diaAdiantamento: ajusteForm.diaAdiant,
+                    diaFechamento: ajusteForm.diaFech,
+                  });
+                }
+              }}>
+              {bulkUpdatePercentuais.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Aplicando...</>
+                : <><Settings2 className="h-4 w-4 mr-2" />Aplicar a todos os contratos ativos</>}
+            </Button>
           </DialogContent>
         </Dialog>
 
