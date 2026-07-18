@@ -1688,7 +1688,7 @@ export const scorecardRouter = router({
         WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
       `;
 
-      const [r, feriasR, seguroR, pjR, feriasGozoR, mesesComDadosR] = await Promise.all([
+      const [r, feriasR, seguroR, pjR, feriasGozoR] = await Promise.all([
         db.execute(sql`
           WITH
           -- Piso absoluto: nenhum custo pode ser anterior à data de início da obra
@@ -1991,6 +1991,7 @@ export const scorecardRouter = router({
               e."tipoContrato"                                      AS tipo_contrato,
               e.cpf                                                 AS cpf,
               e.status                                              AS status,
+              e."licencaDataInicio"                                 AS licenca_data_inicio,
               COALESCE(COUNT(DISTINCT pf.mes_referencia), 0)       AS meses_na_obra,
               COALESCE(SUM(pf.dias_na_obra), 0)                    AS total_dias_na_obra,
               COALESCE(SUM(ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS salario_bruto_total,
@@ -2267,79 +2268,6 @@ export const scorecardRouter = router({
                AND vp."periodo3Fim"::date    >= (${mesFeriasIni} || '-01')::date)
             )
             AND vp."employeeId" IN (${relevantEmpSql})
-        `),
-
-        // Rev. 4362: mesesComDados — bolinha azul = dado REAL processado, nunca projeção.
-        // CLT: payroll_payments com vínculo à obra (employee_site_history ou obra_funcionarios).
-        // PJ:  pj_payments aprovados/pagos (status <> 'pendente') com contrato desta obra.
-        // Isso elimina meses futuros (sem folha processada) e meses só com PJ pendente.
-        db.execute(sql`
-          -- CLT: meses com folha real processada na obra
-          SELECT DISTINCT
-            EXTRACT(MONTH FROM (pp2."mesReferencia" || '-01')::date)::int AS mes
-          FROM payroll_payments pp2
-          WHERE pp2."companyId" = ${input.companyId}
-            AND pp2."mesReferencia" >= ${mesFeriasIni}
-            AND pp2."mesReferencia" <= ${mesFeriasFim}
-            -- Funcionário não desligado
-            AND NOT EXISTS (
-              SELECT 1 FROM employees ed
-              WHERE ed.id = pp2."employeeId"
-                AND ed.status IN ('Desligado','Lista_Negra','Inativo')
-            )
-            -- Vínculo com a obra no mês da folha
-            AND (
-              EXISTS (
-                SELECT 1 FROM employee_site_history esh3
-                WHERE esh3."employeeId" = pp2."employeeId"
-                  AND esh3."obraId"    = ${input.obraId}
-                  AND esh3."companyId" = ${input.companyId}
-                  AND esh3."dataInicio"::date <= (pp2."mesReferencia" || '-28')::date
-                  AND COALESCE(esh3."dataFim"::date, CURRENT_DATE)
-                        >= (pp2."mesReferencia" || '-01')::date
-              )
-              OR EXISTS (
-                SELECT 1 FROM obra_funcionarios of5
-                WHERE of5."employeeId" = pp2."employeeId"
-                  AND of5."obraId"    = ${input.obraId}
-                  AND of5."companyId" = ${input.companyId}
-                  AND of5."createdAt"::date <= (pp2."mesReferencia" || '-28')::date
-              )
-            )
-            -- Férias mês inteiro: custo já no mês de saída, não conta aqui
-            AND NOT EXISTS (
-              SELECT 1 FROM vacation_periods vp3
-              WHERE vp3."employeeId" = pp2."employeeId"
-                AND vp3.status IN ('em_gozo','agendada','concluida','paga','pago')
-                AND vp3."dataInicio"::date <= (pp2."mesReferencia" || '-01')::date
-                AND vp3."dataFim"::date
-                      >= ((pp2."mesReferencia" || '-01')::date
-                          + INTERVAL '1 month' - INTERVAL '1 day')::date
-            )
-            -- Afastado INSS > 15 dias antes do mês: INSS paga, empresa não
-            AND NOT EXISTS (
-              SELECT 1 FROM employees ea3
-              WHERE ea3.id = pp2."employeeId"
-                AND ea3.status = 'Afastado'
-                AND ea3."licencaDataInicio" IS NOT NULL
-                AND ea3."licencaDataInicio"::date + INTERVAL '15 days'
-                      < (pp2."mesReferencia" || '-01')::date
-            )
-
-          UNION
-
-          -- PJ: meses com pagamento aprovado/pago (fechar mês → status <> 'pendente')
-          SELECT DISTINCT
-            EXTRACT(MONTH FROM (pjp2."mesReferencia" || '-01')::date)::int AS mes
-          FROM pj_payments pjp2
-          JOIN pj_contracts pjc2 ON pjc2.id = pjp2."contractId"
-            AND pjc2.obra_id = ${input.obraId}
-          WHERE pjp2."companyId" = ${input.companyId}
-            AND pjp2."mesReferencia" >= ${mesFeriasIni}
-            AND pjp2."mesReferencia" <= ${mesFeriasFim}
-            AND pjp2.status <> 'pendente'
-
-          ORDER BY mes
         `),
 
       ]);
@@ -2697,7 +2625,51 @@ export const scorecardRouter = router({
         feriasTotal:        funcs.reduce((s: number, f: any) => s + n(f.ferias_total),        0),
         seguroVidaTotal:    funcs.reduce((s: number, f: any) => s + n(f.seguro_vida_total),   0),
       };
-      const mesesComDados: number[] = (mesesComDadosR.rows as any[]).map((r: any) => Number(r.mes));
+      // Rev. 4363: mesesComDados derivado do resultado da query principal (funcs).
+      // A query principal já usa site_periods completo (Ramos A+B+C + bridge_emps),
+      // garantindo o vínculo correto empregado↔obra sem depender de query separada.
+      // Para cada empregado, cada mês de historico_mensal é contado SE ele não seria
+      // excluído pelos critérios rígidos da query mensal (férias mês inteiro / afastado > 15d).
+      const hoje = new Date();
+      const mesesComDadosSet = new Set<number>();
+      for (const f of funcs) {
+        const isClt  = (f.tipo_contrato as string) !== 'PJ';
+        const empId  = n(f.employee_id);
+        const empFerias    = feriasGozoMap.get(empId) ?? [];
+        const isAfastado   = isClt && (f.status as string) === 'Afastado';
+        const licencaStr   = isAfastado ? (f.licenca_data_inicio as string | null) : null;
+
+        for (const h of (Array.isArray(f.historico_mensal) ? f.historico_mensal : [])) {
+          const mes = h.mes as string; // 'YYYY-MM'
+          const [anoS, mesS] = mes.split('-');
+          const mesNum   = parseInt(mesS, 10);
+          const mesInicio = new Date(`${anoS}-${mesS}-01T00:00:00`);
+          // último dia do mês
+          const mesFim    = new Date(parseInt(anoS, 10), parseInt(mesS, 10), 0);
+
+          // PJ: só meses passados (sem projeção futura; aprovação formal é follow-up)
+          if (!isClt && mesInicio > hoje) continue;
+
+          // CLT: filtros de elegibilidade mensais
+          if (isClt) {
+            // Férias mês inteiro? (intervalo de gozo cobre do dia 1 ao último dia)
+            const emFeriasInteiro = empFerias.some(({ ini, fim }) =>
+              ini <= mesInicio && fim >= mesFim
+            );
+            if (emFeriasInteiro) continue;
+
+            // Afastado INSS > 15 dias antes do mês?
+            if (isAfastado && licencaStr) {
+              const licDt = new Date(String(licencaStr).slice(0, 10) + 'T00:00:00');
+              licDt.setDate(licDt.getDate() + 15);
+              if (licDt < mesInicio) continue;
+            }
+          }
+
+          mesesComDadosSet.add(mesNum);
+        }
+      }
+      const mesesComDados: number[] = Array.from(mesesComDadosSet).sort((a, b) => a - b);
       return { resumo, mensal, funcionarios: funcs, mesesComDados };
     }),
 

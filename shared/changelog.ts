@@ -1,4 +1,34 @@
 /**
+ * Rev. 4363 - SCORECARD OBRA — FOLHA/CUSTOS: mesesComDados DERIVADO DA QUERY PRINCIPAL
+ *
+ * CAUSA RAIZ DO PROBLEMA DE VÍNCULOS:
+ * As Revs. 4361 e 4362 criavam uma query SQL SEPARADA para calcular mesesComDados,
+ * tentando replicar o vínculo empregado↔obra. Mas a query principal usa o CTE site_periods
+ * (Ramos A+B+C + bridge_emps) para resolver todos os casos (lacunas de ESH, bridge,
+ * obra_funcionarios sem data de saída). Qualquer query separada fica incompleta.
+ *
+ * SOLUÇÃO (Rev. 4363):
+ * Remove a query paralela `mesesComDadosR` completamente.
+ * mesesComDados é agora derivado em JS do resultado da query principal (funcs):
+ * - Para cada empregado, itera sobre seu historico_mensal (já vinculado à obra via
+ *   site_periods completo com todos os 3 ramos).
+ * - CLT: aplica filtros mensais de elegibilidade:
+ *   (a) Férias mês inteiro → skip (usa feriasGozoMap já disponível em memória).
+ *   (b) Afastado INSS > 15d → skip (usa licencaDataInicio, agora adicionado ao SELECT).
+ * - PJ: inclui apenas meses passados (≤ hoje), excluindo projeções futuras.
+ *   Gate de aprovação formal (pj_payments.status) fica como follow-up.
+ * - Acumula em Set<number> → array ordenado → retornado como mesesComDados.
+ *
+ * EFEITO: bolinha azul ↔ mesmo vínculo que a query mensal usa. Sem query extra.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (remove mesesComDadosR, add licencaDataInicio, JS derivation)
+ * - shared/version.ts → Rev. 4363
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4362 - SCORECARD OBRA — FOLHA/CUSTOS: BOLINHAS BASEADAS EM DADOS REAIS (CLT + PJ)
  *
  * PROBLEMA (Rev. 4361 introduziu bug):
