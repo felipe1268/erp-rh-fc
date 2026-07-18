@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4384** — **TEMPLATES ISO: LAYOUT HTML DO CONTRATO PJ + BOTÃO APROVAR CORRIGIDO.** `plainTextModelToHtml()` converte o MODELO_CONTRATO_PJ em HTML estruturado (h2/h3 para títulos, indentação para subitens 1.1/a)/(I), itálico para Parágrafo Único, negrito inline para valores/datas/contas bancárias + CONTRATANTE/CONTRATADA). Botão "Aprovar (Vigente)": antes disabled quando não salvo (verde mas inoperante). Agora auto-salva (saveMut) + aprova (aprovarMut) em um único clique; disabled só se editor vazio. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4385** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — CONTEÚDO SUMIA AO APROVAR.** Race condition entre dois useEffects: `getQuery.data={conteudoHtml:""}` sobrescrevia o modelo pré-populado. Fix: fundidos em 1 único useEffect (aguarda ambas as queries). `handleSalvar`/`handleAprovar` agora leem `editorRef.current?.getHTML()` em vez de state. Auto-cura templates aprovados vazios por engano. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4383** — **TEMPLATES ISO: FICHA AUTO-COMPUTADA E LAYOUT 2×2 CORRIGIDO.** Campos "Elaborado por", "Data de vigência" e "Próxima revisão" preenchidos por valores computed (sem useEffect): user.name, hoje, vigência+1ano. Inputs marcados com "● auto" + fundo azul-claro. Layout 4-colunas → 2×2. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4384** — **TEMPLATES ISO: LAYOUT HTML DO CONTRATO PJ + BOTÃO APROVAR CORRIGIDO.** `plainTextModelToHtml()` converte o MODELO_CONTRATO_PJ em HTML estruturado (h2/h3 para títulos, indentação para subitens 1.1/a)/(I), itálico para Parágrafo Único, negrito inline para valores/datas/contas bancárias + CONTRATANTE/CONTRATADA). Botão "Aprovar (Vigente)": antes disabled quando não salvo (verde mas inoperante). Agora auto-salva (saveMut) + aprova (aprovarMut) em um único clique; disabled só se editor vazio. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4382** — **TEMPLATES ISO: AUTO-PREENCHIMENTO DE "ELABORADO POR" E DATA DE VIGÊNCIA.** useEffect branch para selRow=null: setElaboradoPorNome(user.name) + setDataVigencia(hoje). ZERO DELETE · ZERO ALTER destrutivo.
 

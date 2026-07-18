@@ -1,4 +1,30 @@
 /**
+ * Rev. 4385 - TEMPLATES ISO: CORREÇÃO CRÍTICA — CONTEÚDO SUMIA AO APROVAR
+ *
+ * Problema: ao clicar em "Aprovar (Vigente)" pela primeira vez (template novo),
+ * o conteúdo do editor era salvo vazio. Causa: dois useEffects de conteúdo
+ * competindo — o useEffect de `getQuery.data` disparava com `conteudoHtml: ""`
+ * (template sem conteúdo), sobrescrevendo o modelo pré-populado pelo outro
+ * useEffect ANTES que ele tivesse chance de setar o HTML. Além disso, as funções
+ * `handleSalvar` e `handleAprovar` liam de `conteudoEditado` (state), que pode
+ * estar desatualizado no momento do clique.
+ *
+ * Correção:
+ * (1) Os dois useEffects de conteúdo foram fundidos em UM único useEffect que
+ *     aguarda AMBAS as queries (getQuery + modeloPjQuery) terminarem antes de
+ *     setar o editor — sem race condition. Lógica de prioridade:
+ *     - Conteúdo salvo existe → usa ele (converte texto-plano → HTML se legado)
+ *     - Contrato PJ sem conteúdo → pré-popula com modelo padrão (também auto-cura
+ *       templates aprovados vazios por engano)
+ *     - Outros tipos sem conteúdo → editor vazio
+ * (2) `handleSalvar` e `handleAprovar` agora leem de `editorRef.current?.getHTML()`
+ *     (fonte de verdade da UI) com fallback para `conteudoEditado`.
+ * (3) `isEditorEmpty()` helper: verifica "", "<p></p>", "<p><br></p>".
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4384 - TEMPLATES ISO: LAYOUT HTML DO CONTRATO PJ + BOTÃO APROVAR CORRIGIDO
  *
  * (1) `plainTextModelToHtml()` — função pura que converte o MODELO_CONTRATO_PJ

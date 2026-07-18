@@ -368,23 +368,27 @@ export default function TemplatesDocsTab() {
     { value: "ausente", label: "Não criado" },
   ];
 
-  // Quando muda tipo / versão / dados do servidor → recarrega editor
+  // ── Único useEffect de conteúdo — sem race condition ────────────────────────
+  // Aguarda ambas as queries (get + modeloPj) antes de setar o editor, para que
+  // o modelo padrão nunca seja sobrescrito por um resultado vazio intermediário.
   useEffect(() => {
-    if (getQuery.data) {
-      const html = getQuery.data.conteudoHtml || "";
-      // Conteúdo antigo salvo como texto-plano → converte para HTML
-      setConteudoEditado(html && !html.includes("<") ? plainTextModelToHtml(html) : html);
-    }
-  }, [getQuery.data]);
+    // Aguarda a query principal terminar; para contrato_pj aguarda o modelo também
+    if (getQuery.isLoading) return;
+    if (tipoSelecionado === "contrato_pj" && modeloPjQuery.isLoading) return;
 
-  // Pré-popula o editor com o modelo padrão quando contrato_pj ainda não tem template no DB
-  useEffect(() => {
-    if (tipoSelecionado !== "contrato_pj") return;
-    if (getQuery.isLoading || modeloPjQuery.isLoading) return;
-    if (getQuery.data?.conteudoHtml) return; // já tem template customizado — useEffect acima cuidou
-    const defaultModel = modeloPjQuery.data?.modelo;
-    if (defaultModel) setConteudoEditado(plainTextModelToHtml(defaultModel));
+    const saved = getQuery.data?.conteudoHtml || "";
+    if (saved) {
+      // Conteúdo salvo: usa diretamente (ou converte se legado texto-plano)
+      setConteudoEditado(saved.includes("<") ? saved : plainTextModelToHtml(saved));
+    } else if (tipoSelecionado === "contrato_pj") {
+      // Sem conteúdo salvo → pré-popula com o modelo padrão do servidor
+      const modelo = modeloPjQuery.data?.modelo || "";
+      setConteudoEditado(modelo ? plainTextModelToHtml(modelo) : "");
+    } else {
+      setConteudoEditado("");
+    }
   }, [tipoSelecionado, getQuery.isLoading, getQuery.data, modeloPjQuery.isLoading, modeloPjQuery.data]);
+  // ────────────────────────────────────────────────────────────────────────────
 
   // Quando muda o tipo, reseta versão/comentário/IA e todos os campos da ficha
   useEffect(() => {
@@ -563,12 +567,21 @@ export default function TemplatesDocsTab() {
     elaboradoPorNome: effectiveElaboradoPor || null,
   });
 
+  // Lê o conteúdo do editor: editorRef é a fonte de verdade (o state pode
+  // estar desatualizado por race-condition entre useEffects e re-renders).
+  const getEditorContent = () =>
+    editorRef.current?.getHTML() || conteudoEditado || "";
+
+  const isEditorEmpty = (html: string) =>
+    !html || html === "<p></p>" || html === "<p><br></p>" || html.trim() === "";
+
   const handleSalvar = () => {
-    if (!conteudoEditado || conteudoEditado === "<p></p>") {
+    const html = getEditorContent();
+    if (isEditorEmpty(html)) {
       toast.error("Conteúdo não pode ser vazio.");
       return;
     }
-    saveMut.mutate({ tipo: tipoSelecionado, conteudoHtml: conteudoEditado, comentario: comentario || undefined, ...isoPayload() });
+    saveMut.mutate({ tipo: tipoSelecionado, conteudoHtml: html, comentario: comentario || undefined, ...isoPayload() });
   };
 
   const handleRestaurar = (versao: number) => {
@@ -581,12 +594,13 @@ export default function TemplatesDocsTab() {
     const doAprovar = () => aprovarMut.mutate({ tipo: tipoSelecionado, dataVigencia: effectiveDataVigencia || null, proximaRevisao: effectiveProximaRevisao || null });
     if (!selRow?.existe) {
       // Ainda não salvo → salva automaticamente e depois aprova
-      if (!conteudoEditado || conteudoEditado === "<p></p>") {
+      const html = getEditorContent();
+      if (isEditorEmpty(html)) {
         toast.error("Adicione conteúdo ao template antes de aprovar.");
         return;
       }
       saveMut.mutate(
-        { tipo: tipoSelecionado, conteudoHtml: conteudoEditado, ...isoPayload() },
+        { tipo: tipoSelecionado, conteudoHtml: html, ...isoPayload() },
         { onSuccess: doAprovar },
       );
       return;
