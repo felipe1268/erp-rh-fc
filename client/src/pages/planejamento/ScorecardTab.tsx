@@ -1500,6 +1500,12 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                           {f.em_ferias && (
                                             <span className="px-1 py-0 rounded text-[8px] font-bold bg-orange-100 text-orange-700 border border-orange-200">Férias</span>
                                           )}
+                                          {f.em_afastado && (
+                                            <span className="px-1 py-0 rounded text-[8px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-200">Afastado</span>
+                                          )}
+                                          {f.em_recluso && (
+                                            <span className="px-1 py-0 rounded text-[8px] font-bold bg-red-100 text-red-700 border border-red-200">Recluso</span>
+                                          )}
                                         </div>
                                         {(f.numero_interno || f.matricula) && (
                                           <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.numero_interno ?? f.matricula}</p>

@@ -1688,7 +1688,7 @@ export const scorecardRouter = router({
         WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
       `;
 
-      const [r, feriasR, seguroR, pjR, feriasGozoR] = await Promise.all([
+      const [r, feriasR, seguroR, pjR, feriasGozoR, afastamentoR] = await Promise.all([
         db.execute(sql`
           WITH
           -- Piso absoluto: nenhum custo pode ser anterior à data de início da obra
@@ -1852,6 +1852,7 @@ export const scorecardRouter = router({
               e."salarioBase"                                       AS salario_base_cadastro,
               e."tipoContrato"                                      AS tipo_contrato,
               e.cpf                                                 AS cpf,
+              e.status                                              AS status,
               COALESCE(COUNT(DISTINCT pf.mes_referencia), 0)       AS meses_na_obra,
               COALESCE(SUM(pf.dias_na_obra), 0)                    AS total_dias_na_obra,
               COALESCE(SUM(ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)), 0) AS salario_bruto_total,
@@ -1897,7 +1898,7 @@ export const scorecardRouter = router({
             JOIN employees e ON e.id = pe.employee_id
             LEFT JOIN pf ON pf.employee_id = pe.employee_id
             LEFT JOIN vr_data v ON v.employee_id = pf.employee_id AND v.mes_referencia = pf.mes_referencia
-            GROUP BY pe.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase", e."tipoContrato", e.cpf
+            GROUP BY pe.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase", e."tipoContrato", e.cpf, e.status
           )
           SELECT * FROM custos ORDER BY custo_folha_empresa DESC NULLS LAST, nome ASC
         `),
@@ -2061,6 +2062,7 @@ export const scorecardRouter = router({
             e."fotoUrl"         AS foto_url,
             e.matricula,
             e.cargo,
+            e.status            AS status,
             COUNT(DISTINCT pm.mes)::int                                                                    AS meses_ativos,
             SUM(pm.dias_na_obra)::int                                                                      AS total_dias_uteis,
             SUM(ROUND(pm.valor_mensal * pm.dias_na_obra::numeric / NULLIF(pm.dias_no_mes,0), 2))           AS custo_total,
@@ -2093,7 +2095,7 @@ export const scorecardRouter = router({
           FROM pj_meses pm
           JOIN employees e ON e.id = pm.employee_id
           WHERE pm.dias_na_obra > 0
-          GROUP BY pm.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo
+          GROUP BY pm.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e.status
           ORDER BY custo_total DESC NULLS LAST
         `),
 
@@ -2126,6 +2128,29 @@ export const scorecardRouter = router({
                AND vp."periodo3Fim"::date    >= (${mesFeriasIni} || '-01')::date)
             )
             AND vp."employeeId" IN (${relevantEmpSql})
+        `),
+
+        // 6ª query: detecta períodos de afastamento (atestados com dias ≥ 1) que cobrem o filtro.
+        // Permite zerar salário sintético para CLT afastados sem folha processada.
+        db.execute(sql`
+          SELECT
+            a."employeeId"  AS employee_id,
+            a."dataEmissao" AS data_inicio,
+            COALESCE(
+              (a."dataRetorno"::date - 1)::text,
+              (a."dataEmissao"::date + GREATEST(a."diasAfastamento"::int, 1) - 1)::text
+            )               AS data_fim
+          FROM atestados a
+          WHERE a."companyId" = ${input.companyId}
+            AND a."deletedAt" IS NULL
+            AND a."diasAfastamento" >= 1
+            AND a."afastamento_tipo" = 'dia'
+            AND a."dataEmissao"::date <= (${mesFeriasFim} || '-31')::date
+            AND COALESCE(
+              a."dataRetorno"::date - 1,
+              a."dataEmissao"::date + GREATEST(a."diasAfastamento"::int, 1) - 1
+            ) >= (${mesFeriasIni} || '-01')::date
+            AND a."employeeId" IN (${relevantEmpSql})
         `),
       ]);
 
@@ -2163,7 +2188,38 @@ export const scorecardRouter = router({
         return periods.some(p => p.ini <= mEnd && p.fim >= mStart);
       };
       const emFeriasSet = new Set<number>(feriasGozoMap.keys());
-      console.log(`[getCustosRH] obraId=${input.obraId} companyId=${input.companyId} mesInicio=${input.mesInicio} mesFim=${input.mesFim} funcs=${funcs.length} ferias=${feriasRows.length} seguro=${seguroRows.length} pj=${pjRows.length} emFerias=${emFeriasSet.size}`);
+
+      // Mapa empId → lista de períodos de afastamento {ini, fim} (atestados com dias ≥ 1)
+      const afastamentoMap = new Map<number, Array<{ini: Date; fim: Date}>>();
+      for (const row of afastamentoR.rows as any[]) {
+        const empId = Number(row.employee_id);
+        const parseDt2 = (s: string | null): Date | null => {
+          if (!s) return null;
+          const iso = String(s).slice(0, 10);
+          return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(iso + 'T00:00:00') : null;
+        };
+        const ini = parseDt2(row.data_inicio), fim = parseDt2(row.data_fim);
+        if (ini && fim) {
+          const existing = afastamentoMap.get(empId) ?? [];
+          existing.push({ ini, fim });
+          afastamentoMap.set(empId, existing);
+        }
+      }
+      // Helper: retorna true se empId tem atestado cobrindo algum dia do mês "YYYY-MM"
+      const isAfastado = (empId: number, monthStr: string): boolean => {
+        const periods = afastamentoMap.get(empId);
+        if (!periods?.length) return false;
+        const mStart = new Date(monthStr + '-01T00:00:00');
+        const mEnd   = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0, 23, 59, 59);
+        return periods.some(p => p.ini <= mEnd && p.fim >= mStart);
+      };
+      const emAfastadoSet = new Set<number>(afastamentoMap.keys());
+      // Recluso: status permanente no cadastro do funcionário (sem tabela de períodos)
+      const emReclusoSet  = new Set<number>(
+        (funcs as any[]).filter(f => f.status === 'Recluso').map(f => Number(f.employee_id))
+      );
+
+      console.log(`[getCustosRH] obraId=${input.obraId} companyId=${input.companyId} mesInicio=${input.mesInicio} mesFim=${input.mesFim} funcs=${funcs.length} ferias=${feriasRows.length} seguro=${seguroRows.length} pj=${pjRows.length} emFerias=${emFeriasSet.size} emAfastado=${emAfastadoSet.size} emRecluso=${emReclusoSet.size}`);
       const n    = (v: any) => Number(v ?? 0);
       const rnd2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -2184,6 +2240,8 @@ export const scorecardRouter = router({
         const fTotal  = feriasEmpMap.get(empId) ?? 0;
         const sMensal = seguroMensalMap.get(empId) ?? 0;
         f.em_ferias    = emFeriasSet.has(empId);
+        f.em_afastado  = emAfastadoSet.has(empId);
+        f.em_recluso   = emReclusoSet.has(empId);
         f.ferias_total = fTotal;
 
         // Seguro de vida proporcional: sMensal × fração de dias úteis de cada mês
@@ -2225,6 +2283,8 @@ export const scorecardRouter = router({
           ex.custo_total_empresa = custoTotal;
           ex.historico_mensal    = Array.isArray(pj.historico_mensal) ? pj.historico_mensal : [];
           ex.em_ferias           = emFeriasSet.has(n(pj.employee_id));
+          ex.em_afastado         = emAfastadoSet.has(n(pj.employee_id));
+          ex.em_recluso          = pj.status === 'Recluso';
         } else {
           funcs.push({
             employee_id:         pj.employee_id,
@@ -2235,6 +2295,8 @@ export const scorecardRouter = router({
             tipo_pessoa:         'PJ',
             razao_social:        pj.razao_social,
             em_ferias:           emFeriasSet.has(n(pj.employee_id)),
+            em_afastado:         emAfastadoSet.has(n(pj.employee_id)),
+            em_recluso:          pj.status === 'Recluso',
             meses_na_obra:       pj.meses_ativos,
             total_dias_na_obra:  n(pj.total_dias_uteis),
             salario_bruto_total: valMensal,
@@ -2317,9 +2379,13 @@ export const scorecardRouter = router({
             const frac         = diasNaObra / diasNoMes;
             // Se o funcionário está em gozo de férias neste mês, o salário é R$0
             // (recebeu adiantamento no mês anterior — não duplicar na folha do gozo)
-            const emGozo       = isInVacation(n(f.employee_id), mesStr);
-            const salProrated  = emGozo ? 0 : rnd2(salBase * frac);
-            const fgtsProrated = emGozo ? 0 : rnd2(salBase * 0.08 * frac);
+            const emGozo      = isInVacation(n(f.employee_id), mesStr);
+            const emAfastMes  = isAfastado(n(f.employee_id), mesStr);
+            const emRecluso   = f.status === 'Recluso';
+            // Gozo de férias, afastamento INSS ou recluso → sem custo de folha (empresa não paga)
+            const zeroSal     = emGozo || emAfastMes || emRecluso;
+            const salProrated  = zeroSal ? 0 : rnd2(salBase * frac);
+            const fgtsProrated = zeroSal ? 0 : rnd2(salBase * 0.08 * frac);
             syntheticHist.push({
               mes:          mesStr,
               diasNaObra,

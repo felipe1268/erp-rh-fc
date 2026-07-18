@@ -1,4 +1,42 @@
 /**
+ * Rev. 4353 - SCORECARD OBRA — FOLHA/CUSTOS: AFASTADO E RECLUSO — BADGE + ZERAR SALÁRIO SINTÉTICO
+ *
+ * PROBLEMA:
+ * Funcionários com status "Afastado" (atestado INSS, acidente) ou "Recluso" (preso) continuavam
+ * gerando estimativa de salário no caminho sintético (sem folha processada), distorcendo o custo
+ * da obra. Além disso, não havia nenhuma indicação visual dessas situações na tabela.
+ *
+ * FONTES DISPONÍVEIS:
+ * - `atestados`: tabela com dataEmissao + diasAfastamento + dataRetorno; afastamento_tipo = 'dia'
+ *   → detecção histórica por período (overlap mês filtrado)
+ * - `employees.status = 'Recluso'`: status permanente no cadastro → detecção direta
+ *
+ * SOLUÇÃO:
+ * 1. `e.status` adicionado ao SELECT/GROUP BY das queries CLT e PJ para disponibilizar o status.
+ * 2. 6ª query paralela em `atestados`: retorna employee_id + data_inicio + data_fim dos
+ *    afastamentos que cobrem o intervalo filtrado (diasAfastamento >= 1, tipo = 'dia').
+ * 3. JS: `afastamentoMap: Map<empId, [{ini,fim}]>` com helper `isAfastado(empId, "YYYY-MM")`.
+ * 4. `emReclusoSet`: derivado de `funcs[].status === 'Recluso'`.
+ * 5. Loop sintético: `zeroSal = emGozo || emAfastMes || emRecluso` → salário = 0, FGTS = 0.
+ * 6. Flags `em_afastado`/`em_recluso` propagados para CLT e PJ (update e push).
+ * 7. Frontend: badge amarelo "Afastado" e badge vermelho "Recluso" ao lado do nome.
+ *
+ * NOTAS:
+ * - Para funcionários COM folha processada (meses_na_obra > 0), o payroll já reflete os
+ *   valores corretos do RH; o zerar sintético não os afeta.
+ * - Para "Afastado INSS" de longa duração: a empresa normalmente só paga FGTS (e não sempre);
+ *   o scorecard mostra R$0 de folha, o que é correto para o custo da obra.
+ * - Para "Recluso": salário zerado (status permanente, sem tabela de períodos).
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (6ª query, afastamentoMap, isAfastado, emReclusoSet, loop sint.)
+ * - client/src/pages/planejamento/ScorecardTab.tsx (badges Afastado/Recluso)
+ * - shared/version.ts → Rev. 4353
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4352 - SCORECARD OBRA — FOLHA/CUSTOS: ZERAR SALÁRIO SINTÉTICO NO MÊS DE GOZO DE FÉRIAS
  *
  * PROBLEMA:
