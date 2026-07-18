@@ -1670,15 +1670,21 @@ export const scorecardRouter = router({
       const db = await getDb();
       if (!db) return null;
 
-      const mesInicioFilter = input.mesInicio
-        ? sql`AND pp."mesReferencia" >= ${input.mesInicio}`
+      // Rev. 4370: normalizar zero-pad no servidor — defesa contra browser enviando
+      // "2026-6" (sem zero), que faz comparação string falhar vs "2026-06" no banco.
+      const _pad = (m: string) => m.replace(/^(\d{4})-(\d)$/, '$1-0$2');
+      const mesInicioNorm = input.mesInicio ? _pad(input.mesInicio) : undefined;
+      const mesFimNorm    = input.mesFim    ? _pad(input.mesFim)    : undefined;
+
+      const mesInicioFilter = mesInicioNorm
+        ? sql`AND pp."mesReferencia" >= ${mesInicioNorm}`
         : sql``;
-      const mesFimFilter = input.mesFim
-        ? sql`AND pp."mesReferencia" <= ${input.mesFim}`
+      const mesFimFilter = mesFimNorm
+        ? sql`AND pp."mesReferencia" <= ${mesFimNorm}`
         : sql``;
 
-      const mesFeriasIni = input.mesInicio ?? '2000-01';
-      const mesFeriasFim = input.mesFim   ?? '2099-12';
+      const mesFeriasIni = mesInicioNorm ?? '2000-01';
+      const mesFeriasFim = mesFimNorm   ?? '2099-12';
 
       const relevantEmpSql = sql`
         SELECT DISTINCT esh."employeeId" FROM employee_site_history esh

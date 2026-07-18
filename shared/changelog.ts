@@ -1,4 +1,21 @@
 /**
+ * Rev. 4370 - SCORECARD OBRA — FOLHA/CUSTOS: NORMALIZAÇÃO ZERO-PAD NO SERVIDOR
+ *
+ * Complemento da Rev. 4369: a correção de zero-pad era só no frontend.
+ * iOS Safari não recebe HMR pelo proxy do Replit → browser enviava "2026-6" (sem zero)
+ * mesmo após a Rev. 4369 ser deployada, causando persistência do bug.
+ *
+ * FIX: normalização no servidor em `getCustosRH` antes de qualquer comparação SQL:
+ *   `_pad = (m) => m.replace(/^(\d{4})-(\d)$/, '$1-0$2')`
+ * Converte "2026-6" → "2026-06" server-side. Defesa permanente independente do cliente.
+ * `mesInicioNorm` e `mesFimNorm` substituem `input.mesInicio`/`input.mesFim` em todos
+ * os pontos de uso: mesInicioFilter, mesFimFilter, mesFeriasIni, mesFeriasFim.
+ *
+ * ARQUIVOS: server/routers/scorecard.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4369 - SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE MÊS SEM ZERO-PAD
  *
  * CAUSA RAIZ: ScorecardTab.tsx construía o string de mês como `${ano}-${mes}` sem

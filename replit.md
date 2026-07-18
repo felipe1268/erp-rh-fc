@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4369** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE MÊS SEM ZERO-PAD.** `"2026-6"` vs `"2026-06"`: comparação string falhava silenciosamente (ASCII '0' < '6') → folha existia no banco mas `payroll_frac` retornava vazio → "Sem dados". Fix: `padStart(2,"0")` em `rhMesInicio`/`rhMesFim`. Afetava jan–set ao selecionar mês individual. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4370** — **SCORECARD OBRA — FOLHA/CUSTOS: NORMALIZAÇÃO ZERO-PAD NO SERVIDOR.** Complemento da Rev. 4369: iOS Safari não recebe HMR → browser enviava "2026-6". Fix: `_pad()` server-side em `getCustosRH` antes de qualquer SQL. Defesa permanente independente do cliente. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4368** — **SCORECARD OBRA — FOLHA/CUSTOS: GUARD "ESTÁ ALOCADO" NO CRUZAMENTO DE PONTO.** Ciclo final: locação define equipe → ponto confirma presença CLT → guard EXISTS(ESH ou OF na obra) impede ponto em obra errada puxar estranho → PJ exclusivamente por locação. 27 combinações mês×obra resolvidas dinamicamente. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4369** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE MÊS SEM ZERO-PAD.** `"2026-6"` vs `"2026-06"`: comparação string falhava silenciosamente → "Sem dados". Fix: `padStart(2,"0")` no frontend. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4364** — **FOLHA DE PAGAMENTO: BOTÃO "LIMPAR MÊS" (ADMIN MASTER).** Nova procedure `folha.limparMes` em transação: apaga payroll_payments/advances/adjustments/rounding_ledger + reset payroll_periods + exclui lançamentos legados PDF. ZERO ALTER destrutivo no schema.
 
