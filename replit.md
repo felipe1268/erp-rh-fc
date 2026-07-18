@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4358** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO A DETECTA RETORNO VIA obra_funcionarios.** Prioridade 2 no CASE do Ramo A: se todos os history fechados + obra_funcionarios ativo → CURRENT_DATE. Cobre saída formal em mai + retorno via OF em jul sem novo history. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4359** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO C — BRIDGE DE LACUNA DE REGISTRO.** Novo CTE `bridge_emps` + Ramo C em `site_periods`: detecta funcionários com history fechado antes do mês alvo que voltaram depois (sem transferência no intervalo) e cria período sintético cobrindo exatamente o mês consultado. Ativa só em consulta de mês único (guard: mesFeriasIni = mesFeriasFim). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4357** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO B AGRUPA PERÍODOS CONTÍNUOS NA MESMA OBRA.** `site_periods` Ramo B: `GROUP BY employeeId` (MIN/MAX createdAt). Resolve lacunas entre re-alocações consecutivas na mesma obra. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4358** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO A DETECTA RETORNO VIA obra_funcionarios.** Prioridade 2 no CASE do Ramo A: se todos os history fechados + obra_funcionarios ativo → CURRENT_DATE. Cobre saída formal em mai + retorno via OF em jul sem novo history. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4355** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO BADGES AFASTADO/FÉRIAS.** PJ nunca recebe badges CLT. `emAfastadoSet` → `employees.status='Afastado'`. `zeroSal` sintético: removido `emAfastMes`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4357** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO B AGRUPA PERÍODOS CONTÍNUOS NA MESMA OBRA.** `site_periods` Ramo B: `GROUP BY employeeId` (MIN/MAX createdAt). ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4355** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO BADGES AFASTADO/FÉRIAS.** PJ nunca recebe badges CLT. `emAfastadoSet` → `employees.status='Afastado'`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4351** — **SCORECARD OBRA — FOLHA/CUSTOS: BADGE "FÉRIAS" POR GOZO NO PERÍODO.** 5ª query paralela + `emFeriasSet`. Badge laranja "Férias" ao lado do nome. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4349** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE REGRESSÃO.** `rnd2` antes da declaração `const` → ReferenceError → "Sem dados". Fix: moveu declaração. Seguro de vida proporcional (sMensal × fracao). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4348** — **SCORECARD OBRA — FOLHA/CUSTOS: PROPORCIONAL POR DIAS ÚTEIS (SEG-SEX).** CLT SQL + PJ SQL: `generate_series + DOW`. JS sintético CLT: `countWorkingDays`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4347** — **SCORECARD OBRA — FOLHA/CUSTOS: AUDITORIA + CUSTO PROPORCIONAL PARA TODO O EFETIVO.** 4 bugs corrigidos: dedup CPF+tipo, Seg. de Vida sem folha, date parsing, custo proporcional CLT sem folha. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4345** — **ALMOXARIFADO: 5 MELHORIAS LISTA LEONARDO/17-07.** Item 2: seleção múltipla locados em lote. Item 5: campo `quantidade` em `equipamentos_locados`. Item 6: botão Renovar Locação. Item 7: badge vencimento colorido. Item 8: `onError` em `proprioCriar`. ZERO DELETE · ZERO ALTER destrutivo.
 

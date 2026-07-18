@@ -1696,6 +1696,71 @@ export const scorecardRouter = router({
             SELECT COALESCE("dataInicio"::date, '2000-01-01'::date) AS data_inicio
             FROM obras WHERE id = ${input.obraId}
           ),
+          -- Rev. 4359: identifica lacunas de registro (saiu antes do mês alvo e voltou depois,
+          -- sem transferência para outra obra no intervalo).
+          -- Cria período sintético cobrindo exatamente o mês consultado.
+          -- Só ativa para consulta de mês único (mesFeriasIni = mesFeriasFim) para não
+          -- distorcer a visão anual (onde o funcionário já aparece via período de maio/julho).
+          bridge_emps AS (
+            SELECT DISTINCT
+              esh_b."employeeId"                                              AS employee_id,
+              (${mesFeriasIni} || '-01')::date                               AS periodo_inicio,
+              ((${mesFeriasFim} || '-01')::date
+                + INTERVAL '1 month' - INTERVAL '1 day')::date              AS periodo_fim
+            FROM employee_site_history esh_b
+            WHERE esh_b."obraId"    = ${input.obraId}
+              AND esh_b."companyId" = ${input.companyId}
+              -- Apenas consulta de mês único
+              AND ${mesFeriasIni} = ${mesFeriasFim}
+              -- Registro fechado ANTES do mês alvo (dentro de 6 meses)
+              AND esh_b."dataFim" IS NOT NULL
+              AND esh_b."dataFim"::date <  (${mesFeriasIni} || '-01')::date
+              AND esh_b."dataFim"::date >= (${mesFeriasIni} || '-01')::date - INTERVAL '6 months'
+              -- Sem cobertura existente do mês alvo por qualquer registro nesta obra
+              AND NOT EXISTS (
+                SELECT 1 FROM employee_site_history esh_cov
+                WHERE esh_cov."employeeId" = esh_b."employeeId"
+                  AND esh_cov."obraId"    = ${input.obraId}
+                  AND esh_cov."companyId" = ${input.companyId}
+                  AND COALESCE(esh_cov."dataFim"::date, CURRENT_DATE)
+                        >= (${mesFeriasIni} || '-01')::date
+                  AND esh_cov."dataInicio"::date
+                        <= (${mesFeriasFim} || '-28')::date
+              )
+              -- Voltou para esta obra depois: via novo history ou obra_funcionarios ativo
+              AND (
+                EXISTS (
+                  SELECT 1 FROM employee_site_history esh_ret
+                  WHERE esh_ret."employeeId" = esh_b."employeeId"
+                    AND esh_ret."obraId"    = ${input.obraId}
+                    AND esh_ret."companyId" = ${input.companyId}
+                    AND esh_ret."dataInicio"::date > esh_b."dataFim"::date
+                )
+                OR EXISTS (
+                  SELECT 1 FROM obra_funcionarios ofr
+                  WHERE ofr."employeeId" = esh_b."employeeId"
+                    AND ofr."obraId"    = ${input.obraId}
+                    AND ofr."companyId" = ${input.companyId}
+                    AND ofr."createdAt" > esh_b."dataFim"
+                    AND NOT EXISTS (
+                      SELECT 1 FROM obra_funcionarios ofo
+                      WHERE ofo."employeeId" = ofr."employeeId"
+                        AND ofo."companyId"  = ${input.companyId}
+                        AND ofo."obraId"    <> ${input.obraId}
+                        AND ofo."createdAt"  > ofr."createdAt"
+                    )
+                )
+              )
+              -- Não foi transferido para outra obra durante a lacuna
+              AND NOT EXISTS (
+                SELECT 1 FROM employee_site_history esh_gap
+                WHERE esh_gap."employeeId" = esh_b."employeeId"
+                  AND esh_gap."obraId"    <> ${input.obraId}
+                  AND esh_gap."companyId"  = ${input.companyId}
+                  AND esh_gap."dataInicio"::date >  esh_b."dataFim"::date
+                  AND esh_gap."dataInicio"::date <= (${mesFeriasFim} || '-28')::date
+              )
+          ),
           site_periods AS (
             -- Ramo A: funcionários com registro formal de transferência/alocação
             -- periodo_inicio = MAX(primeiro registro na obra, dataInicio da obra)
@@ -1780,6 +1845,12 @@ export const scorecardRouter = router({
                 )
               GROUP BY of2."employeeId"
             ) AS of_grp
+
+            UNION ALL
+
+            -- Ramo C: períodos sintéticos de bridge_emps (Rev. 4359)
+            -- Cobre funcionários com lacuna entre dois períodos na mesma obra.
+            SELECT employee_id, periodo_inicio, periodo_fim FROM bridge_emps
           ),
           relevant_emp AS (
             -- Apenas funcionários formalmente alocados (site_periods).
