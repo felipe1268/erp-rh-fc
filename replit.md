@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4389** — **MÓDULO PJ: BOTÃO IMPRIMIR CONTRATO → CONTRATOPJVIEW (TEMPLATE ISO).** Botão 🖨️ (verde) na coluna Ações navega para `/contrato-pj/:id`. ContratoPJView usa `pj.modeloContrato` que retorna o template vigente de `systemDocumentTemplates`. Controle de edição permanece em Configurações → Templates de Documentos. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4388** — **MÓDULO PJ: REMOÇÃO DO BOTÃO FCSIGN DA LISTA DE CONTRATOS.** Botão "Enviar para assinatura digital (FCSign)" removido completamente da coluna Ações + import/states/dialog/banner associados. Nova instrução de fluxo de assinatura será fornecida. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4387** — **CONTRATO PJ: AUTO-CURA SERVER-SIDE DO TEMPLATE VAZIO.** Template vigente aprovado com `conteudo_html=""` (race condition anterior à Rev. 4385) → `pj.modeloContrato` detecta vazio, chama `plainTextModelToHtmlServer()` (réplica server da função TipTap), grava no banco e retorna HTML. Próxima chamada já encontra o banco curado. ZERO DELETE · ZERO ALTER destrutivo.

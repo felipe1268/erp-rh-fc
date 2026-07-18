@@ -1,4 +1,16 @@
 /**
+ * Rev. 4389 - MÓDULO PJ: BOTÃO IMPRIMIR CONTRATO → CONTRATOPJVIEW (TEMPLATE ISO)
+ *
+ * Adicionado botão 🖨️ "Imprimir / Ver contrato" (ícone verde, Printer) na
+ * coluna Ações da lista de contratos PJ. Navega para /contrato-pj/:id via
+ * wouter useLocation. ContratoPJView.tsx já consome pj.modeloContrato que
+ * retorna o template vigente de systemDocumentTemplates (tipo="contrato_pj"),
+ * mantendo o controle de edição na aba Templates de Documentos em
+ * Configurações. Import useLocation adicionado ao ModuloPJ.tsx.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4388 - MÓDULO PJ: REMOÇÃO DO BOTÃO FCSIGN DA LISTA DE CONTRATOS
  *
  * Botão "Enviar para assinatura digital (FCSign)" removido completamente

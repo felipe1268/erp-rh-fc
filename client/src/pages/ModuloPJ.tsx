@@ -23,6 +23,7 @@ import {
   ShieldCheck, Paperclip,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
+import { useLocation } from "wouter";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PeriodSelectorCard, { MonthDotStatus } from "@/components/PeriodSelectorCard";
@@ -92,6 +93,7 @@ const STATUS_PAGAMENTO: Record<string, { label: string; color: string; bg: strin
 export default function ModuloPJ() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState("contratos");
@@ -710,6 +712,9 @@ export default function ModuloPJ() {
                                 </Button>
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" title="Editar contrato" onClick={() => openEditContrato(c)}>
                                   <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Imprimir / Ver contrato" onClick={() => navigate(`/contrato-pj/${c.id}`)}>
+                                  <Printer className="h-3.5 w-3.5" />
                                 </Button>
                                 {c.status === "pendente_assinatura" && (
                                   <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => { updateContrato.mutate({ id: c.id, status: "ativo" }); }}>
