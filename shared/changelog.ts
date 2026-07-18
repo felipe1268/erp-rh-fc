@@ -1,4 +1,30 @@
 /**
+ * Rev. 4384 - TEMPLATES ISO: LAYOUT HTML DO CONTRATO PJ + BOTÃO APROVAR CORRIGIDO
+ *
+ * (1) `plainTextModelToHtml()` — função pura que converte o MODELO_CONTRATO_PJ
+ * (texto-plano com \n) em HTML estruturado para o RichTextEditor:
+ *   - Título em maiúsculas → <h2 text-align:center>
+ *   - CLÁUSULA X: → <h3>
+ *   - 1.1 / 1.1.1 → <p margin-left:24px>
+ *   - a), b), c) → <p margin-left:48px>
+ *   - (I), (II) → <p margin-left:24px>
+ *   - Parágrafo Único → <p italic margin-left:24px>
+ *   - CONSIDERANDO/RESOLVEM/CONTRATANTE:/CONTRATADA: → <p><strong>
+ *   - [VALOR_MENSAL], [VALOR_EXTENSO], [DIA_ADIANTAMENTO], [DIA_FECHAMENTO],
+ *     [PERCENTUAL_*], [DADOS_BANCARIOS_CONTRATADA] → inline <strong>
+ *   - CONTRATANTE/CONTRATADA (palavra) → inline <strong>
+ *
+ * (2) Botão "Aprovar (Vigente)":
+ *   - Antes: disabled quando !selRow?.existe (template não salvo) → confundia
+ *     o usuário (aparecia verde mas não fazia nada).
+ *   - Agora: handleAprovar() auto-salva primeiro (saveMut) e, no onSuccess,
+ *     dispara aprovarMut — tudo em um clique só.
+ *   - Disabled apenas quando o editor está vazio.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4383 - TEMPLATES ISO: FICHA AUTO-COMPUTADA E LAYOUT CORRIGIDO
  *
  * Problema: campos "Elaborado por", "Data de vigência" e "Próxima revisão"

@@ -50,19 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4384** — **TEMPLATES ISO: LAYOUT HTML DO CONTRATO PJ + BOTÃO APROVAR CORRIGIDO.** `plainTextModelToHtml()` converte o MODELO_CONTRATO_PJ em HTML estruturado (h2/h3 para títulos, indentação para subitens 1.1/a)/(I), itálico para Parágrafo Único, negrito inline para valores/datas/contas bancárias + CONTRATANTE/CONTRATADA). Botão "Aprovar (Vigente)": antes disabled quando não salvo (verde mas inoperante). Agora auto-salva (saveMut) + aprova (aprovarMut) em um único clique; disabled só se editor vazio. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4383** — **TEMPLATES ISO: FICHA AUTO-COMPUTADA E LAYOUT 2×2 CORRIGIDO.** Campos "Elaborado por", "Data de vigência" e "Próxima revisão" preenchidos por valores computed (sem useEffect): user.name, hoje, vigência+1ano. Inputs marcados com "● auto" + fundo azul-claro. Layout 4-colunas → 2×2. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4382** — **TEMPLATES ISO: AUTO-PREENCHIMENTO DE "ELABORADO POR" E DATA DE VIGÊNCIA.** useEffect branch para selRow=null: setElaboradoPorNome(user.name) + setDataVigencia(hoje). ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4381** — **TEMPLATES ISO: PRÉ-POPULA EDITOR CONTRATO PJ COM MODELO COMPLETO.** useEffect pré-popula editor com MODELO_CONTRATO_PJ quando sem DB template. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4380** — **CONFIGURAÇÕES: CONSOLIDAÇÃO DE TABS EM TEMPLATES DE DOCUMENTOS.** Templates Planilha/Word/Extrato removidos do grid e integrados como pills em TemplatesDocsTab. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4377** — **MÓDULO PJ: APROVAÇÃO DE MEDIÇÕES COM NF → CONTAS A PAGAR.** Botão "Aprovar" (azul, ShieldCheck) por linha pendente na Folha PJ. Dialog abre com upload drag-and-drop da NF (PDF/JPG/PNG) + toggle "Enviar para Contas a Pagar" (padrão ON). Ao aprovar: salva NF via storagePut, grava aprovado_em/aprovado_por_nome/enviado_financeiro em pj_payments, cria ou atualiza financial_entry com origemModulo='pagamento_pj' + anexo_url. Clipe roxo na tabela indica NF anexada. Schema: 5 colunas novas via SyncSchema+. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4376** — **MÓDULO PJ: AUTO-LINK %, AJUSTE EM LOTE, FOLHA DIVIDIDA.** % Adiantamento auto-calcula % Fechamento (100−valor); campo fechamento read-only. Botão ⚙️ na toolbar abre dialog de ajuste em lote de todos os contratos ativos. Folha PJ dividida em dois cards: "Dia 15" (adiantamentos) + "Final do Mês" (fechamentos). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4375** — **FOLHA PJ: MULTI-SELEÇÃO E CONSOLIDAR PERÍODO COMO PAGO.** Checkboxes + barra de ação em lote (Marcar Pago / Excluir). Botão "Consolidar período como pago". Procedures: bulkDelete, bulkMarcarPago, consolidarPeriodo. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4374** — **MÓDULO PJ — CONTRATOS: PADRÃO 50/50 E INPUT LIBERADO.** Padrão % Adiantamento/Fechamento alterado de 40/60 → 50/50 em todos os pontos (frontend + server). Fix do bug "trava ao apagar": `parseInt("") || 40` substituído por `isNaN(v) ? undefined : v` + `value ?? ""`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4373** — **CONFIGURAÇÕES TERCEIROS: PARÂMETRO "PJ FORMA DE PAGAMENTO".** Novo parâmetro `terceiros_pj_forma_pagamento` (seletor PIX/TED/Boleto/Depósito/Cheque, padrão PIX) na seção Terceiros. Módulo PJ pré-preenche o form com o valor configurado. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4372** — **MÓDULO PJ — CONTRATOS PJ: FORMA DE PAGAMENTO.** Campo `formaPagamento` (PIX/TED/Boleto/Depósito/Cheque) em `pj_contracts` + `pj_payments`. Formulário de contrato, geração de previsões, lançamento manual e tabela Folha PJ atualizados. SyncSchema+ Rev. 4372. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4371** — **MÓDULO PJ — FOLHA PJ: PERIOD SELECTOR COM DOTS E LEGENDA.** Substituiu `<Input type="month">` pelo PeriodSelectorCard padrão (ano + 12 pills + "Ano todo"). Dots: azul=com lançamento, verde=todos pagos, cinza=sem dados. Novo endpoint `pj.pagamentos.statusAnual`. PDF desabilitado em "Ano todo". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4370** — **SCORECARD OBRA — FOLHA/CUSTOS: NORMALIZAÇÃO ZERO-PAD NO SERVIDOR.** Complemento da Rev. 4369: iOS Safari não recebe HMR → browser enviava "2026-6". Fix: `_pad()` server-side em `getCustosRH` antes de qualquer SQL. Defesa permanente independente do cliente. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -74,15 +74,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
-- **Rev. 4359** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO C — BRIDGE DE LACUNA DE REGISTRO.** Novo CTE `bridge_emps` + Ramo C em `site_periods`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4375** — **FOLHA PJ: MULTI-SELEÇÃO E CONSOLIDAR PERÍODO COMO PAGO.** Checkboxes + barra de ação em lote. Procedures: bulkDelete, bulkMarcarPago, consolidarPeriodo. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4358** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO A DETECTA RETORNO VIA obra_funcionarios.** Prioridade 2 CASE Ramo A: history fechados + OF ativo → CURRENT_DATE. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4374** — **MÓDULO PJ — CONTRATOS: PADRÃO 50/50 E INPUT LIBERADO.** 40/60→50/50; fix bug "trava ao apagar". ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4357** — **SCORECARD OBRA — FOLHA/CUSTOS: RAMO B AGRUPA PERÍODOS CONTÍNUOS NA MESMA OBRA.** `site_periods` Ramo B: `GROUP BY employeeId` (MIN/MAX createdAt). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4373** — **CONFIGURAÇÕES TERCEIROS: PARÂMETRO "PJ FORMA DE PAGAMENTO".** Parâmetro `terceiros_pj_forma_pagamento` (PIX/TED…). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4355** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO BADGES AFASTADO/FÉRIAS.** PJ nunca recebe badges CLT. `emAfastadoSet` → `employees.status='Afastado'`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4372** — **MÓDULO PJ — CONTRATOS PJ: FORMA DE PAGAMENTO.** Campo `formaPagamento` em pj_contracts + pj_payments. SyncSchema+ Rev. 4372. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4351** — **SCORECARD OBRA — FOLHA/CUSTOS: BADGE "FÉRIAS" POR GOZO NO PERÍODO.** 5ª query paralela + `emFeriasSet`. Badge laranja "Férias" ao lado do nome. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4371** — **MÓDULO PJ — FOLHA PJ: PERIOD SELECTOR COM DOTS E LEGENDA.** PeriodSelectorCard padrão + dots + statusAnual. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4349** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE REGRESSÃO.** `rnd2` antes da declaração `const` → ReferenceError → "Sem dados". Fix: moveu declaração. Seguro de vida proporcional (sMensal × fracao). ZERO DELETE · ZERO ALTER destrutivo.
 

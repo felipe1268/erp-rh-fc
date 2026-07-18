@@ -193,6 +193,80 @@ const SECOES: { id: Secao; label: string; icon: any }[] = [
   { id: "extrato",  label: "Templates de Extrato", icon: Landmark },
 ];
 
+// ─── Converte o modelo texto-plano do Contrato PJ em HTML para o editor ───────
+// Cláusulas → <h3>, sub-itens numerados → indentados, valores/datas/contas → <strong>.
+function plainTextModelToHtml(text: string): string {
+  const FINANCIAL_RE = /(\[VALOR_MENSAL\]|\[VALOR_EXTENSO\]|\[VALOR_ADIANTAMENTO\]|\[VALOR_FECHAMENTO\]|\[DIA_ADIANTAMENTO\]|\[DIA_FECHAMENTO\]|\[PERCENTUAL_ADIANTAMENTO\]|\[PERCENTUAL_FECHAMENTO\]|\[DADOS_BANCARIOS_CONTRATADA\])/g;
+
+  function wrapFinancial(s: string) { return s.replace(FINANCIAL_RE, "<strong>$1</strong>"); }
+  function wrapPartes(s: string) { return s.replace(/\b(CONTRATANTE|CONTRATADA)\b/g, "<strong>$1</strong>"); }
+  function proc(s: string) { return wrapFinancial(wrapPartes(s)); }
+
+  const lines = text.split("\n");
+  const out: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (!line) { out.push("<p><br></p>"); continue; }
+    if (/^_{4,}/.test(line)) continue; // linhas de assinatura — pula
+
+    // Cabeçalho do documento em maiúsculas (título central)
+    if (line === line.toUpperCase() && line.length > 20 && !/^\d/.test(line) && !/^\[/.test(line)) {
+      out.push(`<h2 style="text-align:center">${proc(line)}</h2>`);
+      continue;
+    }
+
+    // CLÁUSULA N: título
+    if (/^CL[ÁA]USULA\s/i.test(line)) {
+      out.push(`<h3>${proc(line)}</h3>`);
+      continue;
+    }
+
+    // 1.1 ou 1.1.1 sub-itens numerados
+    if (/^\d+\.\d/.test(line)) {
+      out.push(`<p style="margin-left:24px">${proc(line)}</p>`);
+      continue;
+    }
+
+    // a), b), c) ... itens alfabéticos
+    if (/^[a-z]\)\s/.test(line)) {
+      out.push(`<p style="margin-left:48px">${proc(line)}</p>`);
+      continue;
+    }
+
+    // (I), (II) ... itens romanos
+    if (/^\([IVX]+\)\s/.test(line)) {
+      out.push(`<p style="margin-left:24px">${proc(line)}</p>`);
+      continue;
+    }
+
+    // Parágrafo Único
+    if (/^Par[áa]grafo\s[ÚU]nico/i.test(line)) {
+      out.push(`<p style="margin-left:24px"><em><strong>Parágrafo Único</strong>${proc(line.replace(/^Par[áa]grafo\s[ÚU]nico\.?/i, ""))}</em></p>`);
+      continue;
+    }
+
+    // CONSIDERANDO QUE / RESOLVEM
+    if (/^(CONSIDERANDO|RESOLVEM)\b/i.test(line)) {
+      out.push(`<p><strong>${proc(line)}</strong></p>`);
+      continue;
+    }
+
+    // Identificação das partes (CONTRATANTE: / CONTRATADA:)
+    if (/^CONTRATANTE:|^CONTRATADA:/i.test(line)) {
+      out.push(`<p><strong>${proc(line)}</strong></p>`);
+      continue;
+    }
+
+    // Parágrafo normal
+    out.push(`<p>${proc(line)}</p>`);
+  }
+
+  return out.join("");
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function TemplatesDocsTab() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
@@ -297,7 +371,9 @@ export default function TemplatesDocsTab() {
   // Quando muda tipo / versão / dados do servidor → recarrega editor
   useEffect(() => {
     if (getQuery.data) {
-      setConteudoEditado(getQuery.data.conteudoHtml || "");
+      const html = getQuery.data.conteudoHtml || "";
+      // Conteúdo antigo salvo como texto-plano → converte para HTML
+      setConteudoEditado(html && !html.includes("<") ? plainTextModelToHtml(html) : html);
     }
   }, [getQuery.data]);
 
@@ -307,7 +383,7 @@ export default function TemplatesDocsTab() {
     if (getQuery.isLoading || modeloPjQuery.isLoading) return;
     if (getQuery.data?.conteudoHtml) return; // já tem template customizado — useEffect acima cuidou
     const defaultModel = modeloPjQuery.data?.modelo;
-    if (defaultModel) setConteudoEditado(defaultModel);
+    if (defaultModel) setConteudoEditado(plainTextModelToHtml(defaultModel));
   }, [tipoSelecionado, getQuery.isLoading, getQuery.data, modeloPjQuery.isLoading, modeloPjQuery.data]);
 
   // Quando muda o tipo, reseta versão/comentário/IA e todos os campos da ficha
@@ -501,9 +577,21 @@ export default function TemplatesDocsTab() {
   };
 
   const handleAprovar = () => {
-    if (!selRow?.existe) { toast.error("Salve o template antes de aprovar."); return; }
     if (!confirm(`Aprovar "${meta.titulo}" e torná-lo VIGENTE? Os módulos passarão a consumir este texto.`)) return;
-    aprovarMut.mutate({ tipo: tipoSelecionado, dataVigencia: effectiveDataVigencia || null, proximaRevisao: effectiveProximaRevisao || null });
+    const doAprovar = () => aprovarMut.mutate({ tipo: tipoSelecionado, dataVigencia: effectiveDataVigencia || null, proximaRevisao: effectiveProximaRevisao || null });
+    if (!selRow?.existe) {
+      // Ainda não salvo → salva automaticamente e depois aprova
+      if (!conteudoEditado || conteudoEditado === "<p></p>") {
+        toast.error("Adicione conteúdo ao template antes de aprovar.");
+        return;
+      }
+      saveMut.mutate(
+        { tipo: tipoSelecionado, conteudoHtml: conteudoEditado, ...isoPayload() },
+        { onSuccess: doAprovar },
+      );
+      return;
+    }
+    doAprovar();
   };
 
   const handlePdfSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -735,8 +823,14 @@ export default function TemplatesDocsTab() {
               </div>
               <div className="flex items-center gap-2">
                 {statusAtual !== "vigente" && (
-                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleAprovar} disabled={aprovarMut.isPending || !selRow?.existe}>
-                    {aprovarMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <BadgeCheck className="w-4 h-4 mr-1" />}
+                  <Button
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={handleAprovar}
+                    disabled={aprovarMut.isPending || saveMut.isPending || (!conteudoEditado || conteudoEditado === "<p></p>")}
+                    title={!conteudoEditado || conteudoEditado === "<p></p>" ? "Adicione conteúdo para aprovar" : "Salvar e aprovar como vigente"}
+                  >
+                    {(aprovarMut.isPending || saveMut.isPending) ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <BadgeCheck className="w-4 h-4 mr-1" />}
                     Aprovar (Vigente)
                   </Button>
                 )}
