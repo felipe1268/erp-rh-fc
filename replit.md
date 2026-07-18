@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4354** — **SCORECARD OBRA — FOLHA/CUSTOS: LACUNA DE MÊS POR HISTÓRICO NÃO-LINEAR (SAIU E VOLTOU).** `site_periods` Ramo A: CASE invertido — `dataFim IS NULL` (registro aberto) agora tem prioridade sobre `saída` anterior. Fix: funcionário saído em maio e re-alocado em julho deixava junho sem dados. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4355** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO BADGES AFASTADO/FÉRIAS.** PJ nunca recebe badges CLT (`em_ferias=false`, `em_afastado=false`). `emAfastadoSet` migrado de atestados → `employees.status='Afastado'`. `zeroSal` sintético: removido `emAfastMes`. 6ª query paralela removida. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4353** — **SCORECARD OBRA — FOLHA/CUSTOS: AFASTADO E RECLUSO — BADGE + ZERO SINTÉTICO.** 6ª query paralela `atestados` → `afastamentoMap + isAfastado`. `emReclusoSet` via `employees.status`. `zeroSal = emGozo||emAfastMes||emRecluso`. Badges amarelo/vermelho. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4354** — **SCORECARD OBRA — FOLHA/CUSTOS: LACUNA DE MÊS POR HISTÓRICO NÃO-LINEAR (SAIU E VOLTOU).** `site_periods` Ramo A: CASE invertido — `dataFim IS NULL` tem prioridade sobre `saída` anterior. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

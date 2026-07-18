@@ -1688,7 +1688,7 @@ export const scorecardRouter = router({
         WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
       `;
 
-      const [r, feriasR, seguroR, pjR, feriasGozoR, afastamentoR] = await Promise.all([
+      const [r, feriasR, seguroR, pjR, feriasGozoR] = await Promise.all([
         db.execute(sql`
           WITH
           -- Piso absoluto: nenhum custo pode ser anterior à data de início da obra
@@ -2132,28 +2132,6 @@ export const scorecardRouter = router({
             AND vp."employeeId" IN (${relevantEmpSql})
         `),
 
-        // 6ª query: detecta períodos de afastamento (atestados com dias ≥ 1) que cobrem o filtro.
-        // Permite zerar salário sintético para CLT afastados sem folha processada.
-        db.execute(sql`
-          SELECT
-            a."employeeId"  AS employee_id,
-            a."dataEmissao" AS data_inicio,
-            COALESCE(
-              (a."dataRetorno"::date - 1)::text,
-              (a."dataEmissao"::date + GREATEST(a."diasAfastamento"::int, 1) - 1)::text
-            )               AS data_fim
-          FROM atestados a
-          WHERE a."companyId" = ${input.companyId}
-            AND a."deletedAt" IS NULL
-            AND a."diasAfastamento" >= 1
-            AND a."afastamento_tipo" = 'dia'
-            AND a."dataEmissao"::date <= (${mesFeriasFim} || '-31')::date
-            AND COALESCE(
-              a."dataRetorno"::date - 1,
-              a."dataEmissao"::date + GREATEST(a."diasAfastamento"::int, 1) - 1
-            ) >= (${mesFeriasIni} || '-01')::date
-            AND a."employeeId" IN (${relevantEmpSql})
-        `),
       ]);
 
       const funcs = r.rows as any[];
@@ -2191,32 +2169,14 @@ export const scorecardRouter = router({
       };
       const emFeriasSet = new Set<number>(feriasGozoMap.keys());
 
-      // Mapa empId → lista de períodos de afastamento {ini, fim} (atestados com dias ≥ 1)
-      const afastamentoMap = new Map<number, Array<{ini: Date; fim: Date}>>();
-      for (const row of afastamentoR.rows as any[]) {
-        const empId = Number(row.employee_id);
-        const parseDt2 = (s: string | null): Date | null => {
-          if (!s) return null;
-          const iso = String(s).slice(0, 10);
-          return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(iso + 'T00:00:00') : null;
-        };
-        const ini = parseDt2(row.data_inicio), fim = parseDt2(row.data_fim);
-        if (ini && fim) {
-          const existing = afastamentoMap.get(empId) ?? [];
-          existing.push({ ini, fim });
-          afastamentoMap.set(empId, existing);
-        }
-      }
-      // Helper: retorna true se empId tem atestado cobrindo algum dia do mês "YYYY-MM"
-      const isAfastado = (empId: number, monthStr: string): boolean => {
-        const periods = afastamentoMap.get(empId);
-        if (!periods?.length) return false;
-        const mStart = new Date(monthStr + '-01T00:00:00');
-        const mEnd   = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0, 23, 59, 59);
-        return periods.some(p => p.ini <= mEnd && p.fim >= mStart);
-      };
-      const emAfastadoSet = new Set<number>(afastamentoMap.keys());
-      // Recluso: status permanente no cadastro do funcionário (sem tabela de períodos)
+      // Afastado e Recluso: derivados do status cadastral do funcionário (employees.status).
+      // Não usamos a tabela de atestados: um atestado avulso (1 dia de consulta) não significa
+      // que a empresa deixou de pagar o salário — isso é responsabilidade da folha processada.
+      // O badge "Afastado" indica status formal de afastamento INSS (longo prazo), igual ao
+      // que aparece no Cadastro de Colaboradores (5 Afastados = status='Afastado').
+      const emAfastadoSet = new Set<number>(
+        (funcs as any[]).filter(f => f.status === 'Afastado').map(f => Number(f.employee_id))
+      );
       const emReclusoSet  = new Set<number>(
         (funcs as any[]).filter(f => f.status === 'Recluso').map(f => Number(f.employee_id))
       );
@@ -2284,8 +2244,8 @@ export const scorecardRouter = router({
           // custo_total_empresa = acumulado real do período (para KPIs e TOTAL da tabela)
           ex.custo_total_empresa = custoTotal;
           ex.historico_mensal    = Array.isArray(pj.historico_mensal) ? pj.historico_mensal : [];
-          ex.em_ferias           = emFeriasSet.has(n(pj.employee_id));
-          ex.em_afastado         = emAfastadoSet.has(n(pj.employee_id));
+          ex.em_ferias           = false; // PJ não tem férias CLT
+          ex.em_afastado         = false; // PJ não tem afastamento INSS
           ex.em_recluso          = pj.status === 'Recluso';
         } else {
           funcs.push({
@@ -2296,8 +2256,8 @@ export const scorecardRouter = router({
             cargo:               pj.cargo,
             tipo_pessoa:         'PJ',
             razao_social:        pj.razao_social,
-            em_ferias:           emFeriasSet.has(n(pj.employee_id)),
-            em_afastado:         emAfastadoSet.has(n(pj.employee_id)),
+            em_ferias:           false, // PJ não tem férias CLT
+            em_afastado:         false, // PJ não tem afastamento INSS
             em_recluso:          pj.status === 'Recluso',
             meses_na_obra:       pj.meses_ativos,
             total_dias_na_obra:  n(pj.total_dias_uteis),
@@ -2382,10 +2342,11 @@ export const scorecardRouter = router({
             // Se o funcionário está em gozo de férias neste mês, o salário é R$0
             // (recebeu adiantamento no mês anterior — não duplicar na folha do gozo)
             const emGozo      = isInVacation(n(f.employee_id), mesStr);
-            const emAfastMes  = isAfastado(n(f.employee_id), mesStr);
             const emRecluso   = f.status === 'Recluso';
-            // Gozo de férias, afastamento INSS ou recluso → sem custo de folha (empresa não paga)
-            const zeroSal     = emGozo || emAfastMes || emRecluso;
+            // Gozo de férias ou recluso → sem custo de folha (empresa não paga).
+            // Afastamento INSS NÃO zera salário estimado: o funcionário pode ter voltado
+            // no meio do mês, e o valor correto é responsabilidade da folha processada.
+            const zeroSal     = emGozo || emRecluso;
             const salProrated  = zeroSal ? 0 : rnd2(salBase * frac);
             const fgtsProrated = zeroSal ? 0 : rnd2(salBase * 0.08 * frac);
             syntheticHist.push({

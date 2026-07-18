@@ -1,4 +1,32 @@
 /**
+ * Rev. 4355 - SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO DE BADGES AFASTADO/FÉRIAS
+ *
+ * PROBLEMAS:
+ * 1. Funcionários PJ recebiam badge "Afastado" e "Férias" indevidamente.
+ *    PJ não tem afastamento INSS nem férias CLT — a empresa paga conforme o contrato.
+ * 2. O badge "Afastado" era gerado por QUALQUER atestado no mês (até 1 dia de consulta),
+ *    não pelo status formal de afastamento INSS de longo prazo.
+ * 3. O caminho sintético (estimativa para CLT sem folha processada) zerava o salário
+ *    quando havia qualquer atestado no mês, mesmo para quem voltou no meio do mês.
+ *
+ * CORREÇÕES:
+ * 1. PJ: `em_ferias = false` e `em_afastado = false` em AMBOS os ramos do merge.
+ * 2. `emAfastadoSet` agora derivado de `employees.status === 'Afastado'` (igual ao
+ *    `emReclusoSet`), que reflete o afastamento INSS formal de longo prazo — consistente
+ *    com o que o Cadastro de Colaboradores mostra (ex.: "5 Afastados").
+ *    Removed 6ª query paralela de atestados que não era necessária para este fim.
+ * 3. Caminho sintético: `zeroSal = emGozo || emRecluso` (sem `emAfastMes`). Afastamento
+ *    INSS não zera estimativa — o valor correto fica a cargo da folha processada.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (Promise.all: 5 queries em vez de 6;
+ *   emAfastadoSet; zeroSal; PJ merge em_ferias/em_afastado)
+ * - shared/version.ts → Rev. 4355
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4354 - SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO DE LACUNA DE JUNHO (SITE_PERIODS RAMO A)
  *
  * PROBLEMA:
