@@ -648,6 +648,7 @@ export default function ModuloPJ() {
                         <th className="p-3 text-right font-medium">Valor Mensal</th>
                         <th className="p-3 text-center font-medium">Adiant./Fech.</th>
                         <th className="p-3 text-center font-medium">Status</th>
+                        <th className="p-3 text-center font-medium">Contrato</th>
                         <th className="p-3 text-center font-medium">Ações</th>
                       </tr>
                     </thead>
@@ -687,6 +688,23 @@ export default function ModuloPJ() {
                             </td>
                             <td className="p-3 text-center">
                               <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
+                            </td>
+                            <td className="p-3 text-center">
+                              {c.contratoAssinadoUrl ? (
+                                <button
+                                  title="Ver contrato assinado"
+                                  onClick={() => window.open(c.contratoAssinadoUrl, "_blank")}
+                                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                  Assinado
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium bg-red-50 text-red-500 border border-red-200">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                  Sem assinatura
+                                </span>
+                              )}
                             </td>
                             <td className="p-3">
                               <div className="flex items-center justify-center gap-1">
