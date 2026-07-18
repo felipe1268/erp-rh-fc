@@ -1,4 +1,36 @@
 /**
+ * Rev. 4364 - FOLHA DE PAGAMENTO: BOTÃO "LIMPAR MÊS" (ADMIN MASTER)
+ *
+ * Nova feature: botão "Limpar mês" visível apenas para Admin Master na tela de Folha
+ * de Pagamento, ao lado do label do mês selecionado. Abre dialog de confirmação com
+ * lista clara do que será apagado antes de executar.
+ *
+ * Backend — nova procedure `folha.limparMes`:
+ * - Gate: ctx.user.role === "admin_master" (FORBIDDEN caso contrário).
+ * - Input: { companyId, mesReferencia (YYYY-MM) }.
+ * - Executa em db.transaction:
+ *   1. DELETE payroll_payments WHERE companyId + mesReferencia.
+ *   2. DELETE payroll_advances WHERE companyId + mesReferencia.
+ *   3. DELETE payroll_adjustments WHERE companyId + mesReferencia.
+ *   4. DELETE payroll_rounding_ledger WHERE companyId + mesReferencia.
+ *   5. UPDATE payroll_periods SET status='aberta', todos snapshots/timestamps=null.
+ *   6. DELETE folha_itens + folha_lancamentos (fluxo legado PDF).
+ *
+ * Frontend — FolhaPagamento.tsx:
+ * - Estado showLimparMes + mutation limparMesMut.
+ * - Botão vermelho outline "Limpar mês" ao lado do label mês, só se isMaster.
+ * - Dialog de confirmação com lista do que é apagado + aviso "irreversível".
+ * - onSuccess: invalidate mesesComLanc + statusMes + lancamentos.
+ *
+ * ARQUIVOS:
+ * - server/routers/folhaPagamento.ts (imports + procedure limparMes)
+ * - client/src/pages/FolhaPagamento.tsx (state + mutation + button + dialog)
+ * - shared/version.ts → Rev. 4364
+ *
+ * ZERO ALTER destrutivo no schema.
+ */
+
+/**
  * Rev. 4363 - SCORECARD OBRA — FOLHA/CUSTOS: mesesComDados DERIVADO DA QUERY PRINCIPAL
  *
  * CAUSA RAIZ DO PROBLEMA DE VÍNCULOS:

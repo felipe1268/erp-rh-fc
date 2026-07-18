@@ -8,6 +8,7 @@ import {
   timeRecords, pontoConsolidacao, obras, manualObraAssignments, companyBankAccounts, systemCriteria,
   pontoDescontos, pontoDescontosResumo, heSolicitacoes, heSolicitacaoFuncionarios,
   auditLogs, payrollPeriods, financialOpeningBalances,
+  payrollPayments, payrollAdvances, payrollAdjustments, payrollRoundingLedger,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -2899,5 +2900,85 @@ export const folhaPagamentoRouter = router({
           comHeNaoAutorizada: cruzamento.filter(c => c.heNaoAutorizadaMin > 0).length,
         },
       };
+    }),
+
+  // ============================================================
+  // LIMPAR MÊS — apaga todos os dados de folha do mês selecionado
+  // (admin_master apenas — operação destrutiva irreversível)
+  // ============================================================
+  limparMes: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode limpar o mês." });
+      }
+      const db = (await getDb())!;
+      const { companyId, mesReferencia } = input;
+
+      await db.transaction(async (tx) => {
+        // 1. payroll_payments
+        await tx.delete(payrollPayments)
+          .where(and(
+            eq(payrollPayments.companyId, companyId),
+            eq(payrollPayments.mesReferencia, mesReferencia),
+          ));
+
+        // 2. payroll_advances
+        await tx.delete(payrollAdvances)
+          .where(and(
+            eq(payrollAdvances.companyId, companyId),
+            eq(payrollAdvances.mesReferencia, mesReferencia),
+          ));
+
+        // 3. payroll_adjustments (tipo automático: falta/atraso/sem_registro)
+        await tx.delete(payrollAdjustments)
+          .where(and(
+            eq(payrollAdjustments.companyId, companyId),
+            eq(payrollAdjustments.mesReferencia, mesReferencia),
+          ));
+
+        // 4. payroll_rounding_ledger
+        await tx.delete(payrollRoundingLedger)
+          .where(and(
+            eq(payrollRoundingLedger.companyId, companyId),
+            eq(payrollRoundingLedger.mesReferencia, mesReferencia),
+          ));
+
+        // 5. payroll_periods — reset de todos os snapshots e timestamps
+        await tx.update(payrollPeriods)
+          .set({
+            status: "aberta",
+            valeResultJson: null,
+            pagamentoResultJson: null,
+            afericaoResultJson: null,
+            valeGeradoEm: null,
+            valeConsolidadoEm: null,
+            pagamentoSimuladoEm: null,
+            pagamentoConsolidadoEm: null,
+          })
+          .where(and(
+            eq(payrollPeriods.companyId, companyId),
+            eq(payrollPeriods.mesReferencia, mesReferencia),
+          ));
+
+        // 6. folha_itens + folha_lancamentos (fluxo legado PDF)
+        const lancIds = await tx.select({ id: folhaLancamentos.id })
+          .from(folhaLancamentos)
+          .where(and(
+            eq(folhaLancamentos.companyId, companyId),
+            eq(folhaLancamentos.mesReferencia, mesReferencia),
+          ));
+        if (lancIds.length > 0) {
+          await tx.delete(folhaItens)
+            .where(inArray(folhaItens.folhaLancamentoId, lancIds.map(l => l.id)));
+          await tx.delete(folhaLancamentos)
+            .where(inArray(folhaLancamentos.id, lancIds.map(l => l.id)));
+        }
+      });
+
+      return { success: true };
     }),
 });

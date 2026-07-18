@@ -517,6 +517,7 @@ export default function FolhaPagamento() {
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth() + 1);
   const mesAno = `${anoSelecionado}-${String(mesSelecionado).padStart(2, "0")}`;
   const [showDissidioRel, setShowDissidioRel] = useState(false);
+  const [showLimparMes, setShowLimparMes] = useState(false);
 
   // Upload refs (direto no seletor de arquivos)
   const valeInputRef = useRef<HTMLInputElement>(null);
@@ -1650,6 +1651,17 @@ export default function FolhaPagamento() {
       toast.success("Excel exportado com sucesso!");
     },
     onError: (err) => toast.error(`Erro ao exportar: ${err.message}`),
+  });
+
+  const limparMesMut = trpc.folha.limparMes.useMutation({
+    onSuccess: () => {
+      toast.success(`Mês ${formatMesAno(mesAno)} limpo com sucesso.`);
+      setShowLimparMes(false);
+      mesesComLanc.refetch();
+      statusMes.refetch();
+      lancamentos.refetch();
+    },
+    onError: (err) => toast.error(`Erro ao limpar mês: ${err.message}`),
   });
 
   const vincularObraMut = trpc.folha.vincularObrasManualmente.useMutation({
@@ -6827,10 +6839,48 @@ export default function FolhaPagamento() {
         </Card>
 
         {/* MÊS SELECIONADO */}
-        <div className="flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-[#1B2A4A]" />
-          <span className="text-sm font-semibold text-[#1B2A4A]">{formatMesAno(mesAno)}</span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-[#1B2A4A]" />
+            <span className="text-sm font-semibold text-[#1B2A4A]">{formatMesAno(mesAno)}</span>
+          </div>
+          {isMaster && (
+            <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-400 gap-1.5"
+              onClick={() => setShowLimparMes(true)}>
+              <Trash2 className="h-3.5 w-3.5" /> Limpar mês
+            </Button>
+          )}
         </div>
+
+        {/* DIALOG — LIMPAR MÊS */}
+        <Dialog open={showLimparMes} onOpenChange={setShowLimparMes}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <Trash2 className="h-5 w-5" /> Limpar {formatMesAno(mesAno)}
+              </DialogTitle>
+              <DialogDescription className="space-y-2 pt-1">
+                <p>Esta ação irá <strong>apagar permanentemente</strong> todos os dados de folha do mês selecionado:</p>
+                <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                  <li>Cálculo de Vale e Pagamento (Cálculo Interno)</li>
+                  <li>Adiantamentos, ajustes e arredondamentos</li>
+                  <li>PDFs importados (fluxo legado)</li>
+                  <li>Status do período volta a "aberta"</li>
+                </ul>
+                <p className="font-semibold text-red-600">Ação irreversível. Confirma?</p>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setShowLimparMes(false)} disabled={limparMesMut.isPending}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" disabled={limparMesMut.isPending}
+                onClick={() => limparMesMut.mutate({ companyId, mesReferencia: mesAno })}>
+                {limparMesMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Limpando...</> : <><Trash2 className="h-4 w-4 mr-1" /> Confirmar limpeza</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* ===== RELATÓRIO DE DIFERENÇAS SALARIAIS (DISSÍDIO) ===== */}
         <Dialog open={showDissidioRel} onOpenChange={setShowDissidioRel}>

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4363** — **SCORECARD OBRA — FOLHA/CUSTOS: mesesComDados DERIVADO DA QUERY PRINCIPAL.** Remove query SQL paralela (incompleta — não tinha bridge_emps). mesesComDados calculado em JS sobre `funcs` (resultado da query com site_periods completo) + filtros férias/afastado por mês via `feriasGozoMap` + `licencaDataInicio` adicionado ao SELECT. PJ: só meses passados. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4364** — **FOLHA DE PAGAMENTO: BOTÃO "LIMPAR MÊS" (ADMIN MASTER).** Nova procedure `folha.limparMes` em transação: apaga payroll_payments/advances/adjustments/rounding_ledger + reset payroll_periods + exclui lançamentos legados PDF. Frontend: botão vermelho outline só para Admin Master + dialog de confirmação com lista do que é apagado. ZERO ALTER destrutivo no schema.
 
-- **Rev. 4362** — **SCORECARD OBRA — FOLHA/CUSTOS: BOLINHAS BASEADAS EM DADOS REAIS (CLT + PJ).** (supersedida — query payroll_payments separada ainda perdia vínculo bridge). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4363** — **SCORECARD OBRA — FOLHA/CUSTOS: mesesComDados DERIVADO DA QUERY PRINCIPAL.** Remove query SQL paralela (incompleta — não tinha bridge_emps). mesesComDados calculado em JS sobre `funcs` (resultado da query com site_periods completo) + filtros férias/afastado por mês via `feriasGozoMap` + `licencaDataInicio` adicionado ao SELECT. PJ: só meses passados. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4360** — **SCORECARD OBRA — FOLHA/CUSTOS: CRITÉRIOS DE ELEGIBILIDADE DO EFETIVO.** 3 critérios: (1) Desligado/Inativo excluído em bridge_emps + period_emps + JOIN custos. (2) Férias mês inteiro excluído (custo já no mês de saída). (3) Afastado INSS > 15 dias antes do mês excluído (licencaDataInicio + 15d < mes_inicio). Férias parcial e afastado ≤ 15 dias: permanecem proporcionais. ZERO DELETE · ZERO ALTER destrutivo.
 
