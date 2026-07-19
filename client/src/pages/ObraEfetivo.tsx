@@ -161,6 +161,7 @@ export default function ObraEfetivo() {
   const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
   const [employeesWithAllocation, setEmployeesWithAllocation] = useState<any[]>([]);
   const [inconsistenciaDialogOpen, setInconsistenciaDialogOpen] = useState(false);
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   const [selectedInconsistencia, setSelectedInconsistencia] = useState<any>(null);
   const [obsInconsistencia, setObsInconsistencia] = useState("");
   const [allocForm, setAllocForm] = useState({ obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "" });
@@ -1163,7 +1164,7 @@ export default function ObraEfetivo() {
                             <td className="p-3">
                               <div className="flex items-center gap-2">
                                 {inc.employeeFotoUrl
-                                  ? <img src={inc.employeeFotoUrl} alt={inc.employeeName || ""} className="h-8 w-8 rounded-full object-cover shrink-0 border border-slate-200" />
+                                  ? <img src={inc.employeeFotoUrl} alt={inc.employeeName || ""} onClick={() => setFotoAmpliada(inc.employeeFotoUrl)} className="h-8 w-8 rounded-full object-cover shrink-0 border border-slate-200 cursor-pointer hover:scale-110 transition-transform" />
                                   : <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center shrink-0 text-xs font-bold text-slate-500">{(inc.employeeName || "?")[0]}</div>
                                 }
                                 <div className="min-w-0">
@@ -1509,6 +1510,16 @@ export default function ObraEfetivo() {
           </div>
         </div>
       </FullScreenDialog>
+
+      {/* Lightbox: foto ampliada */}
+      {fotoAmpliada && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setFotoAmpliada(null)}>
+          <img src={fotoAmpliada} alt="Foto do funcionário" className="max-h-[80vh] max-w-[80vw] rounded-2xl shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
+          <button onClick={() => setFotoAmpliada(null)} className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 transition-colors">
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+      )}
 
       {/* Dialog: Resolver Inconsistência */}
       <Dialog open={inconsistenciaDialogOpen} onOpenChange={setInconsistenciaDialogOpen}>
