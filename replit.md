@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4433** — **FIX: PDF CONTRATO PJ — EXTRAÇÃO DE CORPO ANTES DO buildFcDocument.** Passo 0 adicionado: se `conteudoHtml` for doc HTML completo, extrai só o `<body>` (regex + fallback strip) — idêntico ao DOMPurify do preview. Sem extração, HTML aninhado causava render do letterhead interno em vez do header buildFcDocument. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4434** — **FIX: PDF CONTRATO PJ — SUBSTITUIÇÃO DE PLACEHOLDERS (DUPLO FORMATO + DECODE HTML).** `replacePlaceholders` agora: (1) decodifica `&#91;`→`[` e `&#93;`→`]`; (2) substitui `[BRACKET]` legado; (3) substitui `{{chave}}` ISO (TipTap/seed). Cobre todos os formatos de template. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4432** — **FIX: PDF CONTRATO PJ — LAYOUT IDÊNTICO AO PREVIEW CENTRAL DE DOCUMENTOS.** Caminho ISO reescrito para usar `buildFcDocument({ corpoHtml })` — exatamente como `buildFcPreviewHtml`; header centralizado + faixa "CONTRATO PJ" + slots FCSign via `role`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4433** — **FIX: PDF CONTRATO PJ — EXTRAÇÃO DE CORPO ANTES DO buildFcDocument.** Passo 0 adicionado: se `conteudoHtml` for doc HTML completo, extrai só o `<body>` (regex + fallback strip) — idêntico ao DOMPurify do preview. Sem extração, HTML aninhado causava render do letterhead interno em vez do header buildFcDocument. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

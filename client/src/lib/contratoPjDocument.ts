@@ -194,8 +194,22 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
   const valorAdiantamento = formatMoeda((valorMensal * percAdiantamento) / 100);
   const valorFechamento = formatMoeda((valorMensal * percFechamento) / 100);
   const dataAssinatura = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+  const objetoHtml = htmlMode ? formatObjetoHtml(c.objetoContrato || "") : ((c.objetoContrato || "engenharia civil").replace(/;\s*([a-z]\))/g, "\n$1"));
+  const dataInicioFmt = formatDateExtenso(c.dataInicio);
+  const dataFimFmt = formatDate(c.dataFim);
+  const prazoVigencia = calcularPrazoVigencia(c.dataInicio, c.dataFim);
+  const foro = cidadeEmpresa + " - " + estadoEmpresa;
+  const numeroContrato = c.numeroContrato || "S/N";
 
-  return text
+  // Decodifica entidades HTML que editores rich text possam introduzir nos colchetes
+  // &#91; = [ e &#93; = ] (TipTap, Quill e afins às vezes os encodam)
+  let t = text
+    .replace(/&#91;/g, "[").replace(/&#93;/g, "]")
+    .replace(/&#x5B;/gi, "[").replace(/&#x5D;/gi, "]")
+    .replace(/&lsqb;/gi, "[").replace(/&rsqb;/gi, "]");
+
+  // ── Formato [BRACKET_UPPERCASE] ── (modelo legado / exportado do ERP) ──────
+  t = t
     .replace(/\[CONTRATANTE_NOME\]/g, nomeEmpresa)
     .replace(/\[CONTRATANTE_CNPJ\]/g, cnpjEmpresa)
     .replace(/\[CONTRATANTE_ENDERECO\]/g, enderecoEmpresa)
@@ -207,7 +221,7 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
     .replace(/\[CONTRATADA_ENDERECO\]/g, enderecoPrestador)
     .replace(/\[CONTRATADA_CIDADE\]/g, cidadePrestador)
     .replace(/\[CONTRATADA_ESTADO\]/g, estadoPrestador)
-    .replace(/\[OBJETO_CONTRATO\]/g, htmlMode ? formatObjetoHtml(c.objetoContrato || "") : ((c.objetoContrato || "engenharia civil").replace(/;\s*([a-z]\))/g, "\n$1")))
+    .replace(/\[OBJETO_CONTRATO\]/g, objetoHtml)
     .replace(/\[VALOR_MENSAL\]/g, formatMoeda(valorMensal))
     .replace(/\[VALOR_EXTENSO\]/g, valorPorExtenso(valorMensal))
     .replace(/\[VALOR_ADIANTAMENTO\]/g, valorAdiantamento)
@@ -216,14 +230,42 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
     .replace(/\[PERCENTUAL_FECHAMENTO\]/g, String(percFechamento))
     .replace(/\[DIA_ADIANTAMENTO\]/g, String(diaAdiantamento))
     .replace(/\[DIA_FECHAMENTO\]/g, String(diaFechamento))
-    .replace(/\[PRAZO_VIGENCIA\]/g, calcularPrazoVigencia(c.dataInicio, c.dataFim))
-    .replace(/\[DATA_INICIO\]/g, formatDateExtenso(c.dataInicio))
-    .replace(/\[DATA_FIM\]/g, formatDate(c.dataFim))
+    .replace(/\[PRAZO_VIGENCIA\]/g, prazoVigencia)
+    .replace(/\[DATA_INICIO\]/g, dataInicioFmt)
+    .replace(/\[DATA_FIM\]/g, dataFimFmt)
     .replace(/\[DATA_ASSINATURA\]/g, dataAssinatura)
-    .replace(/\[FORO_COMARCA\]/g, cidadeEmpresa + " - " + estadoEmpresa)
+    .replace(/\[FORO_COMARCA\]/g, foro)
     .replace(/\[PRESTADOR_NOME\]/g, c.employeeName || nomePrestador)
     .replace(/\[PRESTADOR_CPF\]/g, c.employeeCpf || "_______________")
-    .replace(/\[DADOS_BANCARIOS_CONTRATADA\]/g, dadosBancarios);
+    .replace(/\[DADOS_BANCARIOS_CONTRATADA\]/g, dadosBancarios)
+    .replace(/\[NUMERO_CONTRATO\]/g, numeroContrato);
+
+  // ── Formato {{chave}} ── (Central de Documentos / TipTap / seed ISO) ───────
+  // Suporta o formato usado pelo renderTemplate da Central de Documentos,
+  // para que o template funcione independente de como foi editado/salvo.
+  t = t
+    .replace(/\{\{empresaRazaoSocial\}\}/gi, nomeEmpresa)
+    .replace(/\{\{empresaCnpj\}\}/gi, cnpjEmpresa)
+    .replace(/\{\{empresaEndereco\}\}/gi, enderecoEmpresa)
+    .replace(/\{\{empresaCidade\}\}/gi, cidadeEmpresa)
+    .replace(/\{\{empresaEstado\}\}/gi, estadoEmpresa)
+    .replace(/\{\{representanteLegal\}\}/gi, representante)
+    .replace(/\{\{contratadaRazaoSocial\}\}/gi, nomePrestador)
+    .replace(/\{\{contratadaCnpj\}\}/gi, cnpjPrestador)
+    .replace(/\{\{contratadaEndereco\}\}/gi, enderecoPrestador)
+    .replace(/\{\{objetoContrato\}\}/gi, objetoHtml)
+    .replace(/\{\{valorMensal\}\}/gi, formatMoeda(valorMensal))
+    .replace(/\{\{valorExtenso\}\}/gi, valorPorExtenso(valorMensal))
+    .replace(/\{\{dataInicio\}\}/gi, dataInicioFmt)
+    .replace(/\{\{dataFim\}\}/gi, dataFimFmt)
+    .replace(/\{\{foroComarca\}\}/gi, foro)
+    .replace(/\{\{numeroContrato\}\}/gi, numeroContrato)
+    .replace(/\{\{docNumero\}\}/gi, numeroContrato)
+    .replace(/\{\{dadosBancarios\}\}/gi, dadosBancarios)
+    .replace(/\{\{empNome\}\}/gi, c.employeeName || nomePrestador)
+    .replace(/\{\{empCpf\}\}/gi, c.employeeCpf || "_______________");
+
+  return t;
 }
 
 /** Realça CONTRATANTE/CONTRATADA em negrito (texto já escapado). */

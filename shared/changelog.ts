@@ -1,4 +1,29 @@
 /**
+ * Rev. 4434 - FIX: PDF CONTRATO PJ — SUBSTITUIÇÃO DE PLACEHOLDERS (DUPLO FORMATO + DECODE HTML)
+ *
+ * Problema raiz do [CONTRATANTE_NOME] não substituído:
+ * O template armazenado no Neon pode usar:
+ *   (a) Formato [BRACKET_UPPERCASE] — modelo legado/exportado via plainTextModelToHtml
+ *   (b) Formato {{chave}} — Central de Documentos (TipTap/seed ISO)
+ *   (c) Colchetes HTML-encodados: &#91;NOME&#93; — editores que encodam [ e ]
+ *
+ * replacePlaceholders só suportava o formato (a) com colchetes literais. Quando o
+ * template usava formato (b) ou colchetes encodados (c), nenhum placeholder era
+ * substituído — todos apareciam literal no PDF gerado.
+ *
+ * Solução (client/src/lib/contratoPjDocument.ts — replacePlaceholders):
+ * 1. Decodificação de entidades HTML antes de qualquer substituição:
+ *    &#91; → [, &#93; → ], &#x5B; → [, &#x5D; → ], &lsqb; → [, &rsqb; → ]
+ * 2. Substituição [BRACKET_UPPERCASE] (mantido para compatibilidade legada)
+ * 3. Substituição {{chave}} (novo — cobre templates ISO/TipTap/seed)
+ *    Mapeamento: {{empresaRazaoSocial}} → contratante, {{contratadaRazaoSocial}} →
+ *    prestador, {{objetoContrato}} → objeto, {{valorMensal}}, {{dataInicio}},
+ *    {{dataFim}}, {{foroComarca}}, {{docNumero}}/{{numeroContrato}}, etc.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4433 - FIX: PDF CONTRATO PJ — EXTRAÇÃO DE CORPO ANTES DO buildFcDocument
  *
  * Causa raiz do layout errado (complemento da Rev. 4432):
