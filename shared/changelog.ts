@@ -1,4 +1,20 @@
 /**
+ * Rev. 4391 - TEMPLATES ISO: CORREÇÃO CRÍTICA — APROVAR (VIGENTE) PERDIA EDIÇÕES
+ *
+ * Bug: `handleAprovar` em TemplatesDocsTab.tsx, quando o template já existia no banco
+ * (`selRow?.existe = true`), chamava APENAS `aprovarMut` sem antes salvar o conteúdo
+ * editado no editor. O usuário editava o template, clicava "Aprovar (Vigente)" e a
+ * edição era silenciosamente descartada — o DB ficava com o conteúdo antigo.
+ *
+ * Fix: `handleAprovar` agora SEMPRE executa `saveMut` (com o HTML do editor) antes
+ * de chamar `aprovarMut` via `onSuccess`, independente de o template já existir ou
+ * não. A lógica especial para `!selRow?.existe` é mantida pelo mesmo caminho unificado.
+ *
+ * Arquivo: `client/src/pages/configuracoes/TemplatesDocsTab.tsx`
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4390 - CONTRATO PJ: FONTE ÚNICA — APENAS TEMPLATE DE CONFIGURAÇÕES
  *
  * Removidos completamente todos os caminhos alternativos de geração de contrato.

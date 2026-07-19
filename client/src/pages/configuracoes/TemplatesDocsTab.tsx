@@ -592,20 +592,16 @@ export default function TemplatesDocsTab() {
   const handleAprovar = () => {
     if (!confirm(`Aprovar "${meta.titulo}" e torná-lo VIGENTE? Os módulos passarão a consumir este texto.`)) return;
     const doAprovar = () => aprovarMut.mutate({ tipo: tipoSelecionado, dataVigencia: effectiveDataVigencia || null, proximaRevisao: effectiveProximaRevisao || null });
-    if (!selRow?.existe) {
-      // Ainda não salvo → salva automaticamente e depois aprova
-      const html = getEditorContent();
-      if (isEditorEmpty(html)) {
-        toast.error("Adicione conteúdo ao template antes de aprovar.");
-        return;
-      }
-      saveMut.mutate(
-        { tipo: tipoSelecionado, conteudoHtml: html, ...isoPayload() },
-        { onSuccess: doAprovar },
-      );
+    const html = getEditorContent();
+    if (isEditorEmpty(html)) {
+      toast.error("Adicione conteúdo ao template antes de aprovar.");
       return;
     }
-    doAprovar();
+    // Sempre salva o conteúdo do editor antes de aprovar (mesmo que o template já exista)
+    saveMut.mutate(
+      { tipo: tipoSelecionado, conteudoHtml: html, comentario: comentario || undefined, ...isoPayload() },
+      { onSuccess: doAprovar },
+    );
   };
 
   const handlePdfSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
