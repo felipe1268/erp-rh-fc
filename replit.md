@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4414** — **TEMPLATES ISO: NOVO TIPO "AVISO DE ENCERRAMENTO DE CONTRATO PJ" (FC-CON-003).** Tipo fixo na aba Contratos com 5 cláusulas (contrato objeto, encerramento, prazo/obrigações, quitação, disposições finais). Placeholders: representanteLegal, contratadaRazaoSocial, contratadaCnpj, numeroContrato, dataInicioContrato, dataEncerramentoContrato, motivoEncerramento, prazoAviso. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4413** — **TEMPLATES ISO: BOTÃO EXCLUIR SEMPRE VISÍVEL + BARRA FLEX-WRAP.** Botão Excluir agora renderiza sempre: ativo (vermelho) quando documento existe, desabilitado (cinza) com tooltip explicativo quando "Não criado". Barra de ação alterada para `flex-wrap` para não cortar botões no mobile. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4412** — **MÓDULO PJ: CARDS KPI — LAYOUT VERTICAL CENTRADO.** Ícone (círculo topo) → número → label. Labels curtos, min-h uniforme, sem overflow. ZERO DELETE · ZERO ALTER destrutivo.

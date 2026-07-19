@@ -30,7 +30,8 @@ export type DocumentTemplateTipo =
   | "ordem_servico"
   | "proposta_comercial"
   | "contrato_pj"
-  | "contrato_terceiros";
+  | "contrato_terceiros"
+  | "aviso_encerramento_pj";
 
 // ── Categorias canônicas ─────────────────────────────────────────────────────
 export const CATEGORIAS_DOCS = [
@@ -374,6 +375,25 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
       { chave: "foroComarca",             rotulo: "Foro / Comarca",                exemplo: "Guaratinguetá/SP",                grupo: "Específicos" },
     ],
   },
+  {
+    tipo: "aviso_encerramento_pj",
+    titulo: "Aviso de Encerramento de Contrato PJ",
+    descricao: "Comunicado formal de encerramento/rescisão de contrato de prestação de serviços PJ.",
+    icone: "FileX",
+    categoria: "contratos",
+    placeholders: [
+      ...PH_EMPRESA,
+      ...PH_DOCUMENTO,
+      { chave: "representanteLegal",      rotulo: "Representante Legal (Contratante)", exemplo: "FELIPE COSTA ALVES",           grupo: "Contratante" },
+      { chave: "contratadaRazaoSocial",   rotulo: "Razão Social da Contratada",        exemplo: "JOÃO SILVA SERVIÇOS LTDA",     grupo: "Contratada PJ" },
+      { chave: "contratadaCnpj",          rotulo: "CNPJ da Contratada",                exemplo: "12.345.678/0001-99",           grupo: "Contratada PJ" },
+      { chave: "numeroContrato",          rotulo: "Número do Contrato",                exemplo: "001/2025",                     grupo: "Contrato" },
+      { chave: "dataInicioContrato",      rotulo: "Data de Início do Contrato",        exemplo: "01/01/2025",                   grupo: "Contrato" },
+      { chave: "dataEncerramentoContrato",rotulo: "Data de Encerramento",              exemplo: "31/07/2026",                   grupo: "Contrato" },
+      { chave: "motivoEncerramento",      rotulo: "Motivo do Encerramento",            exemplo: "conclusão do objeto contratado", grupo: "Contrato" },
+      { chave: "prazoAviso",              rotulo: "Prazo de Aviso Prévio (dias)",       exemplo: "30",                          grupo: "Contrato" },
+    ],
+  },
 ];
 
 export const DOCUMENT_TEMPLATE_TIPOS: DocumentTemplateTipo[] =
@@ -479,9 +499,32 @@ export const DEFAULT_CODIGOS: Record<DocumentTemplateTipo, string> = {
   // Planejamento
   ata_reuniao:            "FC-PL-001",
   // Contratos
-  ordem_servico:          "FC-CON-001",
-  proposta_comercial:     "FC-CON-002",
+  ordem_servico:              "FC-CON-001",
+  proposta_comercial:         "FC-CON-002",
+  aviso_encerramento_pj:      "FC-CON-003",
 };
+
+// ── Seed: Aviso de Encerramento de Contrato PJ ───────────────────────────────
+const SEED_AVISO_ENCERRAMENTO_PJ = `
+<p style="margin-bottom:12px;text-align:justify"><strong>{{empresaRazaoSocial}}</strong>, inscrita no CNPJ sob o nº <strong>{{empresaCnpj}}</strong>, com sede em <strong>{{empresaEndereco}}</strong>, neste ato representada por seu sócio administrador, <strong>{{representanteLegal}}</strong>, doravante denominada simplesmente <strong>CONTRATANTE</strong>, vem, por meio deste instrumento, comunicar formalmente à empresa <strong>{{contratadaRazaoSocial}}</strong>, inscrita no CNPJ sob o nº <strong>{{contratadaCnpj}}</strong>, doravante denominada simplesmente <strong>CONTRATADA</strong>, o encerramento do contrato de prestação de serviços celebrado entre as partes.</p>
+
+<p style="margin-top:14px"><strong>1. DO CONTRATO OBJETO DESTE AVISO</strong></p>
+<p style="margin-top:6px;text-align:justify">O presente aviso refere-se ao Contrato de Prestação de Serviços nº <strong>{{numeroContrato}}</strong>, celebrado em <strong>{{dataInicioContrato}}</strong>, cujo objeto consistia na prestação de serviços técnicos especializados pela CONTRATADA à CONTRATANTE.</p>
+
+<p style="margin-top:14px"><strong>2. DO ENCERRAMENTO</strong></p>
+<p style="margin-top:6px;text-align:justify">A CONTRATANTE comunica o encerramento do referido contrato em razão de <strong>{{motivoEncerramento}}</strong>, com vigência até a data de <strong>{{dataEncerramentoContrato}}</strong>.</p>
+
+<p style="margin-top:14px"><strong>3. DO PRAZO E DAS OBRIGAÇÕES PENDENTES</strong></p>
+<p style="margin-top:6px;text-align:justify">As partes concordam que o prazo de encerramento observará o aviso prévio de <strong>{{prazoAviso}} ({{prazoAviso}}) dias</strong> a contar da data de recebimento deste comunicado, período durante o qual ambas as partes deverão cumprir integralmente as obrigações assumidas no contrato, incluindo eventuais pendências de pagamento, entrega de relatórios, prestação de contas e devolução de documentos ou equipamentos.</p>
+
+<p style="margin-top:14px"><strong>4. DA QUITAÇÃO</strong></p>
+<p style="margin-top:6px;text-align:justify">Concluídas todas as obrigações acima mencionadas, as partes darão plena, geral e irrevogável quitação uma à outra, relativamente ao objeto do contrato ora encerrado, nada mais tendo a reclamar a qualquer título.</p>
+
+<p style="margin-top:14px"><strong>5. DAS DISPOSIÇÕES FINAIS</strong></p>
+<p style="margin-top:6px;text-align:justify">Este comunicado é firmado em 2 (duas) vias de igual teor e forma, ficando uma via com cada parte.</p>
+
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
 
 // ── Corpos-semente (apenas o CORPO; o cabeçalho/faixa/assinaturas vêm do
 //    buildFcDocument no client). Usam placeholders {{chave}} já catalogados em
@@ -788,8 +831,9 @@ export const SEED_BODIES: Record<DocumentTemplateTipo, string> = {
   // Planejamento
   ata_reuniao:            SEED_ATA_REUNIAO.trim(),
   // Contratos
-  ordem_servico:          SEED_ORDEM_SERVICO.trim(),
-  proposta_comercial:     SEED_PROPOSTA_COMERCIAL.trim(),
+  ordem_servico:              SEED_ORDEM_SERVICO.trim(),
+  proposta_comercial:         SEED_PROPOSTA_COMERCIAL.trim(),
+  aviso_encerramento_pj:      SEED_AVISO_ENCERRAMENTO_PJ.trim(),
 };
 
 /** Seed completo (código ISO + corpo) de um tipo, p/ seedDefaults idempotente. */

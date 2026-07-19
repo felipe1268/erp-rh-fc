@@ -1,4 +1,30 @@
 /**
+ * Rev. 4414 - TEMPLATES ISO: NOVO TIPO "AVISO DE ENCERRAMENTO DE CONTRATO PJ"
+ *
+ * Adiciona o tipo fixo `aviso_encerramento_pj` à Central de Documentos ISO.
+ * Código ISO: FC-CON-003. Categoria: Contratos.
+ *
+ * Placeholders disponíveis:
+ *   Empresa:        empresaRazaoSocial, empresaCnpj, empresaEndereco
+ *   Documento:      docNumero, docData, docLocal
+ *   Contratante:    representanteLegal
+ *   Contratada PJ:  contratadaRazaoSocial, contratadaCnpj
+ *   Contrato:       numeroContrato, dataInicioContrato, dataEncerramentoContrato,
+ *                   motivoEncerramento, prazoAviso
+ *
+ * Seed HTML inclui 5 cláusulas:
+ *   1. Do contrato objeto deste aviso  2. Do encerramento
+ *   3. Do prazo e das obrigações pendentes  4. Da quitação
+ *   5. Das disposições finais
+ *
+ * O tipo aparece na tab "Contratos" da Central de Documentos.
+ * Pode ser inicializado via "Inicializar padrões" ou criado/editado manualmente.
+ *
+ * Arquivos: shared/documentTemplates.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4413 - TEMPLATES ISO: BOTÃO EXCLUIR SEMPRE VISÍVEL + BARRA FLEX-WRAP
  *
  * Problema: o botão "Excluir" só renderizava quando `selRow?.existe === true`.
