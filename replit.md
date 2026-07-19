@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4407** — **CONTAS A PAGAR: BADGE "1ª/2ª MEDIÇÃO" + REF "PJ-XXXXX" PARA PAGAMENTOS PJ.** getRef() reconhece pagamento_pj → "PJ-892978". Badge inline azul/roxo detectado por regex na descricao. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4406** — **CONTAS A PAGAR: DESCRIÇÃO PJ ENRIQUECIDA COM NOME + Nº CONTRATO + MEDIÇÃO.** Ambas as rotas (aprovarComNF + bulkAprovar) geram "NOME — Contrato #X — 1ª/2ª Medição — MM/AAAA". Backfill dos entries existentes via SyncSchema+. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4405** — **FOLHA PJ: BADGE "APROVADO" + BOTÃO "CANCELAR" COM ESTORNO NO CONTAS A PAGAR.** Quando aprovadoEm != null: badge verde "✓ Aprovado" + botão laranja "Cancelar". Cancelar limpa aprovado_em/aprovado_por_nome/enviado_financeiro + DELETE financial_entries (origem_modulo='pagamento_pj'). ZERO DELETE · ZERO ALTER destrutivo.

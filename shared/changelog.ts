@@ -1,4 +1,13 @@
 /**
+ * Rev. 4407 - CONTAS A PAGAR: BADGE "1ª/2ª MEDIÇÃO" + REF "PJ-XXXXX" PARA PAGAMENTOS PJ
+ *
+ * getRef(): pagamento_pj agora retorna "PJ-892978" (origemId) em vez de "#892978".
+ * Badge inline na célula de descrição: azul "1ª Medição" ou roxo "2ª Medição",
+ * detectado pelo regex /1a Medicao|1ª Medi/ vs /2a Medicao|2ª Medi|fechamento/.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4406 - CONTAS A PAGAR: DESCRIÇÃO PJ ENRIQUECIDA COM NOME + Nº CONTRATO + MEDIÇÃO
  *
  * Ambas as rotas de aprovação (aprovarComNF + bulkAprovar) agora geram

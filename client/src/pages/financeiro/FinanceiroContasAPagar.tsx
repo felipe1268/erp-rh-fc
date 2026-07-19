@@ -71,6 +71,7 @@ function extractOcNumero(c: any): string {
     return `FOLHA${ref ? "-" + ref : ""}`;
   }
   if (c.origemModulo === "pj" && c.origemId) return `PJ-${c.origemId}`;
+  if (c.origemModulo === "pagamento_pj" && c.origemId) return `PJ-${c.origemId}`;
   if (c.origemModulo === "frota" && c.origemId) return `FROTA-${c.origemId}`;
   if (c.origemModulo === "terceiros" && c.origemId) return `MED-${c.origemId}`;
   if (c.origemModulo === "tributario") return `TRIB${c.origemId ? "-" + c.origemId : ""}`;
@@ -1765,6 +1766,17 @@ export default function FinanceiroContasAPagar() {
                                     </span>
                                   )}
                                 </div>
+                                {c.origemModulo === "pagamento_pj" && (() => {
+                                  const d = (c.descricao ?? c.origemDescricao ?? "");
+                                  const is2 = /2a\s*Medicao|2ª\s*Medi/i.test(d) || /fechamento/i.test(d);
+                                  const is1 = /1a\s*Medicao|1ª\s*Medi/i.test(d) || /adiantamento/i.test(d);
+                                  if (!is1 && !is2) return null;
+                                  return (
+                                    <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full border whitespace-nowrap ${is2 ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                                      {is2 ? "2ª Medição" : "1ª Medição"}
+                                    </span>
+                                  );
+                                })()}
                                 {c.fornecedorNome && (
                                   <p className="text-[11px] text-indigo-600 truncate font-medium" title={c.fornecedorNome}>🏢 {c.fornecedorNome}</p>
                                 )}
