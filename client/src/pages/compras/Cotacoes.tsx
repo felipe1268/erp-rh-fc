@@ -5786,7 +5786,7 @@ export default function Cotacoes() {
                                               <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Link / URL</p>
                                               <div className="flex gap-1">
                                                 <input
-                                                  type="url" placeholder="https://..."
+                                                  type="text" placeholder="https://..."
                                                   value={anexoUrl[p.fornecedorId] ?? ""}
                                                   onChange={e => setAnexoUrl(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))}
                                                   className="flex-1 h-8 text-xs border border-gray-300 rounded-lg px-2 bg-white text-gray-900"
