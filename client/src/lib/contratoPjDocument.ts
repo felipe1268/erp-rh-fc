@@ -302,11 +302,15 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
   const { contrato: c, modelo, modeloHtml, geradoPor } = args;
 
   // ──────────────────────────────────────────────────────────────────────────
-  // CAMINHO ISO: template da Central de Documentos é a fonte única
+  // CAMINHO ISO: template da Central de Documentos como corpo do buildFcDocument
+  // Replica exatamente o buildFcPreviewHtml da Central de Documentos:
+  //   corpoHtml = conteudoHtml com placeholders substituídos
+  //   buildFcDocument adiciona: logo centralizado + faixa "CONTRATO PJ" +
+  //   Nº/Data + caixa ASSUNTO + corpo em caixa com borda + assinaturas FCSign
   // ──────────────────────────────────────────────────────────────────────────
   if (modeloHtml && modeloHtml.trim()) {
-    // Passo 1: [OBJETO_CONTRATO] pode aparecer inline dentro de tags.
-    // Processar em 3 passagens para expandir corretamente.
+    // Passo 1: expandir [OBJETO_CONTRATO] — usa <div> para que o browser
+    // auto-feche qualquer <p> pai antes do primeiro <div>, separando os itens.
     const objetoHtml = formatObjetoHtml(c.objetoContrato || "");
     const totalOc = (modeloHtml.match(/\[OBJETO_CONTRATO\]/g) || []).length;
     let ocIdx = 0;
@@ -317,58 +321,47 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
       }
       return "\x00OBJ\x00";
     });
-    // Substituição direta: objetoHtml usa <div>, então quando o marcador estiver
-    // dentro de um <p> do template, o browser auto-fecha o <p> antes do primeiro
-    // <div> e renderiza cada item como bloco separado. Sem regex complexo.
     patchedHtml = patchedHtml.replace(/\x00OBJ\x00/g, objetoHtml);
 
-    // Passo 2: substituir todos os demais placeholders
-    const processedHtml = replacePlaceholders(patchedHtml, c, true);
+    // Passo 2: substituir demais placeholders
+    const corpoHtml = replacePlaceholders(patchedHtml, c, true);
 
-    // Passo 3: injetar slots FCSign para o servidor de assinatura digital.
-    // Busca as primeiras linhas de sublinhado (____) antes das legendas de assinatura
-    // e injeta os comentários <!--FCSIGN:SIG:role--> imediatamente antes delas.
-    // Se o template não tiver esse padrão, injeta ao final (invisible) como fallback.
-    let finalHtml = processedHtml;
+    // Passo 3: montar com buildFcDocument — idêntico ao preview da Central de Documentos.
+    // Os slots FCSign (<!--FCSIGN:SIG:role-->) são injetados pelo buildFcDocument
+    // via o campo `role` de cada parte de assinatura.
+    const hojeStr = new Date().toLocaleDateString("pt-BR");
+    const nomePrestador = c.razaoSocialPrestador || c.employeeName || "Prestador";
+    const cnpjPrestador = c.cnpjPrestador || "";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
 
-    // Padrão A: bloco de assinatura com underline antes de "CONTRATADA" ou "Prestador"
-    const hadContratado = finalHtml.includes("<!--FCSIGN:SIG:contratado-->");
-    const hadContratante = finalHtml.includes("<!--FCSIGN:SIG:contratante-->");
+    const params: FcDocumentParams = {
+      empresa: {
+        razaoSocial: c.companyRazaoSocial || undefined,
+        nomeFantasia: c.companyNomeFantasia || undefined,
+        cnpj: c.companyCnpj || undefined,
+        endereco: c.companyEndereco || undefined,
+        cidade: c.companyCidade || undefined,
+        estado: c.companyEstado || undefined,
+        logoUrl: c.companyLogoUrl || undefined,
+      },
+      titulo: "CONTRATO PJ",
+      numero: c.numeroContrato || "S/N",
+      dataEmissao: hojeStr,
+      assunto: { valor: "Contrato de Prestação de Serviços PJ" },
+      corpoHtml,
+      assinaturas: {
+        partes: [
+          { nome: nomePrestador, subtitulo: cnpjPrestador ? `CNPJ: ${cnpjPrestador}` : "CONTRATADA", role: "contratado" },
+          { nome: args.contratanteNome, subtitulo: `${c.companyRazaoSocial || c.companyNomeFantasia || ""} — CONTRATANTE`, role: "contratante" },
+        ],
+        localData: `${c.companyCidade || "Guaratinguetá"}/${c.companyEstado || "SP"}, ${hojeStr}`,
+      },
+      geradoPor,
+      pageTitle: `Contrato PJ ${c.numeroContrato || ""} — ${nomePrestador}`,
+      logoSrc: `${origin}/logo-fc.jpg`,
+    };
 
-    if (!hadContratado) {
-      // Tenta injetar antes da linha de assinatura da CONTRATADA
-      const rContratado = /(\_{4,}[\s\S]{0,200}?(?:CONTRATADA|CONTRATADO|Prestador|Colaborador))/i;
-      if (rContratado.test(finalHtml)) {
-        finalHtml = finalHtml.replace(rContratado, `<!--FCSIGN:SIG:contratado-->$1`);
-      }
-    }
-    if (!hadContratante) {
-      // Tenta injetar antes da linha de assinatura da CONTRATANTE
-      const rContratante = /(\_{4,}[\s\S]{0,200}?(?:CONTRATANTE|FC ENGENHARIA))/i;
-      if (rContratante.test(finalHtml)) {
-        finalHtml = finalHtml.replace(rContratante, `<!--FCSIGN:SIG:contratante-->$1`);
-      }
-    }
-    // Fallback: slots ocultos ao final, o servidor de assinatura ainda os encontra
-    if (!finalHtml.includes("<!--FCSIGN:SIG:contratado-->")) {
-      finalHtml += `<!--FCSIGN:SIG:contratado--><!--FCSIGN:SIG:contratante-->`;
-    } else if (!finalHtml.includes("<!--FCSIGN:SIG:contratante-->")) {
-      finalHtml += `<!--FCSIGN:SIG:contratante-->`;
-    }
-
-    // Passo 4: envolver em HTML completo com CSS de impressão A4.
-    // Se o template já for um documento HTML completo, apenas adicionar o @page.
-    const isFullDoc = /^\s*<!doctype\s+html/i.test(finalHtml) || /^\s*<html[\s>]/i.test(finalHtml);
-    const pageTitle = esc(`Contrato PJ ${c.numeroContrato || ""} — ${c.razaoSocialPrestador || c.employeeName || ""}`);
-    const printCss = `<style>@page{size:A4;margin:15mm}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}@media print{body{background:#fff!important}}</style>`;
-
-    if (isFullDoc) {
-      return finalHtml.includes("</head>")
-        ? finalHtml.replace("</head>", `${printCss}</head>`)
-        : finalHtml;
-    }
-
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${pageTitle}</title>${printCss}</head><body>${finalHtml}</body></html>`;
+    return buildFcDocument(params);
   }
 
   // ──────────────────────────────────────────────────────────────────────────

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4431** — **FIX DEFINITIVO: OBJETO DO CONTRATO PJ — `<div>` EM VEZ DE `<p>`.** `formatObjetoHtml` agora gera `<div>` para cada item; browser auto-fecha o `<p>` do template ao encontrar `<div>` (spec HTML5), cada item vira bloco separado. Expansão simplificada para replace direto sem regex complexo. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4432** — **FIX: PDF CONTRATO PJ — LAYOUT IDÊNTICO AO PREVIEW CENTRAL DE DOCUMENTOS.** Caminho ISO reescrito para usar `buildFcDocument({ corpoHtml })` — exatamente como `buildFcPreviewHtml`; header centralizado + faixa "CONTRATO PJ" + slots FCSign via `role`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4430** — **FIX: OBJETO DO CONTRATO PJ — TENTATIVA REGEX TEMPERED GREEDY TOKEN.** (substituído por Rev. 4431). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4431** — **FIX: OBJETO DO CONTRATO PJ — `<div>` EM VEZ DE `<p>`.** `formatObjetoHtml` gera `<div>`; browser auto-fecha `<p>` do template ao encontrar `<div>`; each item vira bloco separado. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

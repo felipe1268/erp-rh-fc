@@ -1,4 +1,29 @@
 /**
+ * Rev. 4432 - FIX: PDF CONTRATO PJ — LAYOUT IDÊNTICO AO PREVIEW DA CENTRAL DE DOCUMENTOS
+ *
+ * Problema raiz definitivo do header: o caminho ISO em `buildContratoPjSignHtml`
+ * usava o `conteudoHtml` (apenas o corpo) diretamente, sem passar pelo
+ * `buildFcDocument`. O resultado era um documento sem o header institucional
+ * (logo centralizado, faixa "CONTRATO PJ", Nº/Data, caixa ASSUNTO).
+ *
+ * O preview da Central de Documentos (`buildFcPreviewHtml` em TemplatesDocsTab.tsx)
+ * sempre chamou `buildFcDocument({ corpoHtml: conteudoHtml, ... })` — por isso
+ * o preview exibia o layout correto (IMG_4153) mas o PDF gerado mostrava
+ * um header diferente (IMG_4157).
+ *
+ * Solução (client/src/lib/contratoPjDocument.ts):
+ * - Caminho ISO reescrito: após expandir [OBJETO_CONTRATO] e demais placeholders,
+ *   chama `buildFcDocument({ corpoHtml, empresa, titulo, numero, ... })` —
+ *   exatamente como o `buildFcPreviewHtml`.
+ * - Slots FCSign injetados via `role` nos partes de assinatura do buildFcDocument
+ *   (não mais pela busca de padrões ___ no HTML).
+ * - Wrapper manual de @page A4 removido (buildFcDocument já inclui).
+ * - Resultado: PDF gerado = visualmente idêntico ao preview da Central de Documentos.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4431 - FIX: OBJETO DO CONTRATO PJ — <div> EM VEZ DE <p> NA EXPANSÃO
  *
  * Problema raiz definitivo: `formatObjetoHtml` retornava tags `<p>`. Quando o
