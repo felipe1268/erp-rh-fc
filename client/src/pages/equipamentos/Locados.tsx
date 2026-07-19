@@ -1101,9 +1101,11 @@ export default function EquipamentosLocados() {
     }
     // Rev. 4342 — Auto-appenda divergências de quantidade nas observações.
     let obsComDivergencia = form.observacoes || "";
-    if (ocSelecionadaFull && (ocSelecionadaFull.itens || []).length > 0) {
+    if (ocSelecionadaFull) {
+      const _listaReceb = (ocSelecionadaFull.listaRecebimento || []) as any[];
+      const _itensConf = _listaReceb.length > 0 ? _listaReceb : (ocSelecionadaFull.itens || []) as any[];
       const linhasDivergencia: string[] = [];
-      (ocSelecionadaFull.itens as any[]).forEach((it: any, idx: number) => {
+      _itensConf.forEach((it: any, idx: number) => {
         const esperado = Number(it.quantidade) || 0;
         const recStr = qtdRecebidaPorItem[idx];
         const recebido = recStr === undefined || recStr === "" ? esperado : (Number(recStr.replace(",", ".")) || 0);
@@ -2832,8 +2834,10 @@ export default function EquipamentosLocados() {
             )}
 
             {/* ── CONFERÊNCIA DE ITENS ── seção principal */}
-            {ocSelecionadaFull && (ocSelecionadaFull.itens || []).length > 0 && (() => {
-              const itens = ocSelecionadaFull.itens as any[];
+            {ocSelecionadaFull && (() => {
+              const _listaReceb = (ocSelecionadaFull.listaRecebimento || []) as any[];
+              const itens: any[] = _listaReceb.length > 0 ? _listaReceb : (ocSelecionadaFull.itens || []);
+              if (itens.length === 0) return null;
               const divergencias = itens.map((it: any, idx: number) => {
                 const esperado = Number(it.quantidade) || 0;
                 const recStr = qtdRecebidaPorItem[idx];

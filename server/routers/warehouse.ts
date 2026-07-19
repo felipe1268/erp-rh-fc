@@ -2233,10 +2233,10 @@ REGRAS:
         .where(eq(comprasOrdensItens.ordemId, input.ordemCompraId));
 
       // Rev. 4424 — lista de peças para conferência (OC de locação)
-      let listaRecebimento: { id: number; descricao: string; unidade: string; quantidade: number }[] = [];
+      let listaRecebimento: { id: number; descricao: string; unidade: string; quantidade: number; valor_unitario: number }[] = [];
       try {
         const lr = await db.execute(sql`
-          SELECT id, descricao, unidade, quantidade::float8
+          SELECT id, descricao, unidade, quantidade::float8, COALESCE(valor_unitario, 0)::float8 AS valor_unitario
           FROM oc_lista_recebimento
           WHERE oc_id = ${input.ordemCompraId} AND company_id = ${input.companyId}
           ORDER BY id
