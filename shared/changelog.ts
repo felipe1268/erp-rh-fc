@@ -1,4 +1,49 @@
 /**
+ * Rev. 4443 - FIX: BADGE "SEM ASSINATURA" + BOTÃO ENVIO — Contrato PJ (ModuloPJ)
+ *
+ * Problema: contratos PJ assinados via FCSign continuavam mostrando "Sem assinatura"
+ * na lista do Módulo PJ e exibindo o botão de envio (papel de avião) mesmo após
+ * todas as partes terem assinado.
+ *
+ * CAUSA-RAIZ DUPLA:
+ *   1. `signatures.ts` ao completar uma sessão FCSign do tipo "contrato_pj" não
+ *      atualizava `pj_contracts.contratoAssinadoUrl` — só tratava "contrato_experiencia".
+ *      Assim, `contratoAssinadoUrl` permanecia NULL após a assinatura.
+ *   2. O badge e o botão de envio em ModuloPJ.tsx usavam APENAS `c.contratoAssinadoUrl`,
+ *      sem considerar a sessão FCSign completa associada ao contrato.
+ *
+ * FIXES:
+ *
+ * A) signatures.ts (server):
+ *   - Importa `pjContracts` do schema.
+ *   - Após sessão `tipo === "contrato_pj"` completar, parseia o contratoId de
+ *     `session.observacoes` (`contrato_pj:{id}`) e executa
+ *     `UPDATE pj_contracts SET contratoAssinadoUrl = url WHERE id = contratoId`.
+ *   - try/catch não-bloqueante (igual ao bloco contrato_experiencia).
+ *
+ * B) pjContracts.ts (list query, server):
+ *   - Importa `signatureSessions` do schema.
+ *   - Adiciona coluna `fcSignDocumentUrl` via subquery SQL lateral: busca o
+ *     `final_document_url` mais recente de `signature_sessions` WHERE
+ *     `tipo='contrato_pj' AND status='completo' AND observacoes='contrato_pj:{id}'`.
+ *   - Retroativo: cobre contratos assinados antes desta correção.
+ *
+ * C) ModuloPJ.tsx (frontend):
+ *   - Badge "Contrato": usa `c.contratoAssinadoUrl || c.fcSignDocumentUrl` como
+ *     `signedUrl`. Se presente → badge verde "Assinado" clicável. Se null → badge
+ *     vermelho "Sem assinatura".
+ *   - Botão de ação: quando `signedUrl` presente → olhinho verde "Ver contrato
+ *     assinado (FCSign)" abre o HTML em nova aba. Quando null → botão de envio
+ *     (papel de avião) para disparar o fluxo FCSign.
+ *
+ * RESULTADO: contratos já assinados (ex.: Tatiane Costa Alves) passam a exibir
+ * badge verde "Assinado" e botão olhinho imediatamente; novos contratos assinados
+ * via FCSign também atualizam corretamente.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4442 - FIX: PÁGINAS EM BRANCO NO PRINT DO CONTRATO PJ (FCSign)
  *
  * Elimina as páginas em branco (ex.: páginas 9-11 de 11) que apareciam no final

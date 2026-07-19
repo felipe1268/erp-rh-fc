@@ -1,7 +1,7 @@
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, getCompaniesForUser } from "../db";
-import { signatureSessions, signatureSigners, employees, companies, employeeDocuments, employeeContracts, users } from "../../drizzle/schema";
+import { signatureSessions, signatureSigners, employees, companies, employeeDocuments, employeeContracts, users, pjContracts } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -550,6 +550,22 @@ export const signaturesRouter = router({
             finalDocumentUrl: url,
             finalEmployeeDocumentId: doc.id,
           }).where(eq(signatureSessions.id, session.id));
+
+          // Contrato PJ: atualiza pj_contracts.contratoAssinadoUrl com o HTML
+          // final assinado (idempotente — não bloqueia se falhar).
+          if (session.tipo === "contrato_pj" && session.observacoes) {
+            try {
+              const m = session.observacoes.match(/^contrato_pj:(\d+)$/);
+              if (m) {
+                const pjContratoId = Number(m[1]);
+                await db.update(pjContracts).set({
+                  contratoAssinadoUrl: url,
+                }).where(eq(pjContracts.id, pjContratoId));
+              }
+            } catch (e) {
+              console.error("[FCSign.complete] falha ao atualizar pj_contracts.contratoAssinadoUrl:", e);
+            }
+          }
 
           // Rev. 2133 — Contrato de Experiência: também persistir registro
           // em `employee_contracts` para aparecer na lista "Contratos CLT"

@@ -827,21 +827,27 @@ export default function ModuloPJ() {
                               <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
                             </td>
                             <td className="p-3 text-center">
-                              {c.contratoAssinadoUrl ? (
-                                <button
-                                  title="Ver contrato assinado"
-                                  onClick={() => window.open(c.contratoAssinadoUrl, "_blank")}
-                                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                                  Assinado
-                                </button>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium bg-red-50 text-red-500 border border-red-200">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                  Sem assinatura
-                                </span>
-                              )}
+                              {(() => {
+                                const signedUrl = c.contratoAssinadoUrl || (c as any).fcSignDocumentUrl;
+                                if (signedUrl) {
+                                  return (
+                                    <button
+                                      title="Ver contrato assinado"
+                                      onClick={() => window.open(signedUrl, "_blank")}
+                                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                      Assinado
+                                    </button>
+                                  );
+                                }
+                                return (
+                                  <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium bg-red-50 text-red-500 border border-red-200">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                    Sem assinatura
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td className="p-3">
                               <div className="flex items-center justify-center gap-1">
@@ -851,9 +857,21 @@ export default function ModuloPJ() {
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" title="Editar contrato" onClick={() => openEditContrato(c)}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Enviar para assinatura (FCSign)" onClick={() => setFcSignPJContratoId(c.id)}>
-                                  <Send className="h-3.5 w-3.5" />
-                                </Button>
+                                {(() => {
+                                  const signedUrl = c.contratoAssinadoUrl || (c as any).fcSignDocumentUrl;
+                                  if (signedUrl) {
+                                    return (
+                                      <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Ver contrato assinado (FCSign)" onClick={() => window.open(signedUrl, "_blank")}>
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </Button>
+                                    );
+                                  }
+                                  return (
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Enviar para assinatura (FCSign)" onClick={() => setFcSignPJContratoId(c.id)}>
+                                      <Send className="h-3.5 w-3.5" />
+                                    </Button>
+                                  );
+                                })()}
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-orange-500" title="Enviar Aviso de Encerramento (FCSign)" onClick={() => setAvisoEncerramentoContratoId(c.id)}>
                                   <FileMinus2 className="h-3.5 w-3.5" />
                                 </Button>

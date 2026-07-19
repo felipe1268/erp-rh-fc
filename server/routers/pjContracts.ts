@@ -1,7 +1,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, pjContractAditivos, employees, companies, comprasOrdens, fornecedores, documentTemplates, systemDocumentTemplates } from "../../drizzle/schema";
+import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, pjContractAditivos, employees, companies, comprasOrdens, fornecedores, documentTemplates, systemDocumentTemplates, signatureSessions } from "../../drizzle/schema";
 import { eq, and, sql, isNull, desc, asc, lte, gte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -507,6 +507,15 @@ export const pjContractsRouter = router({
           employeeFotoUrl: employees.fotoUrl,
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
+          // URL do documento assinado via FCSign (retroativa — cobre contratos assinados
+          // antes da correção que atualiza contratoAssinadoUrl ao completar a sessão).
+          fcSignDocumentUrl: sql<string | null>`(
+            SELECT final_document_url FROM signature_sessions
+            WHERE tipo = 'contrato_pj'
+              AND status = 'completo'
+              AND observacoes = 'contrato_pj:' || ${pjContracts.id}::text
+            ORDER BY created_at DESC LIMIT 1
+          )`,
         })
         .from(pjContracts)
         .innerJoin(employees, eq(pjContracts.employeeId, employees.id))
