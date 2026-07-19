@@ -532,55 +532,57 @@ export default function ModuloPJ() {
           </div>
         </div>
 
-        {/* Stats — Rev. 4411 */}
+        {/* Stats — Rev. 4412 */}
         {(() => {
           const semContrato = alertas?.pjsSemContrato?.length ?? 0;
           type KpiItem = {
             label: string; value: number | string; icon: any;
-            color: string; bg: string; border: string;
-            sub?: string; alert?: boolean; onClick?: () => void;
+            color: string; iconBg: string; cardBg: string; border: string;
+            alert?: boolean; onClick?: () => void;
           };
           const kpis: KpiItem[] = [
             {
-              label: "Total Contratos", value: stats.total,
-              icon: Briefcase, color: "text-slate-700", bg: "bg-slate-50", border: "border-slate-300",
+              label: "Total", value: stats.total,
+              icon: Briefcase, color: "text-slate-600", iconBg: "bg-slate-100", cardBg: "bg-white", border: "border-slate-200",
               onClick: () => setStatusFilter("todos"),
             },
             {
               label: "Ativos", value: stats.ativos,
-              icon: CheckCircle2, color: "text-green-700", bg: "bg-green-50", border: "border-green-400",
+              icon: CheckCircle2, color: "text-green-600", iconBg: "bg-green-100", cardBg: "bg-white", border: "border-green-300",
               onClick: () => setStatusFilter("ativo"),
             },
             {
               label: "Pendentes", value: stats.pendentes,
-              icon: Clock, color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-400",
+              icon: Clock, color: "text-amber-600", iconBg: "bg-amber-100", cardBg: "bg-white", border: "border-amber-300",
               onClick: () => setStatusFilter("pendente_assinatura"),
             },
             {
               label: "Encerrados", value: stats.encerrados,
-              icon: Ban, color: "text-gray-600", bg: "bg-gray-50", border: "border-gray-300",
+              icon: Ban, color: "text-slate-500", iconBg: "bg-slate-100", cardBg: "bg-white", border: "border-slate-200",
               onClick: () => setStatusFilter("encerrado"),
             },
             {
-              label: "Falta Assinar", value: stats.semAssinatura,
+              label: "Sem Assinatura", value: stats.semAssinatura,
               icon: FileSignature,
-              color: stats.semAssinatura > 0 ? "text-orange-700" : "text-slate-400",
-              bg: stats.semAssinatura > 0 ? "bg-orange-50" : "bg-slate-50",
-              border: stats.semAssinatura > 0 ? "border-orange-400" : "border-slate-200",
-              sub: "sem PDF de contrato", alert: stats.semAssinatura > 0,
+              color: stats.semAssinatura > 0 ? "text-orange-600" : "text-slate-400",
+              iconBg: stats.semAssinatura > 0 ? "bg-orange-100" : "bg-slate-100",
+              cardBg: stats.semAssinatura > 0 ? "bg-orange-50" : "bg-white",
+              border: stats.semAssinatura > 0 ? "border-orange-300" : "border-slate-200",
+              alert: stats.semAssinatura > 0,
               onClick: stats.semAssinatura > 0 ? () => setStatusFilter("ativo") : undefined,
             },
             {
-              label: "PJ Sem Contrato", value: semContrato,
+              label: "PJ s/ Contrato", value: semContrato,
               icon: Users,
-              color: semContrato > 0 ? "text-red-700" : "text-slate-400",
-              bg: semContrato > 0 ? "bg-red-50" : "bg-slate-50",
-              border: semContrato > 0 ? "border-red-400" : "border-slate-200",
-              sub: "colaboradores PJ ativos", alert: semContrato > 0,
+              color: semContrato > 0 ? "text-red-600" : "text-slate-400",
+              iconBg: semContrato > 0 ? "bg-red-100" : "bg-slate-100",
+              cardBg: semContrato > 0 ? "bg-red-50" : "bg-white",
+              border: semContrato > 0 ? "border-red-300" : "border-slate-200",
+              alert: semContrato > 0,
             },
             {
-              label: "Custo Mensal PJ", value: formatMoeda(stats.totalMensal),
-              icon: DollarSign, color: "text-purple-700", bg: "bg-purple-50", border: "border-purple-400",
+              label: "Custo / Mês", value: formatMoeda(stats.totalMensal),
+              icon: DollarSign, color: "text-purple-600", iconBg: "bg-purple-100", cardBg: "bg-white", border: "border-purple-300",
             },
           ];
           return (
@@ -589,16 +591,13 @@ export default function ModuloPJ() {
                 <div
                   key={k.label}
                   onClick={k.onClick}
-                  className={`rounded-xl border-2 ${k.border} ${k.bg} p-4 flex flex-col gap-2 transition-shadow ${k.onClick ? "cursor-pointer hover:shadow-md" : ""}`}
+                  className={`rounded-xl border ${k.border} ${k.cardBg} p-3 flex flex-col items-center text-center gap-1.5 min-h-[100px] transition-shadow ${k.onClick ? "cursor-pointer hover:shadow-md active:scale-[0.98]" : ""}`}
                 >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">{k.label}</p>
-                    <span className={`${k.color} opacity-70`}><k.icon className="w-4 h-4" /></span>
+                  <div className={`w-8 h-8 rounded-full ${k.iconBg} flex items-center justify-center shrink-0`}>
+                    <k.icon className={`w-4 h-4 ${k.color}`} />
                   </div>
                   <p className={`text-2xl font-extrabold leading-none ${k.color}`}>{k.value}</p>
-                  {k.sub && (
-                    <p className={`text-[10px] leading-tight ${k.alert ? k.color + " font-medium opacity-80" : "text-slate-400"}`}>{k.sub}</p>
-                  )}
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">{k.label}</p>
                 </div>
               ))}
             </div>

@@ -1,4 +1,15 @@
 /**
+ * Rev. 4412 - MÓDULO PJ: CARDS KPI — LAYOUT VERTICAL CENTRADO (ÍCONE + VALOR + LABEL)
+ *
+ * Cada card: círculo de ícone (topo, centrado) → número extrabold → label uppercase embaixo.
+ * Sem competição de espaço: label e ícone em linhas separadas.
+ * Labels encurtados: "Total", "Ativos", "Pendentes", "Encerrados",
+ *   "Sem Assinatura", "PJ s/ Contrato", "Custo / Mês".
+ * min-h-[100px] garante altura uniforme. border simples (sem border-2).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4411 - MÓDULO PJ: REDESIGN COMPLETO DOS CARDS KPI + CARD "PJ SEM CONTRATO"
  *
  * 7 cards em grade responsiva (grid-cols-2 sm:grid-cols-4 lg:grid-cols-7):
