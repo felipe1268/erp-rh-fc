@@ -1415,6 +1415,7 @@ export const pjContractsRouter = router({
             const pjRow = await db.execute(sql`
               SELECT pp.id, pp.valor, pp.data_prevista, pp."dataPagamento",
                      pp.descricao, pp.status, pp."mesReferencia",
+                     pp.tipo, pp."contractId",
                      e."nomeCompleto" AS employee_name
               FROM pj_payments pp
               JOIN employees e ON e.id = pp."employeeId"
@@ -1424,6 +1425,8 @@ export const pjContractsRouter = router({
               const pj = pjRow.rows[0] as any;
               const [ano, mes] = (pj.mesReferencia as string).split('-');
               const valor = parseFloat(pj.valor ?? '0');
+              const tipoLabel = pj.tipo === 'fechamento' ? '2ª Medição' : '1ª Medição';
+              const richDesc = `${pj.employee_name ?? 'Prestador PJ'} — Contrato #${pj.contractId} — ${tipoLabel} — ${mes}/${ano}`;
               await db.execute(sql`
                 INSERT INTO financial_entries
                   (company_id, conta_id, conta_nome, tipo, natureza,
@@ -1438,8 +1441,7 @@ export const pjContractsRouter = router({
                    ${`${ano}-${mes}-01`}, ${pj.data_prevista ?? null}, ${pj.dataPagamento ?? null},
                    ${pj.status === 'pago' ? 'pago' : 'a_pagar'},
                    'pagamento_pj', ${input.id},
-                   ${`PJ ${pj.mesReferencia} - ${pj.descricao ?? 'Serviço PJ'}`},
-                   ${pj.descricao ?? `Pagamento PJ ${pj.mesReferencia}`},
+                   ${richDesc}, ${richDesc},
                    ${nfUrl},
                    NOW(), NOW())
               `);
@@ -1489,6 +1491,7 @@ export const pjContractsRouter = router({
               const pjRow = await db.execute(sql`
                 SELECT pp.id, pp.valor, pp.data_prevista, pp."dataPagamento",
                        pp.descricao, pp.status, pp."mesReferencia",
+                       pp.tipo, pp."contractId",
                        e."nomeCompleto" AS employee_name
                 FROM pj_payments pp
                 JOIN employees e ON e.id = pp."employeeId"
@@ -1498,6 +1501,8 @@ export const pjContractsRouter = router({
                 const pj = pjRow.rows[0] as any;
                 const [ano, mes] = (pj.mesReferencia as string).split('-');
                 const valor = parseFloat(pj.valor ?? '0');
+                const tipoLabel = pj.tipo === 'fechamento' ? '2ª Medição' : '1ª Medição';
+                const richDesc = `${pj.employee_name ?? 'Prestador PJ'} — Contrato #${pj.contractId} — ${tipoLabel} — ${mes}/${ano}`;
                 await db.execute(sql`
                   INSERT INTO financial_entries
                     (company_id, conta_id, conta_nome, tipo, natureza,
@@ -1512,8 +1517,7 @@ export const pjContractsRouter = router({
                      ${`${ano}-${mes}-01`}, ${pj.data_prevista ?? null}, ${pj.dataPagamento ?? null},
                      ${'a_pagar'},
                      'pagamento_pj', ${id},
-                     ${`PJ ${pj.mesReferencia} - ${pj.employee_name ?? 'Serviço PJ'}`},
-                     ${pj.descricao ?? `Pagamento PJ ${pj.mesReferencia}`},
+                     ${richDesc}, ${richDesc},
                      NOW(), NOW())
                 `);
               }

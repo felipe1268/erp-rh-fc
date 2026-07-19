@@ -1,4 +1,16 @@
 /**
+ * Rev. 4406 - CONTAS A PAGAR: DESCRIÇÃO PJ ENRIQUECIDA COM NOME + Nº CONTRATO + MEDIÇÃO
+ *
+ * Ambas as rotas de aprovação (aprovarComNF + bulkAprovar) agora geram
+ * origem_descricao/descricao no formato:
+ *   "NOME DO PRESTADOR — Contrato #123 — 1ª Medição — 07/2026"
+ *   "NOME DO PRESTADOR — Contrato #123 — 2ª Medição — 07/2026"
+ * (tipo='adiantamento' → 1ª Medição; tipo='fechamento' → 2ª Medição)
+ * Backfill dos entries existentes via [SyncSchema+ Rev. 4406].
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4405 - FOLHA PJ: BADGE "APROVADO" + BOTÃO "CANCELAR" COM ESTORNO NO CONTAS A PAGAR
  *
  * Quando um lançamento PJ está aprovado (aprovadoEm != null):
