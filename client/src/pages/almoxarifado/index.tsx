@@ -1116,6 +1116,16 @@ export default function AlmoxarifadoPage() {
   const [categoriaAutoSugerida, setCategoriaAutoSugerida] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Importar Itens via IA (Rev. 4420) ─────────────────────────
+  const [importIAOpen, setImportIAOpen] = useState(false);
+  const [importIAStep, setImportIAStep] = useState<"upload"|"processing"|"review">("upload");
+  const [importIAItens, setImportIAItens] = useState<Array<{nome:string;unidade:string;categoria:string;quantidade:number}>>([]);
+  const [importIADragOver, setImportIADragOver] = useState(false);
+  const [importIACriando, setImportIACriando] = useState(false);
+  const [importIAProgress, setImportIAProgress] = useState(0);
+  const [importIASelected, setImportIASelected] = useState<Set<number>>(new Set());
+  const importIAFileRef = useRef<HTMLInputElement>(null);
+
   function abrirNovo() { setFormItem({ ...EMPTY_ITEM }); setEditandoId(null); setEditandoSubItems(null); setEditandoMeta(null); setCamposPreenchidosIA(false); setCategoriaManualment(false); setCategoriaAutoSugerida(false); setModalItem(true); }
   function resolveRealItem(i: any) {
     return i._subItems && i._subItems.length > 1 ? i._subItems[0] : i;
@@ -1231,6 +1241,54 @@ export default function AlmoxarifadoPage() {
     onSuccess: () => { refetch(); utils.warehouse.getDashboard.invalidate(); setModalItem(false); toast.success("Item criado!"); },
     onError: (e) => toast.error("Erro ao criar item: " + e.message),
   });
+  const extrairItensAlmoxIAMut = trpc.warehouse.extrairItensAlmoxIA.useMutation({
+    onSuccess: (res) => {
+      setImportIAItens(res.itens);
+      setImportIASelected(new Set(res.itens.map((_:any, i:number) => i)));
+      setImportIAStep("review");
+    },
+    onError: (e) => { toast.error(e.message); setImportIAStep("upload"); },
+  });
+  async function handleImportIAFile(file: File) {
+    if (!file) return;
+    const valid = ["application/pdf","image/jpeg","image/jpg","image/png"];
+    if (!valid.includes(file.type)) { toast.error("Formato inválido. Use PDF, JPG ou PNG."); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10 MB."); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const b64 = (e.target?.result as string)?.split(",")[1] ?? "";
+      setImportIAStep("processing");
+      extrairItensAlmoxIAMut.mutate({ companyId, fileBase64: b64, mimeType: file.type });
+    };
+    reader.readAsDataURL(file);
+  }
+  async function criarItensIA() {
+    const selecionados = importIAItens.filter((_,i) => importIASelected.has(i));
+    if (selecionados.length === 0) { toast.error("Selecione ao menos um item."); return; }
+    setImportIACriando(true);
+    setImportIAProgress(0);
+    let ok = 0;
+    for (let i = 0; i < selecionados.length; i++) {
+      const it = selecionados[i];
+      try {
+        await new Promise<void>((res, rej) => {
+          criarMut.mutate(
+            { companyId, nome: it.nome, unidade: it.unidade, categoria: it.categoria, quantidadeAtual: it.quantidade, quantidadeMinima: 0 },
+            { onSuccess: () => { ok++; res(); }, onError: (e) => rej(e) }
+          );
+        });
+      } catch { /* pula item com erro */ }
+      setImportIAProgress(Math.round(((i + 1) / selecionados.length) * 100));
+    }
+    setImportIACriando(false);
+    setImportIAProgress(0);
+    toast.success(`${ok} ite${ok === 1 ? "m criado" : "ns criados"} no catálogo!`);
+    refetch();
+    utils.warehouse.getDashboard.invalidate();
+    setImportIAOpen(false);
+    setImportIAItens([]);
+    setImportIAStep("upload");
+  }
   const atualizarMut = trpc.compras.atualizarItem.useMutation({
     onSuccess: () => { refetch(); utils.warehouse.getDashboard.invalidate(); setModalItem(false); toast.success("Item atualizado!"); },
     onError: (e: any) => {
@@ -1702,6 +1760,9 @@ export default function AlmoxarifadoPage() {
                   )}
                 </button>
               )}
+              <button onClick={() => { setImportIAOpen(true); setImportIAStep("upload"); setImportIAItens([]); setImportIASelected(new Set()); }} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition">
+                <Sparkles className="h-4 w-4" /> Importar (IA)
+              </button>
               <button onClick={abrirNovo} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition">
                 <Plus className="h-4 w-4" /> Novo Item
               </button>
@@ -6112,6 +6173,143 @@ export default function AlmoxarifadoPage() {
                   Confirmar Renovação
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog Importar Itens via IA (Rev. 4420) ────────────── */}
+      {importIAOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-6 py-4 border-b bg-gradient-to-r from-blue-700 to-blue-500 rounded-t-2xl">
+              <Sparkles className="h-5 w-5 text-white" />
+              <div>
+                <h2 className="text-base font-semibold text-white">Importar Itens para o Catálogo (IA)</h2>
+                <p className="text-xs text-blue-100">Envie uma lista de materiais, planilha ou orçamento — a IA extrai os itens para cadastrar</p>
+              </div>
+              <button onClick={() => setImportIAOpen(false)} className="ml-auto text-white/70 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Step: upload */}
+              {importIAStep === "upload" && (
+                <div>
+                  <div
+                    className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition ${importIADragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-blue-300 hover:bg-gray-50"}`}
+                    onDragOver={(e) => { e.preventDefault(); setImportIADragOver(true); }}
+                    onDragLeave={() => setImportIADragOver(false)}
+                    onDrop={(e) => { e.preventDefault(); setImportIADragOver(false); const f = e.dataTransfer.files[0]; if (f) handleImportIAFile(f); }}
+                    onClick={() => importIAFileRef.current?.click()}
+                  >
+                    <Sparkles className="h-10 w-10 text-blue-400 mx-auto mb-3" />
+                    <p className="font-medium text-gray-700 mb-1">Arraste ou clique para selecionar</p>
+                    <p className="text-xs text-gray-500">PDF, JPG ou PNG · máx. 10 MB</p>
+                  </div>
+                  <input ref={importIAFileRef} type="file" accept="application/pdf,image/jpeg,image/jpg,image/png" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportIAFile(f); }} />
+                  <p className="text-xs text-gray-400 mt-3 text-center">Funciona com listas de materiais, planilhas fotografadas, orçamentos PDF e catálogos.</p>
+                </div>
+              )}
+
+              {/* Step: processing */}
+              {importIAStep === "processing" && (
+                <div className="flex flex-col items-center justify-center py-16 gap-4">
+                  <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
+                  <p className="font-medium text-gray-700">Analisando documento com IA…</p>
+                  <p className="text-sm text-gray-400">Isso pode levar alguns segundos</p>
+                </div>
+              )}
+
+              {/* Step: review */}
+              {importIAStep === "review" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-700">{importIAItens.length} iten(s) extraído(s) — selecione os que deseja cadastrar:</p>
+                    <button className="text-xs text-blue-600 hover:underline" onClick={() => setImportIASelected(
+                      importIASelected.size === importIAItens.length ? new Set() : new Set(importIAItens.map((_,i) => i))
+                    )}>
+                      {importIASelected.size === importIAItens.length ? "Desmarcar todos" : "Selecionar todos"}
+                    </button>
+                  </div>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="w-8 px-3 py-2" />
+                          <th className="text-left px-3 py-2 font-semibold text-gray-600">Nome do Item</th>
+                          <th className="text-center px-3 py-2 font-semibold text-gray-600">Un</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-600">Categoria</th>
+                          <th className="text-center px-3 py-2 font-semibold text-gray-600">Qtd</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importIAItens.map((it, i) => (
+                          <tr key={i} className={`border-b border-gray-100 last:border-0 transition ${importIASelected.has(i) ? "" : "opacity-40"}`}>
+                            <td className="px-3 py-2 text-center">
+                              <input type="checkbox" className="cursor-pointer" checked={importIASelected.has(i)}
+                                onChange={() => setImportIASelected(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(i)) next.delete(i); else next.add(i);
+                                  return next;
+                                })} />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input className="w-full border-0 bg-transparent text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-300 rounded px-1"
+                                value={it.nome}
+                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? { ...x, nome: e.target.value } : x))} />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <input className="w-14 text-center border-0 bg-transparent text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-300 rounded px-1"
+                                value={it.unidade}
+                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? { ...x, unidade: e.target.value } : x))} />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input className="w-full border-0 bg-transparent text-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-300 rounded px-1"
+                                value={it.categoria}
+                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? { ...x, categoria: e.target.value } : x))} />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <input type="number" min={0} className="w-16 text-center border-0 bg-transparent text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-300 rounded px-1"
+                                value={it.quantidade}
+                                onChange={(e) => setImportIAItens(p => p.map((x, j) => j === i ? { ...x, quantidade: parseInt(e.target.value) || 0 } : x))} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    ⚠ Edite os campos diretamente na tabela antes de criar. Itens já cadastrados com o mesmo nome serão criados como duplicatas.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+              <button onClick={() => setImportIAOpen(false)} className="text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg px-4 py-2">
+                Cancelar
+              </button>
+              {importIAStep === "review" && (
+                <button
+                  onClick={criarItensIA}
+                  disabled={importIACriando || importIASelected.size === 0}
+                  className="relative overflow-hidden flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-medium px-5 py-2 rounded-lg transition"
+                >
+                  {importIACriando && (
+                    <span className="absolute inset-0 bg-white/15" style={{ width: `${importIAProgress}%` }} />
+                  )}
+                  {importIACriando
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando… {importIAProgress}%</>
+                    : <><CheckCircle2 className="h-4 w-4" /> Criar {importIASelected.size} Ite{importIASelected.size === 1 ? "m" : "ns"} no Catálogo</>
+                  }
+                </button>
+              )}
             </div>
           </div>
         </div>

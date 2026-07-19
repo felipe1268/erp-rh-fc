@@ -7414,6 +7414,96 @@ Retorne APENAS um JSON válido neste formato:
       return { status: "done" as const, ...result };
     }),
 
+  // ── EXTRAIR OC IA ─────────────────────────────────────────────────────────────
+  // Rev. 4420 — Criação de OC a partir de documento (proposta/orçamento do fornecedor).
+  // Usa o mesmo padrão job/polling de extrairCotacaoIA: retorna jobId imediatamente,
+  // o processamento IA ocorre em background, cliente faz polling em getIaExtractionResult.
+  extrairOCIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fileBase64: z.string().max(15_000_000),
+      fileName: z.string(),
+      mimeType: z.enum(["application/pdf", "image/jpeg", "image/jpg", "image/png"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      await assertAiModuleEnabled(input.companyId, "compras");
+
+      const jobId = `oc-ia-${input.companyId}-${Date.now()}`;
+      iaExtractionJobs.set(jobId, { status: "processing", startedAt: Date.now() });
+
+      (async () => {
+        try {
+          const { invokeAnthropicVision } = await import("../_core/llm");
+          const systemPrompt = `Você é um assistente especializado em compras industriais e construção civil. Analise este documento (proposta, orçamento ou cotação de fornecedor) e extraia as informações para criar uma Ordem de Compra.
+
+REGRAS CRÍTICAS:
+- Extraia TODOS os itens do documento com: descrição completa, quantidade, unidade de medida, preço unitário
+- Valores devem ser NUMÉRICOS, sem R$, sem pontos de milhar (use ponto decimal: 1234.56)
+- Se um campo não estiver no documento, use null
+- Retorne SOMENTE JSON válido, sem texto adicional, sem markdown
+
+Formato de resposta:
+{
+  "fornecedorNome": "nome do fornecedor/empresa emissora ou null",
+  "fornecedorCnpj": "CNPJ formatado ou null",
+  "condicaoPagamento": "ex: À Vista, 30 dias, 30/60/90 ou null",
+  "prazoEntregaDias": número inteiro de dias ou null,
+  "observacoes": "observações relevantes do documento ou null",
+  "itens": [
+    {
+      "descricao": "descrição completa do item",
+      "quantidade": número,
+      "unidade": "un|m|m²|m³|kg|L|cx|pç|sc|gl|vb|rolo|barra",
+      "precoUnitario": número ou null
+    }
+  ]
+}`;
+          const mime = (input.mimeType === "image/jpg" ? "image/jpeg" : input.mimeType) as any;
+          const text = await invokeAnthropicVision({
+            prompt: systemPrompt,
+            base64: input.fileBase64,
+            mimeType: mime,
+            maxTokens: 4096,
+          });
+          let parsed: any = {};
+          try {
+            const clean = text.replace(/```json\n?/gi, "").replace(/```\n?/gi, "").trim();
+            parsed = JSON.parse(clean);
+          } catch {
+            const match = text.match(/\{[\s\S]+\}/);
+            if (match) { try { parsed = JSON.parse(match[0]); } catch { /* ignore */ } }
+          }
+          const itens = (parsed.itens ?? [])
+            .map((it: any) => ({
+              descricao: String(it.descricao ?? "").trim().slice(0, 300),
+              quantidade: Math.max(0.001, parseFloat(it.quantidade) || 1),
+              unidade: String(it.unidade ?? "un").slice(0, 20),
+              precoUnitario: it.precoUnitario != null ? Math.max(0, parseFloat(it.precoUnitario) || 0) : null,
+            }))
+            .filter((it: any) => it.descricao.length > 0);
+          console.log(`[extrairOCIA] job=${jobId} fornecedor=${parsed.fornecedorNome ?? "?"} itens=${itens.length}`);
+          iaExtractionJobs.set(jobId, {
+            status: "done",
+            startedAt: Date.now(),
+            result: {
+              fornecedorNome: parsed.fornecedorNome ?? null,
+              fornecedorCnpj: parsed.fornecedorCnpj ?? null,
+              condicaoPagamento: parsed.condicaoPagamento ?? null,
+              prazoEntregaDias: parsed.prazoEntregaDias ?? null,
+              observacoes: parsed.observacoes ?? null,
+              itens,
+            },
+          });
+        } catch (err: any) {
+          console.error("[extrairOCIA] Erro:", err.message);
+          iaExtractionJobs.set(jobId, { status: "error", startedAt: Date.now(), error: err.message || "Erro desconhecido" });
+        }
+      })();
+
+      return { jobId };
+    }),
+
   getSaldosRealocacaoGeral: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
     .query(async ({ input, ctx }) => {

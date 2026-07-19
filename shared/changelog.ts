@@ -1,4 +1,42 @@
 /**
+ * Rev. 4420 - FEATURES IA: C1 (CRIAR OC POR DOCUMENTO) + A1 (IMPORTAR ITENS ALMOXARIFADO POR DOCUMENTO)
+ *
+ * C1 — CRIAR OC A PARTIR DE DOCUMENTO (IA):
+ *   Botão "Criar OC por IA" (azul, Sparkles) adicionado ao CommandBar de Ordens de Compra.
+ *   Fluxo 3 passos: (1) Upload — área drag-and-drop para PDF/JPG/PNG ≤10MB;
+ *   (2) Processamento — job assíncrono com polling (getIaExtractionResult, 2s interval);
+ *   (3) Revisão — tabela de itens extraídos + fornecedor nome/CNPJ + condição de pagamento
+ *   + prazo de entrega + observações. Botão "Preencher OC com esses dados" pré-preenche
+ *   os estados do formulário manual de OC (grupos/itens, condicaoPagamento, prazoEntregaDias,
+ *   observacoes) e abre o FullScreenDialog da OC.
+ *   Server: `extrairOCIA` em `server/routers/compras.ts` — usa padrão iaExtractionJobs +
+ *   invokeAnthropicVision (Claude Vision). Prompt extrai: fornecedorNome, fornecedorCnpj,
+ *   condicaoPagamento, prazoEntregaDias, observacoes, itens[]{descricao, quantidade, unidade,
+ *   precoUnitario}. Reutiliza getIaExtractionResult para polling (sem duplicar endpoint).
+ *   Frontend: `client/src/pages/compras/Ordens.tsx` — estados ocIAStep/ocIAJobId/ocIAResult/
+ *   ocIADragOver/ocIAFileRef; extrairOCIAMut; polling via ocIAPollQ; handlers handleOCIAFile +
+ *   preencherOCDeIA; dialog overlay completo com os 3 passos.
+ *
+ * A1 — INSERIR ITENS ALMOXARIFADO A PARTIR DE DOCUMENTO (IA):
+ *   Botão "Importar (IA)" (azul, Sparkles) adicionado ao header do catálogo de itens do
+ *   Almoxarifado (ao lado de "Novo Item"). Fluxo 3 passos: (1) Upload (drag-and-drop);
+ *   (2) Processamento (invocação direta de invokeAnthropicVision sem job/polling, síncrono);
+ *   (3) Revisão — tabela editável dos itens extraídos com checkboxes individuais + seleção
+ *   em massa + edição inline de nome/unidade/categoria/quantidade. Botão "Criar N Itens no
+ *   Catálogo" com barra de progresso 0→100% (Regra de Ouro). Loop sequencial chama
+ *   criarMut (trpc.compras.criarItem) para cada item selecionado; erros individuais não
+ *   bloqueiam os demais.
+ *   Server: `extrairItensAlmoxIA` em `server/routers/warehouse.ts` — invokeAnthropicVision
+ *   síncrono (sem job/Map), retorna { itens[] } direto. Prompt extrai: nome, unidade,
+ *   categoria (lista de 10 valores), quantidade.
+ *   Frontend: `client/src/pages/almoxarifado/index.tsx` — estados importIAOpen/Step/Itens/
+ *   DragOver/Criando/Progress/Selected; extrairItensAlmoxIAMut; handleImportIAFile;
+ *   criarItensIA (loop + progresso); dialog overlay completo.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4419 - CORREÇÕES C5 E S1 (LISTA AJUSTES_ERP_17072026)
  *
  * C5 — ATENDER PELO ESTOQUE: CORREÇÃO CRÍTICA — SERVIDOR BLOQUEAVA OC COM "NENHUM

@@ -50,111 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4420** — **FEATURES IA: C1 (CRIAR OC POR DOCUMENTO) + A1 (IMPORTAR ITENS ALMOXARIFADO POR DOCUMENTO).** C1: botão "Criar OC por IA" (azul, Sparkles) no CommandBar de OC; fluxo 3 passos: upload PDF/JPG/PNG → IA extrai fornecedor + itens + condições → revisão + "Preencher OC". Server: `extrairOCIA` (compras.ts) usa iaExtractionJobs+invokeAnthropicVision; reusa getIaExtractionResult p/ polling. A1: botão "Importar (IA)" no header do catálogo de Almoxarifado; fluxo: upload → IA extrai lista de itens → tabela editável com checkboxes → "Criar N Itens" com progresso 0→100% (Regra de Ouro). Server: `extrairItensAlmoxIA` (warehouse.ts) síncrono. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4419** — **CORREÇÕES C5 E S1 (AJUSTES_ERP_17072026).** C5: correção crítica em `criarOrdemDeCotacao` — participante estoque (`isEstoque=true`) entrava no fallback do frontend mas não do servidor; lançava "Nenhum fornecedor vencedor". Fix: `estoqueParticipante` incluído na cadeia `vencedorSelecionado ?? melhorForn ?? estoqueParticipante ?? null`. S1: `assertCentralWrite` relaxado para usuários com ≥1 obra (antes bloqueava todos os não-admins); `canWriteCentral` no frontend sincronizado. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4418** — **AJUSTES COMPRAS / ALMOXARIFADO / SST (LISTA AJUSTES_ERP_17072026).** 7 melhorias: C2/C3/C6 em Compras; A3/A4 no Almoxarifado; S2/S4 em SST. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4417** — **AVISO ENCERRAMENTO PJ: BOTÃO "PRÉVIA DO DOCUMENTO" + PRAZO PADRÃO 15 DIAS.** Botão laranja "Prévia do Documento" `<Eye>` no footer abre nova janela com o documento renderizado (campos em branco mostram placeholders legíveis). Helper `buildDocData(preview?)` extraído. Prazo de Aviso padrão alterado de "30 dias" para "15 dias". ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4416** — **MÓDULO PJ: BOTÃO "ENVIAR AVISO DE ENCERRAMENTO" → DIALOG FCSIGN (FC-CON-003).** Botão `<FileMinus2>` abre `FCSignAvisoEncerramentoPJDialog`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4415** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — EDITOR EM BRANCO APÓS SALVAR/APROVAR.** Race condition `isFetching` sobrescrevia editor; fix: guard `if (getQuery.isFetching) return`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4414** — **TEMPLATES ISO: NOVO TIPO "AVISO DE ENCERRAMENTO DE CONTRATO PJ" (FC-CON-003).** 5 cláusulas, 8 placeholders. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4413** — **TEMPLATES ISO: BOTÃO EXCLUIR SEMPRE VISÍVEL + BARRA FLEX-WRAP.** Botão Excluir renderiza sempre (ativo/desabilitado); barra flex-wrap. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4412** — **MÓDULO PJ: CARDS KPI — LAYOUT VERTICAL CENTRADO.** Ícone (círculo topo) → número → label. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4410** — **MÓDULO PJ: CARD "FALTA ASSINAR" NOS KPIs.** Novo card laranja contando contratos ativos sem contratoAssinadoUrl. Borda laranja + clicável quando > 0. Grid: lg:grid-cols-6. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4409** — **CONTAS A PAGAR: LAYOUT ESTRUTURADO NAS SUB-LINHAS DO GRUPO PJ EXPANDIDO.** Sub-linhas dentro do grupo consolidado também recebem nome + pills. Dois blocos de renderização substituídos. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4407** — **CONTAS A PAGAR: BADGE "1ª/2ª MEDIÇÃO" + REF "PJ-XXXXX" PARA PAGAMENTOS PJ.** getRef() reconhece pagamento_pj → "PJ-892978". Badge inline azul/roxo detectado por regex na descricao. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4406** — **CONTAS A PAGAR: DESCRIÇÃO PJ ENRIQUECIDA COM NOME + Nº CONTRATO + MEDIÇÃO.** Ambas as rotas (aprovarComNF + bulkAprovar) geram "NOME — Contrato #X — 1ª/2ª Medição — MM/AAAA". Backfill dos entries existentes via SyncSchema+. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4405** — **FOLHA PJ: BADGE "APROVADO" + BOTÃO "CANCELAR" COM ESTORNO NO CONTAS A PAGAR.** Quando aprovadoEm != null: badge verde "✓ Aprovado" + botão laranja "Cancelar". Cancelar limpa aprovado_em/aprovado_por_nome/enviado_financeiro + DELETE financial_entries (origem_modulo='pagamento_pj'). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4404** — **FOLHA PJ: BOTÃO "APROVAR SELECIONADOS" COM PROGRESSO 0→100%.** Regra de Ouro: barra bg-blue-400/20 + texto "Aprovando... XX%". setInterval 3%/200ms cap 90% → 100% on success → reset 800ms. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4403** — **FOLHA PJ: CORREÇÃO CRÍTICA — DUPLICATAS (id duplicado em pj_contracts sem PRIMARY KEY).** pj_contracts sem PK → 2 linhas com id=1 → LEFT JOIN fan-out → ANDRE aparecia N×. Fix: DELETE via ctid do registro espúrio + INSERT fechamento Jul/ANDRE faltante + SyncSchema+ ADD CONSTRAINT UNIQUE(id). ZERO DELETE DE DADOS VÁLIDOS.
-
-- **Rev. 4399** — **MÓDULO PJ: BOTÃO ENVIAR → ABRE FCSIGN DIALOG.** Clique no ícone Send da coluna Ações abre FCSignPJSendDialog inline (em vez de navegar para /contrato-pj/:id). Dialog monta HTML do template vigente + cria sessão FCSign + exibe links individuais por signatário. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4398** — **MÓDULO PJ: BOTÃO IMPRIMIR → ENVIAR (FCSIGN).** Ícone Printer → Send; tooltip "Imprimir / Ver contrato" → "Enviar para assinatura (FCSign)". Printer mantido (usado no Exportar PDF). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4397** — **CONTRATO PJ: 3 CORREÇÕES JURÍDICAS NO TEMPLATE (DB DIRETO).** 2.1: restaurado "plena autonomia" + "métodos, horários" + removido "desde que seja seguido os custos do orçamento executivo" (subordinação econômica = CLT). 2.3: removido "validada pela CONTRATANTE" (controle patronal). 3.1: "sendo obrigatória a comunicação prévia" → "independentemente de comunicação prévia" (exclusividade velada). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4396** — **CONTRATO PJ VIEW: CACHE ZERO + REMOÇÃO DE DADOS BANCÁRIOS DUPLICADOS.** `staleTime:0` em `pj.modeloContrato.useQuery` (eliminava divergência template×contrato em abas simultâneas). Seção hardcoded "DADOS BANCÁRIOS" removida do ContratoPJView (já está na Cláusula 9.3 do template). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4395** — **TEMPLATES ISO: EDITOR BLOQUEADO QUANDO VIGENTE.** Editor TipTap vira `readOnly` quando status=vigente; área Salvar/Comentário some; aviso âmbar instrui a clicar "Reabrir" → editar → salvar revisão → aprovar. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4394** — **CONTRATO PJ: REESCRITA JURÍDICA DO TEMPLATE — BLINDAGEM CONTRA CLT DISFARÇADO.** Template reescrito integralmente: (1) removido "exclusivamente" do CONSIDERANDO; (2) "mão de obra" → "serviços técnicos especializados"; (3) nova Cláusula Segunda — Autonomia (sem jornada fixa, sem subordinação, preposto permitido); (4) nova Cláusula Terceira — Não Exclusividade explícita; (5) nova Cláusula Oitava — Ausência de Vínculo (art. 3º CLT + Lei 13.467/2017, 4 requisitos ausentes listados, cláusula reversa pejotização forçada); (6) CONTRATADA responsável por INSS/ISS/IRPJ; (7) valores = natureza comercial, não salarial. 12 cláusulas. Atualização direta no banco. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4393** — **CONTRATO PJ: DADOS BANCÁRIOS DA CONTRATADA NO TEMPLATE.** Seção "6.3 DADOS BANCÁRIOS" inserida no template vigente (DB direto, Rev. 2), com placeholder `[DADOS_BANCARIOS_CONTRATADA]`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4392** — **CONTRATO PJ: REPRESENTANTE LEGAL = SÓCIO ADMINISTRADOR.** Subquery `companyRepresentante` usava `ORDER BY id ASC` (pegava sócio errado). Fix: cruza com `system_criteria.socio_administrador_employee_id`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4391** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — APROVAR (VIGENTE) PERDIA EDIÇÕES.** `handleAprovar` em `TemplatesDocsTab.tsx` chamava só `aprovarMut` quando template já existia — edições eram descartadas silenciosamente. Fix: sempre executa `saveMut` antes de `aprovarMut` via `onSuccess`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4390** — **CONTRATO PJ: FONTE ÚNICA — APENAS TEMPLATE DE CONFIGURAÇÕES.** `plainTextModelToHtmlServer` removida. `modeloContrato` retorna só o vigente de `systemDocumentTemplates` (sem fallback hardcoded). `ContratoPJView` e `ModuloPJ` limpos: sem "Editar Cláusulas", sem fallback plain-text. Única fonte: Configurações → Templates de Documentos → Contrato PJ. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4389** — **MÓDULO PJ: BOTÃO IMPRIMIR CONTRATO → CONTRATOPJVIEW (TEMPLATE ISO).** Botão 🖨️ (verde) na coluna Ações navega para `/contrato-pj/:id`. ContratoPJView usa `pj.modeloContrato` que retorna o template vigente de `systemDocumentTemplates`. Controle de edição permanece em Configurações → Templates de Documentos. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4388** — **MÓDULO PJ: REMOÇÃO DO BOTÃO FCSIGN DA LISTA DE CONTRATOS.** Botão "Enviar para assinatura digital (FCSign)" removido completamente da coluna Ações + import/states/dialog/banner associados. Nova instrução de fluxo de assinatura será fornecida. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4387** — **CONTRATO PJ: AUTO-CURA SERVER-SIDE DO TEMPLATE VAZIO.** Template vigente aprovado com `conteudo_html=""` (race condition anterior à Rev. 4385) → `pj.modeloContrato` detecta vazio, chama `plainTextModelToHtmlServer()` (réplica server da função TipTap), grava no banco e retorna HTML. Próxima chamada já encontra o banco curado. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4386** — **CONTRATO PJ: TEMPLATE ISO INTEGRADO NA VIEW E FCSign.** `pj.modeloContrato` agora consulta `systemDocumentTemplates` vigente primeiro → retorna `{ modelo, modeloHtml }`. `ContratoPJView.tsx` renderiza via `dangerouslySetInnerHTML` com `replacePlaceholders()` aplicado. `FCSignPJSendDialog.tsx` passa `modeloHtml` para `buildContratoPjSignHtml()` (pula `corpoFromTemplate()`). CSS `.pj-iso-template` em `index.css`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4385** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — CONTEÚDO SUMIA AO APROVAR.** Race condition entre dois useEffects: `getQuery.data={conteudoHtml:""}` sobrescrevia o modelo pré-populado. Fix: fundidos em 1 único useEffect (aguarda ambas as queries). `handleSalvar`/`handleAprovar` agora leem `editorRef.current?.getHTML()` em vez de state. Auto-cura templates aprovados vazios por engano. ZERO DELETE · ZERO ALTER destrutivo. `plainTextModelToHtml()` converte o MODELO_CONTRATO_PJ em HTML estruturado (h2/h3 para títulos, indentação para subitens 1.1/a)/(I), itálico para Parágrafo Único, negrito inline para valores/datas/contas bancárias + CONTRATANTE/CONTRATADA). Botão "Aprovar (Vigente)": antes disabled quando não salvo (verde mas inoperante). Agora auto-salva (saveMut) + aprova (aprovarMut) em um único clique; disabled só se editor vazio. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4382** — **TEMPLATES ISO: AUTO-PREENCHIMENTO DE "ELABORADO POR" E DATA DE VIGÊNCIA.** useEffect branch para selRow=null: setElaboradoPorNome(user.name) + setDataVigencia(hoje). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4381** — **TEMPLATES ISO: PRÉ-POPULA EDITOR CONTRATO PJ COM MODELO COMPLETO.** useEffect pré-popula editor com MODELO_CONTRATO_PJ quando sem DB template. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4380** — **CONFIGURAÇÕES: CONSOLIDAÇÃO DE TABS EM TEMPLATES DE DOCUMENTOS.** Templates Planilha/Word/Extrato removidos do grid e integrados como pills em TemplatesDocsTab. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4377** — **MÓDULO PJ: APROVAÇÃO DE MEDIÇÕES COM NF → CONTAS A PAGAR.** Botão "Aprovar" (azul, ShieldCheck) por linha pendente na Folha PJ. Dialog abre com upload drag-and-drop da NF (PDF/JPG/PNG) + toggle "Enviar para Contas a Pagar" (padrão ON). Ao aprovar: salva NF via storagePut, grava aprovado_em/aprovado_por_nome/enviado_financeiro em pj_payments, cria ou atualiza financial_entry com origemModulo='pagamento_pj' + anexo_url. Clipe roxo na tabela indica NF anexada. Schema: 5 colunas novas via SyncSchema+. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4376** — **MÓDULO PJ: AUTO-LINK %, AJUSTE EM LOTE, FOLHA DIVIDIDA.** % Adiantamento auto-calcula % Fechamento (100−valor); campo fechamento read-only. Botão ⚙️ na toolbar abre dialog de ajuste em lote de todos os contratos ativos. Folha PJ dividida em dois cards: "Dia 15" (adiantamentos) + "Final do Mês" (fechamentos). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4370** — **SCORECARD OBRA — FOLHA/CUSTOS: NORMALIZAÇÃO ZERO-PAD NO SERVIDOR.** Complemento da Rev. 4369: iOS Safari não recebe HMR → browser enviava "2026-6". Fix: `_pad()` server-side em `getCustosRH` antes de qualquer SQL. Defesa permanente independente do cliente. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4369** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE MÊS SEM ZERO-PAD.** `"2026-6"` vs `"2026-06"`: comparação string falhava silenciosamente → "Sem dados". Fix: `padStart(2,"0")` no frontend. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4364** — **FOLHA DE PAGAMENTO: BOTÃO "LIMPAR MÊS" (ADMIN MASTER).** Nova procedure `folha.limparMes` em transação: apaga payroll_payments/advances/adjustments/rounding_ledger + reset payroll_periods + exclui lançamentos legados PDF. ZERO ALTER destrutivo no schema.
-
-- **Rev. 4363** — **SCORECARD OBRA — FOLHA/CUSTOS: mesesComDados DERIVADO DA QUERY PRINCIPAL.** Remove query SQL paralela (incompleta). mesesComDados calculado em JS sobre `funcs` + filtros férias/afastado por mês. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4375** — **FOLHA PJ: MULTI-SELEÇÃO E CONSOLIDAR PERÍODO COMO PAGO.** Checkboxes + barra de ação em lote. Procedures: bulkDelete, bulkMarcarPago, consolidarPeriodo. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4374** — **MÓDULO PJ — CONTRATOS: PADRÃO 50/50 E INPUT LIBERADO.** 40/60→50/50; fix bug "trava ao apagar". ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4373** — **CONFIGURAÇÕES TERCEIROS: PARÂMETRO "PJ FORMA DE PAGAMENTO".** Parâmetro `terceiros_pj_forma_pagamento` (PIX/TED…). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4372** — **MÓDULO PJ — CONTRATOS PJ: FORMA DE PAGAMENTO.** Campo `formaPagamento` em pj_contracts + pj_payments. SyncSchema+ Rev. 4372. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4371** — **MÓDULO PJ — FOLHA PJ: PERIOD SELECTOR COM DOTS E LEGENDA.** PeriodSelectorCard padrão + dots + statusAnual. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4349** — **SCORECARD OBRA — FOLHA/CUSTOS: CORREÇÃO CRÍTICA DE REGRESSÃO.** `rnd2` antes da declaração `const` → ReferenceError → "Sem dados". Fix: moveu declaração. Seguro de vida proporcional (sMensal × fracao). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4348** — **SCORECARD OBRA — FOLHA/CUSTOS: PROPORCIONAL POR DIAS ÚTEIS (SEG-SEX).** CLT SQL + PJ SQL: `generate_series + DOW`. JS sintético CLT: `countWorkingDays`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4345** — **ALMOXARIFADO: 5 MELHORIAS LISTA LEONARDO/17-07.** Item 2: seleção múltipla locados em lote. Item 5: campo `quantidade` em `equipamentos_locados`. Item 6: botão Renovar Locação. Item 7: badge vencimento colorido. Item 8: `onError` em `proprioCriar`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4344** — **ALMOXARIFADO: CORREÇÃO — PAINEL DE VALOR TOTAL NÃO ATUALIZAVA APÓS OPERAÇÕES.** 4 mutations esqueciam `getDashboard.invalidate()`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4341** — **EQUIPAMENTOS PRÓPRIOS: AGRUPAMENTO POR NOME (accordion inline).** `dataAgrupada`, grupos expandíveis com count badge + chips de localização. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4340** — **EQUIPAMENTOS PRÓPRIOS: FLUXO DE TRANSFERÊNCIA ENTRE OBRAS.** Nova tabela + coluna `transferencia_pendente_id`. 5 procedures tRPC. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4418** — **AJUSTES COMPRAS / ALMOXARIFADO / SST (LISTA AJUSTES_ERP_17072026).** 7 melhorias: C2/C3/C6 em Compras; A3/A4 no Almoxarifado; S2/S4 em SST. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4417** — **AVISO ENCERRAMENTO PJ: BOTÃO "PRÉVIA DO DOCUMENTO" + PRAZO PADRÃO 15 DIAS.** Botão laranja Eye + buildDocData(preview?). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4416** — **MÓDULO PJ: BOTÃO "ENVIAR AVISO DE ENCERRAMENTO" → DIALOG FCSIGN (FC-CON-003).** ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4415** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — EDITOR EM BRANCO APÓS SALVAR/APROVAR.** Guard `if (getQuery.isFetching) return`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4414** — **TEMPLATES ISO: NOVO TIPO "AVISO DE ENCERRAMENTO DE CONTRATO PJ" (FC-CON-003).** 5 cláusulas, 8 placeholders. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4322 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4413 e anteriores.
 
 ## User preferences
 

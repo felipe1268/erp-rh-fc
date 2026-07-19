@@ -918,6 +918,69 @@ Responda SOMENTE com JSON válido (sem markdown, sem explicações):
       }
     }),
 
+  // ── EXTRAIR ITENS ALMOXARIFADO POR DOCUMENTO (IA) ─────────────
+  // Rev. 4420 — Importação em lote de itens do catálogo a partir de PDF/imagem
+  // (lista de materiais, planilha fotografada, orçamento). Retorna os itens
+  // extraídos para validação antes de criar em massa.
+  extrairItensAlmoxIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fileBase64: z.string().max(15_000_000),
+      mimeType: z.string().default("image/jpeg"),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const { invokeAnthropicVision } = await import("../_core/llm");
+        const prompt = `Analise este documento (lista de materiais, planilha, orçamento, catálogo ou foto) e extraia TODOS os itens listados para cadastrar em um sistema de almoxarifado de construção civil.
+
+REGRAS:
+- Extraia cada item separado como uma entrada da lista
+- Ignore cabeçalhos, totais, subtotais, serviços e taxas administrativas
+- Apenas materiais/produtos físicos que fazem sentido em um almoxarifado
+- Se não há quantidade especificada, use 0
+- Retorne SOMENTE JSON válido, sem texto adicional, sem markdown
+
+{
+  "itens": [
+    {
+      "nome": "nome técnico completo do material/produto",
+      "unidade": "un|m|m²|m³|kg|L|cx|sc|gl|pç|rolo|barra",
+      "categoria": "uma de: Ferramentas|Materiais de Construção|Elétrico|Hidráulico|EPIs|Tubulação|Cimento e Argamassa|Madeira|Metais|Tintas e Impermeabilizantes|Outros",
+      "quantidade": número inteiro (0 se não especificado)
+    }
+  ]
+}`;
+        const mime = (input.mimeType === "image/jpg" ? "image/jpeg" : input.mimeType) as any;
+        const text = await invokeAnthropicVision({
+          prompt,
+          base64: input.fileBase64,
+          mimeType: mime,
+          maxTokens: 4096,
+        });
+        let parsed: any = {};
+        try {
+          const clean = text.replace(/```json\n?/gi, "").replace(/```\n?/gi, "").trim();
+          parsed = JSON.parse(clean);
+        } catch {
+          const match = text.match(/\{[\s\S]+\}/);
+          if (match) { try { parsed = JSON.parse(match[0]); } catch { /* ignore */ } }
+        }
+        const itens = (parsed.itens ?? [])
+          .map((it: any) => ({
+            nome: String(it.nome ?? "").trim().slice(0, 200),
+            unidade: String(it.unidade ?? "un").slice(0, 20),
+            categoria: String(it.categoria ?? "Outros").slice(0, 80),
+            quantidade: Math.max(0, parseInt(it.quantidade) || 0),
+          }))
+          .filter((it: any) => it.nome.length > 1);
+        console.log(`[extrairItensAlmoxIA] companyId=${input.companyId} itens=${itens.length}`);
+        return { itens };
+      } catch (err: any) {
+        console.error("[extrairItensAlmoxIA] Erro:", err?.message ?? err);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: String(err?.message ?? "Erro ao analisar documento") });
+      }
+    }),
+
   // ── IDENTIFICAR ITEM POR FOTO (IA) ────────────────────────────
   identificarPorFoto: protectedProcedure
     .input(z.object({

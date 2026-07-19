@@ -23,7 +23,7 @@ import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { consolidarOcItens } from "@shared/ocItensConsolidados";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, ChevronDown, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban, Copy } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, ChevronDown, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban, Copy, Sparkles } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
@@ -453,6 +453,13 @@ export default function Ordens() {
   const [showLancamentoDialog, setShowLancamentoDialog] = useState<{ id: number; status: string } | null>(null);
   const [dataLancamentoInput, setDataLancamentoInput] = useState("");
 
+  // ── OC IA (Rev. 4420) ─────────────────────────────────────────
+  const [ocIAStep, setOcIAStep] = useState<"idle"|"upload"|"processing"|"review">("idle");
+  const [ocIAJobId, setOcIAJobId] = useState<string | null>(null);
+  const [ocIAResult, setOcIAResult] = useState<any | null>(null);
+  const [ocIADragOver, setOcIADragOver] = useState(false);
+  const ocIAFileRef = useRef<HTMLInputElement>(null);
+
   const [autoSwitchedForCompany, setAutoSwitchedForCompany] = useState<number | null>(null);
   const urlTabHandled = useRef(false);
   useEffect(() => {
@@ -555,6 +562,29 @@ export default function Ordens() {
     },
     onError: (e) => toast.error(e.message),
   });
+  // ── OC IA mutations + polling (Rev. 4420) ──────────────────────
+  const extrairOCIAMut = trpc.compras.extrairOCIA.useMutation({
+    onSuccess: (res) => { setOcIAJobId(res.jobId); setOcIAStep("processing"); },
+    onError: (e) => { toast.error(e.message); setOcIAStep("upload"); },
+  });
+  const ocIAPollQ = trpc.compras.getIaExtractionResult.useQuery(
+    { jobId: ocIAJobId ?? "" },
+    { enabled: ocIAStep === "processing" && !!ocIAJobId, refetchInterval: 2000 }
+  );
+  useEffect(() => {
+    if (!ocIAPollQ.data) return;
+    const d = ocIAPollQ.data as any;
+    if (d.status === "done") {
+      setOcIAJobId(null);
+      setOcIAResult(d);
+      setOcIAStep("review");
+    } else if (d.status === "error") {
+      setOcIAJobId(null);
+      toast.error((d as any).error ?? "Erro na leitura por IA");
+      setOcIAStep("upload");
+    }
+  }, [ocIAPollQ.data]);
+
   const atualizarStatus = trpc.compras.atualizarStatusOrdem.useMutation({
     onSuccess: (res: any) => {
       if (res?.almoxarifado) {
@@ -672,6 +702,37 @@ export default function Ordens() {
   const [aprovExtraForm, setAprovExtraForm] = useState({ adminEmail: "", adminSenha: "", justificativa: "" });
   const [editTransp, setEditTransp] = useState("");
   const [editRastreio, setEditRastreio] = useState("");
+
+  async function handleOCIAFile(file: File) {
+    if (!file) return;
+    const validTypes = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
+    if (!validTypes.includes(file.type)) { toast.error("Formato inválido. Use PDF, JPG ou PNG."); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10 MB."); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const b64 = (e.target?.result as string)?.split(",")[1] ?? "";
+      extrairOCIAMut.mutate({ companyId, fileBase64: b64, fileName: file.name, mimeType: file.type as any });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function preencherOCDeIA() {
+    if (!ocIAResult) return;
+    const itensIA = (ocIAResult.itens ?? []) as any[];
+    const gruposIA: GrupoForm[] = itensIA.length > 0
+      ? [{ itens: itensIA.map((it: any) => ({ descricao: it.descricao, unidade: it.unidade, quantidade: String(it.quantidade), precoUnitario: it.precoUnitario != null ? String(it.precoUnitario) : "" })) }]
+      : [newGrupo()];
+    setGrupos(gruposIA);
+    setForm(p => ({
+      ...p,
+      condicaoPagamento: ocIAResult.condicaoPagamento ?? p.condicaoPagamento,
+      prazoEntregaDias: ocIAResult.prazoEntregaDias != null ? String(ocIAResult.prazoEntregaDias) : p.prazoEntregaDias,
+      observacoes: ocIAResult.observacoes ?? p.observacoes,
+    }));
+    setOcIAStep("idle");
+    setOcIAResult(null);
+    setShowNova(true);
+  }
 
   function resetForm() {
     setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "", formaPagamento: "", contaBancariaId: "", cartaoId: "", tipoOc: "compra" });
@@ -1066,6 +1127,7 @@ export default function Ordens() {
         {abaAtiva === "oc" && (
           <DraggableCommandBar barId="ordens-compra" items={[
             { id: "nova", node: <Button onClick={() => setShowNova(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2"><Plus className="h-4 w-4" /> Nova OC Manual</Button> },
+            { id: "oc-ia", node: <Button onClick={() => { setOcIAStep("upload"); setOcIAResult(null); setOcIAJobId(null); }} className="bg-blue-600 hover:bg-blue-500 text-white gap-2"><Sparkles className="h-4 w-4" /> Criar OC por IA</Button> },
             { id: "reparar-dup", node: <Button onClick={() => { setShowRepararDup(true); setRepararPreview(null); }} variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50 gap-2" title="Detectar e corrigir OCs com numeração duplicada (admin)"><Wrench className="h-4 w-4" /> Reparar duplicatas</Button> },
           ]} />
         )}
@@ -1418,6 +1480,135 @@ export default function Ordens() {
         </Table>
       </div>
       </TooltipProvider>
+
+      {/* ── Dialog OC IA (Rev. 4420) ────────────────────────────── */}
+      {ocIAStep !== "idle" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-700 to-blue-500 rounded-t-2xl">
+              <Sparkles className="h-5 w-5 text-white" />
+              <div>
+                <h2 className="text-base font-semibold text-white">Criar OC por Documento (IA)</h2>
+                <p className="text-xs text-blue-100">Envie a proposta/orçamento do fornecedor — a IA extrai os itens automaticamente</p>
+              </div>
+              <button onClick={() => { setOcIAStep("idle"); setOcIAResult(null); setOcIAJobId(null); }} className="ml-auto text-white/70 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Step: upload */}
+              {ocIAStep === "upload" && (
+                <div>
+                  <div
+                    className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition ${ocIADragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-blue-300 hover:bg-gray-50"}`}
+                    onDragOver={(e) => { e.preventDefault(); setOcIADragOver(true); }}
+                    onDragLeave={() => setOcIADragOver(false)}
+                    onDrop={(e) => { e.preventDefault(); setOcIADragOver(false); const f = e.dataTransfer.files[0]; if (f) handleOCIAFile(f); }}
+                    onClick={() => ocIAFileRef.current?.click()}
+                  >
+                    <Upload className="h-10 w-10 text-blue-400 mx-auto mb-3" />
+                    <p className="font-medium text-gray-700 mb-1">Arraste ou clique para selecionar</p>
+                    <p className="text-xs text-gray-500">PDF, JPG ou PNG · máx. 10 MB</p>
+                  </div>
+                  <input ref={ocIAFileRef} type="file" accept="application/pdf,image/jpeg,image/jpg,image/png" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleOCIAFile(f); }} />
+                  <p className="text-xs text-gray-400 mt-3 text-center">Funciona com propostas escaneadas, orçamentos em PDF e fotos de tabelas de preços.</p>
+                </div>
+              )}
+
+              {/* Step: processing */}
+              {ocIAStep === "processing" && (
+                <div className="flex flex-col items-center justify-center py-16 gap-4">
+                  <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
+                  <p className="font-medium text-gray-700">Analisando documento com IA…</p>
+                  <p className="text-sm text-gray-400">Isso pode levar alguns segundos</p>
+                </div>
+              )}
+
+              {/* Step: review */}
+              {ocIAStep === "review" && ocIAResult && (
+                <div className="space-y-4">
+                  {/* Dados do fornecedor */}
+                  {(ocIAResult.fornecedorNome || ocIAResult.fornecedorCnpj) && (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 space-y-1">
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Fornecedor identificado</p>
+                      {ocIAResult.fornecedorNome && <p className="font-medium text-gray-800">{ocIAResult.fornecedorNome}</p>}
+                      {ocIAResult.fornecedorCnpj && <p className="text-xs text-gray-500">CNPJ: {ocIAResult.fornecedorCnpj}</p>}
+                    </div>
+                  )}
+                  {/* Condições */}
+                  {(ocIAResult.condicaoPagamento || ocIAResult.prazoEntregaDias) && (
+                    <div className="flex gap-3 flex-wrap">
+                      {ocIAResult.condicaoPagamento && (
+                        <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs rounded-full px-3 py-1">
+                          <DollarSign className="h-3 w-3" /> {ocIAResult.condicaoPagamento}
+                        </span>
+                      )}
+                      {ocIAResult.prazoEntregaDias && (
+                        <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs rounded-full px-3 py-1">
+                          <Calendar className="h-3 w-3" /> {ocIAResult.prazoEntregaDias} dias de prazo
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {/* Itens extraídos */}
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">{(ocIAResult.itens ?? []).length} iten(s) extraído(s):</p>
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-600">#</th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-600">Descrição</th>
+                            <th className="text-center px-3 py-2 font-semibold text-gray-600">Qtd</th>
+                            <th className="text-center px-3 py-2 font-semibold text-gray-600">Un</th>
+                            <th className="text-right px-3 py-2 font-semibold text-gray-600">R$ Unit.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(ocIAResult.itens ?? []).map((it: any, i: number) => (
+                            <tr key={i} className="border-b border-gray-100 last:border-0">
+                              <td className="px-3 py-2 text-gray-400">{i + 1}</td>
+                              <td className="px-3 py-2 text-gray-800 break-words max-w-xs">{it.descricao}</td>
+                              <td className="px-3 py-2 text-center text-gray-700">{it.quantidade}</td>
+                              <td className="px-3 py-2 text-center text-gray-500">{it.unidade}</td>
+                              <td className="px-3 py-2 text-right text-gray-700">
+                                {it.precoUnitario != null
+                                  ? it.precoUnitario.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                  : <span className="text-gray-300">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {ocIAResult.observacoes && (
+                      <p className="text-xs text-gray-500 mt-2 italic">{ocIAResult.observacoes}</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    ⚠ Verifique os dados antes de preencher. Você poderá editar todos os campos no formulário da OC.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+              <Button variant="outline" onClick={() => { setOcIAStep("idle"); setOcIAResult(null); setOcIAJobId(null); }}>
+                Cancelar
+              </Button>
+              {ocIAStep === "review" && (
+                <Button onClick={preencherOCDeIA} className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
+                  <CheckCircle className="h-4 w-4" /> Preencher OC com esses dados
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dialog Nova OC Manual */}
       <FullScreenDialog
