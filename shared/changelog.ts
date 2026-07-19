@@ -1,4 +1,28 @@
 /**
+ * Rev. 4400 - MÓDULO PJ: ABA DOCUMENTOS — SLOTS OBRIGATÓRIOS + BOTÃO "+"
+ *
+ * A aba "Documentos" do dialog de detalhes do contrato PJ foi reestruturada:
+ *
+ * ANTES: campo livre "Nome + Tipo" → upload → lista plana de todos os docs.
+ *
+ * AGORA:
+ * 1. Seção "Documentos Obrigatórios" — 3 slots fixos com feedback visual:
+ *    - Contrato Social  (tipo: contrato_social)
+ *    - RG               (tipo: rg)
+ *    - CPF              (tipo: cpf)
+ *    Cada slot: ícone verde/cinza + botão "Enviar" ou botão "Abrir/Remover".
+ *    Upload auto-preenche nome e tipo, sem precisar digitar.
+ *
+ * 2. Seção "Outros Documentos" — aparece só se houver docs com tipo fora dos 3 obrigatórios.
+ *
+ * 3. Botão "Adicionar outro documento" (dashed, full-width) — expande o formulário
+ *    livre original com X para fechar + seletor de tipo incluindo "Contrato Social".
+ *
+ * Estado: showNovoDoc, uploadingTipo. Mutation: onSuccess fecha o formulário.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4399 - MÓDULO PJ: BOTÃO ENVIAR → ABRE FCSIGN DIALOG (LINKS DE ASSINATURA)
  *
  * Ao clicar no ícone Send (✈) da coluna Ações, agora abre o FCSignPJSendDialog

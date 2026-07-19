@@ -114,6 +114,8 @@ export default function ModuloPJ() {
   const [motivoAlteracao, setMotivoAlteracao] = useState("");
   const [createdContratoId, setCreatedContratoId] = useState<number | null>(null);
   const [fcSignPJContratoId, setFcSignPJContratoId] = useState<number | null>(null);
+  const [showNovoDoc, setShowNovoDoc] = useState(false);
+  const [uploadingTipo, setUploadingTipo] = useState<string | null>(null);
 
   // Mês referência para pagamentos — PeriodSelectorCard (padrão de ouro)
   const [pjAno, setPjAno] = useState(() => new Date().getFullYear());
@@ -276,8 +278,8 @@ export default function ModuloPJ() {
   );
 
   const uploadDocPJ = trpc.pj.documentos.upload.useMutation({
-    onSuccess: () => { refetchDocs(); toast.success("Documento enviado!"); setUploadingDoc(false); setNovoDocNome(""); setNovoDocTipo("outro"); },
-    onError: (e: any) => { toast.error(e.message); setUploadingDoc(false); },
+    onSuccess: () => { refetchDocs(); toast.success("Documento enviado!"); setUploadingDoc(false); setUploadingTipo(null); setNovoDocNome(""); setNovoDocTipo("outro"); setShowNovoDoc(false); },
+    onError: (e: any) => { toast.error(e.message); setUploadingDoc(false); setUploadingTipo(null); },
   });
 
   const deleteDocPJ = trpc.pj.documentos.delete.useMutation({
@@ -1113,86 +1115,164 @@ export default function ModuloPJ() {
 
                 {/* Aba Documentos */}
                 <TabsContent value="documentos" className="space-y-4 mt-4">
-                  <div className="border rounded-lg p-5 space-y-4">
-                    <p className="text-sm font-semibold">Documentos do Prestador</p>
-                    <p className="text-xs text-muted-foreground">Armazene aqui documentos relacionados ao prestador: RG, CPF, CNPJ, comprovante de endereço, DAS, NF, etc.</p>
+                  {(() => {
+                    const DOCS_OBRIGATORIOS = [
+                      { tipo: "contrato_social", label: "Contrato Social",         desc: "Contrato social da empresa prestadora" },
+                      { tipo: "rg",              label: "RG",                      desc: "RG do sócio/representante legal" },
+                      { tipo: "cpf",             label: "CPF",                     desc: "CPF do sócio/representante legal" },
+                    ];
+                    const tiposObrigatorios = DOCS_OBRIGATORIOS.map(d => d.tipo);
+                    const outrosDocs = (pjDocs as any[]).filter((d: any) => !tiposObrigatorios.includes(d.tipo));
 
-                    {/* Upload novo documento */}
-                    <div className="space-y-2 border rounded-lg p-3 bg-muted/20">
-                      <p className="text-xs font-medium uppercase text-muted-foreground">Novo Documento</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input placeholder="Nome do documento" value={novoDocNome} onChange={e => setNovoDocNome(e.target.value)} className="text-sm" />
-                        <Select value={novoDocTipo} onValueChange={setNovoDocTipo}>
-                          <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="rg">RG</SelectItem>
-                            <SelectItem value="cpf">CPF</SelectItem>
-                            <SelectItem value="cnpj">CNPJ</SelectItem>
-                            <SelectItem value="comprovante_endereco">Comprov. Endereço</SelectItem>
-                            <SelectItem value="das">DAS / Guia</SelectItem>
-                            <SelectItem value="nota_fiscal">Nota Fiscal</SelectItem>
-                            <SelectItem value="seguro">Apólice Seguro</SelectItem>
-                            <SelectItem value="contrato_assinado">Contrato Assinado</SelectItem>
-                            <SelectItem value="outro">Outro</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <label className={`block cursor-pointer ${!novoDocNome ? "opacity-50 pointer-events-none" : ""}`}>
-                        <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx" className="hidden" onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file || !novoDocNome) return;
-                          setUploadingDoc(true);
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            const base64 = (reader.result as string).split(",")[1];
-                            uploadDocPJ.mutate({
-                              companyId,
-                              employeeId: selectedContrato.employeeId,
-                              contractId: selectedContrato.id,
-                              nome: novoDocNome,
-                              tipo: novoDocTipo,
-                              fileBase64: base64,
-                              fileName: file.name,
-                            });
-                          };
-                          reader.readAsDataURL(file);
-                        }} />
-                        <div className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg p-3 transition-colors ${uploadingDoc ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-blue-50/50"}`}>
-                          {uploadingDoc ? (
-                            <><RefreshCw className="h-4 w-4 animate-spin text-blue-500" /><span className="text-xs text-blue-600">Enviando...</span></>
-                          ) : (
-                            <><Upload className="h-4 w-4 text-gray-400" /><span className="text-xs text-gray-600">{novoDocNome ? "Clique para selecionar o arquivo" : "Informe o nome do documento antes"}</span></>
-                          )}
+                    return (
+                      <div className="border rounded-lg p-5 space-y-5">
+                        <div>
+                          <p className="text-sm font-semibold">Documentos do Prestador</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Documentos obrigatórios e adicionais da empresa prestadora.</p>
                         </div>
-                      </label>
-                    </div>
 
-                    {/* Lista de documentos */}
-                    {(pjDocs as any[]).length === 0 ? (
-                      <div className="text-center py-6 text-muted-foreground text-sm">
-                        <File className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                        Nenhum documento cadastrado
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {(pjDocs as any[]).map((doc: any) => (
-                          <div key={doc.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/20">
-                            <File className="h-4 w-4 text-blue-500 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{doc.nome}</p>
-                              <p className="text-xs text-muted-foreground">{doc.tipo} • {doc.criadoPor} • {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString("pt-BR") : "-"}</p>
-                            </div>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => window.open(doc.url, "_blank")}>
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 shrink-0" onClick={() => { if (confirm("Remover documento?")) deleteDocPJ.mutate({ id: doc.id }); }}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                        {/* SLOTS OBRIGATÓRIOS */}
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Documentos Obrigatórios</p>
+                          {DOCS_OBRIGATORIOS.map((slot) => {
+                            const existente = (pjDocs as any[]).find((d: any) => d.tipo === slot.tipo);
+                            const isUploading = uploadingTipo === slot.tipo;
+                            return (
+                              <div key={slot.tipo} className={`flex items-center gap-3 p-3 border rounded-lg ${existente ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${existente ? "bg-emerald-100" : "bg-slate-100"}`}>
+                                  {existente
+                                    ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                    : <File className="h-4 w-4 text-slate-400" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold">{slot.label}</p>
+                                  <p className="text-xs text-muted-foreground">{existente ? existente.nome : slot.desc}</p>
+                                </div>
+                                {existente ? (
+                                  <div className="flex gap-1 shrink-0">
+                                    <Button size="icon" variant="ghost" className="h-7 w-7" title="Abrir" onClick={() => window.open(existente.url, "_blank")}>
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Remover" onClick={() => { if (confirm(`Remover ${slot.label}?`)) deleteDocPJ.mutate({ id: existente.id }); }}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <label className="shrink-0 cursor-pointer">
+                                    <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      setUploadingTipo(slot.tipo);
+                                      const reader = new FileReader();
+                                      reader.onload = () => {
+                                        const base64 = (reader.result as string).split(",")[1];
+                                        uploadDocPJ.mutate({
+                                          companyId,
+                                          employeeId: selectedContrato.employeeId,
+                                          contractId: selectedContrato.id,
+                                          nome: slot.label,
+                                          tipo: slot.tipo,
+                                          fileBase64: base64,
+                                          fileName: file.name,
+                                        });
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }} />
+                                    <div className={`flex items-center gap-1.5 px-3 py-1.5 bg-white border rounded-md text-xs font-medium transition-colors ${isUploading ? "border-blue-300 text-blue-600" : "border-slate-300 text-slate-600 hover:bg-slate-50 hover:border-slate-400"}`}>
+                                      {isUploading ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Enviando…</> : <><Upload className="h-3.5 w-3.5" /> Enviar</>}
+                                    </div>
+                                  </label>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* OUTROS DOCUMENTOS */}
+                        {outrosDocs.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Outros Documentos</p>
+                            {outrosDocs.map((doc: any) => (
+                              <div key={doc.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/20">
+                                <File className="h-4 w-4 text-blue-500 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{doc.nome}</p>
+                                  <p className="text-xs text-muted-foreground">{doc.tipo} • {doc.criadoPor} • {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString("pt-BR") : "-"}</p>
+                                </div>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => window.open(doc.url, "_blank")}>
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 shrink-0" onClick={() => { if (confirm("Remover documento?")) deleteDocPJ.mutate({ id: doc.id }); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
+
+                        {/* ADICIONAR DOCUMENTO EXTRA */}
+                        {!showNovoDoc ? (
+                          <Button variant="outline" size="sm" className="gap-1.5 text-xs w-full justify-center border-dashed" onClick={() => setShowNovoDoc(true)}>
+                            <Plus className="h-3.5 w-3.5" /> Adicionar outro documento
+                          </Button>
+                        ) : (
+                          <div className="space-y-2 border rounded-lg p-3 bg-muted/20">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-medium uppercase text-muted-foreground">Novo Documento</p>
+                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setShowNovoDoc(false); setNovoDocNome(""); setNovoDocTipo("outro"); }}>
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input placeholder="Nome do documento" value={novoDocNome} onChange={e => setNovoDocNome(e.target.value)} className="text-sm" />
+                              <Select value={novoDocTipo} onValueChange={setNovoDocTipo}>
+                                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="contrato_social">Contrato Social</SelectItem>
+                                  <SelectItem value="rg">RG</SelectItem>
+                                  <SelectItem value="cpf">CPF</SelectItem>
+                                  <SelectItem value="cnpj">CNPJ</SelectItem>
+                                  <SelectItem value="comprovante_endereco">Comprov. Endereço</SelectItem>
+                                  <SelectItem value="das">DAS / Guia</SelectItem>
+                                  <SelectItem value="nota_fiscal">Nota Fiscal</SelectItem>
+                                  <SelectItem value="seguro">Apólice Seguro</SelectItem>
+                                  <SelectItem value="contrato_assinado">Contrato Assinado</SelectItem>
+                                  <SelectItem value="outro">Outro</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <label className={`block cursor-pointer ${!novoDocNome ? "opacity-50 pointer-events-none" : ""}`}>
+                              <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx" className="hidden" onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file || !novoDocNome) return;
+                                setUploadingDoc(true);
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  const base64 = (reader.result as string).split(",")[1];
+                                  uploadDocPJ.mutate({
+                                    companyId,
+                                    employeeId: selectedContrato.employeeId,
+                                    contractId: selectedContrato.id,
+                                    nome: novoDocNome,
+                                    tipo: novoDocTipo,
+                                    fileBase64: base64,
+                                    fileName: file.name,
+                                  });
+                                };
+                                reader.readAsDataURL(file);
+                              }} />
+                              <div className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg p-3 transition-colors ${uploadingDoc ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-blue-50/50"}`}>
+                                {uploadingDoc
+                                  ? <><RefreshCw className="h-4 w-4 animate-spin text-blue-500" /><span className="text-xs text-blue-600">Enviando...</span></>
+                                  : <><Upload className="h-4 w-4 text-gray-400" /><span className="text-xs text-gray-600">{novoDocNome ? "Clique para selecionar o arquivo" : "Informe o nome do documento antes"}</span></>
+                                }
+                              </div>
+                            </label>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </TabsContent>
 
                 {/* Aba Revisões ISO */}
