@@ -17517,12 +17517,12 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const result = await db.execute(sql`
-        SELECT id, descricao, unidade, quantidade::float8
+        SELECT id, descricao, unidade, quantidade::float8, COALESCE(valor_unitario, 0)::float8 AS valor_unitario
         FROM oc_lista_recebimento
         WHERE oc_id = ${input.ocId} AND company_id = ${input.companyId}
         ORDER BY id
       `);
-      return result.rows as { id: number; descricao: string; unidade: string; quantidade: number }[];
+      return result.rows as { id: number; descricao: string; unidade: string; quantidade: number; valor_unitario: number }[];
     }),
 
   salvarListaRecebimento: protectedProcedure
@@ -17533,6 +17533,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         descricao: z.string().min(1).max(300),
         unidade: z.string().max(20),
         quantidade: z.number().positive(),
+        valorUnitario: z.number().min(0).optional(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -17545,9 +17546,10 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       await db.execute(sql`DELETE FROM oc_lista_recebimento WHERE oc_id = ${input.ocId} AND company_id = ${input.companyId}`);
       const autorNome = (ctx.user as any).name ?? (ctx.user as any).email ?? "sistema";
       for (const it of input.itens) {
+        const vu = it.valorUnitario ?? 0;
         await db.execute(sql`
-          INSERT INTO oc_lista_recebimento (oc_id, company_id, descricao, unidade, quantidade, criado_por, criado_em)
-          VALUES (${input.ocId}, ${input.companyId}, ${it.descricao}, ${it.unidade}, ${it.quantidade}, ${autorNome}, NOW())
+          INSERT INTO oc_lista_recebimento (oc_id, company_id, descricao, unidade, quantidade, valor_unitario, criado_por, criado_em)
+          VALUES (${input.ocId}, ${input.companyId}, ${it.descricao}, ${it.unidade}, ${it.quantidade}, ${vu}, ${autorNome}, NOW())
         `);
       }
       return { ok: true };
@@ -17583,15 +17585,16 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       const prompt = `Você é um assistente especializado em locação de equipamentos de construção civil (andaimes, escoramentos, formas, cimbramento, etc.). Analise este documento de projeto ou lista de material enviado pelo locador e extraia TODAS as peças e componentes listados.
 
 REGRAS CRÍTICAS:
-- Extraia TODOS os itens com descrição completa, quantidade e unidade de medida
+- Extraia TODOS os itens com descrição completa, quantidade, unidade de medida e valor unitário de locação
 - Seja específico na descrição (ex: "Prumo de Escoramento 3m" não apenas "Prumo")
-- Quantidades devem ser NUMÉRICAS (sem vírgula como separador decimal, use ponto)
+- Quantidades e valores devem ser NUMÉRICOS (sem vírgula como separador decimal, use ponto)
+- Se não encontrar valor unitário para um item, use 0
 - Retorne SOMENTE JSON válido, sem texto adicional, sem markdown
 
 Formato de resposta:
 {
   "itens": [
-    { "descricao": "descrição completa da peça/componente", "quantidade": número, "unidade": "un|m|m²|m³|kg|cx|pç|gl|jg|bd|tb" }
+    { "descricao": "descrição completa da peça/componente", "quantidade": número, "unidade": "un|m|m²|m³|kg|cx|pç|gl|jg|bd|tb", "valor_unitario": número }
   ]
 }`;
       const mime = (input.mimeType === "image/jpg" ? "image/jpeg" : input.mimeType) as any;
@@ -17614,6 +17617,7 @@ Formato de resposta:
           descricao: String(it.descricao ?? "").trim().slice(0, 300),
           quantidade: Math.max(0.001, parseFloat(String(it.quantidade).replace(",", ".")) || 1),
           unidade: String(it.unidade ?? "un").slice(0, 20),
+          valorUnitario: Math.max(0, parseFloat(String(it.valor_unitario ?? "0").replace(",", ".")) || 0),
         }))
         .filter((it: any) => it.descricao.length > 0);
       console.log(`[extrairListaRecebimentoIA] oc=${input.ocId} itens=${itens.length}`);

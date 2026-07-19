@@ -1,4 +1,26 @@
 /**
+ * Rev. 4444 - FEAT: VALOR UNITÁRIO NA LISTA DE PEÇAS PARA RECEBIMENTO (OC Locação)
+ *
+ * Adiciona campo `valor_unitario` à tabela `oc_lista_recebimento` e atualiza toda
+ * a cadeia (backend + IA + frontend) para exibir e persistir preço unitário de locação.
+ *
+ * MUDANÇAS:
+ *   1. ColFix + SyncSchema+: `ALTER TABLE oc_lista_recebimento ADD COLUMN IF NOT EXISTS
+ *      valor_unitario NUMERIC(12,2) NOT NULL DEFAULT 0` — COLFIX_VERSION v4444.
+ *   2. `getListaRecebimento`: SELECT inclui `COALESCE(valor_unitario,0)::float8`.
+ *   3. `salvarListaRecebimento`: z.schema aceita `valorUnitario` opcional; INSERT grava
+ *      a coluna nova.
+ *   4. `extrairListaRecebimentoIA`: prompt solicita `valor_unitario`; mapper parseia
+ *      o campo e repassa como `valorUnitario`.
+ *   5. Frontend `Ordens.tsx`: lista passa de linha simples para tabela com colunas
+ *      Descrição / Un. / Qtd / Vl. Unit. / Total + rodapé Total Geral. Formulário
+ *      de adição manual ganha input "R$ vl.un.". Todos os caminhos de save (manual
+ *      + IA) propagam `valorUnitario`.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4443 - FIX: BADGE "SEM ASSINATURA" + BOTÃO ENVIO — Contrato PJ (ModuloPJ)
  *
  * Problema: contratos PJ assinados via FCSign continuavam mostrando "Sem assinatura"

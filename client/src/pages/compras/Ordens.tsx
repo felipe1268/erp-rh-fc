@@ -469,6 +469,7 @@ export default function Ordens() {
   const [listaAddDesc, setListaAddDesc] = useState("");
   const [listaAddUnit, setListaAddUnit] = useState("un");
   const [listaAddQty, setListaAddQty] = useState("1");
+  const [listaAddValor, setListaAddValor] = useState("");
   const [listaIALoading, setListaIALoading] = useState(false);
   const [listaIAProgress, setListaIAProgress] = useState(0);
   const listaFileInputRef = useRef<HTMLInputElement>(null);
@@ -709,7 +710,7 @@ export default function Ordens() {
       if (!data.itens.length) { toast.error("Nenhuma peça encontrada no documento."); return; }
       const current = listaRecebQ.data ?? [];
       const merged = [
-        ...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade })),
+        ...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade, valorUnitario: (i as any).valor_unitario ?? 0 })),
         ...data.itens,
       ];
       salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: merged });
@@ -2731,7 +2732,7 @@ export default function Ordens() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setListaShowAdd(true); setListaAddDesc(""); setListaAddUnit("un"); setListaAddQty("1"); }}
+                          onClick={() => { setListaShowAdd(true); setListaAddDesc(""); setListaAddUnit("un"); setListaAddQty("1"); setListaAddValor(""); }}
                           className="inline-flex items-center gap-1 rounded border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 text-xs px-2 py-1 transition"
                         >
                           <Plus className="h-3 w-3" /> Adicionar
@@ -2747,27 +2748,74 @@ export default function Ordens() {
                           Nenhuma peça cadastrada. Use "+ Adicionar" ou "Ler PDF (IA)" para montar a lista de conferência do almoxarife.
                         </p>
                       )}
-                      {(listaRecebQ.data ?? []).map((item, idx) => (
-                        <div key={item.id} className="flex items-center gap-2 bg-white rounded border border-amber-100 px-2.5 py-1.5">
-                          <span className="text-[10px] text-amber-500 font-mono font-bold w-5 shrink-0 text-center">{idx + 1}</span>
-                          <span className="flex-1 text-xs text-gray-800 break-words">{item.descricao}</span>
-                          <span className="text-xs text-gray-500 shrink-0 font-medium tabular-nums">
-                            {item.quantidade % 1 === 0 ? item.quantidade : item.quantidade.toFixed(2)} {item.unidade}
-                          </span>
-                          <button
-                            onClick={() => removerListaItemMut.mutate({ id: item.id, companyId })}
-                            disabled={removerListaItemMut.isPending}
-                            className="text-gray-300 hover:text-red-500 transition-colors shrink-0 ml-0.5"
-                            title="Remover"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
+                      {(listaRecebQ.data ?? []).length > 0 && (
+                        <div className="overflow-x-auto rounded border border-amber-100">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-amber-50/80 border-b border-amber-100">
+                                <th className="text-left px-2 py-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wide w-6">#</th>
+                                <th className="text-left px-2 py-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wide">Descrição</th>
+                                <th className="text-center px-2 py-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wide w-12">Un.</th>
+                                <th className="text-right px-2 py-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wide w-16">Qtd</th>
+                                <th className="text-right px-2 py-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wide w-24">Vl. Unit.</th>
+                                <th className="text-right px-2 py-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wide w-24">Total</th>
+                                <th className="w-6"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(listaRecebQ.data ?? []).map((item, idx) => {
+                                const vu = (item as any).valor_unitario ?? 0;
+                                const total = vu * item.quantidade;
+                                return (
+                                  <tr key={item.id} className={`border-b border-amber-50 ${idx % 2 === 0 ? "bg-white" : "bg-amber-50/30"}`}>
+                                    <td className="px-2 py-1.5 text-[10px] text-amber-400 font-mono font-bold text-center">{idx + 1}</td>
+                                    <td className="px-2 py-1.5 text-gray-800 break-words">{item.descricao}</td>
+                                    <td className="px-2 py-1.5 text-center text-gray-500 font-medium uppercase">{item.unidade}</td>
+                                    <td className="px-2 py-1.5 text-right text-gray-700 tabular-nums font-medium">
+                                      {item.quantidade % 1 === 0 ? item.quantidade : item.quantidade.toFixed(2)}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-right text-gray-600 tabular-nums">
+                                      {vu > 0 ? `R$ ${vu.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-right text-gray-700 tabular-nums font-semibold">
+                                      {total > 0 ? `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                                    </td>
+                                    <td className="px-2 py-1.5">
+                                      <button
+                                        onClick={() => removerListaItemMut.mutate({ id: item.id, companyId })}
+                                        disabled={removerListaItemMut.isPending}
+                                        className="text-gray-300 hover:text-red-500 transition-colors"
+                                        title="Remover"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            {(() => {
+                              const data = listaRecebQ.data ?? [];
+                              const totalGeral = data.reduce((acc, it) => acc + ((it as any).valor_unitario ?? 0) * it.quantidade, 0);
+                              return totalGeral > 0 ? (
+                                <tfoot>
+                                  <tr className="bg-amber-100/60 border-t border-amber-200">
+                                    <td colSpan={5} className="px-2 py-1.5 text-right text-[10px] font-bold text-amber-800 uppercase tracking-wide">Total Geral</td>
+                                    <td className="px-2 py-1.5 text-right text-xs font-bold text-amber-900 tabular-nums">
+                                      R$ {totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                    </td>
+                                    <td></td>
+                                  </tr>
+                                </tfoot>
+                              ) : null;
+                            })()}
+                          </table>
                         </div>
-                      ))}
+                      )}
                       {listaShowAdd && (
-                        <div className="flex items-center gap-1.5 bg-white rounded border-2 border-dashed border-amber-300 px-2 py-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5 bg-white rounded border-2 border-dashed border-amber-300 px-2 py-1.5">
                           <input
-                            className="flex-1 text-xs border-none outline-none bg-transparent placeholder-gray-400 min-w-0"
+                            className="flex-1 min-w-[140px] text-xs border-none outline-none bg-transparent placeholder-gray-400"
                             placeholder="Descrição da peça (ex: Prumo de Escoramento 3m)"
                             value={listaAddDesc}
                             onChange={e => setListaAddDesc(e.target.value)}
@@ -2775,18 +2823,19 @@ export default function Ordens() {
                             onKeyDown={e => {
                               if (e.key === "Enter" && listaAddDesc.trim()) {
                                 const current = listaRecebQ.data ?? [];
-                                salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade })), { descricao: listaAddDesc.trim(), unidade: listaAddUnit || "un", quantidade: parseFloat(listaAddQty) || 1 }] });
+                                salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade, valorUnitario: (i as any).valor_unitario ?? 0 })), { descricao: listaAddDesc.trim(), unidade: listaAddUnit || "un", quantidade: parseFloat(listaAddQty) || 1, valorUnitario: parseFloat(listaAddValor.replace(",", ".")) || 0 }] });
                               }
                               if (e.key === "Escape") setListaShowAdd(false);
                             }}
                           />
-                          <input className="w-14 text-xs border border-gray-200 rounded px-1.5 py-1 text-center tabular-nums" placeholder="1" value={listaAddQty} onChange={e => setListaAddQty(e.target.value)} type="number" min="0.001" step="any" />
+                          <input className="w-14 text-xs border border-gray-200 rounded px-1.5 py-1 text-center tabular-nums" placeholder="Qtd" value={listaAddQty} onChange={e => setListaAddQty(e.target.value)} type="number" min="0.001" step="any" />
                           <input className="w-10 text-xs border border-gray-200 rounded px-1 py-1 text-center uppercase" placeholder="un" value={listaAddUnit} onChange={e => setListaAddUnit(e.target.value)} maxLength={10} />
+                          <input className="w-20 text-xs border border-gray-200 rounded px-1.5 py-1 text-right tabular-nums" placeholder="R$ vl.un." value={listaAddValor} onChange={e => setListaAddValor(e.target.value)} type="text" inputMode="decimal" />
                           <button
                             onClick={() => {
                               if (!listaAddDesc.trim()) return;
                               const current = listaRecebQ.data ?? [];
-                              salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade })), { descricao: listaAddDesc.trim(), unidade: listaAddUnit || "un", quantidade: parseFloat(listaAddQty) || 1 }] });
+                              salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade, valorUnitario: (i as any).valor_unitario ?? 0 })), { descricao: listaAddDesc.trim(), unidade: listaAddUnit || "un", quantidade: parseFloat(listaAddQty) || 1, valorUnitario: parseFloat(listaAddValor.replace(",", ".")) || 0 }] });
                             }}
                             disabled={!listaAddDesc.trim() || salvarListaMut.isPending}
                             className="text-emerald-600 hover:text-emerald-700 disabled:opacity-40 shrink-0"

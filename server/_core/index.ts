@@ -5500,11 +5500,17 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4424: tabela oc_lista_recebimento garantida (lista de peças p/ locação).");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4424 oc_lista_recebimento:", e?.message || e); }
 
+        // Rev. 4444 — valor_unitario em oc_lista_recebimento
+        try {
+          await db.execute(sql.raw(`ALTER TABLE oc_lista_recebimento ADD COLUMN IF NOT EXISTS valor_unitario NUMERIC(12,2) NOT NULL DEFAULT 0;`));
+          console.log("[SyncSchema+] Rev. 4444: coluna valor_unitario garantida em oc_lista_recebimento.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4444 valor_unitario:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4441-2026-07-19-template-margins";
+    const COLFIX_VERSION = "v4444-2026-07-19-lista-receb-valor";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
