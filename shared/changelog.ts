@@ -1,4 +1,25 @@
 /**
+ * Rev. 4422 - OC IA: BARRA DE PROGRESSO 0→100% NO STEP DE PROCESSAMENTO
+ *
+ * O step "processing" do dialog "Criar OC por IA" mostrava apenas um spinner
+ * sem feedback de andamento. Agora exibe barra de progresso com percentual.
+ *
+ * Implementação (Regra de Ouro — fase IA não-determinística):
+ * — Novo estado `ocIAProgress` (0–100).
+ * — useEffect disparado ao entrar em `ocIAStep==="processing"`: setInterval a
+ *   cada 1.2s incrementa +1 a +5% aleatórios, cap em 90% (zona IA simulada).
+ * — Ao polling retornar `status==="done"`: salta para 100% imediatamente,
+ *   aguarda 600ms para o usuário ver "100%", depois troca para step "review".
+ * — Cleanup: interval cancelado + progress resetado ao sair de "processing".
+ * — UI: barra cinza `bg-gray-200` com faixa azul `bg-blue-500` crescendo via
+ *   `width: X%` + `transition-all duration-700 ease-out`. Percentual numérico
+ *   em `text-blue-600 font-semibold` ao lado do rótulo "Progresso".
+ *
+ * Arquivo: `client/src/pages/compras/Ordens.tsx`
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4421 - A2: TRANSFERÊNCIAS ALMOXARIFADO — MOSTRAR "PARA" E "ENVIADO POR" NO HISTÓRICO
  *
  * No histórico de movimentações (Movimentacoes.tsx), as transferências mostravam apenas

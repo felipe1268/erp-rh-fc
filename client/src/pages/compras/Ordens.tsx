@@ -458,6 +458,7 @@ export default function Ordens() {
   const [ocIAJobId, setOcIAJobId] = useState<string | null>(null);
   const [ocIAResult, setOcIAResult] = useState<any | null>(null);
   const [ocIADragOver, setOcIADragOver] = useState(false);
+  const [ocIAProgress, setOcIAProgress] = useState(0);
   const ocIAFileRef = useRef<HTMLInputElement>(null);
 
   const [autoSwitchedForCompany, setAutoSwitchedForCompany] = useState<number | null>(null);
@@ -572,12 +573,25 @@ export default function Ordens() {
     { enabled: ocIAStep === "processing" && !!ocIAJobId, refetchInterval: 2000 }
   );
   useEffect(() => {
+    if (ocIAStep !== "processing") { setOcIAProgress(0); return; }
+    setOcIAProgress(0);
+    const iv = setInterval(() => {
+      setOcIAProgress(p => p < 90 ? Math.min(p + Math.random() * 4 + 1, 90) : p);
+    }, 1200);
+    return () => clearInterval(iv);
+  }, [ocIAStep]);
+
+  useEffect(() => {
     if (!ocIAPollQ.data) return;
     const d = ocIAPollQ.data as any;
     if (d.status === "done") {
-      setOcIAJobId(null);
-      setOcIAResult(d);
-      setOcIAStep("review");
+      setOcIAProgress(100);
+      setTimeout(() => {
+        setOcIAJobId(null);
+        setOcIAResult(d);
+        setOcIAStep("review");
+        setOcIAProgress(0);
+      }, 600);
     } else if (d.status === "error") {
       setOcIAJobId(null);
       toast.error((d as any).error ?? "Erro na leitura por IA");
@@ -1523,6 +1537,18 @@ export default function Ordens() {
                 <div className="flex flex-col items-center justify-center py-16 gap-4">
                   <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
                   <p className="font-medium text-gray-700">Analisando documento com IA…</p>
+                  <div className="w-64">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>Progresso</span>
+                      <span className="font-semibold text-blue-600">{Math.round(ocIAProgress)}%</span>
+                    </div>
+                    <div className="relative h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-full bg-blue-500 transition-all duration-700 ease-out"
+                        style={{ width: `${ocIAProgress}%` }}
+                      />
+                    </div>
+                  </div>
                   <p className="text-sm text-gray-400">Isso pode levar alguns segundos</p>
                 </div>
               )}
