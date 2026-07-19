@@ -506,7 +506,7 @@ export default function ModuloPJ() {
       pendentes: list.filter(c => c.status === "pendente_assinatura").length,
       encerrados: list.filter(c => c.status === "encerrado").length,
       totalMensal: totalValor,
-      semAssinatura: ativos.filter(c => !c.contratoAssinadoUrl).length,
+      semAssinatura: ativos.filter(c => !c.contratoAssinadoUrl && !(c as any).fcSignDocumentUrl).length,
     };
   }, [contratos]);
 
