@@ -9722,6 +9722,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       impostos: z.number().optional(),
       desconto: z.number().optional(),
       modalidadeFd: z.enum(["normal", "fd_cliente", "fd_fc"]).optional(),
+      tipoOc: z.enum(["compra", "locacao", "servico"]).optional(),
       userId: z.number().optional(),
       userName: z.string().optional(),
       anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
@@ -9785,6 +9786,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         total: String(total.toFixed(2)),
         modalidadeFd: input.modalidadeFd ?? "normal",
         fdPagador: input.modalidadeFd === "fd_cliente" ? "cliente" : input.modalidadeFd === "fd_fc" ? "fc" : null,
+        tipo: input.tipoOc ?? "compra",
       } as any).returning();
       if (input.itens.length > 0) {
         await db.insert(comprasOrdensItens).values(

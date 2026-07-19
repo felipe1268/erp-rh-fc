@@ -1,4 +1,49 @@
 /**
+ * Rev. 4418 - AJUSTES COMPRAS / ALMOXARIFADO / SST (LISTA AJUSTES_ERP_17072026)
+ *
+ * 7 melhorias implementadas em Compras, Almoxarifado e SST:
+ *
+ * C2 — TIPO DE ORDEM NA OC MANUAL: Campo "Tipo de Ordem" (Compra / Aluguel / Serviço)
+ *   adicionado ao formulário "Nova OC Manual" em Compras → Ordens. Valor persiste no
+ *   banco (`comprasOrdens.tipo`) via `criarOrdemManual` (server+client). O filtro e
+ *   badge de tipo já existentes passam a refletir o valor salvo.
+ *   Arquivos: `client/src/pages/compras/Ordens.tsx`, `server/routers/compras.ts`
+ *
+ * C3 — CAMPO "OBSERVAÇÃO" NO DÉBITO DE BDI: Input de observação adicionado ao dialog
+ *   de débito/BDI em Cotações. Campo `observacaoDebito` enviado à mutation e limpo
+ *   após sucesso.
+ *   Arquivo: `client/src/pages/compras/Cotacoes.tsx`
+ *
+ * C6 — FILTRO DE OBRA + BUSCA POR DESCRIÇÃO EM COTAÇÕES: `filtroObraId` filtra a
+ *   lista de cotações por obra. Campo de busca agora também pesquisa em `c.descricao`
+ *   (além do número). Seletor de obra exibido na barra de filtros.
+ *   Arquivo: `client/src/pages/compras/Cotacoes.tsx`
+ *
+ * A3 — QUANTIDADE INTEIRA NO ALMOXARIFADO: 3 inputs de quantidade mudados de
+ *   `step=0.001` / `step=0.01` para `step=1`, `min=1` e `Math.round()` no onChange:
+ *   movimentação (entrada/saída), vistoria e transferência.
+ *   Arquivo: `client/src/pages/almoxarifado/index.tsx`
+ *
+ * A4 — NOME DO REMETENTE NO HISTÓRICO DE TRANSFERÊNCIAS: Histórico de transferências
+ *   exibe nome do almoxarife (almoxarife_nome) em linha roxa abaixo da data.
+ *   Arquivo: `client/src/pages/almoxarifado/index.tsx`
+ *
+ * S2 — CONDIÇÃO DO EPI POR OBRA: Coluna "Cond." adicionada à tabela "Estoque por Obra"
+ *   (EPIs). Badge colorido: Verde=Bom, Amarelo=Regular, Vermelho=Ruim. Campo
+ *   `condicaoEpi` incluído no server query `estoqueObraList`.
+ *   Arquivos: `client/src/pages/Epis.tsx`, `server/routers/epis.ts`
+ *
+ * S4 — FILTRO POR OBRA NOS ALERTAS DE ESTOQUE MÍNIMO: Select de obra filtra a lista
+ *   de alertas de EPI na tela EpiEstoqueMinimo.
+ *   Arquivo: `client/src/pages/EpiEstoqueMinimo.tsx`
+ *
+ * Verificados como já implementados (sem alteração de código):
+ *   C4 (rastreio SC→OC), A2 (transferência em lote), S3 (EPI obra→obra).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4417 - AVISO ENCERRAMENTO PJ: BOTÃO "PRÉVIA DO DOCUMENTO" + PRAZO PADRÃO 15 DIAS
  *
  * Melhorias no FCSignAvisoEncerramentoPJDialog (Rev. 4416):

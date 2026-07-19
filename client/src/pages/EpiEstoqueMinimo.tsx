@@ -19,6 +19,7 @@ export default function EpiEstoqueMinimo() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState<"alertas" | "config">("alertas");
+  const [filtroObraAlerta, setFiltroObraAlerta] = useState("todas");
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({ epiId: "", obraId: "", quantidadeMinima: "20" });
 
@@ -68,7 +69,27 @@ export default function EpiEstoqueMinimo() {
       {/* ============================================================ */}
       {tab === "alertas" && (
         <div className="space-y-3">
-          {alertas.length === 0 ? (
+          {/* Filtro por obra */}
+          <div className="flex items-center gap-2">
+            <Select value={filtroObraAlerta} onValueChange={setFiltroObraAlerta}>
+              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Filtrar por obra..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as obras</SelectItem>
+                <SelectItem value="central">🏢 Almoxarifado Central</SelectItem>
+                {obrasList.map((o: any) => (
+                  <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {filtroObraAlerta !== "todas" && (
+              <button onClick={() => setFiltroObraAlerta("todas")} className="text-xs text-gray-400 hover:text-gray-600 underline">Limpar filtro</button>
+            )}
+          </div>
+          {(() => {
+            const alertasFiltrados = filtroObraAlerta === "todas" ? alertas
+              : filtroObraAlerta === "central" ? alertas.filter((a: any) => a.tipo === "central")
+              : alertas.filter((a: any) => String(a.obraId) === filtroObraAlerta);
+            return alertasFiltrados.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <CheckCircle2 className="h-10 w-10 text-green-500 mb-3" />
@@ -82,21 +103,21 @@ export default function EpiEstoqueMinimo() {
                 <Card className="border-red-200 bg-red-50/50">
                   <CardContent className="py-3 text-center">
                     <ShieldAlert className="h-6 w-6 text-red-600 mx-auto mb-1" />
-                    <p className="text-2xl font-bold text-red-700">{fmtNum(alertas.length)}</p>
+                    <p className="text-2xl font-bold text-red-700">{fmtNum(alertasFiltrados.length)}</p>
                     <p className="text-xs text-red-600">Itens abaixo do mínimo</p>
                   </CardContent>
                 </Card>
                 <Card className="border-amber-200 bg-amber-50/50">
                   <CardContent className="py-3 text-center">
                     <Package className="h-6 w-6 text-amber-600 mx-auto mb-1" />
-                    <p className="text-2xl font-bold text-amber-700">{fmtNum(alertas.reduce((s: number, a: any) => s + a.deficit, 0))}</p>
+                    <p className="text-2xl font-bold text-amber-700">{fmtNum(alertasFiltrados.reduce((s: number, a: any) => s + a.deficit, 0))}</p>
                     <p className="text-xs text-amber-600">Unidades faltantes</p>
                   </CardContent>
                 </Card>
               </div>
 
               <div className="space-y-2">
-                {alertas.map((alerta: any, idx: number) => (
+                {alertasFiltrados.map((alerta: any, idx: number) => (
                   <Card key={idx} className="border-red-200 bg-red-50/20">
                     <div className="p-3 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
@@ -136,7 +157,7 @@ export default function EpiEstoqueMinimo() {
                     <Bell className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
                     <div className="text-xs text-blue-800">
                       <p className="font-semibold mb-1">Sugestão de Reposição</p>
-                      {alertas.map((a: any, idx: number) => (
+                      {alertasFiltrados.map((a: any, idx: number) => (
                         <p key={idx}>
                           Estoque de <strong>{a.nomeEpi}</strong> na <strong>{a.nomeObra}</strong> está com{" "}
                           <strong>{a.quantidadeAtual}</strong> unidades — mínimo configurado: <strong>{a.quantidadeMinima}</strong>.
@@ -148,7 +169,8 @@ export default function EpiEstoqueMinimo() {
                 </CardContent>
               </Card>
             </>
-          )}
+          );
+        })()}
         </div>
       )}
 

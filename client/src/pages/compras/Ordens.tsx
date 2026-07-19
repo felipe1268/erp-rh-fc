@@ -477,6 +477,7 @@ export default function Ordens() {
     frete: "", outrasDespesas: "", impostos: "", desconto: "",
     condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "",
     formaPagamento: "", contaBancariaId: "", cartaoId: "",
+    tipoOc: "compra" as "compra" | "locacao" | "servico",
   });
   // Rev. 2486 — Grupos por etapa. `itens` legado computado via flatten()
   // pra preservar compatibilidade com leitores existentes (formHasData,
@@ -673,7 +674,7 @@ export default function Ordens() {
   const [editRastreio, setEditRastreio] = useState("");
 
   function resetForm() {
-    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "", formaPagamento: "", contaBancariaId: "", cartaoId: "" });
+    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "", formaPagamento: "", contaBancariaId: "", cartaoId: "", tipoOc: "compra" });
     setGrupos([newGrupo()]);
     setNumParc(1);
     setParcelas([]);
@@ -854,6 +855,7 @@ export default function Ordens() {
       impostos: parseFloat(form.impostos) || 0,
       desconto: parseFloat(form.desconto) || 0,
       modalidadeFd: tipoFaturamento,
+      tipoOc: form.tipoOc,
       userId: user?.id,
       userName: user?.name,
       anexos: anexosForm.length > 0 ? anexosForm : undefined,
@@ -1452,6 +1454,21 @@ export default function Ordens() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-400">Obrigatório — o custo desta OC será apropriado à obra selecionada.</p>
+            </div>
+
+            {/* Tipo de OC */}
+            <div className="space-y-1.5">
+              <Label className="text-gray-700 text-sm font-medium">Tipo de Ordem</Label>
+              <Select value={form.tipoOc} onValueChange={v => setForm(p => ({ ...p, tipoOc: v as "compra" | "locacao" | "servico" }))}>
+                <SelectTrigger className="bg-white border-gray-300 text-gray-900">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-gray-200">
+                  <SelectItem value="compra">Compra</SelectItem>
+                  <SelectItem value="locacao">Aluguel / Locação</SelectItem>
+                  <SelectItem value="servico">Serviço</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">

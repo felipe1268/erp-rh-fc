@@ -3273,6 +3273,7 @@ export default function Epis() {
                           <th className="p-3 text-left font-medium">Obra</th>
                           <th className="p-3 text-left font-medium">EPI</th>
                           <th className="p-3 text-center font-medium">CA</th>
+                          <th className="p-3 text-center font-medium">Cond.</th>
                           <th className="p-3 text-center font-medium">Categoria</th>
                           <th className="p-3 text-center font-medium">Quantidade</th>
                           <th className="p-3 text-right font-medium">Valor Unit.</th>
@@ -3315,6 +3316,11 @@ export default function Epis() {
                             </td>
                             <td className="p-3 text-center">
                               {e.caEpi ? <Badge variant="outline" className="text-[10px]">CA: {e.caEpi}</Badge> : '—'}
+                            </td>
+                            <td className="p-3 text-center">
+                              {e.condicaoEpi
+                                ? <Badge variant="outline" className={`text-[10px] ${e.condicaoEpi === 'Reutilizado' ? 'text-amber-700 border-amber-300 bg-amber-50' : 'text-green-700 border-green-300 bg-green-50'}`}>{e.condicaoEpi === 'Reutilizado' ? 'Reutiliz.' : 'Novo'}</Badge>
+                                : <span className="text-[10px] text-muted-foreground">—</span>}
                             </td>
                             <td className="p-3 text-center">
                               <Badge variant="outline" className="text-[10px]">{e.categoriaEpi || '—'}</Badge>

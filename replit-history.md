@@ -1,3 +1,4 @@
+- **Rev. 4411** — **MÓDULO PJ: REDESIGN COMPLETO DOS CARDS KPI + CARD "PJ SEM CONTRATO".** 7 cards com ícones, cores semânticas e grade responsiva (lg:grid-cols-7). "PJ Sem Contrato" (vermelho) usa alertas.pjsSemContrato existente. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4408** — **CONTAS A PAGAR: LAYOUT ESTRUTURADO PARA LINHAS PJ (NOME + TAGS).** Célula PJ: linha 1 = nome negrito; linha 2 = pills [1ª/2ª Medição] [Contrato #X] [PJ-XXXXX] [MM/AAAA]. Demais origens inalteradas. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `forTransfer?: boolean` bypassa filtro por usuário. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4323** — **SCORECARD RH/FOLHA: BANCO DE HORAS COM DADOS REAIS + PERIOD SELECTOR.** `getBancoHorasObra` reescrito; `PeriodSelectorCard` com bolinhas azuis; tabela "Mov. Mês|Ano" + "Saldo Acum.". ZERO DELETE · ZERO ALTER destrutivo.

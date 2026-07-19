@@ -3482,10 +3482,10 @@ export default function AlmoxarifadoPage() {
               <div>
                 <label className="text-xs font-medium text-gray-700">Quantidade ({movItem.unidade}) *</label>
                 <input
-                  type="number" min={0.001} step={0.001}
+                  type="number" min={1} step={1}
                   className="mt-1 w-full h-10 px-3 text-lg font-semibold rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
                   value={formMov.quantidade || ""}
-                  onChange={e => setFormMov(p => ({ ...p, quantidade: parseFloat(e.target.value) || 0 }))}
+                  onChange={e => setFormMov(p => ({ ...p, quantidade: Math.round(parseFloat(e.target.value)) || 0 }))}
                 />
               </div>
               {formMov.tipo === "saida" && (
@@ -4079,7 +4079,7 @@ export default function AlmoxarifadoPage() {
                   {/* Quantidade */}
                   <div>
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
-                    <input type="number" inputMode="decimal" min="0.01" step="0.01" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={insQtd} onChange={e => setInsQtd(e.target.value)} />
+                    <input type="number" inputMode="numeric" min="1" step="1" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={insQtd} onChange={e => setInsQtd(String(Math.round(parseFloat(e.target.value) || 1)))} />
                   </div>
                   {/* Obra */}
                   {typeof obraContexto === "number" ? (
@@ -4226,7 +4226,7 @@ export default function AlmoxarifadoPage() {
                     </div>
                     <div>
                       <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
-                      <input type="number" inputMode="decimal" min="0.01" step="0.01" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={transfQtd} onChange={e => setTransfQtd(e.target.value)} />
+                      <input type="number" inputMode="numeric" min="1" step="1" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={transfQtd} onChange={e => setTransfQtd(String(Math.round(parseFloat(e.target.value) || 1)))} />
                     </div>
                   </div>
 
@@ -4801,7 +4801,10 @@ export default function AlmoxarifadoPage() {
                         <span className="px-2 py-0.5 bg-purple-100 rounded-full font-medium">{destinoLabel}</span>
                       </div>
                       {t.motivo && <p className="text-[11px] text-gray-400 italic mt-1">{t.motivo}</p>}
-                      <p className="text-[11px] text-gray-400 mt-0.5">{t.created_at ? new Date(t.created_at).toLocaleString("pt-BR") : ""}</p>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <p className="text-[11px] text-gray-400">{t.created_at ? new Date(t.created_at).toLocaleString("pt-BR") : ""}</p>
+                        {t.almoxarife_nome && <p className="text-[11px] text-purple-600 font-medium">Enviado por {t.almoxarife_nome}</p>}
+                      </div>
                     </div>
                   );
                 })}

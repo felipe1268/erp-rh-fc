@@ -50,19 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4418** — **AJUSTES COMPRAS / ALMOXARIFADO / SST (LISTA AJUSTES_ERP_17072026).** 7 melhorias: C2 — campo "Tipo de Ordem" (Compra/Aluguel/Serviço) no formulário de OC Manual + server `criarOrdemManual` aceita `tipoOc`; C3 — observação no débito de BDI em Cotações; C6 — filtro por obra + busca por descrição em cotações; A3 — inputs de quantidade inteira (step=1) em movimentação, vistoria e transferência do almoxarifado; A4 — nome do remetente (almoxarife_nome) no histórico de transferências; S2 — coluna "Cond." na tabela de EPIs por obra; S4 — filtro por obra nos alertas de estoque mínimo. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4417** — **AVISO ENCERRAMENTO PJ: BOTÃO "PRÉVIA DO DOCUMENTO" + PRAZO PADRÃO 15 DIAS.** Botão laranja "Prévia do Documento" `<Eye>` no footer abre nova janela com o documento renderizado (campos em branco mostram placeholders legíveis). Helper `buildDocData(preview?)` extraído. Prazo de Aviso padrão alterado de "30 dias" para "15 dias". ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4416** — **MÓDULO PJ: BOTÃO "ENVIAR AVISO DE ENCERRAMENTO" → DIALOG FCSIGN (FC-CON-003).** Botão laranja `<FileMinus2>` na coluna Ações de cada contrato PJ abre `FCSignAvisoEncerramentoPJDialog`. Dialog carrega dados do contrato + template vigente `aviso_encerramento_pj`, preenche 14 placeholders via `renderTemplate`, constrói HTML com `buildFcDocument` e cria sessão FCSign (`tipo: "aviso_encerramento_pj"`, signers: contratante=Felipe + contratado=prestador). Campos editáveis: motivo, data encerramento, prazo aviso, nº/data/local do documento. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4416** — **MÓDULO PJ: BOTÃO "ENVIAR AVISO DE ENCERRAMENTO" → DIALOG FCSIGN (FC-CON-003).** Botão `<FileMinus2>` abre `FCSignAvisoEncerramentoPJDialog`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4415** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — EDITOR EM BRANCO APÓS SALVAR/APROVAR.** Race condition no `useEffect` de conteúdo: após `invalidarTudo()`, `getQuery.isFetching=true` mas `isLoading=false`; dado stale (`conteudoHtml:""`) sobrescrevia o editor antes do refetch terminar. Fix: guarda `if (getQuery.isFetching) return` + `isFetching` nas deps. Bônus: tipos fixos "Não criado" agora pré-populam com seed institucional via `getSeedTemplate`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4415** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — EDITOR EM BRANCO APÓS SALVAR/APROVAR.** Race condition `isFetching` sobrescrevia editor; fix: guard `if (getQuery.isFetching) return`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4414** — **TEMPLATES ISO: NOVO TIPO "AVISO DE ENCERRAMENTO DE CONTRATO PJ" (FC-CON-003).** Tipo fixo na aba Contratos com 5 cláusulas (contrato objeto, encerramento, prazo/obrigações, quitação, disposições finais). Placeholders: representanteLegal, contratadaRazaoSocial, contratadaCnpj, numeroContrato, dataInicioContrato, dataEncerramentoContrato, motivoEncerramento, prazoAviso. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4414** — **TEMPLATES ISO: NOVO TIPO "AVISO DE ENCERRAMENTO DE CONTRATO PJ" (FC-CON-003).** 5 cláusulas, 8 placeholders. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4413** — **TEMPLATES ISO: BOTÃO EXCLUIR SEMPRE VISÍVEL + BARRA FLEX-WRAP.** Botão Excluir renderiza sempre: ativo (vermelho) quando existe, desabilitado (cinza) com tooltip quando "Não criado". Barra flex-wrap no mobile. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4413** — **TEMPLATES ISO: BOTÃO EXCLUIR SEMPRE VISÍVEL + BARRA FLEX-WRAP.** Botão Excluir renderiza sempre (ativo/desabilitado); barra flex-wrap. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4412** — **MÓDULO PJ: CARDS KPI — LAYOUT VERTICAL CENTRADO.** Ícone (círculo topo) → número → label. Labels curtos, min-h uniforme, sem overflow. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4411** — **MÓDULO PJ: REDESIGN COMPLETO DOS CARDS KPI + CARD "PJ SEM CONTRATO".** 7 cards com ícones, cores semânticas e grade responsiva (lg:grid-cols-7). "PJ Sem Contrato" (vermelho) usa alertas.pjsSemContrato existente. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4412** — **MÓDULO PJ: CARDS KPI — LAYOUT VERTICAL CENTRADO.** Ícone (círculo topo) → número → label. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4410** — **MÓDULO PJ: CARD "FALTA ASSINAR" NOS KPIs.** Novo card laranja contando contratos ativos sem contratoAssinadoUrl. Borda laranja + clicável quando > 0. Grid: lg:grid-cols-6. ZERO DELETE · ZERO ALTER destrutivo.
 

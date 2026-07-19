@@ -145,6 +145,7 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
     onSuccess: (d) => {
       toast.success(`Debitado do RISCO! Reserva restante: ${fmt(d.novoDisponivel)}${d.ocsAprovadas ? " — OC aprovada automaticamente." : ""}`);
       setValorDebito("");
+      setObservacaoDebito("");
       q.refetch();
       onAcao?.();
       if (d.ocsAprovadas) onCoberto?.();
@@ -183,6 +184,7 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
   });
 
   const [valorDebito, setValorDebito] = useState("");
+  const [observacaoDebito, setObservacaoDebito] = useState("");
   const [sobrasSel, setSobrasSel] = useState<Set<number>>(new Set());
   const [desfazerTarget, setDesfazerTarget] = useState<{ id: number; valor: number } | null>(null);
   const [senhaMasterCot, setSenhaMasterCot] = useState("");
@@ -270,30 +272,41 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
 
         {/* Input de novo débito — só aparece se ainda há saldo a cobrir */}
         {!cotacaoCoberta && risco.disponivel > 0 && debitarMax > 0 && risco.orcamentoId ? (
-          <div className="flex items-center gap-2 pt-1">
-            <div className="relative flex-1">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
-              <input
-                type="number"
-                min={0}
-                max={debitarMax}
-                step={0.01}
-                value={valorDebito}
-                onChange={e => setValorDebito(e.target.value)}
-                placeholder={`Máx. ${fmt(debitarMax)}`}
-                className="w-full pl-8 pr-2 py-1.5 text-xs border border-orange-300 rounded bg-white outline-none focus:ring-1 focus:ring-orange-400"
-              />
+          <div className="flex flex-col gap-1.5 pt-1">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={debitarMax}
+                  step={0.01}
+                  value={valorDebito}
+                  onChange={e => setValorDebito(e.target.value)}
+                  placeholder={`Máx. ${fmt(debitarMax)}`}
+                  className="w-full pl-8 pr-2 py-1.5 text-xs border border-orange-300 rounded bg-white outline-none focus:ring-1 focus:ring-orange-400"
+                />
+              </div>
+              <Button size="sm" variant="ghost"
+                onClick={() => setValorDebito(String(debitarMax.toFixed(2)))}
+                className="h-7 text-xs text-orange-700 hover:bg-orange-100 whitespace-nowrap">
+                Usar tudo
+              </Button>
             </div>
-            <Button size="sm" disabled={valorDebitoNum <= 0 || valorDebitoNum > debitarMax + 0.01 || debitarRisco.isPending}
-              onClick={() => debitarRisco.mutate({ companyId, obraId, orcamentoId: risco.orcamentoId!, cotacaoId, valor: valorDebitoNum, deficit, observacao: `Débito automático — Cotação #${cotacaoId}` })}
-              className="h-7 bg-orange-500 hover:bg-orange-600 text-white text-xs gap-1 whitespace-nowrap">
-              {debitarRisco.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Debitar do Risco
-            </Button>
-            <Button size="sm" variant="ghost"
-              onClick={() => setValorDebito(String(debitarMax.toFixed(2)))}
-              className="h-7 text-xs text-orange-700 hover:bg-orange-100 whitespace-nowrap">
-              Usar tudo
-            </Button>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={observacaoDebito}
+                onChange={e => setObservacaoDebito(e.target.value)}
+                placeholder={`Observação (padrão: Débito automático — Cotação #${cotacaoId})`}
+                className="flex-1 px-2.5 py-1.5 text-xs border border-orange-200 rounded bg-white outline-none focus:ring-1 focus:ring-orange-400 text-gray-700 placeholder:text-gray-400"
+              />
+              <Button size="sm" disabled={valorDebitoNum <= 0 || valorDebitoNum > debitarMax + 0.01 || debitarRisco.isPending}
+                onClick={() => debitarRisco.mutate({ companyId, obraId, orcamentoId: risco.orcamentoId!, cotacaoId, valor: valorDebitoNum, deficit, observacao: observacaoDebito.trim() || `Débito automático — Cotação #${cotacaoId}` })}
+                className="h-7 bg-orange-500 hover:bg-orange-600 text-white text-xs gap-1 whitespace-nowrap">
+                {debitarRisco.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Debitar do Risco
+              </Button>
+            </div>
           </div>
         ) : cotacaoCoberta ? (
           <p className="text-[11px] text-green-700 italic font-medium bg-green-50 rounded px-2 py-1">✓ Déficit desta cotação já coberto integralmente pela reserva de risco.</p>
@@ -905,6 +918,7 @@ export default function Cotacoes() {
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [filtroObraId, setFiltroObraId] = useState("");
   // Rev. 2298 — filtro por tipo (material/servico/pacote/equipamento)
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "material" | "servico" | "pacote" | "equipamento">("todos");
   // Rev. 4016 — Item 17: filtro dedicado por período de CRIAÇÃO da cotação
@@ -1997,7 +2011,7 @@ export default function Cotacoes() {
 
   const lista = q.data ?? [];
   // Rev. 2296 — contadores por status (ignoram filtroStatus, mas respeitam busca por número).
-  const listaSearched = lista.filter(c => !busca || c.numeroCotacao?.toLowerCase().includes(busca.toLowerCase()));
+  const listaSearched = lista.filter(c => !busca || c.numeroCotacao?.toLowerCase().includes(busca.toLowerCase()) || c.descricao?.toLowerCase().includes(busca.toLowerCase()));
   // Rev. 2298 — contadores e filtros são compostos (status + tipo).
   // Cada linha de pills mostra o contador IGNORANDO seu próprio filtro
   // mas APLICANDO o filtro da outra dimensão — assim, ao escolher um
@@ -2050,7 +2064,8 @@ export default function Cotacoes() {
   const filtBase = listaSearched.filter(c =>
     matchStatus(c) &&
     (filtroTipo === "todos" || tipoOf(c) === filtroTipo) &&
-    matchData(c)
+    matchData(c) &&
+    (!filtroObraId || String(c.obraId) === filtroObraId)
   );
   // Rev. 2487 — Ordenação clicável por coluna.
   const fornecedoresList = fornQ.data ?? [];
@@ -8445,8 +8460,18 @@ export default function Cotacoes() {
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input placeholder="Buscar por número..." className="pl-9 bg-white border-gray-300 text-gray-900" value={busca} onChange={e => setBusca(e.target.value)} />
+          <Input placeholder="Buscar por número ou descrição..." className="pl-9 bg-white border-gray-300 text-gray-900" value={busca} onChange={e => setBusca(e.target.value)} />
         </div>
+        {/* Filtro por obra */}
+        <select
+          className="h-9 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md text-gray-900 outline-none focus:ring-1 focus:ring-blue-400"
+          value={filtroObraId}
+          onChange={e => setFiltroObraId(e.target.value)}
+          title="Filtrar por obra"
+        >
+          <option value="">Todas as obras</option>
+          {obrasList.map((o: any) => <option key={o.id} value={String(o.id)}>{o.nome}</option>)}
+        </select>
         {/* Rev. 4016 — Item 17: filtro por período de criação da cotação. */}
         <div className="flex items-center gap-1.5">
           <Input
