@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { useDocumentMargins } from "@/hooks/useDocumentMargins";
 import { renderTemplate } from "@shared/documentTemplates";
 import { formatBRL, valorPorExtenso } from "@/lib/numeroExtenso";
 import { Users, UsersRound, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save, ChevronsUpDown, Check, RefreshCw, Footprints, Shirt, Ruler } from "lucide-react";
@@ -240,6 +241,7 @@ function formatDate(val: unknown): string {
 export default function Colaboradores() {
   const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const { user } = useAuth();
+  const documentMargins = useDocumentMargins();
   const isAdminMaster = user?.role === "admin_master";
   // Rev. 2206/2207 — Sigilo do status "Aviso Prévio".
   // Rev. 2206: hardcoded por regex no nome do grupo (RH/DP).
@@ -2797,6 +2799,7 @@ ${(() => {
                       geradoPor: userName,
                       pageTitle: `Contrato de Experiência - ${empNome}`,
                       logoSrc,
+                      margins: documentMargins,
                     });
                     const empCpfFmt = formatCPF(empCpf);
                     // Rev. 2136 — validação consolidada de pré-requisitos do Contrato

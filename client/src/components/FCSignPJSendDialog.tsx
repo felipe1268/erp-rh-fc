@@ -6,6 +6,7 @@ import { ShieldCheck, Users, Loader2, Copy, CheckCircle2, ExternalLink, Send, Lo
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { buildContratoPjSignHtml } from "@/lib/contratoPjDocument";
+import { useDocumentMargins } from "@/hooks/useDocumentMargins";
 
 type Props = {
   open: boolean;
@@ -35,6 +36,7 @@ const roleLabel: Record<string, string> = {
 };
 
 export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, geradoPor }: Props) {
+  const documentMargins = useDocumentMargins();
   const [t1Nome, setT1Nome] = useState("");
   const [t1Cpf, setT1Cpf] = useState("");
   const [t2Nome, setT2Nome] = useState("");
@@ -75,6 +77,7 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
         modeloHtml,
         contratanteNome: FELIPE_SOCIO.nome,
         geradoPor: geradoPor || "Sistema",
+        margins: documentMargins,
       });
       const signers: Array<{ role: "contratado" | "contratante" | "testemunha_1" | "testemunha_2"; nome: string; cpf: string | null }> = [
         // Ordem PJ: prestador assina 1º, FC (CONTRATANTE) valida 2º.

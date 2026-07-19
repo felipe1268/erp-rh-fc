@@ -20,6 +20,7 @@ import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { useDocumentMargins } from "@/hooks/useDocumentMargins";
 import { renderTemplate } from "@shared/documentTemplates";
 import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
@@ -85,6 +86,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
+  const documentMargins = useDocumentMargins();
   // Rev. 2747 — geradores consomem o template Vigente quando existir (fallback HTML atual).
   const avisoTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "aviso_previo" });
   const rescisaoTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "termo_rescisao" });
@@ -660,6 +662,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         },
         geradoPor: user?.name || "Sistema",
         pageTitle: `Aviso Prévio ${modalidade} — ${empNome}`,
+        margins: documentMargins,
       });
       const wv = window.open("", "_blank", "width=820,height=1100");
       if (!wv) { toast.error("Popup bloqueado. Permita popups para gerar o documento."); return; }
@@ -2200,6 +2203,7 @@ ${isExperiencia ? (() => {
                           },
                           geradoPor: user?.name || "Sistema",
                           pageTitle: `Termo de Rescisão — ${pdfData.funcionario.nome}`,
+                          margins: documentMargins,
                         });
                         const wv = window.open('', '_blank', 'width=800,height=1100');
                         if (!wv) { toast.error('Popup bloqueado. Permita popups para gerar o PDF.'); return; }

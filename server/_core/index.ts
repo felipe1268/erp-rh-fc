@@ -5504,7 +5504,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4345-2026-07-17-locados-quantidade";
+    const COLFIX_VERSION = "v4440-2026-07-19-doc-margins";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7308,6 +7308,19 @@ REGRAS DE EXTRAÇÃO:
         await _db4345.$client.query(`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS quantidade INTEGER NOT NULL DEFAULT 1`);
         console.log("[ColFix Rev.4345] equipamentos_locados: coluna quantidade garantida.");
       } catch (e: any) { console.error("[ColFix Rev.4345] FALHA quantidade locados:", e?.message ?? e); }
+
+      // Rev. 4440 — Margens configuráveis por empresa para documentos institucionais.
+      try {
+        const _db4440 = await getDb();
+        if (!_db4440) throw new Error("db indisponível");
+        await _db4440.$client.query(`
+          ALTER TABLE companies ADD COLUMN IF NOT EXISTS doc_margin_top_mm    INTEGER DEFAULT 10;
+          ALTER TABLE companies ADD COLUMN IF NOT EXISTS doc_margin_right_mm  INTEGER DEFAULT 10;
+          ALTER TABLE companies ADD COLUMN IF NOT EXISTS doc_margin_bottom_mm INTEGER DEFAULT 10;
+          ALTER TABLE companies ADD COLUMN IF NOT EXISTS doc_margin_left_mm   INTEGER DEFAULT 10;
+        `);
+        console.log("[ColFix Rev.4440] companies: colunas doc_margin_*_mm garantidas.");
+      } catch (e: any) { console.error("[ColFix Rev.4440] FALHA doc_margin columns:", e?.message ?? e); }
 
       // Rev. 4042 — Stripe: inicializar (schema stripe.* + webhook gerenciado)
       // Envolvido em try/catch isolado: falha na configuração do Stripe NÃO

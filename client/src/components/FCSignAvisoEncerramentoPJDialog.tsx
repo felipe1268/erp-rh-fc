@@ -11,6 +11,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { renderTemplate } from "@shared/documentTemplates";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { useDocumentMargins } from "@/hooks/useDocumentMargins";
 
 const FELIPE_SOCIO = { nome: "FELIPE COSTA ALVES", cpf: "362.506.888-54" } as const;
 
@@ -44,6 +45,7 @@ type SessionResult = {
 };
 
 export default function FCSignAvisoEncerramentoPJDialog({ open, onOpenChange, contratoId, geradoPor }: Props) {
+  const documentMargins = useDocumentMargins();
   const [motivoEncerramento, setMotivoEncerramento] = useState("");
   const [dataEncerramento, setDataEncerramento]   = useState("");
   const [prazoAviso, setPrazoAviso]               = useState("15 dias");
@@ -119,6 +121,7 @@ export default function FCSignAvisoEncerramentoPJDialog({ open, onOpenChange, co
       },
       geradoPor: geradoPor || "Sistema",
       pageTitle: `Aviso de Encerramento — ${(contrato as any).numeroContrato || ""} — ${prestadorNome}`,
+      margins: documentMargins,
     });
     return { dados, documentHtml };
   }
@@ -199,6 +202,7 @@ export default function FCSignAvisoEncerramentoPJDialog({ open, onOpenChange, co
         },
         geradoPor: geradoPor || "Sistema",
         pageTitle: `Aviso de Encerramento — ${contrato.numeroContrato || ""} — ${prestadorNome}`,
+        margins: documentMargins,
       });
 
       const r = await createMut.mutateAsync({

@@ -1,4 +1,39 @@
 /**
+ * Rev. 4440 - FEAT: MARGENS CONFIGURÁVEIS POR EMPRESA — Central de Documentos
+ *
+ * Adiciona margens de página configuráveis (superior, inferior, esquerda, direita em mm)
+ * para todos os documentos gerados pelo buildFcDocument.
+ *
+ * BACKEND:
+ * - 4 novas colunas em `companies`: docMarginTopMm, docMarginRightMm,
+ *   docMarginBottomMm, docMarginLeftMm (INTEGER DEFAULT 10).
+ * - COLFIX_VERSION = "v4440-2026-07-19-doc-margins" (ALTER TABLE IF NOT EXISTS).
+ * - tRPC procedures getDocumentMargins + updateDocumentMargins no router
+ *   systemDocumentTemplates.ts (admin-only, validação 5–50 mm).
+ *
+ * FRONTEND:
+ * - buildFcDocument (fcDocumentTemplate.ts): aceita param opcional
+ *   margins?: { top, right, bottom, left } (mm, default 10 cada);
+ *   CSS @page e .fc-doc padding usam esses valores.
+ * - Hook useDocumentMargins (client/src/hooks/useDocumentMargins.ts):
+ *   busca margens da empresa via tRPC e retorna objeto { top, right, bottom, left }.
+ * - TemplatesDocsTab.tsx: nova seção "Configurações de Página" com diagrama
+ *   visual de A4, 4 inputs numéricos (5–50 mm) e botão Salvar com progresso.
+ *   buildFcPreviewHtml também recebe e passa margins.
+ * - Todos os callers de buildFcDocument atualizados:
+ *   ControleDocumentos.tsx (2×), Colaboradores.tsx, FCSignAvisoEncerramentoPJDialog.tsx (2×),
+ *   TermoResponsabilidadeDialog.tsx, SolicitacaoMDO.tsx, AvisoPrevio.tsx (2×).
+ * - buildContratoPjSignHtml (contratoPjDocument.ts): campo margins? adicionado
+ *   à interface BuildContratoPjSignHtmlArgs; ambos os caminhos ISO/legado passam margins.
+ *   Callers: FCSignPJSendDialog.tsx, ModuloPJ.tsx atualizados.
+ *
+ * Racional: margens hardcoded em 10mm tornaram-se insuficientes para documentos
+ * com cabeçalho mais alto ou papel diferente; empresa pode agora calibrar sem
+ * nenhuma alteração de código.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4439 - UX: BOTÃO LIMPAR ASSINATURA — AssinarDocumento (FCSign)
  *
  * Adicionado botão "↺ Limpar" ao lado do título "SUA ASSINATURA (Nª NA ORDEM)"

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { useDocumentMargins } from "@/hooks/useDocumentMargins";
 import { renderTemplate } from "@shared/documentTemplates";
 import { formatCPF, fmtNum } from "@/lib/formatters";
 import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
@@ -2252,6 +2253,7 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
 export default function ControleDocumentos() {
   const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
+  const documentMargins = useDocumentMargins();
   const companyIds = getCompanyIdsForQuery();
   const hasValidCompany = isConstrutoras ? companyIds.length > 0 : !!companyId;
   const selectedCompany = companies?.find((c: any) => String(c.id) === selectedCompanyId);
@@ -3540,6 +3542,7 @@ export default function ControleDocumentos() {
                                     corpoHtml: renderTemplate(advVigenteHtml, dadosA),
                                     assinaturas: { partes: [{ nome: "Empregador / Representante Legal", subtitulo: nomeEmpresaCompleto }, { nome: a.nomeCompleto, subtitulo: "Colaborador(a)" }] },
                                     geradoPor: userName, pageTitle: tipoTitulo,
+                                    margins: documentMargins,
                                   });
                                   const wv = window.open("", "_blank");
                                   if (wv) { wv.document.write(htmlVig); wv.document.write(`<script>setTimeout(function(){window.print()},500)<\/script>`); wv.document.close(); }
@@ -4517,6 +4520,7 @@ export default function ControleDocumentos() {
                       corpoHtml: renderTemplate(advVigenteHtml, dadosA),
                       assinaturas: { partes: [{ nome: "Empregador / Representante Legal", subtitulo: nomeEmpresaCompleto }, { nome: a.nomeCompleto, subtitulo: "Colaborador(a)" }] },
                       geradoPor: userName, pageTitle: tipoTitulo,
+                      margins: documentMargins,
                     });
                     const wv = window.open("", "_blank");
                     if (wv) { wv.document.write(htmlVig); wv.document.write(`<script>setTimeout(function(){window.print()},500)<\/script>`); wv.document.close(); }

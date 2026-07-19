@@ -799,6 +799,60 @@ export const systemDocumentTemplatesRouter = router({
       }
       return { ok: true, conteudoHtml: html, sugestoes };
     }),
+
+  // ── Rev. 4440 — Margens configuráveis por empresa ──────────────────────────
+  /** Retorna as 4 margens (mm) da empresa. Admin only. */
+  getDocumentMargins: protectedProcedure
+    .input(z.object({ companyId: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { companies } = await import("../../drizzle/schema");
+      const row = await db
+        .select({
+          top:    companies.docMarginTopMm,
+          right:  companies.docMarginRightMm,
+          bottom: companies.docMarginBottomMm,
+          left:   companies.docMarginLeftMm,
+        })
+        .from(companies)
+        .where(eq(companies.id, input.companyId))
+        .limit(1);
+      if (!row.length) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa não encontrada" });
+      return {
+        top:    row[0].top    ?? 10,
+        right:  row[0].right  ?? 10,
+        bottom: row[0].bottom ?? 10,
+        left:   row[0].left   ?? 10,
+      };
+    }),
+
+  /** Salva as 4 margens (mm) da empresa. Admin only. */
+  updateDocumentMargins: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      top:       z.number().int().min(0).max(50),
+      right:     z.number().int().min(0).max(50),
+      bottom:    z.number().int().min(0).max(50),
+      left:      z.number().int().min(0).max(50),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { companies } = await import("../../drizzle/schema");
+      await db
+        .update(companies)
+        .set({
+          docMarginTopMm:    input.top,
+          docMarginRightMm:  input.right,
+          docMarginBottomMm: input.bottom,
+          docMarginLeftMm:   input.left,
+        })
+        .where(eq(companies.id, input.companyId));
+      return { ok: true };
+    }),
 });
 
 /**

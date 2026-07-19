@@ -50,21 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4440** — **FEAT: MARGENS CONFIGURÁVEIS POR EMPRESA — Central de Documentos.** 4 colunas em `companies` (`docMarginTop/Right/Bottom/LeftMm`, DEFAULT 10); ColFix `v4440`; tRPC `getDocumentMargins`+`updateDocumentMargins`; hook `useDocumentMargins`; UI "Configurações de Página" em TemplatesDocsTab; todos os callers de `buildFcDocument`/`buildContratoPjSignHtml` atualizados (10 arquivos). ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4439** — **UX: BOTÃO LIMPAR ASSINATURA — AssinarDocumento (FCSign).** Botão "↺ Limpar" ao lado do título da área de assinatura; chama `padRef.current?.clear()`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4438** — **LAYOUT: MARGENS 1cm EM TODOS OS LADOS — PADRÃO DEFINITIVO (buildFcDocument).** `@page`: `10mm`; `.fc-doc` padding: `1cm`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4437** — **LAYOUT: MARGENS LATERAIS 1,5cm — TEMPLATE ISO (buildFcDocument).** `@page`: `20mm 15mm`; `.fc-doc` padding: `2cm 1.5cm`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4436** — **LAYOUT: REDUÇÃO DE MARGENS DO TEMPLATE ISO (buildFcDocument).** `@page` margin: `25mm 15mm` → `20mm` (todos os lados); `.fc-doc` padding: `2.5cm 1.5cm` → `2cm` uniforme. Afeta Contrato PJ, Comunicados e demais docs ISO. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4435** — **FIX: BOTÃO VOLTAR — ContratoPJView e AditivoPJView.** `window.history.back()` é no-op quando página abre sem histórico anterior (iOS/link direto). Substituído por `navigate("/modulo-pj")` no ContratoPJView e `navigate(\`/contrato-pj/${contractId}\`)` no AditivoPJView (contractId passado do wrapper como prop). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4429** — **FIX: PDF CONTRATO PJ = 100% TEMPLATE DA CENTRAL DE DOCUMENTOS.** `buildContratoPjSignHtml` usa template ISO diretamente; sem `buildFcDocument`; HTML shell mínimo `@page A4`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4428** — **SYNC BIDIRECIONAL: DADOS BANCÁRIOS COLABORADORES ↔ CONTRATO PJ.** `getLastByEmployee` estendido; preenchimento auto no form novo; sync vice-versa ao salvar. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4427** — **FIX: MENSAGEM DE ERRO DE CONEXÃO iOS NO CADASTRO DE COLABORADOR.** iOS WebKit descarta requisições HTTP silenciosamente; `erroToast` detecta padrão e exibe mensagem amigável; `onSettled` garante invalidação. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4426** — **FIX: PRÉ-VISUALIZAR CONTRATO PJ — OBJETO DO CONTRATO DUPLICADO/INLINE.** Fix 3 camadas: `formatObjetoHtml` filtra cabeçalhos; `buildContratoPjSignHtml` pré-processa ISO em 3 passagens; prompt IA reescrito + strip server-side. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4425** — **IA: GERAR CLÁUSULA DE OBJETO DO CONTRATO PJ.** Campo "Objeto do Contrato" virou seção estilizada; IA gera parágrafo inicial + 7–12 alíneas + encerramento. Progresso 0→100%. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4423** — **OC IA: SELEÇÃO DE OBRA + EAP NO STEP DE REVISÃO.** card verde "Obra e Apropriação" no step review do dialog Criar OC por IA. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4438** — **LAYOUT: MARGENS 1cm EM TODOS OS LADOS — PADRÃO DEFINITIVO (buildFcDocument).** `@page`: `10mm`; `.fc-doc` padding: `1cm`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4437** — **LAYOUT: MARGENS LATERAIS 1,5cm — TEMPLATE ISO (buildFcDocument).** `@page`: `20mm 15mm`; `.fc-doc` padding: `2cm 1.5cm`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4436** — **LAYOUT: REDUÇÃO DE MARGENS DO TEMPLATE ISO (buildFcDocument).** `@page` margin: `25mm 15mm` → `20mm`; `.fc-doc` padding: `2.5cm 1.5cm` → `2cm`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4435** — **FIX: BOTÃO VOLTAR — ContratoPJView e AditivoPJView.** `window.history.back()` no-op; substituído por `navigate("/modulo-pj")` / `navigate(\`/contrato-pj/${contractId}\`)`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4429** — **FIX: PDF CONTRATO PJ = 100% TEMPLATE DA CENTRAL DE DOCUMENTOS.** `buildContratoPjSignHtml` usa template ISO diretamente; HTML shell mínimo `@page A4`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

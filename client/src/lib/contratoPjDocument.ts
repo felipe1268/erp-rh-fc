@@ -327,6 +327,8 @@ export interface BuildContratoPjSignHtmlArgs {
   contratanteNome: string;
   /** Nome de quem está gerando (opcional — não é mais exibido no documento). */
   geradoPor: string;
+  /** Margens configuráveis da empresa (mm). Rev. 4440. */
+  margins?: { top?: number; right?: number; bottom?: number; left?: number };
 }
 
 /**
@@ -341,7 +343,7 @@ export interface BuildContratoPjSignHtmlArgs {
  *   Usa o texto plain-text do modelo + buildFcDocument (comportamento anterior).
  */
 export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): string {
-  const { contrato: c, modelo, modeloHtml, geradoPor } = args;
+  const { contrato: c, modelo, modeloHtml, geradoPor, margins } = args;
 
   // ──────────────────────────────────────────────────────────────────────────
   // CAMINHO ISO: template da Central de Documentos como corpo do buildFcDocument
@@ -425,6 +427,7 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
       geradoPor,
       pageTitle: `Contrato PJ ${c.numeroContrato || ""} — ${nomePrestador}`,
       logoSrc: `${origin}/logo-fc.jpg`,
+      margins,
     };
 
     return buildFcDocument(params);
@@ -465,6 +468,7 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
     },
     geradoPor,
     pageTitle: `Contrato PJ ${c.numeroContrato || ""} — ${nomePrestador}`,
+    margins,
   };
 
   return buildFcDocument(params);

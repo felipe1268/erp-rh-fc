@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { useDocumentMargins } from "@/hooks/useDocumentMargins";
 import { renderTemplate } from "@shared/documentTemplates";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/hooks/useCompany";
@@ -167,6 +168,7 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
         dataEmissao: e.cidadeData,
         assunto: { label: "ASSUNTO:", valor: "Abertura de Conta Salário" },
         corpoHtml: renderTemplate(cartaVigenteHtml, dados),
+        margins: documentMargins,
         assinaturas: {
           partes: [
             { nome: d.responsavelNome, subtitulo: "Responsável pelo encaminhamento" },
@@ -325,6 +327,7 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
 export default function SolicitacaoMDO() {
   const { user } = useAuth();
   const { companyId, companyIds } = useCompany();
+  const documentMargins = useDocumentMargins();
   const { isAdminMaster, hasGroup, groupCanAccessRoute, groupCanEdit } = usePermissions();
   const userRole = user?.role || "";
   const isAdmin = userRole === "admin" || userRole === "admin_master";

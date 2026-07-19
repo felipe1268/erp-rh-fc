@@ -652,6 +652,11 @@ export const companies = pgTable("companies", {
         docRodapeTexto: text("doc_rodape_texto"),
         docMarcaDaguaUrl: text("doc_marca_dagua_url"),
         docMarcaDaguaOpacidade: numeric("doc_marca_dagua_opacidade", { precision: 3, scale: 2 }).default("0.08"),
+        // Rev. 4440 — Margens configuráveis por empresa para documentos institucionais (mm). Default 10mm.
+        docMarginTopMm: integer("doc_margin_top_mm").default(10),
+        docMarginRightMm: integer("doc_margin_right_mm").default(10),
+        docMarginBottomMm: integer("doc_margin_bottom_mm").default(10),
+        docMarginLeftMm: integer("doc_margin_left_mm").default(10),
         heDestinoPadrao: text("heDestinoPadrao").default("banco_horas"),
         gestorFinanceiroId: integer("gestor_financeiro_id"),
         gestorFinanceiroNome: varchar("gestor_financeiro_nome", { length: 255 }),

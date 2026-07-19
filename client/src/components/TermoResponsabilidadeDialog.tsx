@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { useDocumentMargins } from "@/hooks/useDocumentMargins";
 import { renderTemplate } from "@shared/documentTemplates";
 
 // Rev. 2137 — Dialog do Termo de Responsabilidade. Espelha o fluxo FCSign
@@ -147,6 +148,7 @@ export default function TermoResponsabilidadeDialog({
   open, onOpenChange, companyId, employeeId, empNome, empCpf, empRg, empFuncao,
   comp, geradoPor, isAdminMaster, onSendToFcSign,
 }: Props) {
+  const documentMargins = useDocumentMargins();
   const [mode, setMode] = useState<"list" | "compose">("list");
   const [items, setItems] = useState<ItemEntregue[]>([]);
   const [local, setLocal] = useState<string>("");
@@ -470,6 +472,7 @@ ${obsHtml}
           valor: `${empNome}${empCpf ? ` — CPF ${empCpf}` : ""}`,
         },
         corpoHtml: corpoHtmlFinal,
+        margins: documentMargins,
         assinaturas: {
           partes: [
             { role: "empregador", label: "EMPRESA", nome: comp?.razaoSocial || "", documento: comp?.cnpj || "" },

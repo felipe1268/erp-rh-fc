@@ -94,6 +94,17 @@ export interface FcAssinaturasBlock {
   localData?: string;
 }
 
+export interface FcDocumentMargins {
+  /** Margem superior em mm. Default 10. */
+  top?: number;
+  /** Margem direita em mm. Default 10. */
+  right?: number;
+  /** Margem inferior em mm. Default 10. */
+  bottom?: number;
+  /** Margem esquerda em mm. Default 10. */
+  left?: number;
+}
+
 export interface FcDocumentParams {
   empresa: FcEmpresa;
   /** Nome do documento — vai dentro da faixa azul. Ex: "CONTRATO DE EXPERIÊNCIA". */
@@ -129,6 +140,11 @@ export interface FcDocumentParams {
    * funcionar dentro do window.open isolado.
    */
   logoSrc?: string;
+  /**
+   * Margens da página em mm. Se omitido, usa 10mm em todos os lados.
+   * Configurável por empresa via Central de Documentos → Configurações de Página.
+   */
+  margins?: FcDocumentMargins;
 }
 
 /**
@@ -209,11 +225,17 @@ export function buildFcDocument(p: FcDocumentParams): string {
 
   // Container principal: max-w-3xl ~ 720px (igual ao Comunicado React)
   // Padding 32px tela / 16px print (do print:p-4 do Tailwind)
+  const mTop    = p.margins?.top    ?? 10;
+  const mRight  = p.margins?.right  ?? 10;
+  const mBottom = p.margins?.bottom ?? 10;
+  const mLeft   = p.margins?.left   ?? 10;
+  const pageMarginCss = `${mTop}mm ${mRight}mm ${mBottom}mm ${mLeft}mm`;
+  const screenPadCss  = `${mTop}mm ${mRight}mm`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${pageTitle}</title></head><body style="margin:0;padding:0;background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact">
 <style>
-@page{size:A4;margin:10mm 10mm 10mm 10mm}
+@page{size:A4;margin:${pageMarginCss}}
 body{font-family:'Helvetica','Arial','Liberation Sans',sans-serif;font-size:11pt;line-height:1.55;color:#1a1a1a}
-.fc-doc{max-width:760px;margin:0 auto;background:#fff;padding:1cm 1cm;box-sizing:border-box}
+.fc-doc{max-width:760px;margin:0 auto;background:#fff;padding:${screenPadCss};box-sizing:border-box}
 .fc-doc p{margin:0 0 10px 0;text-align:justify}
 .fc-doc strong{font-weight:700;color:#1a1a1a}
 @media print{

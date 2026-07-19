@@ -30,6 +30,7 @@ import PeriodSelectorCard, { MonthDotStatus } from "@/components/PeriodSelectorC
 import FCSignPJSendDialog from "@/components/FCSignPJSendDialog";
 import FCSignAvisoEncerramentoPJDialog from "@/components/FCSignAvisoEncerramentoPJDialog";
 import { buildContratoPjSignHtml } from "@/lib/contratoPjDocument";
+import { useDocumentMargins } from "@/hooks/useDocumentMargins";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -96,6 +97,7 @@ const STATUS_PAGAMENTO: Record<string, { label: string; color: string; bg: strin
 export default function ModuloPJ() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
+  const documentMargins = useDocumentMargins();
   const [, navigate] = useLocation();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
@@ -395,6 +397,7 @@ export default function ModuloPJ() {
       modeloHtml,
       contratanteNome: "FELIPE COSTA ALVES",
       geradoPor: user?.name || user?.username || "Sistema",
+      margins: documentMargins,
     });
     const win = window.open("", "_blank");
     if (win) {
