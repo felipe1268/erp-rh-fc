@@ -1,4 +1,16 @@
 /**
+ * Rev. 4402 - FOLHA PJ: CORREÇÃO CRÍTICA — APROVAR FALHAVA (coluna "dataPrevista" inexistente)
+ *
+ * `bulkAprovar` e `aprovarComNF` faziam JOIN pj_payments + employees usando
+ * `pp."dataPrevista"` (camelCase), mas a coluna real no banco é `data_prevista`
+ * (snake_case). Isso causava erro em TODOS os lançamentos, resultando em
+ * "0 aprovado(s), N erro(s)". Nenhum lançamento era enviado para Contas a Pagar.
+ *
+ * Fix: renomeado para `pp.data_prevista` e `pj.data_prevista` nos dois
+ * procedures (aprovarComNF + bulkAprovar). ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4401 - MÓDULO PJ: COLUNA "VENCIMENTO" NA LISTA DE CONTRATOS
  *
  * Nova coluna entre "Vigência" e "Valor Mensal" com badge colorido por urgência:

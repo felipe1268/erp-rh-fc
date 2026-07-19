@@ -1413,7 +1413,7 @@ export const pjContractsRouter = router({
             }
           } else {
             const pjRow = await db.execute(sql`
-              SELECT pp.id, pp.valor, pp."dataPrevista", pp."dataPagamento",
+              SELECT pp.id, pp.valor, pp.data_prevista, pp."dataPagamento",
                      pp.descricao, pp.status, pp."mesReferencia",
                      e."nomeCompleto" AS employee_name
               FROM pj_payments pp
@@ -1435,7 +1435,7 @@ export const pjContractsRouter = router({
                 VALUES
                   (${input.companyId}, 391, 'Serviços PJ / Terceirizados', 'despesa', 'variavel',
                    ${valor}, ${pj.status === 'pago' ? valor : null},
-                   ${`${ano}-${mes}-01`}, ${pj.dataPrevista ?? null}, ${pj.dataPagamento ?? null},
+                   ${`${ano}-${mes}-01`}, ${pj.data_prevista ?? null}, ${pj.dataPagamento ?? null},
                    ${pj.status === 'pago' ? 'pago' : 'a_pagar'},
                    'pagamento_pj', ${input.id},
                    ${`PJ ${pj.mesReferencia} - ${pj.descricao ?? 'Serviço PJ'}`},
@@ -1487,7 +1487,7 @@ export const pjContractsRouter = router({
 
             if ((existing.rows ?? []).length === 0) {
               const pjRow = await db.execute(sql`
-                SELECT pp.id, pp.valor, pp."dataPrevista", pp."dataPagamento",
+                SELECT pp.id, pp.valor, pp.data_prevista, pp."dataPagamento",
                        pp.descricao, pp.status, pp."mesReferencia",
                        e."nomeCompleto" AS employee_name
                 FROM pj_payments pp
@@ -1509,7 +1509,7 @@ export const pjContractsRouter = router({
                   VALUES
                     (${input.companyId}, 391, 'Serviços PJ / Terceirizados', 'despesa', 'variavel',
                      ${valor}, ${pj.status === 'pago' ? valor : null},
-                     ${`${ano}-${mes}-01`}, ${pj.dataPrevista ?? null}, ${pj.dataPagamento ?? null},
+                     ${`${ano}-${mes}-01`}, ${pj.data_prevista ?? null}, ${pj.dataPagamento ?? null},
                      ${'a_pagar'},
                      'pagamento_pj', ${id},
                      ${`PJ ${pj.mesReferencia} - ${pj.employee_name ?? 'Serviço PJ'}`},
