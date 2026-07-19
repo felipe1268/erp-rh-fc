@@ -1,4 +1,26 @@
 /**
+ * Rev. 4445 - UX: MODAL "RECEBER LOCAÇÃO" TELA CHEIA + CONFERÊNCIA EM TABELA COMPACTA
+ *
+ * Problema: modal estreito (max-w-2xl) + números text-3xl causavam sobreposição
+ * de valores como "4.077,20" e "103,25" na seção Conferência dos Itens.
+ *
+ * MUDANÇAS:
+ *   1. `Modal` component (Locados.tsx): nova prop `fullscreen` — quando ativa,
+ *      o modal ocupa 98vw × 96vh (desktop) ou tela cheia (mobile), com
+ *      flex-col + scroll interno via `flex-1 overflow-y-auto`.
+ *   2. Modal "Receber Locação" passa `fullscreen` prop.
+ *   3. Conferência dos Itens: trocado de cards com `text-3xl font-black`
+ *      para tabela compacta (`rounded-xl border overflow-hidden`) com colunas
+ *      # / Item / Un. / Esperado / Recebido — `text-sm tabular-nums`.
+ *   4. Formatação de números em pt-BR: `toLocaleString("pt-BR")` com
+ *      ponto de milhar e vírgula decimal (4.077,20; 103,25).
+ *   5. Campo "Recebido" compacto (`text-sm`, alinhado à direita) — sem
+ *      labels abaixo e sem sobreposição.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4444 - FEAT: VALOR UNITÁRIO NA LISTA DE PEÇAS PARA RECEBIMENTO (OC Locação)
  *
  * Adiciona campo `valor_unitario` à tabela `oc_lista_recebimento` e atualiza toda

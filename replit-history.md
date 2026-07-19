@@ -1,3 +1,4 @@
+- **Rev. 4438** — **LAYOUT: MARGENS 1cm EM TODOS OS LADOS — PADRÃO DEFINITIVO (buildFcDocument).** `@page`: `10mm`; `.fc-doc` padding: `1cm`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4435** — **FIX: BOTÃO VOLTAR — ContratoPJView e AditivoPJView.** `window.history.back()` no-op; substituído por `navigate("/modulo-pj")` / `navigate(\`/contrato-pj/${contractId}\`)`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4428** — **SYNC BIDIRECIONAL: DADOS BANCÁRIOS COLABORADORES ↔ CONTRATO PJ.** `getLastByEmployee` estendido; preenchimento auto no form novo; sync vice-versa ao salvar. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4427** — **FIX: MENSAGEM DE ERRO DE CONEXÃO iOS NO CADASTRO DE COLABORADOR.** iOS WebKit descarta requisições HTTP silenciosamente; `erroToast` detecta padrão e exibe mensagem amigável; `onSettled` garante invalidação. ZERO DELETE · ZERO ALTER destrutivo.

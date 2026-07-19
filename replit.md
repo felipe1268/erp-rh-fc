@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4445** — **UX: MODAL "RECEBER LOCAÇÃO" TELA CHEIA + CONFERÊNCIA EM TABELA COMPACTA.** `Modal` component ganha prop `fullscreen` (98vw×96vh desktop, tela cheia mobile). Conferência dos Itens substituída de cards `text-3xl` que sobrepunham números (4.077,20; 103,25) por tabela compacta com colunas #/Item/Un./Esperado/Recebido em `text-sm tabular-nums`. Números formatados em pt-BR (ponto milhar + vírgula decimal). ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4444** — **FEAT: VALOR UNITÁRIO NA LISTA DE PEÇAS PARA RECEBIMENTO (OC Locação).** Coluna `valor_unitario NUMERIC(12,2)` adicionada a `oc_lista_recebimento` via ColFix v4444 + SyncSchema+. Backend (`getListaRecebimento`, `salvarListaRecebimento`, `extrairListaRecebimentoIA`) atualizado. Frontend: lista vira tabela com colunas Descrição/Un./Qtd/Vl. Unit./Total + rodapé Total Geral; formulário manual ganha campo R$ vl.un.; IA extrai preços do PDF. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4443** — **FIX: BADGE "SEM ASSINATURA" + BOTÃO ENVIO — Contrato PJ (ModuloPJ).** FCSign ao completar não atualizava `pj_contracts.contratoAssinadoUrl` → badge sempre vermelho + botão de envio nunca sumia. Fix: (A) signatures.ts parseia `observacoes="contrato_pj:{id}"` e faz UPDATE; (B) pjContracts.list adiciona `fcSignDocumentUrl` via subquery lateral retroativa; (C) ModuloPJ.tsx usa `contratoAssinadoUrl || fcSignDocumentUrl` no badge e substitui botão envio por olhinho quando assinado. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4443** — **FIX: BADGE "SEM ASSINATURA" + BOTÃO ENVIO — Contrato PJ (ModuloPJ).** FCSign ao completar não atualizava `pj_contracts.contratoAssinadoUrl` → badge sempre vermelho + botão de envio nunca sumia. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4442** — **FIX: PÁGINAS EM BRANCO NO PRINT DO CONTRATO PJ (FCSign).** `print:hidden` no header/toolbar/aside; `<main>` → `print:block`; `@media print` reescrito. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4441** — **FEAT: MARGENS POR TEMPLATE — Aba Documentos ISO (TemplatesDocsTab).** 4 colunas em `system_document_templates`; ColFix `v4441`; tRPC `updateTemplateMargins`; aba "Configurações de Página" REMOVIDA; painel por documento. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4440** — **FEAT: MARGENS CONFIGURÁVEIS POR EMPRESA — Central de Documentos.** 4 colunas em `companies`; ColFix `v4440`; tRPC `getDocumentMargins`+`updateDocumentMargins`; hook `useDocumentMargins`; UI em TemplatesDocsTab. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4441** — **FEAT: MARGENS POR TEMPLATE — Aba Documentos ISO (TemplatesDocsTab).** 4 colunas em `system_document_templates`; ColFix `v4441`; tRPC `updateTemplateMargins`; aba "Configurações de Página" REMOVIDA. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4440** — **FEAT: MARGENS CONFIGURÁVEIS POR EMPRESA — Central de Documentos.** 4 colunas em `companies`; ColFix `v4440`; tRPC `getDocumentMargins`+`updateDocumentMargins`; hook `useDocumentMargins`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4439** — **UX: BOTÃO LIMPAR ASSINATURA — AssinarDocumento (FCSign).** Botão "↺ Limpar" ao lado do título da área de assinatura; chama `padRef.current?.clear()`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4438** — **LAYOUT: MARGENS 1cm EM TODOS OS LADOS — PADRÃO DEFINITIVO (buildFcDocument).** `@page`: `10mm`; `.fc-doc` padding: `1cm`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
