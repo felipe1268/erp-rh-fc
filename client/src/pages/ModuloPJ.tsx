@@ -196,7 +196,7 @@ export default function ModuloPJ() {
 
   // Mutations
   const createContrato = trpc.pj.contratos.create.useMutation({
-    onSuccess: (data: any) => { refetchContratos(); toast.success(`Contrato ${data.numeroContrato} criado!`); setCreatedContratoId(data.id); setForm({}); },
+    onSuccess: (data: any) => { refetchContratos(); toast.success(`Contrato ${data.numeroContrato} criado!`); setCreatedContratoId(data.id); },
     onError: (e: any) => toast.error(e.message),
   });
   const updateContrato = trpc.pj.contratos.update.useMutation({
