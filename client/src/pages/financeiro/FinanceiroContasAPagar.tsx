@@ -1488,8 +1488,47 @@ export default function FinanceiroContasAPagar() {
                                       <td className="px-2 py-2 whitespace-nowrap">
                                         <span className="text-[11px] font-mono text-slate-500">#{c.id}</span>
                                       </td>
-                                      <td className="px-2 py-2 max-w-[190px]">
-                                        <p className="text-xs text-slate-700 truncate" title={desc}>{desc}</p>
+                                      <td className="px-2 py-2 max-w-[220px]">
+                                        {c.origemModulo === "pagamento_pj" ? (() => {
+                                          const raw = c.descricao ?? c.origemDescricao ?? "";
+                                          const sep = raw.includes(" — ") ? " — " : " - ";
+                                          const nome = raw.split(sep)[0]?.trim() || raw;
+                                          const contratoM = raw.match(/Contrato\s*#(\d+)/i);
+                                          const contratoNum = contratoM ? contratoM[1] : null;
+                                          const is2 = /2a\s*Medicao|2ª\s*Medi/i.test(raw);
+                                          const is1 = /1a\s*Medicao|1ª\s*Medi/i.test(raw);
+                                          const mesM = raw.match(/(\d{2})\/(\d{4})/);
+                                          const mes = mesM ? `${mesM[1]}/${mesM[2]}` : null;
+                                          return (
+                                            <>
+                                              <p className="text-xs font-semibold text-slate-800 truncate" title={nome}>{nome}</p>
+                                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                                {(is1 || is2) && (
+                                                  <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${is2 ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                                                    {is2 ? "2ª Medição" : "1ª Medição"}
+                                                  </span>
+                                                )}
+                                                {contratoNum && (
+                                                  <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                                    Contrato #{contratoNum}
+                                                  </span>
+                                                )}
+                                                {c.origemId && (
+                                                  <span className="inline-flex items-center text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-gray-50 text-gray-400 border border-gray-200">
+                                                    PJ-{c.origemId}
+                                                  </span>
+                                                )}
+                                                {mes && (
+                                                  <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200">
+                                                    {mes}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </>
+                                          );
+                                        })() : (
+                                          <p className="text-xs text-slate-700 truncate" title={desc}>{desc}</p>
+                                        )}
                                       </td>
                                       <td className="px-2 py-2">
                                         <div className="flex items-center gap-1">
@@ -1664,8 +1703,47 @@ export default function FinanceiroContasAPagar() {
                                       <td className="px-2 py-2 whitespace-nowrap">
                                         <span className="text-[11px] font-mono text-slate-500">#{c.id}</span>
                                       </td>
-                                      <td className="px-2 py-2 max-w-[190px]">
-                                        <p className="text-xs text-slate-700 truncate" title={desc}>{desc}</p>
+                                      <td className="px-2 py-2 max-w-[220px]">
+                                        {c.origemModulo === "pagamento_pj" ? (() => {
+                                          const raw = c.descricao ?? c.origemDescricao ?? "";
+                                          const sep = raw.includes(" — ") ? " — " : " - ";
+                                          const nome = raw.split(sep)[0]?.trim() || raw;
+                                          const contratoM = raw.match(/Contrato\s*#(\d+)/i);
+                                          const contratoNum = contratoM ? contratoM[1] : null;
+                                          const is2 = /2a\s*Medicao|2ª\s*Medi/i.test(raw);
+                                          const is1 = /1a\s*Medicao|1ª\s*Medi/i.test(raw);
+                                          const mesM = raw.match(/(\d{2})\/(\d{4})/);
+                                          const mes = mesM ? `${mesM[1]}/${mesM[2]}` : null;
+                                          return (
+                                            <>
+                                              <p className="text-xs font-semibold text-slate-800 truncate" title={nome}>{nome}</p>
+                                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                                {(is1 || is2) && (
+                                                  <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${is2 ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                                                    {is2 ? "2ª Medição" : "1ª Medição"}
+                                                  </span>
+                                                )}
+                                                {contratoNum && (
+                                                  <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                                    Contrato #{contratoNum}
+                                                  </span>
+                                                )}
+                                                {c.origemId && (
+                                                  <span className="inline-flex items-center text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-gray-50 text-gray-400 border border-gray-200">
+                                                    PJ-{c.origemId}
+                                                  </span>
+                                                )}
+                                                {mes && (
+                                                  <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200">
+                                                    {mes}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </>
+                                          );
+                                        })() : (
+                                          <p className="text-xs text-slate-700 truncate" title={desc}>{desc}</p>
+                                        )}
                                       </td>
                                       <td className="px-2 py-2">
                                         <div className="flex items-center gap-1">

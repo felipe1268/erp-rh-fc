@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4409** — **CONTAS A PAGAR: LAYOUT ESTRUTURADO NAS SUB-LINHAS DO GRUPO PJ EXPANDIDO.** Sub-linhas dentro do grupo consolidado também recebem nome + pills. Dois blocos de renderização substituídos. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4408** — **CONTAS A PAGAR: LAYOUT ESTRUTURADO PARA LINHAS PJ (NOME + TAGS).** Célula PJ: linha 1 = nome negrito; linha 2 = pills [1ª/2ª Medição] [Contrato #X] [PJ-XXXXX] [MM/AAAA]. Demais origens inalteradas. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4407** — **CONTAS A PAGAR: BADGE "1ª/2ª MEDIÇÃO" + REF "PJ-XXXXX" PARA PAGAMENTOS PJ.** getRef() reconhece pagamento_pj → "PJ-892978". Badge inline azul/roxo detectado por regex na descricao. ZERO DELETE · ZERO ALTER destrutivo.

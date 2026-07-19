@@ -1,4 +1,13 @@
 /**
+ * Rev. 4409 - CONTAS A PAGAR: LAYOUT ESTRUTURADO NAS SUB-LINHAS DO GRUPO PJ EXPANDIDO
+ *
+ * As sub-linhas dentro do grupo consolidado "Pagamentos PJ" (caminho {isExpanded && gp.items.map})
+ * também recebem o layout estruturado: nome em destaque + pills [1ª/2ª Medição] [Contrato #X]
+ * [PJ-XXXXX] [MM/AAAA]. Havia dois blocos idênticos de sub-linha; ambos substituídos.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4408 - CONTAS A PAGAR: LAYOUT ESTRUTURADO PARA LINHAS PJ (NOME + TAGS)
  *
  * Célula de descrição para origemModulo='pagamento_pj':
