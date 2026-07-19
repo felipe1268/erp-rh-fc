@@ -1,4 +1,14 @@
 /**
+ * Rev. 4439 - UX: BOTÃO LIMPAR ASSINATURA — AssinarDocumento (FCSign)
+ *
+ * Adicionado botão "↺ Limpar" ao lado do título "SUA ASSINATURA (Nª NA ORDEM)"
+ * no painel direito da página de assinatura FCSign (AssinarDocumento.tsx).
+ * Chama padRef.current?.clear() — método já exposto pelo SignaturePadHandle.
+ * Estilo discreto (text-slate-400 → hover:text-red-500, RotateCcw icon 3×3).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4438 - LAYOUT: MARGENS 1cm EM TODOS OS LADOS — PADRÃO DEFINITIVO (buildFcDocument)
  *
  * @page margin: 10mm 10mm 10mm 10mm (1cm todos os lados — PDF físico)

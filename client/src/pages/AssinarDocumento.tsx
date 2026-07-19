@@ -285,7 +285,17 @@ export default function AssinarDocumento() {
             </div>
           ) : (
             <div className="bg-white rounded-lg shadow border border-slate-200 p-4">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Sua assinatura ({signer.ordem}ª na ordem)</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sua assinatura ({signer.ordem}ª na ordem)</div>
+                <button
+                  type="button"
+                  onClick={() => padRef.current?.clear()}
+                  className="text-[10px] text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors"
+                  title="Limpar e desenhar novamente"
+                >
+                  <RotateCcw className="h-3 w-3" /> Limpar
+                </button>
+              </div>
               <SignaturePad ref={padRef} height={180} disabled={submitting} />
               <label className="flex items-start gap-2 mt-3 text-xs text-slate-700 cursor-pointer">
                 <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
