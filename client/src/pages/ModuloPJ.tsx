@@ -266,6 +266,10 @@ export default function ModuloPJ() {
       toast.error(e.message);
     },
   });
+  const cancelarAprovacao = (trpc as any).pj.pagamentos.cancelarAprovacao.useMutation({
+    onSuccess: () => { refetchPagamentos(); toast.success("Aprovação cancelada e removida do Contas a Pagar."); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const aprovarComNF = (trpc as any).pj.pagamentos.aprovarComNF.useMutation({
     onSuccess: (d: any) => {
       refetchPagamentos();
@@ -998,12 +1002,25 @@ export default function ModuloPJ() {
                                   )}
                                 </td>
                                 <td className="p-3">
-                                  <div className="flex items-center justify-center gap-1">
-                                    {p.status === "pendente" && (
+                                  <div className="flex items-center justify-center gap-1 flex-wrap">
+                                    {p.aprovadoEm ? (
+                                      <>
+                                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                                          <Check className="h-3 w-3" /> Aprovado
+                                        </span>
+                                        <Button size="sm" variant="ghost"
+                                          className="h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                          title="Cancelar aprovação e remover do Contas a Pagar"
+                                          disabled={cancelarAprovacao.isPending}
+                                          onClick={() => { if (confirm("Cancelar aprovação e remover do Contas a Pagar?")) cancelarAprovacao.mutate({ id: p.id, companyId }); }}>
+                                          <XCircle className="h-3.5 w-3.5 mr-1" /> Cancelar
+                                        </Button>
+                                      </>
+                                    ) : p.status === "pendente" ? (
                                       <Button size="sm" variant="ghost" className="h-7 text-xs text-blue-600" title="Aprovar e enviar para Contas a Pagar" onClick={() => { setAprovarTarget(p); setAprovarNfFile(null); setAprovarEnviarFin(true); setShowAprovarDialog(true); }}>
                                         <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Aprovar
                                       </Button>
-                                    )}
+                                    ) : null}
                                     <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir?")) deletePagamento.mutate({ id: p.id }); }}>
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </Button>

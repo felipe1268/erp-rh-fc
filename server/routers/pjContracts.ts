@@ -1525,6 +1525,32 @@ export const pjContractsRouter = router({
         }
         return { approved, errors };
       }),
+
+    /**
+     * Rev. 4405 — Cancelar aprovação de um pj_payment individual:
+     *   1. Limpa aprovado_em / aprovado_por_nome / enviado_financeiro na pj_payments.
+     *   2. Apaga o lançamento correspondente em financial_entries (origem_modulo='pagamento_pj').
+     */
+    cancelarAprovacao: protectedProcedure
+      .input(z.object({ id: z.number(), companyId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.execute(sql`
+          UPDATE pj_payments
+          SET aprovado_em        = NULL,
+              aprovado_por_nome  = NULL,
+              enviado_financeiro = false,
+              "updatedAt"        = NOW()
+          WHERE id = ${input.id} AND "companyId" = ${input.companyId}
+        `);
+        await db.execute(sql`
+          DELETE FROM financial_entries
+          WHERE origem_modulo = 'pagamento_pj'
+            AND origem_id     = ${input.id}
+            AND company_id    = ${input.companyId}
+        `);
+        return { success: true };
+      }),
   }),
 
   /** Relatório consolidado PJ para exportação PDF (retorna HTML formatado) */

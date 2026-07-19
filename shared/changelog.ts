@@ -1,4 +1,16 @@
 /**
+ * Rev. 4405 - FOLHA PJ: BADGE "APROVADO" + BOTÃO "CANCELAR" COM ESTORNO NO CONTAS A PAGAR
+ *
+ * Quando um lançamento PJ está aprovado (aprovadoEm != null):
+ *   - Exibe badge verde "✓ Aprovado" na coluna Ações (em vez do botão Aprovar).
+ *   - Exibe botão laranja "Cancelar" ao lado.
+ * Ao cancelar: procedure `cancelarAprovacao` limpa aprovado_em / aprovado_por_nome /
+ *   enviado_financeiro em pj_payments E apaga o financial_entries correspondente
+ *   (origem_modulo='pagamento_pj', origem_id=id).
+ * ZERO DELETE de dados válidos · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4404 - FOLHA PJ: BOTÃO "APROVAR SELECIONADOS" COM PROGRESSO 0→100%
  *
  * Regra de Ouro — botões de carregamento longo.

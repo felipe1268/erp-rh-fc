@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4405** — **FOLHA PJ: BADGE "APROVADO" + BOTÃO "CANCELAR" COM ESTORNO NO CONTAS A PAGAR.** Quando aprovadoEm != null: badge verde "✓ Aprovado" + botão laranja "Cancelar". Cancelar limpa aprovado_em/aprovado_por_nome/enviado_financeiro + DELETE financial_entries (origem_modulo='pagamento_pj'). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4404** — **FOLHA PJ: BOTÃO "APROVAR SELECIONADOS" COM PROGRESSO 0→100%.** Regra de Ouro: barra bg-blue-400/20 + texto "Aprovando... XX%". setInterval 3%/200ms cap 90% → 100% on success → reset 800ms. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4403** — **FOLHA PJ: CORREÇÃO CRÍTICA — DUPLICATAS (id duplicado em pj_contracts sem PRIMARY KEY).** pj_contracts sem PK → 2 linhas com id=1 → LEFT JOIN fan-out → ANDRE aparecia N×. Fix: DELETE via ctid do registro espúrio + INSERT fechamento Jul/ANDRE faltante + SyncSchema+ ADD CONSTRAINT UNIQUE(id). ZERO DELETE DE DADOS VÁLIDOS.
