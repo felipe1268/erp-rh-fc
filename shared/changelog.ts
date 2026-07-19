@@ -1,4 +1,37 @@
 /**
+ * Rev. 4397 - CONTRATO PJ: REVISÃO JURÍDICA DO TEMPLATE (3 CORREÇÕES PONTUAIS)
+ *
+ * O usuário havia editado o template (Rev. 6 do banco) introduzindo 3 trechos
+ * que enfraquecem a blindagem anti-CLT. Correções aplicadas diretamente no banco:
+ *
+ * Cláusula 2.1 — Autonomia:
+ *   ANTES: "...sendo-lhe facultado determinar as ferramentas e profissionais próprios
+ *           para atingir os resultados contratados, desde que seja seguido os custos
+ *           do orçamento executivo."
+ *   DEPOIS: "...com PLENA autonomia técnica, operacional e administrativa, sendo-lhe
+ *            facultado determinar os métodos, horários, ferramentas e profissionais
+ *            próprios que julgue mais adequados para atingir os resultados contratados."
+ *   Motivo: "desde que seja seguido os custos do orçamento executivo" cria subordinação
+ *   econômica (CONTRATANTE controla o orçamento = indicador CLT). "plena" e
+ *   "métodos, horários" foram restaurados.
+ *
+ * Cláusula 2.3 — Pessoalidade:
+ *   ANTES: "...desde comprovada sua capacidade técnica e validada pela CONTRATANTE."
+ *   DEPOIS: "...ficando expressamente afastada a pessoalidade como requisito desta avença."
+ *   Motivo: "validada pela CONTRATANTE" introduz controle sobre o preposto =
+ *   indicador de pessoalidade/subordinação patronal.
+ *
+ * Cláusula 3.1 — Não Exclusividade:
+ *   ANTES: "...sendo obrigatória a comunicação prévia à CONTRATANTE..."
+ *   DEPOIS: "...independentemente de comunicação prévia à CONTRATANTE..."
+ *   Motivo: comunicação "obrigatória" cria dependência hierárquica e restringe
+ *   a não-exclusividade (indicador de exclusividade velada = CLT).
+ *
+ * Atualização direta no banco (system_document_templates, versao_atual++).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4396 - CONTRATO PJ VIEW: CACHE ZERO + REMOÇÃO DE DADOS BANCÁRIOS DUPLICADOS
  *
  * Causa raiz do "contrato não bate com template aprovado":
