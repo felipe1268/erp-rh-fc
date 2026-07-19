@@ -5467,6 +5467,21 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4377: colunas de aprovação+NF garantidas em pj_payments.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4377 pj_payments aprovação:", e?.message || e); }
 
+        // Rev. 4403 — pj_contracts não tinha PRIMARY KEY, permitindo id duplicado (fan-out no LEFT JOIN).
+        // Adiciona UNIQUE constraint em id para blindar futuros INSERTs duplicados.
+        try {
+          await db.execute(sql.raw(`
+            ALTER TABLE pj_contracts ADD CONSTRAINT pj_contracts_id_unique UNIQUE (id);
+          `));
+          console.log("[SyncSchema+] Rev. 4403: UNIQUE constraint em pj_contracts.id garantida (previne id duplicado).");
+        } catch (e: any) {
+          if (e?.message?.includes('already exists')) {
+            console.log("[SyncSchema+] Rev. 4403: pj_contracts_id_unique já existe, ok.");
+          } else {
+            console.error("[SyncSchema+] FALHA Rev.4403 pj_contracts UNIQUE:", e?.message || e);
+          }
+        }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

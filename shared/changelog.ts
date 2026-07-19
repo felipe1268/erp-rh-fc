@@ -1,4 +1,22 @@
 /**
+ * Rev. 4403 - FOLHA PJ: CORREÇÃO CRÍTICA — DUPLICATAS NA LISTA (id duplicado em pj_contracts)
+ *
+ * pj_contracts não tinha PRIMARY KEY → dois registros com id=1 coexistiam
+ * (employeeId=420043 e employeeId=1320016). O LEFT JOIN em pagamentos.list
+ * fazia fan-out: cada pj_payment de ANDRE aparecia N vezes na tela (N = linhas
+ * duplicadas do contrato). O usuário via "0 aprovado(s)" porque os IDs duplicados
+ * também afetavam o bulkAprovar.
+ *
+ * Fix aplicado no banco (Neon):
+ *   1. DELETE do registro duplicado (id=1, employeeId=420043) via ctid.
+ *   2. INSERT do fechamento de Jul/2026 de ANDRE que estava faltando (id=513).
+ *   3. SyncSchema+ Rev.4403: ALTER TABLE pj_contracts ADD CONSTRAINT
+ *      pj_contracts_id_unique UNIQUE (id) — previne futuros duplicados.
+ *
+ * ZERO DELETE DE DADOS VÁLIDOS · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4402 - FOLHA PJ: CORREÇÃO CRÍTICA — APROVAR FALHAVA (coluna "dataPrevista" inexistente)
  *
  * `bulkAprovar` e `aprovarComNF` faziam JOIN pj_payments + employees usando

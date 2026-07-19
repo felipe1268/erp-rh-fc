@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4402** — **FOLHA PJ: CORREÇÃO CRÍTICA — APROVAR FALHAVA (coluna "dataPrevista" inexistente).** `bulkAprovar` + `aprovarComNF` usavam `pp."dataPrevista"` (camelCase) mas coluna real é `data_prevista` → 100% dos lançamentos falhavam silenciosamente, zero enviado ao Contas a Pagar. Fix: renomeado para `data_prevista` nos 2 procedures. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4403** — **FOLHA PJ: CORREÇÃO CRÍTICA — DUPLICATAS (id duplicado em pj_contracts sem PRIMARY KEY).** pj_contracts sem PK → 2 linhas com id=1 → LEFT JOIN fan-out → ANDRE aparecia N×. Fix: DELETE via ctid do registro espúrio + INSERT fechamento Jul/ANDRE faltante + SyncSchema+ ADD CONSTRAINT UNIQUE(id). ZERO DELETE DE DADOS VÁLIDOS.
 
-- **Rev. 4401** — **MÓDULO PJ: COLUNA "VENCIMENTO" NA LISTA DE CONTRATOS.** Badge colorido por urgência: verde (>60d) / âmbar (31–60d) / laranja (16–30d) / vermelho (≤15d / "Vence hoje") / cinza ("Encerrado") / texto ("Indeterminado"). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4402** — **FOLHA PJ: CORREÇÃO CRÍTICA — APROVAR FALHAVA (coluna "dataPrevista" inexistente).** `bulkAprovar` + `aprovarComNF` usavam `pp."dataPrevista"` (camelCase) mas coluna real é `data_prevista` → 100% dos lançamentos falhavam silenciosamente, zero enviado ao Contas a Pagar. Fix: renomeado para `data_prevista` nos 2 procedures. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4399** — **MÓDULO PJ: BOTÃO ENVIAR → ABRE FCSIGN DIALOG.** Clique no ícone Send da coluna Ações abre FCSignPJSendDialog inline (em vez de navegar para /contrato-pj/:id). Dialog monta HTML do template vigente + cria sessão FCSign + exibe links individuais por signatário. ZERO DELETE · ZERO ALTER destrutivo.
 
