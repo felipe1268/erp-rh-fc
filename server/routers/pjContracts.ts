@@ -1025,24 +1025,28 @@ export const pjContractsRouter = router({
     .mutation(async ({ input }) => {
       await assertAiModuleEnabled(input.companyId, "rh");
       const { invokeLLM } = await import("../_core/llm");
-      const prompt = `Você é um especialista em contratos de prestação de serviços técnicos no Brasil (construção civil, engenharia, arquitetura). Gere a cláusula de OBJETO DO CONTRATO de forma profissional e juridicamente adequada para o cargo/função a seguir.
+      const prompt = `Você é um especialista em contratos de prestação de serviços técnicos no Brasil (construção civil, engenharia, arquitetura). Gere o TEXTO DA CLÁUSULA DE OBJETO para um contrato PJ de forma profissional e juridicamente adequada para o cargo/função a seguir.
 
 Cargo / função / tipo de contrato informado: "${input.descricao}"
 
-INSTRUÇÕES:
+INSTRUÇÕES OBRIGATÓRIAS:
 - Escreva em português formal, no estilo de um contrato particular de prestação de serviços PJ
-- Comece com 1 parágrafo resumindo o objeto geral do contrato (ex: "Constitui objeto do presente contrato a prestação de serviços técnicos especializados de [cargo], compreendendo...")
-- Em seguida, liste as responsabilidades e obrigações específicas do prestador, numeradas com letras minúsculas: a) b) c) etc.
-- IMPORTANTE: coloque CADA alínea em sua PRÓPRIA LINHA — use uma quebra de linha (\n) antes de cada a), b), c) etc., de forma que cada item fique em um parágrafo separado
+- COMECE DIRETAMENTE com o parágrafo de abertura — ex: "Constitui objeto do presente contrato a prestação de serviços técnicos especializados de [cargo], compreendendo..."
+- NÃO inclua NENHUM título, cabeçalho ou rótulo no início (proibido: "OBJETO DO CONTRATO", "CLÁUSULA PRIMEIRA", "CLÁUSULA 1ª", "1.", "§ 1º", "Cláusula Primeira: Do Objeto" ou qualquer variação)
+- Após o parágrafo de abertura, liste as responsabilidades com letras minúsculas: a) b) c) etc.
+- IMPORTANTE: coloque CADA alínea em sua PRÓPRIA LINHA — use quebra de linha (\n) antes de cada a), b), c) etc.
 - Inclua entre 7 e 12 responsabilidades típicas e relevantes para esse cargo
 - Cada responsabilidade deve ser objetiva e direta (máximo 2 linhas)
-- NÃO inclua cabeçalho de cláusula numerada (tipo "CLÁUSULA 1ª" ou "§ 1º")
-- Termine com uma linha em branco e depois uma frase de encerramento sobre a natureza autônoma/independente da prestação
-- Retorne APENAS o texto da cláusula, sem comentários ou formatação markdown`;
+- Termine com uma frase de encerramento sobre a natureza autônoma/independente da prestação
+- Retorne APENAS o texto da cláusula, sem comentários, sem markdown, sem asteriscos`;
       const result = await invokeLLM({ messages: [{ role: "user", content: prompt }], maxTokens: 1200 });
       const raw = result.choices?.[0]?.message?.content;
-      const clausula = (typeof raw === "string" ? raw : "").trim();
-      return { clausula };
+      const stripped = (typeof raw === "string" ? raw : "")
+        .trim()
+        // Remove primeira linha se for apenas um título/cabeçalho de cláusula
+        .replace(/^(OBJETO\s+DO\s+CONTRATO|CL[ÁA]USULA\s+(PRIMEIRA|1[ªa°\s]*)[-:\s]*(DO\s+OBJETO)?)[:\s]*\n+/i, "")
+        .trim();
+      return { clausula: stripped };
     }),
   }),
 

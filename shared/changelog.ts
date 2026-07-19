@@ -1,4 +1,31 @@
 /**
+ * Rev. 4426 - FIX: PRÉ-VISUALIZAR CONTRATO PJ — OBJETO DO CONTRATO DUPLICADO/INLINE
+ *
+ * Problema: O botão "Pré-visualizar" exibia o texto gerado pela IA em dois lugares
+ * errados: (1) CONSIDERANDO (III) mostrava o texto completo inline no meio de uma frase,
+ * (2) CLÁUSULA PRIMEIRA idem, com o texto colado após "A CONTRATADA obriga-se...de ".
+ * Raiz dupla: (a) template ISO do banco tinha [OBJETO_CONTRATO] INLINE dentro de <p>
+ * com texto antes/depois — inserir múltiplos <p> dentro de outro <p> é HTML inválido;
+ * (b) a IA retornava "OBJETO DO CONTRATO" como cabeçalho no início do texto, apesar
+ * da instrução (a instrução proibia "CLÁUSULA 1ª" mas não "OBJETO DO CONTRATO").
+ *
+ * Solução (3 camadas):
+ * 1. formatObjetoHtml(): filtra linhas que são apenas cabeçalhos de cláusula via regex
+ *    headingPat antes de converter para HTML.
+ * 2. buildContratoPjSignHtml(): pré-processa o template ISO em 3 passagens antes de
+ *    chamar replacePlaceholders: (a) 1ª de N ocorrências → texto estático "conforme
+ *    descrito na Cláusula Primeira deste instrumento"; (b) marcador \x00OBJ\x00 inline
+ *    em <tag>texto\x00OBJ\x00texto</tag> → fecha o <p>, expande objetoHtml, reabre <p>
+ *    para texto seguinte; (c) marcador standalone em <p>\x00OBJ\x00</p> → substituído
+ *    diretamente por objetoHtml.
+ * 3. gerarClausulaObjetoIA (servidor): prompt reescrito proibindo explicitamente todos
+ *    os cabeçalhos possíveis; strip server-side via regex no resultado bruto.
+ *
+ * Arquivos: client/src/lib/contratoPjDocument.ts, server/routers/pjContracts.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4425 - IA: GERAR CLÁUSULA DE OBJETO DO CONTRATO PJ
  *
  * Problema: O campo "Objeto do Contrato" era um textarea simples de 2 linhas.

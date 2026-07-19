@@ -153,7 +153,10 @@ function formatObjetoHtml(raw: string): string {
   const normalized = raw
     .replace(/;\s*([a-z]\))/g, "\n$1")
     .replace(/\n{2,}/g, "\n");
-  const lines = normalized.split(/\n/).map(l => l.trim()).filter(Boolean);
+  // Cabeçalhos que a IA insere e devem ser ignorados
+  const headingPat = /^(OBJETO\s+DO\s+CONTRATO|CL[ÁA]USULA\s+(PRIMEIRA|1[ªa°\s]*)[-:\s]*(DO\s+OBJETO)?)/i;
+  const lines = normalized.split(/\n/).map(l => l.trim()).filter(l => l && !headingPat.test(l));
+  if (!lines.length) return "<p>engenharia civil</p>";
   return lines.map(line => {
     const safe = esc(line);
     if (/^[a-z]\)/.test(line)) {
@@ -292,9 +295,40 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
   // Prioridade: HTML do template ISO (já estruturado) > plain text legado
   let corpoHtml: string;
   if (modeloHtml && modeloHtml.trim()) {
-    // Template é HTML com placeholders [TOKEN] — substitui inline e usa direto
-    // htmlMode=true: [OBJETO_CONTRATO] vira parágrafos HTML com alíneas separadas
-    corpoHtml = replacePlaceholders(modeloHtml, c, true);
+    // Pre-processamento do template ISO:
+    // [OBJETO_CONTRATO] pode aparecer INLINE dentro de <p> com texto antes/depois.
+    // Estratégia: substituir ANTES de chamar replacePlaceholders, tratando cada ocorrência.
+    const objetoHtml = formatObjetoHtml(c.objetoContrato || "");
+    const totalOc = (modeloHtml.match(/\[OBJETO_CONTRATO\]/g) || []).length;
+    let ocIdx = 0;
+    // Primeira passagem: primeira de N ocorrências → referência estática (CONSIDERANDO);
+    // última ocorrência → marcador temporário para expansão completa.
+    let patchedHtml = modeloHtml.replace(/\[OBJETO_CONTRATO\]/g, () => {
+      ocIdx++;
+      if (totalOc > 1 && ocIdx < totalOc) {
+        return "conforme descrito na Cláusula Primeira deste instrumento";
+      }
+      return "\x00OBJ\x00";
+    });
+    // Segunda passagem: marcador inline dentro de <tag>texto\x00OBJ\x00texto</tag>
+    // → fecha o parágrafo anterior, expande o objeto, abre novo para texto após.
+    patchedHtml = patchedHtml.replace(
+      /(<[^<>]+>)([^<\x00]+)\x00OBJ\x00([^<]*?)(<\/[^<>]+>)/g,
+      (_, ot, before, after, ct) => {
+        const trimB = before.trimEnd().replace(/[\s,]*\s+de\s*$|[\s,]*:\s*$/, "");
+        const trimA = after.trim().replace(/^[,;:]\s*/, "");
+        return (trimB ? `${ot}${trimB}:${ct}\n` : "") +
+               objetoHtml +
+               (trimA ? `\n${ot}${trimA}${ct}` : "");
+      }
+    );
+    // Terceira passagem: marcador standalone em sua própria tag <p>\x00OBJ\x00</p>
+    patchedHtml = patchedHtml.replace(/<[^<>]+>\s*\x00OBJ\x00\s*<\/[^<>]+>/g, objetoHtml);
+    // Fallback: marcador solto (sem tag ao redor)
+    patchedHtml = patchedHtml.replace(/\x00OBJ\x00/g, objetoHtml);
+    // Agora aplica os demais placeholders ([CONTRATANTE_NOME], [VALOR_MENSAL], etc.)
+    // [OBJETO_CONTRATO] já foi expandido acima, não haverá substituição dupla.
+    corpoHtml = replacePlaceholders(patchedHtml, c, true);
   } else {
     const replaced = replacePlaceholders(modelo || "", c);
     corpoHtml = corpoFromTemplate(replaced);
