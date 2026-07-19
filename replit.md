@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4435** — **FIX: BOTÃO VOLTAR — ContratoPJView e AditivoPJView.** `window.history.back()` é no-op quando página abre sem histórico anterior (iOS/link direto). Substituído por `navigate("/modulo-pj")` no ContratoPJView e `navigate(\`/contrato-pj/${contractId}\`)` no AditivoPJView (contractId passado do wrapper como prop). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4436** — **LAYOUT: REDUÇÃO DE MARGENS DO TEMPLATE ISO (buildFcDocument).** `@page` margin: `25mm 15mm` → `20mm` (todos os lados); `.fc-doc` padding: `2.5cm 1.5cm` → `2cm` uniforme. Afeta Contrato PJ, Comunicados e demais docs ISO. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4434** — **FIX: PDF CONTRATO PJ — SUBSTITUIÇÃO DE PLACEHOLDERS (DUPLO FORMATO + DECODE HTML).** `replacePlaceholders` agora: (1) decodifica `&#91;`→`[` e `&#93;`→`]`; (2) substitui `[BRACKET]` legado; (3) substitui `{{chave}}` ISO (TipTap/seed). Cobre todos os formatos de template. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4435** — **FIX: BOTÃO VOLTAR — ContratoPJView e AditivoPJView.** `window.history.back()` é no-op quando página abre sem histórico anterior (iOS/link direto). Substituído por `navigate("/modulo-pj")` no ContratoPJView e `navigate(\`/contrato-pj/${contractId}\`)` no AditivoPJView (contractId passado do wrapper como prop). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

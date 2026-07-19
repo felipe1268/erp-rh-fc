@@ -1,4 +1,20 @@
 /**
+ * Rev. 4436 - LAYOUT: REDUÇÃO DE MARGENS DO TEMPLATE DE DOCUMENTO (buildFcDocument)
+ *
+ * Margens laterais e superior do template ISO estavam grandes demais (2,5cm topo,
+ * 1,5cm lados), gerando área branca excessiva nas laterais do PDF/visualização.
+ *
+ * Ajuste em client/src/lib/fcDocumentTemplate.ts:
+ * - @page margin: 25mm 15mm 25mm 15mm → 20mm 20mm 20mm 20mm (2cm em todos os lados)
+ * - .fc-doc padding: 2.5cm 1.5cm → 2cm 2cm (uniforme, 2cm topo/lados na tela)
+ *
+ * Afeta todos os documentos gerados por buildFcDocument: Contrato PJ, Comunicados,
+ * avisos e qualquer outro documento ISO do ERP.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4435 - FIX: BOTÃO VOLTAR — ContratoPJView e AditivoPJView
  *
  * `window.history.back()` é no-op quando a página é aberta diretamente (sem
