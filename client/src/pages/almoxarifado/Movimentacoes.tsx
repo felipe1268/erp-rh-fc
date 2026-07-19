@@ -538,6 +538,12 @@ export default function AlmoxarifadoMovimentacoes() {
                         {mov.fonte === "emprestimo" ? "Funcionário:" : "Para:"} <span className="font-medium">{mov.contraparte}</span>
                       </p>
                     )}
+                    {mov.fonte === "transferencia" && mov.quem && mov.quem !== "—" && (
+                      <p className="text-xs text-gray-600 mt-0.5 truncate">
+                        <User className="inline w-3 h-3 mr-1 -mt-0.5" />
+                        Enviado por: <span className="font-medium">{mov.quem}</span>
+                      </p>
+                    )}
                     {(mov.motivo || mov.obra_nome) && (
                       <p className="text-xs text-gray-500 mt-0.5 truncate">
                         {mov.obra_nome && mov.obra_id ? (

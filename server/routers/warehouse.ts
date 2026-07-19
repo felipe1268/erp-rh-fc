@@ -313,7 +313,7 @@ export const warehouseRouter = router({
               ' → ' ||
               COALESCE(t.destino_obra_nome, 'Central')    AS obra_nome,
             t.motivo                                      AS motivo,
-            NULL::text                                    AS contraparte,
+            COALESCE(t.destino_obra_nome, 'Central')     AS contraparte,
             NULL::timestamp                               AS estornada_em,
             NULL::varchar                                 AS estornada_por_nome,
             NULL::text                                    AS estorno_motivo

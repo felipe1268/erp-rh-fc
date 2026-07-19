@@ -1,4 +1,26 @@
 /**
+ * Rev. 4421 - A2: TRANSFERÊNCIAS ALMOXARIFADO — MOSTRAR "PARA" E "ENVIADO POR" NO HISTÓRICO
+ *
+ * No histórico de movimentações (Movimentacoes.tsx), as transferências mostravam apenas
+ * o rótulo "Origem → Destino" na área de obra, mas a linha "Para:" ficava em branco porque
+ * `contraparte` era NULL no SQL. O campo `quem` (almoxarife) aparecia sem rótulo.
+ *
+ * Correções:
+ * — Server (warehouse.ts): `contraparte` para transferências passa a ser
+ *   `COALESCE(t.destino_obra_nome, 'Central')` — mostra o destino no card.
+ * — Frontend (Movimentacoes.tsx): adicionado bloco "Enviado por: {nome}" exclusivo
+ *   para `fonte === "transferencia"`, separado do `quem` genérico do rodapé do card.
+ *   O campo `quem` do rodapé (sem rótulo) continua existindo para as demais fontes.
+ *
+ * Resultado: card de transferência agora exibe:
+ *   Para: <Obra Destino>          ← nova linha (era null antes)
+ *   Enviado por: <Nome Almoxarife> ← rótulo explícito (antes era ícone sem label)
+ *   Central → Obra X              ← rota completa (mantida)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4420 - FEATURES IA: C1 (CRIAR OC POR DOCUMENTO) + A1 (IMPORTAR ITENS ALMOXARIFADO POR DOCUMENTO)
  *
  * C1 — CRIAR OC A PARTIR DE DOCUMENTO (IA):
