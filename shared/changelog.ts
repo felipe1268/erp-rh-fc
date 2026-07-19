@@ -1,4 +1,12 @@
 /**
+ * Rev. 4438 - LAYOUT: MARGENS 1cm EM TODOS OS LADOS — PADRÃO DEFINITIVO (buildFcDocument)
+ *
+ * @page margin: 10mm 10mm 10mm 10mm (1cm todos os lados — PDF físico)
+ * .fc-doc padding: 1cm 1cm (idem para visualização em tela/FCSign)
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4437 - LAYOUT: MARGENS LATERAIS 1,5cm NO TEMPLATE ISO (buildFcDocument)
  *
  * Ajuste fino após Rev. 4436: lados reduzidos de 2cm para 1,5cm.
