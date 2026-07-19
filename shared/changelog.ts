@@ -1,4 +1,15 @@
 /**
+ * Rev. 4404 - FOLHA PJ: BOTÃO "APROVAR SELECIONADOS" COM PROGRESSO 0→100%
+ *
+ * Regra de Ouro — botões de carregamento longo.
+ * onMutate: inicia setInterval (3%/200ms, cap 90%) + barra bg-blue-400/20.
+ * onSuccess: clearInterval → setBulkProgress(100) → setTimeout 800ms → 0.
+ * onError: clearInterval → reset 0.
+ * Texto: "Aprovando... XX%" durante loading; ícone ShieldCheck preservado.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4403 - FOLHA PJ: CORREÇÃO CRÍTICA — DUPLICATAS NA LISTA (id duplicado em pj_contracts)
  *
  * pj_contracts não tinha PRIMARY KEY → dois registros com id=1 coexistiam

@@ -22,7 +22,7 @@ import {
   ExternalLink, File, XCircle, Award, Loader2, Check, Settings2,
   ShieldCheck, Paperclip,
 } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -116,6 +116,8 @@ export default function ModuloPJ() {
   const [fcSignPJContratoId, setFcSignPJContratoId] = useState<number | null>(null);
   const [showNovoDoc, setShowNovoDoc] = useState(false);
   const [uploadingTipo, setUploadingTipo] = useState<string | null>(null);
+  const [bulkProgress, setBulkProgress] = useState(0);
+  const bulkProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Mês referência para pagamentos — PeriodSelectorCard (padrão de ouro)
   const [pjAno, setPjAno] = useState(() => new Date().getFullYear());
@@ -241,13 +243,28 @@ export default function ModuloPJ() {
     onError: (e: any) => toast.error(e.message),
   });
   const bulkAprovar = (trpc as any).pj.pagamentos.bulkAprovar.useMutation({
+    onMutate: () => {
+      setBulkProgress(0);
+      let pct = 0;
+      bulkProgressRef.current = setInterval(() => {
+        pct = Math.min(pct + 3, 90);
+        setBulkProgress(pct);
+      }, 200);
+    },
     onSuccess: (d: any) => {
+      if (bulkProgressRef.current) clearInterval(bulkProgressRef.current);
+      setBulkProgress(100);
+      setTimeout(() => setBulkProgress(0), 800);
       refetchPagamentos();
       setSelectedIds(new Set());
       if (d.errors?.length) toast.error(`${d.approved} aprovado(s), ${d.errors.length} erro(s).`);
       else toast.success(`${d.approved} medição(ões) aprovada(s) e enviada(s) para Contas a Pagar!`);
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      if (bulkProgressRef.current) clearInterval(bulkProgressRef.current);
+      setBulkProgress(0);
+      toast.error(e.message);
+    },
   });
   const aprovarComNF = (trpc as any).pj.pagamentos.aprovarComNF.useMutation({
     onSuccess: (d: any) => {
@@ -796,7 +813,8 @@ export default function ModuloPJ() {
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-3">
                 <span className="text-sm font-medium text-blue-800">{selectedIds.size} selecionado(s)</span>
-                <Button size="sm" variant="outline" className="h-8 text-xs text-blue-700 border-blue-300 hover:bg-blue-50"
+                <Button size="sm" variant="outline"
+                  className="relative h-8 text-xs text-blue-700 border-blue-300 hover:bg-blue-50 overflow-hidden min-w-[140px]"
                   disabled={bulkAprovar.isPending}
                   onClick={() => {
                     const pendentes = Array.from(selectedIds).filter(id =>
@@ -805,8 +823,14 @@ export default function ModuloPJ() {
                     if (!pendentes.length) { toast.error("Nenhum lançamento pendente selecionado."); return; }
                     bulkAprovar.mutate({ ids: pendentes, companyId });
                   }}>
-                  <ShieldCheck className="h-3.5 w-3.5 mr-1" />
-                  {bulkAprovar.isPending ? "Aprovando..." : `Aprovar selecionados`}
+                  {bulkAprovar.isPending && (
+                    <span className="absolute inset-0 bg-blue-400/20 transition-all duration-200 rounded"
+                      style={{ width: `${bulkProgress}%` }} />
+                  )}
+                  <span className="relative flex items-center gap-1">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    {bulkAprovar.isPending ? `Aprovando... ${bulkProgress}%` : `Aprovar selecionados`}
+                  </span>
                 </Button>
                 <Button size="sm" variant="outline" className="h-8 text-xs text-red-700 border-red-300 hover:bg-red-50"
                   onClick={() => { if (confirm(`Excluir ${selectedIds.size} lançamento(s)?`)) bulkDelete.mutate({ ids: Array.from(selectedIds) }); }}>
