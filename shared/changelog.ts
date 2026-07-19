@@ -1,4 +1,35 @@
 /**
+ * Rev. 4419 - CORREÇÕES C5 E S1 (LISTA AJUSTES_ERP_17072026)
+ *
+ * C5 — ATENDER PELO ESTOQUE: CORREÇÃO CRÍTICA — SERVIDOR BLOQUEAVA OC COM "NENHUM
+ *   FORNECEDOR VENCEDOR" QUANDO ESTOQUE ERA O ÚNICO PARTICIPANTE (OU O MAIS BARATO
+ *   NÃO TINHA PREÇO).
+ *   Causa raiz: `criarOrdemDeCotacao` montava a cadeia de resolução do vencedor como
+ *   `vencedorSelecionado ?? melhorForn ?? null` — sem incluir o participante estoque
+ *   (`isEstoque=true`) no fallback. O frontend identificava o estoque corretamente
+ *   (via `fallback ?? estoqueParticipante`), abria o TransferenciaDialog e enviava a
+ *   mutation, mas o servidor lançava TRPCError BAD_REQUEST antes de chegar no bloco
+ *   `isEstoqueWinner`. Fix: adiciona `estoqueParticipante` na cadeia:
+ *   `vencedorSelecionado ?? melhorForn ?? estoqueParticipante ?? null`.
+ *   O log `[criarOrdemDeCotacao]` agora inclui `estoqueParticipante` e diferencia
+ *   `fornInfoCheck=estoque` de `fornInfoCheck=fornecedorId`.
+ *   Arquivo: `server/routers/compras.ts`
+ *
+ * S1 — EPI ALMOXARIFADO CENTRAL: AJUSTE PERMITIDO PARA USUÁRIOS COM PERMISSÃO DE OBRA.
+ *   Antes: `assertCentralWrite` bloqueava TODOS os usuários não-admin
+ *   (`if (allowed !== null) throw FORBIDDEN`). Qualquer usuário com obras atribuídas
+ *   (lista não-vazia) recebia o erro mesmo tendo obra access.
+ *   Agora: bloqueado APENAS quando `allowed !== null && allowed.length === 0`
+ *   (sem nenhuma obra atribuída). Qualquer usuário com ≥1 obra pode criar/ajustar
+ *   no Almoxarifado Central.
+ *   Frontend: `canWriteCentral` atualizado para incluir obra users:
+ *   `... || (allowedObraIds !== null && allowedObraIds.length > 0)`.
+ *   Arquivos: `server/routers/epis.ts`, `client/src/pages/Epis.tsx`
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4418 - AJUSTES COMPRAS / ALMOXARIFADO / SST (LISTA AJUSTES_ERP_17072026)
  *
  * 7 melhorias implementadas em Compras, Almoxarifado e SST:

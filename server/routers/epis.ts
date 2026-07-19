@@ -20,12 +20,14 @@ async function assertObraWrite(ctx: any, obraId: number | null | undefined) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem permissão para ajustar o estoque desta obra." });
   }
 }
-// `assertCentralWrite`: usuário RESTRITO (allowed_obra_ids != null) NÃO escreve no
-// Almoxarifado Central — só cadastra/ajusta nas obras que tem acesso. Admin = global.
+// `assertCentralWrite`: permite admin (allowed=null) E usuários de obra (allowed.length>0).
+// Bloqueia apenas usuários sem nenhuma obra atribuída (allowed=[]).
+// Rev. 4419 — por solicitação do usuário, qualquer usuário com permissão de obra pode
+// cadastrar/ajustar no Almoxarifado Central (antes era exclusivo de administradores).
 async function assertCentralWrite(ctx: any) {
   const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
-  if (allowed !== null) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem permissão para cadastrar/ajustar no Almoxarifado Central. Selecione uma obra que você gerencia." });
+  if (allowed !== null && allowed.length === 0) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem permissão para cadastrar/ajustar no Almoxarifado Central. Solicite ao administrador acesso a pelo menos uma obra." });
   }
 }
 

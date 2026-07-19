@@ -152,8 +152,9 @@ export default function Epis() {
   const readOnly = !isAdminMaster && hasGroup && isSomenteVisualizacao;
   // Rev. 2950 — escrita no Almoxarifado Central só p/ acesso TOTAL (admin/master ou
   // sem restrição de obra); usuários restritos só cadastram/ajustam nas suas obras.
-  // Rev. 3594 — canEditEpiCentral: permissão especial do grupo SST sem precisar ser admin.
-  const canWriteCentral = isAdminMaster || isAdmin || allowedObraIds === null || canEditEpiCentral;
+  // Rev. 4419 — qualquer usuário com ao menos uma obra pode ajustar o Almoxarifado Central.
+  // canEditEpiCentral mantido p/ compatibilidade. Bloqueado apenas quando allowedObraIds=[].
+  const canWriteCentral = isAdminMaster || isAdmin || allowedObraIds === null || canEditEpiCentral || (allowedObraIds !== null && allowedObraIds.length > 0);
 
   // Suporte a ?tab= para links diretos da sidebar
   const validTabs: ViewMode[] = useMemo(() => ["catalogo", "entregas", "estoque_obra", "transferencias", "config", "checklist", "validade", "custos", "minimo", "ia", "capacidade", "necessidade", "descontos"], []);

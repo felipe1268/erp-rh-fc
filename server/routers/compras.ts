@@ -8703,8 +8703,14 @@ Retorne APENAS um JSON válido neste formato:
           return best;
         }, comTotal[0]);
       })();
-      const fornInfoCheck = vencedorSelecionado ?? melhorForn ?? (cot.fornecedorId ? todosParticipantes.find(p => p.fornecedorId === cot.fornecedorId) ?? null : null);
-      console.log(`[criarOrdemDeCotacao] cotacaoId=${input.cotacaoId} participantes=${todosParticipantes.length} vencedorSelecionado=${vencedorSelecionado?.fornecedorId ?? "none"} melhorForn=${melhorForn?.fornecedorId ?? "none"} fornInfoCheck=${fornInfoCheck?.fornecedorId ?? "none"} totaisVivos=${JSON.stringify(totalVivoPorForn)}`);
+      // Rev. 4419 — Fallback: participante marcado como estoque (isEstoque=true) entra
+      // na cadeia de resolução do vencedor. Sem isso, quando o estoque era o único
+      // participante ou todos os fornecedores reais ficavam sem preço, o servidor lançava
+      // "Nenhum fornecedor vencedor" mesmo que o frontend já tivesse detectado o estoque
+      // como vencedor e enviado a OC com obraOrigemId preenchida.
+      const estoqueParticipante = todosParticipantes.find(p => (p as any).isEstoque === true) ?? null;
+      const fornInfoCheck = vencedorSelecionado ?? melhorForn ?? estoqueParticipante ?? (cot.fornecedorId ? todosParticipantes.find(p => p.fornecedorId === cot.fornecedorId) ?? null : null);
+      console.log(`[criarOrdemDeCotacao] cotacaoId=${input.cotacaoId} participantes=${todosParticipantes.length} vencedorSelecionado=${vencedorSelecionado?.fornecedorId ?? "none"} melhorForn=${melhorForn?.fornecedorId ?? "none"} estoqueParticipante=${estoqueParticipante ? "yes" : "no"} fornInfoCheck=${(fornInfoCheck as any)?.isEstoque ? "estoque" : (fornInfoCheck?.fornecedorId ?? "none")} totaisVivos=${JSON.stringify(totalVivoPorForn)}`);
       if (!fornInfoCheck) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum fornecedor vencedor identificado. Acesse o Mapa de Cotação, verifique se há preços preenchidos e, se necessário, clique em 'Selecionar como Vencedor'." });
       const vencedorFornecedorId = fornInfoCheck.fornecedorId;
 

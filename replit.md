@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4418** — **AJUSTES COMPRAS / ALMOXARIFADO / SST (LISTA AJUSTES_ERP_17072026).** 7 melhorias: C2 — campo "Tipo de Ordem" (Compra/Aluguel/Serviço) no formulário de OC Manual + server `criarOrdemManual` aceita `tipoOc`; C3 — observação no débito de BDI em Cotações; C6 — filtro por obra + busca por descrição em cotações; A3 — inputs de quantidade inteira (step=1) em movimentação, vistoria e transferência do almoxarifado; A4 — nome do remetente (almoxarife_nome) no histórico de transferências; S2 — coluna "Cond." na tabela de EPIs por obra; S4 — filtro por obra nos alertas de estoque mínimo. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4419** — **CORREÇÕES C5 E S1 (AJUSTES_ERP_17072026).** C5: correção crítica em `criarOrdemDeCotacao` — participante estoque (`isEstoque=true`) entrava no fallback do frontend mas não do servidor; lançava "Nenhum fornecedor vencedor". Fix: `estoqueParticipante` incluído na cadeia `vencedorSelecionado ?? melhorForn ?? estoqueParticipante ?? null`. S1: `assertCentralWrite` relaxado para usuários com ≥1 obra (antes bloqueava todos os não-admins); `canWriteCentral` no frontend sincronizado. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4418** — **AJUSTES COMPRAS / ALMOXARIFADO / SST (LISTA AJUSTES_ERP_17072026).** 7 melhorias: C2/C3/C6 em Compras; A3/A4 no Almoxarifado; S2/S4 em SST. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4417** — **AVISO ENCERRAMENTO PJ: BOTÃO "PRÉVIA DO DOCUMENTO" + PRAZO PADRÃO 15 DIAS.** Botão laranja "Prévia do Documento" `<Eye>` no footer abre nova janela com o documento renderizado (campos em branco mostram placeholders legíveis). Helper `buildDocData(preview?)` extraído. Prazo de Aviso padrão alterado de "30 dias" para "15 dias". ZERO DELETE · ZERO ALTER destrutivo.
 
