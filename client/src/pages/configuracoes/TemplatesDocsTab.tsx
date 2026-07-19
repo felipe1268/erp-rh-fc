@@ -1044,13 +1044,23 @@ export default function TemplatesDocsTab() {
                 ref={editorRef}
                 value={conteudoEditado}
                 onChange={setConteudoEditado}
-                readOnly={!!visualizandoVersaoAntiga}
+                readOnly={!!visualizandoVersaoAntiga || statusAtual === "vigente"}
                 minHeight={560}
                 readable
               />
             )}
 
-            {!visualizandoVersaoAntiga && !mostrarPreview && (
+            {/* Aviso de bloqueio quando vigente */}
+            {statusAtual === "vigente" && !visualizandoVersaoAntiga && !mostrarPreview && (
+              <div className="mt-3 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                <span>
+                  <strong>Documento Vigente — somente leitura.</strong> Para editar, clique em <strong>Reabrir</strong> (status volta para Rascunho), faça os ajustes, salve como nova revisão e aprove novamente.
+                </span>
+              </div>
+            )}
+
+            {!visualizandoVersaoAntiga && !mostrarPreview && statusAtual !== "vigente" && (
               <div className="mt-3 space-y-2">
                 <label className="text-xs font-medium text-gray-700">Comentário desta revisão (opcional)</label>
                 <Input

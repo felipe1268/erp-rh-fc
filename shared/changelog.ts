@@ -1,4 +1,25 @@
 /**
+ * Rev. 4395 - TEMPLATES ISO: EDITOR BLOQUEADO QUANDO VIGENTE (SOMENTE LEITURA)
+ *
+ * Quando um documento está com status "vigente", o editor TipTap agora fica em
+ * modo readOnly — o cursor não aparece e nenhuma edição é possível diretamente.
+ * A área "Comentário + Salvar Nova Revisão" também é ocultada.
+ *
+ * Em seu lugar aparece um aviso âmbar:
+ *   "Documento Vigente — somente leitura. Para editar, clique em Reabrir
+ *    (status volta para Rascunho), faça os ajustes, salve como nova revisão
+ *    e aprove novamente."
+ *
+ * Fluxo correto agora imposto pelo sistema:
+ *   1. Clicar "Reabrir" → status = rascunho → editor liberado
+ *   2. Editar → "Salvar Nova Revisão" → gera nova Rev.
+ *   3. Clicar "Aprovar (Vigente)" → volta para vigente bloqueado
+ *
+ * Arquivo: `client/src/pages/configuracoes/TemplatesDocsTab.tsx`
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4394 - CONTRATO PJ: REESCRITA JURÍDICA DO TEMPLATE — BLINDAGEM CONTRA CLT DISFARÇADO
  *
  * Template de contrato PJ reescrito integralmente para blindagem jurídica contra

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4395** — **TEMPLATES ISO: EDITOR BLOQUEADO QUANDO VIGENTE.** Editor TipTap vira `readOnly` quando status=vigente; área Salvar/Comentário some; aviso âmbar instrui a clicar "Reabrir" → editar → salvar revisão → aprovar. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4394** — **CONTRATO PJ: REESCRITA JURÍDICA DO TEMPLATE — BLINDAGEM CONTRA CLT DISFARÇADO.** Template reescrito integralmente: (1) removido "exclusivamente" do CONSIDERANDO; (2) "mão de obra" → "serviços técnicos especializados"; (3) nova Cláusula Segunda — Autonomia (sem jornada fixa, sem subordinação, preposto permitido); (4) nova Cláusula Terceira — Não Exclusividade explícita; (5) nova Cláusula Oitava — Ausência de Vínculo (art. 3º CLT + Lei 13.467/2017, 4 requisitos ausentes listados, cláusula reversa pejotização forçada); (6) CONTRATADA responsável por INSS/ISS/IRPJ; (7) valores = natureza comercial, não salarial. 12 cláusulas. Atualização direta no banco. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4393** — **CONTRATO PJ: DADOS BANCÁRIOS DA CONTRATADA NO TEMPLATE.** Seção "6.3 DADOS BANCÁRIOS" inserida no template vigente (DB direto, Rev. 2), com placeholder `[DADOS_BANCARIOS_CONTRATADA]`. ZERO DELETE · ZERO ALTER destrutivo.
