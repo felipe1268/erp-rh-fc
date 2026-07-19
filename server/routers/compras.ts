@@ -17505,4 +17505,116 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         .sort((a, b) => b.n_ocs - a.n_ocs)
         .slice(0, 12);
     }),
+
+  // ── Lista de Recebimento de Peças (OC Locação) — Rev. 4424 ──────────────────
+
+  getListaRecebimento: protectedProcedure
+    .input(z.object({ ocId: z.number(), companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const result = await db.execute(sql`
+        SELECT id, descricao, unidade, quantidade::float8
+        FROM oc_lista_recebimento
+        WHERE oc_id = ${input.ocId} AND company_id = ${input.companyId}
+        ORDER BY id
+      `);
+      return result.rows as { id: number; descricao: string; unidade: string; quantidade: number }[];
+    }),
+
+  salvarListaRecebimento: protectedProcedure
+    .input(z.object({
+      ocId: z.number(),
+      companyId: z.number(),
+      itens: z.array(z.object({
+        descricao: z.string().min(1).max(300),
+        unidade: z.string().max(20),
+        quantidade: z.number().positive(),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [oc] = await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.ocId), eq(comprasOrdens.companyId, input.companyId)));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "OC não encontrada" });
+      await db.execute(sql`DELETE FROM oc_lista_recebimento WHERE oc_id = ${input.ocId} AND company_id = ${input.companyId}`);
+      const autorNome = (ctx.user as any).name ?? (ctx.user as any).email ?? "sistema";
+      for (const it of input.itens) {
+        await db.execute(sql`
+          INSERT INTO oc_lista_recebimento (oc_id, company_id, descricao, unidade, quantidade, criado_por, criado_em)
+          VALUES (${input.ocId}, ${input.companyId}, ${it.descricao}, ${it.unidade}, ${it.quantidade}, ${autorNome}, NOW())
+        `);
+      }
+      return { ok: true };
+    }),
+
+  removerItemListaRecebimento: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.execute(sql`DELETE FROM oc_lista_recebimento WHERE id = ${input.id} AND company_id = ${input.companyId}`);
+      return { ok: true };
+    }),
+
+  extrairListaRecebimentoIA: protectedProcedure
+    .input(z.object({
+      ocId: z.number(),
+      companyId: z.number(),
+      fileBase64: z.string().max(15_000_000),
+      fileName: z.string(),
+      mimeType: z.enum(["application/pdf", "image/jpeg", "image/jpg", "image/png"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      await assertAiModuleEnabled(input.companyId, "compras");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [oc] = await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.ocId), eq(comprasOrdens.companyId, input.companyId)));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "OC não encontrada" });
+      const { invokeAnthropicVision } = await import("../_core/llm");
+      const prompt = `Você é um assistente especializado em locação de equipamentos de construção civil (andaimes, escoramentos, formas, cimbramento, etc.). Analise este documento de projeto ou lista de material enviado pelo locador e extraia TODAS as peças e componentes listados.
+
+REGRAS CRÍTICAS:
+- Extraia TODOS os itens com descrição completa, quantidade e unidade de medida
+- Seja específico na descrição (ex: "Prumo de Escoramento 3m" não apenas "Prumo")
+- Quantidades devem ser NUMÉRICAS (sem vírgula como separador decimal, use ponto)
+- Retorne SOMENTE JSON válido, sem texto adicional, sem markdown
+
+Formato de resposta:
+{
+  "itens": [
+    { "descricao": "descrição completa da peça/componente", "quantidade": número, "unidade": "un|m|m²|m³|kg|cx|pç|gl|jg|bd|tb" }
+  ]
+}`;
+      const mime = (input.mimeType === "image/jpg" ? "image/jpeg" : input.mimeType) as any;
+      const text = await invokeAnthropicVision({
+        prompt,
+        base64: input.fileBase64,
+        mimeType: mime,
+        maxTokens: 4096,
+      });
+      let parsed: any = {};
+      try {
+        const clean = text.replace(/```json\n?/gi, "").replace(/```\n?/gi, "").trim();
+        parsed = JSON.parse(clean);
+      } catch {
+        const match = text.match(/\{[\s\S]+\}/);
+        if (match) { try { parsed = JSON.parse(match[0]); } catch { /* ignore */ } }
+      }
+      const itens = (parsed.itens ?? [])
+        .map((it: any) => ({
+          descricao: String(it.descricao ?? "").trim().slice(0, 300),
+          quantidade: Math.max(0.001, parseFloat(String(it.quantidade).replace(",", ".")) || 1),
+          unidade: String(it.unidade ?? "un").slice(0, 20),
+        }))
+        .filter((it: any) => it.descricao.length > 0);
+      console.log(`[extrairListaRecebimentoIA] oc=${input.ocId} itens=${itens.length}`);
+      return { itens };
+    }),
 });

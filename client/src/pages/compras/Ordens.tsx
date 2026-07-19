@@ -23,7 +23,7 @@ import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { consolidarOcItens } from "@shared/ocItensConsolidados";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, ChevronDown, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban, Copy, Sparkles } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, ChevronDown, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban, Copy, Sparkles, ClipboardList } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
@@ -464,6 +464,14 @@ export default function Ordens() {
   const [ocIAEapDescricao, setOcIAEapDescricao] = useState<string | undefined>(undefined);
   const [ocIAEapPopover, setOcIAEapPopover] = useState(false);
   const ocIAFileRef = useRef<HTMLInputElement>(null);
+  // Lista de peças para recebimento (OC locação) — Rev. 4424
+  const [listaShowAdd, setListaShowAdd] = useState(false);
+  const [listaAddDesc, setListaAddDesc] = useState("");
+  const [listaAddUnit, setListaAddUnit] = useState("un");
+  const [listaAddQty, setListaAddQty] = useState("1");
+  const [listaIALoading, setListaIALoading] = useState(false);
+  const [listaIAProgress, setListaIAProgress] = useState(0);
+  const listaFileInputRef = useRef<HTMLInputElement>(null);
 
   const [autoSwitchedForCompany, setAutoSwitchedForCompany] = useState<number | null>(null);
   const urlTabHandled = useRef(false);
@@ -512,6 +520,10 @@ export default function Ordens() {
     { enabled: companyId > 0 }
   );
   const detalheQ = trpc.compras.getOrdem.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
+  const listaRecebQ = trpc.compras.getListaRecebimento.useQuery(
+    { ocId: showDetalhe!, companyId },
+    { enabled: showDetalhe !== null && companyId > 0, staleTime: 0 }
+  );
   const parcelasQ = trpc.purchase.listarParcelasOC.useQuery(
     { ordemId: showDetalhe!, companyId },
     { enabled: showDetalhe !== null && companyId > 0 }
@@ -682,6 +694,28 @@ export default function Ordens() {
   });
   const uploadAnexoOrdem = trpc.compras.uploadAnexoOrdem.useMutation({
     onError: (e) => { toast.error(e.message); setUploadingAnexo(false); },
+  });
+  // Lista de peças para recebimento — Rev. 4424
+  const salvarListaMut = trpc.compras.salvarListaRecebimento.useMutation({
+    onSuccess: () => { listaRecebQ.refetch(); setListaShowAdd(false); setListaAddDesc(""); setListaAddQty("1"); setListaAddUnit("un"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const removerListaItemMut = trpc.compras.removerItemListaRecebimento.useMutation({
+    onSuccess: () => listaRecebQ.refetch(),
+    onError: (e) => toast.error(e.message),
+  });
+  const extrairListaMut = trpc.compras.extrairListaRecebimentoIA.useMutation({
+    onSuccess: (data) => {
+      if (!data.itens.length) { toast.error("Nenhuma peça encontrada no documento."); return; }
+      const current = listaRecebQ.data ?? [];
+      const merged = [
+        ...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade })),
+        ...data.itens,
+      ];
+      salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: merged });
+      toast.success(`${data.itens.length} peça(s) extraída(s) pela IA`);
+    },
+    onError: (e) => toast.error(e.message || "Erro na extração IA"),
   });
   const removeAnexoOrdem = trpc.compras.removeAnexoOrdem.useMutation({
     onSuccess: () => { detalheQ.refetch(); },
@@ -2637,6 +2671,136 @@ export default function Ordens() {
                 })()}
 
                 <OcItensConsolidados itens={detalhe.itens as any[]} />
+
+                {/* Lista de Peças para Recebimento — somente OC de Locação (Rev. 4424) */}
+                {(detalhe as any).tipo === "locacao" && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-amber-100/70 border-b border-amber-200">
+                      <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <ClipboardList className="h-3.5 w-3.5" /> Lista de Peças para Recebimento
+                        {(listaRecebQ.data ?? []).length > 0 && (
+                          <span className="ml-1 bg-amber-300 text-amber-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            {(listaRecebQ.data ?? []).length} peça{(listaRecebQ.data ?? []).length !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </h3>
+                      <div className="flex gap-1.5">
+                        <input
+                          ref={listaFileInputRef}
+                          type="file"
+                          accept="application/pdf,image/jpeg,image/jpg,image/png"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file || !showDetalhe) return;
+                            const reader = new FileReader();
+                            reader.onload = async () => {
+                              const dataUrl = reader.result as string;
+                              const base64 = dataUrl.split(",")[1];
+                              const mime: any = file.type?.includes("pdf") ? "application/pdf" : file.type?.includes("png") ? "image/png" : "image/jpeg";
+                              setListaIAProgress(0);
+                              setListaIALoading(true);
+                              const iv = setInterval(() => setListaIAProgress(p => Math.min(p + Math.floor(Math.random() * 10 + 4), 88)), 900);
+                              try {
+                                await extrairListaMut.mutateAsync({ ocId: showDetalhe, companyId, fileBase64: base64, fileName: file.name, mimeType: mime });
+                              } finally {
+                                clearInterval(iv);
+                                setListaIAProgress(100);
+                                setTimeout(() => { setListaIALoading(false); setListaIAProgress(0); }, 800);
+                                if (listaFileInputRef.current) listaFileInputRef.current.value = "";
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => listaFileInputRef.current?.click()}
+                          disabled={listaIALoading || salvarListaMut.isPending}
+                          className="relative overflow-hidden inline-flex items-center gap-1 rounded border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 text-xs px-2 py-1 transition disabled:opacity-60"
+                        >
+                          {listaIALoading && (
+                            <span className="absolute inset-0 bg-amber-400/30" style={{ width: `${listaIAProgress}%` }} />
+                          )}
+                          <span className="relative flex items-center gap-1">
+                            {listaIALoading
+                              ? <><Loader2 className="h-3 w-3 animate-spin" /> IA... {listaIAProgress}%</>
+                              : <><Sparkles className="h-3 w-3" /> Ler PDF (IA)</>}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setListaShowAdd(true); setListaAddDesc(""); setListaAddUnit("un"); setListaAddQty("1"); }}
+                          className="inline-flex items-center gap-1 rounded border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 text-xs px-2 py-1 transition"
+                        >
+                          <Plus className="h-3 w-3" /> Adicionar
+                        </button>
+                      </div>
+                    </div>
+                    <div className="p-3 space-y-1.5">
+                      {listaRecebQ.isLoading && (
+                        <div className="py-3 text-center"><Loader2 className="h-4 w-4 animate-spin mx-auto text-amber-600" /></div>
+                      )}
+                      {!listaRecebQ.isLoading && (listaRecebQ.data ?? []).length === 0 && !listaShowAdd && (
+                        <p className="text-xs text-amber-700 text-center py-3 italic">
+                          Nenhuma peça cadastrada. Use "+ Adicionar" ou "Ler PDF (IA)" para montar a lista de conferência do almoxarife.
+                        </p>
+                      )}
+                      {(listaRecebQ.data ?? []).map((item, idx) => (
+                        <div key={item.id} className="flex items-center gap-2 bg-white rounded border border-amber-100 px-2.5 py-1.5">
+                          <span className="text-[10px] text-amber-500 font-mono font-bold w-5 shrink-0 text-center">{idx + 1}</span>
+                          <span className="flex-1 text-xs text-gray-800 break-words">{item.descricao}</span>
+                          <span className="text-xs text-gray-500 shrink-0 font-medium tabular-nums">
+                            {item.quantidade % 1 === 0 ? item.quantidade : item.quantidade.toFixed(2)} {item.unidade}
+                          </span>
+                          <button
+                            onClick={() => removerListaItemMut.mutate({ id: item.id, companyId })}
+                            disabled={removerListaItemMut.isPending}
+                            className="text-gray-300 hover:text-red-500 transition-colors shrink-0 ml-0.5"
+                            title="Remover"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {listaShowAdd && (
+                        <div className="flex items-center gap-1.5 bg-white rounded border-2 border-dashed border-amber-300 px-2 py-1.5">
+                          <input
+                            className="flex-1 text-xs border-none outline-none bg-transparent placeholder-gray-400 min-w-0"
+                            placeholder="Descrição da peça (ex: Prumo de Escoramento 3m)"
+                            value={listaAddDesc}
+                            onChange={e => setListaAddDesc(e.target.value)}
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === "Enter" && listaAddDesc.trim()) {
+                                const current = listaRecebQ.data ?? [];
+                                salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade })), { descricao: listaAddDesc.trim(), unidade: listaAddUnit || "un", quantidade: parseFloat(listaAddQty) || 1 }] });
+                              }
+                              if (e.key === "Escape") setListaShowAdd(false);
+                            }}
+                          />
+                          <input className="w-14 text-xs border border-gray-200 rounded px-1.5 py-1 text-center tabular-nums" placeholder="1" value={listaAddQty} onChange={e => setListaAddQty(e.target.value)} type="number" min="0.001" step="any" />
+                          <input className="w-10 text-xs border border-gray-200 rounded px-1 py-1 text-center uppercase" placeholder="un" value={listaAddUnit} onChange={e => setListaAddUnit(e.target.value)} maxLength={10} />
+                          <button
+                            onClick={() => {
+                              if (!listaAddDesc.trim()) return;
+                              const current = listaRecebQ.data ?? [];
+                              salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade })), { descricao: listaAddDesc.trim(), unidade: listaAddUnit || "un", quantidade: parseFloat(listaAddQty) || 1 }] });
+                            }}
+                            disabled={!listaAddDesc.trim() || salvarListaMut.isPending}
+                            className="text-emerald-600 hover:text-emerald-700 disabled:opacity-40 shrink-0"
+                            title="Confirmar"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => setListaShowAdd(false)} className="text-gray-300 hover:text-gray-500 shrink-0" title="Cancelar">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
                   <PurchaseTimeline companyId={companyId} ordemId={detalhe.id} />

@@ -1,4 +1,34 @@
 /**
+ * Rev. 4424 - LISTA DE PEÇAS PARA RECEBIMENTO EM OC DE LOCAÇÃO
+ *
+ * Problema: OCs de locação (andaime, escoramento) têm apenas 1 item genérico
+ * (ex: "Escoramento"). O locador envia um PDF com a lista completa de peças
+ * (prumos, pranchas, parafusos etc.) — o almoxarife não tinha como conferir.
+ *
+ * Solução: Nova seção "Lista de Peças para Recebimento" no detalhe da OC,
+ * visível apenas quando `tipo === "locacao"`. O COMPRADOR preenche via:
+ * — Botão "Ler PDF (IA)": lê o projeto/lista do locador com Claude Vision,
+ *   extrai todas as peças (descrição, quantidade, unidade). Progresso 0→100%.
+ * — "+ Adicionar": input inline para inclusão manual de peças.
+ * — Remoção: ✕ por item. IA faz append (não substitui) sobre lista existente.
+ *
+ * No Almoxarifado (SmartEntry > review): quando a OC selecionada tem lista,
+ * exibe card âmbar "Lista de Peças" read-only ANTES dos itens de entrada,
+ * para o almoxarife conferir fisicamente cada peça antes de confirmar.
+ *
+ * Banco: nova tabela `oc_lista_recebimento` (criada via SyncSchema+ Rev.4424).
+ * Backend: 4 novas procedures em compras.ts:
+ *   getListaRecebimento, salvarListaRecebimento,
+ *   removerItemListaRecebimento, extrairListaRecebimentoIA.
+ * warehouse.getOCItemsForReceiving retorna agora `listaRecebimento` + `tipo`.
+ *
+ * Arquivos: server/_core/index.ts, server/routers/compras.ts,
+ *   server/routers/warehouse.ts, client/src/pages/compras/Ordens.tsx,
+ *   client/src/pages/almoxarifado/SmartEntry.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4423 - OC IA: SELEÇÃO DE OBRA + EAP NO STEP DE REVISÃO
  *
  * O step "review" do dialog "Criar OC por IA" não tinha campo de obra nem

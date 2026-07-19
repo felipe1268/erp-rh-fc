@@ -2232,6 +2232,18 @@ REGRAS:
         .from(comprasOrdensItens)
         .where(eq(comprasOrdensItens.ordemId, input.ordemCompraId));
 
+      // Rev. 4424 — lista de peças para conferência (OC de locação)
+      let listaRecebimento: { id: number; descricao: string; unidade: string; quantidade: number }[] = [];
+      try {
+        const lr = await db.execute(sql`
+          SELECT id, descricao, unidade, quantidade::float8
+          FROM oc_lista_recebimento
+          WHERE oc_id = ${input.ordemCompraId} AND company_id = ${input.companyId}
+          ORDER BY id
+        `);
+        listaRecebimento = lr.rows as any[];
+      } catch { /* tabela ainda não existe — ignora */ }
+
       return {
         oc: {
           id: oc.id,
@@ -2239,6 +2251,7 @@ REGRAS:
           fornecedorNome: oc.fornecedorNome,
           obraId: oc.obraId,
           status: oc.status,
+          tipo: oc.tipo ?? "compra",
         },
         itens: itens.map((it) => ({
           id: it.id,
@@ -2249,6 +2262,7 @@ REGRAS:
           quantidadePendente: parseFloat(String(it.quantidade) || "0") - parseFloat(String(it.quantidadeEntregue) || "0"),
           precoUnitario: parseFloat(String(it.precoUnitario) || "0"),
         })),
+        listaRecebimento,
       };
     }),
 

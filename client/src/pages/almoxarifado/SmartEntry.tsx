@@ -790,6 +790,29 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
 
           {step === "review" && (
             <div className="space-y-3">
+              {/* Lista de peças para conferência — OC de locação (Rev. 4424) */}
+              {(ocItems.data?.listaRecebimento?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="w-4 h-4 text-amber-700 shrink-0" />
+                    <p className="text-sm font-bold text-amber-800">
+                      Lista de Peças — {ocItems.data!.listaRecebimento!.length} peça{ocItems.data!.listaRecebimento!.length !== 1 ? "s" : ""} para conferir
+                    </p>
+                  </div>
+                  <p className="text-xs text-amber-700">Confira cada peça abaixo antes de confirmar o recebimento:</p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto -mx-1 px-1">
+                    {ocItems.data!.listaRecebimento!.map((item: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2 bg-white rounded border border-amber-200 px-2 py-1.5">
+                        <span className="text-[10px] text-amber-500 font-mono font-bold w-5 shrink-0 text-center">{idx + 1}</span>
+                        <span className="flex-1 text-xs text-gray-800">{item.descricao}</span>
+                        <span className="text-xs text-gray-500 shrink-0 tabular-nums font-medium">
+                          {item.quantidade % 1 === 0 ? item.quantidade : Number(item.quantidade).toFixed(2)} {item.unidade}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {nfData && (
                 <div className="bg-gray-50 rounded-xl p-3 mb-3">
                   <div className="flex justify-between text-sm">

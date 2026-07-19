@@ -5482,6 +5482,24 @@ REGRAS DE EXTRAÇÃO:
           }
         }
 
+        // Rev. 4424 — tabela de lista de peças para recebimento de OC de locação
+        try {
+          await db.execute(sql.raw(`
+            CREATE TABLE IF NOT EXISTS oc_lista_recebimento (
+              id SERIAL PRIMARY KEY,
+              oc_id INTEGER NOT NULL,
+              company_id INTEGER NOT NULL,
+              descricao TEXT NOT NULL,
+              unidade VARCHAR(20) NOT NULL DEFAULT 'un',
+              quantidade NUMERIC(10,3) NOT NULL DEFAULT 1,
+              criado_por TEXT,
+              criado_em TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS oc_lista_recebimento_oc_id_idx ON oc_lista_recebimento(oc_id);
+          `));
+          console.log("[SyncSchema+] Rev. 4424: tabela oc_lista_recebimento garantida (lista de peças p/ locação).");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4424 oc_lista_recebimento:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
