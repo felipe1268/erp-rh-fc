@@ -144,23 +144,27 @@ export interface ContratoPjForDoc {
   pixPrestador?: string | null;
 }
 
-/** Converte o texto da cláusula de objeto em HTML com parágrafos/alíneas separados.
- *  Normaliza tanto textos novos (com \n por item) quanto antigos (itens separados por ";") */
+/**
+ * Converte o texto do objeto do contrato em HTML com parágrafos/alíneas separados.
+ * Usa <div> em vez de <p>: quando injetado dentro de um <p> do template (comum nos
+ * CONSIDERANDO), o browser auto-fecha o <p> externo ao encontrar um <div>, fazendo
+ * cada item renderizar como bloco separado — independente do nível de aninhamento.
+ */
 function formatObjetoHtml(raw: string): string {
-  if (!raw) return "<p>engenharia civil</p>";
+  if (!raw) return `<div style="margin:0 0 8px 0;text-align:justify;">engenharia civil</div>`;
   const normalized = raw
     .replace(/;\s*([a-z]\))/g, "\n$1")
     .replace(/\n{2,}/g, "\n");
   // Cabeçalhos que a IA insere e devem ser ignorados
   const headingPat = /^(OBJETO\s+DO\s+CONTRATO|CL[ÁA]USULA\s+(PRIMEIRA|1[ªa°\s]*)[-:\s]*(DO\s+OBJETO)?)/i;
   const lines = normalized.split(/\n/).map(l => l.trim()).filter(l => l && !headingPat.test(l));
-  if (!lines.length) return "<p>engenharia civil</p>";
+  if (!lines.length) return `<div style="margin:0 0 8px 0;text-align:justify;">engenharia civil</div>`;
   return lines.map(line => {
     const safe = esc(line);
     if (/^[a-z]\)/.test(line)) {
-      return `<p style="margin:2px 0 6px 32px;text-align:justify;">${safe}</p>`;
+      return `<div style="margin:2px 0 6px 32px;text-align:justify;">${safe}</div>`;
     }
-    return `<p style="margin:0 0 8px 0;text-align:justify;">${safe}</p>`;
+    return `<div style="margin:0 0 8px 0;text-align:justify;">${safe}</div>`;
   }).join("\n");
 }
 
@@ -313,21 +317,9 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
       }
       return "\x00OBJ\x00";
     });
-    // Segunda passagem: <p> contendo o marcador, mesmo que tenha tags internas
-    // (<strong>, <em>, etc.) antes/depois do marcador.
-    // Usa tempered greedy token ((?:(?!</p>)[\s\S])*?) para não cruzar </p>.
-    patchedHtml = patchedHtml.replace(
-      /(<p[^>]*>)((?:(?!<\/p>)[\s\S])*?)\x00OBJ\x00((?:(?!<\/p>)[\s\S])*?)(<\/p>)/g,
-      (_, ot, before, after, ct) => {
-        // Remove pontuação/preposição de encadeamento no final do "antes"
-        const trimB = before.trimEnd().replace(/[\s,;:]+$/, "");
-        const trimA = after.trim().replace(/^[,;:\s]+/, "");
-        return (trimB ? `${ot}${trimB}:${ct}\n` : "") +
-               objetoHtml +
-               (trimA ? `\n${ot}${trimA}${ct}` : "");
-      }
-    );
-    // Fallback: marcador ainda solto (não estava em <p>), injetar diretamente
+    // Substituição direta: objetoHtml usa <div>, então quando o marcador estiver
+    // dentro de um <p> do template, o browser auto-fecha o <p> antes do primeiro
+    // <div> e renderiza cada item como bloco separado. Sem regex complexo.
     patchedHtml = patchedHtml.replace(/\x00OBJ\x00/g, objetoHtml);
 
     // Passo 2: substituir todos os demais placeholders

@@ -1,4 +1,25 @@
 /**
+ * Rev. 4431 - FIX: OBJETO DO CONTRATO PJ — <div> EM VEZ DE <p> NA EXPANSÃO
+ *
+ * Problema raiz definitivo: `formatObjetoHtml` retornava tags `<p>`. Quando o
+ * placeholder `[OBJETO_CONTRATO]` está dentro de um `<p>` do template (CONSIDERANDO
+ * III), injetar `<p>` dentro de `<p>` é HTML inválido — browser colapsa tudo em
+ * texto inline. Todas as tentativas de regex (tempered greedy token, 3 passagens,
+ * etc.) falhavam porque a regex não casava com o `<p>` correto (tinha `<strong>`,
+ * `<em>` e outras tags internas antes do placeholder).
+ *
+ * Solução definitiva (client/src/lib/contratoPjDocument.ts):
+ * - `formatObjetoHtml` agora gera `<div>` em vez de `<p>` para cada item.
+ * - Quando o browser encontra `<div>` dentro de `<p>`, auto-fecha o `<p>` externo
+ *   (spec HTML5), fazendo cada item renderizar como bloco separado.
+ * - Expansão simplificada: `.replace(/\x00OBJ\x00/g, objetoHtml)` — direto, sem
+ *   regex de múltiplas passagens. Funciona para qualquer tag container do template.
+ * - Comentário duplicado removido.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4430 - FIX: OBJETO DO CONTRATO PJ — ITENS SEPARADOS EM PARÁGRAFOS NO PDF
  *
  * Problema: No PDF gerado do Contrato PJ, todos os itens do objeto (a) até l))

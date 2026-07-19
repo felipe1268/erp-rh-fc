@@ -50,17 +50,17 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4430** — **FIX: OBJETO DO CONTRATO PJ — ITENS EM PARÁGRAFOS SEPARADOS NO PDF.** Regex da expansão `[OBJETO_CONTRATO]` reescrita com tempered greedy token para cruzar tags internas (`<strong>` etc.) sem ultrapassar `</p>` — resolve o colapso inline dos itens a)–l). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4431** — **FIX DEFINITIVO: OBJETO DO CONTRATO PJ — `<div>` EM VEZ DE `<p>`.** `formatObjetoHtml` agora gera `<div>` para cada item; browser auto-fecha o `<p>` do template ao encontrar `<div>` (spec HTML5), cada item vira bloco separado. Expansão simplificada para replace direto sem regex complexo. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4429** — **FIX: PDF CONTRATO PJ = 100% TEMPLATE DA CENTRAL DE DOCUMENTOS.** `buildContratoPjSignHtml` usa template ISO diretamente; `buildFcDocument` não é chamado; HTML shell mínimo com `@page A4`; caminho legado preservado. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4430** — **FIX: OBJETO DO CONTRATO PJ — TENTATIVA REGEX TEMPERED GREEDY TOKEN.** (substituído por Rev. 4431). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4429** — **FIX: PDF CONTRATO PJ = 100% TEMPLATE DA CENTRAL DE DOCUMENTOS.** `buildContratoPjSignHtml` usa template ISO diretamente; sem `buildFcDocument`; HTML shell mínimo `@page A4`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4428** — **SYNC BIDIRECIONAL: DADOS BANCÁRIOS COLABORADORES ↔ CONTRATO PJ.** `getLastByEmployee` estendido; preenchimento auto no form novo; sync vice-versa ao salvar. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4427** — **FIX: MENSAGEM DE ERRO DE CONEXÃO iOS NO CADASTRO DE COLABORADOR.** iOS WebKit descarta requisições HTTP silenciosamente; `erroToast` detecta padrão e exibe mensagem amigável; `onSettled` garante invalidação. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4426** — **FIX: PRÉ-VISUALIZAR CONTRATO PJ — OBJETO DO CONTRATO DUPLICADO/INLINE.** Fix 3 camadas: `formatObjetoHtml` filtra cabeçalhos; `buildContratoPjSignHtml` pré-processa ISO em 3 passagens; prompt IA reescrito + strip server-side. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4425** — **IA: GERAR CLÁUSULA DE OBJETO DO CONTRATO PJ.** Campo "Objeto do Contrato" virou seção estilizada; IA gera parágrafo inicial + 7–12 alíneas + encerramento. Progresso 0→100%. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4424** — **LISTA DE PEÇAS PARA RECEBIMENTO EM OC DE LOCAÇÃO.** OCs de locação ganham seção "Lista de Peças para Recebimento" no detalhe + SmartEntry almoxarifado. Nova tabela `oc_lista_recebimento`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4423** — **OC IA: SELEÇÃO DE OBRA + EAP NO STEP DE REVISÃO.** card verde "Obra e Apropriação" no step review do dialog Criar OC por IA. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
