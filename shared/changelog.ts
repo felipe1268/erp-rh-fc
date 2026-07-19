@@ -1,4 +1,24 @@
 /**
+ * Rev. 4413 - TEMPLATES ISO: BOTÃO EXCLUIR SEMPRE VISÍVEL + BARRA FLEX-WRAP
+ *
+ * Problema: o botão "Excluir" só renderizava quando `selRow?.existe === true`.
+ * Documentos fixos ainda não criados (ex.: "Proposta Comercial — Não criado")
+ * ficavam sem nenhum botão de exclusão, sem qualquer explicação na UI.
+ *
+ * Fix:
+ *   - O botão "Excluir" passa a renderizar SEMPRE (para qualquer tipo selecionado).
+ *   - Quando `existe: true`  → botão ativo (vermelho), comportamento original.
+ *   - Quando `existe: false` → botão desabilitado (cinza slate) com `title`
+ *     explicando: "Crie o documento primeiro (adicione conteúdo e salve) para
+ *     poder excluí-lo". Assim o usuário entende o fluxo sem confusão.
+ *   - Barra de ação (`div` com os botões) alterada de `flex` para `flex flex-wrap`
+ *     para não cortar botões em telas estreitas (mobile/iPhone).
+ *
+ * Arquivos: client/src/pages/configuracoes/TemplatesDocsTab.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4412 - MÓDULO PJ: CARDS KPI — LAYOUT VERTICAL CENTRADO (ÍCONE + VALOR + LABEL)
  *
  * Cada card: círculo de ícone (topo, centrado) → número extrabold → label uppercase embaixo.

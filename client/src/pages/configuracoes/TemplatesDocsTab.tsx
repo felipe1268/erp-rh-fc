@@ -831,7 +831,7 @@ export default function TemplatesDocsTab() {
                 <h3 className="text-base font-semibold text-gray-800">{meta.titulo}</h3>
                 <StatusBadge status={statusAtual} />
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {statusAtual !== "vigente" && (
                   <Button
                     size="sm"
@@ -854,7 +854,7 @@ export default function TemplatesDocsTab() {
                     <XCircle className="w-4 h-4 mr-1" /> Obsoleto
                   </Button>
                 )}
-                {selRow?.existe && (
+                {selRow?.existe ? (
                   <Button
                     size="sm"
                     variant="outline"
@@ -869,6 +869,17 @@ export default function TemplatesDocsTab() {
                     disabled={excluirMut.isPending}
                   >
                     {excluirMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Trash2 className="w-4 h-4 mr-1" />}
+                    Excluir
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-slate-400 border-slate-200 cursor-not-allowed"
+                    title="Crie o documento primeiro (adicione conteúdo e salve) para poder excluí-lo"
+                    disabled
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
                     Excluir
                   </Button>
                 )}

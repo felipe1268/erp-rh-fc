@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4413** — **TEMPLATES ISO: BOTÃO EXCLUIR SEMPRE VISÍVEL + BARRA FLEX-WRAP.** Botão Excluir agora renderiza sempre: ativo (vermelho) quando documento existe, desabilitado (cinza) com tooltip explicativo quando "Não criado". Barra de ação alterada para `flex-wrap` para não cortar botões no mobile. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4412** — **MÓDULO PJ: CARDS KPI — LAYOUT VERTICAL CENTRADO.** Ícone (círculo topo) → número → label. Labels curtos, min-h uniforme, sem overflow. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4411** — **MÓDULO PJ: REDESIGN COMPLETO DOS CARDS KPI + CARD "PJ SEM CONTRATO".** 7 cards com ícones, cores semânticas e grade responsiva (lg:grid-cols-7). "PJ Sem Contrato" (vermelho) usa alertas.pjsSemContrato existente. ZERO DELETE · ZERO ALTER destrutivo.
