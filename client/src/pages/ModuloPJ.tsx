@@ -29,6 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import PeriodSelectorCard, { MonthDotStatus } from "@/components/PeriodSelectorCard";
 import FCSignPJSendDialog from "@/components/FCSignPJSendDialog";
 import FCSignAvisoEncerramentoPJDialog from "@/components/FCSignAvisoEncerramentoPJDialog";
+import { buildContratoPjSignHtml } from "@/lib/contratoPjDocument";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -160,6 +161,15 @@ export default function ModuloPJ() {
   const { data: criteriaData = [] } = trpc.criteria.getAll.useQuery(
     { companyId },
     { enabled: !!companyId }
+  );
+  // Rev. 4425 — dados completos do contrato (com empresa) e modelo para prévia
+  const { data: contratoByIdData } = (trpc as any).pj.contratos.getById.useQuery(
+    { id: selectedContrato?.id || 0 },
+    { enabled: showDetailDialog && !!selectedContrato?.id }
+  );
+  const { data: modeloContratoData } = trpc.pj.modeloContrato.useQuery(
+    { companyId: selectedContrato?.companyId || companyId },
+    { enabled: showDetailDialog && !!(selectedContrato?.companyId || companyId) }
   );
   const defaultFormaPgto = (criteriaData as any[]).find(c => c.chave === "terceiros_pj_forma_pagamento")?.valor || "PIX";
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
@@ -356,6 +366,24 @@ export default function ModuloPJ() {
     { companyId, mesReferencia: mesRefFallback },
     { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" && pjMes != null }
   );
+
+  function handlePreviewContrato() {
+    if (!contratoByIdData) { toast.error("Aguarde os dados do contrato carregarem."); return; }
+    const modeloHtml = (modeloContratoData as any)?.modeloHtml || null;
+    const html = buildContratoPjSignHtml({
+      contrato: contratoByIdData,
+      modelo: "",
+      modeloHtml,
+      contratanteNome: "FELIPE COSTA ALVES",
+      geradoPor: user?.name || user?.username || "Sistema",
+    });
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      setTimeout(() => win.print(), 800);
+    }
+  }
 
   function exportarPDF() {
     if (!relatorio || !relatorio.prestadores.length) {
@@ -1170,6 +1198,9 @@ export default function ModuloPJ() {
             <div className="w-full max-w-3xl mx-auto space-y-4">
 
               <div className="flex justify-end gap-2 flex-wrap">
+                <Button variant="outline" size="sm" className="gap-2" onClick={handlePreviewContrato} disabled={!contratoByIdData}>
+                  <Printer className="h-4 w-4" /> Pré-visualizar
+                </Button>
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => { setShowDetailDialog(false); openEditContrato(selectedContrato); }}>
                   <Pencil className="h-4 w-4" /> Editar
                 </Button>
