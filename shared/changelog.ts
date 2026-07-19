@@ -1,4 +1,28 @@
 /**
+ * Rev. 4430 - FIX: OBJETO DO CONTRATO PJ — ITENS SEPARADOS EM PARÁGRAFOS NO PDF
+ *
+ * Problema: No PDF gerado do Contrato PJ, todos os itens do objeto (a) até l))
+ * apareciam em linha contínua dentro de um único bloco de texto, sem separação.
+ * Causa-raiz: a `<p>` do template que continha `[OBJETO_CONTRATO]` tinha tags
+ * internas antes do placeholder (ex: `<strong>(III)</strong> O objeto desta
+ * avença... [OBJETO_CONTRATO]`). A regex da segunda passagem usava `[^<\x00]+`
+ * (sem tags), que não casava com conteúdo que inclui `<` de tags HTML internas.
+ * O fallback então injetava os `<p>` do objeto DENTRO do `<p>` do template —
+ * HTML inválido que o browser colapsa em texto inline.
+ *
+ * Solução (client/src/lib/contratoPjDocument.ts):
+ * - Segunda passagem reescrita com tempered greedy token:
+ *   `((?:(?!<\/p>)[\s\S])*?)` — atravessa tags internas (<strong>, <em>, etc.)
+ *   mas não cruza fronteiras de </p>.
+ * - Regex: `(<p[^>]*>)(TGT)\x00OBJ\x00(TGT)(<\/p>)` onde TGT é o token.
+ * - Resultado: a `<p>` do CONSIDERANDO fecha com o texto anterior, os parágrafos
+ *   do objeto são inseridos separados, texto remanescente abre nova `<p>`.
+ * - Terceira passagem redundante removida (o fallback direto já cobre o caso).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4429 - FIX: PDF CONTRATO PJ = 100% TEMPLATE CENTRAL DE DOCUMENTOS
  *
  * Problema: O PDF gerado pelo botão "Imprimir / Salvar PDF" do Contrato PJ NÃO

@@ -313,17 +313,21 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
       }
       return "\x00OBJ\x00";
     });
+    // Segunda passagem: <p> contendo o marcador, mesmo que tenha tags internas
+    // (<strong>, <em>, etc.) antes/depois do marcador.
+    // Usa tempered greedy token ((?:(?!</p>)[\s\S])*?) para não cruzar </p>.
     patchedHtml = patchedHtml.replace(
-      /(<[^<>]+>)([^<\x00]+)\x00OBJ\x00([^<]*?)(<\/[^<>]+>)/g,
+      /(<p[^>]*>)((?:(?!<\/p>)[\s\S])*?)\x00OBJ\x00((?:(?!<\/p>)[\s\S])*?)(<\/p>)/g,
       (_, ot, before, after, ct) => {
-        const trimB = before.trimEnd().replace(/[\s,]*\s+de\s*$|[\s,]*:\s*$/, "");
-        const trimA = after.trim().replace(/^[,;:]\s*/, "");
+        // Remove pontuação/preposição de encadeamento no final do "antes"
+        const trimB = before.trimEnd().replace(/[\s,;:]+$/, "");
+        const trimA = after.trim().replace(/^[,;:\s]+/, "");
         return (trimB ? `${ot}${trimB}:${ct}\n` : "") +
                objetoHtml +
                (trimA ? `\n${ot}${trimA}${ct}` : "");
       }
     );
-    patchedHtml = patchedHtml.replace(/<[^<>]+>\s*\x00OBJ\x00\s*<\/[^<>]+>/g, objetoHtml);
+    // Fallback: marcador ainda solto (não estava em <p>), injetar diretamente
     patchedHtml = patchedHtml.replace(/\x00OBJ\x00/g, objetoHtml);
 
     // Passo 2: substituir todos os demais placeholders
