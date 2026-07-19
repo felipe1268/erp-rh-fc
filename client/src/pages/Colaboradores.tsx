@@ -2210,209 +2210,273 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
             </TabsContent>
 
             {/* ===== ABA PROFISSIONAL ===== */}
-            <TabsContent value="profissional" className="pt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                    <Hash className="h-3.5 w-3.5" /> Código Interno (JFC)
-                    {form.codigoInterno && <Lock className="h-3 w-3 text-amber-500" />}
-                  </Label>
-                  {editingId && form.codigoInterno ? (
-                    <div className="relative">
-                      <Input
-                        value={form.codigoInterno ?? ""}
-                        onChange={e => set("codigoInterno", e.target.value.toUpperCase())}
-                        className="bg-input mt-1 font-mono font-bold text-primary"
-                        readOnly={user?.role !== 'admin' && user?.role !== 'admin_master'}
-                        disabled={user?.role !== 'admin' && user?.role !== 'admin_master'}
-                      />
-                      <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                        {(user?.role === 'admin' || user?.role === 'admin_master') ? 'Somente ADM Master pode alterar' : 'Gerado automaticamente • Imutável'}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="bg-muted/50 border border-dashed border-muted-foreground/30 rounded-md px-3 py-2 mt-1 text-sm text-muted-foreground italic">
-                      Gerado automaticamente ao salvar
-                    </div>
-                  )}
+            <TabsContent value="profissional" className="pt-4 space-y-4">
+
+              {/* ── Card 1: Cargo e Posição ── */}
+              <div className="rounded-xl border overflow-hidden shadow-sm">
+                <div className="bg-gradient-to-r from-slate-700 to-slate-600 px-4 py-2.5 flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-white/80" />
+                  <span className="text-sm font-semibold text-white">Cargo e Posição</span>
                 </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">eSocial</Label>
-                  <Input value={form.matricula ?? ""} onChange={e => set("matricula", e.target.value)} className="bg-input mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Status</Label>
-                  <Select value={form.status ?? "Ativo"} onValueChange={v => {
-                    if (v === "Desligado" && (form.status || "Ativo") !== "Desligado") {
-                      setPreviousStatus(form.status || "Ativo");
-                      set("status", v);
-                      setDesligamentoDialogOpen(true);
-                    } else {
-                      set("status", v);
-                    }
-                  }}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {EMPLOYEE_STATUS_MANUAL.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {['Ferias', 'Afastado', 'Licenca'].includes(form.status || '') && (
-                    <p className="text-xs text-blue-600 mt-1">Status calculado automaticamente pelo sistema</p>
-                  )}
-                </div>
-                {form.status === 'Afastado' && (
-                  <>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                        🏥 Data de Afastamento <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        type="date"
-                        value={form.licencaDataInicio ?? ""}
-                        onChange={e => set("licencaDataInicio", e.target.value)}
-                        className="bg-input mt-1"
-                      />
-                      <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                        Início do afastamento (INSS, atestado, etc.) — usado p/ regra dos 180 dias (CLT Art. 133, IV)
-                      </span>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Tipo de Afastamento</Label>
-                      <Select value={form.licencaTipo || "none"} onValueChange={v => set("licencaTipo", v === "none" ? "" : v)}>
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Selecione</SelectItem>
-                          <SelectItem value="auxilio_doenca">Auxílio-Doença (INSS)</SelectItem>
-                          <SelectItem value="acidente_trabalho">Acidente de Trabalho (INSS)</SelectItem>
-                          <SelectItem value="atestado_medico">Atestado Médico</SelectItem>
-                          <SelectItem value="suspensao">Suspensão Disciplinar</SelectItem>
-                          <SelectItem value="outros">Outros</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Previsão de Retorno</Label>
-                      <Input
-                        type="date"
-                        value={form.licencaDataFim ?? ""}
-                        onChange={e => set("licencaDataFim", e.target.value)}
-                        className="bg-input mt-1"
-                      />
-                      <span className="text-[10px] text-muted-foreground mt-0.5 block">Opcional</span>
-                    </div>
-                  </>
-                )}
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Função</Label>
-                  {/* Rev. 2169 — combobox pesquisável (Popover + cmdk) substitui o Select
-                      pra facilitar busca em listas longas. Mesmo padrão do PlanoDeContaCombobox. */}
-                  <FuncaoCombobox
-                    value={form.funcao || ""}
-                    onChange={(v) => set("funcao", v)}
-                    options={(funcoesList ?? []).filter((f: any) => f.isActive !== false)}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Setor</Label>
-                  <Select value={form.setor || "none"} onValueChange={v => set("setor", v === "none" ? "" : v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Selecione o setor</SelectItem>
-                      {(setoresList ?? []).filter((s: any) => s.isActive !== false).map((s: any) => (
-                        <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><HardHat className="h-3.5 w-3.5" /> Obra Atual</Label>
-                  <div className="bg-muted/50 border rounded-md px-3 py-2 mt-1 text-sm text-muted-foreground">
-                    {form.obraAtualId && form.obraAtualId !== "0" ? (
-                      (obras ?? []).find((o: any) => String(o.id) === String(form.obraAtualId))?.nome || "Obra #" + form.obraAtualId
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      <Hash className="h-3.5 w-3.5" /> Código Interno (JFC)
+                      {form.codigoInterno && <Lock className="h-3 w-3 text-amber-500" />}
+                    </Label>
+                    {editingId && form.codigoInterno ? (
+                      <div className="relative">
+                        <Input
+                          value={form.codigoInterno ?? ""}
+                          onChange={e => set("codigoInterno", e.target.value.toUpperCase())}
+                          className="bg-input mt-1 font-mono font-bold text-primary"
+                          readOnly={user?.role !== 'admin' && user?.role !== 'admin_master'}
+                          disabled={user?.role !== 'admin' && user?.role !== 'admin_master'}
+                        />
+                        <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                          {(user?.role === 'admin' || user?.role === 'admin_master') ? 'Somente ADM Master pode alterar' : 'Gerado automaticamente • Imutável'}
+                        </span>
+                      </div>
                     ) : (
-                      <span className="italic">Não alocado — use Efetivo por Obra</span>
+                      <div className="bg-muted/50 border border-dashed border-muted-foreground/30 rounded-md px-3 py-2 mt-1 text-sm text-muted-foreground italic">
+                        Gerado automaticamente ao salvar
+                      </div>
                     )}
                   </div>
+
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">eSocial / Matrícula</Label>
+                    <Input value={form.matricula ?? ""} onChange={e => set("matricula", e.target.value)} className="bg-input mt-1" placeholder="Número de matrícula" />
+                  </div>
+
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">Status</Label>
+                    <Select value={form.status ?? "Ativo"} onValueChange={v => {
+                      if (v === "Desligado" && (form.status || "Ativo") !== "Desligado") {
+                        setPreviousStatus(form.status || "Ativo");
+                        set("status", v);
+                        setDesligamentoDialogOpen(true);
+                      } else {
+                        set("status", v);
+                      }
+                    }}>
+                      <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {EMPLOYEE_STATUS_MANUAL.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {['Ferias', 'Afastado', 'Licenca'].includes(form.status || '') && (
+                      <p className="text-xs text-blue-600 mt-1">Status calculado automaticamente pelo sistema</p>
+                    )}
+                  </div>
+
+                  {form.status === 'Afastado' && (
+                    <>
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                          🏥 Data de Afastamento <span className="text-red-500">*</span>
+                        </Label>
+                        <Input type="date" value={form.licencaDataInicio ?? ""} onChange={e => set("licencaDataInicio", e.target.value)} className="bg-input mt-1" />
+                        <span className="text-[10px] text-muted-foreground mt-0.5 block">Início do afastamento (INSS, atestado, etc.) — regra dos 180 dias (CLT Art. 133, IV)</span>
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Tipo de Afastamento</Label>
+                        <Select value={form.licencaTipo || "none"} onValueChange={v => set("licencaTipo", v === "none" ? "" : v)}>
+                          <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Selecione</SelectItem>
+                            <SelectItem value="auxilio_doenca">Auxílio-Doença (INSS)</SelectItem>
+                            <SelectItem value="acidente_trabalho">Acidente de Trabalho (INSS)</SelectItem>
+                            <SelectItem value="atestado_medico">Atestado Médico</SelectItem>
+                            <SelectItem value="suspensao">Suspensão Disciplinar</SelectItem>
+                            <SelectItem value="outros">Outros</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Previsão de Retorno</Label>
+                        <Input type="date" value={form.licencaDataFim ?? ""} onChange={e => set("licencaDataFim", e.target.value)} className="bg-input mt-1" />
+                        <span className="text-[10px] text-muted-foreground mt-0.5 block">Opcional</span>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="sm:col-span-2">
+                    <Label className="text-xs font-medium text-muted-foreground">Função / Cargo</Label>
+                    <FuncaoCombobox
+                      value={form.funcao || ""}
+                      onChange={(v) => set("funcao", v)}
+                      options={(funcoesList ?? []).filter((f: any) => f.isActive !== false)}
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">Setor</Label>
+                    <Select value={form.setor || "none"} onValueChange={v => set("setor", v === "none" ? "" : v)}>
+                      <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Selecione o setor</SelectItem>
+                        {(setoresList ?? []).filter((s: any) => s.isActive !== false).map((s: any) => (
+                          <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><HardHat className="h-3.5 w-3.5" /> Obra Atual</Label>
+                    <div className="bg-muted/40 border border-dashed rounded-lg px-4 py-2.5 mt-1 text-sm text-muted-foreground flex items-center gap-2">
+                      <HardHat className="h-4 w-4 shrink-0 opacity-50" />
+                      {form.obraAtualId && form.obraAtualId !== "0" ? (
+                        <span className="font-medium text-foreground">{(obras ?? []).find((o: any) => String(o.id) === String(form.obraAtualId))?.nome || "Obra #" + form.obraAtualId}</span>
+                      ) : (
+                        <span className="italic">Não alocado — use Efetivo por Obra para alocar</span>
+                      )}
+                    </div>
+                  </div>
+
                 </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Código Contábil</Label>
-                  <Input value={form.codigoContabil ?? ""} onChange={e => set("codigoContabil", e.target.value)} placeholder="Ex: 128" className="bg-input mt-1" />
-                  <span className="text-[10px] text-muted-foreground mt-0.5 block">Nº de identificação no sistema da contabilidade</span>
+              </div>
+
+              {/* ── Card 2: Contrato & Admissão ── */}
+              <div className="rounded-xl border overflow-hidden shadow-sm">
+                <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-white/80" />
+                  <span className="text-sm font-semibold text-white">Contrato & Admissão</span>
                 </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Data de Admissão</Label>
-                  <Input type="date" value={form.dataAdmissao ?? ""} onChange={e => set("dataAdmissao", e.target.value)} className="bg-input mt-1" />
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">Tipo de Contrato</Label>
+                    <Select value={form.tipoContrato || "none"} onValueChange={v => set("tipoContrato", v === "none" ? "" : v)}>
+                      <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Selecione</SelectItem>
+                        <SelectItem value="CLT">CLT</SelectItem>
+                        <SelectItem value="PJ">PJ</SelectItem>
+                        <SelectItem value="Temporario">Temporário</SelectItem>
+                        <SelectItem value="Estagio">Estágio</SelectItem>
+                        <SelectItem value="Aprendiz">Aprendiz</SelectItem>
+                        <SelectItem value="Socio">Sócio</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Rev. 2502 — Tipo de Remuneração (Mensalista / Horista). */}
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">Tipo de Remuneração</Label>
+                    <Select value={(form as any).tipoRemuneracao || "horista"} onValueChange={v => set("tipoRemuneracao" as any, v)}>
+                      <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="horista">Horista</SelectItem>
+                        <SelectItem value="mensalista">Mensalista</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">Horista: por hora. Mensalista: salário fixo.</span>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">Data de Admissão</Label>
+                    <Input type="date" value={form.dataAdmissao ?? ""} onChange={e => set("dataAdmissao", e.target.value)} className="bg-input mt-1" />
+                  </div>
+
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">Código Contábil</Label>
+                    <Input value={form.codigoContabil ?? ""} onChange={e => set("codigoContabil", e.target.value)} placeholder="Ex: 128" className="bg-input mt-1" />
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">ID na contabilidade</span>
+                  </div>
+
                 </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Salário Base (R$)</Label>
-                  <Input value={form.salarioBase ?? ""} onChange={e => {
-                    const formatted = formatMoedaInput(e.target.value);
-                    set("salarioBase", formatted);
-                    const salarioNum = parseMoedaBR(formatted);
-                    const horasNum = parseFloat(String(form.horasMensais || "220").replace(",", "."));
-                    if (salarioNum > 0 && !isNaN(horasNum) && horasNum > 0) {
-                      set("valorHora", formatMoedaSemPrefixo(salarioNum / horasNum));
-                    }
-                  }} placeholder="2.500,00" className="bg-input mt-1" />
-                  <span className="text-[10px] text-muted-foreground mt-0.5 block">Referência mensal (varia conforme dias úteis)</span>
+              </div>
+
+              {/* ── Card 3: Remuneração ── */}
+              <div className="rounded-xl border overflow-hidden shadow-sm">
+                <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Award className="h-4 w-4 text-white/80" />
+                    <span className="text-sm font-semibold text-white">Remuneração</span>
+                  </div>
+                  {form.salarioBase && (
+                    <span className="text-xs text-emerald-100 bg-emerald-700/50 px-2 py-0.5 rounded-full font-medium">
+                      R$ {formatMoedaSemPrefixo(parseMoedaBR(String(form.salarioBase)))} / mês
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <Label className="text-xs font-medium font-semibold text-blue-700">Valor da Hora (R$) ⭐</Label>
-                  <Input value={form.valorHora ?? ""} onChange={e => {
-                    const formatted = formatMoedaInput(e.target.value);
-                    set("valorHora", formatted);
-                    const horaNum = parseMoedaBR(formatted);
-                    const horasNum = parseFloat(String(form.horasMensais || "220").replace(",", "."));
-                    if (horaNum > 0 && !isNaN(horasNum) && horasNum > 0) {
-                      set("salarioBase", formatMoedaSemPrefixo(horaNum * horasNum));
-                    }
-                  }} placeholder="11,36" className="bg-input mt-1 border-blue-300 ring-1 ring-blue-100" />
-                  <span className="text-[10px] mt-0.5 block font-medium text-blue-600">
-                    Dado mestre — base para cálculo da folha (todos CLT são horistas)
-                  </span>
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Horas Mensais</Label>
-                  <Input value={form.horasMensais ?? ""} onChange={e => {
-                    const horas = e.target.value;
-                    set("horasMensais", horas);
-                    const horaNum = parseMoedaBR(String(form.valorHora || "0"));
-                    const horasNum = parseFloat(horas.replace(",", "."));
-                    if (horaNum > 0 && !isNaN(horasNum) && horasNum > 0) {
-                      set("salarioBase", formatMoedaSemPrefixo(horaNum * horasNum));
-                    }
-                  }} placeholder="220" className="bg-input mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Tipo de Contrato</Label>
-                  <Select value={form.tipoContrato || "none"} onValueChange={v => set("tipoContrato", v === "none" ? "" : v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Selecione</SelectItem>
-                      <SelectItem value="CLT">CLT</SelectItem>
-                      <SelectItem value="PJ">PJ</SelectItem>
-                      <SelectItem value="Temporario">Temporário</SelectItem>
-                      <SelectItem value="Estagio">Estágio</SelectItem>
-                      <SelectItem value="Aprendiz">Aprendiz</SelectItem>
-                      <SelectItem value="Socio">Sócio</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {/* Rev. 2502 — Tipo de Remuneração (Mensalista / Horista). Determina o
-                    texto da CLÁUSULA 2ª do Contrato de Experiência e o regime de cálculo
-                    da folha (campo já consumido por payrollEngine.ts / financial.ts). */}
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Tipo de Remuneração</Label>
-                  <Select value={(form as any).tipoRemuneracao || "horista"} onValueChange={v => set("tipoRemuneracao" as any, v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="horista">Horista</SelectItem>
-                      <SelectItem value="mensalista">Mensalista</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                    Horista: remuneração por hora trabalhada. Mensalista: salário mensal fixo.
-                  </span>
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+                  {/* Salário Base */}
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4">
+                    <Label className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Salário Base</Label>
+                    <div className="flex items-baseline gap-1 mt-1 mb-2">
+                      <span className="text-xs text-emerald-600 font-medium">R$</span>
+                    </div>
+                    <Input
+                      value={form.salarioBase ? formatMoedaSemPrefixo(parseMoedaBR(String(form.salarioBase))) : ""}
+                      onChange={e => {
+                        const formatted = formatMoedaInput(e.target.value);
+                        set("salarioBase", formatted);
+                        const salarioNum = parseMoedaBR(formatted);
+                        const horasNum = parseFloat(String(form.horasMensais || "220").replace(",", "."));
+                        if (salarioNum > 0 && !isNaN(horasNum) && horasNum > 0) {
+                          set("valorHora", formatMoedaSemPrefixo(salarioNum / horasNum));
+                        }
+                      }}
+                      placeholder="2.500,00"
+                      className="bg-white border-emerald-200 font-semibold text-emerald-900 text-base"
+                    />
+                    <span className="text-[10px] text-emerald-600 mt-1 block">Referência mensal (varia com dias úteis)</span>
+                  </div>
+
+                  {/* Valor da Hora — dado mestre */}
+                  <div className="rounded-xl bg-blue-50 border-2 border-blue-300 p-4 relative">
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Valor da Hora</Label>
+                      <span className="text-[10px] font-bold text-white bg-blue-600 px-1.5 py-0.5 rounded-full">⭐ MESTRE</span>
+                    </div>
+                    <div className="flex items-baseline gap-1 mt-1 mb-2">
+                      <span className="text-xs text-blue-600 font-medium">R$</span>
+                    </div>
+                    <Input
+                      value={form.valorHora ? formatMoedaSemPrefixo(parseMoedaBR(String(form.valorHora))) : ""}
+                      onChange={e => {
+                        const formatted = formatMoedaInput(e.target.value);
+                        set("valorHora", formatted);
+                        const horaNum = parseMoedaBR(formatted);
+                        const horasNum = parseFloat(String(form.horasMensais || "220").replace(",", "."));
+                        if (horaNum > 0 && !isNaN(horasNum) && horasNum > 0) {
+                          set("salarioBase", formatMoedaSemPrefixo(horaNum * horasNum));
+                        }
+                      }}
+                      placeholder="11,36"
+                      className="bg-white border-blue-300 font-bold text-blue-900 text-base ring-1 ring-blue-200"
+                    />
+                    <span className="text-[10px] text-blue-600 mt-1 block font-medium">Base para cálculo da folha CLT (horistas)</span>
+                  </div>
+
+                  {/* Horas Mensais */}
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+                    <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Horas Mensais</Label>
+                    <div className="flex items-baseline gap-1 mt-1 mb-2">
+                      <span className="text-xs text-slate-500 font-medium">h/mês</span>
+                    </div>
+                    <Input
+                      value={form.horasMensais ?? ""}
+                      onChange={e => {
+                        const horas = e.target.value;
+                        set("horasMensais", horas);
+                        const horaNum = parseMoedaBR(String(form.valorHora || "0"));
+                        const horasNum = parseFloat(horas.replace(",", "."));
+                        if (horaNum > 0 && !isNaN(horasNum) && horasNum > 0) {
+                          set("salarioBase", formatMoedaSemPrefixo(horaNum * horasNum));
+                        }
+                      }}
+                      placeholder="220"
+                      className="bg-white border-slate-200 font-semibold text-slate-800 text-base"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">Padrão CLT: 220h (44h/semana)</span>
+                  </div>
+
                 </div>
               </div>
 
