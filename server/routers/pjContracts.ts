@@ -1039,7 +1039,8 @@ INSTRUÇÕES:
 - Termine com uma frase de encerramento sobre a natureza autônoma/independente da prestação
 - Retorne APENAS o texto da cláusula, sem comentários ou formatação markdown`;
       const result = await invokeLLM({ messages: [{ role: "user", content: prompt }], maxTokens: 1200 });
-      const clausula = (result.content ?? "").trim();
+      const raw = result.choices?.[0]?.message?.content;
+      const clausula = (typeof raw === "string" ? raw : "").trim();
       return { clausula };
     }),
   }),
