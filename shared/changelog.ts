@@ -1,4 +1,27 @@
 /**
+ * Rev. 4433 - FIX: PDF CONTRATO PJ — EXTRAÇÃO DE CORPO ANTES DO buildFcDocument
+ *
+ * Causa raiz do layout errado (complemento da Rev. 4432):
+ * O conteudoHtml salvo no Neon pode ser um DOCUMENTO HTML COMPLETO (<!DOCTYPE html>...)
+ * quando foi gerado/salvo pela versão legada da UI. Passar esse HTML completo como
+ * `corpoHtml` do buildFcDocument aninhava dois documentos HTML, e o browser renderizava
+ * apenas o HTML interno (letterhead do template) ignorando o buildFcDocument externo.
+ *
+ * O buildFcPreviewHtml da Central de Documentos usa DOMPurify.sanitize() que
+ * AUTOMATICAMENTE extrai só o conteúdo do <body> quando recebe HTML completo.
+ * O caminho ISO não tinha esse tratamento — agora tem (Passo 0 em buildContratoPjSignHtml).
+ *
+ * Solução (client/src/lib/contratoPjDocument.ts — Passo 0):
+ * - Detecta se modeloHtml é documento HTML completo (<!DOCTYPE html> ou <html>)
+ * - Extrai apenas o conteúdo do <body> via regex <body...>(...)></body>
+ * - Fallback: strip manual das tags de shell (<!DOCTYPE>, <html>, <head>...</head>, <body>)
+ * - Resultado: corpoHtml passado ao buildFcDocument = apenas parágrafos/divs do contrato
+ * - Idêntico ao que DOMPurify faz no preview — layout 100% igual
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4432 - FIX: PDF CONTRATO PJ — LAYOUT IDÊNTICO AO PREVIEW DA CENTRAL DE DOCUMENTOS
  *
  * Problema raiz definitivo do header: o caminho ISO em `buildContratoPjSignHtml`

@@ -307,14 +307,38 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
   //   corpoHtml = conteudoHtml com placeholders substituídos
   //   buildFcDocument adiciona: logo centralizado + faixa "CONTRATO PJ" +
   //   Nº/Data + caixa ASSUNTO + corpo em caixa com borda + assinaturas FCSign
+  //
+  // IMPORTANTE: o conteudoHtml pode ser um documento HTML completo (salvo
+  // por versão legada da UI). Extraímos apenas o conteúdo do <body> antes de
+  // passar como corpoHtml — exatamente o que DOMPurify.sanitize() faz no
+  // buildFcPreviewHtml da Central de Documentos.
   // ──────────────────────────────────────────────────────────────────────────
   if (modeloHtml && modeloHtml.trim()) {
+    // Passo 0: se for documento HTML completo, extrair somente o corpo interno
+    // (strip <!DOCTYPE>, <html>, <head>...</head>, <body>) tal como DOMPurify.
+    let rawBody = modeloHtml;
+    const isFullDoc = /^\s*<!doctype\s+html/i.test(rawBody) || /^\s*<html[\s>]/i.test(rawBody);
+    if (isFullDoc) {
+      const bodyMatch = rawBody.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      if (bodyMatch) {
+        rawBody = bodyMatch[1];
+      } else {
+        // Sem </body> explícito — strip das tags de shell
+        rawBody = rawBody
+          .replace(/^\s*<!doctype[^>]*>\s*/i, "")
+          .replace(/^\s*<html[^>]*>\s*/i, "")
+          .replace(/^\s*<head[\s\S]*?<\/head>\s*/i, "")
+          .replace(/^\s*<body[^>]*>\s*/i, "")
+          .replace(/\s*<\/(?:body|html)>\s*$/i, "");
+      }
+    }
+
     // Passo 1: expandir [OBJETO_CONTRATO] — usa <div> para que o browser
     // auto-feche qualquer <p> pai antes do primeiro <div>, separando os itens.
     const objetoHtml = formatObjetoHtml(c.objetoContrato || "");
-    const totalOc = (modeloHtml.match(/\[OBJETO_CONTRATO\]/g) || []).length;
+    const totalOc = (rawBody.match(/\[OBJETO_CONTRATO\]/g) || []).length;
     let ocIdx = 0;
-    let patchedHtml = modeloHtml.replace(/\[OBJETO_CONTRATO\]/g, () => {
+    let patchedHtml = rawBody.replace(/\[OBJETO_CONTRATO\]/g, () => {
       ocIdx++;
       if (totalOc > 1 && ocIdx < totalOc) {
         return "conforme descrito na Cláusula Primeira deste instrumento";
