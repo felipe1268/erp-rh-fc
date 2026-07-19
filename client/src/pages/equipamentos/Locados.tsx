@@ -2885,7 +2885,7 @@ export default function EquipamentosLocados() {
                     {itens.map((it: any, idx: number) => {
                       const { esperado, recebido, diff } = divergencias[idx];
                       const status = diff === 0 ? "ok" : diff < 0 ? "falta" : "excesso";
-                      const fmtNum = (n: number) => n % 1 === 0 ? String(n) : n.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+                      const fmtNum = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: n % 1 === 0 ? 0 : 2, maximumFractionDigits: 3 });
                       return (
                         <div
                           key={idx}
