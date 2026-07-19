@@ -109,7 +109,10 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
     { enabled: !!contratoId }
   );
 
-  const { data: modeloPadrao } = trpc.pj.modeloContrato.useQuery({ companyId });
+  const { data: modeloPadrao } = trpc.pj.modeloContrato.useQuery(
+    { companyId },
+    { staleTime: 0 } // sempre busca o template vigente mais recente
+  );
 
   const [showAditivoModal, setShowAditivoModal] = useState(false);
   const [selectedClausulas, setSelectedClausulas] = useState<Record<string, boolean>>({});
@@ -359,14 +362,6 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
               </p>
             )}
           </div>
-
-          {/* DADOS BANCÁRIOS DA CONTRATADA */}
-          {temDadosBancarios && (
-            <div className="mt-8 pt-4 border-t-2 border-blue-100">
-              <p className="text-[9pt] font-bold text-blue-900 uppercase tracking-wider mb-2">Dados Bancários para Pagamento</p>
-              <p className="text-[10pt] text-gray-700">{dadosBancariosStr}</p>
-            </div>
-          )}
 
           {/* RODAPÉ COM DADOS DA EMPRESA */}
           {(telefoneEmpresa || emailEmpresa || siteEmpresa) && (

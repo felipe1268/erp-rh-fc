@@ -1,4 +1,24 @@
 /**
+ * Rev. 4396 - CONTRATO PJ VIEW: CACHE ZERO + REMOÇÃO DE DADOS BANCÁRIOS DUPLICADOS
+ *
+ * Causa raiz do "contrato não bate com template aprovado":
+ *   - `pj.modeloContrato.useQuery` não tinha `staleTime`, então React Query
+ *     servia do cache a versão anterior do template quando a página estava aberta
+ *     durante uma aprovação simultânea em outra aba.
+ *   Fix: adicionado `{ staleTime: 0 }` → sempre busca fresco do servidor.
+ *
+ * Segundo problema: dados bancários apareciam duas vezes no contrato impresso.
+ *   - O template (Cláusula 9.3) já contém `[DADOS_BANCARIOS_CONTRATADA]`,
+ *     substituído por `replacePlaceholders()` na renderização.
+ *   - `ContratoPJView` também tinha uma seção hardcoded "DADOS BANCÁRIOS"
+ *     abaixo do template (linhas 363-369), criando duplicação.
+ *   Fix: seção hardcoded removida — dados bancários vivem SOMENTE no template.
+ *
+ * Arquivo: `client/src/pages/ContratoPJView.tsx`
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4395 - TEMPLATES ISO: EDITOR BLOQUEADO QUANDO VIGENTE (SOMENTE LEITURA)
  *
  * Quando um documento está com status "vigente", o editor TipTap agora fica em
