@@ -1,4 +1,34 @@
 /**
+ * Rev. 4415 - TEMPLATES ISO: CORREÇÃO CRÍTICA — EDITOR EM BRANCO APÓS SALVAR/APROVAR
+ *
+ * Problema: após salvar ou aprovar qualquer documento, o editor exibia tela
+ * em branco. Causa-raiz: race condition no useEffect de conteúdo de
+ * TemplatesDocsTab.tsx.
+ *
+ * Fluxo defeituoso:
+ *   1. Usuário salva/aprova → `invalidarTudo()` marca `getQuery` como stale.
+ *   2. React Query inicia refetch em background: `isLoading=false` (tem cache)
+ *      mas `isFetching=true`. O dado stale é `conteudoHtml:""` (estado
+ *      "Não criado" anterior ao primeiro save).
+ *   3. O useEffect só guardava `isLoading`, então disparava com dado stale
+ *      vazio → `setConteudoEditado("")` → editor em branco.
+ *   4. Quando o refetch completava, o conteúdo voltava — mas em modo vigente
+ *      (readOnly) o usuário só via o branco.
+ *
+ * Correção:
+ *   - Adicionada guarda `if (getQuery.isFetching) return;` no useEffect:
+ *     preserva o conteúdo atual do editor enquanto o refetch não termina.
+ *   - `getQuery.isFetching` adicionado ao array de dependências.
+ *   - Bônus: branch `else` (tipo sem conteúdo salvo) agora pré-popula com
+ *     seed institucional (`getSeedTemplate`) quando disponível — tipos fixos
+ *     "Não criado" agora iniciam com conteúdo de referência editável.
+ *   - Importado `getSeedTemplate` de `@shared/documentTemplates`.
+ *
+ * Arquivos: client/src/pages/configuracoes/TemplatesDocsTab.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4414 - TEMPLATES ISO: NOVO TIPO "AVISO DE ENCERRAMENTO DE CONTRATO PJ"
  *
  * Adiciona o tipo fixo `aviso_encerramento_pj` à Central de Documentos ISO.

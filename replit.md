@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4415** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — EDITOR EM BRANCO APÓS SALVAR/APROVAR.** Race condition no `useEffect` de conteúdo: após `invalidarTudo()`, `getQuery.isFetching=true` mas `isLoading=false`; dado stale (`conteudoHtml:""`) sobrescrevia o editor antes do refetch terminar. Fix: guarda `if (getQuery.isFetching) return` + `isFetching` nas deps. Bônus: tipos fixos "Não criado" agora pré-populam com seed institucional via `getSeedTemplate`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4414** — **TEMPLATES ISO: NOVO TIPO "AVISO DE ENCERRAMENTO DE CONTRATO PJ" (FC-CON-003).** Tipo fixo na aba Contratos com 5 cláusulas (contrato objeto, encerramento, prazo/obrigações, quitação, disposições finais). Placeholders: representanteLegal, contratadaRazaoSocial, contratadaCnpj, numeroContrato, dataInicioContrato, dataEncerramentoContrato, motivoEncerramento, prazoAviso. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4413** — **TEMPLATES ISO: BOTÃO EXCLUIR SEMPRE VISÍVEL + BARRA FLEX-WRAP.** Botão Excluir agora renderiza sempre: ativo (vermelho) quando documento existe, desabilitado (cinza) com tooltip explicativo quando "Não criado". Barra de ação alterada para `flex-wrap` para não cortar botões no mobile. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4413** — **TEMPLATES ISO: BOTÃO EXCLUIR SEMPRE VISÍVEL + BARRA FLEX-WRAP.** Botão Excluir renderiza sempre: ativo (vermelho) quando existe, desabilitado (cinza) com tooltip quando "Não criado". Barra flex-wrap no mobile. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4412** — **MÓDULO PJ: CARDS KPI — LAYOUT VERTICAL CENTRADO.** Ícone (círculo topo) → número → label. Labels curtos, min-h uniforme, sem overflow. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -61,8 +63,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4410** — **MÓDULO PJ: CARD "FALTA ASSINAR" NOS KPIs.** Novo card laranja contando contratos ativos sem contratoAssinadoUrl. Borda laranja + clicável quando > 0. Grid: lg:grid-cols-6. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4409** — **CONTAS A PAGAR: LAYOUT ESTRUTURADO NAS SUB-LINHAS DO GRUPO PJ EXPANDIDO.** Sub-linhas dentro do grupo consolidado também recebem nome + pills. Dois blocos de renderização substituídos. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4408** — **CONTAS A PAGAR: LAYOUT ESTRUTURADO PARA LINHAS PJ (NOME + TAGS).** Célula PJ: linha 1 = nome negrito; linha 2 = pills [1ª/2ª Medição] [Contrato #X] [PJ-XXXXX] [MM/AAAA]. Demais origens inalteradas. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4407** — **CONTAS A PAGAR: BADGE "1ª/2ª MEDIÇÃO" + REF "PJ-XXXXX" PARA PAGAMENTOS PJ.** getRef() reconhece pagamento_pj → "PJ-892978". Badge inline azul/roxo detectado por regex na descricao. ZERO DELETE · ZERO ALTER destrutivo.
 

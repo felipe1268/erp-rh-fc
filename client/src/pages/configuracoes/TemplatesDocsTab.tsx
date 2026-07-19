@@ -34,6 +34,7 @@ import {
   CATEGORIAS_DOCS,
   renderTemplate,
   getDocMetaOrFallback,
+  getSeedTemplate,
   isCustomTipo,
   type DocumentTemplateTipo,
   type DocumentTemplateMeta,
@@ -371,10 +372,16 @@ export default function TemplatesDocsTab() {
   // ── Único useEffect de conteúdo — sem race condition ────────────────────────
   // Aguarda ambas as queries (get + modeloPj) antes de setar o editor, para que
   // o modelo padrão nunca seja sobrescrito por um resultado vazio intermediário.
+  // Rev. 4415: guarda isFetching — durante refetch após save/aprovar, o dado
+  // stale pode ter conteudoHtml:"" (estado "Não criado" anterior). Sem o guarda,
+  // o editor ia para branco e permanecia vazio até o próximo refetch completar.
   useEffect(() => {
     // Aguarda a query principal terminar; para contrato_pj aguarda o modelo também
     if (getQuery.isLoading) return;
     if (tipoSelecionado === "contrato_pj" && modeloPjQuery.isLoading) return;
+    // Se há um refetch em background (dado stale pode estar desatualizado),
+    // preserva o conteúdo atual do editor em vez de sobrescrever com dado antigo.
+    if (getQuery.isFetching) return;
 
     const saved = getQuery.data?.conteudoHtml || "";
     if (saved) {
@@ -385,9 +392,12 @@ export default function TemplatesDocsTab() {
       const modelo = modeloPjQuery.data?.modelo || "";
       setConteudoEditado(modelo ? plainTextModelToHtml(modelo) : "");
     } else {
-      setConteudoEditado("");
+      // Sem conteúdo salvo → pré-popula com seed institucional (se disponível)
+      // para que o usuário não veja o editor em branco ao criar um tipo fixo.
+      const seedHtml = (getSeedTemplate(tipoSelecionado as DocumentTemplateTipo) as any)?.conteudoHtml || "";
+      setConteudoEditado(seedHtml);
     }
-  }, [tipoSelecionado, getQuery.isLoading, getQuery.data, modeloPjQuery.isLoading, modeloPjQuery.data]);
+  }, [tipoSelecionado, getQuery.isLoading, getQuery.isFetching, getQuery.data, modeloPjQuery.isLoading, modeloPjQuery.data]);
   // ────────────────────────────────────────────────────────────────────────────
 
   // Quando muda o tipo, reseta versão/comentário/IA e todos os campos da ficha
