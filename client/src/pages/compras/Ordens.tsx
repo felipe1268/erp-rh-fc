@@ -2730,6 +2730,21 @@ export default function Ordens() {
                               : <><Sparkles className="h-3 w-3" /> Ler PDF (IA)</>}
                           </span>
                         </button>
+                        {(listaRecebQ.data ?? []).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Limpar todas as ${(listaRecebQ.data ?? []).length} peças da lista?`)) {
+                                salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [] });
+                              }
+                            }}
+                            disabled={salvarListaMut.isPending}
+                            className="inline-flex items-center gap-1 rounded border border-red-200 bg-white text-red-500 hover:bg-red-50 text-xs px-2 py-1 transition disabled:opacity-50"
+                            title="Limpar toda a lista"
+                          >
+                            <Trash2 className="h-3 w-3" /> Limpar tudo
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => { setListaShowAdd(true); setListaAddDesc(""); setListaAddUnit("un"); setListaAddQty("1"); setListaAddValor(""); }}
