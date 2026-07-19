@@ -644,15 +644,6 @@ export default function ModuloPJ() {
               onClick: stats.semAssinatura > 0 ? () => setStatusFilter("ativo") : undefined,
             },
             {
-              label: "PJ s/ Contrato", value: semContrato,
-              icon: Users,
-              color: semContrato > 0 ? "text-red-600" : "text-slate-400",
-              iconBg: semContrato > 0 ? "bg-red-100" : "bg-slate-100",
-              cardBg: semContrato > 0 ? "bg-red-50" : "bg-white",
-              border: semContrato > 0 ? "border-red-300" : "border-slate-200",
-              alert: semContrato > 0,
-            },
-            {
               label: "Custo / Mês", value: formatMoeda(stats.totalMensal),
               icon: DollarSign, color: "text-purple-600", iconBg: "bg-purple-100", cardBg: "bg-white", border: "border-purple-300",
             },
