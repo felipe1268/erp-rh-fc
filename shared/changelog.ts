@@ -1,4 +1,13 @@
 /**
+ * Rev. 4437 - LAYOUT: MARGENS LATERAIS 1,5cm NO TEMPLATE ISO (buildFcDocument)
+ *
+ * Ajuste fino após Rev. 4436: lados reduzidos de 2cm para 1,5cm.
+ * @page margin: 20mm 15mm 20mm 15mm (topo/baixo 2cm, lados 1,5cm)
+ * .fc-doc padding: 2cm 1.5cm (idem para visualização em tela)
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4436 - LAYOUT: REDUÇÃO DE MARGENS DO TEMPLATE DE DOCUMENTO (buildFcDocument)
  *
  * Margens laterais e superior do template ISO estavam grandes demais (2,5cm topo,
