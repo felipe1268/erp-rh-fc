@@ -1,4 +1,14 @@
 /**
+ * Rev. 4408 - CONTAS A PAGAR: LAYOUT ESTRUTURADO PARA LINHAS PJ (NOME + TAGS)
+ *
+ * Célula de descrição para origemModulo='pagamento_pj':
+ *   Linha 1: nome do prestador (negrito, truncate)
+ *   Linha 2: pills — [1ª/2ª Medição] [Contrato #X] [PJ-XXXXX] [MM/AAAA]
+ * Demais origens: layout original inalterado.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4407 - CONTAS A PAGAR: BADGE "1ª/2ª MEDIÇÃO" + REF "PJ-XXXXX" PARA PAGAMENTOS PJ
  *
  * getRef(): pagamento_pj agora retorna "PJ-892978" (origemId) em vez de "#892978".

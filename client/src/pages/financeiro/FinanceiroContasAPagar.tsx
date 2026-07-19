@@ -1756,32 +1756,68 @@ export default function FinanceiroContasAPagar() {
                                 </span>
                               </td>
                               {/* Descrição */}
-                              <td className="px-2 py-2.5 max-w-[190px]">
-                                <div className="flex items-center gap-1.5">
-                                  <p className="text-sm font-medium text-slate-800 truncate" title={desc}>{desc}</p>
-                                  {isDup && (
-                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-300 whitespace-nowrap"
-                                      title="Possível duplicidade: mesmo descrição, valor e vencimento já consta no ano">
-                                      <Copy className="w-2.5 h-2.5" />DUP
-                                    </span>
-                                  )}
-                                </div>
-                                {c.origemModulo === "pagamento_pj" && (() => {
-                                  const d = (c.descricao ?? c.origemDescricao ?? "");
-                                  const is2 = /2a\s*Medicao|2ª\s*Medi/i.test(d) || /fechamento/i.test(d);
-                                  const is1 = /1a\s*Medicao|1ª\s*Medi/i.test(d) || /adiantamento/i.test(d);
-                                  if (!is1 && !is2) return null;
+                              <td className="px-2 py-2.5 max-w-[220px]">
+                                {c.origemModulo === "pagamento_pj" ? (() => {
+                                  const raw = c.descricao ?? c.origemDescricao ?? "";
+                                  const sep = raw.includes(" — ") ? " — " : " - ";
+                                  const parts = raw.split(sep);
+                                  const nome = parts[0]?.trim() || raw;
+                                  const contratoM = raw.match(/Contrato\s*#(\d+)/i);
+                                  const contratoNum = contratoM ? contratoM[1] : null;
+                                  const is2 = /2a\s*Medicao|2ª\s*Medi/i.test(raw);
+                                  const is1 = /1a\s*Medicao|1ª\s*Medi/i.test(raw);
+                                  const mesM = raw.match(/(\d{2})\/(\d{4})/);
+                                  const mes = mesM ? `${mesM[1]}/${mesM[2]}` : null;
                                   return (
-                                    <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full border whitespace-nowrap ${is2 ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
-                                      {is2 ? "2ª Medição" : "1ª Medição"}
-                                    </span>
+                                    <>
+                                      <p className="text-sm font-semibold text-slate-800 truncate" title={nome}>{nome}</p>
+                                      <div className="flex flex-wrap gap-1 mt-0.5">
+                                        {(is1 || is2) && (
+                                          <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${is2 ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                                            {is2 ? "2ª Medição" : "1ª Medição"}
+                                          </span>
+                                        )}
+                                        {contratoNum && (
+                                          <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                            Contrato #{contratoNum}
+                                          </span>
+                                        )}
+                                        {c.origemId && (
+                                          <span className="inline-flex items-center text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-gray-50 text-gray-400 border border-gray-200">
+                                            PJ-{c.origemId}
+                                          </span>
+                                        )}
+                                        {mes && (
+                                          <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200">
+                                            {mes}
+                                          </span>
+                                        )}
+                                        {isDup && (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-300" title="Possível duplicidade">
+                                            <Copy className="w-2.5 h-2.5" />DUP
+                                          </span>
+                                        )}
+                                      </div>
+                                    </>
                                   );
-                                })()}
-                                {c.fornecedorNome && (
-                                  <p className="text-[11px] text-indigo-600 truncate font-medium" title={c.fornecedorNome}>🏢 {c.fornecedorNome}</p>
-                                )}
-                                {c.obraNome && (
-                                  <p className="text-[11px] text-slate-400 truncate" title={c.obraNome}>📍 {c.obraNome}</p>
+                                })() : (
+                                  <>
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-sm font-medium text-slate-800 truncate" title={desc}>{desc}</p>
+                                      {isDup && (
+                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-300 whitespace-nowrap"
+                                          title="Possível duplicidade: mesmo descrição, valor e vencimento já consta no ano">
+                                          <Copy className="w-2.5 h-2.5" />DUP
+                                        </span>
+                                      )}
+                                    </div>
+                                    {c.fornecedorNome && (
+                                      <p className="text-[11px] text-indigo-600 truncate font-medium" title={c.fornecedorNome}>🏢 {c.fornecedorNome}</p>
+                                    )}
+                                    {c.obraNome && (
+                                      <p className="text-[11px] text-slate-400 truncate" title={c.obraNome}>📍 {c.obraNome}</p>
+                                    )}
+                                  </>
                                 )}
                               </td>
                               {/* Categoria — Rev. 2228: removido pill ORIGEM redundante
