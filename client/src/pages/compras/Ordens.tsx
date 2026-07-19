@@ -459,6 +459,10 @@ export default function Ordens() {
   const [ocIAResult, setOcIAResult] = useState<any | null>(null);
   const [ocIADragOver, setOcIADragOver] = useState(false);
   const [ocIAProgress, setOcIAProgress] = useState(0);
+  const [ocIAObraId, setOcIAObraId] = useState("");
+  const [ocIAEapCodigo, setOcIAEapCodigo] = useState<string | undefined>(undefined);
+  const [ocIAEapDescricao, setOcIAEapDescricao] = useState<string | undefined>(undefined);
+  const [ocIAEapPopover, setOcIAEapPopover] = useState(false);
   const ocIAFileRef = useRef<HTMLInputElement>(null);
 
   const [autoSwitchedForCompany, setAutoSwitchedForCompany] = useState<number | null>(null);
@@ -518,6 +522,10 @@ export default function Ordens() {
   const eapQ = trpc.compras.getEapParaObra.useQuery(
     { obraId: parseInt(form.obraId), companyId },
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 60_000 }
+  );
+  const ocIAEapQ = trpc.compras.getEapParaObra.useQuery(
+    { obraId: parseInt(ocIAObraId), companyId },
+    { enabled: !!ocIAObraId && parseInt(ocIAObraId) > 0 && companyId > 0, staleTime: 60_000 }
   );
   const contratosOS = trpc.terceiroContratos.listarContratos.useQuery(
     { companyId },
@@ -734,17 +742,21 @@ export default function Ordens() {
     if (!ocIAResult) return;
     const itensIA = (ocIAResult.itens ?? []) as any[];
     const gruposIA: GrupoForm[] = itensIA.length > 0
-      ? [{ itens: itensIA.map((it: any) => ({ descricao: it.descricao, unidade: it.unidade, quantidade: String(it.quantidade), precoUnitario: it.precoUnitario != null ? String(it.precoUnitario) : "" })) }]
+      ? [{ eapCodigo: ocIAEapCodigo, eapDescricao: ocIAEapDescricao, itens: itensIA.map((it: any) => ({ descricao: it.descricao, unidade: it.unidade, quantidade: String(it.quantidade), precoUnitario: it.precoUnitario != null ? String(it.precoUnitario) : "" })) }]
       : [newGrupo()];
     setGrupos(gruposIA);
     setForm(p => ({
       ...p,
+      obraId: ocIAObraId || p.obraId,
       condicaoPagamento: ocIAResult.condicaoPagamento ?? p.condicaoPagamento,
       prazoEntregaDias: ocIAResult.prazoEntregaDias != null ? String(ocIAResult.prazoEntregaDias) : p.prazoEntregaDias,
       observacoes: ocIAResult.observacoes ?? p.observacoes,
     }));
     setOcIAStep("idle");
     setOcIAResult(null);
+    setOcIAObraId("");
+    setOcIAEapCodigo(undefined);
+    setOcIAEapDescricao(undefined);
     setShowNova(true);
   }
 
@@ -1556,6 +1568,73 @@ export default function Ordens() {
               {/* Step: review */}
               {ocIAStep === "review" && ocIAResult && (
                 <div className="space-y-4">
+                  {/* Obra + EAP */}
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-3">
+                    <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide flex items-center gap-1">
+                      <Building2 className="h-3.5 w-3.5" /> Obra e Apropriação
+                    </p>
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-gray-600 font-medium">Obra / Centro de Custo</p>
+                      <Select value={ocIAObraId} onValueChange={v => { setOcIAObraId(v); setOcIAEapCodigo(undefined); setOcIAEapDescricao(undefined); }}>
+                        <SelectTrigger className="bg-white border-gray-300 text-gray-900 text-sm h-9">
+                          <SelectValue placeholder="Selecione a obra (opcional)..." />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border-gray-200">
+                          {(obras as any[]).map((o: any) => (
+                            <SelectItem key={o.id} value={String(o.id)}>
+                              {o.codigo ? `[${o.codigo}] ` : ""}{o.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {ocIAObraId && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-gray-600 font-medium">Etapa do Orçamento (EAP)</p>
+                        <Popover open={ocIAEapPopover} onOpenChange={setOcIAEapPopover}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className={`flex w-full items-center gap-2 rounded border px-3 py-2 text-sm transition-colors bg-white ${ocIAEapCodigo ? "border-violet-300 text-violet-700 hover:bg-violet-50" : "border-dashed border-gray-300 text-gray-400 hover:border-violet-300"}`}
+                            >
+                              <Search className="h-3.5 w-3.5 shrink-0" />
+                              {ocIAEapCodigo ? (
+                                <span className="truncate flex-1 text-left"><code className="font-mono font-semibold">{ocIAEapCodigo}</code> — {ocIAEapDescricao}</span>
+                              ) : (
+                                <span className="flex-1 text-left">
+                                  {ocIAEapQ.isLoading ? "Carregando orçamento..." : (ocIAEapQ.data?.items ?? []).filter((e: any) => e.descricao?.trim()).length === 0 ? "Obra sem orçamento vinculado" : "Selecionar etapa (opcional)"}
+                                </span>
+                              )}
+                              {ocIAEapCodigo && (
+                                <span onClick={e => { e.stopPropagation(); setOcIAEapCodigo(undefined); setOcIAEapDescricao(undefined); }} className="ml-auto text-violet-400 hover:text-red-500 text-xs">✕</span>
+                              )}
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-0 bg-white border-gray-200 shadow-lg" align="start">
+                            <Command>
+                              <CommandInput placeholder="Buscar por código ou descrição..." className="h-9" />
+                              <CommandList className="max-h-60">
+                                <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                                <CommandGroup>
+                                  {(ocIAEapQ.data?.items ?? []).filter((e: any) => e.descricao?.trim()).map((e: any) => (
+                                    <CommandItem
+                                      key={e.id}
+                                      value={`${e.eapCodigo ?? ""} ${e.descricao ?? ""}`}
+                                      onSelect={() => { setOcIAEapCodigo(e.eapCodigo ?? ""); setOcIAEapDescricao(e.descricao ?? ""); setOcIAEapPopover(false); }}
+                                      className="cursor-pointer text-xs"
+                                    >
+                                      <code className="font-mono font-semibold mr-2 text-violet-700">{e.eapCodigo}</code>
+                                      <span className="truncate">{e.descricao}</span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    )}
+                  </div>
                   {/* Dados do fornecedor */}
                   {(ocIAResult.fornecedorNome || ocIAResult.fornecedorCnpj) && (
                     <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 space-y-1">
@@ -1623,7 +1702,7 @@ export default function Ordens() {
 
             {/* Footer */}
             <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
-              <Button variant="outline" onClick={() => { setOcIAStep("idle"); setOcIAResult(null); setOcIAJobId(null); }}>
+              <Button variant="outline" onClick={() => { setOcIAStep("idle"); setOcIAResult(null); setOcIAJobId(null); setOcIAObraId(""); setOcIAEapCodigo(undefined); setOcIAEapDescricao(undefined); }}>
                 Cancelar
               </Button>
               {ocIAStep === "review" && (

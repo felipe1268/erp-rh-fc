@@ -1,4 +1,30 @@
 /**
+ * Rev. 4423 - OC IA: SELEÇÃO DE OBRA + EAP NO STEP DE REVISÃO
+ *
+ * O step "review" do dialog "Criar OC por IA" não tinha campo de obra nem
+ * de etapa do orçamento (EAP). O usuário precisava preencher esses dados
+ * manualmente após clicar em "Preencher OC". Agora pode definir ambos
+ * diretamente na tela de revisão, antes de transferir para o formulário.
+ *
+ * Novos estados: `ocIAObraId`, `ocIAEapCodigo`, `ocIAEapDescricao`, `ocIAEapPopover`.
+ * Nova query: `ocIAEapQ = trpc.compras.getEapParaObra` habilitada por `ocIAObraId`.
+ *
+ * UI adicionada ao step review (card verde "Obra e Apropriação"):
+ * — Select de Obra usando a `obrasQ` já existente no componente.
+ * — Ao selecionar obra: exibe Popover de EAP (Command busca código/descrição),
+ *   idêntico ao do formulário da OC. Oculto se obra não selecionada.
+ *   Mostra "Obra sem orçamento vinculado" quando EAP vazia.
+ *
+ * `preencherOCDeIA` atualizado:
+ * — `form.obraId` recebe `ocIAObraId` (se preenchido, sobrepõe o anterior).
+ * — O grupo de itens nasce com `eapCodigo`/`eapDescricao` já preenchidos.
+ * — Reset dos 3 novos estados ao confirmar ou cancelar.
+ *
+ * Arquivo: `client/src/pages/compras/Ordens.tsx`
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4422 - OC IA: BARRA DE PROGRESSO 0→100% NO STEP DE PROCESSAMENTO
  *
  * O step "processing" do dialog "Criar OC por IA" mostrava apenas um spinner

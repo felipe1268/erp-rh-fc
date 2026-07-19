@@ -50,17 +50,17 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4422** — **OC IA: BARRA DE PROGRESSO 0→100% NO STEP DE PROCESSAMENTO.** Step "processing" do dialog "Criar OC por IA" exibia apenas spinner. Agora: barra cinza+azul crescendo via `width:X%` + percentual numérico. useEffect com setInterval 1.2s incrementa aleatoriamente até 90% (cap IA simulada); ao polling retornar `done` salta para 100%, aguarda 600ms e vai p/ review. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4423** — **OC IA: SELEÇÃO DE OBRA + EAP NO STEP DE REVISÃO.** Step "review" do dialog "Criar OC por IA" ganhou card verde "Obra e Apropriação": Select de Obra (usando obrasQ existente) + Popover EAP (Command, busca código/descrição) habilitado após obra selecionada. `preencherOCDeIA` passa `obraId` e `eapCodigo`/`eapDescricao` diretamente para o formulário da OC. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4421** — **A2: TRANSFERÊNCIAS ALMOXARIFADO — "PARA" E "ENVIADO POR" NO HISTÓRICO.** `contraparte` estava NULL no SQL para transferências → linha "Para:" vazia no card. Fix server: `contraparte = COALESCE(destino_obra_nome, 'Central')`. Fix frontend: bloco "Enviado por: {almoxarife}" exclusivo p/ `fonte==="transferencia"`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4422** — **OC IA: BARRA DE PROGRESSO 0→100% NO STEP DE PROCESSAMENTO.** Step "processing" do dialog "Criar OC por IA" exibia apenas spinner. Agora: barra cinza+azul + percentual numérico. setInterval até 90% simulado; ao `done` salta 100% + 600ms + review. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4421** — **A2: TRANSFERÊNCIAS ALMOXARIFADO — "PARA" E "ENVIADO POR" NO HISTÓRICO.** contraparte NULL→COALESCE(destino_obra_nome,'Central'); label "Enviado por:". ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4420** — **FEATURES IA: C1 (CRIAR OC POR DOCUMENTO) + A1 (IMPORTAR ITENS ALMOXARIFADO POR DOCUMENTO).** Botão "Criar OC por IA" + "Importar (IA)" no Almoxarifado. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4419** — **CORREÇÕES C5 E S1 (AJUSTES_ERP_17072026).** Fix `estoqueParticipante` + `assertCentralWrite` relaxado. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4418** — **AJUSTES COMPRAS / ALMOXARIFADO / SST.** 7 melhorias: C2/C3/C6 + A3/A4 + S2/S4. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4417** — **AVISO ENCERRAMENTO PJ: BOTÃO "PRÉVIA DO DOCUMENTO" + PRAZO PADRÃO 15 DIAS.** Botão laranja Eye + buildDocData(preview?). ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4416** — **MÓDULO PJ: BOTÃO "ENVIAR AVISO DE ENCERRAMENTO" → DIALOG FCSIGN (FC-CON-003).** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
