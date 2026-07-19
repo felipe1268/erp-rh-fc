@@ -204,13 +204,13 @@ CONSIDERANDO QUE:
 
 (I) A CONTRATADA apresenta a necessária qualificação e o "know-how" adequado para prestar os serviços almejados pela CONTRATANTE;
 
-(II) a CONTRATANTE tem interesse em contratar a CONTRATADA para a prestação do serviço relacionado a [OBJETO_CONTRATO], exclusivamente;
+(II) a CONTRATANTE tem interesse em contratar a CONTRATADA para a prestação dos serviços especializados descritos na Cláusula Primeira deste instrumento, de forma autônoma e independente;
 
 RESOLVEM as partes celebrar o presente Contrato de Prestação de Serviços, de acordo com as cláusulas e condições seguintes:
 
 CLÁUSULA PRIMEIRA: DO OBJETO
 
-Pelo presente instrumento, a CONTRATADA obriga-se ao fornecimento dos serviços de mão de obra especializada na execução de serviço relacionado ao setor de [OBJETO_CONTRATO], não ocorrendo autoria em projetos.
+[OBJETO_CONTRATO]
 
 CLÁUSULA SEGUNDA: CONDIÇÕES GERAIS DO CONTRATO
 
@@ -1033,10 +1033,11 @@ INSTRUÇÕES:
 - Escreva em português formal, no estilo de um contrato particular de prestação de serviços PJ
 - Comece com 1 parágrafo resumindo o objeto geral do contrato (ex: "Constitui objeto do presente contrato a prestação de serviços técnicos especializados de [cargo], compreendendo...")
 - Em seguida, liste as responsabilidades e obrigações específicas do prestador, numeradas com letras minúsculas: a) b) c) etc.
+- IMPORTANTE: coloque CADA alínea em sua PRÓPRIA LINHA — use uma quebra de linha (\n) antes de cada a), b), c) etc., de forma que cada item fique em um parágrafo separado
 - Inclua entre 7 e 12 responsabilidades típicas e relevantes para esse cargo
 - Cada responsabilidade deve ser objetiva e direta (máximo 2 linhas)
 - NÃO inclua cabeçalho de cláusula numerada (tipo "CLÁUSULA 1ª" ou "§ 1º")
-- Termine com uma frase de encerramento sobre a natureza autônoma/independente da prestação
+- Termine com uma linha em branco e depois uma frase de encerramento sobre a natureza autônoma/independente da prestação
 - Retorne APENAS o texto da cláusula, sem comentários ou formatação markdown`;
       const result = await invokeLLM({ messages: [{ role: "user", content: prompt }], maxTokens: 1200 });
       const raw = result.choices?.[0]?.message?.content;

@@ -1223,7 +1223,7 @@ export default function ModuloPJ() {
                   {selectedContrato.objetoContrato && (
                     <div className="bg-blue-50 rounded-lg p-4">
                       <p className="text-xs text-blue-600 uppercase font-semibold">Objeto do Contrato</p>
-                      <p className="text-sm mt-1">{selectedContrato.objetoContrato}</p>
+                      <p className="text-sm mt-1 whitespace-pre-wrap break-words">{selectedContrato.objetoContrato}</p>
                     </div>
                   )}
                   {selectedContrato.observacoes && (
