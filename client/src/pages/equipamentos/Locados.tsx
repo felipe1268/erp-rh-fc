@@ -496,6 +496,12 @@ export default function EquipamentosLocados() {
   const [ocSelecionada, setOcSelecionada] = useState<{ id: number; numeroOc: string } | null>(null);
   // Rev. 4342 — dados completos da OC selecionada (itens com quantidade esperada)
   const [ocSelecionadaFull, setOcSelecionadaFull] = useState<any | null>(null);
+  // Rev. 4444 — lista de peças cadastrada para a OC de locação (tem prioridade sobre itens da OC na conferência)
+  const ocListaRecebimentoQ = trpc.warehouse.getOCItemsForReceiving.useQuery(
+    { companyId, ordemCompraId: ocSelecionada?.id ?? 0 },
+    { enabled: !!ocSelecionada && !!companyId }
+  );
+  const _listaRecebAtiva: any[] = (ocListaRecebimentoQ.data?.listaRecebimento ?? []);
   // Rev. 4342 — quantidade recebida por item (idx → valor digitado pelo operador)
   const [qtdRecebidaPorItem, setQtdRecebidaPorItem] = useState<Record<number, string>>({});
   // Rev. 2372 — Picker visual de devolução (cards grandes com foto). Aberto
@@ -1102,8 +1108,7 @@ export default function EquipamentosLocados() {
     // Rev. 4342 — Auto-appenda divergências de quantidade nas observações.
     let obsComDivergencia = form.observacoes || "";
     if (ocSelecionadaFull) {
-      const _listaReceb = (ocSelecionadaFull.listaRecebimento || []) as any[];
-      const _itensConf = _listaReceb.length > 0 ? _listaReceb : (ocSelecionadaFull.itens || []) as any[];
+      const _itensConf: any[] = _listaRecebAtiva.length > 0 ? _listaRecebAtiva : (ocSelecionadaFull.itens || []);
       const linhasDivergencia: string[] = [];
       _itensConf.forEach((it: any, idx: number) => {
         const esperado = Number(it.quantidade) || 0;
@@ -2835,8 +2840,7 @@ export default function EquipamentosLocados() {
 
             {/* ── CONFERÊNCIA DE ITENS ── seção principal */}
             {ocSelecionadaFull && (() => {
-              const _listaReceb = (ocSelecionadaFull.listaRecebimento || []) as any[];
-              const itens: any[] = _listaReceb.length > 0 ? _listaReceb : (ocSelecionadaFull.itens || []);
+              const itens: any[] = _listaRecebAtiva.length > 0 ? _listaRecebAtiva : (ocSelecionadaFull.itens || []);
               if (itens.length === 0) return null;
               const divergencias = itens.map((it: any, idx: number) => {
                 const esperado = Number(it.quantidade) || 0;
