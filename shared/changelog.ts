@@ -1,4 +1,17 @@
 /**
+ * Rev. 4393 - CONTRATO PJ: DADOS BANCÁRIOS DA CONTRATADA NO TEMPLATE
+ *
+ * Inserida seção "6.3 DADOS BANCÁRIOS PARA PAGAMENTO" diretamente no template
+ * vigente de `system_document_templates` (tipo='contrato_pj'), usando o
+ * placeholder `[DADOS_BANCARIOS_CONTRATADA]` já existente em `replacePlaceholders()`
+ * em `ContratoPJView.tsx`. Placeholder é substituído em tempo de render pelos
+ * campos Banco/Agência/Conta/PIX do contrato.
+ *
+ * Atualização feita diretamente no banco (Rev. 2 do template) sem alterar código.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4392 - CONTRATO PJ: REPRESENTANTE LEGAL = SÓCIO ADMINISTRADOR
  *
  * Bug: subquery `companyRepresentante` em `pjContracts.getById` usava

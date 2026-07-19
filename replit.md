@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4393** — **CONTRATO PJ: DADOS BANCÁRIOS DA CONTRATADA NO TEMPLATE.** Seção "6.3 DADOS BANCÁRIOS" inserida no template vigente (DB direto, Rev. 2), com placeholder `[DADOS_BANCARIOS_CONTRATADA]`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4392** — **CONTRATO PJ: REPRESENTANTE LEGAL = SÓCIO ADMINISTRADOR.** Subquery `companyRepresentante` usava `ORDER BY id ASC` (pegava Júlio, não Felipe). Fix: cruza com `system_criteria.socio_administrador_employee_id` para usar o sócio marcado como administrador. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4391** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — APROVAR (VIGENTE) PERDIA EDIÇÕES.** `handleAprovar` em `TemplatesDocsTab.tsx` chamava só `aprovarMut` quando template já existia — edições eram descartadas silenciosamente. Fix: sempre executa `saveMut` antes de `aprovarMut` via `onSuccess`. ZERO DELETE · ZERO ALTER destrutivo.
