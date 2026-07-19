@@ -565,11 +565,17 @@ export const pjContractsRouter = router({
           companyTelefone: companies.telefone,
           companyEmail: companies.email,
           companySite: companies.site,
-          // Primeiro sócio/administrador ativo como representante legal da contratante
+          // Sócio administrador (system_criteria) como representante legal; fallback: 1º ativo por id
           companyRepresentante: sql<string | null>`(
             SELECT cp.nome FROM company_partners cp
             WHERE cp.company_id = ${pjContracts.companyId} AND cp.ativo = 1
-            ORDER BY cp.id ASC LIMIT 1
+              AND cp.employee_id = (
+                SELECT valor::integer FROM system_criteria
+                WHERE "companyId" = ${pjContracts.companyId}
+                  AND chave = 'socio_administrador_employee_id'
+                LIMIT 1
+              )
+            LIMIT 1
           )`,
         })
         .from(pjContracts)

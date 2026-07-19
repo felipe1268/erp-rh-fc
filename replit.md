@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4392** — **CONTRATO PJ: REPRESENTANTE LEGAL = SÓCIO ADMINISTRADOR.** Subquery `companyRepresentante` usava `ORDER BY id ASC` (pegava Júlio, não Felipe). Fix: cruza com `system_criteria.socio_administrador_employee_id` para usar o sócio marcado como administrador. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4391** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — APROVAR (VIGENTE) PERDIA EDIÇÕES.** `handleAprovar` em `TemplatesDocsTab.tsx` chamava só `aprovarMut` quando template já existia — edições eram descartadas silenciosamente. Fix: sempre executa `saveMut` antes de `aprovarMut` via `onSuccess`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4390** — **CONTRATO PJ: FONTE ÚNICA — APENAS TEMPLATE DE CONFIGURAÇÕES.** `plainTextModelToHtmlServer` removida. `modeloContrato` retorna só o vigente de `systemDocumentTemplates` (sem fallback hardcoded). `ContratoPJView` e `ModuloPJ` limpos: sem "Editar Cláusulas", sem fallback plain-text. Única fonte: Configurações → Templates de Documentos → Contrato PJ. ZERO DELETE · ZERO ALTER destrutivo.

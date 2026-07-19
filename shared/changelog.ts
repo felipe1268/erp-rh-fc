@@ -1,4 +1,19 @@
 /**
+ * Rev. 4392 - CONTRATO PJ: REPRESENTANTE LEGAL = SÓCIO ADMINISTRADOR
+ *
+ * Bug: subquery `companyRepresentante` em `pjContracts.getById` usava
+ * `ORDER BY cp.id ASC LIMIT 1` — pegava o primeiro sócio cadastrado pelo ID,
+ * não necessariamente o administrador. Resultado: Júlio aparecia em vez de Felipe.
+ *
+ * Fix: subquery agora cruza com `system_criteria` (chave = 'socio_administrador_employee_id')
+ * para obter o sócio marcado como administrador via `employee_id`. Sem administrador
+ * cadastrado → retorna NULL (placeholder "_______________" no contrato).
+ *
+ * Arquivo: `server/routers/pjContracts.ts`
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4391 - TEMPLATES ISO: CORREÇÃO CRÍTICA — APROVAR (VIGENTE) PERDIA EDIÇÕES
  *
  * Bug: `handleAprovar` em TemplatesDocsTab.tsx, quando o template já existia no banco
