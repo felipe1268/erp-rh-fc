@@ -1038,8 +1038,9 @@ INSTRUÇÕES:
 - NÃO inclua cabeçalho de cláusula numerada (tipo "CLÁUSULA 1ª" ou "§ 1º")
 - Termine com uma frase de encerramento sobre a natureza autônoma/independente da prestação
 - Retorne APENAS o texto da cláusula, sem comentários ou formatação markdown`;
-      const text = await invokeLLM({ prompt, maxTokens: 1200 });
-      return { clausula: text.trim() };
+      const result = await invokeLLM({ messages: [{ role: "user", content: prompt }], maxTokens: 1200 });
+      const clausula = (result.content ?? "").trim();
+      return { clausula };
     }),
   }),
 
