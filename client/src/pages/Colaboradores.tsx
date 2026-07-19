@@ -520,6 +520,12 @@ export default function Colaboradores() {
     return base;
   }, [displayEmployees, blacklistPrintList]);
 
+  const erroToast = (e: { message?: string }) => {
+    const m = e.message ?? "";
+    const isTransporte = /did not match the expected pattern|load failed|failed to fetch|aborted|timed out/i.test(m) || m === "";
+    toast.error(isTransporte ? "Falha de conexão. Verifique sua internet e tente novamente." : "Erro: " + m);
+  };
+
   const createMut = trpc.employees.create.useMutation({
     onSuccess: (result: any) => {
       const newId = result?.id;
@@ -533,7 +539,8 @@ export default function Colaboradores() {
       setDialogOpen(false);
       toast.success("Colaborador cadastrado!");
     },
-    onError: (e) => toast.error("Erro: " + e.message),
+    onError: erroToast,
+    onSettled: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); },
   });
   // Recontratação — cria a SOLICITAÇÃO (staging); NÃO cria funcionário.
   const criarSolicitacaoMut = trpc.recontratacao.criarSolicitacao.useMutation({
@@ -545,11 +552,12 @@ export default function Colaboradores() {
       setRecontratacaoVinculo(null);
       toast.success("Solicitação de recontratação enviada para liberação do sócio.");
     },
-    onError: (e) => toast.error("Erro: " + e.message),
+    onError: erroToast,
   });
   const updateMut = trpc.employees.update.useMutation({
     onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); utils.obras.efetivoPorObra.invalidate(); utils.obras.semObra.invalidate(); setDialogOpen(false); toast.success("Colaborador atualizado!"); },
-    onError: (e) => toast.error("Erro: " + e.message),
+    onError: erroToast,
+    onSettled: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); },
   });
   // Rev. 2113: salvamento parcial dos dados do Contrato de Experiência (NÃO fecha o modal)
   const updateExperienciaMut = trpc.employees.update.useMutation({

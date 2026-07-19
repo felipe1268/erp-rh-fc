@@ -1,4 +1,40 @@
 /**
+ * Rev. 4427 - FIX: MENSAGEM DE ERRO DE CONEXÃO iOS NO CADASTRO DE COLABORADOR
+ *
+ * Problema: Ao salvar um novo colaborador (ou editar um existente) em iPad/iPhone,
+ * o iOS WebKit descartava a requisição HTTP no nível de transporte e retornava a
+ * DOMException "The string did not match the expected pattern" — um erro de rede
+ * opaco completamente fora do pipeline da aplicação (server/superjson/Zod estão
+ * limpos). O mesmo erro de transporte também atingia a query `recontratacao.verificarCpf`,
+ * que mostrava o card âmbar "NÃO FOI POSSÍVEL VERIFICAR O CPF" antes mesmo de salvar.
+ *
+ * Os três `onError` de `createMut`, `criarSolicitacaoMut` e `updateMut` repassavam
+ * `e.message` bruto, então o usuário via o texto cryptic em inglês sem instrução útil.
+ *
+ * Solução:
+ * 1. Helper `erroToast(e)` — detecta padrão iOS via regex:
+ *    /did not match the expected pattern|load failed|failed to fetch|aborted|timed out/i
+ *    ou mensagem vazia. Se bater, exibe em português:
+ *    "Falha de conexão. Verifique sua internet e tente novamente."
+ *    Caso contrário exibe "Erro: <mensagem>" como antes.
+ * 2. `onError: erroToast` nos três mutations.
+ * 3. `onSettled` em `createMut` e `updateMut` para invalidar `employees.list` +
+ *    `employees.stats` — garante que a lista reflita o estado real no servidor
+ *    mesmo quando o iOS descarta a RESPOSTA após o request já ter tido sucesso
+ *    server-side (evita que o usuário não veja o funcionário criado/atualizado).
+ *
+ * Nota: o `onSettled` causa dupla invalidação em caso de sucesso (onSuccess +
+ * onSettled), que é inofensiva — apenas dispara um refetch extra.
+ *
+ * A verificação de CPF (query `verificarCpf`) já tinha UI de falha adequada
+ * (card âmbar) e o botão Salvar NÃO era bloqueado por `cpfErro` — o fluxo de
+ * save continuava funcionando, só a mensagem de erro ao tentar salvar era ruim.
+ *
+ * Arquivos: client/src/pages/Colaboradores.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4426 - FIX: PRÉ-VISUALIZAR CONTRATO PJ — OBJETO DO CONTRATO DUPLICADO/INLINE
  *
  * Problema: O botão "Pré-visualizar" exibia o texto gerado pela IA em dois lugares
