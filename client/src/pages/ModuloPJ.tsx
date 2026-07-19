@@ -648,21 +648,38 @@ export default function ModuloPJ() {
               icon: DollarSign, color: "text-purple-600", iconBg: "bg-purple-100", cardBg: "bg-white", border: "border-purple-300",
             },
           ];
+          const custoCard = kpis.find(k => k.label === "Custo / Mês");
+          const countCards = kpis.filter(k => k.label !== "Custo / Mês");
           return (
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-              {kpis.map((k) => (
-                <div
-                  key={k.label}
-                  onClick={k.onClick}
-                  className={`rounded-xl border ${k.border} ${k.cardBg} p-3 flex flex-col items-center text-center gap-1.5 min-h-[100px] transition-shadow ${k.onClick ? "cursor-pointer hover:shadow-md active:scale-[0.98]" : ""}`}
-                >
-                  <div className={`w-8 h-8 rounded-full ${k.iconBg} flex items-center justify-center shrink-0`}>
-                    <k.icon className={`w-4 h-4 ${k.color}`} />
+            <div className="flex flex-col gap-3">
+              {/* Linha superior: cards de contagem */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {countCards.map((k) => (
+                  <div
+                    key={k.label}
+                    onClick={k.onClick}
+                    className={`rounded-xl border ${k.border} ${k.cardBg} px-4 py-4 flex flex-col items-center text-center gap-2 transition-shadow ${k.onClick ? "cursor-pointer hover:shadow-md active:scale-[0.98]" : ""}`}
+                  >
+                    <div className={`w-9 h-9 rounded-full ${k.iconBg} flex items-center justify-center shrink-0`}>
+                      <k.icon className={`w-4.5 h-4.5 ${k.color}`} />
+                    </div>
+                    <p className={`text-3xl font-extrabold leading-none ${k.color}`}>{k.value}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">{k.label}</p>
                   </div>
-                  <p className={`text-2xl font-extrabold leading-none ${k.color}`}>{k.value}</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">{k.label}</p>
+                ))}
+              </div>
+              {/* Card de custo — faixa larga */}
+              {custoCard && (
+                <div className={`rounded-xl border ${custoCard.border} ${custoCard.cardBg} px-6 py-4 flex items-center justify-between gap-4`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full ${custoCard.iconBg} flex items-center justify-center shrink-0`}>
+                      <custoCard.icon className={`w-5 h-5 ${custoCard.color}`} />
+                    </div>
+                    <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">{custoCard.label}</p>
+                  </div>
+                  <p className={`text-3xl font-extrabold ${custoCard.color}`}>{custoCard.value}</p>
                 </div>
-              ))}
+              )}
             </div>
           );
         })()}
