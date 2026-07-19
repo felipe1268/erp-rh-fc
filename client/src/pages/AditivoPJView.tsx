@@ -21,10 +21,11 @@ function formatDateExtenso(d: string | null | undefined) {
 export default function AditivoPJViewWrapper() {
   const [, params] = useRoute("/contrato-pj/:contractId/aditivo/:aditivoId");
   const aditivoId = params?.aditivoId ? parseInt(params.aditivoId, 10) : 0;
-  return <AditivoPJViewInner key={aditivoId} aditivoId={aditivoId} />;
+  const contractId = params?.contractId ? parseInt(params.contractId, 10) : 0;
+  return <AditivoPJViewInner key={aditivoId} aditivoId={aditivoId} contractId={contractId} />;
 }
 
-function AditivoPJViewInner({ aditivoId }: { aditivoId: number }) {
+function AditivoPJViewInner({ aditivoId, contractId }: { aditivoId: number; contractId: number }) {
   const [, navigate] = useLocation();
   const { selectedCompany, selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
@@ -85,7 +86,7 @@ function AditivoPJViewInner({ aditivoId }: { aditivoId: number }) {
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center space-y-4">
           <p className="text-red-600 text-lg font-semibold">Aditivo não encontrado</p>
-          <Button onClick={() => window.history.back()} variant="outline" className="gap-2">
+          <Button onClick={() => navigate(contractId ? `/contrato-pj/${contractId}` : "/modulo-pj")} variant="outline" className="gap-2">
             <ArrowLeft className="h-4 w-4" /> Voltar
           </Button>
         </div>
@@ -130,7 +131,7 @@ function AditivoPJViewInner({ aditivoId }: { aditivoId: number }) {
     <>
       <div className="print:hidden sticky top-0 z-50 bg-gradient-to-r from-blue-800 to-blue-900 text-white px-6 py-3 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => window.history.back()} className="text-white hover:bg-white/20 h-9 w-9">
+          <Button variant="ghost" size="icon" onClick={() => navigate(contractId ? `/contrato-pj/${contractId}` : "/modulo-pj")} className="text-white hover:bg-white/20 h-9 w-9">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -145,7 +146,7 @@ function AditivoPJViewInner({ aditivoId }: { aditivoId: number }) {
           <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
             <Printer className="h-4 w-4" /> Imprimir / Salvar PDF
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => window.history.back()} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
+          <Button variant="ghost" size="sm" onClick={() => navigate(contractId ? `/contrato-pj/${contractId}` : "/modulo-pj")} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
             <ArrowLeft className="h-4 w-4" /> Voltar
           </Button>
         </div>

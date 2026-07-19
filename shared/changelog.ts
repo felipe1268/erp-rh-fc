@@ -1,4 +1,19 @@
 /**
+ * Rev. 4435 - FIX: BOTÃO VOLTAR — ContratoPJView e AditivoPJView
+ *
+ * `window.history.back()` é no-op quando a página é aberta diretamente (sem
+ * entrada anterior no histórico do browser) — comum em iOS e em links diretos.
+ *
+ * Substituído por navigate() do wouter em todas as ocorrências:
+ * - ContratoPJView: ambos os botões Voltar → navigate("/modulo-pj")
+ * - AditivoPJView: todos os botões Voltar → navigate(`/contrato-pj/${contractId}`)
+ *   (com fallback navigate("/modulo-pj") se contractId = 0)
+ *   contractId passado do wrapper (useRoute) para o inner component como prop.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4434 - FIX: PDF CONTRATO PJ — SUBSTITUIÇÃO DE PLACEHOLDERS (DUPLO FORMATO + DECODE HTML)
  *
  * Problema raiz do [CONTRATANTE_NOME] não substituído:
