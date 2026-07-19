@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4401** — **MÓDULO PJ: COLUNA "VENCIMENTO" NA LISTA DE CONTRATOS.** Badge colorido por urgência: verde (>60d) / âmbar (31–60d) / laranja (16–30d) / vermelho (≤15d / "Vence hoje") / cinza ("Encerrado") / texto ("Indeterminado"). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4400** — **MÓDULO PJ: ABA DOCUMENTOS — SLOTS OBRIGATÓRIOS + BOTÃO "+".** 3 slots fixos (Contrato Social / RG / CPF) com feedback verde/cinza + upload direto. Outros docs em seção separada. Botão "+" dashed abre formulário livre para documentos extras. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4399** — **MÓDULO PJ: BOTÃO ENVIAR → ABRE FCSIGN DIALOG.** Clique no ícone Send da coluna Ações abre FCSignPJSendDialog inline (em vez de navegar para /contrato-pj/:id). Dialog monta HTML do template vigente + cria sessão FCSign + exibe links individuais por signatário. ZERO DELETE · ZERO ALTER destrutivo.

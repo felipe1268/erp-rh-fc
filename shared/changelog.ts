@@ -1,4 +1,18 @@
 /**
+ * Rev. 4401 - MÓDULO PJ: COLUNA "VENCIMENTO" NA LISTA DE CONTRATOS
+ *
+ * Nova coluna entre "Vigência" e "Valor Mensal" com badge colorido por urgência:
+ * - Verde:   > 60 dias restantes
+ * - Âmbar:   31–60 dias
+ * - Laranja: 16–30 dias
+ * - Vermelho: ≤ 15 dias / "Vence hoje"
+ * - Cinza:   Encerrado (dataFim no passado)
+ * - Texto:   "Indeterminado" se dataFim ausente
+ * Cálculo client-side (Date diff em ms / 86400000, setHours(0,0,0,0)).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4400 - MÓDULO PJ: ABA DOCUMENTOS — SLOTS OBRIGATÓRIOS + BOTÃO "+"
  *
  * A aba "Documentos" do dialog de detalhes do contrato PJ foi reestruturada:

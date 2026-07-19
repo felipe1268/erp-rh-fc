@@ -634,6 +634,7 @@ export default function ModuloPJ() {
                         <th className="p-3 text-left font-medium">Prestador</th>
                         <th className="p-3 text-left font-medium">CNPJ</th>
                         <th className="p-3 text-left font-medium">Vigência</th>
+                        <th className="p-3 text-center font-medium">Vencimento</th>
                         <th className="p-3 text-right font-medium">Valor Mensal</th>
                         <th className="p-3 text-center font-medium">Adiant./Fech.</th>
                         <th className="p-3 text-center font-medium">Status</th>
@@ -643,7 +644,7 @@ export default function ModuloPJ() {
                     </thead>
                     <tbody>
                       {filtered.length === 0 ? (
-                        <tr><td colSpan={9} className="py-12 text-center text-muted-foreground">Nenhum contrato encontrado</td></tr>
+                        <tr><td colSpan={10} className="py-12 text-center text-muted-foreground">Nenhum contrato encontrado</td></tr>
                       ) : filtered.map((c: any) => {
                         const st = STATUS_CONTRATO[c.status] || STATUS_CONTRATO.ativo;
                         return (
@@ -669,6 +670,20 @@ export default function ModuloPJ() {
                             </td>
                             <td className="p-3 text-xs font-mono">{formatCNPJ(c.cnpjPrestador)}</td>
                             <td className="p-3 text-xs">{formatDate(c.dataInicio)} — {formatDate(c.dataFim)}</td>
+                            <td className="p-3 text-center">
+                              {(() => {
+                                if (!c.dataFim) return <span className="text-xs text-slate-400">Indeterminado</span>;
+                                const hoje = new Date(); hoje.setHours(0,0,0,0);
+                                const fim = new Date(c.dataFim + "T00:00:00");
+                                const dias = Math.round((fim.getTime() - hoje.getTime()) / 86400000);
+                                if (dias < 0) return <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Encerrado</span>;
+                                if (dias === 0) return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">Vence hoje</span>;
+                                if (dias <= 15) return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">faltam {dias}d</span>;
+                                if (dias <= 30) return <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold">faltam {dias}d</span>;
+                                if (dias <= 60) return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">faltam {dias}d</span>;
+                                return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">faltam {dias}d</span>;
+                              })()}
+                            </td>
                             <td className="p-3 text-right font-bold">{formatMoeda(c.valorMensal)}</td>
                             <td className="p-3 text-center text-xs">
                               <span className="text-amber-600">{c.percentualAdiantamento ?? 50}%</span>
