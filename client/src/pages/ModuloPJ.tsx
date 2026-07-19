@@ -366,8 +366,10 @@ export default function ModuloPJ() {
         contaPrestador: prev.contaPrestador || emp?.conta || (lastContratoData as any)?.contaPrestador || "",
         pixPrestador: prev.pixPrestador || emp?.chavePix || (lastContratoData as any)?.pixPrestador || "",
         formaPagamento: prev.formaPagamento || (lastContratoData as any)?.formaPagamento || "",
-        // Valor mensal: salário base do perfil RH primeiro, depois último contrato
-        valorMensal: prev.valorMensal || (emp?.salarioBase ? String(emp.salarioBase) : "") || (lastContratoData as any)?.valorMensal || "",
+        // Valor mensal: salário base do perfil RH primeiro, depois último contrato.
+        // parseMoedaBR converte "2.600" (BR) → 2600 antes de stringify, evitando
+        // que parseFloat("2.600") leia 2.6 na exibição do campo.
+        valorMensal: prev.valorMensal || (emp?.salarioBase ? String(parseMoedaBR(String(emp.salarioBase)) || "") : "") || (lastContratoData as any)?.valorMensal || "",
       }));
     }
   }, [lastContratoData, prestadorEmpData]);
