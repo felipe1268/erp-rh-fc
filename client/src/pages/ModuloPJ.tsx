@@ -339,21 +339,38 @@ export default function ModuloPJ() {
     onSuccess: () => { refetchDocs(); toast.success("Documento removido!"); },
   });
 
-  // Auto-fill: último contrato do prestador selecionado (para preencher CNPJ/Razão Social)
+  // Auto-fill: último contrato do prestador selecionado (CNPJ, Razão Social, dados bancários)
   const { data: lastContratoData } = trpc.pj.contratos.getLastByEmployee.useQuery(
     { employeeId: form.employeeId || 0, companyId },
     { enabled: !!form.employeeId && !editingContratoId && companyId > 0 }
   );
+  // Rev. 4428 — Auto-fill: perfil do prestador em RH (dados bancários + salário base)
+  const { data: prestadorEmpData } = trpc.employees.getById.useQuery(
+    { id: form.employeeId || 0, companyId },
+    { enabled: !!form.employeeId && !editingContratoId && companyId > 0 }
+  );
+  // Mescla as duas fontes: perfil RH tem prioridade nos dados bancários (mais atualizado);
+  // último contrato tem prioridade em CNPJ/Razão Social (não ficam no perfil RH).
   useEffect(() => {
-    if (!editingContratoId && form.employeeId && lastContratoData) {
+    if (!editingContratoId && form.employeeId && (lastContratoData !== undefined || prestadorEmpData !== undefined)) {
+      const emp = prestadorEmpData as any;
       setForm((prev: any) => ({
         ...prev,
-        cnpjPrestador: prev.cnpjPrestador || lastContratoData.cnpjPrestador || "",
-        razaoSocialPrestador: prev.razaoSocialPrestador || lastContratoData.razaoSocialPrestador || "",
-        objetoContrato: prev.objetoContrato || lastContratoData.objetoContrato || "",
+        // CNPJ/Razão Social: vêm do último contrato (não existem no perfil CLT/PJ)
+        cnpjPrestador: prev.cnpjPrestador || (lastContratoData as any)?.cnpjPrestador || "",
+        razaoSocialPrestador: prev.razaoSocialPrestador || (lastContratoData as any)?.razaoSocialPrestador || "",
+        objetoContrato: prev.objetoContrato || (lastContratoData as any)?.objetoContrato || "",
+        // Dados bancários: perfil RH primeiro, depois último contrato como fallback
+        bancoPrestador: prev.bancoPrestador || emp?.bancoNome || emp?.banco || (lastContratoData as any)?.bancoPrestador || "",
+        agenciaPrestador: prev.agenciaPrestador || emp?.agencia || (lastContratoData as any)?.agenciaPrestador || "",
+        contaPrestador: prev.contaPrestador || emp?.conta || (lastContratoData as any)?.contaPrestador || "",
+        pixPrestador: prev.pixPrestador || emp?.chavePix || (lastContratoData as any)?.pixPrestador || "",
+        formaPagamento: prev.formaPagamento || (lastContratoData as any)?.formaPagamento || "",
+        // Valor mensal: salário base do perfil RH primeiro, depois último contrato
+        valorMensal: prev.valorMensal || (emp?.salarioBase ? String(emp.salarioBase) : "") || (lastContratoData as any)?.valorMensal || "",
       }));
     }
-  }, [lastContratoData]);
+  }, [lastContratoData, prestadorEmpData]);
 
   // Revisões ISO do contrato em detalhe
   const { data: revisoes = [] } = trpc.pj.contratos.revisoes.useQuery(

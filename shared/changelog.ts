@@ -1,4 +1,50 @@
 /**
+ * Rev. 4428 - SYNC BIDIRECIONAL: DADOS BANCÁRIOS COLABORADORES ↔ CONTRATO PJ
+ *
+ * Problema: Ao criar um Novo Contrato PJ, os campos "CNPJ do Prestador", "Razão Social",
+ * "Banco", "Agência", "Conta Corrente", "Chave PIX" e "Valor Mensal" ficavam em branco,
+ * obrigando o usuário a digitar manualmente informações que já existem no perfil do
+ * colaborador em Recursos Humanos (Bancário e Profissional). O usuário pediu que os
+ * dois módulos funcionem de forma bidirecional: dados preenchidos num refletem no outro.
+ *
+ * Solução (frontend + backend):
+ *
+ * FRONTEND (client/src/pages/ModuloPJ.tsx):
+ * 1. Nova query `trpc.employees.getById` disparada quando um prestador é selecionado
+ *    num novo contrato. Retorna o perfil completo do employee incluindo bancário + salarioBase.
+ * 2. useEffect mesclado (substituiu o anterior que só puxava CNPJ/Razão Social):
+ *    - CNPJ e Razão Social: vêm do último contrato (`getLastByEmployee`) pois não ficam
+ *      gravados no perfil CLT/PJ do employee.
+ *    - Bancário (banco, agência, conta, PIX): perfil RH tem prioridade (dado mais atualizado);
+ *      último contrato serve de fallback.
+ *    - Valor Mensal: salárioBase do perfil RH primeiro, depois último contrato.
+ *    - Forma de Pagamento: último contrato.
+ *    - Todos usam `||` para não sobrescrever o que o usuário já digitou.
+ *
+ * BACKEND (server/routers/pjContracts.ts):
+ * 1. `getLastByEmployee`: select estendido para incluir bancoPrestador, agenciaPrestador,
+ *    contaPrestador, pixPrestador e formaPagamento (antes só retornava CNPJ/Razão/Objeto).
+ * 2. Mutation `create`: após criar o contrato, atualiza o employee com os dados bancários
+ *    informados (bancoNome, agencia, conta, chavePix). Não-fatal: falha loggada com warn.
+ * 3. Mutation `update`: após atualizar o contrato, idem. Usa `!== undefined` para
+ *    permitir limpar os campos (passar string vazia → grava NULL no employee).
+ *
+ * Vice-versa explícito:
+ * - Editar bancário no employee (Colaboradores) → ao abrir novo contrato, o auto-fill
+ *   puxará os dados atualizados do perfil (já funciona com a nova query).
+ * - Salvar contrato → atualiza automaticamente o perfil bancário do employee.
+ *
+ * O que NÃO sincroniza:
+ * - `valorMensal` do contrato NÃO volta para `salarioBase` do employee (mudança de
+ *   salário passa por processo formal de RH, não pelo contrato PJ).
+ * - CNPJ e Razão Social do prestador ficam APENAS no contrato (não há campo equivalente
+ *   no perfil de employee).
+ *
+ * Arquivos: client/src/pages/ModuloPJ.tsx, server/routers/pjContracts.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4427 - FIX: MENSAGEM DE ERRO DE CONEXÃO iOS NO CADASTRO DE COLABORADOR
  *
  * Problema: Ao salvar um novo colaborador (ou editar um existente) em iPad/iPhone,

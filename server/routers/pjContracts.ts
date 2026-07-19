@@ -790,6 +790,21 @@ export const pjContractsRouter = router({
           console.error('[pj.contratos.create] Falha ao gerar previsões:', e?.message || e);
         }
 
+        // Rev. 4428 — Sync bancário bidirecional: atualiza o employee com os dados bancários
+        // informados no contrato para que o perfil em Colaboradores fique sempre em dia.
+        try {
+          const bancUpdate: Record<string, string | null> = {};
+          if (input.bancoPrestador) bancUpdate.bancoNome = input.bancoPrestador;
+          if (input.agenciaPrestador) bancUpdate.agencia = input.agenciaPrestador;
+          if (input.contaPrestador) bancUpdate.conta = input.contaPrestador;
+          if (input.pixPrestador) bancUpdate.chavePix = input.pixPrestador;
+          if (Object.keys(bancUpdate).length > 0) {
+            await db.update(employees).set(bancUpdate).where(eq(employees.id, input.employeeId));
+          }
+        } catch (e: any) {
+          console.warn('[pj.contratos.create] Sync bancário ao employee falhou (não-fatal):', e?.message ?? e);
+        }
+
         return { success: true, id: inserted.id, numeroContrato: numero, previsoesGeradas };
       }),
 
@@ -854,6 +869,21 @@ export const pjContractsRouter = router({
 
         updateData.updatedAt = sql`NOW()`;
         await db.update(pjContracts).set(updateData).where(eq(pjContracts.id, id));
+
+        // Rev. 4428 — Sync bancário bidirecional: atualiza o employee com os dados bancários
+        // para que o perfil em Colaboradores fique sempre em dia com o que está no contrato.
+        try {
+          const bancUpdate: Record<string, string | null> = {};
+          if (input.bancoPrestador !== undefined) bancUpdate.bancoNome = input.bancoPrestador || null;
+          if (input.agenciaPrestador !== undefined) bancUpdate.agencia = input.agenciaPrestador || null;
+          if (input.contaPrestador !== undefined) bancUpdate.conta = input.contaPrestador || null;
+          if (input.pixPrestador !== undefined) bancUpdate.chavePix = input.pixPrestador || null;
+          if (Object.keys(bancUpdate).length > 0) {
+            await db.update(employees).set(bancUpdate).where(eq(employees.id, atual.employeeId));
+          }
+        } catch (e: any) {
+          console.warn('[pj.contratos.update] Sync bancário ao employee falhou (não-fatal):', e?.message ?? e);
+        }
 
         // Rev. 3699 — propagar mudança de valorMensal/percentuais aos pj_payments PENDENTES
         const valorCampos = ['valorMensal', 'percentualAdiantamento', 'percentualFechamento'];
@@ -992,6 +1022,11 @@ export const pjContractsRouter = router({
           percentualFechamento: pjContracts.percentualFechamento,
           diaAdiantamento: pjContracts.diaAdiantamento,
           diaFechamento: pjContracts.diaFechamento,
+          bancoPrestador: pjContracts.bancoPrestador,
+          agenciaPrestador: pjContracts.agenciaPrestador,
+          contaPrestador: pjContracts.contaPrestador,
+          pixPrestador: pjContracts.pixPrestador,
+          formaPagamento: pjContracts.formaPagamento,
         })
         .from(pjContracts)
         .where(and(

@@ -50,17 +50,17 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4427** — **FIX: MENSAGEM DE ERRO DE CONEXÃO iOS NO CADASTRO DE COLABORADOR.** iOS WebKit descarta requisições HTTP silenciosamente, retornando "The string did not match the expected pattern" — erro de transporte opaco que aparecia bruto nos toasts de `createMut`, `criarSolicitacaoMut` e `updateMut`. Fix: helper `erroToast` detecta o padrão iOS (+ variantes "load failed / failed to fetch / aborted / timed out") e exibe "Falha de conexão. Verifique sua internet e tente novamente." em português. `onSettled` adicionado ao `createMut` e `updateMut` para sempre invalidar a lista — garante que a UI reflita o estado real mesmo quando a resposta é descartada após sucesso no servidor. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4428** — **SYNC BIDIRECIONAL: DADOS BANCÁRIOS COLABORADORES ↔ CONTRATO PJ.** Ao selecionar um prestador no "Novo Contrato PJ", campos bancários (Banco, Agência, Conta Corrente, Chave PIX) e Valor Mensal preenchem automaticamente do perfil RH do colaborador; CNPJ/Razão Social vêm do último contrato. Ao salvar o contrato (criar ou editar), os dados bancários são gravados de volta no perfil do employee (sync vice-versa). `getLastByEmployee` estendido para retornar também campos bancários + forma de pagamento. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4426** — **FIX: PRÉ-VISUALIZAR CONTRATO PJ — OBJETO DO CONTRATO DUPLICADO/INLINE.** Template ISO do banco tinha `[OBJETO_CONTRATO]` inline dentro de `<p>` com texto antes/depois; IA retornava cabeçalho "OBJETO DO CONTRATO" apesar da instrução. Fix 3 camadas: (1) `formatObjetoHtml` filtra linhas-cabeçalho via regex; (2) `buildContratoPjSignHtml` pré-processa ISO em 3 passagens antes de `replacePlaceholders` — 1ª ocorrência vira referência estática, última vira bloco standalone; (3) prompt IA reescrito + strip server-side. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4427** — **FIX: MENSAGEM DE ERRO DE CONEXÃO iOS NO CADASTRO DE COLABORADOR.** iOS WebKit descarta requisições HTTP silenciosamente, retornando "The string did not match the expected pattern" — erro de transporte opaco. Helper `erroToast` detecta o padrão e exibe mensagem amigável em PT. `onSettled` em `createMut`/`updateMut` garante invalidação da lista mesmo com resposta descartada. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4426** — **FIX: PRÉ-VISUALIZAR CONTRATO PJ — OBJETO DO CONTRATO DUPLICADO/INLINE.** Fix 3 camadas: `formatObjetoHtml` filtra cabeçalhos; `buildContratoPjSignHtml` pré-processa ISO em 3 passagens; prompt IA reescrito + strip server-side. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4425** — **IA: GERAR CLÁUSULA DE OBJETO DO CONTRATO PJ.** Campo "Objeto do Contrato" virou seção estilizada; IA gera parágrafo inicial + 7–12 alíneas + encerramento. Progresso 0→100%. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4424** — **LISTA DE PEÇAS PARA RECEBIMENTO EM OC DE LOCAÇÃO.** OCs de locação ganham seção "Lista de Peças para Recebimento" no detalhe + SmartEntry almoxarifado. Nova tabela `oc_lista_recebimento`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4423** — **OC IA: SELEÇÃO DE OBRA + EAP NO STEP DE REVISÃO.** card verde "Obra e Apropriação" no step review do dialog Criar OC por IA. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4422** — **OC IA: BARRA DE PROGRESSO 0→100% NO STEP DE PROCESSAMENTO.** setInterval até 90% simulado; ao `done` salta 100% + 600ms + review. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4421** — **A2: TRANSFERÊNCIAS ALMOXARIFADO — "PARA" E "ENVIADO POR" NO HISTÓRICO.** contraparte NULL→COALESCE(destino_obra_nome,'Central'); label "Enviado por:". ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
