@@ -2694,7 +2694,7 @@ export default function EquipamentosLocados() {
           ? (importQueue.length > 0 ? "Salvar e próximo" : "Confirmar recebimento")
           : (recEtapa === 1 ? "Avançar para assinaturas →" : "Confirmar recebimento");
         return (
-        <Modal title={titulo} onClose={() => { setModal(false); setOcSelecionada(null); setOcSelecionadaFull(null); setQtdRecebidaPorItem({}); resetRecAssinaturas(); }} onSave={salvar} loading={criar.isPending} saveLabel={saveLbl}>
+        <Modal title={titulo} onClose={() => { setModal(false); setOcSelecionada(null); setOcSelecionadaFull(null); setQtdRecebidaPorItem({}); resetRecAssinaturas(); }} onSave={salvar} loading={criar.isPending} saveLabel={saveLbl} fullscreen>
           {/* Rev. 4342 — indicador de progresso com labels de etapa */}
           {!noFluxoImport && (
             <div className="flex items-center gap-2 mb-4">
@@ -2866,64 +2866,59 @@ export default function EquipamentosLocados() {
 
                   {/* Instrução */}
                   <p className="text-sm text-slate-600 mb-3 text-center">
-                    Digite a <strong>quantidade que você recebeu</strong> de cada item.<br />
-                    <span className="text-slate-400 text-xs">Se bateu com o esperado, não precisa mudar nada.</span>
+                    Digite a <strong>quantidade que você recebeu</strong> de cada item.
+                    <span className="text-slate-400 text-xs ml-1">Se bateu com o esperado, não precisa mudar nada.</span>
                   </p>
 
-                  {/* Cabeçalho das colunas */}
-                  <div className="grid grid-cols-[1fr_88px_88px] gap-2 px-1 mb-1">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Item</span>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Esperado</span>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-blue-500 text-center">Recebido</span>
-                  </div>
+                  {/* Tabela compacta de conferência */}
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    {/* Cabeçalho */}
+                    <div className="grid grid-cols-[2rem_1fr_4rem_6rem_6rem] gap-0 bg-slate-100 border-b border-slate-200 px-2 py-1.5">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 text-center">#</span>
+                      <span className="text-[10px] font-bold uppercase text-slate-500">Item</span>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 text-center">Un.</span>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 text-right pr-2">Esperado</span>
+                      <span className="text-[10px] font-bold uppercase text-blue-500 text-right pr-1">Recebido</span>
+                    </div>
 
-                  {/* Linhas de conferência */}
-                  <div className="space-y-2">
+                    {/* Linhas */}
                     {itens.map((it: any, idx: number) => {
                       const { esperado, recebido, diff } = divergencias[idx];
                       const status = diff === 0 ? "ok" : diff < 0 ? "falta" : "excesso";
+                      const fmtNum = (n: number) => n % 1 === 0 ? String(n) : n.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
                       return (
                         <div
                           key={idx}
-                          className={`grid grid-cols-[1fr_88px_88px] gap-2 items-center rounded-2xl border-2 p-3 transition-colors ${
-                            status === "ok"
-                              ? "bg-emerald-50 border-emerald-200"
-                              : status === "falta"
-                              ? "bg-red-50 border-red-300"
-                              : "bg-amber-50 border-amber-300"
+                          className={`grid grid-cols-[2rem_1fr_4rem_6rem_6rem] gap-0 items-center px-2 py-2 border-b last:border-b-0 transition-colors ${
+                            status === "ok" ? "bg-white" : status === "falta" ? "bg-red-50" : "bg-amber-50"
                           }`}
                         >
-                          {/* Nome do item */}
-                          <div className="min-w-0">
-                            <p className="font-bold text-slate-800 text-sm leading-tight break-words">{it.descricao || "(sem descrição)"}</p>
-                            {it.unidade && <p className="text-xs text-slate-400 mt-0.5">{it.unidade}</p>}
-                            {status === "falta" && (
-                              <p className="text-xs font-bold text-red-600 mt-1">
-                                ⚠ Faltando {Math.abs(diff)} {it.unidade || "un"}
-                              </p>
-                            )}
-                            {status === "excesso" && (
-                              <p className="text-xs font-bold text-amber-600 mt-1">
-                                ⚠ {diff} {it.unidade || "un"} a mais
-                              </p>
-                            )}
+                          {/* # */}
+                          <span className="text-[10px] text-slate-400 font-mono text-center">{idx + 1}</span>
+
+                          {/* Descrição + alerta */}
+                          <div className="min-w-0 pr-2">
+                            <p className="text-xs font-semibold text-slate-800 leading-tight break-words">{it.descricao || "(sem descrição)"}</p>
+                            {status === "falta" && <p className="text-[10px] font-bold text-red-600 mt-0.5">⚠ faltando {Math.abs(diff)} {it.unidade || "un"}</p>}
+                            {status === "excesso" && <p className="text-[10px] font-bold text-amber-600 mt-0.5">⚠ {diff} {it.unidade || "un"} a mais</p>}
                           </div>
 
+                          {/* Unidade */}
+                          <span className="text-[11px] text-slate-400 text-center uppercase font-medium">{it.unidade || "—"}</span>
+
                           {/* Esperado — só leitura */}
-                          <div className="text-center">
-                            <p className="text-3xl font-black text-slate-500 leading-none">{esperado}</p>
-                            <p className="text-[10px] text-slate-400 uppercase mt-0.5">esperado</p>
+                          <div className="text-right pr-2">
+                            <span className="text-sm font-bold text-slate-500 tabular-nums">{fmtNum(esperado)}</span>
                           </div>
 
                           {/* Recebido — campo editável */}
-                          <div className="text-center">
+                          <div className="text-right pr-1">
                             <input
-                              type="number"
-                              min="0"
-                              inputMode="numeric"
+                              type="text"
+                              inputMode="decimal"
                               value={qtdRecebidaPorItem[idx] ?? String(esperado)}
                               onChange={e => setQtdRecebidaPorItem(p => ({ ...p, [idx]: e.target.value }))}
-                              className={`w-full text-center text-3xl font-black rounded-xl border-2 p-1 outline-none focus:ring-2 transition-colors ${
+                              className={`w-full text-right text-sm font-bold rounded-lg border-2 px-2 py-1 outline-none focus:ring-2 transition-colors tabular-nums ${
                                 status === "ok"
                                   ? "border-emerald-400 text-emerald-700 bg-white focus:ring-emerald-200"
                                   : status === "falta"
@@ -2931,7 +2926,6 @@ export default function EquipamentosLocados() {
                                   : "border-amber-400 text-amber-700 bg-white focus:ring-amber-200"
                               }`}
                             />
-                            <p className="text-[10px] text-blue-500 uppercase mt-0.5 font-bold">recebido</p>
                           </div>
                         </div>
                       );
@@ -5206,16 +5200,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
-function Modal({ title, onClose, onSave, children, saveLabel = "Salvar", loading }: any) {
+function Modal({ title, onClose, onSave, children, saveLabel = "Salvar", loading, fullscreen = false }: any) {
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-3 border-b flex items-center justify-between">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 md:p-4" onClick={onClose}>
+      <div
+        className={`bg-white rounded-lg shadow-xl flex flex-col ${fullscreen ? "w-full h-full max-w-none max-h-none rounded-none md:rounded-lg md:w-[98vw] md:h-[96vh]" : "max-w-2xl w-full max-h-[90vh]"}`}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 border-b flex items-center justify-between shrink-0">
           <h2 className="font-semibold text-slate-800">{title}</h2>
           <button onClick={onClose}><X className="h-5 w-5 text-slate-500" /></button>
         </div>
-        <div className="p-5 space-y-3">{children}</div>
-        <div className="px-5 py-3 border-t bg-slate-50 flex items-center justify-end gap-2">
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">{children}</div>
+        <div className="px-5 py-3 border-t bg-slate-50 flex items-center justify-end gap-2 shrink-0">
           <button onClick={onClose} className="px-3 py-1.5 text-sm border rounded">Cancelar</button>
           <button onClick={onSave} disabled={loading} className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50 inline-flex items-center gap-1">
             {loading ? "Salvando…" : <><CheckCircle2 className="h-4 w-4" /> {saveLabel}</>}
