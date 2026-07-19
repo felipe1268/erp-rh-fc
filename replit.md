@@ -50,17 +50,17 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4424** — **LISTA DE PEÇAS PARA RECEBIMENTO EM OC DE LOCAÇÃO.** OCs de locação ganham seção "Lista de Peças para Recebimento" no detalhe: comprador adiciona peças manualmente ou via "Ler PDF (IA)" (Claude Vision, progresso 0→100%). No SmartEntry do almoxarifado, a lista aparece como card âmbar read-only antes da confirmação. Nova tabela `oc_lista_recebimento`. 4 novas procedures. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4425** — **IA: GERAR CLÁUSULA DE OBJETO DO CONTRATO PJ.** Campo "Objeto do Contrato" virou seção estilizada "Cláusula — Objeto do Contrato": usuário digita cargo (ex: "Engenheiro de campo") e clica "Gerar com IA" → Claude gera parágrafo inicial + 7–12 alíneas de responsabilidades + frase de encerramento. Progresso 0→100%. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4423** — **OC IA: SELEÇÃO DE OBRA + EAP NO STEP DE REVISÃO.** Step "review" do dialog "Criar OC por IA" ganhou card verde "Obra e Apropriação": Select de Obra (usando obrasQ existente) + Popover EAP (Command, busca código/descrição) habilitado após obra selecionada. `preencherOCDeIA` passa `obraId` e `eapCodigo`/`eapDescricao` diretamente para o formulário da OC. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4424** — **LISTA DE PEÇAS PARA RECEBIMENTO EM OC DE LOCAÇÃO.** OCs de locação ganham seção "Lista de Peças para Recebimento" no detalhe: comprador adiciona peças manualmente ou via "Ler PDF (IA)" (Claude Vision, progresso 0→100%). No SmartEntry do almoxarifado, a lista aparece como card âmbar read-only antes da confirmação. Nova tabela `oc_lista_recebimento`. 4 novas procedures. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4423** — **OC IA: SELEÇÃO DE OBRA + EAP NO STEP DE REVISÃO.** card verde "Obra e Apropriação" no step review do dialog Criar OC por IA. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4422** — **OC IA: BARRA DE PROGRESSO 0→100% NO STEP DE PROCESSAMENTO.** setInterval até 90% simulado; ao `done` salta 100% + 600ms + review. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4421** — **A2: TRANSFERÊNCIAS ALMOXARIFADO — "PARA" E "ENVIADO POR" NO HISTÓRICO.** contraparte NULL→COALESCE(destino_obra_nome,'Central'); label "Enviado por:". ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4420** — **FEATURES IA: C1 (CRIAR OC POR DOCUMENTO) + A1 (IMPORTAR ITENS ALMOXARIFADO POR DOCUMENTO).** Botão "Criar OC por IA" + "Importar (IA)" no Almoxarifado. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4419** — **CORREÇÕES C5 E S1 (AJUSTES_ERP_17072026).** Fix `estoqueParticipante` + `assertCentralWrite` relaxado. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4418** — **AJUSTES COMPRAS / ALMOXARIFADO / SST.** 7 melhorias: C2/C3/C6 + A3/A4 + S2/S4. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

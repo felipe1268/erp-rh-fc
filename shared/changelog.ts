@@ -1,4 +1,26 @@
 /**
+ * Rev. 4425 - IA: GERAR CLÁUSULA DE OBJETO DO CONTRATO PJ
+ *
+ * Problema: O campo "Objeto do Contrato" era um textarea simples de 2 linhas.
+ * O usuário precisava redigir manualmente uma cláusula jurídica completa,
+ * listando todas as responsabilidades do prestador para cada cargo.
+ *
+ * Solução: O campo foi transformado numa seção estilizada "Cláusula — Objeto
+ * do Contrato" com assistente IA integrado. O usuário digita o cargo/função
+ * (ex: "Engenheiro de campo", "Orçamentista", "Mestre de obras") e clica
+ * "Gerar com IA". A IA (Claude) gera automaticamente:
+ * - 1 parágrafo inicial resumindo o objeto do contrato
+ * - 7 a 12 responsabilidades específicas listadas em alíneas (a, b, c...)
+ * - Frase de encerramento sobre natureza autônoma da prestação
+ * O texto gerado preenche o textarea e pode ser editado livremente.
+ * Barra de progresso 0→100% (simulado até 88%; salta a 100% ao terminar).
+ *
+ * Arquivos: server/routers/pjContracts.ts (procedure gerarClausulaObjetoIA),
+ *   client/src/pages/ModuloPJ.tsx (UI + estados + mutation)
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4424 - LISTA DE PEÇAS PARA RECEBIMENTO EM OC DE LOCAÇÃO
  *
  * Problema: OCs de locação (andaime, escoramento) têm apenas 1 item genérico

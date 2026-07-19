@@ -20,7 +20,7 @@ import {
   Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar, Pencil,
   Users, TrendingUp, FileSignature, Ban, Send, Printer, Upload, FolderOpen,
   ExternalLink, File, XCircle, Award, Loader2, Check, Settings2,
-  ShieldCheck, Paperclip, FileMinus2,
+  ShieldCheck, Paperclip, FileMinus2, Sparkles,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
@@ -120,6 +120,10 @@ export default function ModuloPJ() {
   const [uploadingTipo, setUploadingTipo] = useState<string | null>(null);
   const [bulkProgress, setBulkProgress] = useState(0);
   const bulkProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // IA — Gerar cláusula de Objeto do Contrato (Rev. 4425)
+  const [objetoIAInput, setObjetoIAInput] = useState("");
+  const [objetoIALoading, setObjetoIALoading] = useState(false);
+  const [objetoIAProgress, setObjetoIAProgress] = useState(0);
 
   // Mês referência para pagamentos — PeriodSelectorCard (padrão de ouro)
   const [pjAno, setPjAno] = useState(() => new Date().getFullYear());
@@ -189,6 +193,22 @@ export default function ModuloPJ() {
     onSuccess: (data: any) => { refetchContratos(); toast.success(`Contrato atualizado! (Rev. ${data.revisao || '—'})`); setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); },
     onError: (e: any) => toast.error(e.message),
   });
+  const gerarClausulaObjetoMut = trpc.pj.contratos.gerarClausulaObjetoIA.useMutation({
+    onSuccess: (data) => { setForm((f: any) => ({ ...f, objetoContrato: data.clausula })); toast.success("Cláusula gerada com sucesso!"); },
+    onError: (e: any) => toast.error(e.message || "Erro ao gerar cláusula"),
+  });
+  const handleGerarClausulaPJ = () => {
+    if (!objetoIAInput.trim()) return;
+    setObjetoIAProgress(0);
+    setObjetoIALoading(true);
+    const iv = setInterval(() => setObjetoIAProgress(p => Math.min(p + Math.floor(Math.random() * 12 + 5), 88)), 700);
+    gerarClausulaObjetoMut.mutateAsync({ companyId, descricao: objetoIAInput.trim() })
+      .finally(() => {
+        clearInterval(iv);
+        setObjetoIAProgress(100);
+        setTimeout(() => { setObjetoIALoading(false); setObjetoIAProgress(0); }, 700);
+      });
+  };
   const deleteContrato = trpc.pj.contratos.delete.useMutation({
     onSuccess: () => { refetchContratos(); toast.success("Contrato excluído!"); },
   });
@@ -1566,9 +1586,50 @@ export default function ModuloPJ() {
                 )}
               </div>
 
+              {/* §§ Cláusula de Objeto do Contrato com IA — Rev. 4425 */}
               <div className="col-span-2">
-                <label className="text-sm font-medium">Objeto do Contrato</label>
-                <Textarea value={form.objetoContrato || ""} onChange={e => setForm({ ...form, objetoContrato: e.target.value })} rows={2} placeholder="Descreva o objeto do contrato..." />
+                <div className="rounded-lg border-2 border-blue-100 bg-gradient-to-b from-blue-50/60 to-white overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border-b border-blue-100">
+                    <FileText className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                    <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Cláusula — Objeto do Contrato</p>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    <div className="flex gap-2 items-center">
+                      <input
+                        value={objetoIAInput}
+                        onChange={e => setObjetoIAInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") handleGerarClausulaPJ(); }}
+                        placeholder="Cargo / tipo de contrato (ex: Engenheiro de campo, Orçamentista, Mestre de obras...)"
+                        className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white placeholder-gray-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleGerarClausulaPJ}
+                        disabled={!objetoIAInput.trim() || objetoIALoading}
+                        className="relative overflow-hidden inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 text-xs font-semibold px-3 py-2 transition-colors disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {objetoIALoading && (
+                          <span className="absolute inset-0 bg-blue-400/25 transition-all" style={{ width: `${objetoIAProgress}%` }} />
+                        )}
+                        <span className="relative flex items-center gap-1.5">
+                          {objetoIALoading
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando... {objetoIAProgress}%</>
+                            : <><Sparkles className="h-3.5 w-3.5" /> Gerar com IA</>}
+                        </span>
+                      </button>
+                    </div>
+                    <Textarea
+                      value={form.objetoContrato || ""}
+                      onChange={e => setForm({ ...form, objetoContrato: e.target.value })}
+                      rows={9}
+                      placeholder="Digite o cargo no campo acima e clique 'Gerar com IA' — ou escreva a cláusula diretamente. A IA listará as responsabilidades do prestador de forma jurídica e detalhada."
+                      className="bg-white text-xs leading-relaxed border-gray-200 resize-y font-[inherit]"
+                    />
+                    {form.objetoContrato && (
+                      <p className="text-[10px] text-gray-400 text-right">{(form.objetoContrato || "").length} caracteres</p>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="col-span-2">
                 <label className="text-sm font-medium">Observações</label>
