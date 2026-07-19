@@ -1,4 +1,14 @@
 /**
+ * Rev. 4410 - MÓDULO PJ: CARD "FALTA ASSINAR" NOS KPIs
+ *
+ * Novo card laranja entre "Encerrados" e "Custo Mensal PJ".
+ * Conta contratos ativos (status='ativo') que não têm contratoAssinadoUrl preenchido.
+ * Quando > 0: borda laranja + clicável (filtra para ativos). Quando = 0: cinza/inativo.
+ * Grid ajustado para grid-cols-2 md:grid-cols-3 lg:grid-cols-6.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4409 - CONTAS A PAGAR: LAYOUT ESTRUTURADO NAS SUB-LINHAS DO GRUPO PJ EXPANDIDO
  *
  * As sub-linhas dentro do grupo consolidado "Pagamentos PJ" (caminho {isExpanded && gp.items.map})

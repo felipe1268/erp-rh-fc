@@ -426,13 +426,15 @@ export default function ModuloPJ() {
   // Stats
   const stats = useMemo(() => {
     const list = contratos as any[];
-    const totalValor = list.filter(c => c.status === "ativo").reduce((s, c) => s + parseFloat(c.valorMensal || "0"), 0);
+    const ativos = list.filter(c => c.status === "ativo");
+    const totalValor = ativos.reduce((s, c) => s + parseFloat(c.valorMensal || "0"), 0);
     return {
       total: list.length,
-      ativos: list.filter(c => c.status === "ativo").length,
+      ativos: ativos.length,
       pendentes: list.filter(c => c.status === "pendente_assinatura").length,
       encerrados: list.filter(c => c.status === "encerrado").length,
       totalMensal: totalValor,
+      semAssinatura: ativos.filter(c => !c.contratoAssinadoUrl).length,
     };
   }, [contratos]);
 
@@ -531,7 +533,7 @@ export default function ModuloPJ() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <Card className="cursor-pointer hover:shadow-md" onClick={() => setStatusFilter("todos")}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Total Contratos</p>
@@ -554,6 +556,16 @@ export default function ModuloPJ() {
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Encerrados</p>
               <p className="text-2xl font-bold text-gray-600">{fmtNum(stats.encerrados)}</p>
+            </CardContent>
+          </Card>
+          <Card className={`border-l-4 ${stats.semAssinatura > 0 ? "border-l-orange-500 cursor-pointer hover:shadow-md" : "border-l-slate-200"}`}
+            onClick={() => stats.semAssinatura > 0 ? setStatusFilter("ativo") : undefined}>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground uppercase">Falta Assinar</p>
+              <p className={`text-2xl font-bold ${stats.semAssinatura > 0 ? "text-orange-600" : "text-slate-400"}`}>
+                {fmtNum(stats.semAssinatura)}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">contratos ativos sem PDF</p>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-purple-500">
