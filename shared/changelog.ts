@@ -1,4 +1,31 @@
 /**
+ * Rev. 4429 - FIX: PDF CONTRATO PJ = 100% TEMPLATE CENTRAL DE DOCUMENTOS
+ *
+ * Problema: O PDF gerado pelo botão "Imprimir / Salvar PDF" do Contrato PJ NÃO
+ * respeitava o layout do template cadastrado na Central de Documentos ISO.
+ * O sistema envolvia o conteúdo do template dentro de `buildFcDocument`, que
+ * adicionava seu próprio cabeçalho (logo + empresa centralizado), faixa azul de
+ * título, caixa de assunto, caixa de corpo com borda, bloco de assinaturas extra
+ * e rodapé — resultando num documento DIFERENTE do template aprovado.
+ * Além disso, o PDF exibia DUAS seções de assinatura: uma do template e outra
+ * do buildFcDocument.
+ *
+ * Solução (client/src/lib/contratoPjDocument.ts):
+ * - Quando `modeloHtml` está presente (template da Central de Documentos),
+ *   `buildContratoPjSignHtml` agora usa o template DIRETAMENTE como documento
+ *   final. `buildFcDocument` NÃO é chamado.
+ * - Fluxo ISO: substitui placeholders (3-pass para [OBJETO_CONTRATO]) →
+ *   injeta slots FCSign (<!--FCSIGN:SIG:contratado/contratante-->) nos blocos
+ *   de assinatura do template → envolve em HTML shell mínimo com @page A4 e
+ *   print-color-adjust para impressão fiel.
+ * - Caminho legado (sem modeloHtml) preservado sem alteração.
+ * - FCSignPJSendDialog.tsx não precisa de mudança: usa a mesma função, agora
+ *   com slots FCSign injetados no corpo do template.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4428 - SYNC BIDIRECIONAL: DADOS BANCÁRIOS COLABORADORES ↔ CONTRATO PJ
  *
  * Problema: Ao criar um Novo Contrato PJ, os campos "CNPJ do Prestador", "Razão Social",

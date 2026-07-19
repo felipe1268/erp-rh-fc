@@ -1,22 +1,20 @@
 /**
  * client/src/lib/contratoPjDocument.ts
  *
- * Rev. 2736 — Monta o HTML assinável (FCSign) de um CONTRATO DE PRESTAÇÃO DE
+ * Rev. 4429 — Monta o HTML assinável (FCSign) de um CONTRATO DE PRESTAÇÃO DE
  * SERVIÇOS PJ a partir do modelo (`pj.modeloContrato`) + dados do contrato
- * (`pj.contratos.getById`). Reusa `buildFcDocument` (cabeçalho institucional
- * FC + slots de assinatura) e replica a substituição de placeholders da
- * página de visualização `ContratoPJView.tsx`.
+ * (`pj.contratos.getById`).
  *
- * Saída: string HTML pronta pra ser enviada como `documentHtml` ao
- * `signatures.create`. O bloco de assinaturas usa os roles PJ
- * (`contratado` = prestador / `contratante` = FC Engenharia), de modo que o
- * servidor estampe as imagens das assinaturas nos slots corretos.
+ * CAMINHO ISO (modeloHtml presente):
+ *   O template da Central de Documentos é a ÚNICA fonte de layout.
+ *   Apenas substitui placeholders + injeta slots FCSign + CSS de impressão.
+ *   Nenhuma informação extra é adicionada (sem cabeçalho, sem rodapé,
+ *   sem caixa de assunto, sem bloco de assinaturas extra do buildFcDocument).
  *
- * SEGURANÇA: `buildFcDocument` injeta o corpo RAW; portanto TODO valor
- * interpolado é escapado aqui (`esc`) antes de virar HTML. As únicas tags
- * inseridas no corpo são as nossas próprias (`<p>`, `<h2>`, `<strong>`),
- * nunca conteúdo vindo do banco. Sem `on*`/`<script>`/`javascript:` —
- * respeitando o filtro XSS do `signatures.create`.
+ * CAMINHO LEGADO (sem modeloHtml):
+ *   Usa o texto plain-text do modelo + buildFcDocument (comportamento anterior).
+ *
+ * SEGURANÇA: todo valor interpolado é escapado com `esc()` antes de virar HTML.
  */
 import { buildFcDocument, type FcDocumentParams } from "./fcDocumentTemplate";
 import { calcularPrazoVigencia } from "@shared/contratoPrazo";
@@ -275,34 +273,39 @@ export interface BuildContratoPjSignHtmlArgs {
   modelo: string;
   /**
    * HTML do template vigente da Central de Documentos ISO (`systemDocumentTemplates`).
-   * Quando fornecido, é usado diretamente como corpo (substitui placeholders inline
-   * no HTML, sem passar por `corpoFromTemplate`). Tem prioridade sobre `modelo`.
+   * Quando fornecido, é a ÚNICA fonte de layout — apenas placeholders são substituídos
+   * e slots FCSign são injetados. buildFcDocument NÃO é chamado.
    */
   modeloHtml?: string | null;
   /** Nome do sócio CONTRATANTE (assinatura FC). */
   contratanteNome: string;
-  /** Nome de quem está gerando (rodapé). */
+  /** Nome de quem está gerando (opcional — não é mais exibido no documento). */
   geradoPor: string;
 }
 
 /**
- * Monta o HTML completo (cabeçalho FC + corpo do contrato + bloco de
- * assinaturas com slots `contratado`/`contratante`) pronto pro FCSign.
+ * Monta o HTML completo do contrato PJ pronto para impressão e FCSign.
+ *
+ * CAMINHO ISO (modeloHtml presente):
+ *   O template da Central de Documentos é a ÚNICA fonte de layout.
+ *   Substitui placeholders, injeta slots FCSign e envolve em CSS de impressão.
+ *   NÃO chama buildFcDocument — nenhuma informação extra é adicionada.
+ *
+ * CAMINHO LEGADO (sem modeloHtml):
+ *   Usa o texto plain-text do modelo + buildFcDocument (comportamento anterior).
  */
 export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): string {
-  const { contrato: c, modelo, modeloHtml, contratanteNome, geradoPor } = args;
+  const { contrato: c, modelo, modeloHtml, geradoPor } = args;
 
-  // Prioridade: HTML do template ISO (já estruturado) > plain text legado
-  let corpoHtml: string;
+  // ──────────────────────────────────────────────────────────────────────────
+  // CAMINHO ISO: template da Central de Documentos é a fonte única
+  // ──────────────────────────────────────────────────────────────────────────
   if (modeloHtml && modeloHtml.trim()) {
-    // Pre-processamento do template ISO:
-    // [OBJETO_CONTRATO] pode aparecer INLINE dentro de <p> com texto antes/depois.
-    // Estratégia: substituir ANTES de chamar replacePlaceholders, tratando cada ocorrência.
+    // Passo 1: [OBJETO_CONTRATO] pode aparecer inline dentro de tags.
+    // Processar em 3 passagens para expandir corretamente.
     const objetoHtml = formatObjetoHtml(c.objetoContrato || "");
     const totalOc = (modeloHtml.match(/\[OBJETO_CONTRATO\]/g) || []).length;
     let ocIdx = 0;
-    // Primeira passagem: primeira de N ocorrências → referência estática (CONSIDERANDO);
-    // última ocorrência → marcador temporário para expansão completa.
     let patchedHtml = modeloHtml.replace(/\[OBJETO_CONTRATO\]/g, () => {
       ocIdx++;
       if (totalOc > 1 && ocIdx < totalOc) {
@@ -310,8 +313,6 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
       }
       return "\x00OBJ\x00";
     });
-    // Segunda passagem: marcador inline dentro de <tag>texto\x00OBJ\x00texto</tag>
-    // → fecha o parágrafo anterior, expande o objeto, abre novo para texto após.
     patchedHtml = patchedHtml.replace(
       /(<[^<>]+>)([^<\x00]+)\x00OBJ\x00([^<]*?)(<\/[^<>]+>)/g,
       (_, ot, before, after, ct) => {
@@ -322,17 +323,63 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
                (trimA ? `\n${ot}${trimA}${ct}` : "");
       }
     );
-    // Terceira passagem: marcador standalone em sua própria tag <p>\x00OBJ\x00</p>
     patchedHtml = patchedHtml.replace(/<[^<>]+>\s*\x00OBJ\x00\s*<\/[^<>]+>/g, objetoHtml);
-    // Fallback: marcador solto (sem tag ao redor)
     patchedHtml = patchedHtml.replace(/\x00OBJ\x00/g, objetoHtml);
-    // Agora aplica os demais placeholders ([CONTRATANTE_NOME], [VALOR_MENSAL], etc.)
-    // [OBJETO_CONTRATO] já foi expandido acima, não haverá substituição dupla.
-    corpoHtml = replacePlaceholders(patchedHtml, c, true);
-  } else {
-    const replaced = replacePlaceholders(modelo || "", c);
-    corpoHtml = corpoFromTemplate(replaced);
+
+    // Passo 2: substituir todos os demais placeholders
+    const processedHtml = replacePlaceholders(patchedHtml, c, true);
+
+    // Passo 3: injetar slots FCSign para o servidor de assinatura digital.
+    // Busca as primeiras linhas de sublinhado (____) antes das legendas de assinatura
+    // e injeta os comentários <!--FCSIGN:SIG:role--> imediatamente antes delas.
+    // Se o template não tiver esse padrão, injeta ao final (invisible) como fallback.
+    let finalHtml = processedHtml;
+
+    // Padrão A: bloco de assinatura com underline antes de "CONTRATADA" ou "Prestador"
+    const hadContratado = finalHtml.includes("<!--FCSIGN:SIG:contratado-->");
+    const hadContratante = finalHtml.includes("<!--FCSIGN:SIG:contratante-->");
+
+    if (!hadContratado) {
+      // Tenta injetar antes da linha de assinatura da CONTRATADA
+      const rContratado = /(\_{4,}[\s\S]{0,200}?(?:CONTRATADA|CONTRATADO|Prestador|Colaborador))/i;
+      if (rContratado.test(finalHtml)) {
+        finalHtml = finalHtml.replace(rContratado, `<!--FCSIGN:SIG:contratado-->$1`);
+      }
+    }
+    if (!hadContratante) {
+      // Tenta injetar antes da linha de assinatura da CONTRATANTE
+      const rContratante = /(\_{4,}[\s\S]{0,200}?(?:CONTRATANTE|FC ENGENHARIA))/i;
+      if (rContratante.test(finalHtml)) {
+        finalHtml = finalHtml.replace(rContratante, `<!--FCSIGN:SIG:contratante-->$1`);
+      }
+    }
+    // Fallback: slots ocultos ao final, o servidor de assinatura ainda os encontra
+    if (!finalHtml.includes("<!--FCSIGN:SIG:contratado-->")) {
+      finalHtml += `<!--FCSIGN:SIG:contratado--><!--FCSIGN:SIG:contratante-->`;
+    } else if (!finalHtml.includes("<!--FCSIGN:SIG:contratante-->")) {
+      finalHtml += `<!--FCSIGN:SIG:contratante-->`;
+    }
+
+    // Passo 4: envolver em HTML completo com CSS de impressão A4.
+    // Se o template já for um documento HTML completo, apenas adicionar o @page.
+    const isFullDoc = /^\s*<!doctype\s+html/i.test(finalHtml) || /^\s*<html[\s>]/i.test(finalHtml);
+    const pageTitle = esc(`Contrato PJ ${c.numeroContrato || ""} — ${c.razaoSocialPrestador || c.employeeName || ""}`);
+    const printCss = `<style>@page{size:A4;margin:15mm}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}@media print{body{background:#fff!important}}</style>`;
+
+    if (isFullDoc) {
+      return finalHtml.includes("</head>")
+        ? finalHtml.replace("</head>", `${printCss}</head>`)
+        : finalHtml;
+    }
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${pageTitle}</title>${printCss}</head><body>${finalHtml}</body></html>`;
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // CAMINHO LEGADO: sem template ISO — usa plain text + buildFcDocument
+  // ──────────────────────────────────────────────────────────────────────────
+  const replaced = replacePlaceholders(modelo || "", c);
+  const corpoHtml = corpoFromTemplate(replaced);
 
   const nomeEmpresa = c.companyRazaoSocial || c.companyNomeFantasia || "FC ENGENHARIA";
   const nomePrestador = c.razaoSocialPrestador || c.employeeName || "Prestador";
@@ -357,7 +404,7 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
     assinaturas: {
       partes: [
         { nome: nomePrestador, subtitulo: cnpjPrestador ? `CNPJ: ${cnpjPrestador}` : "CONTRATADA", role: "contratado" },
-        { nome: contratanteNome, subtitulo: `${nomeEmpresa} — CONTRATANTE`, role: "contratante" },
+        { nome: args.contratanteNome, subtitulo: `${nomeEmpresa} — CONTRATANTE`, role: "contratante" },
       ],
       localData: `${c.companyCidade || "São José dos Campos"}/${c.companyEstado || "SP"}, ${hojeStr}`,
     },

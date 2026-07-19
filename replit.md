@@ -50,17 +50,17 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4428** — **SYNC BIDIRECIONAL: DADOS BANCÁRIOS COLABORADORES ↔ CONTRATO PJ.** Ao selecionar um prestador no "Novo Contrato PJ", campos bancários (Banco, Agência, Conta Corrente, Chave PIX) e Valor Mensal preenchem automaticamente do perfil RH do colaborador; CNPJ/Razão Social vêm do último contrato. Ao salvar o contrato (criar ou editar), os dados bancários são gravados de volta no perfil do employee (sync vice-versa). `getLastByEmployee` estendido para retornar também campos bancários + forma de pagamento. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4429** — **FIX: PDF CONTRATO PJ = 100% TEMPLATE DA CENTRAL DE DOCUMENTOS.** O PDF gerado pelo botão "Imprimir" agora usa o template ISO diretamente, sem envolver em `buildFcDocument`. Placeholders substituídos, slots FCSign injetados no bloco de assinatura do template, HTML shell mínimo com `@page A4`. Fim do cabeçalho duplicado, da caixa de corpo com borda e do bloco de assinaturas extra. Caminho legado (sem template ISO) preservado. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4427** — **FIX: MENSAGEM DE ERRO DE CONEXÃO iOS NO CADASTRO DE COLABORADOR.** iOS WebKit descarta requisições HTTP silenciosamente, retornando "The string did not match the expected pattern" — erro de transporte opaco. Helper `erroToast` detecta o padrão e exibe mensagem amigável em PT. `onSettled` em `createMut`/`updateMut` garante invalidação da lista mesmo com resposta descartada. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4428** — **SYNC BIDIRECIONAL: DADOS BANCÁRIOS COLABORADORES ↔ CONTRATO PJ.** Ao selecionar um prestador no "Novo Contrato PJ", campos bancários (Banco, Agência, Conta Corrente, Chave PIX) e Valor Mensal preenchem automaticamente do perfil RH do colaborador; CNPJ/Razão Social vêm do último contrato. Ao salvar o contrato (criar ou editar), os dados bancários são gravados de volta no perfil do employee (sync vice-versa). `getLastByEmployee` estendido para retornar também campos bancários + forma de pagamento. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4427** — **FIX: MENSAGEM DE ERRO DE CONEXÃO iOS NO CADASTRO DE COLABORADOR.** iOS WebKit descarta requisições HTTP silenciosamente; `erroToast` detecta padrão e exibe mensagem amigável; `onSettled` garante invalidação. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4426** — **FIX: PRÉ-VISUALIZAR CONTRATO PJ — OBJETO DO CONTRATO DUPLICADO/INLINE.** Fix 3 camadas: `formatObjetoHtml` filtra cabeçalhos; `buildContratoPjSignHtml` pré-processa ISO em 3 passagens; prompt IA reescrito + strip server-side. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4425** — **IA: GERAR CLÁUSULA DE OBJETO DO CONTRATO PJ.** Campo "Objeto do Contrato" virou seção estilizada; IA gera parágrafo inicial + 7–12 alíneas + encerramento. Progresso 0→100%. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4424** — **LISTA DE PEÇAS PARA RECEBIMENTO EM OC DE LOCAÇÃO.** OCs de locação ganham seção "Lista de Peças para Recebimento" no detalhe + SmartEntry almoxarifado. Nova tabela `oc_lista_recebimento`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4423** — **OC IA: SELEÇÃO DE OBRA + EAP NO STEP DE REVISÃO.** card verde "Obra e Apropriação" no step review do dialog Criar OC por IA. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4422** — **OC IA: BARRA DE PROGRESSO 0→100% NO STEP DE PROCESSAMENTO.** setInterval até 90% simulado; ao `done` salta 100% + 600ms + review. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

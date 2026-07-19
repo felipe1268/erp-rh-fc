@@ -1,3 +1,4 @@
+- **Rev. 4422** — **OC IA: BARRA DE PROGRESSO 0→100% NO STEP DE PROCESSAMENTO.** setInterval até 90% simulado; ao `done` salta 100% + 600ms + review. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4411** — **MÓDULO PJ: REDESIGN COMPLETO DOS CARDS KPI + CARD "PJ SEM CONTRATO".** 7 cards com ícones, cores semânticas e grade responsiva (lg:grid-cols-7). "PJ Sem Contrato" (vermelho) usa alertas.pjsSemContrato existente. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4408** — **CONTAS A PAGAR: LAYOUT ESTRUTURADO PARA LINHAS PJ (NOME + TAGS).** Célula PJ: linha 1 = nome negrito; linha 2 = pills [1ª/2ª Medição] [Contrato #X] [PJ-XXXXX] [MM/AAAA]. Demais origens inalteradas. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4337** — **ALMOXARIFADO: DESTINO DE TRANSFERÊNCIA MOSTRA TODAS AS OBRAS.** `forTransfer?: boolean` bypassa filtro por usuário. ZERO DELETE · ZERO ALTER destrutivo.
