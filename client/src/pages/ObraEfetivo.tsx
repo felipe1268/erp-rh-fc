@@ -1161,8 +1161,16 @@ export default function ObraEfetivo() {
                               {inc.dataPonto ? new Date(inc.dataPonto + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
                             </td>
                             <td className="p-3">
-                              <p className="font-medium">{inc.employeeName || "—"}</p>
-                              <p className="text-xs text-muted-foreground">{inc.employeeFuncao || ""}</p>
+                              <div className="flex items-center gap-2">
+                                {inc.employeeFotoUrl
+                                  ? <img src={inc.employeeFotoUrl} alt={inc.employeeName || ""} className="h-8 w-8 rounded-full object-cover shrink-0 border border-slate-200" />
+                                  : <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center shrink-0 text-xs font-bold text-slate-500">{(inc.employeeName || "?")[0]}</div>
+                                }
+                                <div className="min-w-0">
+                                  <p className="font-medium leading-tight">{inc.employeeName || "—"}</p>
+                                  <p className="text-xs text-muted-foreground">{inc.employeeFuncao || ""}</p>
+                                </div>
+                              </div>
                             </td>
                             <td className="p-3">
                               <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">

@@ -3333,6 +3333,7 @@ export async function getInconsistenciasPendentes(companyId: number, companyIds?
     createdAt: obraPontoInconsistencies.createdAt,
     employeeName: employees.nomeCompleto,
     employeeFuncao: employees.funcao,
+    employeeFotoUrl: employees.fotoUrl,
   }).from(obraPontoInconsistencies)
     .leftJoin(employees, eq(obraPontoInconsistencies.employeeId, employees.id))
     .where(and(
