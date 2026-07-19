@@ -1,4 +1,17 @@
 /**
+ * Rev. 4399 - MÓDULO PJ: BOTÃO ENVIAR → ABRE FCSIGN DIALOG (LINKS DE ASSINATURA)
+ *
+ * Ao clicar no ícone Send (✈) da coluna Ações, agora abre o FCSignPJSendDialog
+ * diretamente (em vez de navegar para /contrato-pj/:id).
+ * - Importado FCSignPJSendDialog em ModuloPJ.tsx
+ * - Estado fcSignPJContratoId (number|null) controla qual contrato está aberto
+ * - Dialog carrega o contrato + template vigente, monta o HTML, cria sessão FCSign
+ *   e exibe os links individuais por signatário (prestador → FC Engenharia → testemunhas)
+ * - geradoPor passado via user.name do useAuth()
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4398 - MÓDULO PJ: BOTÃO IMPRIMIR → ENVIAR (DOCUSIGN)
  *
  * Na coluna "Ações" da lista de contratos PJ, o ícone de impressora (Printer)

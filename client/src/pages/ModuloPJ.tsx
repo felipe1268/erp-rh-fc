@@ -27,6 +27,7 @@ import { useLocation } from "wouter";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PeriodSelectorCard, { MonthDotStatus } from "@/components/PeriodSelectorCard";
+import FCSignPJSendDialog from "@/components/FCSignPJSendDialog";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -112,6 +113,7 @@ export default function ModuloPJ() {
   const [novoDocTipo, setNovoDocTipo] = useState("outro");
   const [motivoAlteracao, setMotivoAlteracao] = useState("");
   const [createdContratoId, setCreatedContratoId] = useState<number | null>(null);
+  const [fcSignPJContratoId, setFcSignPJContratoId] = useState<number | null>(null);
 
   // Mês referência para pagamentos — PeriodSelectorCard (padrão de ouro)
   const [pjAno, setPjAno] = useState(() => new Date().getFullYear());
@@ -699,7 +701,7 @@ export default function ModuloPJ() {
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" title="Editar contrato" onClick={() => openEditContrato(c)}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Enviar para assinatura (FCSign)" onClick={() => navigate(`/contrato-pj/${c.id}`)}>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Enviar para assinatura (FCSign)" onClick={() => setFcSignPJContratoId(c.id)}>
                                   <Send className="h-3.5 w-3.5" />
                                 </Button>
                                 {c.status === "pendente_assinatura" && (
@@ -1712,6 +1714,16 @@ export default function ModuloPJ() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* FCSign — Envio para assinatura digital */}
+        {fcSignPJContratoId != null && (
+          <FCSignPJSendDialog
+            open={fcSignPJContratoId != null}
+            onOpenChange={(v) => { if (!v) setFcSignPJContratoId(null); }}
+            contratoId={fcSignPJContratoId}
+            geradoPor={user?.name || ""}
+          />
+        )}
     </DashboardLayout>
   );
 }

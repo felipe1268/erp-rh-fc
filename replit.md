@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4398** — **MÓDULO PJ: BOTÃO IMPRIMIR → ENVIAR (DOCUSIGN).** Ícone Printer → Send na coluna Ações da lista de contratos; tooltip "Imprimir / Ver contrato" → "Enviar para assinatura (DocuSign)". Printer mantido no import (usado no Exportar PDF). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4399** — **MÓDULO PJ: BOTÃO ENVIAR → ABRE FCSIGN DIALOG.** Clique no ícone Send da coluna Ações abre FCSignPJSendDialog inline (em vez de navegar para /contrato-pj/:id). Dialog monta HTML do template vigente + cria sessão FCSign + exibe links individuais por signatário. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4398** — **MÓDULO PJ: BOTÃO IMPRIMIR → ENVIAR (FCSIGN).** Ícone Printer → Send; tooltip "Imprimir / Ver contrato" → "Enviar para assinatura (FCSign)". Printer mantido (usado no Exportar PDF). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4397** — **CONTRATO PJ: 3 CORREÇÕES JURÍDICAS NO TEMPLATE (DB DIRETO).** 2.1: restaurado "plena autonomia" + "métodos, horários" + removido "desde que seja seguido os custos do orçamento executivo" (subordinação econômica = CLT). 2.3: removido "validada pela CONTRATANTE" (controle patronal). 3.1: "sendo obrigatória a comunicação prévia" → "independentemente de comunicação prévia" (exclusividade velada). ZERO DELETE · ZERO ALTER destrutivo.
 
