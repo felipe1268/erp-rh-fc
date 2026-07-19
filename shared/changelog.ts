@@ -1,4 +1,35 @@
 /**
+ * Rev. 4442 - FIX: PÁGINAS EM BRANCO NO PRINT DO CONTRATO PJ (FCSign)
+ *
+ * Elimina as páginas em branco (ex.: páginas 9-11 de 11) que apareciam no final
+ * do PDF/print do Contrato PJ após as assinaturas na tela FCSign (/assinar/:token).
+ *
+ * CAUSA-RAIZ:
+ *   O print CSS antigo usava `body * { visibility: hidden }` + `#fcsign-pdf-page
+ *   { position: absolute; top: 0; left: 0 }`. O `visibility: hidden` oculta
+ *   visualmente mas MANTÉM o espaço no layout — o `<header>` azul, o `<aside>`
+ *   com o painel de assinatura e o toolbar ocupavam ~3 páginas A4 de layout
+ *   invisível após o documento, gerando páginas em branco.
+ *
+ * FIX (AssinarDocumento.tsx):
+ *   - `<header>` → `print:hidden` (display:none; remove do layout).
+ *   - Toolbar do viewer (bg-slate-800) → `print:hidden`.
+ *   - `<aside>` → `print:hidden`.
+ *   - `<main>` → `print:block print:p-0` (converte grid 2 colunas em bloco).
+ *   - Wrapper viewer (bg-slate-600 overflow-auto) → classe `fc-print-viewer-wrap`.
+ *   - Flex centering wrapper → `print:block print:p-0`.
+ *   - @media print reescrito: remove `body * { visibility: hidden }` e
+ *     `position: absolute`; adiciona `.fc-print-viewer-wrap { max-height:none;
+ *     overflow:visible; background:white }` + `#fcsign-pdf-page { position:static;
+ *     transform:none; margin:0 auto; padding:15mm }`.
+ *
+ * RESULTADO: documento imprime exatamente o número de páginas do conteúdo,
+ * sem páginas em branco no final.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4441 - FEAT: MARGENS DE PÁGINA POR TEMPLATE — Documentos ISO (TemplatesDocsTab)
  *
  * Move as configurações de margem de página do nível empresa (global) para o nível

@@ -96,7 +96,7 @@ export default function AssinarDocumento() {
   return (
     <div className="min-h-screen bg-slate-100">
       {/* Header institucional FC */}
-      <header className="bg-[#1B2A4A] text-white">
+      <header className="bg-[#1B2A4A] text-white print:hidden">
         <div className="max-w-[1400px] mx-auto px-4 py-4 flex items-center gap-3">
           <div className="bg-white/10 p-2 rounded-lg">
             <ShieldCheck className="h-6 w-6" />
@@ -108,11 +108,11 @@ export default function AssinarDocumento() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-4 py-6 grid lg:grid-cols-[1fr_340px] gap-6">
+      <main className="max-w-[1400px] mx-auto px-4 py-6 grid lg:grid-cols-[1fr_340px] gap-6 print:block print:p-0">
         {/* Documento — visualização tipo PDF (página A4 com toolbar) */}
         <section className="bg-slate-700 rounded-lg shadow-lg border border-slate-300 overflow-hidden flex flex-col">
           {/* Toolbar tipo viewer de PDF */}
-          <div className="bg-slate-800 text-slate-100 px-4 py-2 flex items-center gap-3 text-xs">
+          <div className="bg-slate-800 text-slate-100 px-4 py-2 flex items-center gap-3 text-xs print:hidden">
             <FileText className="h-4 w-4 text-slate-300 flex-shrink-0" />
             <h2 className="font-medium truncate flex-1">{session.documentTitle}</h2>
             <div className="flex items-center gap-1 bg-slate-700 rounded-md px-1 py-0.5">
@@ -166,8 +166,8 @@ export default function AssinarDocumento() {
           </div>
 
           {/* Área de visualização — fundo escuro, página A4 branca centralizada */}
-          <div className="bg-slate-600 overflow-auto" style={{ maxHeight: "82vh" }}>
-            <div className="flex justify-center py-6 px-4 print:p-0 print:bg-white" style={{ minHeight: "100%" }}>
+          <div className="bg-slate-600 overflow-auto fc-print-viewer-wrap" style={{ maxHeight: "82vh" }}>
+            <div className="flex justify-center py-6 px-4 print:block print:p-0 print:bg-white" style={{ minHeight: "100%" }}>
               <div
                 id="fcsign-pdf-page"
                 className="bg-white shadow-2xl print:shadow-none origin-top"
@@ -195,7 +195,7 @@ export default function AssinarDocumento() {
         </section>
 
         {/* Painel lateral */}
-        <aside className="space-y-4">
+        <aside className="space-y-4 print:hidden">
           {/* Identificação */}
           <div className="bg-white rounded-lg shadow border border-slate-200 p-4">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Você está assinando como</div>
@@ -482,15 +482,20 @@ export default function AssinarDocumento() {
         #fcsign-pdf-page, #fcsign-pdf-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
         @media print {
-          body * { visibility: hidden !important; }
-          #fcsign-pdf-page, #fcsign-pdf-page * { visibility: visible !important; }
+          /* header, aside e toolbar já têm print:hidden (display:none) via Tailwind */
+          /* Remove restrições de altura/overflow do wrapper do viewer */
+          .fc-print-viewer-wrap {
+            max-height: none !important;
+            overflow: visible !important;
+            background: white !important;
+          }
           #fcsign-pdf-page {
-            position: absolute !important;
-            top: 0 !important; left: 0 !important;
+            position: static !important;
             transform: none !important;
             box-shadow: none !important;
-            margin: 0 !important;
-            width: 100% !important; min-height: auto !important;
+            margin: 0 auto !important;
+            width: 100% !important;
+            min-height: auto !important;
             padding: 15mm !important;
           }
           @page { size: A4; margin: 0; }
