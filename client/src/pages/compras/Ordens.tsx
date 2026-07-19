@@ -2673,7 +2673,8 @@ export default function Ordens() {
                 <OcItensConsolidados itens={detalhe.itens as any[]} />
 
                 {/* Lista de Peças para Recebimento — somente OC de Locação (Rev. 4424) */}
-                {(detalhe as any).tipo === "locacao" && (
+                {/* isLocacao cobre OCs geradas antes da correção que define tipo="locacao" */}
+                {((detalhe as any).tipo === "locacao" || (detalhe as any).isLocacao) && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-2.5 bg-amber-100/70 border-b border-amber-200">
                       <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">

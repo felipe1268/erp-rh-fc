@@ -9032,7 +9032,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           : (vencedorFornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, vencedorFornecedorId))).map(f => f.nome || f.razao || null)[0] ?? null : null),
         criadoPorId: input.userId ?? null,
         criadoPorNome: input.userName ?? null,
-        tipo: isEstoqueWinner ? "estoque" : ordemTipo,
+        tipo: isEstoqueWinner ? "estoque" : (scLocacao?.isLocacao ? "locacao" : ordemTipo),
         // Rev. 2294 — Aprovação automática: OC nasce sempre aprovada (a
         // existência da SC já é a aprovação). O estouro de orçamento NÃO
         // bloqueia mais a OC — fica apenas registrado em aprovacaoExtraMotivo
@@ -9499,6 +9499,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         locacaoDataFim: scSrc.locacaoDataFimPrevista ?? null,
         locacaoDuracaoDias: scSrc.locacaoDuracaoDias ?? null,
       } : null;
+      // Quando a SC é locação, garante que o tipo da OC seja "locacao" (não "compra")
+      const ordemTipoFinal = (scSrc?.isLocacao ? "locacao" : ordemTipo) as "compra" | "locacao" | "servico" | "pacote";
 
       const ocsGeradas: { id: number; numeroOc: string; fornecedorId: number }[] = [];
 
@@ -9550,7 +9552,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         }
 
         // Rev. 1985 — numeração atômica via advisory lock (fix race C1)
-        const numeroOc = await gerarProximoNumeroOC(input.companyId, ordemTipo as "compra" | "servico" | "pacote");
+        const numeroOc = await gerarProximoNumeroOC(input.companyId, (ordemTipoFinal === "locacao" ? "compra" : ordemTipoFinal) as "compra" | "servico" | "pacote");
 
         const [fornData] = await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, grupo.fornecedorId));
         const fornNome = fornData?.nome || fornData?.razao || null;
@@ -9567,7 +9569,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           fornecedorNome: fornNome,
           criadoPorId: input.userId ?? null,
           criadoPorNome: input.userName ?? null,
-          tipo: ordemTipo,
+          tipo: ordemTipoFinal,
           status: input.comoRascunho ? "rascunho" : "aprovada",
           aprovacaoStatus: input.comoRascunho ? "aguardando" : "aprovado",
           aprovacaoExtraRequerida: false,
