@@ -203,6 +203,41 @@ export async function syncSchema(): Promise<void> {
       c => !c.isSerial && !dbColumns.has(`${c.tableName}.${c.columnName}`)
     );
 
+    // ── Backfill Rev. 4406: descrição de financial_entries PJ ───────────────
+    try {
+      // Primeiro: conta quantas precisam de atualização
+      const countRes = await db.execute(sql`
+        SELECT COUNT(*) AS n
+        FROM financial_entries fe
+        WHERE fe.origem_modulo = 'pagamento_pj'
+          AND fe.descricao NOT LIKE '%Contrato #%'
+      `);
+      const pending = parseInt((countRes.rows?.[0] as any)?.n ?? '0', 10);
+      console.log(`[SyncSchema+ Rev.4406] ${pending} financial_entries PJ aguardando enriquecimento.`);
+      if (pending > 0) {
+        await db.execute(sql`
+          UPDATE financial_entries fe
+          SET descricao        = sub.rich,
+              origem_descricao = sub.rich
+          FROM (
+            SELECT pp.id AS pid,
+                   CONCAT(e."nomeCompleto", ' - Contrato #', pp."contractId",
+                     ' - ', CASE WHEN pp.tipo = 'fechamento' THEN '2a Medicao' ELSE '1a Medicao' END,
+                     ' - ', LPAD(SPLIT_PART(pp."mesReferencia", '-', 2), 2, '0'),
+                     '/', SPLIT_PART(pp."mesReferencia", '-', 1)) AS rich
+            FROM pj_payments pp
+            JOIN employees e ON e.id = pp."employeeId"
+          ) sub
+          WHERE fe.origem_modulo = 'pagamento_pj'
+            AND fe.origem_id     = sub.pid
+            AND fe.descricao NOT LIKE '%Contrato #%'
+        `);
+        console.log(`[SyncSchema+ Rev.4406] Backfill concluído.`);
+      }
+    } catch (bfErr: any) {
+      console.warn("[SyncSchema+ Rev.4406] Backfill descrição PJ:", bfErr?.message ?? bfErr);
+    }
+
     if (missing.length === 0) {
       console.log("[SyncSchema] Todas as colunas OK — nenhuma diferença.");
       return;
@@ -234,31 +269,5 @@ export async function syncSchema(): Promise<void> {
     console.log(`[SyncSchema] Concluído: ${adicionadas} adicionada(s)${erros.length > 0 ? `, ${erros.length} erro(s)` : ""}.`);
   } catch (err: any) {
     console.error("[SyncSchema] Erro ao sincronizar schema:", err?.message ?? err);
-  }
-
-  // ── Backfill Rev. 4406: enriquecer descrição de financial_entries PJ ─────
-  try {
-    const db = await getDb();
-    if (!db) return;
-    const res = await db.execute(sql`
-      UPDATE financial_entries fe
-      SET descricao        = CONCAT(e."nomeCompleto", ' — Contrato #', pp."contractId",
-                               ' — ', CASE WHEN pp.tipo = 'fechamento' THEN '2ª Medição' ELSE '1ª Medição' END,
-                               ' — ', LPAD(SPLIT_PART(pp."mesReferencia", '-', 2), 2, '0'),
-                               '/', SPLIT_PART(pp."mesReferencia", '-', 1)),
-          origem_descricao = CONCAT(e."nomeCompleto", ' — Contrato #', pp."contractId",
-                               ' — ', CASE WHEN pp.tipo = 'fechamento' THEN '2ª Medição' ELSE '1ª Medição' END,
-                               ' — ', LPAD(SPLIT_PART(pp."mesReferencia", '-', 2), 2, '0'),
-                               '/', SPLIT_PART(pp."mesReferencia", '-', 1))
-      FROM pj_payments pp
-      JOIN employees e ON e.id = pp."employeeId"
-      WHERE fe.origem_modulo = 'pagamento_pj'
-        AND fe.origem_id     = pp.id
-        AND (fe.descricao NOT LIKE '% — Contrato #%' OR fe.descricao IS NULL)
-    `);
-    const n = (res as any).rowCount ?? 0;
-    if (n > 0) console.log(`[SyncSchema+ Rev.4406] ${n} financial_entries PJ enriquecido(s).`);
-  } catch (err: any) {
-    console.warn("[SyncSchema+ Rev.4406] Backfill descrição PJ:", err?.message ?? err);
   }
 }
