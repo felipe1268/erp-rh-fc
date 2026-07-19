@@ -1015,6 +1015,32 @@ export const pjContractsRouter = router({
           .orderBy(desc(pjContractRevisoes.criadoEm));
         return rows;
       }),
+
+  // ── IA: Gerar cláusula de Objeto do Contrato — Rev. 4425 ────────────────────
+  gerarClausulaObjetoIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      descricao: z.string().min(3).max(500),
+    }))
+    .mutation(async ({ input }) => {
+      await assertAiModuleEnabled(input.companyId, "rh");
+      const { invokeLLM } = await import("../_core/llm");
+      const prompt = `Você é um especialista em contratos de prestação de serviços técnicos no Brasil (construção civil, engenharia, arquitetura). Gere a cláusula de OBJETO DO CONTRATO de forma profissional e juridicamente adequada para o cargo/função a seguir.
+
+Cargo / função / tipo de contrato informado: "${input.descricao}"
+
+INSTRUÇÕES:
+- Escreva em português formal, no estilo de um contrato particular de prestação de serviços PJ
+- Comece com 1 parágrafo resumindo o objeto geral do contrato (ex: "Constitui objeto do presente contrato a prestação de serviços técnicos especializados de [cargo], compreendendo...")
+- Em seguida, liste as responsabilidades e obrigações específicas do prestador, numeradas com letras minúsculas: a) b) c) etc.
+- Inclua entre 7 e 12 responsabilidades típicas e relevantes para esse cargo
+- Cada responsabilidade deve ser objetiva e direta (máximo 2 linhas)
+- NÃO inclua cabeçalho de cláusula numerada (tipo "CLÁUSULA 1ª" ou "§ 1º")
+- Termine com uma frase de encerramento sobre a natureza autônoma/independente da prestação
+- Retorne APENAS o texto da cláusula, sem comentários ou formatação markdown`;
+      const text = await invokeLLM({ prompt, maxTokens: 1200 });
+      return { clausula: text.trim() };
+    }),
   }),
 
   // ============================================================
@@ -2004,29 +2030,4 @@ export const pjContractsRouter = router({
       }),
   }),
 
-  // ── IA: Gerar cláusula de Objeto do Contrato — Rev. 4425 ────────────────────
-  gerarClausulaObjetoIA: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      descricao: z.string().min(3).max(500),
-    }))
-    .mutation(async ({ input }) => {
-      await assertAiModuleEnabled(input.companyId, "rh");
-      const { invokeLLM } = await import("../_core/llm");
-      const prompt = `Você é um especialista em contratos de prestação de serviços técnicos no Brasil (construção civil, engenharia, arquitetura). Gere a cláusula de OBJETO DO CONTRATO de forma profissional e juridicamente adequada para o cargo/função a seguir.
-
-Cargo / função / tipo de contrato informado: "${input.descricao}"
-
-INSTRUÇÕES:
-- Escreva em português formal, no estilo de um contrato particular de prestação de serviços PJ
-- Comece com 1 parágrafo resumindo o objeto geral do contrato (ex: "Constitui objeto do presente contrato a prestação de serviços técnicos especializados de [cargo], compreendendo...")
-- Em seguida, liste as responsabilidades e obrigações específicas do prestador, numeradas com letras minúsculas: a) b) c) etc.
-- Inclua entre 7 e 12 responsabilidades típicas e relevantes para esse cargo na área de engenharia/construção civil
-- Cada responsabilidade deve ser objetiva e direta (máximo 2 linhas)
-- NÃO inclua cabeçalho de cláusula numerada (tipo "CLÁUSULA 1ª" ou "§ 1º")
-- Termine com uma frase de encerramento sobre a natureza autônoma/independente da prestação
-- Retorne APENAS o texto da cláusula, sem comentários ou formatação markdown`;
-      const text = await invokeLLM({ prompt, maxTokens: 1200 });
-      return { clausula: text.trim() };
-    }),
 });
