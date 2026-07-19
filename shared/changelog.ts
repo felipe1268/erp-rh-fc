@@ -1,4 +1,45 @@
 /**
+ * Rev. 4416 - MÓDULO PJ: BOTÃO "ENVIAR AVISO DE ENCERRAMENTO" → DIALOG FCSIGN (FC-CON-003)
+ *
+ * Nova funcionalidade na coluna Ações da lista de contratos PJ: botão laranja
+ * `<FileMinus2>` "Enviar Aviso de Encerramento (FCSign)" que abre o dialog
+ * `FCSignAvisoEncerramentoPJDialog`.
+ *
+ * O dialog:
+ *   - Carrega dados do contrato via `pj.contratos.getById` (empresa, prestador,
+ *     número, data início) e o template vigente via
+ *     `systemDocumentTemplates.getVigente({ tipo: "aviso_encerramento_pj" })`
+ *     (FC-CON-003, adicionado na Rev. 4414).
+ *   - Campos editáveis obrigatórios: Motivo do Encerramento + Data de
+ *     Encerramento. Opcionais: Prazo de Aviso (padrão "30 dias"), Nº do
+ *     Documento, Data de Emissão (padrão hoje), Local (padrão "Guaratinguetá/SP").
+ *   - Preenche todos os 14 placeholders `{{...}}` via `renderTemplate` (shared).
+ *   - Constrói o HTML final com `buildFcDocument` (cabeçalho institucional +
+ *     slots de assinatura digital FCSign).
+ *   - Cria sessão via `signatures.create` com:
+ *       tipo: "aviso_encerramento_pj"
+ *       observacoes: "aviso_encerramento_pj:{contratoId}"
+ *       signers: [contratante=FELIPE (assina), contratado=prestador (ciente)]
+ *   - Exibe links únicos por signatário para envio manual (WhatsApp/e-mail).
+ *   - Avisa quando o template não está Vigente (não bloqueia o botão, mas
+ *     não permite criar a sessão enquanto não houver conteúdo).
+ *
+ * Arquivos criados:
+ *   - client/src/components/FCSignAvisoEncerramentoPJDialog.tsx (novo)
+ *
+ * Arquivos editados:
+ *   - client/src/pages/ModuloPJ.tsx
+ *       · import FileMinus2 de lucide-react
+ *       · import FCSignAvisoEncerramentoPJDialog
+ *       · useState avisoEncerramentoContratoId
+ *       · botão <FileMinus2> laranja na coluna Ações
+ *       · dialog <FCSignAvisoEncerramentoPJDialog> no final do JSX
+ *   - shared/version.ts → Rev. 4416
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4415 - TEMPLATES ISO: CORREÇÃO CRÍTICA — EDITOR EM BRANCO APÓS SALVAR/APROVAR
  *
  * Problema: após salvar ou aprovar qualquer documento, o editor exibia tela

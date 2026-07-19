@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4416** — **MÓDULO PJ: BOTÃO "ENVIAR AVISO DE ENCERRAMENTO" → DIALOG FCSIGN (FC-CON-003).** Botão laranja `<FileMinus2>` na coluna Ações de cada contrato PJ abre `FCSignAvisoEncerramentoPJDialog`. Dialog carrega dados do contrato + template vigente `aviso_encerramento_pj`, preenche 14 placeholders via `renderTemplate`, constrói HTML com `buildFcDocument` e cria sessão FCSign (`tipo: "aviso_encerramento_pj"`, signers: contratante=Felipe + contratado=prestador). Campos editáveis: motivo, data encerramento, prazo aviso, nº/data/local do documento. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4415** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — EDITOR EM BRANCO APÓS SALVAR/APROVAR.** Race condition no `useEffect` de conteúdo: após `invalidarTudo()`, `getQuery.isFetching=true` mas `isLoading=false`; dado stale (`conteudoHtml:""`) sobrescrevia o editor antes do refetch terminar. Fix: guarda `if (getQuery.isFetching) return` + `isFetching` nas deps. Bônus: tipos fixos "Não criado" agora pré-populam com seed institucional via `getSeedTemplate`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4414** — **TEMPLATES ISO: NOVO TIPO "AVISO DE ENCERRAMENTO DE CONTRATO PJ" (FC-CON-003).** Tipo fixo na aba Contratos com 5 cláusulas (contrato objeto, encerramento, prazo/obrigações, quitação, disposições finais). Placeholders: representanteLegal, contratadaRazaoSocial, contratadaCnpj, numeroContrato, dataInicioContrato, dataEncerramentoContrato, motivoEncerramento, prazoAviso. ZERO DELETE · ZERO ALTER destrutivo.

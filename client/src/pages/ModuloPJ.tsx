@@ -20,7 +20,7 @@ import {
   Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar, Pencil,
   Users, TrendingUp, FileSignature, Ban, Send, Printer, Upload, FolderOpen,
   ExternalLink, File, XCircle, Award, Loader2, Check, Settings2,
-  ShieldCheck, Paperclip,
+  ShieldCheck, Paperclip, FileMinus2,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
@@ -28,6 +28,7 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PeriodSelectorCard, { MonthDotStatus } from "@/components/PeriodSelectorCard";
 import FCSignPJSendDialog from "@/components/FCSignPJSendDialog";
+import FCSignAvisoEncerramentoPJDialog from "@/components/FCSignAvisoEncerramentoPJDialog";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -114,6 +115,7 @@ export default function ModuloPJ() {
   const [motivoAlteracao, setMotivoAlteracao] = useState("");
   const [createdContratoId, setCreatedContratoId] = useState<number | null>(null);
   const [fcSignPJContratoId, setFcSignPJContratoId] = useState<number | null>(null);
+  const [avisoEncerramentoContratoId, setAvisoEncerramentoContratoId] = useState<number | null>(null);
   const [showNovoDoc, setShowNovoDoc] = useState(false);
   const [uploadingTipo, setUploadingTipo] = useState<string | null>(null);
   const [bulkProgress, setBulkProgress] = useState(0);
@@ -781,6 +783,9 @@ export default function ModuloPJ() {
                                 </Button>
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Enviar para assinatura (FCSign)" onClick={() => setFcSignPJContratoId(c.id)}>
                                   <Send className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-orange-500" title="Enviar Aviso de Encerramento (FCSign)" onClick={() => setAvisoEncerramentoContratoId(c.id)}>
+                                  <FileMinus2 className="h-3.5 w-3.5" />
                                 </Button>
                                 {c.status === "pendente_assinatura" && (
                                   <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => { updateContrato.mutate({ id: c.id, status: "ativo" }); }}>
@@ -1897,6 +1902,16 @@ export default function ModuloPJ() {
             open={fcSignPJContratoId != null}
             onOpenChange={(v) => { if (!v) setFcSignPJContratoId(null); }}
             contratoId={fcSignPJContratoId}
+            geradoPor={user?.name || ""}
+          />
+        )}
+
+        {/* FCSign — Aviso de Encerramento de Contrato PJ */}
+        {avisoEncerramentoContratoId != null && (
+          <FCSignAvisoEncerramentoPJDialog
+            open={avisoEncerramentoContratoId != null}
+            onOpenChange={(v) => { if (!v) setAvisoEncerramentoContratoId(null); }}
+            contratoId={avisoEncerramentoContratoId}
             geradoPor={user?.name || ""}
           />
         )}
