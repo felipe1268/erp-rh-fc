@@ -1,4 +1,36 @@
 /**
+ * Rev. 4417 - AVISO ENCERRAMENTO PJ: BOTÃO "PRÉVIA DO DOCUMENTO" + PRAZO PADRÃO 15 DIAS
+ *
+ * Melhorias no FCSignAvisoEncerramentoPJDialog (Rev. 4416):
+ *
+ * 1. Botão "Prévia do Documento" (laranja, borda) no footer — disponível assim
+ *    que o template vigente estiver carregado. Abre uma nova janela com o
+ *    documento já renderizado (buildDocData(preview=true) → window.open +
+ *    document.write). Campos ainda em branco aparecem como
+ *    "[ MOTIVO DO ENCERRAMENTO ]" / "[ DATA DE ENCERRAMENTO ]" para o usuário
+ *    entender onde o conteúdo entrará.
+ *
+ * 2. Prazo de Aviso padrão: "30 dias" → "15 dias" (prazo padrão dos contratos
+ *    PJ da FC Engenharia, conforme solicitado pelo usuário).
+ *
+ * 3. Helper buildDocData(preview?) extraído: evita duplicação entre
+ *    handlePreview e handleSubmit. handleSubmit ainda tem seu próprio bloco
+ *    explícito para manter as validações de obrigatoriedade antes de chamar
+ *    signatures.create.
+ *
+ * Arquivo editado:
+ *   - client/src/components/FCSignAvisoEncerramentoPJDialog.tsx
+ *       · import Eye de lucide-react
+ *       · useState prazoAviso → "15 dias"
+ *       · função buildDocData(preview?) antes do handleSubmit
+ *       · handlePreview usando buildDocData(true) + window.open
+ *       · Botão <Eye> "Prévia do Documento" no footer
+ *   - shared/version.ts → Rev. 4417
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4416 - MÓDULO PJ: BOTÃO "ENVIAR AVISO DE ENCERRAMENTO" → DIALOG FCSIGN (FC-CON-003)
  *
  * Nova funcionalidade na coluna Ações da lista de contratos PJ: botão laranja

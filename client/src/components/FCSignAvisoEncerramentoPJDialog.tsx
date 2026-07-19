@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
   ShieldCheck, Loader2, Copy, CheckCircle2, ExternalLink, Send,
-  Lock, Building2, FileSignature, AlertTriangle,
+  Lock, Building2, FileSignature, AlertTriangle, Eye,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -46,7 +46,7 @@ type SessionResult = {
 export default function FCSignAvisoEncerramentoPJDialog({ open, onOpenChange, contratoId, geradoPor }: Props) {
   const [motivoEncerramento, setMotivoEncerramento] = useState("");
   const [dataEncerramento, setDataEncerramento]   = useState("");
-  const [prazoAviso, setPrazoAviso]               = useState("30 dias");
+  const [prazoAviso, setPrazoAviso]               = useState("15 dias");
   const [docNumero, setDocNumero]                 = useState("");
   const [docData, setDocData]                     = useState(todayIso());
   const [docLocal, setDocLocal]                   = useState("Guaratinguetá/SP");
@@ -77,6 +77,61 @@ export default function FCSignAvisoEncerramentoPJDialog({ open, onOpenChange, co
 
   const handleClose = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
 
+  // Helper: monta os dados + HTML do documento com o estado atual do form.
+  // preview=true usa placeholders legíveis para campos ainda em branco.
+  function buildDocData(preview = false) {
+    if (!contrato) return null;
+    const templateHtml = (templateQ.data as any)?.conteudoHtml ?? "";
+    if (!templateHtml) return null;
+    const nomeEmpresa    = (contrato as any).companyRazaoSocial || "FC ENGENHARIA E CONSTRUÇÃO LTDA";
+    const cnpjEmpresa    = (contrato as any).companyCnpj || "";
+    const enderecoEmpresa = [(contrato as any).companyEndereco, (contrato as any).companyCidade, (contrato as any).companyEstado]
+      .filter(Boolean).join(", ");
+    const dados: Record<string, string> = {
+      empresaRazaoSocial:       nomeEmpresa,
+      empresaCnpj:              cnpjEmpresa,
+      empresaEndereco:          enderecoEmpresa,
+      representanteLegal:       (contrato as any).companyRepresentante || FELIPE_SOCIO.nome,
+      contratadaRazaoSocial:    prestadorNome,
+      contratadaCnpj:           prestadorCnpj,
+      numeroContrato:           (contrato as any).numeroContrato || "",
+      dataInicioContrato:       formatDateBR((contrato as any).dataInicio),
+      dataEncerramentoContrato: dataEncerramento ? formatDateBR(dataEncerramento) : (preview ? "[ DATA DE ENCERRAMENTO ]" : ""),
+      motivoEncerramento:       motivoEncerramento.trim() || (preview ? "[ MOTIVO DO ENCERRAMENTO ]" : ""),
+      prazoAviso:               prazoAviso.trim() || "15 dias",
+      docNumero:                docNumero.trim() || "—",
+      docData:                  formatDateBR(docData),
+      docLocal:                 docLocal.trim() || "Guaratinguetá/SP",
+    };
+    const corpoHtml     = renderTemplate(templateHtml, dados);
+    const documentHtml  = buildFcDocument({
+      empresa: { razaoSocial: nomeEmpresa, cnpj: cnpjEmpresa, endereco: enderecoEmpresa, logoUrl: (contrato as any).companyLogoUrl ?? undefined },
+      titulo:      "AVISO DE ENCERRAMENTO DE CONTRATO PJ",
+      numero:      dados.docNumero,
+      dataEmissao: dados.docData,
+      assunto:     { valor: `Encerramento do Contrato Nº ${dados.numeroContrato || "—"}` },
+      corpoHtml,
+      assinaturas: {
+        partes: [
+          { nome: FELIPE_SOCIO.nome, subtitulo: `${nomeEmpresa}${cnpjEmpresa ? ` — CNPJ: ${cnpjEmpresa}` : ""}`, role: "contratante" },
+          { nome: prestadorNome,     subtitulo: prestadorCnpj ? `CNPJ: ${prestadorCnpj}` : undefined,           role: "contratado"  },
+        ],
+      },
+      geradoPor: geradoPor || "Sistema",
+      pageTitle: `Aviso de Encerramento — ${(contrato as any).numeroContrato || ""} — ${prestadorNome}`,
+    });
+    return { dados, documentHtml };
+  }
+
+  const handlePreview = () => {
+    if (!contrato) { toast.error("Contrato ainda carregando."); return; }
+    if (!(templateQ.data as any)?.conteudoHtml) { toast.error("Template não vigente — configure em Configurações → Templates de Documentos."); return; }
+    const built = buildDocData(true);
+    if (!built) return;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(built.documentHtml); w.document.close(); }
+  };
+
   const handleSubmit = async () => {
     if (!contrato) { toast.error("Contrato ainda carregando."); return; }
     if (!motivoEncerramento.trim()) { toast.error("Informe o motivo do encerramento."); return; }
@@ -91,9 +146,9 @@ export default function FCSignAvisoEncerramentoPJDialog({ open, onOpenChange, co
       return;
     }
 
-    const nomeEmpresa = contrato.companyRazaoSocial || "FC ENGENHARIA E CONSTRUÇÃO LTDA";
-    const cnpjEmpresa = contrato.companyCnpj || "";
-    const enderecoEmpresa = [contrato.companyEndereco, contrato.companyCidade, contrato.companyEstado]
+    const nomeEmpresa = (contrato as any).companyRazaoSocial || "FC ENGENHARIA E CONSTRUÇÃO LTDA";
+    const cnpjEmpresa = (contrato as any).companyCnpj || "";
+    const enderecoEmpresa = [(contrato as any).companyEndereco, (contrato as any).companyCidade, (contrato as any).companyEstado]
       .filter(Boolean).join(", ");
 
     const dados: Record<string, string> = {
@@ -103,11 +158,11 @@ export default function FCSignAvisoEncerramentoPJDialog({ open, onOpenChange, co
       representanteLegal:       (contrato as any).companyRepresentante || FELIPE_SOCIO.nome,
       contratadaRazaoSocial:    prestadorNome,
       contratadaCnpj:           prestadorCnpj,
-      numeroContrato:           contrato.numeroContrato || "",
-      dataInicioContrato:       formatDateBR(contrato.dataInicio),
+      numeroContrato:           (contrato as any).numeroContrato || "",
+      dataInicioContrato:       formatDateBR((contrato as any).dataInicio),
       dataEncerramentoContrato: formatDateBR(dataEncerramento),
       motivoEncerramento:       motivoEncerramento.trim(),
-      prazoAviso:               prazoAviso.trim() || "30 dias",
+      prazoAviso:               prazoAviso.trim() || "15 dias",
       docNumero:                docNumero.trim() || "—",
       docData:                  formatDateBR(docData),
       docLocal:                 docLocal.trim() || "Guaratinguetá/SP",
@@ -411,6 +466,16 @@ export default function FCSignAvisoEncerramentoPJDialog({ open, onOpenChange, co
             <>
               <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={createMut.isPending}>
                 Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePreview}
+                disabled={!contrato || !(templateQ.data as any)?.conteudoHtml}
+                className="gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50"
+              >
+                <Eye className="h-4 w-4" />
+                Prévia do Documento
               </Button>
               <Button
                 type="button"
