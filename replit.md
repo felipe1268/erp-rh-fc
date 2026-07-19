@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4394** — **CONTRATO PJ: REESCRITA JURÍDICA DO TEMPLATE — BLINDAGEM CONTRA CLT DISFARÇADO.** Template reescrito integralmente: (1) removido "exclusivamente" do CONSIDERANDO; (2) "mão de obra" → "serviços técnicos especializados"; (3) nova Cláusula Segunda — Autonomia (sem jornada fixa, sem subordinação, preposto permitido); (4) nova Cláusula Terceira — Não Exclusividade explícita; (5) nova Cláusula Oitava — Ausência de Vínculo (art. 3º CLT + Lei 13.467/2017, 4 requisitos ausentes listados, cláusula reversa pejotização forçada); (6) CONTRATADA responsável por INSS/ISS/IRPJ; (7) valores = natureza comercial, não salarial. 12 cláusulas. Atualização direta no banco. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4393** — **CONTRATO PJ: DADOS BANCÁRIOS DA CONTRATADA NO TEMPLATE.** Seção "6.3 DADOS BANCÁRIOS" inserida no template vigente (DB direto, Rev. 2), com placeholder `[DADOS_BANCARIOS_CONTRATADA]`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4392** — **CONTRATO PJ: REPRESENTANTE LEGAL = SÓCIO ADMINISTRADOR.** Subquery `companyRepresentante` usava `ORDER BY id ASC` (pegava Júlio, não Felipe). Fix: cruza com `system_criteria.socio_administrador_employee_id` para usar o sócio marcado como administrador. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4392** — **CONTRATO PJ: REPRESENTANTE LEGAL = SÓCIO ADMINISTRADOR.** Subquery `companyRepresentante` usava `ORDER BY id ASC` (pegava sócio errado). Fix: cruza com `system_criteria.socio_administrador_employee_id`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4391** — **TEMPLATES ISO: CORREÇÃO CRÍTICA — APROVAR (VIGENTE) PERDIA EDIÇÕES.** `handleAprovar` em `TemplatesDocsTab.tsx` chamava só `aprovarMut` quando template já existia — edições eram descartadas silenciosamente. Fix: sempre executa `saveMut` antes de `aprovarMut` via `onSuccess`. ZERO DELETE · ZERO ALTER destrutivo.
 

@@ -1,4 +1,52 @@
 /**
+ * Rev. 4394 - CONTRATO PJ: REESCRITA JURÍDICA DO TEMPLATE — BLINDAGEM CONTRA CLT DISFARÇADO
+ *
+ * Template de contrato PJ reescrito integralmente para blindagem jurídica contra
+ * reconhecimento de vínculo empregatício ("CLT disfarçado"). Alterações principais:
+ *
+ * CONSIDERANDO QUE:
+ *   - Removido "exclusivamente" do item (II) — exclusividade é indicador de CLT.
+ *   - Adicionado item (III) deixando claro que o objeto é RESULTADO TÉCNICO,
+ *     não disponibilidade de tempo/jornada/trabalho pessoal subordinado.
+ *
+ * CLÁUSULA PRIMEIRA (Objeto):
+ *   - Substituído "mão de obra especializada" por "serviços técnicos especializados"
+ *     (mão de obra remete a trabalho subordinado).
+ *
+ * CLÁUSULA SEGUNDA (NOVA — Autonomia e Modo de Execução):
+ *   - Autonomia técnica, operacional e administrativa plena da CONTRATADA.
+ *   - Ausência de controle de jornada, ponto e supervisão hierárquica.
+ *   - Possibilidade de representação por prepostos próprios (afasta pessoalidade).
+ *   - Orientações técnicas = especificação do serviço, não subordinação.
+ *
+ * CLÁUSULA TERCEIRA (NOVA — Não Exclusividade):
+ *   - Declaração expressa de inexistência de exclusividade (em ambas as direções).
+ *
+ * CLÁUSULA QUARTA (Sigilo) e QUINTA (Não Concorrência): mantidas e refinadas.
+ *
+ * CLÁUSULA SEXTA (Vigência e Rescisão):
+ *   - Item 6.3: sem verbas trabalhistas em caso de rescisão.
+ *
+ * CLÁUSULA SÉTIMA (Obrigações das Partes):
+ *   - Segregação clara: obrigações da CONTRATANTE × CONTRATADA.
+ *   - CONTRATADA: responsável por INSS, ISS, IRPJ; emissão de NF obrigatória.
+ *
+ * CLÁUSULA OITAVA (NOVA — Ausência de Vínculo Empregatício):
+ *   - Cláusula dedicada com fundamento expresso no art. 3º CLT e Lei 13.467/2017.
+ *   - Lista explícita dos 4 requisitos ausentes (pessoalidade, subordinação,
+ *     não-eventualidade, exclusividade).
+ *   - Item 8.4: cláusula reversa — em caso de pejotização forçada (fraude da
+ *     CONTRATADA), ônus é exclusivo da CONTRATADA.
+ *
+ * CLÁUSULA NONA (Preços): adicionado parágrafo único declarando natureza comercial
+ *   dos valores (não salarial).
+ *
+ * Total: 12 cláusulas (antes 10). Todos os placeholders preservados.
+ * Atualização feita diretamente no banco (system_document_templates).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4393 - CONTRATO PJ: DADOS BANCÁRIOS DA CONTRATADA NO TEMPLATE
  *
  * Inserida seção "6.3 DADOS BANCÁRIOS PARA PAGAMENTO" diretamente no template
