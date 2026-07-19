@@ -146,7 +146,24 @@ export interface ContratoPjForDoc {
   pixPrestador?: string | null;
 }
 
-function replacePlaceholders(text: string, c: ContratoPjForDoc): string {
+/** Converte o texto da cláusula de objeto em HTML com parágrafos/alíneas separados.
+ *  Normaliza tanto textos novos (com \n por item) quanto antigos (itens separados por ";") */
+function formatObjetoHtml(raw: string): string {
+  if (!raw) return "<p>engenharia civil</p>";
+  const normalized = raw
+    .replace(/;\s*([a-z]\))/g, "\n$1")
+    .replace(/\n{2,}/g, "\n");
+  const lines = normalized.split(/\n/).map(l => l.trim()).filter(Boolean);
+  return lines.map(line => {
+    const safe = esc(line);
+    if (/^[a-z]\)/.test(line)) {
+      return `<p style="margin:2px 0 6px 32px;text-align:justify;">${safe}</p>`;
+    }
+    return `<p style="margin:0 0 8px 0;text-align:justify;">${safe}</p>`;
+  }).join("\n");
+}
+
+function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false): string {
   const valorMensal = parseMoney(c.valorMensal);
   const nomeEmpresa = c.companyRazaoSocial || c.companyNomeFantasia || "Empresa";
   const cnpjEmpresa = c.companyCnpj || "_______________";
@@ -185,7 +202,7 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc): string {
     .replace(/\[CONTRATADA_ENDERECO\]/g, enderecoPrestador)
     .replace(/\[CONTRATADA_CIDADE\]/g, cidadePrestador)
     .replace(/\[CONTRATADA_ESTADO\]/g, estadoPrestador)
-    .replace(/\[OBJETO_CONTRATO\]/g, c.objetoContrato || "engenharia civil")
+    .replace(/\[OBJETO_CONTRATO\]/g, htmlMode ? formatObjetoHtml(c.objetoContrato || "") : ((c.objetoContrato || "engenharia civil").replace(/;\s*([a-z]\))/g, "\n$1")))
     .replace(/\[VALOR_MENSAL\]/g, formatMoeda(valorMensal))
     .replace(/\[VALOR_EXTENSO\]/g, valorPorExtenso(valorMensal))
     .replace(/\[VALOR_ADIANTAMENTO\]/g, valorAdiantamento)
@@ -276,7 +293,8 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
   let corpoHtml: string;
   if (modeloHtml && modeloHtml.trim()) {
     // Template é HTML com placeholders [TOKEN] — substitui inline e usa direto
-    corpoHtml = replacePlaceholders(modeloHtml, c);
+    // htmlMode=true: [OBJETO_CONTRATO] vira parágrafos HTML com alíneas separadas
+    corpoHtml = replacePlaceholders(modeloHtml, c, true);
   } else {
     const replaced = replacePlaceholders(modelo || "", c);
     corpoHtml = corpoFromTemplate(replaced);
