@@ -2823,19 +2823,19 @@ export default function Ordens() {
                             onKeyDown={e => {
                               if (e.key === "Enter" && listaAddDesc.trim()) {
                                 const current = listaRecebQ.data ?? [];
-                                salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade, valorUnitario: (i as any).valor_unitario ?? 0 })), { descricao: listaAddDesc.trim(), unidade: listaAddUnit || "un", quantidade: parseFloat(listaAddQty) || 1, valorUnitario: parseFloat(listaAddValor.replace(",", ".")) || 0 }] });
+                                salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade, valorUnitario: (i as any).valor_unitario ?? 0 })), { descricao: listaAddDesc.trim(), unidade: listaAddUnit || "un", quantidade: parseFloat(listaAddQty.replace(",", ".")) || 1, valorUnitario: parseFloat(listaAddValor.replace(",", ".")) || 0 }] });
                               }
                               if (e.key === "Escape") setListaShowAdd(false);
                             }}
                           />
-                          <input className="w-14 text-xs border border-gray-200 rounded px-1.5 py-1 text-center tabular-nums" placeholder="Qtd" value={listaAddQty} onChange={e => setListaAddQty(e.target.value)} type="number" min="0.001" step="any" />
+                          <input className="w-14 text-xs border border-gray-200 rounded px-1.5 py-1 text-center tabular-nums" placeholder="Qtd" value={listaAddQty} onChange={e => setListaAddQty(e.target.value)} type="text" inputMode="decimal" />
                           <input className="w-10 text-xs border border-gray-200 rounded px-1 py-1 text-center uppercase" placeholder="un" value={listaAddUnit} onChange={e => setListaAddUnit(e.target.value)} maxLength={10} />
                           <input className="w-20 text-xs border border-gray-200 rounded px-1.5 py-1 text-right tabular-nums" placeholder="R$ vl.un." value={listaAddValor} onChange={e => setListaAddValor(e.target.value)} type="text" inputMode="decimal" />
                           <button
                             onClick={() => {
                               if (!listaAddDesc.trim()) return;
                               const current = listaRecebQ.data ?? [];
-                              salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade, valorUnitario: (i as any).valor_unitario ?? 0 })), { descricao: listaAddDesc.trim(), unidade: listaAddUnit || "un", quantidade: parseFloat(listaAddQty) || 1, valorUnitario: parseFloat(listaAddValor.replace(",", ".")) || 0 }] });
+                              salvarListaMut.mutate({ ocId: showDetalhe!, companyId, itens: [...current.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade, valorUnitario: (i as any).valor_unitario ?? 0 })), { descricao: listaAddDesc.trim(), unidade: listaAddUnit || "un", quantidade: parseFloat(listaAddQty.replace(",", ".")) || 1, valorUnitario: parseFloat(listaAddValor.replace(",", ".")) || 0 }] });
                             }}
                             disabled={!listaAddDesc.trim() || salvarListaMut.isPending}
                             className="text-emerald-600 hover:text-emerald-700 disabled:opacity-40 shrink-0"
