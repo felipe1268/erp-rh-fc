@@ -1,4 +1,17 @@
 /**
+ * Rev. 4398 - MÓDULO PJ: BOTÃO IMPRIMIR → ENVIAR (DOCUSIGN)
+ *
+ * Na coluna "Ações" da lista de contratos PJ, o ícone de impressora (Printer)
+ * foi substituído pelo ícone de envio (Send), refletindo que o fluxo de
+ * assinatura é digital via DocuSign (não impressão física).
+ * - Ícone: Printer → Send (lucide-react)
+ * - Tooltip: "Imprimir / Ver contrato" → "Enviar para assinatura (DocuSign)"
+ * - O botão ainda navega para /contrato-pj/:id (página de visualização/envio)
+ * - Printer mantido no import pois ainda é usado no botão "Exportar PDF" da Folha PJ
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4397 - CONTRATO PJ: REVISÃO JURÍDICA DO TEMPLATE (3 CORREÇÕES PONTUAIS)
  *
  * O usuário havia editado o template (Rev. 6 do banco) introduzindo 3 trechos

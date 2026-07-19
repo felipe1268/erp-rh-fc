@@ -18,7 +18,7 @@ import { removeAccents } from "@/lib/searchUtils";
 import {
   Briefcase, Plus, Search, DollarSign, AlertTriangle, FileText,
   Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar, Pencil,
-  Users, TrendingUp, FileSignature, Ban, Printer, Upload, FolderOpen,
+  Users, TrendingUp, FileSignature, Ban, Send, Printer, Upload, FolderOpen,
   ExternalLink, File, XCircle, Award, Loader2, Check, Settings2,
   ShieldCheck, Paperclip,
 } from "lucide-react";
@@ -699,8 +699,8 @@ export default function ModuloPJ() {
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" title="Editar contrato" onClick={() => openEditContrato(c)}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Imprimir / Ver contrato" onClick={() => navigate(`/contrato-pj/${c.id}`)}>
-                                  <Printer className="h-3.5 w-3.5" />
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Enviar para assinatura (DocuSign)" onClick={() => navigate(`/contrato-pj/${c.id}`)}>
+                                  <Send className="h-3.5 w-3.5" />
                                 </Button>
                                 {c.status === "pendente_assinatura" && (
                                   <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => { updateContrato.mutate({ id: c.id, status: "ativo" }); }}>

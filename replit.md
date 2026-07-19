@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4398** — **MÓDULO PJ: BOTÃO IMPRIMIR → ENVIAR (DOCUSIGN).** Ícone Printer → Send na coluna Ações da lista de contratos; tooltip "Imprimir / Ver contrato" → "Enviar para assinatura (DocuSign)". Printer mantido no import (usado no Exportar PDF). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4397** — **CONTRATO PJ: 3 CORREÇÕES JURÍDICAS NO TEMPLATE (DB DIRETO).** 2.1: restaurado "plena autonomia" + "métodos, horários" + removido "desde que seja seguido os custos do orçamento executivo" (subordinação econômica = CLT). 2.3: removido "validada pela CONTRATANTE" (controle patronal). 3.1: "sendo obrigatória a comunicação prévia" → "independentemente de comunicação prévia" (exclusividade velada). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4396** — **CONTRATO PJ VIEW: CACHE ZERO + REMOÇÃO DE DADOS BANCÁRIOS DUPLICADOS.** `staleTime:0` em `pj.modeloContrato.useQuery` (eliminava divergência template×contrato em abas simultâneas). Seção hardcoded "DADOS BANCÁRIOS" removida do ContratoPJView (já está na Cláusula 9.3 do template). ZERO DELETE · ZERO ALTER destrutivo.
