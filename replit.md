@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4411** — **MÓDULO PJ: REDESIGN COMPLETO DOS CARDS KPI + CARD "PJ SEM CONTRATO".** 7 cards com ícones, cores semânticas e grade responsiva (lg:grid-cols-7). "PJ Sem Contrato" (vermelho) usa alertas.pjsSemContrato existente. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4410** — **MÓDULO PJ: CARD "FALTA ASSINAR" NOS KPIs.** Novo card laranja contando contratos ativos sem contratoAssinadoUrl. Borda laranja + clicável quando > 0. Grid: lg:grid-cols-6. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4409** — **CONTAS A PAGAR: LAYOUT ESTRUTURADO NAS SUB-LINHAS DO GRUPO PJ EXPANDIDO.** Sub-linhas dentro do grupo consolidado também recebem nome + pills. Dois blocos de renderização substituídos. ZERO DELETE · ZERO ALTER destrutivo.

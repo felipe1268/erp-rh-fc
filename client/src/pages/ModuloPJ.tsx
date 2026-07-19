@@ -532,49 +532,78 @@ export default function ModuloPJ() {
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <Card className="cursor-pointer hover:shadow-md" onClick={() => setStatusFilter("todos")}>
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground uppercase">Total Contratos</p>
-              <p className="text-2xl font-bold">{fmtNum(stats.total)}</p>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-green-500" onClick={() => setStatusFilter("ativo")}>
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground uppercase">Ativos</p>
-              <p className="text-2xl font-bold text-green-600">{fmtNum(stats.ativos)}</p>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-amber-500" onClick={() => setStatusFilter("pendente_assinatura")}>
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground uppercase">Pendentes</p>
-              <p className="text-2xl font-bold text-amber-600">{fmtNum(stats.pendentes)}</p>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-gray-500" onClick={() => setStatusFilter("encerrado")}>
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground uppercase">Encerrados</p>
-              <p className="text-2xl font-bold text-gray-600">{fmtNum(stats.encerrados)}</p>
-            </CardContent>
-          </Card>
-          <Card className={`border-l-4 ${stats.semAssinatura > 0 ? "border-l-orange-500 cursor-pointer hover:shadow-md" : "border-l-slate-200"}`}
-            onClick={() => stats.semAssinatura > 0 ? setStatusFilter("ativo") : undefined}>
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground uppercase">Falta Assinar</p>
-              <p className={`text-2xl font-bold ${stats.semAssinatura > 0 ? "text-orange-600" : "text-slate-400"}`}>
-                {fmtNum(stats.semAssinatura)}
-              </p>
-              <p className="text-[10px] text-slate-400 mt-0.5">contratos ativos sem PDF</p>
-            </CardContent>
-          </Card>
-          <Card className="border-l-4 border-l-purple-500">
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground uppercase">Custo Mensal PJ</p>
-              <p className="text-2xl font-bold text-purple-600">{formatMoeda(stats.totalMensal)}</p>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Stats — Rev. 4411 */}
+        {(() => {
+          const semContrato = alertas?.pjsSemContrato?.length ?? 0;
+          type KpiItem = {
+            label: string; value: number | string; icon: any;
+            color: string; bg: string; border: string;
+            sub?: string; alert?: boolean; onClick?: () => void;
+          };
+          const kpis: KpiItem[] = [
+            {
+              label: "Total Contratos", value: stats.total,
+              icon: Briefcase, color: "text-slate-700", bg: "bg-slate-50", border: "border-slate-300",
+              onClick: () => setStatusFilter("todos"),
+            },
+            {
+              label: "Ativos", value: stats.ativos,
+              icon: CheckCircle2, color: "text-green-700", bg: "bg-green-50", border: "border-green-400",
+              onClick: () => setStatusFilter("ativo"),
+            },
+            {
+              label: "Pendentes", value: stats.pendentes,
+              icon: Clock, color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-400",
+              onClick: () => setStatusFilter("pendente_assinatura"),
+            },
+            {
+              label: "Encerrados", value: stats.encerrados,
+              icon: Ban, color: "text-gray-600", bg: "bg-gray-50", border: "border-gray-300",
+              onClick: () => setStatusFilter("encerrado"),
+            },
+            {
+              label: "Falta Assinar", value: stats.semAssinatura,
+              icon: FileSignature,
+              color: stats.semAssinatura > 0 ? "text-orange-700" : "text-slate-400",
+              bg: stats.semAssinatura > 0 ? "bg-orange-50" : "bg-slate-50",
+              border: stats.semAssinatura > 0 ? "border-orange-400" : "border-slate-200",
+              sub: "sem PDF de contrato", alert: stats.semAssinatura > 0,
+              onClick: stats.semAssinatura > 0 ? () => setStatusFilter("ativo") : undefined,
+            },
+            {
+              label: "PJ Sem Contrato", value: semContrato,
+              icon: Users,
+              color: semContrato > 0 ? "text-red-700" : "text-slate-400",
+              bg: semContrato > 0 ? "bg-red-50" : "bg-slate-50",
+              border: semContrato > 0 ? "border-red-400" : "border-slate-200",
+              sub: "colaboradores PJ ativos", alert: semContrato > 0,
+            },
+            {
+              label: "Custo Mensal PJ", value: formatMoeda(stats.totalMensal),
+              icon: DollarSign, color: "text-purple-700", bg: "bg-purple-50", border: "border-purple-400",
+            },
+          ];
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+              {kpis.map((k) => (
+                <div
+                  key={k.label}
+                  onClick={k.onClick}
+                  className={`rounded-xl border-2 ${k.border} ${k.bg} p-4 flex flex-col gap-2 transition-shadow ${k.onClick ? "cursor-pointer hover:shadow-md" : ""}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">{k.label}</p>
+                    <span className={`${k.color} opacity-70`}><k.icon className="w-4 h-4" /></span>
+                  </div>
+                  <p className={`text-2xl font-extrabold leading-none ${k.color}`}>{k.value}</p>
+                  {k.sub && (
+                    <p className={`text-[10px] leading-tight ${k.alert ? k.color + " font-medium opacity-80" : "text-slate-400"}`}>{k.sub}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Alerts */}
         {alertas && ((alertas.vencendo?.length || 0) > 0 || (alertas.vencidos?.length || 0) > 0 || (alertas.pjsSemContrato?.length || 0) > 0) && (

@@ -1,4 +1,16 @@
 /**
+ * Rev. 4411 - MÓDULO PJ: REDESIGN COMPLETO DOS CARDS KPI + CARD "PJ SEM CONTRATO"
+ *
+ * 7 cards em grade responsiva (grid-cols-2 sm:grid-cols-4 lg:grid-cols-7):
+ *   Total Contratos | Ativos | Pendentes | Encerrados | Falta Assinar | PJ Sem Contrato | Custo Mensal PJ
+ * Cada card: ícone lucide alinhado à direita, label uppercase, valor bold, sub-label condicional.
+ * "PJ Sem Contrato" usa alertas.pjsSemContrato (backend já existia); vermelho quando > 0.
+ * "Falta Assinar" laranja quando > 0; cinza quando zerado.
+ * Todos clicáveis onde aplicável (filtro de status).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4410 - MÓDULO PJ: CARD "FALTA ASSINAR" NOS KPIs
  *
  * Novo card laranja entre "Encerrados" e "Custo Mensal PJ".
