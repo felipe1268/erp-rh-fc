@@ -2937,8 +2937,8 @@ export default function EquipamentosLocados() {
                     <div className={`mt-3 rounded-xl p-3 flex items-center justify-between ${temDivergencia ? "bg-red-50 border border-red-200" : "bg-emerald-50 border border-emerald-200"}`}>
                       <span className="text-sm font-semibold text-slate-700">Total</span>
                       <div className="flex items-center gap-3 text-sm font-bold">
-                        <span className="text-slate-500">Esperado: <span className="text-slate-800">{totalEsperado}</span></span>
-                        <span className={temDivergencia ? "text-red-600" : "text-emerald-600"}>Recebido: <span>{totalRecebido}</span></span>
+                        <span className="text-slate-500">Esperado: <span className="text-slate-800">{totalEsperado.toLocaleString("pt-BR", { minimumFractionDigits: totalEsperado % 1 === 0 ? 0 : 2, maximumFractionDigits: 3 })}</span></span>
+                        <span className={temDivergencia ? "text-red-600" : "text-emerald-600"}>Recebido: <span>{totalRecebido.toLocaleString("pt-BR", { minimumFractionDigits: totalRecebido % 1 === 0 ? 0 : 2, maximumFractionDigits: 3 })}</span></span>
                       </div>
                     </div>
                   )}
