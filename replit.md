@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4441** — **FEAT: MARGENS POR TEMPLATE — Aba Documentos ISO (TemplatesDocsTab).** 4 colunas em `system_document_templates` (`docMarginTop/Right/Bottom/LeftMm`, DEFAULT 10); ColFix `v4441`; tRPC `updateTemplateMargins` + `getVigente` retorna `margins`; aba "Configurações de Página" REMOVIDA; painel de margens inserido dentro do card Ficha ISO de cada documento (diagrama A4 + 4 inputs + Salvar); preview usa margens do template. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4440** — **FEAT: MARGENS CONFIGURÁVEIS POR EMPRESA — Central de Documentos.** 4 colunas em `companies` (`docMarginTop/Right/Bottom/LeftMm`, DEFAULT 10); ColFix `v4440`; tRPC `getDocumentMargins`+`updateDocumentMargins`; hook `useDocumentMargins`; UI "Configurações de Página" em TemplatesDocsTab; todos os callers de `buildFcDocument`/`buildContratoPjSignHtml` atualizados (10 arquivos). ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4439** — **UX: BOTÃO LIMPAR ASSINATURA — AssinarDocumento (FCSign).** Botão "↺ Limpar" ao lado do título da área de assinatura; chama `padRef.current?.clear()`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4439** — **UX: BOTÃO LIMPAR ASSINATURA — AssinarDocumento (FCSign).** Botão "↺ Limpar" ao lado do título da área de assinatura; chama `padRef.current?.clear()`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4438** — **LAYOUT: MARGENS 1cm EM TODOS OS LADOS — PADRÃO DEFINITIVO (buildFcDocument).** `@page`: `10mm`; `.fc-doc` padding: `1cm`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4437** — **LAYOUT: MARGENS LATERAIS 1,5cm — TEMPLATE ISO (buildFcDocument).** `@page`: `20mm 15mm`; `.fc-doc` padding: `2cm 1.5cm`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4436** — **LAYOUT: REDUÇÃO DE MARGENS DO TEMPLATE ISO (buildFcDocument).** `@page` margin: `25mm 15mm` → `20mm`; `.fc-doc` padding: `2.5cm 1.5cm` → `2cm`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4435** — **FIX: BOTÃO VOLTAR — ContratoPJView e AditivoPJView.** `window.history.back()` no-op; substituído por `navigate("/modulo-pj")` / `navigate(\`/contrato-pj/${contractId}\`)`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4429** — **FIX: PDF CONTRATO PJ = 100% TEMPLATE DA CENTRAL DE DOCUMENTOS.** `buildContratoPjSignHtml` usa template ISO diretamente; HTML shell mínimo `@page A4`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

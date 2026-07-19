@@ -508,8 +508,15 @@ export const systemDocumentTemplatesRouter = router({
         isNull(systemDocumentTemplates.deletedAt),
       ));
       const titulo = meta?.titulo ?? row?.titulo ?? input.tipo;
+      // Rev. 4441 — margens por template (fallback 10mm quando ausente)
+      const margins = row ? {
+        top:    (row as any).docMarginTopMm    ?? 10,
+        right:  (row as any).docMarginRightMm  ?? 10,
+        bottom: (row as any).docMarginBottomMm ?? 10,
+        left:   (row as any).docMarginLeftMm   ?? 10,
+      } : { top: 10, right: 10, bottom: 10, left: 10 };
       if (!row || row.status !== "vigente") {
-        return { tipo: input.tipo, vigente: false, conteudoHtml: null as string | null, codigo: row?.codigo ?? null, versao: row?.versaoAtual ?? null, titulo };
+        return { tipo: input.tipo, vigente: false, conteudoHtml: null as string | null, codigo: row?.codigo ?? null, versao: row?.versaoAtual ?? null, titulo, margins };
       }
       return {
         tipo: input.tipo,
@@ -518,7 +525,33 @@ export const systemDocumentTemplatesRouter = router({
         codigo: row.codigo ?? null,
         versao: row.versaoAtual,
         titulo,
+        margins,
       };
+    }),
+
+  /** Rev. 4441 — Salva as margens (mm) de um template específico. Admin only. */
+  updateTemplateMargins: protectedProcedure
+    .input(z.object({
+      tipo:   z.string().min(1),
+      top:    z.number().int().min(0).max(50),
+      right:  z.number().int().min(0).max(50),
+      bottom: z.number().int().min(0).max(50),
+      left:   z.number().int().min(0).max(50),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      await db.$client.query(
+        `UPDATE system_document_templates
+            SET doc_margin_top_mm    = $1,
+                doc_margin_right_mm  = $2,
+                doc_margin_bottom_mm = $3,
+                doc_margin_left_mm   = $4
+          WHERE tipo = $5`,
+        [input.top, input.right, input.bottom, input.left, input.tipo],
+      );
+      return { ok: true };
     }),
 
   // ── seedDefaults: cria os 7 tipos faltantes a partir do seed institucional,

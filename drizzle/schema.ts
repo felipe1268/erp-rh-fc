@@ -9929,6 +9929,11 @@ export const systemDocumentTemplates = pgTable("system_document_templates", {
   // Rev. 2754 — soft-delete (exclusão pelo admin). NULL = ativo; com data = excluído
   // (some das listas/consumo). NUNCA fazemos DELETE físico (R-001/R-007/R-010).
   deletedAt: timestamp("deleted_at", { mode: 'string' }),
+  // Rev. 4441 — margens por template (mm). Default 10 em todos os lados.
+  docMarginTopMm:    integer("doc_margin_top_mm").default(10),
+  docMarginRightMm:  integer("doc_margin_right_mm").default(10),
+  docMarginBottomMm: integer("doc_margin_bottom_mm").default(10),
+  docMarginLeftMm:   integer("doc_margin_left_mm").default(10),
 }, (table) => [
   uniqueIndex("uq_sys_doc_tpl_tipo").on(table.tipo),
 ]);

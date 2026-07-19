@@ -5504,7 +5504,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4440-2026-07-19-doc-margins";
+    const COLFIX_VERSION = "v4441-2026-07-19-template-margins";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7321,6 +7321,19 @@ REGRAS DE EXTRAÇÃO:
         `);
         console.log("[ColFix Rev.4440] companies: colunas doc_margin_*_mm garantidas.");
       } catch (e: any) { console.error("[ColFix Rev.4440] FALHA doc_margin columns:", e?.message ?? e); }
+
+      // Rev. 4441 — Margens configuráveis por template (system_document_templates).
+      try {
+        const _db4441 = await getDb();
+        if (!_db4441) throw new Error("db indisponível");
+        await _db4441.$client.query(`
+          ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS doc_margin_top_mm    INTEGER DEFAULT 10;
+          ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS doc_margin_right_mm  INTEGER DEFAULT 10;
+          ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS doc_margin_bottom_mm INTEGER DEFAULT 10;
+          ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS doc_margin_left_mm   INTEGER DEFAULT 10;
+        `);
+        console.log("[ColFix Rev.4441] system_document_templates: colunas doc_margin_*_mm garantidas.");
+      } catch (e: any) { console.error("[ColFix Rev.4441] FALHA template margins:", e?.message ?? e); }
 
       // Rev. 4042 — Stripe: inicializar (schema stripe.* + webhook gerenciado)
       // Envolvido em try/catch isolado: falha na configuração do Stripe NÃO

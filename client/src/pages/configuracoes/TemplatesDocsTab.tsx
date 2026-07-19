@@ -187,14 +187,13 @@ function StatusBadge({ status, size = "sm" }: { status: string; size?: "sm" | "x
   return <span className={`inline-flex items-center rounded font-semibold ${pad} ${it.cls}`}>{it.label}</span>;
 }
 
-type Secao = "iso" | "planilha" | "word" | "extrato" | "pagina";
+type Secao = "iso" | "planilha" | "word" | "extrato";
 
 const SECOES: { id: Secao; label: string; icon: any }[] = [
   { id: "iso",      label: "Documentos ISO",       icon: FileText },
   { id: "planilha", label: "Template de Planilha",  icon: FileSpreadsheet },
   { id: "word",     label: "Template de Word",      icon: FileText },
   { id: "extrato",  label: "Templates de Extrato",  icon: Landmark },
-  { id: "pagina",   label: "Configurações de Página", icon: Settings2 },
 ];
 
 // ─── Converte o modelo texto-plano do Contrato PJ em HTML para o editor ───────
@@ -422,15 +421,23 @@ export default function TemplatesDocsTab() {
     setDataVigencia("");
     setProximaRevisao("");
     setCodigo("");
+    setMarginTop(10);
+    setMarginRight(10);
+    setMarginBottom(10);
+    setMarginLeft(10);
   }, [tipoSelecionado]);
 
-  // Quando o selRow carrega (template existente) → sincroniza ficha ISO
+  // Quando o selRow carrega (template existente) → sincroniza ficha ISO + margens
   useEffect(() => {
     if (!selRow) return;
     setCodigo(selRow.codigo || "");
     setDataVigencia(selRow.dataVigencia || "");
     setProximaRevisao(selRow.proximaRevisao || "");
     setElaboradoPorNome(selRow.elaboradoPorNome || "");
+    setMarginTop(selRow.docMarginTopMm ?? 10);
+    setMarginRight(selRow.docMarginRightMm ?? 10);
+    setMarginBottom(selRow.docMarginBottomMm ?? 10);
+    setMarginLeft(selRow.docMarginLeftMm ?? 10);
   }, [selRow]);
 
   const invalidarTudo = () => {
@@ -485,23 +492,11 @@ export default function TemplatesDocsTab() {
     },
     onError: (e) => toast.error(e.message || "Falha ao excluir."),
   });
-  // ── Margens de página — query + mutation (Rev. 4440) ──────────────────────
-  const companyIdNum = Number(selectedCompanyId) || 0;
-  const marginsQuery = trpc.systemDocumentTemplates.getDocumentMargins.useQuery(
-    { companyId: companyIdNum },
-    { enabled: companyIdNum > 0 && isAdmin }
-  );
-  useEffect(() => {
-    if (!marginsQuery.data) return;
-    setMarginTop(marginsQuery.data.top);
-    setMarginRight(marginsQuery.data.right);
-    setMarginBottom(marginsQuery.data.bottom);
-    setMarginLeft(marginsQuery.data.left);
-  }, [marginsQuery.data]);
-  const updateMarginsMut = trpc.systemDocumentTemplates.updateDocumentMargins.useMutation({
+  // ── Margens por template (Rev. 4441) — sincronizadas do selRow ───────────
+  const updateMarginsMut = trpc.systemDocumentTemplates.updateTemplateMargins.useMutation({
     onSuccess: () => {
-      toast.success("Margens salvas com sucesso.");
-      utils.systemDocumentTemplates.getDocumentMargins.invalidate({ companyId: companyIdNum });
+      toast.success("Margens salvas.");
+      utils.systemDocumentTemplates.listAll.invalidate();
     },
     onError: (e) => toast.error(e.message || "Falha ao salvar margens."),
   });
@@ -563,9 +558,14 @@ export default function TemplatesDocsTab() {
 
   // Rev. 2752 — Preview = documento institucional COMPLETO (cabeçalho/logo/faixa/
   // margens/assinaturas), idêntico à impressão. Renderizado em <iframe srcDoc>.
+  // Rev. 4441 — usa margens por template (estado local sincronizado do selRow).
+  const templateMargins = useMemo(
+    () => ({ top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft }),
+    [marginTop, marginRight, marginBottom, marginLeft],
+  );
   const previewHtml = useMemo(
-    () => buildFcPreviewHtml(conteudoEditado, meta, user?.name || "Sistema", marginsQuery.data),
-    [conteudoEditado, meta, user, marginsQuery.data]
+    () => buildFcPreviewHtml(conteudoEditado, meta, user?.name || "Sistema", templateMargins),
+    [conteudoEditado, meta, user, templateMargins]
   );
 
   // Placeholders agrupados + filtrados pela busca
@@ -691,7 +691,7 @@ export default function TemplatesDocsTab() {
   // Rev. 2752 — Abre o documento institucional COMPLETO numa janela isolada e
   // dispara a impressão (réplica exata do que será impresso/lido).
   const handleImprimir = () => {
-    const html = buildFcPreviewHtml(conteudoEditado, meta, user?.name || "Sistema", marginsQuery.data);
+    const html = buildFcPreviewHtml(conteudoEditado, meta, user?.name || "Sistema", templateMargins);
     if (!html) { toast.error("Sem conteúdo para imprimir."); return; }
     const w = window.open("", "_blank");
     if (!w) { toast.error("Permita pop-ups para imprimir o documento."); return; }
@@ -714,8 +714,8 @@ export default function TemplatesDocsTab() {
   // Rev. 2752 — Preview do modal "Novo Documento" = documento institucional
   // COMPLETO (mesmo wrapper da impressão), renderizado em <iframe srcDoc>.
   const novoPreviewHtml = useMemo(
-    () => buildFcPreviewHtml(novoConteudo, getDocMetaOrFallback("", novoTitulo), user?.name || "Sistema", marginsQuery.data),
-    [novoConteudo, novoTitulo, user, marginsQuery.data]
+    () => buildFcPreviewHtml(novoConteudo, getDocMetaOrFallback("", novoTitulo), user?.name || "Sistema"),
+    [novoConteudo, novoTitulo, user]
   );
 
   const visualizandoVersaoAntiga = versaoVisualizada != null && getQuery.data?.template?.versaoAtual && versaoVisualizada !== getQuery.data.template.versaoAtual;
@@ -964,6 +964,67 @@ export default function TemplatesDocsTab() {
               <span>Vigência: <strong>{formatData(selRow?.dataVigencia)}</strong></span>
               <span>Próx. revisão: <strong>{formatData(selRow?.proximaRevisao)}</strong></span>
             </div>
+
+            {/* ── Margens de página por documento (Rev. 4441) ── */}
+            {isAdmin && selRow?.existe && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Settings2 className="w-4 h-4 text-gray-500" />
+                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Margens de Página (mm)</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs px-3"
+                    disabled={updateMarginsMut.isPending}
+                    onClick={() => updateMarginsMut.mutate({ tipo: tipoSelecionado, top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft })}
+                  >
+                    {updateMarginsMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                    Salvar margens
+                  </Button>
+                </div>
+                <div className="flex items-start gap-4 flex-wrap">
+                  {/* Diagrama visual A4 */}
+                  <div className="relative border-2 border-gray-200 bg-gray-50 rounded flex-shrink-0"
+                    style={{ width: 80, height: 110 }}
+                  >
+                    <div
+                      className="absolute bg-white border border-dashed border-blue-400 rounded-sm"
+                      style={{
+                        top:    `${Math.min(90, (marginTop    / 50) * 100)}%`,
+                        left:   `${Math.min(90, (marginLeft   / 50) * 100)}%`,
+                        right:  `${Math.min(90, (marginRight  / 50) * 100)}%`,
+                        bottom: `${Math.min(90, (marginBottom / 50) * 100)}%`,
+                      }}
+                    />
+                    <span className="absolute bottom-1 right-1 text-[8px] text-gray-400">A4</span>
+                  </div>
+                  {/* Inputs */}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 flex-1 min-w-[200px]">
+                    {([
+                      { label: "Superior",  val: marginTop,    set: setMarginTop },
+                      { label: "Inferior",  val: marginBottom, set: setMarginBottom },
+                      { label: "Esquerda",  val: marginLeft,   set: setMarginLeft },
+                      { label: "Direita",   val: marginRight,  set: setMarginRight },
+                    ] as const).map(({ label, val, set }) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <label className="text-[11px] text-gray-500 w-14 shrink-0">{label}</label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={val}
+                          onChange={e => (set as any)(Math.min(50, Math.max(0, Number(e.target.value))))}
+                          className="h-7 w-16 text-center text-xs"
+                        />
+                        <span className="text-[11px] text-gray-400">mm</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Editor */}
@@ -1349,153 +1410,6 @@ export default function TemplatesDocsTab() {
         <ExtratoTemplateTab />
       )}
 
-      {/* ── Seção: Configurações de Página (Rev. 4440) ───────────────── */}
-      {secaoAtiva === "pagina" && (
-        <div className="space-y-4">
-          <div className="bg-white border rounded-lg p-4">
-            <div className="flex items-start gap-3 mb-4">
-              <Settings2 className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800">Configurações de Página</h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  Define as margens (em mm) aplicadas a <strong>todos</strong> os documentos gerados pela Central de Documentos desta empresa.
-                  O valor padrão é <strong>10 mm</strong> em todos os lados.
-                </p>
-              </div>
-            </div>
-
-            {!isAdmin && (
-              <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                Apenas administradores podem alterar as configurações de página.
-              </div>
-            )}
-
-            {isAdmin && (
-              <div className="space-y-6">
-                {marginsQuery.isLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Carregando configurações...
-                  </div>
-                ) : (
-                  <>
-                    {/* Diagrama visual + inputs */}
-                    <div className="flex flex-col items-center gap-4">
-                      {/* Margem superior */}
-                      <div className="flex flex-col items-center gap-1 w-40">
-                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Superior</label>
-                        <div className="flex items-center gap-1.5">
-                          <Input
-                            type="number"
-                            min={0}
-                            max={50}
-                            value={marginTop}
-                            onChange={e => setMarginTop(Math.min(50, Math.max(0, Number(e.target.value))))}
-                            className="h-8 w-20 text-center text-sm"
-                          />
-                          <span className="text-xs text-gray-500">mm</span>
-                        </div>
-                      </div>
-
-                      {/* Linha com esquerda + prévia A4 + direita */}
-                      <div className="flex items-center gap-4">
-                        {/* Esquerda */}
-                        <div className="flex flex-col items-center gap-1">
-                          <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Esquerda</label>
-                          <div className="flex items-center gap-1.5">
-                            <Input
-                              type="number"
-                              min={0}
-                              max={50}
-                              value={marginLeft}
-                              onChange={e => setMarginLeft(Math.min(50, Math.max(0, Number(e.target.value))))}
-                              className="h-8 w-20 text-center text-sm"
-                            />
-                            <span className="text-xs text-gray-500">mm</span>
-                          </div>
-                        </div>
-
-                        {/* Prévia proporcional A4 */}
-                        <div className="relative border-2 border-gray-300 bg-gray-50 rounded"
-                          style={{ width: 120, height: 170 }}
-                        >
-                          {/* Área interna do documento */}
-                          <div
-                            className="absolute bg-white border border-dashed border-blue-400"
-                            style={{
-                              top:    `${(marginTop    / 50) * 100}%`,
-                              left:   `${(marginLeft   / 50) * 100}%`,
-                              right:  `${(marginRight  / 50) * 100}%`,
-                              bottom: `${(marginBottom / 50) * 100}%`,
-                            }}
-                          />
-                          <span className="absolute bottom-1 left-0 right-0 text-center text-[9px] text-gray-400 select-none">A4</span>
-                        </div>
-
-                        {/* Direita */}
-                        <div className="flex flex-col items-center gap-1">
-                          <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Direita</label>
-                          <div className="flex items-center gap-1.5">
-                            <Input
-                              type="number"
-                              min={0}
-                              max={50}
-                              value={marginRight}
-                              onChange={e => setMarginRight(Math.min(50, Math.max(0, Number(e.target.value))))}
-                              className="h-8 w-20 text-center text-sm"
-                            />
-                            <span className="text-xs text-gray-500">mm</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Margem inferior */}
-                      <div className="flex flex-col items-center gap-1 w-40">
-                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Inferior</label>
-                        <div className="flex items-center gap-1.5">
-                          <Input
-                            type="number"
-                            min={0}
-                            max={50}
-                            value={marginBottom}
-                            onChange={e => setMarginBottom(Math.min(50, Math.max(0, Number(e.target.value))))}
-                            className="h-8 w-20 text-center text-sm"
-                          />
-                          <span className="text-xs text-gray-500">mm</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => { setMarginTop(10); setMarginRight(10); setMarginBottom(10); setMarginLeft(10); }}
-                        disabled={updateMarginsMut.isPending}
-                      >
-                        Restaurar padrão (10 mm)
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => updateMarginsMut.mutate({
-                          companyId: companyIdNum,
-                          top: marginTop, right: marginRight,
-                          bottom: marginBottom, left: marginLeft,
-                        })}
-                        disabled={updateMarginsMut.isPending || companyIdNum === 0}
-                      >
-                        {updateMarginsMut.isPending
-                          ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Salvando…</>
-                          : <><Save className="w-4 h-4 mr-1.5" />Salvar Margens</>}
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

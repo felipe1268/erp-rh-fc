@@ -1,4 +1,38 @@
 /**
+ * Rev. 4441 - FEAT: MARGENS DE PÁGINA POR TEMPLATE — Documentos ISO (TemplatesDocsTab)
+ *
+ * Move as configurações de margem de página do nível empresa (global) para o nível
+ * de cada template de documento ISO. Cada documento da Central de Documentos possui
+ * agora suas próprias margens (Superior, Inferior, Esquerda, Direita em mm).
+ *
+ * BACKEND:
+ * - 4 novas colunas em `system_document_templates`: docMarginTopMm, docMarginRightMm,
+ *   docMarginBottomMm, docMarginLeftMm (INTEGER DEFAULT 10).
+ * - COLFIX_VERSION = "v4441-2026-07-19-template-margins".
+ * - tRPC procedure updateTemplateMargins (admin-only) adicionado ao router
+ *   systemDocumentTemplates.ts; usa raw SQL para evitar conflito de tipo Drizzle.
+ * - getVigente atualizado: retorna campo `margins` com as 4 dimensões do template
+ *   (fallback 10 mm quando coluna ainda null).
+ *
+ * FRONTEND (TemplatesDocsTab.tsx):
+ * - Aba "Configurações de Página" REMOVIDA das seções (SECOES array: 5→4 items).
+ * - Seção global "pagina" removida do JSX final.
+ * - marginsQuery (empresa) e updateDocumentMargins mutation substituídos por
+ *   updateTemplateMargins mutation por documento.
+ * - useEffect de sincronização: ao carregar selRow, sincroniza marginTop/Right/
+ *   Bottom/Left a partir de selRow.docMarginTopMm etc.
+ * - useEffect de reset: ao mudar de documento, reseta todas as margens para 10.
+ * - previewHtml: agora usa `templateMargins` (estado local) em vez de marginsQuery.data.
+ * - UI: painel "Margens de Página (mm)" inserido dentro do card da Ficha ISO
+ *   (após bloco de aprovação/datas), visível apenas para admins quando o
+ *   documento já existe. Inclui diagrama A4 proporcional + 4 inputs + botão Salvar.
+ *
+ * Racional: o usuário quer as configurações de margem integradas dentro da aba
+ * "Documentos ISO" de cada template, e não como uma seção separada global.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4440 - FEAT: MARGENS CONFIGURÁVEIS POR EMPRESA — Central de Documentos
  *
  * Adiciona margens de página configuráveis (superior, inferior, esquerda, direita em mm)
