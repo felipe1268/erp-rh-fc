@@ -1,4 +1,32 @@
 /**
+ * Rev. 4477 - FEAT: TOOLBARS DO EDITOR ISO FICAM FIXAS ENQUANTO TEXTO ROLA
+ *
+ * PROBLEMA RAIZ: no editor da Central de Documentos ISO (TemplatesDocsTab),
+ * ao trabalhar num contrato longo o usuário precisava rolar para cima para acessar
+ * os botões de ação (Histórico, Preview, Imprimir, Gerar com IA, Ler PDF) e a
+ * barra de formatação (undo/redo/H1/H2/B/I/U/…) do RichTextEditor — ambos sumiam
+ * durante a edição do corpo do texto.
+ *
+ * FIX:
+ *   · `TemplatesDocsTab.tsx` — card do editor passa a ser:
+ *       - `sticky top-14 z-20` (gruda logo abaixo do CompanyHeader = h-14 = 56px)
+ *       - `height: calc(100vh - 3.5rem - 0.5rem)` → ocupa toda a área visível
+ *       - `flex flex-col overflow-hidden` → estrutura interna flex
+ *       - Action toolbar row: `flex-shrink-0 border-b` — nunca rola
+ *       - Conteúdo (IA panels, banners, editor, save): `flex-1 overflow-y-auto min-h-0`
+ *         → só o texto rola internamente, dentro do card
+ *   · `RichTextEditor.tsx` — toolbar de formatação:
+ *       - root div: remove `overflow-hidden` (bloqueava sticky descendente)
+ *       - toolbar div: adiciona `sticky top-0 z-10 rounded-t-lg` → fica fixo no
+ *         topo da área scrollável do card quando o usuário rola o conteúdo
+ *   ZERO schema change. ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS:
+ *   · client/src/pages/configuracoes/TemplatesDocsTab.tsx — card editor reestruturado
+ *   · client/src/components/RichTextEditor.tsx — toolbar sticky
+ */
+
+/**
  * Rev. 4476 - FIX: PRÉVIA DO CONTRATO NO DIÁLOGO FCSIGN ABRE O DOCUMENTO CORRETO
  *
  * PROBLEMA RAIZ: o botão "Prévia do Contrato" no FCSignPJSendDialog fazia

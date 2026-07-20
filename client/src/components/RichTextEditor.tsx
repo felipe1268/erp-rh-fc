@@ -103,9 +103,9 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichText
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden bg-white">
+    <div className="border rounded-lg bg-white">
       {!readOnly && (
-        <div className="flex items-center flex-wrap gap-0.5 px-2 py-1.5 border-b bg-gray-50">
+        <div className="flex items-center flex-wrap gap-0.5 px-2 py-1.5 border-b bg-gray-50 sticky top-0 z-10 rounded-t-lg">
           <ToolbarButton title="Desfazer (Ctrl+Z)" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()}>
             <Undo2 className="w-4 h-4" />
           </ToolbarButton>

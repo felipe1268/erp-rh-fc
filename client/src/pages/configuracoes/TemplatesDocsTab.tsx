@@ -1027,9 +1027,10 @@ export default function TemplatesDocsTab() {
             )}
           </div>
 
-          {/* Editor */}
-          <div className="bg-white border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          {/* Editor — Rev. 4477: card sticky abaixo do CompanyHeader (top-14=56px);
+               action toolbar flex-shrink-0 (nunca rola); conteúdo/texto rola internamente. */}
+          <div className="bg-white border rounded-lg flex flex-col overflow-hidden sticky top-14 z-20" style={{ height: 'calc(100vh - 3.5rem - 0.5rem)' }}>
+            <div className="flex-shrink-0 flex items-center justify-between border-b bg-white px-4 py-2.5 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setMostrarHistorico(v => !v)}>
                   <History className="w-4 h-4 mr-1" /> Histórico
@@ -1068,6 +1069,9 @@ export default function TemplatesDocsTab() {
                 <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={handlePdfSelecionado} />
               </div>
             </div>
+
+            {/* Área scrollável — só o texto/conteúdo rola; toolbars acima ficam fixas */}
+            <div className="flex-1 overflow-y-auto min-h-0 px-4 py-3">
 
             {iaPainel && (
               <div className="mb-3 p-3 border border-violet-200 bg-violet-50/60 rounded-lg">
@@ -1196,6 +1200,7 @@ export default function TemplatesDocsTab() {
                 </div>
               </div>
             )}
+            </div>{/* fim área scrollável */}
           </div>
         </div>
 
