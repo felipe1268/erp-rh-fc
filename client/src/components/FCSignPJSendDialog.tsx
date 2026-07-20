@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, Users, Loader2, Copy, CheckCircle2, ExternalLink, Send, Lock, Building2, FileSignature } from "lucide-react";
+import { ShieldCheck, Users, Loader2, Copy, CheckCircle2, ExternalLink, Send, Lock, Building2, FileSignature, AlertTriangle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { buildContratoPjSignHtml } from "@/lib/contratoPjDocument";
@@ -67,6 +67,17 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
 
   const handleSubmit = async () => {
     if (!contrato) { toast.error("Contrato ainda carregando."); return; }
+    // Rev. 4462 — Validação de dados obrigatórios antes de criar a sessão de assinatura
+    const faltando: string[] = [];
+    if (!(contrato as any).cnpjPrestador || (contrato as any).cnpjPrestador.replace(/\D/g, "").length !== 14) faltando.push("CNPJ");
+    if (!(contrato as any).enderecoPrestador?.trim()) faltando.push("Endereço");
+    const temBanco = !!((contrato as any).bancoPrestador?.trim() && (contrato as any).contaPrestador?.trim());
+    const temPix = !!(contrato as any).pixPrestador?.trim();
+    if (!temBanco && !temPix) faltando.push("Dados Bancários (banco+conta ou PIX)");
+    if (faltando.length > 0) {
+      toast.error(`Preencha os dados obrigatórios antes de assinar: ${faltando.join(", ")}. Edite o contrato e tente novamente.`);
+      return;
+    }
     const modeloHtml = modeloQ.data?.modeloHtml || null;
     const modelo = modeloQ.data?.modelo || "";
     if (!modeloHtml && !modelo) { toast.error("Modelo de contrato não configurado. Configure em Configurações → Templates de Documentos → Contrato PJ."); return; }
@@ -143,6 +154,27 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
             </div>
           ) : !result ? (
             <div className="space-y-4 max-w-6xl mx-auto w-full">
+              {/* Rev. 4462 — Banner de alerta de dados incompletos */}
+              {contrato && (() => {
+                const faltando: string[] = [];
+                if (!(contrato as any).cnpjPrestador || (contrato as any).cnpjPrestador.replace(/\D/g, "").length !== 14) faltando.push("CNPJ");
+                if (!(contrato as any).enderecoPrestador?.trim()) faltando.push("Endereço");
+                const temBanco = !!((contrato as any).bancoPrestador?.trim() && (contrato as any).contaPrestador?.trim());
+                const temPix = !!(contrato as any).pixPrestador?.trim();
+                if (!temBanco && !temPix) faltando.push("Dados Bancários (banco+conta ou PIX)");
+                if (faltando.length === 0) return null;
+                return (
+                  <div className="rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-amber-900">Dados incompletos — assinatura bloqueada</p>
+                      <p className="text-xs text-amber-800 mt-1 break-words">
+                        Feche este painel, edite o contrato e preencha: <strong>{faltando.join(", ")}</strong>.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-start gap-2 text-xs text-indigo-900">
                 <ShieldCheck className="h-4 w-4 mt-0.5 flex-shrink-0 text-indigo-700" />
                 <div>

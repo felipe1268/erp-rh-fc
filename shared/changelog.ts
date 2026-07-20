@@ -1,4 +1,52 @@
 /**
+ * Rev. 4462 - FEAT: VALIDAÇÃO DE DADOS OBRIGATÓRIOS ANTES DE ENVIAR CONTRATO PJ PARA ASSINATURA
+ *
+ * CONTEXTO: O botão "Enviar para Assinatura (FCSign)" nos contratos PJ podia ser clicado mesmo
+ * quando CNPJ, Endereço e Dados Bancários do prestador estavam em branco — o contrato gerado
+ * ficaria incompleto juridicamente e o documento assinado seria inutilizável.
+ *
+ * REGRA (definida pelo usuário):
+ *   - CNPJ: 14 dígitos válidos obrigatório.
+ *   - Endereço: campo enderecoPrestador não vazio.
+ *   - Dados Bancários: (bancoPrestador + contaPrestador preenchidos) OU pixPrestador preenchido.
+ *   Se qualquer um faltar → bloqueio total do envio para assinatura.
+ *
+ * IMPLEMENTAÇÃO (3 camadas, apenas FRONTEND + 1 seletor backend):
+ *
+ * (1) helper `contratoFaltando(c)` (client/src/pages/ModuloPJ.tsx):
+ *     Função pura que recebe o objeto contrato e retorna string[] com os campos faltando.
+ *     Regras: CNPJ via replace(/\D/g).length===14; endereço via .trim(); banco=(banco+conta) OU pix.
+ *
+ * (2) Botão de assinatura na LISTA (ModuloPJ.tsx ~L958):
+ *     - Se contrato já assinado → ícone "Ver" verde (inalterado).
+ *     - Se dados faltando → ícone ⚠️ âmbar com title descritivo; clique dispara toast.warning().
+ *     - Se completo → ícone Send verde abre FCSignPJSendDialog (comportamento anterior).
+ *
+ * (3) Banner no DETAIL DIALOG (ModuloPJ.tsx ~L1348):
+ *     Tarja âmbar entre os botões de ação e as abas, listando os campos faltando +
+ *     botão "Preencher agora" que fecha o detail e abre o form de edição.
+ *     Usa contratoByIdData (getById, mais completo) com fallback a selectedContrato.
+ *
+ * (4) FCSIGN DIALOG — validação dupla (FCSignPJSendDialog.tsx):
+ *     a) Banner âmbar no corpo do dialog (antes do fluxo de signatários) listando os campos faltando.
+ *     b) handleSubmit: bloqueia com toast.error() se qualquer campo faltando, ANTES de montar o HTML
+ *        do contrato ou chamar signatures.create — garante que mesmo acesso direto ao dialog seja
+ *        bloqueado.
+ *
+ * (5) Backend (server/routers/pjContracts.ts — contratos.list):
+ *     Adicionados bancoPrestador, contaPrestador, pixPrestador, enderecoPrestador ao SELECT da
+ *     listagem. Necessário para que o botão âmbar na LISTA (que usa dados do cache da lista) possa
+ *     fazer a verificação sem precisar de um getById extra.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change.
+ * Arquivos tocados:
+ *   - client/src/pages/ModuloPJ.tsx (helper + botão lista + banner detail)
+ *   - client/src/components/FCSignPJSendDialog.tsx (banner + handleSubmit gate)
+ *   - server/routers/pjContracts.ts (add 4 campos ao contratos.list select)
+ *   - shared/version.ts (bump 4461→4462)
+ */
+
+/**
  * Rev. 4461 - FIX: DESMARCAR SERVIÇO EAP NA SC E SALVAR NÃO PERSISTE (REABRE COM ITEM AINDA MARCADO)
  *
  * CAUSA-RAIZ: race condition entre cache stale do React Query e abertura do form de edição.

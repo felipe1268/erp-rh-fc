@@ -46,6 +46,17 @@ function formatCNPJ(v: string | null | undefined) {
   return n.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
 }
 
+/** Rev. 4462 — Retorna lista dos campos obrigatórios faltando para enviar à assinatura. */
+function contratoFaltando(c: any): string[] {
+  const f: string[] = [];
+  if (!c.cnpjPrestador || c.cnpjPrestador.replace(/\D/g, "").length !== 14) f.push("CNPJ");
+  if (!c.enderecoPrestador?.trim()) f.push("Endereço");
+  const temBanco = !!(c.bancoPrestador?.trim() && c.contaPrestador?.trim());
+  const temPix = !!c.pixPrestador?.trim();
+  if (!temBanco && !temPix) f.push("Dados Bancários (banco+conta ou PIX)");
+  return f;
+}
+
 /**
  * Rev. 3262 — Badge do cruzamento prestador × catálogo de Fornecedores.
  * verde = casou por CNPJ; ambar = sugestão por nome (a confirmar);
@@ -941,6 +952,16 @@ export default function ModuloPJ() {
                                       </Button>
                                     );
                                   }
+                                  const faltando = contratoFaltando(c);
+                                  if (faltando.length > 0) {
+                                    return (
+                                      <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-500"
+                                        title={`Dados incompletos — preencha antes de assinar: ${faltando.join(", ")}`}
+                                        onClick={() => toast.warning(`Preencha antes de enviar para assinatura: ${faltando.join(", ")}`)}>
+                                        <AlertTriangle className="h-3.5 w-3.5" />
+                                      </Button>
+                                    );
+                                  }
                                   return (
                                     <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Enviar para assinatura (FCSign)" onClick={() => setFcSignPJContratoId(c.id)}>
                                       <Send className="h-3.5 w-3.5" />
@@ -1320,6 +1341,29 @@ export default function ModuloPJ() {
                   <Pencil className="h-4 w-4" /> Editar
                 </Button>
               </div>
+
+              {/* Rev. 4462 — Banner de dados obrigatórios faltando para assinatura */}
+              {(() => {
+                const src = contratoByIdData || selectedContrato;
+                const faltando = src ? contratoFaltando(src) : [];
+                if (faltando.length === 0) return null;
+                return (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-start gap-3">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-amber-800">Contrato incompleto — envio para assinatura bloqueado</p>
+                      <p className="text-xs text-amber-700 mt-0.5 break-words">
+                        Preencha os seguintes dados antes de enviar para assinatura: <strong>{faltando.join(", ")}</strong>.
+                      </p>
+                    </div>
+                    <Button size="sm" variant="outline"
+                      className="border-amber-400 text-amber-700 hover:bg-amber-100 text-xs shrink-0"
+                      onClick={() => { setShowDetailDialog(false); openEditContrato(selectedContrato); }}>
+                      Preencher agora
+                    </Button>
+                  </div>
+                );
+              })()}
 
               {/* Tabs */}
               <Tabs value={detailTab} onValueChange={setDetailTab}>
