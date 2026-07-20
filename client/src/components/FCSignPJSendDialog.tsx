@@ -99,6 +99,30 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
     }
   };
 
+  // Rev. 4476 — Prévia abre o MESMO HTML que será enviado ao FCSign,
+  // não mais o ContratoPJView (rota /contrato-pj/:id).
+  const handlePreview = () => {
+    if (!contrato) { toast.error("Contrato ainda carregando."); return; }
+    const modeloHtml = modeloQ.data?.modeloHtml || null;
+    const modelo = modeloQ.data?.modelo || "";
+    if (!modeloHtml && !modelo) {
+      toast.error("Modelo de contrato não configurado. Configure em Configurações → Templates de Documentos → Contrato PJ.");
+      return;
+    }
+    const html = buildContratoPjSignHtml({
+      contrato,
+      modelo,
+      modeloHtml,
+      contratanteNome: FELIPE_SOCIO.nome,
+      geradoPor: geradoPor || "Sistema",
+      margins: documentMargins,
+      hasTestemunhas: !!(t1Nome.trim() || t2Nome.trim()),
+    });
+    const w = window.open("", "_blank");
+    if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+    else toast.error("O navegador bloqueou a abertura da prévia. Permita pop-ups para este site.");
+  };
+
   const handleSubmit = async () => {
     if (!contrato) { toast.error("Contrato ainda carregando."); return; }
     // Rev. 4462 — Validação de dados obrigatórios antes de criar a sessão de assinatura
@@ -434,7 +458,13 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
           {!result ? (
             <>
               <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={createMut.isPending || cancelando}>Cancelar</Button>
-              <Button type="button" variant="outline" className="gap-1.5 border-purple-300 text-purple-700 hover:bg-purple-50" onClick={() => window.open(`/contrato-pj/${contratoId}`, "_blank")}>
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-1.5 border-purple-300 text-purple-700 hover:bg-purple-50"
+                onClick={handlePreview}
+                disabled={contratoQ.isLoading || modeloQ.isLoading}
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                 Prévia do Contrato
               </Button>

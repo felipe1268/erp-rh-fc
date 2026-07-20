@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4476** — **FIX: PRÉVIA DO CONTRATO NO DIÁLOGO FCSIGN ABRE O DOCUMENTO CORRETO.** Botão "Prévia do Contrato" antes fazia `window.open('/contrato-pj/:id')` (abrindo o ContratoPJView antigo). Agora `handlePreview()` gera o HTML via `buildContratoPjSignHtml` (idêntico ao enviado ao FCSign) e abre numa janela nova. Botão desabilitado enquanto carregando; toast se pop-up bloqueado. ZERO schema change.
 - **Rev. 4475** — **FIX: BLOCO DE ASSINATURA DO CONTRATO PJ — REMOVE TEXTO REDUNDANTE + TESTEMUNHAS.** Nova função `stripPartyIdBlock()` em `contratoPjDocument.ts`: remove `<p>` com "CONTRATANTE:"/„CONTRATADA:" e linhas avulsas "CNPJ: ..." do corpoHtml ISO (eram texto duplicado do template). `hasTestemunhas` propagado do diálogo FCSign → `buildFcDocument` renderiza slots de testemunha_1/testemunha_2 quando ao menos uma testemunha for preenchida. ZERO schema change.
-- **Rev. 4474** — **FEAT: FCSIGN PJ EXIBE SESSÃO ATIVA BLOQUEANTE + BOTÃO CANCELAR.** Novo endpoint `signatures.getActiveByObservacoes` retorna sessão não-cancelada por `observacoes='contrato_pj:{id}'` com signers. `FCSignPJSendDialog.tsx` busca a sessão ao abrir: se existe, mostra painel laranja com status, data, quem criou, status de cada signatário (✓/⏱) e botão "Cancelar sessão" (Admin Master). Formulário fica oculto enquanto houver sessão ativa. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4474** — **FEAT: FCSIGN PJ EXIBE SESSÃO ATIVA BLOQUEANTE + BOTÃO CANCELAR.** Novo endpoint `signatures.getActiveByObservacoes`; `FCSignPJSendDialog.tsx` mostra painel laranja com status, signatários (✓/⏱) e botão "Cancelar sessão" (Admin Master). Formulário oculto enquanto houver sessão ativa. ZERO schema change.
 - **Rev. 4473** — **FIX: PRÉVIA DO CONTRATO PJ MOSTRA RASCUNHO + BANNER DE AVISO.** `pj.modeloContrato` aceita `forPreview: true` → fallback ao rascunho quando não há vigente + retorna `isRascunho`. `ContratoPJView.tsx` usa `forPreview: true`; banner âmbar quando `isRascunho=true`. ZERO schema change.
 - **Rev. 4472** — **FIX: PREVIEW DO CONTRATO PJ USA SOMENTE O TEMPLATE DA CENTRAL DE DOCUMENTOS.** `handlePreviewContrato` bloqueia com toast de erro se `modeloHtml=null`; botão desabilitado + spinner enquanto query não resolve. Template legado NUNCA mais exibido. ZERO schema change.
 - **Rev. 4471** — **FEAT: VALOR E DADOS BANCÁRIOS EM VERMELHO + TABELA NO PDF DO CONTRATO PJ.** `replacePlaceholders` em `contratoPjDocument.ts`: ISO path → `[VALOR_MENSAL]`/`[VALOR_EXTENSO]` → vermelho, `[DADOS_BANCARIOS_CONTRATADA]` → mini-tabela HTML. ZERO schema change.
 - **Rev. 4470** — **FEAT: COMBOBOX PESQUISÁVEL DE BANCOS BRASILEIROS NO CONTRATO PJ.** Campo "Banco" em §5 → `BancoCombobox` (Popover+Command). Nova lib `bancosBrasil.ts` com ~250 bancos; filtra por código/nome; normaliza acentos. ZERO schema change.
-- **Rev. 4469** — **FEAT: REATIVAR CONTRATO PJ CANCELADO.** Botão `<CheckCircle2>` teal desfaz cancelamento acidental: mutation `reativar` guard status=cancelado → ativo; onSuccess muda filtro. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

@@ -1,4 +1,28 @@
 /**
+ * Rev. 4476 - FIX: PRÉVIA DO CONTRATO NO DIÁLOGO FCSIGN ABRE O DOCUMENTO CORRETO
+ *
+ * PROBLEMA RAIZ: o botão "Prévia do Contrato" no FCSignPJSendDialog fazia
+ * `window.open('/contrato-pj/${contratoId}')`, que abria o ContratoPJView — o visualizador
+ * antigo (formato "Contrato de Prestação de Serviços PJ" com cabeçalho azul simples, sem o
+ * layout FC template). O documento enviado ao FCSign é gerado por `buildContratoPjSignHtml`
+ * (layout com logo, faixa azul "CONTRATO PJ", data de emissão, bloco de assinaturas).
+ * Ou seja, o usuário visualizava um documento diferente do que seria assinado.
+ *
+ * FIX:
+ *   · `FCSignPJSendDialog.tsx` → nova função `handlePreview()`: gera o HTML via
+ *     `buildContratoPjSignHtml` (idêntico ao `handleSubmit`) e abre numa janela nova
+ *     via `window.open("","_blank")` + `document.write(html)`.
+ *   · `hasTestemunhas` propagado para a prévia (se t1Nome ou t2Nome preenchidos,
+ *     a prévia já mostra os slots de testemunha).
+ *   · Botão desabilitado enquanto `contratoQ.isLoading || modeloQ.isLoading`.
+ *   · Toast de erro se pop-up bloqueado pelo navegador.
+ *   · ZERO schema change. ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS:
+ *   · client/src/components/FCSignPJSendDialog.tsx — `handlePreview` + novo onClick.
+ */
+
+/**
  * Rev. 4475 - FIX: BLOCO DE ASSINATURA DO CONTRATO PJ — REMOVE TEXTO REDUNDANTE + TESTEMUNHAS
  *
  * PROBLEMA RAIZ: o PDF/HTML do contrato PJ exibia, no corpo do documento (após a CLÁUSULA DÉCIMA
