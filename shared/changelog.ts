@@ -1,15 +1,29 @@
 /**
- * Rev. 4456 - FEAT: PRONTUÁRIO DO FORNECEDOR (SHEET LATERAL) + EXCLUSÃO DEFINITIVA
+ * Rev. 4456 - FEAT: FICHA COMPLETA DO FORNECEDOR (PÁGINA FULL-SCREEN MODERNA) + EXCLUSÃO DEFINITIVA
  *
- * Contexto: na tela de Fornecedores, clicar no nome da empresa agora abre um painel
- * lateral (Sheet) com o prontuário completo: razão social, CNPJ, situação Receita Federal,
- * badges de status, categorias, contato (telefone/e-mail/contato comercial), endereço
- * completo, dados bancários, desempenho (reutilizando DesempenhoFornecedor) e observações.
- * Ações rápidas no cabeçalho do painel: Editar, Avaliar, Portal.
+ * Contexto: na tela de Fornecedores, clicar no nome da empresa navega para a rota
+ * /compras/fornecedores/:id — página full-screen com layout moderno em 2 colunas (2/3 + 1/3).
  *
- * Além disso, foi adicionado botão de exclusão definitiva (🗑️) para fornecedores inativos:
- * clique no ícone → confirmar/cancelar inline → servidor verifica vínculos em compras_ordens
- * e compras_cotacoes; se houver vínculos, exibe mensagem explicativa; caso contrário, DELETE.
+ * Hero header com gradiente escuro, ícone, CNPJ, badges de situação/status e destaque
+ * proeminente de "Tempo no mercado" (calculado a partir de dataAbertura; exibe anos/meses +
+ * ícone Sparkles para empresas ≥10 anos). Capital Social exibido formatado como R$ (pt-BR).
+ *
+ * Seções principais (coluna 2/3): Dados Receita Federal (natureza jurídica, porte,
+ * capital social em R$, data abertura com badge de idade inline), Atividades CNAE (principal
+ * em card azul + secundárias como lista), Inscrições Fiscais, Representante Legal, Quadro
+ * Societário (grid 2 colunas com avatar inicial), Desempenho (score geral + 4 métricas
+ * coloridas: OCs, pontualidade, competitividade, avaliação), Observações.
+ *
+ * Coluna lateral (1/3): Contato, Endereço, Dados Bancários (ag/conta lado a lado + PIX
+ * formatado), Classificações (chips coloridos fornecedor/prestador), Registro.
+ *
+ * Exclusão definitiva: botão 🗑️ inline em Fornecedores.tsx para inativos sem vínculos.
+ * Mutation deletarFornecedor: guard ativo=false + FK check em compras_ordens/cotacoes + DELETE.
+ *
+ * Arquivos: client/src/pages/compras/FornecedorFicha.tsx (nova página full-screen),
+ * client/src/pages/compras/Fornecedores.tsx (navegação por setLocation, Sheet removido),
+ * client/src/App.tsx (rota /compras/fornecedores/:id antes da rota base),
+ * server/routers/compras.ts (mutation deletarFornecedor).
  *
  * Arquivos alterados:
  * - `client/src/pages/compras/Fornecedores.tsx`: import Sheet + Trash2; estado prontuario +
