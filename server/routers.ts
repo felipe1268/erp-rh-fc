@@ -44,7 +44,7 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS, EMPLOYEE_STATUS_DESLIGADOS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens, obraFuncionarios, obraClientes, clientes, terminationNotices, gestorSubstituicaoSolicitacoes } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens, obraFuncionarios, obraClientes, clientes, terminationNotices, gestorSubstituicaoSolicitacoes, users } from "../drizzle/schema";
 import { calcularRescisaoCompleta, calcularAnosServico } from "./utils/rescisaoCalc";
 import { getIncluirMultaFgts } from "./utils/rescisaoMultaCfg";
 import { diasFeriasNoMesDaSaida } from "./routers/avisoPrevioFerias";
@@ -415,7 +415,41 @@ export const appRouter = router({
         gestorProjetoId: companies.gestorProjetoId,
         gestorProjetoNome: companies.gestorProjetoNome,
       }).from(companies).where(eq(companies.id, input.companyId));
-      return company || { gestorFinanceiroId: null, gestorFinanceiroNome: null, gestorRhId: null, gestorRhNome: null, gestorProjetoId: null, gestorProjetoNome: null };
+      if (!company) return { gestorFinanceiroId: null, gestorFinanceiroNome: null, gestorRhId: null, gestorRhNome: null, gestorProjetoId: null, gestorProjetoNome: null, finUser: null, rhUser: null };
+
+      // Busca status do usuário do sistema para cada gestor via employees.email → users.email
+      const gestorIds: number[] = [];
+      if (company.gestorFinanceiroId) gestorIds.push(company.gestorFinanceiroId);
+      if ((company as any).gestorRhId) gestorIds.push((company as any).gestorRhId);
+
+      type UserInfo = { userId: number; status: string; nome: string } | null;
+      let finUser: UserInfo = null;
+      let rhUser: UserInfo = null;
+
+      if (gestorIds.length > 0) {
+        const empRows = await db.select({ id: employees.id, email: employees.email })
+          .from(employees).where(inArray(employees.id, gestorIds));
+        const emails = empRows.map(e => e.email).filter(Boolean) as string[];
+        if (emails.length > 0) {
+          const userRows = await db.select({ id: users.id, email: users.email, name: users.name, status: users.status, deletedAt: users.deletedAt })
+            .from(users).where(inArray(users.email, emails));
+          const userByEmail = new Map(userRows.map(u => [u.email?.toLowerCase() || "", u]));
+          const empById = new Map(empRows.map(e => [e.id, e]));
+
+          if (company.gestorFinanceiroId) {
+            const emp = empById.get(company.gestorFinanceiroId);
+            const u = emp?.email ? userByEmail.get(emp.email.toLowerCase()) : null;
+            finUser = u ? { userId: u.id, status: u.deletedAt ? "deletado" : (u.status || "ativo"), nome: u.name || "" } : null;
+          }
+          if ((company as any).gestorRhId) {
+            const emp = empById.get((company as any).gestorRhId);
+            const u = emp?.email ? userByEmail.get(emp.email.toLowerCase()) : null;
+            rhUser = u ? { userId: u.id, status: u.deletedAt ? "deletado" : (u.status || "ativo"), nome: u.name || "" } : null;
+          }
+        }
+      }
+
+      return { ...company, finUser, rhUser };
     }),
     salvarGestoresContrato: protectedProcedure.input(z.object({
       companyId: z.number(),

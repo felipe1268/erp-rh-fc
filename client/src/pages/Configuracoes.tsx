@@ -1306,6 +1306,35 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
 // ============================================================
 // COMPONENTE: Gestores de Contratos
 // ============================================================
+function GestorUserStatusBadge({ userInfo, empId }: {
+  userInfo: { userId: number; status: string; nome: string } | null;
+  empId: number | null;
+}) {
+  if (!empId) return null;
+  if (!userInfo) {
+    return (
+      <p className="text-xs text-amber-600 flex items-center gap-1.5">
+        <AlertTriangle className="w-3 h-3 shrink-0" />
+        Sem conta no sistema — cadastre um usuário com o mesmo e-mail deste funcionário
+      </p>
+    );
+  }
+  if (userInfo.status === "deletado" || userInfo.status === "inativo") {
+    return (
+      <p className="text-xs text-red-600 flex items-center gap-1.5">
+        <AlertTriangle className="w-3 h-3 shrink-0" />
+        Usuário <strong>{userInfo.nome}</strong> está <strong>inativo</strong> no sistema
+      </p>
+    );
+  }
+  return (
+    <p className="text-xs text-emerald-700 flex items-center gap-1.5">
+      <Check className="w-3 h-3 shrink-0" />
+      Usuário <strong>{userInfo.nome}</strong> ativo no sistema
+    </p>
+  );
+}
+
 function GestoresContratoTab({ companyId }: { companyId: number }) {
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
@@ -1446,6 +1475,7 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
                   <AlertTriangle className="w-3 h-3" /> Não configurado — contratos não poderão ser enviados
                 </p>
               )}
+              <GestorUserStatusBadge userInfo={(gestoresQuery.data as any)?.finUser ?? null} empId={gestoresQuery.data?.gestorFinanceiroId ?? null} />
             </div>
 
             {/* Gestor RH */}
@@ -1470,6 +1500,7 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
                   <AlertTriangle className="w-3 h-3" /> Não configurado — contratos não poderão ser enviados
                 </p>
               )}
+              <GestorUserStatusBadge userInfo={(gestoresQuery.data as any)?.rhUser ?? null} empId={(gestoresQuery.data as any)?.gestorRhId ?? null} />
             </div>
           </div>
 
