@@ -1,3 +1,4 @@
+- **Rev. 4442** — **FIX: PÁGINAS EM BRANCO NO PRINT DO CONTRATO PJ (FCSign).** `print:hidden` no header/toolbar/aside; `<main>` → `print:block`; `@media print` reescrito. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4441** — **FEAT: MARGENS POR TEMPLATE — Aba Documentos ISO (TemplatesDocsTab).** 4 colunas em `system_document_templates`; ColFix `v4441`; tRPC `updateTemplateMargins`; aba "Configurações de Página" REMOVIDA. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4440** — **FEAT: MARGENS CONFIGURÁVEIS POR EMPRESA — Central de Documentos.** 4 colunas em `companies`; ColFix `v4440`; tRPC `getDocumentMargins`+`updateDocumentMargins`; hook `useDocumentMargins`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4438** — **LAYOUT: MARGENS 1cm EM TODOS OS LADOS — PADRÃO DEFINITIVO (buildFcDocument).** `@page`: `10mm`; `.fc-doc` padding: `1cm`. ZERO DELETE · ZERO ALTER destrutivo.

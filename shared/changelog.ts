@@ -1,4 +1,26 @@
 /**
+ * Rev. 4452 - FIX: CUSTO RH — AFASTADO INSS > 15 DIAS NÃO ERA EXCLUÍDO DO CUSTO ESTIMADO (SINTÉTICO)
+ *
+ * Quando um funcionário tem status='Afastado' e o INSS assumiu o pagamento (licencaDataInicio + 15 dias
+ * já passou), o custo estimado sintético ainda aparecia na tabela "Custo por Mês" porque o loop sintético
+ * não tinha a checagem de afastamento — só verificava gozo de férias e recluso.
+ *
+ * Fix no loop sintético (server/routers/scorecard.ts):
+ *  1. Antes do loop de meses: deriva `licencaDt15 = licencaDataInicio + 15 dias` para Afastados.
+ *  2. Por mês: se `licencaDt15 < monthStart` → pula o mês inteiro (INSS paga tudo).
+ *  3. Se `licencaDt15` cai dentro do mês: limita `overlapEnd` ao dia anterior (empresa paga só
+ *     os dias de responsabilidade), zerando o restante do mês.
+ *
+ * A mesma lógica já existia em:
+ *  - period_emps critério 3 (SQL, mês único)
+ *  - mesesComDados computation (JS, bolinhas do seletor de período)
+ * Agora os três contextos estão consistentes.
+ *
+ * Arquivo: server/routers/scorecard.ts (loop sintético, ~10 linhas)
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4451 - FIX: CUSTO RH — DATA INVÁLIDA "YYYY-MM-31" QUEBRAVA MESES COM <31 DIAS (JUNHO, ABR, SET, NOV, FEV)
  *
  * getCustosRH: query de férias (vacation_periods) usava `(mesFeriasFim || '-31')::date`

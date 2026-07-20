@@ -2575,14 +2575,36 @@ export const scorecardRouter = router({
         const syntheticHist: any[] = [];
         let curY = iniY, curM = iniM;
 
+        // Afastado INSS: licencaDataInicio + 15 dias → empresa paga até lá, INSS assume depois.
+        const isAfastadoInss = (f.status as string) === 'Afastado' && !!f.licenca_data_inicio;
+        const licencaDt15: Date | null = isAfastadoInss
+          ? (() => {
+              const d = new Date(String(f.licenca_data_inicio).slice(0, 10) + 'T00:00:00');
+              d.setDate(d.getDate() + 15);
+              return d;
+            })()
+          : null;
+
         while (curY < fimY || (curY === fimY && curM <= fimM)) {
           const mesStr     = `${curY}-${String(curM).padStart(2, '0')}`;
           const monthStart = new Date(curY, curM - 1, 1);
           const monthEnd   = new Date(curY, curM, 0); // último dia do mês
           const diasNoMes  = countWorkingDays(monthStart, monthEnd); // dias úteis do mês
 
+          // Afastado INSS > 15 dias antes do início do mês → INSS paga tudo este mês.
+          // Mesma lógica usada em period_emps (critério 3) e mesesComDados.
+          if (licencaDt15 && licencaDt15 < monthStart) {
+            curM++; if (curM > 12) { curM = 1; curY++; } continue;
+          }
+
           const overlapStart = desde > monthStart ? desde : monthStart;
-          const overlapEnd   = ate   < monthEnd   ? ate   : monthEnd;
+          // Afastado INSS: limita o overlap ao último dia de responsabilidade da empresa
+          // (licencaDt15 - 1 dia). Se 15º dia cai após o mês, usa monthEnd normalmente.
+          const inssHandoverDay: Date | null = (licencaDt15 && licencaDt15 <= monthEnd)
+            ? new Date(licencaDt15.getTime() - 86_400_000) // licencaDt15 - 1 dia
+            : null;
+          const effectiveEnd = inssHandoverDay ?? monthEnd;
+          const overlapEnd   = ate < effectiveEnd ? ate : effectiveEnd;
           const diasNaObra   = countWorkingDays(overlapStart, overlapEnd); // dias úteis na obra
 
           if (diasNaObra > 0) {
@@ -2592,8 +2614,7 @@ export const scorecardRouter = router({
             const emGozo      = isInVacation(n(f.employee_id), mesStr);
             const emRecluso   = f.status === 'Recluso';
             // Gozo de férias ou recluso → sem custo de folha (empresa não paga).
-            // Afastamento INSS NÃO zera salário estimado: o funcionário pode ter voltado
-            // no meio do mês, e o valor correto é responsabilidade da folha processada.
+            // Afastado INSS dentro dos primeiros 15 dias: empresa ainda paga (incluído).
             const zeroSal     = emGozo || emRecluso;
             const salProrated  = zeroSal ? 0 : rnd2(salBase * frac);
             const fgtsProrated = zeroSal ? 0 : rnd2(salBase * 0.08 * frac);
