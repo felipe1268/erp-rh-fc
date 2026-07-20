@@ -50,7 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4448** — **FIX: CUSTO RH — EX-FUNCIONÁRIOS EXCLUÍDOS DA OBRA (isActive=0).** `site_periods` Ramo B: fallback `CURRENT_DATE→max_created` quando `has_active=0`; Ramo A Prioridade 2: exige `isActive=1` no OF check. Segundo `sitePeriodsCte` (~L3005) recebe fix idêntico. Custo RH agora alinhado com Efetivo. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4448b** — **FIX: CUSTO RH — PRIORIDADE 1 site_periods IGNORAVA isActive (raiz real).** Ramo A Prioridade 1: `WHEN BOOL_OR(dataFim IS NULL)` passa a exigir `NOT EXISTS(OF) OR EXISTS(OF.isActive=1)`; sem isso, ESH aberto de ex-funcionário retornava CURRENT_DATE. Fix em getCustosRH e sitePeriodsCte. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4447** — **FIX: CUSTO ESTIMADO DE FÉRIAS — SALÁRIO VIA JOIN (mismatch de empresa).** `allVacations` select inclui `empSalarioBase: employees.salarioBase` (JOIN já existia). `feriasCustoProximo` usa `v.empSalarioBase` direto, eliminando falha quando funcionário é de empresa irmã do grupo. `parseSalarioBR()` robusto. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners

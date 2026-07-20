@@ -1783,9 +1783,27 @@ export const scorecardRouter = router({
                 (SELECT data_inicio FROM obra_inicio)
               )                                                              AS periodo_inicio,
               CASE
-                -- Prioridade 1: registro em aberto (dataFim IS NULL) → ainda está na obra AGORA.
-                -- Deve ganhar de qualquer saída anterior (funcionário saiu e foi re-alocado aqui).
-                WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
+                -- Prioridade 1: registro em aberto (dataFim IS NULL) + OF confirma isActive=1.
+                -- Rev. 4448b: ESH aberto sem OF (puro histórico) → também CURRENT_DATE.
+                -- Mas se existe OF com isActive=0 (desativado via Efetivo sem fechar o ESH),
+                -- o registro aberto NÃO vale como "ainda aqui" — cai nas prioridades seguintes.
+                WHEN BOOL_OR(esh."dataFim" IS NULL) AND (
+                  -- Sem nenhuma entrada em obra_funcionarios (alocação puramente via ESH)
+                  NOT EXISTS (
+                    SELECT 1 FROM obra_funcionarios ofz
+                    WHERE ofz."employeeId" = esh."employeeId"
+                      AND ofz."obraId"    = ${input.obraId}
+                      AND ofz."companyId" = ${input.companyId}
+                  )
+                  -- OU tem entrada ativa (isActive=1) → ainda aqui
+                  OR EXISTS (
+                    SELECT 1 FROM obra_funcionarios ofz2
+                    WHERE ofz2."employeeId" = esh."employeeId"
+                      AND ofz2."obraId"    = ${input.obraId}
+                      AND ofz2."companyId" = ${input.companyId}
+                      AND ofz2."isActive"  = 1
+                  )
+                ) THEN CURRENT_DATE
                 -- Prioridade 2 (Rev. 4358): todos os registros de history fechados, mas
                 -- obra_funcionarios tem entrada ativa (sem transferência posterior para outra obra).
                 -- Isso cobre o caso: saída formal em history em mai + re-alocado em obra_funcionarios
@@ -3019,7 +3037,22 @@ export const scorecardRouter = router({
               WHEN BOOL_OR(esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL)
                 THEN MAX(CASE WHEN esh.tipo = 'saida' AND esh."dataFim" IS NOT NULL
                               THEN esh."dataFim"::date END)
-              WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
+              -- Rev. 4448b: ESH aberto → CURRENT_DATE só se OF confirma isActive=1 ou sem OF
+              WHEN BOOL_OR(esh."dataFim" IS NULL) AND (
+                NOT EXISTS (
+                  SELECT 1 FROM obra_funcionarios ofz
+                  WHERE ofz."employeeId" = esh."employeeId"
+                    AND ofz."obraId"    = ${obraId}
+                    AND ofz."companyId" = ${companyId}
+                )
+                OR EXISTS (
+                  SELECT 1 FROM obra_funcionarios ofz2
+                  WHERE ofz2."employeeId" = esh."employeeId"
+                    AND ofz2."obraId"    = ${obraId}
+                    AND ofz2."companyId" = ${companyId}
+                    AND ofz2."isActive"  = 1
+                )
+              ) THEN CURRENT_DATE
               ELSE MAX(esh."dataFim"::date)
             END                                                            AS periodo_fim
           FROM employee_site_history esh

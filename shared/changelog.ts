@@ -1,4 +1,31 @@
 /**
+ * Rev. 4448b - FIX: CUSTO RH — PRIORIDADE 1 DO site_periods IGNORAVA isActive (raiz real)
+ *
+ * Problema: após Rev. 4448 o Custo RH continuava mostrando ex-funcionários (Darcy, Felipe,
+ * Jose Carlos) que não estavam no Efetivo da obra.
+ *
+ * CAUSA-RAIZ REAL:
+ * A Prioridade 1 do CASE em site_periods Ramo A:
+ *   WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
+ * só verificava se há ESH aberto, sem cruzar com obra_funcionarios.isActive.
+ * Quando o funcionário é removido da obra via Efetivo (isActive→0) mas o ESH não é
+ * formalmente fechado (dataFim permanece NULL), a Prioridade 1 retorna CURRENT_DATE → 
+ * funcionário aparece no mês corrente mesmo desalocado.
+ *
+ * FIX (3 pontos em scorecard.ts):
+ *   1. Ramo A getCustosRH Prioridade 1 (L~1793): adiciona guard isActive.
+ *      WHEN BOOL_OR(dataFim IS NULL) AND (NOT EXISTS(OF) OR EXISTS(OF.isActive=1)) THEN CURRENT_DATE
+ *      Se todas as OF estão isActive=0 → cai nas prioridades seguintes (dataFim real ou NULL).
+ *   2. sitePeriodsCte Ramo A (L~3044): mesma lógica no CTE reutilizável de Banco de Horas.
+ *   Rev. 4448 (anterior) cobriu: Prioridade 2 + Ramo B de ambas as CTEs.
+ *
+ * Critério final: ESH aberto = "ainda aqui" SOMENTE SE obra_funcionarios.isActive=1
+ * (ou sem OF → alocação puramente via ESH, que é rara mas válida).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4448 - FIX: CUSTO RH — EX-FUNCIONÁRIOS EXCLUÍDOS DA OBRA (isActive=0)
  *
  * Problema: Custo RH mostrava funcionários (ex: Felipe Costa Alves) que NÃO estavam
