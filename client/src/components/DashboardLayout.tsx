@@ -87,6 +87,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Users, label: "Colaboradores", path: "/colaboradores" },
       { icon: ClipboardList, label: "Coleta de Campo", path: "/coleta-campo" },
       { icon: RefreshCw, label: "Recontratações Pendentes", path: "/recontratacoes-pendentes" },
+      { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
     ],
   },
   {
@@ -117,7 +118,6 @@ const menuSectionsRHDP: MenuSection[] = [
       ]},
       { icon: Palmtree, label: "Férias", path: "/ferias" },
       { icon: ShieldCheck, label: "Seguro de Vida", path: "/seguro-vida" },
-      { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
     ],
   },
   {
