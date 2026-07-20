@@ -1907,11 +1907,26 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             qtdCalculadaOriginal: qtdCalculada,
           });
         }
+        // Se todos os insumos ficaram com saldo=0 (ex.: cache stale de insumosConsolidados),
+        // cria um item genérico do serviço como fallback para garantir que o item seja
+        // incluído no payload e salvo. Sem isso: selectedEapIds recebe o id, checkbox
+        // aparece marcado, mas itens[] fica vazio → payload omite o serviço → não salva.
+        const itemsParaInserir = finalItems.length > 0 ? finalItems : [{
+          descricao: `[${eapItem.eapCodigo}] ${eapItem.descricao}`,
+          unidade: eapItem.unidade || "vb",
+          quantidade: String(qtdServ),
+          observacoes: "",
+          orcamentoItemId: orcItemId,
+          eapCodigo: eapItem.eapCodigo,
+          composicaoCodigo: eapItem.servicoCodigo,
+          origemEap: true,
+          quantidadeServico: qtdServ,
+        }];
         setItens(prev => {
           const avulsosDeste = prev.filter(x => x.orcamentoItemId === orcItemId && !x.insumoCodigo && !x.origemEap);
           const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
           const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
-          return [...semVazios, ...finalItems, ...avulsosDeste];
+          return [...semVazios, ...itemsParaInserir, ...avulsosDeste];
         });
         setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
       } else {

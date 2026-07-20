@@ -1,19 +1,22 @@
 /**
- * Rev. 4459 - FIX: ITENS NOVOS ERAM IMEDIATAMENTE DELETADOS APÓS INSERT (ORDEM ERRADA)
+ * Rev. 4459 - FIX: SALVAR/REMARCAR ITENS NA EAP (SC COM COTAÇÃO VINCULADA) — 2 BUGS
  *
- * Causa-raiz da Rev. 4458: o bloco `hasLinkedCot` executava as operações em ordem errada:
- *   1. UPDATE existentes ✅
- *   2. INSERT novos itens (ganham novos ids no banco)
- *   3. Busca existingItems — INCLUÍA os recém-inseridos!
- *   4. DELETE items cujo id não estava em inputItemIds — APAGAVA os recém-inseridos! ❌
+ * BUG A — Servidor: ordem errada de operações no branch hasLinkedCot.
+ *   Rev. 4458 executava: UPDATE → INSERT novos → busca existingItems → DELETE.
+ *   O problema: a busca de existingItems capturava os recém-inseridos, que então
+ *   apareciam em removedIds e eram APAGADOS imediatamente após o INSERT.
+ *   Fix: mover busca de existingItems + DELETE para ANTES do INSERT.
+ *   Ordem correta: UPDATE → DELETE (snapshot pré-insert) → INSERT novos.
  *
- * Os novos itens eram inseridos e imediatamente deletados, tornando as mudanças invisíveis.
- * Fix: mover a busca de existingItems + DELETE para ANTES do INSERT, garantindo que
- * o snapshot de "itens que existiam antes da edição" não contamine os novos inseridos.
+ * BUG B — Cliente: handleEapQtdChange criava finalItems=[] quando insumosConsolidadosQ
+ *   estava stale (cache de 30s) e mostrava saldo=0 para os insumos. Resultado: o item
+ *   aparecia como "marcado" no checkbox (selectedEapIds.add), mas nenhuma linha era
+ *   adicionada a itens[] → payload excluía o serviço → não salva.
+ *   Fix: se finalItems ficou vazio (todos insumos com saldo=0), criar 1 item genérico
+ *   do serviço como fallback (itemsParaInserir), garantindo presença no payload.
  *
- * Ordem correta: UPDATE → DELETE (de existentes antes da operação) → INSERT novos.
  * ZERO DELETE · ZERO ALTER destrutivo.
- * Arquivo: server/routers/compras.ts (editarSolicitacao, branch hasLinkedCot).
+ * Arquivos: server/routers/compras.ts + client/src/pages/compras/Solicitacoes.tsx.
  */
 
 /**
