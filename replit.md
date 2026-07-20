@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4458** — **FIX: ITENS DA SC NÃO ERAM SALVOS AO EDITAR SC COM COTAÇÃO VINCULADA.** `ItemForm` não tinha campo `id`; mapeamento de `scItens` e `itensPayload` nunca enviavam o id do item ao servidor. No servidor, o branch `hasLinkedCot` só processava itens com `id` → `inputItemIds=[]` → zero UPDATE/DELETE/INSERT. Fix em 4 pontos: (1) `id?` no `ItemForm`, (2) mapeamento do form, (3) payload, (4) servidor: UPDATE existentes + INSERT novos + DELETE removidos com todos os campos. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4457** — **FIX: CAMPOS DE LOCAÇÃO NÃO PERSISTIAM AO EDITAR SC DE EQUIPAMENTO.** `getSolicitacao` monta retorno com campos EXPLÍCITOS e os 4 campos de locação (`isLocacao`, `locacaoDuracaoDias`, `locacaoDataInicioPrevista`, `locacaoDataFimPrevista`) foram omitidos. Dado salvava no banco mas na releitura vinha `undefined` → `isLocacao = false` → form zerava os campos. Fix: adicionar os 4 campos ao return. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4459** — **FIX: ITENS NOVOS ERAM DELETADOS LOGO APÓS INSERT (ORDEM ERRADA NO BRANCH `hasLinkedCot`).** Após Rev. 4458, o DELETE de itens removidos acontecia DEPOIS do INSERT dos novos, incluindo os recém-inseridos no snapshot de `existingItems` → apagava os próprios itens que acabara de criar. Fix: mover DELETE para antes do INSERT. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4458** — **FIX: ITENS DA SC NÃO ERAM SALVOS AO EDITAR SC COM COTAÇÃO VINCULADA.** `ItemForm` sem `id`; mapeamento e payload nunca enviavam o id. Servidor no branch `hasLinkedCot` só processava itens com `id` → `inputItemIds=[]` → zero UPDATE/DELETE/INSERT. Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4457** — **FIX: CAMPOS DE LOCAÇÃO NÃO PERSISTIAM AO EDITAR SC DE EQUIPAMENTO.** `getSolicitacao` omitiu os 4 campos de locação no retorno. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4456** — **FEAT: FICHA COMPLETA DO FORNECEDOR (PÁGINA FULL-SCREEN) + EXCLUSÃO DEFINITIVA.** Clicar no nome da empresa navega para `/compras/fornecedores/:id`. Para inativas: 🗑️ hard DELETE com guard de vínculos. ZERO ALTER destrutivo.
 - **Rev. 4455** — **FIX: VR/VA NÃO PAGO NOS DIAS DE FÉRIAS (CUSTO RH + GERAÇÃO DE VALE).** Fix em scorecard.ts + valeAlimentacao.ts. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4454** — **FEAT: LOOKUP CNPJ AUTOMÁTICO NO CONTRATO PJ (ENDEREÇO + SÓCIOS).** BrasilAPI auto-preenche Razão Social, Endereço, Sócios. 5 novas colunas em `pj_contracts`. ZERO ALTER destrutivo.
 - **Rev. 4453** — **FIX: CNPJ DA CONTRATADA NÃO APARECIA NO CONTRATO PJ.** COALESCE + subquery no contrato mais recente. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4452** — **FIX: CUSTO RH — AFASTADO INSS > 15 DIAS NÃO ERA EXCLUÍDO DO CUSTO ESTIMADO SINTÉTICO.** Fix: `licencaDt15` + limita `overlapEnd`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

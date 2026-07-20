@@ -1,4 +1,22 @@
 /**
+ * Rev. 4459 - FIX: ITENS NOVOS ERAM IMEDIATAMENTE DELETADOS APÓS INSERT (ORDEM ERRADA)
+ *
+ * Causa-raiz da Rev. 4458: o bloco `hasLinkedCot` executava as operações em ordem errada:
+ *   1. UPDATE existentes ✅
+ *   2. INSERT novos itens (ganham novos ids no banco)
+ *   3. Busca existingItems — INCLUÍA os recém-inseridos!
+ *   4. DELETE items cujo id não estava em inputItemIds — APAGAVA os recém-inseridos! ❌
+ *
+ * Os novos itens eram inseridos e imediatamente deletados, tornando as mudanças invisíveis.
+ * Fix: mover a busca de existingItems + DELETE para ANTES do INSERT, garantindo que
+ * o snapshot de "itens que existiam antes da edição" não contamine os novos inseridos.
+ *
+ * Ordem correta: UPDATE → DELETE (de existentes antes da operação) → INSERT novos.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: server/routers/compras.ts (editarSolicitacao, branch hasLinkedCot).
+ */
+
+/**
  * Rev. 4458 - FIX: ITENS DA SC NÃO ERAM SALVOS AO EDITAR SC COM COTAÇÃO VINCULADA
  *
  * Causa-raiz: quando a SC já tinha cotação vinculada ("Já na SC"), o servidor usava

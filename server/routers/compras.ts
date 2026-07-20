@@ -13830,6 +13830,18 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               }).where(and(eq(comprasSolicitacoesItens.id, it.id), eq(comprasSolicitacoesItens.solicitacaoId, input.id)));
             }
           }
+          // DELETE itens removidos ANTES do INSERT — buscar ids existentes ANTES de inserir
+          // novos, caso contrário os recém-inseridos apareceriam em existingItems e seriam
+          // apagados imediatamente (bug: INSERT → existingItems → DELETE dos novos).
+          const existingItems = await db.select({ id: comprasSolicitacoesItens.id })
+            .from(comprasSolicitacoesItens)
+            .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+          const removedIds = existingItems.map(i => i.id).filter(id => !inputItemIds.includes(id));
+          if (removedIds.length > 0) {
+            await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
+            await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
+            await db.delete(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, removedIds));
+          }
           // INSERT novos itens (sem id) — ex.: usuário marcou nova atividade EAP
           const newItens = input.itens.filter(it => !it.id);
           if (newItens.length > 0) {
@@ -13857,16 +13869,6 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
                 somenteMo: it.somenteMo ?? false,
               }))
             );
-          }
-          // DELETE itens removidos (tinha id antes, mas não está mais no payload)
-          const existingItems = await db.select({ id: comprasSolicitacoesItens.id })
-            .from(comprasSolicitacoesItens)
-            .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
-          const removedIds = existingItems.map(i => i.id).filter(id => !inputItemIds.includes(id));
-          if (removedIds.length > 0) {
-            await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
-            await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
-            await db.delete(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, removedIds));
           }
         } else {
           const existingItems = await db.select({ id: comprasSolicitacoesItens.id })
