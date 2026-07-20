@@ -1,3 +1,4 @@
+- **Rev. 4456** — **FEAT: FICHA COMPLETA DO FORNECEDOR (PÁGINA FULL-SCREEN) + EXCLUSÃO DEFINITIVA.** Clicar no nome da empresa navega para `/compras/fornecedores/:id`. Para inativas: hard DELETE com guard de vínculos. ZERO ALTER destrutivo.
 - **Rev. 4455** — **FIX: VR/VA NÃO PAGO NOS DIAS DE FÉRIAS (CUSTO RH + GERAÇÃO DE VALE).** Fix em scorecard.ts + valeAlimentacao.ts. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4454** — **FEAT: LOOKUP CNPJ AUTOMÁTICO NO CONTRATO PJ (ENDEREÇO + SÓCIOS).** BrasilAPI auto-preenche Razão Social, Endereço, Sócios. 5 novas colunas em `pj_contracts`. ZERO ALTER destrutivo.
 - **Rev. 4443** — **FIX: BADGE "SEM ASSINATURA" + BOTÃO ENVIO — Contrato PJ (ModuloPJ).** FCSign ao completar não atualizava `pj_contracts.contratoAssinadoUrl` → badge sempre vermelho + botão de envio nunca sumia. ZERO DELETE · ZERO ALTER destrutivo.

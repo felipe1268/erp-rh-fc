@@ -155,7 +155,7 @@ export default function ModuloPJ() {
   // no client (useMemo `filtered`). Assim os contadores no topo refletem os
   // totais reais independente do filtro selecionado.
   const { data: contratos = [], refetch: refetchContratos } = trpc.pj.contratos.list.useQuery(
-    { companyId },
+    { companyId, companyIds },
     { enabled: !!companyId || companyIds?.length > 0 }
   );
   const { data: alertas } = trpc.pj.contratos.alertas.useQuery(
@@ -190,19 +190,27 @@ export default function ModuloPJ() {
   );
   const defaultFormaPgto = (criteriaData as any[]).find(c => c.chave === "terceiros_pj_forma_pagamento")?.valor || "PIX";
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
-  // IDs com contrato ativo — não podem aparecer para criação de novo contrato
-  const empIdsComContratoAtivo = useMemo(
-    () => new Set((contratos as any[]).filter(c => c.status === "ativo").map(c => c.employeeId)),
+  // IDs com contrato vigente (ativo ou pendente_assinatura) — não podem receber novo contrato
+  const empIdsComContratoVigente = useMemo(
+    () => new Set(
+      (contratos as any[])
+        .filter(c => c.status === "ativo" || c.status === "pendente_assinatura")
+        .map(c => c.employeeId)
+    ),
     [contratos]
   );
   const pjEmployees = useMemo(
-    () => (empList as any[]).filter((e: any) => e.tipoContrato === "PJ" && e.status === "Ativo" && !e.deletedAt),
+    () => (empList as any[]).filter((e: any) =>
+      e.tipoContrato === "PJ" &&
+      !["Desligado", "Lista_Negra", "Inativo"].includes(e.status) &&
+      !e.deletedAt
+    ),
     [empList]
   );
-  // Lista disponível para novo contrato: só quem não tem contrato ativo
+  // Lista disponível para novo contrato: só quem não tem contrato ativo ou pendente
   const pjEmployeesSemContrato = useMemo(
-    () => pjEmployees.filter((e: any) => !empIdsComContratoAtivo.has(e.id)),
-    [pjEmployees, empIdsComContratoAtivo]
+    () => pjEmployees.filter((e: any) => !empIdsComContratoVigente.has(e.id)),
+    [pjEmployees, empIdsComContratoVigente]
   );
   // Rev. 4371: dots coloridos do PeriodSelectorCard por status do mês
   const monthStatus = useMemo((): Record<number, MonthDotStatus> => {
@@ -1691,7 +1699,7 @@ export default function ModuloPJ() {
                             <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-56 overflow-y-auto" style={{ zIndex: 62 }}>
                               {filteredEmps.length === 0 ? (
                                 <div className="p-3 text-sm text-muted-foreground text-center">
-                                  {pjEmployees.length === 0 ? "Nenhum prestador cadastrado" : pjEmployeesSemContrato.length === 0 ? "Todos os prestadores PJ já possuem contrato ativo" : `Nenhum resultado para "${empSearch}"`}
+                                  {pjEmployees.length === 0 ? "Nenhum prestador PJ cadastrado" : pjEmployeesSemContrato.length === 0 ? "Todos os prestadores PJ já possuem contrato ativo ou pendente de assinatura" : `Nenhum resultado para "${empSearch}"`}
                                 </div>
                               ) : filteredEmps.slice(0, 20).map((e: any) => (
                                 <div key={e.id} className="px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm flex justify-between" onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>

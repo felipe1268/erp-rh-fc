@@ -1,4 +1,34 @@
 /**
+ * Rev. 4463 - FIX: DROPDOWN "PRESTADOR" NO NOVO CONTRATO PJ NÃO MOSTRAVA FUNCIONÁRIOS SEM CONTRATO ATIVO
+ *
+ * CONTEXTO: Tela "Novo Contrato PJ" — campo Prestador — não listava funcionários PJ que deveriam
+ * aparecer. Dois sub-problemas: (1) `contratos.list` não passava `companyIds`, deixando contratos
+ * de empresas irmãs fora do escopo em contexto multi-empresa; (2) `empIdsComContratoAtivo` bloqueava
+ * só contratos com status="ativo", deixando quem tinha "pendente_assinatura" aparecer e possibilitando
+ * criação de contrato duplicado; (3) `pjEmployees` filtrava apenas `status === "Ativo"`, excluindo
+ * PJ em Aviso/Afastado/Férias; (4) mensagem de dropdown vazio desatualizada.
+ *
+ * FIXES (todos FRONTEND, ZERO schema/backend):
+ *
+ * (1) `contratos.list` → agora passa `companyIds` (além de `companyId`) para carregar contratos
+ *     de todas as empresas do grupo. O backend já suportava `companyIds` (z.array(z.number()).optional()).
+ *
+ * (2) `empIdsComContratoAtivo` renomeado para `empIdsComContratoVigente` e critério expandido:
+ *     bloqueia status `"ativo"` OU `"pendente_assinatura"`. Funcionário com contrato pendente
+ *     (aguardando assinatura) NÃO pode receber novo contrato até o anterior ser encerrado/cancelado.
+ *
+ * (3) `pjEmployees` filtro expandido: antes `status === "Ativo"`, agora exclui apenas os desligados
+ *     (`Desligado`, `Lista_Negra`, `Inativo`). Funcionários PJ em Aviso/Afastado/Férias passam
+ *     a aparecer no dropdown para criação de novo contrato.
+ *
+ * (4) Mensagem de dropdown vazio atualizada: "Todos os prestadores PJ já possuem contrato ativo
+ *     ou pendente de assinatura" (reflete nova lógica de bloqueio).
+ *
+ * ARQUIVO: client/src/pages/ModuloPJ.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4462 - FEAT: VALIDAÇÃO DE DADOS OBRIGATÓRIOS ANTES DE ENVIAR CONTRATO PJ PARA ASSINATURA
  *
  * CONTEXTO: O botão "Enviar para Assinatura (FCSign)" nos contratos PJ podia ser clicado mesmo
