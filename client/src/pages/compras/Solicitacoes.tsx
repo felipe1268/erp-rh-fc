@@ -70,6 +70,7 @@ const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "
 
 
 interface ItemForm {
+  id?: number; // Rev. 4458 — id do item no banco (necessário p/ edição com cotação vinculada)
   descricao: string; unidade: string; quantidade: string; observacoes: string;
   orcamentoItemId?: number; eapCodigo?: string;
   insumoCodigo?: string; composicaoCodigo?: string; precoMeta?: number;
@@ -2209,6 +2210,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     setUploadingImagem(false);
 
     const itensPayload = Array.from(consolidados.values()).map(i => ({
+      id: i.id ?? undefined, // Rev. 4458 — necessário p/ edição de SC com cotação vinculada
       descricao: i.descricao,
       unidade: i.unidade,
       quantidade: parseFloat(i.quantidade) || 1,
@@ -5199,6 +5201,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                             setImagemNome("");
                           }
                           const scItens = (detalhe.itens as any[]).map((it: any): ItemForm => ({
+                            id: it.id ?? undefined, // Rev. 4458 — preserva id p/ edição com cotação vinculada
                             descricao: it.descricao || "",
                             unidade: it.unidade || "un",
                             quantidade: String(parseFloat(it.quantidade) || 1),

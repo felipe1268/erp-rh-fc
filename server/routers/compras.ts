@@ -13803,6 +13803,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           .limit(1);
 
         if (hasLinkedCot.length > 0) {
+          // Rev. 4458 — SC com cotação vinculada: UPDATE itens existentes (id presente),
+          // INSERT novos (sem id), DELETE removidos (id existente mas ausente do payload).
           const inputItemIds = input.itens.filter(it => it.id).map(it => it.id!);
           for (const it of input.itens) {
             if (it.id) {
@@ -13811,19 +13813,60 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
                 unidade: it.unidade,
                 quantidade: String(it.quantidade),
                 observacoes: it.observacoes,
+                orcamentoItemId: it.orcamentoItemId ?? null,
+                eapCodigo: it.eapCodigo ?? null,
+                insumoCodigo: it.insumoCodigo ?? null,
+                composicaoCodigo: it.composicaoCodigo ?? null,
+                precoMeta: it.precoMeta ? String(it.precoMeta) : null,
+                quantidadeServico: it.quantidadeServico ? String(it.quantidadeServico) : null,
+                coeficiente: it.coeficiente ? String(it.coeficiente) : null,
+                origemEap: it.origemEap ?? false,
+                semVerba: it.semVerba ?? false,
+                motivoSemVerba: it.motivoSemVerba ?? null,
+                incluirAjudante: it.incluirAjudante ?? true,
+                metaMdoProfissional: it.metaMdoProfissional ? String(it.metaMdoProfissional) : null,
+                metaMdoAjudante: it.metaMdoAjudante ? String(it.metaMdoAjudante) : null,
+                somenteMo: it.somenteMo ?? false,
               }).where(and(eq(comprasSolicitacoesItens.id, it.id), eq(comprasSolicitacoesItens.solicitacaoId, input.id)));
             }
           }
-          if (inputItemIds.length > 0) {
-            const existingItems = await db.select({ id: comprasSolicitacoesItens.id })
-              .from(comprasSolicitacoesItens)
-              .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
-            const removedIds = existingItems.map(i => i.id).filter(id => !inputItemIds.includes(id));
-            if (removedIds.length > 0) {
-              await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
-              await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
-              await db.delete(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, removedIds));
-            }
+          // INSERT novos itens (sem id) — ex.: usuário marcou nova atividade EAP
+          const newItens = input.itens.filter(it => !it.id);
+          if (newItens.length > 0) {
+            await db.insert(comprasSolicitacoesItens).values(
+              newItens.map(it => ({
+                solicitacaoId: input.id,
+                descricao: normalizarTexto(it.descricao),
+                unidade: it.unidade,
+                quantidade: String(it.quantidade),
+                observacoes: it.observacoes,
+                statusItem: "pendente",
+                orcamentoItemId: it.orcamentoItemId ?? null,
+                eapCodigo: it.eapCodigo ?? null,
+                insumoCodigo: it.insumoCodigo ?? null,
+                composicaoCodigo: it.composicaoCodigo ?? null,
+                precoMeta: it.precoMeta ? String(it.precoMeta) : null,
+                quantidadeServico: it.quantidadeServico ? String(it.quantidadeServico) : null,
+                coeficiente: it.coeficiente ? String(it.coeficiente) : null,
+                origemEap: it.origemEap ?? false,
+                semVerba: it.semVerba ?? false,
+                motivoSemVerba: it.motivoSemVerba ?? null,
+                incluirAjudante: it.incluirAjudante ?? true,
+                metaMdoProfissional: it.metaMdoProfissional ? String(it.metaMdoProfissional) : null,
+                metaMdoAjudante: it.metaMdoAjudante ? String(it.metaMdoAjudante) : null,
+                somenteMo: it.somenteMo ?? false,
+              }))
+            );
+          }
+          // DELETE itens removidos (tinha id antes, mas não está mais no payload)
+          const existingItems = await db.select({ id: comprasSolicitacoesItens.id })
+            .from(comprasSolicitacoesItens)
+            .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+          const removedIds = existingItems.map(i => i.id).filter(id => !inputItemIds.includes(id));
+          if (removedIds.length > 0) {
+            await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
+            await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
+            await db.delete(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, removedIds));
           }
         } else {
           const existingItems = await db.select({ id: comprasSolicitacoesItens.id })

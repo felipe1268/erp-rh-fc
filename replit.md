@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4458** — **FIX: ITENS DA SC NÃO ERAM SALVOS AO EDITAR SC COM COTAÇÃO VINCULADA.** `ItemForm` não tinha campo `id`; mapeamento de `scItens` e `itensPayload` nunca enviavam o id do item ao servidor. No servidor, o branch `hasLinkedCot` só processava itens com `id` → `inputItemIds=[]` → zero UPDATE/DELETE/INSERT. Fix em 4 pontos: (1) `id?` no `ItemForm`, (2) mapeamento do form, (3) payload, (4) servidor: UPDATE existentes + INSERT novos + DELETE removidos com todos os campos. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4457** — **FIX: CAMPOS DE LOCAÇÃO NÃO PERSISTIAM AO EDITAR SC DE EQUIPAMENTO.** `getSolicitacao` monta retorno com campos EXPLÍCITOS e os 4 campos de locação (`isLocacao`, `locacaoDuracaoDias`, `locacaoDataInicioPrevista`, `locacaoDataFimPrevista`) foram omitidos. Dado salvava no banco mas na releitura vinha `undefined` → `isLocacao = false` → form zerava os campos. Fix: adicionar os 4 campos ao return. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4456** — **FEAT: FICHA COMPLETA DO FORNECEDOR (PÁGINA FULL-SCREEN) + EXCLUSÃO DEFINITIVA.** Clicar no nome da empresa navega para `/compras/fornecedores/:id` — página full-screen com: cabeçalho gradiente, tempo no mercado em destaque, capital social em R$, regime tributário como badge colorido, dados Receita Federal, CNAE, inscrições fiscais, quadro societário, representante legal, contato, endereço, dados bancários, desempenho e observações. Para inativas: 🗑️ hard DELETE com guard de vínculos. ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4456** — **FEAT: FICHA COMPLETA DO FORNECEDOR (PÁGINA FULL-SCREEN) + EXCLUSÃO DEFINITIVA.** Clicar no nome da empresa navega para `/compras/fornecedores/:id`. Para inativas: 🗑️ hard DELETE com guard de vínculos. ZERO ALTER destrutivo.
 - **Rev. 4455** — **FIX: VR/VA NÃO PAGO NOS DIAS DE FÉRIAS (CUSTO RH + GERAÇÃO DE VALE).** Fix em scorecard.ts + valeAlimentacao.ts. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4454** — **FEAT: LOOKUP CNPJ AUTOMÁTICO NO CONTRATO PJ (ENDEREÇO + SÓCIOS).** BrasilAPI auto-preenche Razão Social, Endereço, Sócios. 5 novas colunas em `pj_contracts`. ZERO ALTER destrutivo.
 - **Rev. 4453** — **FIX: CNPJ DA CONTRATADA NÃO APARECIA NO CONTRATO PJ.** COALESCE + subquery no contrato mais recente. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4452** — **FIX: CUSTO RH — AFASTADO INSS > 15 DIAS NÃO ERA EXCLUÍDO DO CUSTO ESTIMADO SINTÉTICO.** Fix: `licencaDt15` + limita `overlapEnd`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4451** — **FIX: CUSTO RH — DATA INVÁLIDA "YYYY-MM-31" QUEBRAVA MESES COM <31 DIAS.** Fix: 3 ocorrências. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

@@ -1,4 +1,28 @@
 /**
+ * Rev. 4458 - FIX: ITENS DA SC NÃO ERAM SALVOS AO EDITAR SC COM COTAÇÃO VINCULADA
+ *
+ * Causa-raiz: quando a SC já tinha cotação vinculada ("Já na SC"), o servidor usava
+ * um caminho conservador que só processava itens que tinham `id` no payload. Mas o
+ * cliente nunca enviava `id` porque: (1) `ItemForm` não tinha campo `id`; (2) o mapeamento
+ * de `scItens` na abertura do form de edição não incluía `it.id`; (3) `itensPayload` não
+ * passava o campo.
+ *
+ * Resultado: `inputItemIds` ficava sempre `[]` → nenhum UPDATE, nenhum DELETE,
+ * nenhum INSERT era executado → todas as marcações/desmarcações do usuário sumiam ao salvar.
+ *
+ * Fix em 4 pontos:
+ *   1. `ItemForm` interface: adicionado `id?: number`
+ *   2. Mapeamento de `scItens` (abertura do form): inclui `id: it.id ?? undefined`
+ *   3. `itensPayload` (handleSalvar): inclui `id: i.id ?? undefined`
+ *   4. Servidor `editarSolicitacao` path `hasLinkedCot`: UPDATE de existentes (com id)
+ *      + INSERT de novos (sem id) + DELETE de removidos — todos os campos são propagados,
+ *      não só descricao/unidade/quantidade/observacoes como antes.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivos: client/src/pages/compras/Solicitacoes.tsx + server/routers/compras.ts.
+ */
+
+/**
  * Rev. 4457 - FIX: CAMPOS DE LOCAÇÃO NÃO PERSISTIAM AO EDITAR SC DE EQUIPAMENTO
  *
  * Causa-raiz: `getSolicitacao` monta seu retorno com campos EXPLÍCITOS (linhas 4233-4303)
