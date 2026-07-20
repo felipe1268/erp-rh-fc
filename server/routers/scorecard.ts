@@ -1790,11 +1790,14 @@ export const scorecardRouter = router({
                 -- obra_funcionarios tem entrada ativa (sem transferência posterior para outra obra).
                 -- Isso cobre o caso: saída formal em history em mai + re-alocado em obra_funcionarios
                 -- em jul sem novo registro de history → junho ficava vazio.
+                -- Rev. 4448: exige isActive=1 — se o OF foi desativado (isActive=0) sem gerar
+                -- novo OF em outra obra, não extender até CURRENT_DATE (ex-funcionário).
                 WHEN EXISTS (
                   SELECT 1 FROM obra_funcionarios ofx
                   WHERE ofx."employeeId" = esh."employeeId"
                     AND ofx."obraId"     = ${input.obraId}
                     AND ofx."companyId"  = ${input.companyId}
+                    AND ofx."isActive"   = 1
                     AND NOT EXISTS (
                       SELECT 1 FROM obra_funcionarios ofy
                       WHERE ofy."employeeId" = ofx."employeeId"
@@ -1839,13 +1842,18 @@ export const scorecardRouter = router({
                    AND of3."companyId"  = ${input.companyId}
                    AND of3."obraId"    <> ${input.obraId}
                    AND of3."createdAt"  > of_grp.max_created),
-                CURRENT_DATE
+                -- Rev. 4448: se ainda tem isActive=1 nesta obra → funcionário ainda está
+                -- aqui → CURRENT_DATE. Se todos os registros estão isActive=0
+                -- (desativado/transferido sem criar novo OF) → fecha no último registro
+                -- conhecido, evitando que ex-funcionários apareçam no mês atual.
+                CASE WHEN of_grp.has_active = 1 THEN CURRENT_DATE ELSE of_grp.max_created END
               )                                                              AS periodo_fim
             FROM (
               SELECT
-                of2."employeeId"             AS employee_id,
-                MIN(of2."createdAt"::date)   AS min_created,
-                MAX(of2."createdAt"::date)   AS max_created
+                of2."employeeId"                                                AS employee_id,
+                MIN(of2."createdAt"::date)                                      AS min_created,
+                MAX(of2."createdAt"::date)                                      AS max_created,
+                MAX(CASE WHEN of2."isActive" = 1 THEN 1 ELSE 0 END)            AS has_active
               FROM obra_funcionarios of2
               WHERE of2."obraId"    = ${input.obraId}
                 AND of2."companyId" = ${input.companyId}
@@ -3021,6 +3029,7 @@ export const scorecardRouter = router({
           UNION ALL
 
           -- Ramo B: obra_funcionarios sem histórico formal
+          -- Rev. 4448: usa isActive para determinar se ainda está alocado aqui.
           SELECT
             of2."employeeId"                                               AS employee_id,
             GREATEST(
@@ -3034,7 +3043,7 @@ export const scorecardRouter = router({
                  AND of3."companyId"  = of2."companyId"
                  AND of3."obraId"    <> of2."obraId"
                  AND of3."createdAt"  > of2."createdAt"),
-              CURRENT_DATE
+              CASE WHEN of2."isActive" = 1 THEN CURRENT_DATE ELSE of2."createdAt"::date END
             )                                                              AS periodo_fim
           FROM obra_funcionarios of2
           WHERE of2."obraId"    = ${obraId}

@@ -1,4 +1,32 @@
 /**
+ * Rev. 4448 - FIX: CUSTO RH — EX-FUNCIONÁRIOS EXCLUÍDOS DA OBRA (isActive=0)
+ *
+ * Problema: Custo RH mostrava funcionários (ex: Felipe Costa Alves) que NÃO estavam
+ * mais alocados na obra (Efetivo mostrava 12, Custo RH mostrava 16).
+ *
+ * CAUSA-RAIZ:
+ * getCustosRH usa CTE site_periods com dois ramos:
+ *   Ramo A (employee_site_history): Prioridade 2 = CURRENT_DATE quando OF existe sem
+ *     transferência posterior — MAS não verificava isActive=1. Um OF com isActive=0
+ *     (desativado sem criar novo OF em outra obra) extendia periodo_fim até CURRENT_DATE.
+ *   Ramo B (obra_funcionarios sem ESH): COALESCE(..., CURRENT_DATE) — sem verificar
+ *     isActive. Funcionário desativado (isActive=0) ficava com periodo_fim=CURRENT_DATE
+ *     se não havia nova OF em outra obra com createdAt maior.
+ * Resultado: ex-funcionários com isActive=0 apareciam no mês corrente.
+ *
+ * FIX (3 pontos):
+ *   1. Ramo B (getCustosRH CTE principal): subquery agrega has_active=MAX(isActive).
+ *      COALESCE fallback = CASE WHEN has_active=1 THEN CURRENT_DATE ELSE max_created END.
+ *   2. Ramo A Prioridade 2: adiciona AND ofx.isActive=1 no EXISTS de obra_funcionarios.
+ *   3. Ramo B (sitePeriodsCte reutilizável ~linha 3005): mesmo fix com isActive inline.
+ *
+ * Critério correto: Custo RH deve exibir exatamente quem está alocado ativamente,
+ * alinhado com o Efetivo da Obra (obra_funcionarios.isActive=1 ou ESH aberto).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4447 - FIX: CUSTO ESTIMADO DE FÉRIAS — SALÁRIO VIA JOIN (elimina mismatch de empresa)
  *
  * Problema: "Custo estimado próximos 90 dias" mostrava R$ 42,41 mesmo com 8+ férias agendadas.

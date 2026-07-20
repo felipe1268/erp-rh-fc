@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4447** — **FIX: CUSTO ESTIMADO DE FÉRIAS — SALÁRIO VIA JOIN (mismatch de empresa).** `allVacations` select passa a incluir `empSalarioBase: employees.salarioBase` (JOIN já existia). `feriasCustoProximo` usa `v.empSalarioBase` direto, eliminando falha quando funcionário é de empresa irmã do grupo. `parseSalarioBR()` robusto para varchar BR e numérico. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4446** — **UX: LAYOUT RESPONSIVO TABLET/MOBILE — SIDEBAR OVERLAY + FILTRO COLAPSÁVEL.** `useMobile.tsx` breakpoint 480→768px: tablets (<768px) usam sidebar como Sheet overlay (libera 100% da largura). `DashboardLayout`: TABLET_BREAKPOINT 1024→1200. `Curriculos.tsx`: filtro colapsável em mobile. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4448** — **FIX: CUSTO RH — EX-FUNCIONÁRIOS EXCLUÍDOS DA OBRA (isActive=0).** `site_periods` Ramo B: fallback `CURRENT_DATE→max_created` quando `has_active=0`; Ramo A Prioridade 2: exige `isActive=1` no OF check. Segundo `sitePeriodsCte` (~L3005) recebe fix idêntico. Custo RH agora alinhado com Efetivo. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4447** — **FIX: CUSTO ESTIMADO DE FÉRIAS — SALÁRIO VIA JOIN (mismatch de empresa).** `allVacations` select inclui `empSalarioBase: employees.salarioBase` (JOIN já existia). `feriasCustoProximo` usa `v.empSalarioBase` direto, eliminando falha quando funcionário é de empresa irmã do grupo. `parseSalarioBR()` robusto. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
