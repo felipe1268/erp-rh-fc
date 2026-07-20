@@ -1694,7 +1694,7 @@ export const scorecardRouter = router({
         WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
       `;
 
-      const [r, feriasR, seguroR, pjR, feriasGozoR] = await Promise.all([
+      const [r, feriasR, seguroR, pjR, feriasGozoR, vrDiarioR] = await Promise.all([
         db.execute(sql`
           WITH
           -- Piso absoluto: nenhum custo pode ser anterior à data de início da obra
@@ -1997,6 +1997,8 @@ export const scorecardRouter = router({
               pp."employeeId"                                        AS employee_id,
               pp."mesReferencia"                                     AS mes_referencia,
               pp.status                                              AS folha_status,
+              pp."consolidadoEm" IS NOT NULL                        AS folha_fechado,
+              pp."dataPagamento" IS NOT NULL                        AS folha_pago,
               (pp."mesReferencia" || '-01')::date                   AS mes_ini,
               ((pp."mesReferencia" || '-01')::date
                 + INTERVAL '1 month' - INTERVAL '1 day')::date     AS mes_fim_d,
@@ -2110,7 +2112,9 @@ export const scorecardRouter = router({
                        + COALESCE(v.va_total,0))
                       * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2
                     ),
-                    'folhaStatus',  pf.folha_status
+                    'folhaStatus',  pf.folha_status,
+                    'folhaFechado', pf.folha_fechado,
+                    'folhaPago',    pf.folha_pago
                   ) ORDER BY pf.mes_referencia
                 ) FILTER (WHERE pf.employee_id IS NOT NULL),
                 '[]'::json
@@ -2355,6 +2359,22 @@ export const scorecardRouter = router({
             AND vp."employeeId" IN (${relevantEmpSql})
         `),
 
+        // Rev. 4450 — VR diário por funcionário (último mês lançado) para estimativa em meses sem folha
+        db.execute(sql`
+          SELECT DISTINCT ON (vr."employeeId")
+            vr."employeeId" AS employee_id,
+            COALESCE(CASE WHEN vr."valorDiario" ~ '^-?[0-9]'
+              THEN REPLACE(REPLACE(vr."valorDiario", '.', ''), ',', '.')::numeric
+              ELSE NULL END, 0) AS vr_diario
+          FROM vr_benefits vr
+          JOIN employees emp_vr ON emp_vr.id = vr."employeeId"
+            AND vr."companyId" = emp_vr."companyId"
+          WHERE vr."employeeId" IN (${relevantEmpSql})
+            AND vr."valorDiario" IS NOT NULL
+            AND vr."valorDiario" <> '0'
+          ORDER BY vr."employeeId", vr."mesReferencia" DESC
+        `),
+
       ]);
 
       const funcs = r.rows as any[];
@@ -2418,6 +2438,11 @@ export const scorecardRouter = router({
       const seguroMensalMap = new Map<number, number>();
       for (const row of seguroRows) {
         seguroMensalMap.set(n(row.employee_id), n(row.custo_mensal));
+      }
+      // Rev. 4450 — taxa diária de VR/VA por funcionário (para estimativa em meses sem folha)
+      const vrDiarioMap = new Map<number, number>();
+      for (const row of (vrDiarioR as any).rows as any[]) {
+        vrDiarioMap.set(Number(row.employee_id), Number(row.vr_diario ?? 0));
       }
 
       for (const f of funcs) {
@@ -2580,13 +2605,13 @@ export const scorecardRouter = router({
               salarioBruto: salProrated,
               horasExtras:  0,
               adicionais:   0,
-              va:           0,
+              va:           rnd2((vrDiarioMap.get(n(f.employee_id)) ?? 0) * diasNaObra),
               fgts:         fgtsProrated,
               inss:         0,
               ferias:       feriasKeyMap.get(`${n(f.employee_id)}|${mesStr}`) ?? 0,
               seguroVida:   0, // preenchido após loop
               liquido:      0,
-              custoEmpresa: rnd2(salProrated + fgtsProrated),
+              custoEmpresa: rnd2(salProrated + fgtsProrated + (vrDiarioMap.get(n(f.employee_id)) ?? 0) * diasNaObra),
               custoTotal:   0, // recalculado após loop
               folhaStatus:  'estimado',
             });
@@ -2611,7 +2636,8 @@ export const scorecardRouter = router({
           f.total_dias_na_obra  = syntheticHist.reduce((s: number, h: any) => s + h.diasNaObra, 0);
           f.salario_bruto_total = syntheticHist.reduce((s: number, h: any) => s + h.salarioBruto, 0);
           f.fgts_total          = syntheticHist.reduce((s: number, h: any) => s + h.fgts, 0);
-          f.custo_folha_empresa = rnd2(f.salario_bruto_total + f.fgts_total);
+          f.va_total            = syntheticHist.reduce((s: number, h: any) => s + n(h.va), 0);
+          f.custo_folha_empresa = rnd2(f.salario_bruto_total + f.fgts_total + f.va_total);
           f.seguro_vida_total   = rnd2(segSintetico);
           f.custo_total_empresa = rnd2(f.custo_folha_empresa + n(f.ferias_total) + f.seguro_vida_total);
         }
@@ -2657,7 +2683,7 @@ export const scorecardRouter = router({
         for (const h of (f.historico_mensal as any[] || [])) {
           const mes = h.mes as string;
           if (!mensalMap.has(mes)) {
-            mensalMap.set(mes, { mes, qtdFuncionarios: 0, salarioBruto: 0, he: 0, va: 0, fgts: 0, inss: 0, ferias: 0, seguroVida: 0, custoEmpresa: 0, custoTotal: 0 });
+            mensalMap.set(mes, { mes, qtdFuncionarios: 0, salarioBruto: 0, he: 0, va: 0, fgts: 0, inss: 0, ferias: 0, seguroVida: 0, custoEmpresa: 0, custoTotal: 0, statusMes: 'estimado' });
           }
           const m = mensalMap.get(mes)!;
           m.qtdFuncionarios++;
@@ -2670,6 +2696,17 @@ export const scorecardRouter = router({
           m.seguroVida   += n(h.seguroVida);
           m.custoEmpresa += n(h.custoEmpresa);
           m.custoTotal   += n(h.custoTotal);
+          // Rev. 4450: hierarquia estimado(0) < simulado(1) < fechado(2) < pago(3)
+          {
+            const RANK: Record<string, number> = { estimado: 0, pj: 0, simulado: 1, fechado: 2, pago: 3 };
+            const cur = RANK[m.statusMes as string] ?? 0;
+            let entry: string;
+            if      (h.folhaPago)    entry = 'pago';
+            else if (h.folhaFechado) entry = 'fechado';
+            else if (h.folhaStatus && h.folhaStatus !== 'estimado' && h.folhaStatus !== 'pj') entry = 'simulado';
+            else                     entry = 'estimado';
+            if ((RANK[entry] ?? 0) > cur) m.statusMes = entry;
+          }
         }
       }
       // Fix: férias cujo mes_ref não coincide com nenhum mês de payroll ficam
@@ -2689,7 +2726,7 @@ export const scorecardRouter = router({
         const alreadyCounted = hist.some((h: any) => h.mes === mes);
         if (alreadyCounted) continue; // já contabilizado via h.ferias no loop acima
         if (!mensalMap.has(mes)) {
-          mensalMap.set(mes, { mes, qtdFuncionarios: 0, salarioBruto: 0, he: 0, va: 0, fgts: 0, inss: 0, ferias: 0, seguroVida: 0, custoEmpresa: 0, custoTotal: 0 });
+          mensalMap.set(mes, { mes, qtdFuncionarios: 0, salarioBruto: 0, he: 0, va: 0, fgts: 0, inss: 0, ferias: 0, seguroVida: 0, custoEmpresa: 0, custoTotal: 0, statusMes: 'estimado' });
         }
         const m = mensalMap.get(mes)!;
         m.ferias    += valor;

@@ -1338,12 +1338,22 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                 {/* Tabela mensal */}
                 {analiseRH.data.mensal.length > 0 && (
                   <div>
+                    {/* Rev. 4450 — banner de aviso para meses estimados */}
+                    {(analiseRH.data.mensal as any[]).some((m: any) => !m.statusMes || m.statusMes === 'estimado') && (
+                      <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] text-blue-700 mb-2 leading-snug">
+                        <span className="shrink-0 font-bold text-blue-500 mt-px">ℹ</span>
+                        <span>
+                          <strong>Meses marcados como "Previsão"</strong> ainda não têm folha processada — o valor é estimado pelo salário base proporcional aos dias de alocação. VR/VA estimado pelo valor diário do último período lançado. Os valores são substituídos automaticamente ao processar a folha.
+                        </span>
+                      </div>
+                    )}
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Custo por Mês — clique para filtrar</p>
                     <div className="overflow-x-auto rounded border border-gray-200">
                       <table className="w-full text-[10px]">
                         <thead>
                           <tr className="bg-gray-50 text-[9px] uppercase tracking-wide text-gray-500">
                             <th className="text-left px-2 py-1.5 font-semibold">Mês</th>
+                            <th className="text-center px-2 py-1.5 font-semibold">Folha</th>
                             <th className="text-center px-2 py-1.5 font-semibold">Funcs</th>
                             <th className="text-right px-2 py-1.5 font-semibold">Salário</th>
                             <th className="text-right px-2 py-1.5 font-semibold">HE</th>
@@ -1364,6 +1374,12 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                 onClick={() => setRhMes(isActive ? 'all' : mm)}
                                 className={`border-t border-gray-100 cursor-pointer transition-colors hover:bg-indigo-50/40 ${isActive ? 'bg-indigo-50' : ''}`}>
                                 <td className="px-2 py-1.5 font-semibold text-gray-700">{mesLabel}</td>
+                                <td className="px-2 py-1.5 text-center">
+                                  {m.statusMes === 'pago'     && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 text-[8px] font-bold uppercase tracking-wide whitespace-nowrap">✓ Pago</span>}
+                                  {m.statusMes === 'fechado'  && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[8px] font-bold uppercase tracking-wide whitespace-nowrap">⊗ Fechada</span>}
+                                  {m.statusMes === 'simulado' && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-[8px] font-bold uppercase tracking-wide whitespace-nowrap">◎ Aberta</span>}
+                                  {(!m.statusMes || m.statusMes === 'estimado') && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 text-[8px] font-bold uppercase tracking-wide whitespace-nowrap">~ Previsão</span>}
+                                </td>
                                 <td className="px-2 py-1.5 text-center text-gray-500">{m.qtdFuncionarios}</td>
                                 <td className="px-2 py-1.5 text-right text-gray-700">{fmt(m.salarioBruto)}</td>
                                 <td className="px-2 py-1.5 text-right text-amber-700">{m.he > 0 ? fmt(m.he) : <span className="text-gray-200">—</span>}</td>
@@ -1379,6 +1395,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                         <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                           <tr className="font-semibold text-[10px] text-gray-700">
                             <td className="px-2 py-1.5 uppercase tracking-wide text-gray-500">Total</td>
+                            <td className="px-2 py-1.5"></td>
                             <td className="px-2 py-1.5 text-center">{analiseRH.data.resumo.totalFuncionarios}</td>
                             <td className="px-2 py-1.5 text-right">{fmt(analiseRH.data.resumo.salarioBrutoTotal)}</td>
                             <td className="px-2 py-1.5 text-right text-amber-700">{fmt(analiseRH.data.resumo.heTotal)}</td>
@@ -1397,7 +1414,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                 <p className="text-[10px] text-gray-400 italic bg-blue-50 border border-blue-100 rounded px-2 py-1.5 leading-snug">
                   Custo proporcional ao período de alocação. Funcionário com 15 dias aqui e 15 dias em outra obra tem <strong>50% do custo alocado aqui</strong>.
                   Férias = períodos lançados no RH com custo real. Seg. Vida = custo mensal cadastrado × meses ativos.
-                  VT não incluso (depende de presença diária — consultar Folha).
+                  VR/VA: meses com "Previsão" usam valor diário × dias úteis na obra (estimativa); substituído pelo valor real da folha ao ser processada. VT não incluso.
                 </p>
 
                 {/* Tabela: individual (admin_master) ou por função (demais — LGPD) */}

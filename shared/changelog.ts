@@ -1,4 +1,42 @@
 /**
+ * Rev. 4450 - FEAT: CUSTO RH — PREVISÃO vs. CONSOLIDADO (badges de status + VR/VA estimado)
+ *
+ * Scorecard Custo RH (ScorecardTab.tsx) — tabela "Custo por Mês" agora exibe:
+ *
+ * 1. COLUNA "FOLHA" com badge de status por mês:
+ *    • ~ Previsão  (azul)   — nenhuma folha processada; valor sintético pelo salário base
+ *    • ◎ Aberta   (amarelo) — payroll_payments existe mas não consolidado/pago
+ *    • ⊗ Fechada  (laranja) — folha consolidada (consolidadoEm IS NOT NULL)
+ *    • ✓ Pago     (verde)   — pagamento confirmado (dataPagamento IS NOT NULL)
+ *    Hierarquia por mês: o status mais avançado de qualquer funcionário define o badge.
+ *
+ * 2. BANNER DE AVISO azul acima da tabela quando há meses em "Previsão".
+ *
+ * 3. VR/VA ESTIMADO em meses sem folha:
+ *    • Nova query no Promise.all: último valorDiario de vr_benefits por funcionário
+ *    • Sintético usa:  va = valorDiario × diasNaObra;  custoEmpresa inclui VA
+ *    • va_total e custo_total_empresa do func também atualizados (consistência com resumo)
+ *
+ * 4. NOTA ATUALIZADA: rodapé da tabela explica que VR/VA em Previsão é estimativa.
+ *
+ * Backend (server/routers/scorecard.ts):
+ *   payroll_frac CTE: + folha_fechado (consolidadoEm IS NOT NULL), folha_pago (dataPagamento IS NOT NULL)
+ *   historico_mensal JSON: + folhaFechado, folhaPago
+ *   Promise.all: + vrDiarioR (SELECT DISTINCT ON empId ORDER BY mesReferencia DESC)
+ *   vrDiarioMap: construído após seguroMensalMap
+ *   mensalMap: + campo statusMes; upgrade por hierarquia a cada employee×mês
+ *   Loop sintético: va = vrDiario×diasNaObra; custoEmpresa inclui VA; va_total atualizado
+ *
+ * Frontend (client/src/pages/planejamento/ScorecardTab.tsx):
+ *   + banner azul antes da tabela (condicional: há meses estimados?)
+ *   + coluna "Folha" com badge (Previsão/Aberta/Fechada/Pago)
+ *   + célula vazia na linha de totais (colspan alinhado)
+ *   + nota de rodapé atualizada
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4449 - FEAT: RAIO-X — USUÁRIO + HORÁRIO NA MUDANÇA DE OBRA (Timeline)
  *
  * Ao clicar num evento de Mudança de Obra / Alocação em Obra / Saída de Obra na
