@@ -1033,4 +1033,42 @@ export const signaturesRouter = router({
       }
       return { success: true };
     }),
+
+  /** Retorna a sessão ativa (não-cancelada) de um contrato PJ por observacoes.
+   *  Usado pelo FCSignPJSendDialog para mostrar a sessão bloqueante ao usuário. */
+  getActiveByObservacoes: protectedProcedure
+    .input(z.object({ companyId: z.number(), observacoes: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const db = (await getDb())!;
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowed as any[]).map(c => typeof c === 'number' ? c : c?.id).filter((v: any) => typeof v === 'number');
+      if (!allowedIds.includes(input.companyId)) return null;
+      const rows = await db.select({
+        id: signatureSessions.id,
+        status: signatureSessions.status,
+        documentTitle: signatureSessions.documentTitle,
+        createdAt: signatureSessions.createdAt,
+        createdByName: signatureSessions.createdByName,
+        completedAt: signatureSessions.completedAt,
+      }).from(signatureSessions)
+        .where(and(
+          eq(signatureSessions.companyId, input.companyId),
+          eq(signatureSessions.observacoes, input.observacoes),
+          sql`${signatureSessions.status} <> 'cancelado'`,
+        ))
+        .orderBy(desc(signatureSessions.createdAt))
+        .limit(1);
+      if (rows.length === 0) return null;
+      const s = rows[0];
+      const sgn = await db.select({
+        id: signatureSigners.id,
+        role: signatureSigners.role,
+        nome: signatureSigners.nome,
+        signedAt: signatureSigners.signedAt,
+        token: signatureSigners.token,
+      }).from(signatureSigners)
+        .where(eq(signatureSigners.sessionId, s.id))
+        .orderBy(signatureSigners.ordem);
+      return { ...s, signers: sgn };
+    }),
 });

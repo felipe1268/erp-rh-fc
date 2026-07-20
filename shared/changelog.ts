@@ -1,4 +1,34 @@
 /**
+ * Rev. 4474 - FEAT: FCSIGN PJ EXIBE SESSÃO ATIVA BLOQUEANTE + BOTÃO CANCELAR
+ *
+ * PROBLEMA RAIZ: ao tentar enviar um contrato PJ para assinatura via FCSign, o usuário
+ * recebia o toast "Já existe uma sessão FCSign em andamento pra este contrato PJ." sem
+ * qualquer informação sobre qual sessão era essa, quem assinou, quem não assinou, ou
+ * como resolvê-la. Não é bug — a sessão existe no banco (`signature_sessions`) com
+ * status='em_andamento' ou 'completo'. O problema era 100% falta de visibilidade + ação.
+ *
+ * FIX:
+ *   · signatures.ts → novo endpoint `getActiveByObservacoes`: busca a sessão ativa
+ *     (status <> 'cancelado') pelo campo `observacoes` (ex: 'contrato_pj:123');
+ *     retorna id, status, documentTitle, createdAt, createdByName, completedAt +
+ *     signers com signedAt. ACL idêntica ao `getForEmployeeTipo`.
+ *   · FCSignPJSendDialog.tsx: ao abrir o diálogo, consulta a sessão ativa via
+ *     `signatures.getActiveByObservacoes`. Se existe, mostra painel laranja com:
+ *     - Status da sessão (EM ANDAMENTO / CONCLUÍDA)
+ *     - Data de criação e quem criou
+ *     - Lista de signatários com ✓ (assinou + data) ou ⏱ (pendente)
+ *     - Botão "Cancelar sessão" (chama `signatures.cancel` → só Admin Master)
+ *     - Após cancelamento, invalida a query e libera o formulário de nova sessão
+ *   · Formulário + botão "Criar Sessão & Gerar Links" ficam OCULTOS enquanto houver
+ *     sessão ativa (não é possível criar nova sem cancelar a anterior).
+ *   · ZERO schema change. ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS:
+ *   · server/routers/signatures.ts — endpoint `getActiveByObservacoes` (antes do `})`);
+ *   · client/src/components/FCSignPJSendDialog.tsx — painel de sessão ativa + cancel.
+ */
+
+/**
  * Rev. 4473 - FIX: PRÉVIA DO CONTRATO PJ (ContratoPJView) MOSTRA TEMPLATE EM RASCUNHO + BANNER
  *
  * PROBLEMA RAIZ: o botão "Prévia do Contrato" no FCSign abre /contrato-pj/:id
