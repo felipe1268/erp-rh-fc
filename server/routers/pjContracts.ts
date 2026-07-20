@@ -2034,13 +2034,14 @@ INSTRUÇÕES OBRIGATÓRIAS:
       };
     }),
 
-  /** Modelo de contrato — lê exclusivamente do template vigente em Configurações → Templates de Documentos */
+  /** Modelo de contrato — lê do template vigente (fonte de verdade); com forPreview=true faz
+   *  fallback ao rascunho quando não há vigente, retornando isRascunho=true para a UI avisar. */
   modeloContrato: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
-    .query(async () => {
+    .input(z.object({ companyId: z.number(), forPreview: z.boolean().optional() }))
+    .query(async ({ input }) => {
       try {
         const db = (await getDb())!;
-        const isoRows = await db.select({
+        const vigentes = await db.select({
           conteudoHtml: systemDocumentTemplates.conteudoHtml,
         })
           .from(systemDocumentTemplates)
@@ -2050,12 +2051,29 @@ INSTRUÇÕES OBRIGATÓRIAS:
             isNull(systemDocumentTemplates.deletedAt),
           ))
           .limit(1);
-        if (isoRows.length > 0) {
-          const html = isoRows[0].conteudoHtml?.trim() || '';
-          return { modeloHtml: html || null };
+        if (vigentes.length > 0) {
+          const html = vigentes[0].conteudoHtml?.trim() || '';
+          return { modeloHtml: html || null, isRascunho: false };
+        }
+        if (input.forPreview) {
+          const rascunhos = await db.select({
+            conteudoHtml: systemDocumentTemplates.conteudoHtml,
+          })
+            .from(systemDocumentTemplates)
+            .where(and(
+              eq(systemDocumentTemplates.tipo, 'contrato_pj'),
+              eq(systemDocumentTemplates.status, 'rascunho'),
+              isNull(systemDocumentTemplates.deletedAt),
+            ))
+            .orderBy(desc(systemDocumentTemplates.updatedAt))
+            .limit(1);
+          if (rascunhos.length > 0) {
+            const html = rascunhos[0].conteudoHtml?.trim() || '';
+            return { modeloHtml: html || null, isRascunho: true };
+          }
         }
       } catch { /* retorna null */ }
-      return { modeloHtml: null };
+      return { modeloHtml: null, isRascunho: false };
     }),
 
   salvarClausulas: protectedProcedure

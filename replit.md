@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4473** — **FIX: PRÉVIA DO CONTRATO PJ MOSTRA RASCUNHO + BANNER DE AVISO.** `pj.modeloContrato` aceita `forPreview: true` → fallback ao rascunho quando não há vigente + retorna `isRascunho`. `ContratoPJView.tsx` usa `forPreview: true`; exibe banner âmbar quando `isRascunho=true` orientando o usuário a aprovar em Templates de Documentos. ZERO schema change.
 - **Rev. 4472** — **FIX: PREVIEW DO CONTRATO PJ USA SOMENTE O TEMPLATE DA CENTRAL DE DOCUMENTOS.** `handlePreviewContrato` bloqueia com toast de erro se `modeloHtml=null`; botão fica desabilitado + spinner "Carregando template..." enquanto query não resolve. Template legado embutido NUNCA mais exibido. Central de Documentos = única fonte de verdade.
-- **Rev. 4471** — **FEAT: VALOR E DADOS BANCÁRIOS EM VERMELHO + TABELA NO PDF DO CONTRATO PJ.** `replacePlaceholders` em `contratoPjDocument.ts`: no caminho ISO (htmlMode=true), `[VALOR_MENSAL]`/`[VALOR_EXTENSO]` → vermelho, `[DADOS_BANCARIOS_CONTRATADA]` → mini-tabela HTML com header vermelho e fundo rosa. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4471** — **FEAT: VALOR E DADOS BANCÁRIOS EM VERMELHO + TABELA NO PDF DO CONTRATO PJ.** `replacePlaceholders` em `contratoPjDocument.ts`: ISO path → `[VALOR_MENSAL]`/`[VALOR_EXTENSO]` → vermelho, `[DADOS_BANCARIOS_CONTRATADA]` → mini-tabela HTML. ZERO schema change.
 - **Rev. 4470** — **FEAT: COMBOBOX PESQUISÁVEL DE BANCOS BRASILEIROS NO CONTRATO PJ.** Campo "Banco" em §5 → `BancoCombobox` (Popover+Command). Nova lib `bancosBrasil.ts` com ~250 bancos; filtra por código/nome; normaliza acentos. ZERO schema change.
 - **Rev. 4469** — **FEAT: REATIVAR CONTRATO PJ CANCELADO.** Botão `<CheckCircle2>` teal desfaz cancelamento acidental: mutation `reativar` guard status=cancelado → ativo; onSuccess muda filtro. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4468** — **FEAT: "CRIAR REVISÃO" + "RENOVAR" NO MÓDULO PJ (ISO 9001).** Dois novos fluxos: (1) botão `<GitBranch>` roxo em contratos cancelados; (2) botão `<RotateCw>` verde em ativos/encerrados ≤60 dias; ambos abrem Fase 2 pré-preenchida, criam novo contrato com Rev. incrementada. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4467** — **FEAT: CARD "CANCELADOS" + FILTRO NO MÓDULO PJ.** Novo KPI card vermelho "Cancelados" nos stats (contador de `status=cancelado`); clicar aplica filtro automaticamente. Grid expandido de 5→6 colunas. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4466** — **FEAT: REDESIGN "NOVO CONTRATO PJ" — FASE 1 COM GRADE DE PRESTADORES + LAYOUT MODERNO.** Grade visual de PJTs sem contrato + busca inline; Fase 2 com banner + form 2-col. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

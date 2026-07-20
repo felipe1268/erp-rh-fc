@@ -1,4 +1,29 @@
 /**
+ * Rev. 4473 - FIX: PRÉVIA DO CONTRATO PJ (ContratoPJView) MOSTRA TEMPLATE EM RASCUNHO + BANNER
+ *
+ * PROBLEMA RAIZ: o botão "Prévia do Contrato" no FCSign abre /contrato-pj/:id
+ * (ContratoPJView.tsx). Esse componente já usava o template ISO vigente corretamente,
+ * mas quando o usuário EDITAVA o template em Configurações → Templates de Documentos,
+ * o registro mudava de status='vigente' → 'rascunho'. O endpoint pj.modeloContrato
+ * filtrava SÓ status='vigente', retornando null → a prévia mostrava "Nenhum modelo
+ * configurado" ou parava de refletir as edições feitas pelo usuário.
+ *
+ * FIX:
+ *   · pjContracts.ts → modeloContrato: aceita forPreview?: boolean. Com forPreview=true,
+ *     tenta vigente primeiro (comportamento existente); se não existir, faz fallback ao
+ *     rascunho mais recente (ORDER BY updated_at DESC LIMIT 1). Retorna { modeloHtml,
+ *     isRascunho } em ambos os caminhos.
+ *   · ContratoPJView.tsx: query passa forPreview: true + staleTime: 0. Extrai isRascunho.
+ *   · Banner âmbar print:hidden aparece quando isRascunho=true, explicando ao usuário que
+ *     o template ainda não foi aprovado e que o envio para assinatura exige aprovação em
+ *     Configurações → Templates de Documentos → Contrato PJ.
+ *   · FCSign handleSubmit e handlePreviewContrato (ModuloPJ) mantêm o gate original
+ *     (só vigente para geração de documento de assinatura) — o forPreview não é passado.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4472 - FIX: PREVIEW DO CONTRATO PJ DEVE USAR SOMENTE O TEMPLATE DA CENTRAL DE DOCUMENTOS
  *
  * PROBLEMA: O botão "Pré-visualizar" no detalhe do contrato PJ podia cair silenciosamente
