@@ -534,8 +534,24 @@ export const pjContractsRouter = router({
           companyId: pjContracts.companyId,
           employeeId: pjContracts.employeeId,
           numeroContrato: pjContracts.numeroContrato,
-          cnpjPrestador: pjContracts.cnpjPrestador,
-          razaoSocialPrestador: pjContracts.razaoSocialPrestador,
+          cnpjPrestador: sql<string | null>`COALESCE(
+            ${pjContracts.cnpjPrestador},
+            (SELECT pc2."cnpjPrestador" FROM pj_contracts pc2
+             WHERE pc2."employeeId" = ${pjContracts.employeeId}
+               AND pc2."cnpjPrestador" IS NOT NULL
+               AND pc2.deleted_at IS NULL
+             ORDER BY pc2.created_at DESC
+             LIMIT 1)
+          )`,
+          razaoSocialPrestador: sql<string | null>`COALESCE(
+            ${pjContracts.razaoSocialPrestador},
+            (SELECT pc2."razaoSocialPrestador" FROM pj_contracts pc2
+             WHERE pc2."employeeId" = ${pjContracts.employeeId}
+               AND pc2."razaoSocialPrestador" IS NOT NULL
+               AND pc2.deleted_at IS NULL
+             ORDER BY pc2.created_at DESC
+             LIMIT 1)
+          )`,
           objetoContrato: pjContracts.objetoContrato,
           dataInicio: pjContracts.dataInicio,
           dataFim: pjContracts.dataFim,

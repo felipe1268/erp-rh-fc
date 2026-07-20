@@ -1,4 +1,27 @@
 /**
+ * Rev. 4453 - FIX: CNPJ DA CONTRATADA NÃO APARECIA NO CONTRATO PJ (getById SEM FALLBACK)
+ *
+ * Contexto: a tela "Contrato PJ" (ContratoPJView.tsx) chama `pj.contratos.getById` para buscar
+ * o contrato e renderizar o documento com o CNPJ da contratada. A query retornava
+ * `pjContracts.cnpjPrestador` direto — se o campo estivesse NULL no registro específico,
+ * o template exibia `_______________` no lugar do CNPJ.
+ *
+ * A query de lista (`pjContracts.list`) já tinha um mecanismo de fallback:
+ * `carregarCnpjPorEmployee` busca o CNPJ do contrato mais recente do mesmo prestador.
+ * Por isso o CNPJ aparecia correto na lista mas ficava em branco no documento.
+ *
+ * Fix (server/routers/pjContracts.ts — getById, ~12 linhas):
+ *  - `cnpjPrestador`: COALESCE(cnpjPrestador, subquery no contrato mais recente do mesmo
+ *    employeeId com cnpjPrestador não-null, ordenado por created_at DESC)
+ *  - `razaoSocialPrestador`: mesmo padrão de fallback
+ *
+ * Cenário afetado: contratos onde o CNPJ foi preenchido num contrato posterior (revisão)
+ * mas o contrato original foi criado sem CNPJ — o documento passava a exibir underscores.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4452 - FIX: CUSTO RH — AFASTADO INSS > 15 DIAS NÃO ERA EXCLUÍDO DO CUSTO ESTIMADO (SINTÉTICO)
  *
  * Quando um funcionário tem status='Afastado' e o INSS assumiu o pagamento (licencaDataInicio + 15 dias
