@@ -381,7 +381,14 @@ export const homeDataRouter = router({
       const hoje90 = new Date(hoje);
       hoje90.setDate(hoje90.getDate() + 90);
       const hoje90Str = hoje90.toISOString().split('T')[0];
-      const empSalarioMap = new Map(allEmps.map(e => [e.id, parseFloat((e as any).salarioBase || '0') || 0]));
+      // salarioBase pode estar em formato BR ("3.500,00") — parseFloat puro pararia no ponto
+      // de milhar retornando 3.5. Normalizar: remove pontos → troca vírgula por ponto.
+      const parseSalarioBR = (val: any): number => {
+        if (!val) return 0;
+        const str = String(val).replace(/\./g, '').replace(',', '.');
+        return parseFloat(str) || 0;
+      };
+      const empSalarioMap = new Map(allEmps.map(e => [e.id, parseSalarioBR((e as any).salarioBase)]));
       const feriasCustoProximo = allVacations
         .filter(v => {
           if (!v.dataInicio || v.status === 'cancelada') return false;
