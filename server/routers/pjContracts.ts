@@ -1039,6 +1039,22 @@ export const pjContractsRouter = router({
         return { success: true };
       }),
 
+    // Rev. 4469 — Reativar: desfaz cancelamento acidental, voltando para 'ativo'
+    reativar: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [contrato] = await db.select().from(pjContracts)
+          .where(and(eq(pjContracts.id, input.id), isNull(pjContracts.deletedAt)));
+        if (!contrato) throw new TRPCError({ code: "NOT_FOUND" });
+        if (contrato.status !== 'cancelado')
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Só é possível reativar contratos cancelados." });
+        await db.update(pjContracts)
+          .set({ status: 'ativo' as any })
+          .where(eq(pjContracts.id, input.id));
+        return { success: true };
+      }),
+
     // Rev. 4468 — Criar Revisão: substituto de contrato cancelado, Rev. auto-incrementada (ISO 9001)
     criarRevisao: protectedProcedure
       .input(z.object({

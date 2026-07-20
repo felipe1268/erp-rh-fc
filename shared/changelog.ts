@@ -1,4 +1,24 @@
 /**
+ * Rev. 4469 - FEAT: REATIVAR CONTRATO PJ CANCELADO (DESFAZ CANCELAMENTO ACIDENTAL)
+ *
+ * CONTEXTO: Usuário cancelou acidentalmente o contrato de Enivaldo (PJ-2026-0211, Rev.06)
+ * ao clicar sem querer no botão de cancelamento. Não havia forma de desfazer sem
+ * criar uma nova revisão desnecessária.
+ *
+ * BACKEND (server/routers/pjContracts.ts):
+ *   · Nova mutation `reativar`: aceita { id }, valida que o contrato existe (não deletado)
+ *     e que o status atual é 'cancelado' (guard de segurança); faz UPDATE status='ativo'.
+ *
+ * FRONTEND (client/src/pages/ModuloPJ.tsx):
+ *   · Nova mutation `reativarContrato` com onSuccess: refetch + setStatusFilter("ativo")
+ *     + toast "Contrato reativado com sucesso!".
+ *   · Botão <CheckCircle2> teal na coluna de ações para contratos cancelados (antes do
+ *     botão de Criar Revisão). confirm() explica a operação antes de executar.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4468 - FEAT: "CRIAR REVISÃO" + "RENOVAR" NO MÓDULO PJ (ISO 9001)
  *
  * CONTEXTO: Após cancelar um contrato PJ, o usuário precisava de um fluxo para:

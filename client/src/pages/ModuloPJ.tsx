@@ -307,6 +307,10 @@ export default function ModuloPJ() {
     onSuccess: () => { refetchContratos(); toast.success("Contrato cancelado. O prestador pode receber um novo contrato."); },
     onError: (e: any) => toast.error(e.message),
   });
+  const reativarContrato = (trpc as any).pj.contratos.reativar.useMutation({
+    onSuccess: () => { refetchContratos(); setStatusFilter("ativo"); toast.success("Contrato reativado com sucesso!"); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const _fecharDialogAposContrato = (data: any, label: string) => {
     refetchContratos();
     setShowContratoDialog(false);
@@ -1125,9 +1129,14 @@ export default function ModuloPJ() {
                                   </Button>
                                 )}
                                 {c.status === "cancelado" && (
-                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-600" title="Criar Revisão — novo contrato substituto com Rev. incrementada (ISO 9001)" onClick={() => openCriarRevisao(c)}>
-                                    <GitBranch className="h-3.5 w-3.5" />
-                                  </Button>
+                                  <>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-teal-600" title="Reativar contrato (desfaz cancelamento acidental)" onClick={() => { if (confirm(`Reativar o contrato ${c.numeroContrato}?\n\nO contrato voltará ao status "Ativo".`)) reativarContrato.mutate({ id: c.id }); }}>
+                                      <CheckCircle2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-600" title="Criar Revisão — novo contrato substituto com Rev. incrementada (ISO 9001)" onClick={() => openCriarRevisao(c)}>
+                                      <GitBranch className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </>
                                 )}
                                 {(c.status === "ativo" || c.status === "encerrado") && c.dataFim && (() => {
                                   const diasRestantes = Math.ceil((new Date(c.dataFim.slice(0,10) + "T00:00:00").getTime() - Date.now()) / 86400000);
