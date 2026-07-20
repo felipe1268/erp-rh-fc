@@ -255,7 +255,7 @@ export default function ModuloPJ() {
     { id: selectedContrato?.id || 0 },
     { enabled: showDetailDialog && !!selectedContrato?.id }
   );
-  const { data: modeloContratoData } = trpc.pj.modeloContrato.useQuery(
+  const { data: modeloContratoData, isLoading: modeloContratoLoading } = trpc.pj.modeloContrato.useQuery(
     { companyId: selectedContrato?.companyId || companyId },
     { enabled: showDetailDialog && !!(selectedContrato?.companyId || companyId) }
   );
@@ -558,6 +558,10 @@ export default function ModuloPJ() {
   function handlePreviewContrato() {
     if (!contratoByIdData) { toast.error("Aguarde os dados do contrato carregarem."); return; }
     const modeloHtml = (modeloContratoData as any)?.modeloHtml || null;
+    if (!modeloHtml) {
+      toast.error("Template de contrato não encontrado. Configure o modelo em Configurações → Templates de Documentos → Contrato PJ e certifique-se de que está como 'Vigente'.");
+      return;
+    }
     const html = buildContratoPjSignHtml({
       contrato: contratoByIdData,
       modelo: "",
@@ -1572,8 +1576,9 @@ export default function ModuloPJ() {
             <div className="w-full max-w-3xl mx-auto space-y-4">
 
               <div className="flex justify-end gap-2 flex-wrap">
-                <Button variant="outline" size="sm" className="gap-2" onClick={handlePreviewContrato} disabled={!contratoByIdData}>
-                  <Printer className="h-4 w-4" /> Pré-visualizar
+                <Button variant="outline" size="sm" className="gap-2" onClick={handlePreviewContrato} disabled={!contratoByIdData || modeloContratoLoading}>
+                  {modeloContratoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                  {modeloContratoLoading ? "Carregando template..." : "Pré-visualizar"}
                 </Button>
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => { setShowDetailDialog(false); openEditContrato(selectedContrato); }}>
                   <Pencil className="h-4 w-4" /> Editar

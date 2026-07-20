@@ -1,4 +1,25 @@
 /**
+ * Rev. 4472 - FIX: PREVIEW DO CONTRATO PJ DEVE USAR SOMENTE O TEMPLATE DA CENTRAL DE DOCUMENTOS
+ *
+ * PROBLEMA: O botão "Pré-visualizar" no detalhe do contrato PJ podia cair silenciosamente
+ * no template legado embutido (hardcoded) quando modeloHtml=null — por race condition na
+ * query (usuário clicava antes de terminar o fetch) ou ausência de template vigente.
+ * O FCSign já bloqueava corretamente, mas o preview não.
+ *
+ * FIX (client/src/pages/ModuloPJ.tsx):
+ *   · Query `modeloContratoData` agora desestrutura `isLoading: modeloContratoLoading`.
+ *   · Botão "Pré-visualizar" fica desabilitado + spinner "Carregando template..." enquanto
+ *     a query ainda não resolveu, evitando que o usuário clique com modeloHtml=undefined.
+ *   · `handlePreviewContrato`: se modeloHtml=null após o fetch, exibe toast de erro com
+ *     instrução para configurar o template em Configurações → Templates de Documentos →
+ *     Contrato PJ, em vez de abrir o template legado antigo silenciosamente.
+ *   · O template legado embutido NUNCA mais é exibido via preview; Central de Documentos
+ *     é a ÚNICA fonte de verdade para o conteúdo do contrato.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4471 - FEAT: VALOR E DADOS BANCÁRIOS EM VERMELHO + TABELA NO CONTRATO PJ (PDF)
  *
  * CONTEXTO: No contrato PJ impresso (PDF), o valor mensal e os dados bancários
