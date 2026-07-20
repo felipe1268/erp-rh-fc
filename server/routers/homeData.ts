@@ -403,10 +403,9 @@ export const homeDataRouter = router({
           return di >= hojeStr && di <= hoje90Str;
         })
         .reduce((total, v) => {
-          // Se já tem valorTotal (folha processada), usa ele; senão estima pelo salário
-          const valorProcessado = parseFloat(String(v.valorTotal || '0').replace(',', '.')) || 0;
-          if (valorProcessado > 0) return total + valorProcessado;
-          // Usa salário que veio direto no JOIN — sem risco de mismatch de empresa
+          // Rev. 4447 — SEMPRE estima pelo salário (empSalarioBase do JOIN).
+          // valorTotal gravado em vacation_periods pode ter sido calculado com salário
+          // malparseado em execução anterior — não é confiável como base de projeção.
           const salario = parseSalarioBR((v as any).empSalarioBase);
           const diasGozo = v.diasGozo || 30;
           const diasAbono = (v.abonoPecuniario) ? 10 : 0;
