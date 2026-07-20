@@ -377,16 +377,29 @@ export const homeDataRouter = router({
         });
 
       // Fluxo de caixa de férias nos próximos 3 meses
+      // Rev. 4446 — usa salário do funcionário em vez de valorTotal (que só existe quando a folha já foi processada)
       const hoje90 = new Date(hoje);
       hoje90.setDate(hoje90.getDate() + 90);
       const hoje90Str = hoje90.toISOString().split('T')[0];
+      const empSalarioMap = new Map(allEmps.map(e => [e.id, parseFloat((e as any).salarioBase || '0') || 0]));
       const feriasCustoProximo = allVacations
         .filter(v => {
           if (!v.dataInicio || v.status === 'cancelada') return false;
           const di = toDateStr(v.dataInicio);
           return di >= hojeStr && di <= hoje90Str;
         })
-        .reduce((total, v) => total + (parseFloat(v.valorTotal || '0') || 0), 0);
+        .reduce((total, v) => {
+          // Se já tem valorTotal (folha processada), usa ele; senão estima pelo salário
+          const valorProcessado = parseFloat(v.valorTotal || '0') || 0;
+          if (valorProcessado > 0) return total + valorProcessado;
+          const salario = empSalarioMap.get(v.employeeId) || 0;
+          const diasGozo = v.diasGozo || 30;
+          const diasAbono = (v.abonoPecuniario) ? 10 : 0;
+          const diasTotais = diasGozo + diasAbono;
+          // Custo = (salário/30) × dias × 4/3 (inclui 1/3 constitucional)
+          const estimado = (salario / 30) * diasTotais * (4 / 3);
+          return total + estimado;
+        }, 0);
 
       const feriasDashboard = {
         agendadas: feriasAgendadas,
