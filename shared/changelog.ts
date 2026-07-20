@@ -1,4 +1,19 @@
 /**
+ * Rev. 4457 - FIX: CAMPOS DE LOCAÇÃO NÃO PERSISTIAM AO EDITAR SC DE EQUIPAMENTO
+ *
+ * Causa-raiz: `getSolicitacao` monta seu retorno com campos EXPLÍCITOS (linhas 4233-4303)
+ * e os 4 campos de locação (isLocacao, locacaoDuracaoDias, locacaoDataInicioPrevista,
+ * locacaoDataFimPrevista) foram omitidos da lista. O dado chegava ao banco corretamente
+ * no INSERT/UPDATE, mas na releitura para popular o form de edição os campos vinham como
+ * `undefined`, que `!!undefined` convertia para `isLocacao = false` — zerando os dates e
+ * a duração antes mesmo de o usuário ver o formulário. Fix: acrescentar os 4 campos ao
+ * return de `getSolicitacao` (server/routers/compras.ts).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * Arquivo: server/routers/compras.ts (getSolicitacao return, ~linha 4258).
+ */
+
+/**
  * Rev. 4456 - FEAT: FICHA COMPLETA DO FORNECEDOR (PÁGINA FULL-SCREEN MODERNA) + EXCLUSÃO DEFINITIVA
  *
  * Contexto: na tela de Fornecedores, clicar no nome da empresa navega para a rota
