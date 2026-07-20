@@ -307,12 +307,24 @@ export default function ModuloPJ() {
     onSuccess: () => { refetchContratos(); toast.success("Contrato cancelado. O prestador pode receber um novo contrato."); },
     onError: (e: any) => toast.error(e.message),
   });
+  const _fecharDialogAposContrato = (data: any, label: string) => {
+    refetchContratos();
+    setShowContratoDialog(false);
+    setEditingContratoId(null);
+    setForm({});
+    setMotivoAlteracao("");
+    setCreatedContratoId(null);
+    setFormOrigemTipo(null);
+    setFormOrigemContrato(null);
+    setStatusFilter("pendente_assinatura");
+    toast.success(`${label} ${data.numeroContrato} (Rev.${data.revisao}) criado — use o botão ✉ na linha para enviar ao FCSign.`, { duration: 6000 });
+  };
   const criarRevisaoMutation = (trpc as any).pj.contratos.criarRevisao.useMutation({
-    onSuccess: (data: any) => { refetchContratos(); setCreatedContratoId(data.id); toast.success(`Revisão Rev. ${data.revisao} criada! Contrato ${data.numeroContrato} aguardando assinatura.`); },
+    onSuccess: (data: any) => _fecharDialogAposContrato(data, "Revisão"),
     onError: (e: any) => toast.error(e.message),
   });
   const renovarMutation = (trpc as any).pj.contratos.renovar.useMutation({
-    onSuccess: (data: any) => { refetchContratos(); setCreatedContratoId(data.id); toast.success(`Renovação criada! Contrato ${data.numeroContrato} aguardando assinatura.`); },
+    onSuccess: (data: any) => _fecharDialogAposContrato(data, "Renovação"),
     onError: (e: any) => toast.error(e.message),
   });
   const gerarMensal = trpc.pj.pagamentos.gerarMensal.useMutation({
