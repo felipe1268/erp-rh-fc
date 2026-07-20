@@ -1,4 +1,26 @@
 /**
+ * Rev. 4456 - FEAT: PRONTUÁRIO DO FORNECEDOR (SHEET LATERAL) + EXCLUSÃO DEFINITIVA
+ *
+ * Contexto: na tela de Fornecedores, clicar no nome da empresa agora abre um painel
+ * lateral (Sheet) com o prontuário completo: razão social, CNPJ, situação Receita Federal,
+ * badges de status, categorias, contato (telefone/e-mail/contato comercial), endereço
+ * completo, dados bancários, desempenho (reutilizando DesempenhoFornecedor) e observações.
+ * Ações rápidas no cabeçalho do painel: Editar, Avaliar, Portal.
+ *
+ * Além disso, foi adicionado botão de exclusão definitiva (🗑️) para fornecedores inativos:
+ * clique no ícone → confirmar/cancelar inline → servidor verifica vínculos em compras_ordens
+ * e compras_cotacoes; se houver vínculos, exibe mensagem explicativa; caso contrário, DELETE.
+ *
+ * Arquivos alterados:
+ * - `client/src/pages/compras/Fornecedores.tsx`: import Sheet + Trash2; estado prontuario +
+ *   deletarConfirmId; nome da empresa como <button> clicável; Sheet prontuário completo no fim.
+ * - `server/routers/compras.ts`: nova mutation `deletarFornecedor` com guard de ativo +
+ *   verificação de vínculos + hard DELETE.
+ *
+ * ZERO ALTER destrutivo · ZERO DROP · hard-delete SOMENTE para fornecedores inativos sem vínculos.
+ */
+
+/**
  * Rev. 4455 - FIX: VR/VA NÃO PAGO NOS DIAS DE FÉRIAS (CUSTO RH + GERAÇÃO DE VALE)
  *
  * Contexto: a empresa optou por NÃO pagar Vale Refeição / Vale Alimentação nos dias em que o

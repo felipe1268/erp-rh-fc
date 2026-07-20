@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4456** — **FEAT: PRONTUÁRIO DO FORNECEDOR (SHEET LATERAL) + EXCLUSÃO DEFINITIVA.** Clicar no nome da empresa em Fornecedores abre Sheet lateral com prontuário completo: CNPJ, situação Receita, categorias, contato, endereço, dados bancários, desempenho e observações. Ações rápidas no cabeçalho (Editar, Avaliar, Portal). Para empresas inativas: botão 🗑️ com confirmação inline + mutation `deletarFornecedor` (hard DELETE com guard de vínculos em OCs/cotações). ZERO ALTER destrutivo.
 - **Rev. 4455** — **FIX: VR/VA NÃO PAGO NOS DIAS DE FÉRIAS (CUSTO RH + GERAÇÃO DE VALE).** Empresa optou por não pagar VR/VA em dias de gozo de férias; sistema calculava sobre o total de dias úteis ignorando o gozo. Fix em 2 lugares: (1) scorecard sintético: helper `countVacationWorkingDaysInRange` + `diasVrVa = diasNaObra − diasFeriasNoMes`; (2) `valeAlimentacao.ts` (individual + batch): `vaEhProporcional = isProporcional || isAfastado || diasFerias > 0` → VA proporcional a `diasEfetivos / diasUteisOriginal`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4454** — **FEAT: LOOKUP CNPJ AUTOMÁTICO NO CONTRATO PJ (ENDEREÇO + SÓCIOS).** Ao digitar 14 dígitos no campo CNPJ do Prestador (ou clicar em 🔍), o formulário consulta BrasilAPI (Receita Federal, sem auth) e auto-preenche: Razão Social, Endereço, Cidade, Estado, CEP. Quadro Societário exibido como pills + salvo em JSON. 5 novas colunas em `pj_contracts` via ColFix v4454. `ContratoPJView` ganhou suporte a `[CONTRATADA_CEP]`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4453** — **FIX: CNPJ DA CONTRATADA NÃO APARECIA NO CONTRATO PJ.** `pj.contratos.getById` retornava `cnpjPrestador` direto do registro; se null, contrato exibia `_______________`. Fix: COALESCE + subquery no contrato mais recente. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4452** — **FIX: CUSTO RH — AFASTADO INSS > 15 DIAS NÃO ERA EXCLUÍDO DO CUSTO ESTIMADO SINTÉTICO.** Loop sintético verificava gozo de férias e recluso, mas ignorava `Afastado`. Fix: `licencaDt15` + limita `overlapEnd`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4451** — **FIX: CUSTO RH — DATA INVÁLIDA "YYYY-MM-31" QUEBRAVA MESES COM <31 DIAS.** `getCustosRH`: query `vacation_periods` usava `|| '-31'` → `date out of range`. Fix: 3 ocorrências. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4450** — **FEAT: CUSTO RH — PREVISÃO vs. CONSOLIDADO (badges de status + VR/VA estimado).** Tabela "Custo por Mês" ganha coluna "Folha" com badge + VR/VA estimado em meses sem folha. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4449** — **FEAT: RAIO-X — USUÁRIO + HORÁRIO NA MUDANÇA DE OBRA (Timeline).** Card de Mudança de Obra exibe nome do usuário que transferiu + timestamp. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4454** — **FEAT: LOOKUP CNPJ AUTOMÁTICO NO CONTRATO PJ (ENDEREÇO + SÓCIOS).** BrasilAPI auto-preenche Razão Social, Endereço, Sócios. 5 novas colunas em `pj_contracts`. ZERO ALTER destrutivo.
+- **Rev. 4453** — **FIX: CNPJ DA CONTRATADA NÃO APARECIA NO CONTRATO PJ.** COALESCE + subquery no contrato mais recente. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4452** — **FIX: CUSTO RH — AFASTADO INSS > 15 DIAS NÃO ERA EXCLUÍDO DO CUSTO ESTIMADO SINTÉTICO.** Fix: `licencaDt15` + limita `overlapEnd`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4451** — **FIX: CUSTO RH — DATA INVÁLIDA "YYYY-MM-31" QUEBRAVA MESES COM <31 DIAS.** Fix: 3 ocorrências. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4450** — **FEAT: CUSTO RH — PREVISÃO vs. CONSOLIDADO (badges de status + VR/VA estimado).** Tabela "Custo por Mês" ganha coluna "Folha" com badge + VR/VA estimado. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

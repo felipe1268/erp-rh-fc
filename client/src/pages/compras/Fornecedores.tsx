@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -408,6 +409,7 @@ export default function Fornecedores() {
   const reativarMut = trpc.compras.reativarFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira reativada!"); } });
   const deletarMut  = trpc.compras.deletarFornecedor.useMutation({ onSuccess: () => { refetch(); setDeletarConfirmId(null); toast.success("Fornecedor excluído."); }, onError: (e) => { setDeletarConfirmId(null); toast.error(e.message); } });
   const [deletarConfirmId, setDeletarConfirmId] = useState<number | null>(null);
+  const [prontuario, setProntuario] = useState<any | null>(null);
 
   const avaliarMut  = trpc.compras.avaliarFornecedor.useMutation({
     onSuccess: () => {
@@ -987,7 +989,12 @@ export default function Fornecedores() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-slate-800 truncate">{f.nomeFantasia || f.razaoSocial}</span>
+                      <button
+                        className="font-semibold text-slate-800 hover:text-blue-600 hover:underline truncate text-left transition-colors cursor-pointer"
+                        onClick={() => setProntuario(f)}
+                      >
+                        {f.nomeFantasia || f.razaoSocial}
+                      </button>
                       {situacaoBadge(f.situacaoReceita)}
                       {!f.ativo && <Badge variant="outline" className="text-slate-400 border-slate-300">Inativo</Badge>}
                     </div>
@@ -1983,6 +1990,161 @@ export default function Fornecedores() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ─── Prontuário do Fornecedor ─── */}
+      <Sheet open={!!prontuario} onOpenChange={v => !v && setProntuario(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-0">
+          {prontuario && (() => {
+            const p = prontuario;
+            const nome = p.nomeFantasia || p.razaoSocial;
+            const temEndereco = p.endereco || p.cidade;
+            const temBancario = p.banco || p.pix || p.agencia;
+            const temContato = p.contatoNome || p.contatoCelular || p.contatoEmail;
+            return (
+              <div className="flex flex-col h-full">
+                {/* Cabeçalho */}
+                <div className="bg-gradient-to-r from-slate-800 to-slate-700 text-white px-6 py-5 shrink-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-bold leading-tight break-words">{nome}</h2>
+                      {p.nomeFantasia && p.nomeFantasia !== p.razaoSocial && (
+                        <p className="text-slate-300 text-sm mt-0.5">{p.razaoSocial}</p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {p.cnpj && <span className="font-mono text-xs bg-white/10 px-2 py-0.5 rounded">{formatCNPJ(p.cnpj)}</span>}
+                        {situacaoBadge(p.situacaoReceita)}
+                        {!p.ativo && <Badge variant="outline" className="text-slate-300 border-slate-500 text-xs">Inativo</Badge>}
+                      </div>
+                    </div>
+                    <Building2 className="h-8 w-8 text-slate-400 shrink-0 mt-1" />
+                  </div>
+                  {/* Ações rápidas */}
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white/10 border-white/20 text-white hover:bg-white/20"
+                      onClick={() => { setProntuario(null); abrirModal(p); }}>
+                      <Pencil className="h-3.5 w-3.5" /> Editar
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white/10 border-white/20 text-white hover:bg-white/20"
+                      onClick={() => { setProntuario(null); abrirAvaliacao(p.id, nome); }}>
+                      <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /> Avaliar
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white/10 border-white/20 text-white hover:bg-white/20"
+                      onClick={() => { setProntuario(null); handleGerarAcesso(p); }}>
+                      <KeyRound className="h-3.5 w-3.5" /> Portal
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Corpo */}
+                <div className="flex-1 overflow-y-auto">
+
+                  {/* Categorias */}
+                  {Array.isArray(p.categorias) && p.categorias.length > 0 && (
+                    <div className="px-6 py-4 border-b border-slate-100">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <Tag className="h-3 w-3" /> Categorias
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(p.categorias as string[]).map((c: string) => (
+                          <span key={c} className="bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full">{c}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Contato */}
+                  {(p.telefone || p.email || temContato) && (
+                    <div className="px-6 py-4 border-b border-slate-100">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                        <Phone className="h-3 w-3" /> Contato
+                      </p>
+                      <div className="space-y-2 text-sm">
+                        {p.telefone && (
+                          <div className="flex items-center gap-2 text-slate-700">
+                            <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span>{p.telefone}</span>
+                          </div>
+                        )}
+                        {p.email && (
+                          <div className="flex items-center gap-2 text-slate-700">
+                            <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span className="break-all">{p.email}</span>
+                          </div>
+                        )}
+                        {temContato && (
+                          <div className="mt-2 pt-2 border-t border-slate-100">
+                            <p className="text-xs text-slate-400 mb-1">Contato comercial</p>
+                            {p.contatoNome && <p className="font-medium text-slate-700">{p.contatoNome}</p>}
+                            {p.contatoCelular && <p className="text-slate-500 text-xs">{p.contatoCelular}</p>}
+                            {p.contatoEmail && <p className="text-slate-500 text-xs break-all">{p.contatoEmail}</p>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Endereço */}
+                  {temEndereco && (
+                    <div className="px-6 py-4 border-b border-slate-100">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                        <MapPin className="h-3 w-3" /> Endereço
+                      </p>
+                      <div className="text-sm text-slate-700 space-y-0.5">
+                        {p.endereco && <p>{[p.endereco, p.numero, p.complemento].filter(Boolean).join(", ")}</p>}
+                        {p.bairro && <p className="text-slate-500">{p.bairro}</p>}
+                        {(p.cidade || p.estado) && <p className="text-slate-500">{[p.cidade, p.estado].filter(Boolean).join(" / ")}</p>}
+                        {p.cep && <p className="text-slate-400 font-mono text-xs">CEP {p.cep}</p>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dados Bancários */}
+                  {temBancario && (
+                    <div className="px-6 py-4 border-b border-slate-100">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                        <Landmark className="h-3 w-3" /> Dados Bancários
+                      </p>
+                      <div className="text-sm text-slate-700 space-y-1">
+                        {p.banco && <p className="font-medium">{p.banco}</p>}
+                        {p.agencia && <p className="text-slate-500">Ag. <span className="font-mono">{p.agencia}</span> / Conta <span className="font-mono">{p.conta}</span></p>}
+                        {p.pix && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <Hash className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                            <span className="text-emerald-700 font-mono text-xs break-all">{p.pix}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Desempenho */}
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                      <BarChart3 className="h-3 w-3" /> Desempenho
+                    </p>
+                    <DesempenhoFornecedor fornecedorId={p.id} companyId={companyId} />
+                  </div>
+
+                  {/* Observações */}
+                  {p.observacoes && (
+                    <div className="px-6 py-4 border-b border-slate-100">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <MessageSquare className="h-3 w-3" /> Observações
+                      </p>
+                      <p className="text-sm text-slate-600 whitespace-pre-wrap break-words">{p.observacoes}</p>
+                    </div>
+                  )}
+
+                  {/* Rodapé info */}
+                  <div className="px-6 py-4">
+                    <p className="text-[10px] text-slate-300 text-center">ID #{p.id} · Fornecedor {p.ativo ? "ativo" : "inativo"}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
     </div>
     </DashboardLayout>
   );
