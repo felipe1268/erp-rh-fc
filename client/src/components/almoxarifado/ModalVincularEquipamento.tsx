@@ -25,7 +25,6 @@ export function ModalVincularEquipamento({ aberto, item, onFechar, onSucesso }: 
   const [tipo, setTipo] = useState<"proprio" | "locado">("proprio");
 
   // Próprio
-  const [codigoPatrimonio, setCodigoPatrimonio] = useState("");
   const [marca, setMarca] = useState("");
   const [modelo, setModelo] = useState("");
   const [numeroSerie, setNumeroSerie] = useState("");
@@ -44,7 +43,6 @@ export function ModalVincularEquipamento({ aberto, item, onFechar, onSucesso }: 
   useEffect(() => {
     if (aberto && item) {
       setTipo("proprio");
-      setCodigoPatrimonio("");
       setMarca(""); setModelo(""); setNumeroSerie("");
       setDataAquisicao(new Date().toISOString().slice(0, 10));
       setValorAquisicao(item.valorUnitario ? String(parseFloat(String(item.valorUnitario))) : "");
@@ -76,18 +74,17 @@ export function ModalVincularEquipamento({ aberto, item, onFechar, onSucesso }: 
 
   const podeSubmeter = (() => {
     if (mutVincular.isPending) return false;
-    if (tipo === "proprio") return codigoPatrimonio.trim().length > 0;
+    if (tipo === "proprio") return true;
     return fornecedorNome.trim().length > 0 && !!dataInicio && !!dataFimPrevista;
   })();
 
   const submeter = () => {
     if (tipo === "proprio") {
       mutVincular.mutate({
-        companyId: selectedCompanyId,
+        companyId: Number(selectedCompanyId),
         itemId: item.id,
         tipo: "proprio",
         proprio: {
-          codigoPatrimonio: codigoPatrimonio.trim(),
           marca: marca.trim() || undefined,
           modelo: modelo.trim() || undefined,
           numeroSerie: numeroSerie.trim() || undefined,
@@ -98,7 +95,7 @@ export function ModalVincularEquipamento({ aberto, item, onFechar, onSucesso }: 
       });
     } else {
       mutVincular.mutate({
-        companyId: selectedCompanyId,
+        companyId: Number(selectedCompanyId),
         itemId: item.id,
         tipo: "locado",
         locado: {
@@ -180,15 +177,6 @@ export function ModalVincularEquipamento({ aberto, item, onFechar, onSucesso }: 
 
           {tipo === "proprio" ? (
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Código de Patrimônio <span className="text-red-500">*</span></label>
-                <input
-                  value={codigoPatrimonio}
-                  onChange={(e) => setCodigoPatrimonio(e.target.value)}
-                  placeholder="ex.: PAT-0001"
-                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
-                />
-              </div>
               <div>
                 <label className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Marca</label>
                 <input value={marca} onChange={(e) => setMarca(e.target.value)} className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-indigo-500 outline-none" />

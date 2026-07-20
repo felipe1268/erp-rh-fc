@@ -3340,7 +3340,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       itemId: z.number(),
       tipo: z.enum(["proprio", "locado"]),
       proprio: z.object({
-        codigoPatrimonio: z.string().min(1).max(50),
+        codigoPatrimonio: z.string().max(50).optional(),
         numeroSerie: z.string().max(100).optional(),
         marca: z.string().max(100).optional(),
         modelo: z.string().max(100).optional(),
@@ -3382,15 +3382,18 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
 
       if (input.tipo === "proprio") {
         if (!input.proprio) throw new TRPCError({ code: "BAD_REQUEST", message: "Dados do equipamento proprio obrigatorios." });
-        const [dup] = await db.select({ id: equipamentosProprios.id }).from(equipamentosProprios)
-          .where(and(
-            eq(equipamentosProprios.companyId, input.companyId),
-            eq(equipamentosProprios.codigoPatrimonio, input.proprio.codigoPatrimonio),
-          )).limit(1);
-        if (dup) throw new TRPCError({ code: "CONFLICT", message: "Patrimonio ja cadastrado." });
+        const cod = input.proprio.codigoPatrimonio?.trim() || await proximoCodigoPatrimonio(db, input.companyId);
+        if (input.proprio.codigoPatrimonio?.trim()) {
+          const [dup] = await db.select({ id: equipamentosProprios.id }).from(equipamentosProprios)
+            .where(and(
+              eq(equipamentosProprios.companyId, input.companyId),
+              eq(equipamentosProprios.codigoPatrimonio, cod),
+            )).limit(1);
+          if (dup) throw new TRPCError({ code: "CONFLICT", message: "Patrimonio ja cadastrado." });
+        }
         const [created] = await db.insert(equipamentosProprios).values({
           companyId: input.companyId,
-          codigoPatrimonio: input.proprio.codigoPatrimonio,
+          codigoPatrimonio: cod,
           descricao: item.nome,
           categoria: item.categoria ?? null,
           numeroSerie: input.proprio.numeroSerie ?? null,
