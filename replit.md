@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4461** — **FIX: DESMARCAR SERVIÇO EAP NA SC E SALVAR NÃO PERSISTE (REABRE COM ITEM AINDA MARCADO).** Race condition entre cache stale do React Query e abertura do form de edição. `detalheQ` fica desabilitada (`showDetalhe=null`) durante edição → `detalheQ.refetch()` no `onSuccess` era no-op → cache ficava com dados antigos → reabrindo o detalhe rapidamente e clicando "Editar" populava o form com dados stale. Fix: (A) `onSuccess` usa `trpcCtx.compras.getSolicitacao.invalidate()` em vez do no-op refetch; (B) handler do botão "Editar" agora faz `await trpcCtx.compras.getSolicitacao.fetch()` antes de popular o form. O servidor (branch `hasLinkedCot`) já estava correto desde Rev. 4458/4459. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4460** — **FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR ITEM DO ALMOXARIFADO COMO EQUIPAMENTO.** `vincularItemAlmoxarifado` e `desvincularItemAlmoxarifado` usavam guard quebrado: `getCompaniesForUser` retorna objetos, não IDs → `allowed.includes(numericId)` sempre false → FORBIDDEN universal. Fix: padrão canônico com `getUserCompanyLinks` (admin bypass + vínculos reais + sem vínculos = libera). ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4459** — **FIX: ITENS NOVOS ERAM DELETADOS LOGO APÓS INSERT (ORDEM ERRADA NO BRANCH `hasLinkedCot`).** Após Rev. 4458, o DELETE de itens removidos acontecia DEPOIS do INSERT dos novos, incluindo os recém-inseridos no snapshot de `existingItems` → apagava os próprios itens que acabara de criar. Fix: mover DELETE para antes do INSERT. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4459** — **FIX: ITENS NOVOS ERAM DELETADOS LOGO APÓS INSERT (ORDEM ERRADA NO BRANCH `hasLinkedCot`).** Após Rev. 4458, o DELETE de itens removidos acontecia DEPOIS do INSERT dos novos, incluindo os recém-inseridos no snapshot de `existingItems` → apagava os próprios itens que acabara de criar. Fix: mover DELETE para antes do INSERT. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4458** — **FIX: ITENS DA SC NÃO ERAM SALVOS AO EDITAR SC COM COTAÇÃO VINCULADA.** `ItemForm` sem `id`; mapeamento e payload nunca enviavam o id. Servidor no branch `hasLinkedCot` só processava itens com `id` → `inputItemIds=[]` → zero UPDATE/DELETE/INSERT. Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4457** — **FIX: CAMPOS DE LOCAÇÃO NÃO PERSISTIAM AO EDITAR SC DE EQUIPAMENTO.** `getSolicitacao` omitiu os 4 campos de locação no retorno. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4456** — **FEAT: FICHA COMPLETA DO FORNECEDOR (PÁGINA FULL-SCREEN) + EXCLUSÃO DEFINITIVA.** Clicar no nome da empresa navega para `/compras/fornecedores/:id`. Para inativas: 🗑️ hard DELETE com guard de vínculos. ZERO ALTER destrutivo.
 - **Rev. 4455** — **FIX: VR/VA NÃO PAGO NOS DIAS DE FÉRIAS (CUSTO RH + GERAÇÃO DE VALE).** Fix em scorecard.ts + valeAlimentacao.ts. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4454** — **FEAT: LOOKUP CNPJ AUTOMÁTICO NO CONTRATO PJ (ENDEREÇO + SÓCIOS).** BrasilAPI auto-preenche Razão Social, Endereço, Sócios. 5 novas colunas em `pj_contracts`. ZERO ALTER destrutivo.
 
 ### Histórico completo
 

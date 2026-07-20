@@ -1,3 +1,4 @@
+- **Rev. 4454** — **FEAT: LOOKUP CNPJ AUTOMÁTICO NO CONTRATO PJ (ENDEREÇO + SÓCIOS).** BrasilAPI auto-preenche Razão Social, Endereço, Sócios. 5 novas colunas em `pj_contracts`. ZERO ALTER destrutivo.
 - **Rev. 4443** — **FIX: BADGE "SEM ASSINATURA" + BOTÃO ENVIO — Contrato PJ (ModuloPJ).** FCSign ao completar não atualizava `pj_contracts.contratoAssinadoUrl` → badge sempre vermelho + botão de envio nunca sumia. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4442** — **FIX: PÁGINAS EM BRANCO NO PRINT DO CONTRATO PJ (FCSign).** `print:hidden` no header/toolbar/aside; `<main>` → `print:block`; `@media print` reescrito. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4441** — **FEAT: MARGENS POR TEMPLATE — Aba Documentos ISO (TemplatesDocsTab).** 4 colunas em `system_document_templates`; ColFix `v4441`; tRPC `updateTemplateMargins`; aba "Configurações de Página" REMOVIDA. ZERO DELETE · ZERO ALTER destrutivo.

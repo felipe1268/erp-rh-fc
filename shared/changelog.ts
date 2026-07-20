@@ -1,4 +1,39 @@
 /**
+ * Rev. 4461 - FIX: DESMARCAR SERVIÇO EAP NA SC E SALVAR NÃO PERSISTE (REABRE COM ITEM AINDA MARCADO)
+ *
+ * CAUSA-RAIZ: race condition entre cache stale do React Query e abertura do form de edição.
+ *
+ * Fluxo do bug:
+ *   1. Usuário abre detalhe da SC → detalheQ (getSolicitacao) carrega dados frescos (2 serviços).
+ *   2. Usuário clica "Editar" → handler seta showDetalhe=null → detalheQ DESABILITADA (enabled: showDetalhe !== null).
+ *   3. Usuário desmarca serviço 07.04.07.26, salva → servidor executa DELETE correto, retorna sucesso.
+ *   4. onSuccess chamava `detalheQ.refetch()` — mas detalheQ estava desabilitada, logo o refetch
+ *      era no-op (ou disparava com id=null e falhava no servidor). Cache do par {id: scId} ficava
+ *      com os dados antigos (2 serviços).
+ *   5. Usuário reabre detalhe da SC → detalheQ habilitada com {id: scId} → React Query serve o
+ *      cache stale (2 serviços) IMEDIATAMENTE enquanto dispara background refetch.
+ *   6. Usuário clica "Editar" nesse instante → form populado com dados stale → 07.04.07.26 aparece
+ *      marcado novamente, apesar de ter sido deletado do banco.
+ *
+ * Fix em 2 pontos (client/src/pages/compras/Solicitacoes.tsx):
+ *
+ *   A) editar.onSuccess: substituído `detalheQ.refetch()` (no-op c/ query desabilitada) por
+ *      `trpcCtx.compras.getSolicitacao.invalidate()` — invalida TODO o cache de getSolicitacao
+ *      para que o próximo acesso sempre busque dados frescos do servidor.
+ *
+ *   B) Handler do botão "Editar" (onClick): convertido para async; antes de popular o form,
+ *      executa `await trpcCtx.compras.getSolicitacao.fetch({ id: sc.id })` para buscar os dados
+ *      atuais do servidor. O form é populado com os dados frescos (sc), não com o cache potencialmente
+ *      stale (detalhe). Fallback ao cache local se o servidor estiver indisponível.
+ *
+ * O servidor (compras.ts hasLinkedCot branch) já estava correto desde Rev. 4458/4459:
+ * DELETE removedIds antes do INSERT; o bug era 100% client-side (cache + fetch timing).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: client/src/pages/compras/Solicitacoes.tsx.
+ */
+
+/**
  * Rev. 4460 - FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR ITEM DO ALMOXARIFADO COMO EQUIPAMENTO
  *
  * `vincularItemAlmoxarifado` e `desvincularItemAlmoxarifado` em `server/routers/equipamentos.ts`

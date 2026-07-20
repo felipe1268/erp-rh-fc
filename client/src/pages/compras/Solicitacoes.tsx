@@ -1430,7 +1430,12 @@ export default function Solicitacoes() {
   const editar = trpc.compras.editarSolicitacao.useMutation({
     onSuccess: () => {
       toast.success("SC atualizada!");
-      q.refetch(); detalheQ.refetch(); setEditMode(false);
+      q.refetch();
+      // Rev. 4461 — detalheQ fica desabilitada (showDetalhe=null) durante edição, então
+      // detalheQ.refetch() era no-op e o cache ficava stale. Usar invalidate() garante
+      // que o próximo acesso ao detalhe busque dados frescos do servidor.
+      trpcCtx.compras.getSolicitacao.invalidate();
+      setEditMode(false);
       if (editingSc) { setShowNova(false); resetForm(); setEditingSc(null); setEditingOriginalEapIds(new Set()); }
     },
     onError: (e) => toast.error(e.message),
@@ -5175,38 +5180,49 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   <div className="flex items-center gap-2">
                     {!["cancelado"].includes(detalhe.status) && (
                       <Button size="sm" variant="outline"
-                        onClick={() => {
-                          const scTipo = (detalhe as any).tipo || "material";
+                        onClick={async () => {
+                          // Rev. 4461 — Busca dados frescos do servidor antes de popular o form
+                          // para evitar race condition com cache stale: detalheQ é desabilitada
+                          // (showDetalhe=null) durante edição, portanto detalheQ.refetch() no
+                          // onSuccess era no-op e o cache ficava com dados antigos. Se o usuário
+                          // abria o detalhe e clicava "Editar" antes do background refetch terminar,
+                          // o form era populado com itens que já haviam sido removidos.
+                          let sc: any = detalhe;
+                          try {
+                            const fresh = await trpcCtx.compras.getSolicitacao.fetch({ id: (detalhe as any).id });
+                            if (fresh) sc = fresh;
+                          } catch { /* fallback ao cache local se servidor indisponível */ }
+                          const scTipo = sc.tipo || "material";
                           setForm({
-                            titulo: detalhe.titulo || "",
-                            obraId: detalhe.obraId ? String(detalhe.obraId) : "",
-                            dataNecessidade: detalhe.dataNecessidade || "",
-                            prioridade: detalhe.prioridade || "normal",
-                            observacoes: detalhe.observacoes || "",
+                            titulo: sc.titulo || "",
+                            obraId: sc.obraId ? String(sc.obraId) : "",
+                            dataNecessidade: sc.dataNecessidade || "",
+                            prioridade: sc.prioridade || "normal",
+                            observacoes: sc.observacoes || "",
                             tipo: scTipo,
-                            incluirEquipamentos: (detalhe as any).incluirEquipamentos || false,
-                            vehicleId: (detalhe as any).vehicleId ? String((detalhe as any).vehicleId) : "",
+                            incluirEquipamentos: sc.incluirEquipamentos || false,
+                            vehicleId: sc.vehicleId ? String(sc.vehicleId) : "",
                             // Rev. 2290 — Locação (carrega da SC ao editar).
-                            isLocacao: !!(detalhe as any).isLocacao,
-                            locacaoDuracaoDias: (detalhe as any).locacaoDuracaoDias ? String((detalhe as any).locacaoDuracaoDias) : "",
-                            locacaoDataInicioPrevista: (detalhe as any).locacaoDataInicioPrevista || "",
-                            locacaoDataFimPrevista: (detalhe as any).locacaoDataFimPrevista || "",
+                            isLocacao: !!sc.isLocacao,
+                            locacaoDuracaoDias: sc.locacaoDuracaoDias ? String(sc.locacaoDuracaoDias) : "",
+                            locacaoDataInicioPrevista: sc.locacaoDataInicioPrevista || "",
+                            locacaoDataFimPrevista: sc.locacaoDataFimPrevista || "",
                           });
-                          if (detalhe.obraId) {
-                            const obra = obrasQ.data?.find((o: any) => o.id === detalhe.obraId);
+                          if (sc.obraId) {
+                            const obra = obrasQ.data?.find((o: any) => o.id === sc.obraId);
                             if (obra) setObraSearch(obra.nome || "");
                           }
                           setVeiculoSearch(""); setVeiculoOpen(false);
-                          const existingAnexos = Array.isArray((detalhe as any).anexos) ? (detalhe as any).anexos : [];
+                          const existingAnexos = Array.isArray(sc.anexos) ? sc.anexos : [];
                           if (existingAnexos.length > 0) {
                             setPendingAnexos(existingAnexos.map((a: any) => ({ url: a.url, nome: a.nome, tipo: a.tipo, ts: a.ts || Date.now(), preview: a.tipo === "imagem" ? a.url : undefined })));
                             const firstImg = existingAnexos.find((a: any) => a.tipo === "imagem");
                             setImagemPreview(firstImg?.url || null);
                             setImagemBase64(null);
                             setImagemNome("");
-                          } else if (detalhe.imagemReferenciaUrl) {
-                            setPendingAnexos([{ url: detalhe.imagemReferenciaUrl, nome: "imagem_referencia", tipo: "imagem", ts: Date.now(), preview: detalhe.imagemReferenciaUrl }]);
-                            setImagemPreview(detalhe.imagemReferenciaUrl);
+                          } else if (sc.imagemReferenciaUrl) {
+                            setPendingAnexos([{ url: sc.imagemReferenciaUrl, nome: "imagem_referencia", tipo: "imagem", ts: Date.now(), preview: sc.imagemReferenciaUrl }]);
+                            setImagemPreview(sc.imagemReferenciaUrl);
                             setImagemBase64(null);
                             setImagemNome("");
                           } else {
@@ -5215,7 +5231,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                             setImagemBase64(null);
                             setImagemNome("");
                           }
-                          const scItens = (detalhe.itens as any[]).map((it: any): ItemForm => ({
+                          const scItens = (sc.itens as any[]).map((it: any): ItemForm => ({
                             id: it.id ?? undefined, // Rev. 4458 — preserva id p/ edição com cotação vinculada
                             descricao: it.descricao || "",
                             unidade: it.unidade || "un",
@@ -5240,7 +5256,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                           const eapIds = new Set<number>();
                           const eapQtd: Record<number, string> = {};
                           const ajudOverrides: Record<number, boolean> = {};
-                          for (const it of (detalhe.itens as any[])) {
+                          for (const it of (sc.itens as any[])) {
                             if (it.orcamentoItemId) {
                               const orcId = typeof it.orcamentoItemId === "string" ? parseInt(it.orcamentoItemId) : it.orcamentoItemId;
                               eapIds.add(orcId);
@@ -5258,10 +5274,10 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                           setIncluirAjudanteOverride(ajudOverrides);
                           const allAjud = Object.values(ajudOverrides);
                           if (allAjud.length > 0) setIncluirAjudanteGlobal(allAjud.every(v => v));
-                          const hasAvulsoItems = (detalhe.itens as any[]).some((it: any) => it.motivoSemVerba === "avulso");
-                          const hasEapOrigemItems = (detalhe.itens as any[]).some((it: any) => it.origemEap && it.motivoSemVerba !== "avulso");
+                          const hasAvulsoItems = (sc.itens as any[]).some((it: any) => it.motivoSemVerba === "avulso");
+                          const hasEapOrigemItems = (sc.itens as any[]).some((it: any) => it.origemEap && it.motivoSemVerba !== "avulso");
                           setModoSC(hasAvulsoItems && !hasEapOrigemItems ? "manual" : hasEapOrigemItems ? "eap" : "manual");
-                          setEditingSc({ id: detalhe.id, companyId: detalhe.companyId ?? companyId });
+                          setEditingSc({ id: sc.id, companyId: sc.companyId ?? companyId });
                           setShowDetalhe(null);
                           setShowNova(true);
                         }}
