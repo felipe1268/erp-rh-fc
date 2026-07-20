@@ -4943,7 +4943,14 @@ export default function AlmoxarifadoPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex justify-end mt-2">
+                    <div className="flex justify-end gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => { setModalLocacoesVencendo(false); setModalRenovarLocacao({ item: i }); setNovaDataVencLocacao(i.dataVencimentoLocacao ?? ""); }}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-800 bg-white hover:bg-emerald-50 border border-emerald-300 rounded-md px-2.5 py-1 transition"
+                      >
+                        <CalendarPlus className="h-3.5 w-3.5" /> Renovar
+                      </button>
                       <button
                         type="button"
                         onClick={() => { setModalLocacoesVencendo(false); abrirDevolverLocacao(i); }}
