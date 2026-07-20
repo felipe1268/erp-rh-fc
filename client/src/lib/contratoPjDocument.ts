@@ -177,12 +177,40 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
   const estadoEmpresa = c.companyEstado || "SP";
   const representante = c.companyRepresentante || "_______________";
   const nomePrestador = c.razaoSocialPrestador || c.employeeName || "_______________";
-  const dadosBancarios = [
+  const dadosBancariosTexto = [
     c.bancoPrestador && `Banco: ${c.bancoPrestador}`,
     c.agenciaPrestador && `Agência: ${c.agenciaPrestador}`,
     c.contaPrestador && `Conta: ${c.contaPrestador}`,
     c.pixPrestador && `PIX: ${c.pixPrestador}`,
   ].filter(Boolean).join(" | ") || "_______________";
+
+  // Versão HTML: mini-tabela com cabeçalho vermelho (só quando htmlMode=true)
+  const _bankCols: { label: string; val: string | null | undefined }[] = [
+    { label: "Banco", val: c.bancoPrestador },
+    { label: "Agência", val: c.agenciaPrestador },
+    { label: "Conta Corrente", val: c.contaPrestador },
+    { label: "Chave PIX", val: c.pixPrestador },
+  ].filter(col => col.val) as { label: string; val: string }[];
+  const dadosBancariosHtml = _bankCols.length
+    ? `<table style="border-collapse:collapse;margin:6px 0 8px 0;font-size:10pt;width:auto;">` +
+      `<thead><tr>` +
+      _bankCols.map(col => `<th style="background:#b91c1c;color:#fff;padding:4px 12px;border:1px solid #b91c1c;font-weight:700;white-space:nowrap;">${esc(col.label)}</th>`).join("") +
+      `</tr></thead><tbody><tr>` +
+      _bankCols.map(col => `<td style="padding:4px 12px;border:1px solid #e5e7eb;background:#fff7f7;white-space:nowrap;">${esc(col.val as string)}</td>`).join("") +
+      `</tr></tbody></table>`
+    : `<span style="color:#b91c1c;font-weight:700;">_______________</span>`;
+
+  const dadosBancarios = htmlMode ? dadosBancariosHtml : dadosBancariosTexto;
+
+  // Valor mensal em vermelho para htmlMode
+  const valorMensalFmt = formatMoeda(valorMensal);
+  const valorExtensoFmt = valorPorExtenso(valorMensal);
+  const valorMensalOut = htmlMode
+    ? `<strong style="color:#b91c1c;">${valorMensalFmt}</strong>`
+    : valorMensalFmt;
+  const valorExtensoOut = htmlMode
+    ? `<strong style="color:#b91c1c;">${valorExtensoFmt}</strong>`
+    : valorExtensoFmt;
   const cnpjPrestador = c.cnpjPrestador || "_______________";
   const enderecoPrestador = c.enderecoPrestador || "_______________";
   const cidadePrestador = c.cidadePrestador || cidadeEmpresa;
@@ -222,8 +250,8 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
     .replace(/\[CONTRATADA_CIDADE\]/g, cidadePrestador)
     .replace(/\[CONTRATADA_ESTADO\]/g, estadoPrestador)
     .replace(/\[OBJETO_CONTRATO\]/g, objetoHtml)
-    .replace(/\[VALOR_MENSAL\]/g, formatMoeda(valorMensal))
-    .replace(/\[VALOR_EXTENSO\]/g, valorPorExtenso(valorMensal))
+    .replace(/\[VALOR_MENSAL\]/g, valorMensalOut)
+    .replace(/\[VALOR_EXTENSO\]/g, valorExtensoOut)
     .replace(/\[VALOR_ADIANTAMENTO\]/g, valorAdiantamento)
     .replace(/\[VALOR_FECHAMENTO\]/g, valorFechamento)
     .replace(/\[PERCENTUAL_ADIANTAMENTO\]/g, String(percAdiantamento))
@@ -254,8 +282,8 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
     .replace(/\{\{contratadaCnpj\}\}/gi, cnpjPrestador)
     .replace(/\{\{contratadaEndereco\}\}/gi, enderecoPrestador)
     .replace(/\{\{objetoContrato\}\}/gi, objetoHtml)
-    .replace(/\{\{valorMensal\}\}/gi, formatMoeda(valorMensal))
-    .replace(/\{\{valorExtenso\}\}/gi, valorPorExtenso(valorMensal))
+    .replace(/\{\{valorMensal\}\}/gi, valorMensalOut)
+    .replace(/\{\{valorExtenso\}\}/gi, valorExtensoOut)
     .replace(/\{\{dataInicio\}\}/gi, dataInicioFmt)
     .replace(/\{\{dataFim\}\}/gi, dataFimFmt)
     .replace(/\{\{foroComarca\}\}/gi, foro)

@@ -1,4 +1,25 @@
 /**
+ * Rev. 4471 - FEAT: VALOR E DADOS BANCÁRIOS EM VERMELHO + TABELA NO CONTRATO PJ (PDF)
+ *
+ * CONTEXTO: No contrato PJ impresso (PDF), o valor mensal e os dados bancários
+ * apareciam como texto corrido sem destaque visual. Usuário queria: (1) valor em
+ * vermelho, (2) dados bancários em formato de tabela para facilitar conferência.
+ *
+ * IMPLEMENTAÇÃO (client/src/lib/contratoPjDocument.ts → replacePlaceholders):
+ *   · Quando htmlMode=true (caminho ISO — template da Central de Documentos):
+ *     - [VALOR_MENSAL] / {{valorMensal}}: substituído por
+ *       <strong style="color:#b91c1c;">R$ X.XXX,XX</strong>
+ *     - [VALOR_EXTENSO] / {{valorExtenso}}: idem, em vermelho.
+ *     - [DADOS_BANCARIOS_CONTRATADA] / {{dadosBancarios}}: substituído por
+ *       mini-tabela HTML com cabeçalho vermelho (#b91c1c) e linhas fundo rosa,
+ *       exibindo apenas as colunas preenchidas (Banco / Agência / Conta / PIX).
+ *   · Quando htmlMode=false (caminho legado): comportamento inalterado (texto pipe).
+ *   · Nenhuma mudança de schema, API ou template de banco de dados.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4470 - FEAT: COMBOBOX PESQUISÁVEL DE BANCOS BRASILEIROS NO CONTRATO PJ (§5 DADOS BANCÁRIOS)
  *
  * CONTEXTO: O campo "Banco" em §5 era um <Input> livre, causando erros de digitação
