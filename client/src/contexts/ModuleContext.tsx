@@ -244,6 +244,10 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
       // (mesma rota/tela compartilhada). Quando o usuário JÁ está num desses módulos,
       // NÃO trocamos a barra lateral — fica fixa no módulo de origem.
       { prefix: "/contas-bancarias", keepIf: ["financeiro", "cadastro", "rh-dp"] },
+      // Rev. 4455 — "Contratos PJ" (/modulo-pj) aparece tanto no menu RH & DP quanto no
+      // menu Terceiros. Quando o usuário já está em "rh-dp", a barra lateral permanece RH.
+      { prefix: "/modulo-pj",       keepIf: ["rh-dp"] },
+      { prefix: "/contrato-pj",     keepIf: ["rh-dp"] },
     ];
     const sticky = STICKY_AMBIGUOUS.find(
       s => (location === s.prefix || location.startsWith(s.prefix + "/")) && s.keepIf.includes(activeModule),
