@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4449** — **FEAT: RAIO-X — USUÁRIO + HORÁRIO NA MUDANÇA DE OBRA (Timeline).** Card de Mudança de Obra / Alocação / Saída exibe abaixo da descrição o nome do usuário que transferiu e o timestamp (DD/MM/AAAA HH:MM). Dados já existiam em `employee_site_history.registradoPor`+`createdAt`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4448b** — **FIX: CUSTO RH — PRIORIDADE 1 site_periods IGNORAVA isActive (raiz real).** Ramo A Prioridade 1: `WHEN BOOL_OR(dataFim IS NULL)` passa a exigir `NOT EXISTS(OF) OR EXISTS(OF.isActive=1)`; sem isso, ESH aberto de ex-funcionário retornava CURRENT_DATE. Fix em getCustosRH e sitePeriodsCte. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4447** — **FIX: CUSTO ESTIMADO DE FÉRIAS — SALÁRIO VIA JOIN (mismatch de empresa).** `allVacations` select inclui `empSalarioBase: employees.salarioBase` (JOIN já existia). `feriasCustoProximo` usa `v.empSalarioBase` direto, eliminando falha quando funcionário é de empresa irmã do grupo. `parseSalarioBR()` robusto. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

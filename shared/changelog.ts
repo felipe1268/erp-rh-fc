@@ -1,4 +1,23 @@
 /**
+ * Rev. 4449 - FEAT: RAIO-X — USUÁRIO + HORÁRIO NA MUDANÇA DE OBRA (Timeline)
+ *
+ * Ao clicar num evento de Mudança de Obra / Alocação em Obra / Saída de Obra na
+ * Timeline Cronológica do Raio-X, o card agora exibe embaixo da descrição:
+ *   <User icon>  Nome do usuário · DD/MM/AAAA HH:MM
+ *
+ * Os campos registradoPor e createdAt já existiam em employee_site_history e
+ * chegavam via meta:h no payload da timeline — bastou consumi-los no frontend.
+ *
+ * Alterações:
+ *   client/src/components/RaioXFuncionario.tsx
+ *     + helper formatDateTimeShort(ts) — formata timestamp ISO em pt-BR
+ *     + card da timeline: renderiza linha de registradoPor+createdAt
+ *       quando refTipo===obra_historico e meta.registradoPor existe
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4448b - FIX: CUSTO RH — PRIORIDADE 1 DO site_periods IGNORAVA isActive (raiz real)
  *
  * Problema: após Rev. 4448 o Custo RH continuava mostrando ex-funcionários (Darcy, Felipe,

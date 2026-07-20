@@ -35,6 +35,15 @@ function formatDate(d: string | null | undefined) {
   return d;
 }
 
+function formatDateTimeShort(ts: string | null | undefined) {
+  if (!ts) return "";
+  try {
+    const d = new Date(String(ts).replace(" ", "T"));
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch { return ""; }
+}
+
 // ── FICHA DO ASO (IA) — parsers que estruturam o texto livre em LINHAS DE TABELA ──
 // O objetivo é deixar os dados granulares (por restrição / por categoria de risco)
 // prontos para leitura tabular e, futuramente, para gráficos de perfil do funcionário.
@@ -1686,6 +1695,12 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                 <Badge variant="outline" className="text-[10px]">{ev.tipo}</Badge>
                               </div>
                               <p className="text-sm text-gray-700 mt-1">{ev.descricao}</p>
+                              {ev.refTipo === "obra_historico" && ev.meta?.registradoPor && (
+                                <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                                  <User className="h-3 w-3 shrink-0" />
+                                  <span>{ev.meta.registradoPor}{ev.meta.createdAt ? ` · ${formatDateTimeShort(ev.meta.createdAt)}` : ""}</span>
+                                </p>
+                              )}
                             </div>
                           </button>
                         ))}
