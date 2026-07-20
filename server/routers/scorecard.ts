@@ -2410,6 +2410,19 @@ export const scorecardRouter = router({
         const mEnd   = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0, 23, 59, 59);
         return periods.some(p => p.ini <= mEnd && p.fim >= mStart);
       };
+      // Helper: conta dias úteis que o funcionário está em gozo dentro do intervalo [rangeStart, rangeEnd]
+      // Usado para descontar férias do VR/VA estimado (empresa não paga VR/VA nos dias de férias)
+      const countVacationWorkingDaysInRange = (empId: number, rangeStart: Date, rangeEnd: Date): number => {
+        const periods = feriasGozoMap.get(empId);
+        if (!periods?.length) return 0;
+        let total = 0;
+        for (const { ini, fim } of periods) {
+          const s = ini > rangeStart ? ini : rangeStart;
+          const e = fim < rangeEnd   ? fim : rangeEnd;
+          if (s <= e) total += countWorkingDays(s, e);
+        }
+        return total;
+      };
       const emFeriasSet = new Set<number>(feriasGozoMap.keys());
 
       // Afastado e Recluso: derivados do status cadastral do funcionário (employees.status).
@@ -2618,6 +2631,11 @@ export const scorecardRouter = router({
             const zeroSal     = emGozo || emRecluso;
             const salProrated  = zeroSal ? 0 : rnd2(salBase * frac);
             const fgtsProrated = zeroSal ? 0 : rnd2(salBase * 0.08 * frac);
+            // Empresa não paga VR/VA nos dias em que o funcionário está em gozo de férias.
+            // diasVrVa = dias úteis na obra MENOS os dias em gozo de férias nesse intervalo.
+            const diasFeriasNoMes = countVacationWorkingDaysInRange(n(f.employee_id), overlapStart, overlapEnd);
+            const diasVrVa        = Math.max(0, diasNaObra - diasFeriasNoMes);
+            const vrDiario        = vrDiarioMap.get(n(f.employee_id)) ?? 0;
             syntheticHist.push({
               mes:          mesStr,
               diasNaObra,
@@ -2626,13 +2644,13 @@ export const scorecardRouter = router({
               salarioBruto: salProrated,
               horasExtras:  0,
               adicionais:   0,
-              va:           rnd2((vrDiarioMap.get(n(f.employee_id)) ?? 0) * diasNaObra),
+              va:           rnd2(vrDiario * diasVrVa),
               fgts:         fgtsProrated,
               inss:         0,
               ferias:       feriasKeyMap.get(`${n(f.employee_id)}|${mesStr}`) ?? 0,
               seguroVida:   0, // preenchido após loop
               liquido:      0,
-              custoEmpresa: rnd2(salProrated + fgtsProrated + (vrDiarioMap.get(n(f.employee_id)) ?? 0) * diasNaObra),
+              custoEmpresa: rnd2(salProrated + fgtsProrated + vrDiario * diasVrVa),
               custoTotal:   0, // recalculado após loop
               folhaStatus:  'estimado',
             });

@@ -514,7 +514,10 @@ export const valeAlimentacaoRouter = router({
         const valorCafe = (isFerias || isAfastado) ? 0 : Math.round(cafeDia * diasEfetivos * 100) / 100;
         const valorLanche = (isFerias || isAfastado) ? 0 : Math.round(lancheDia * diasEfetivos * 100) / 100;
         const valorJanta = (isFerias || isAfastado) ? 0 : Math.round(jantaDia * diasEfetivos * 100) / 100;
-        const valorVA = (isProporcional || isAfastado) ? Math.round(vaMensal * diasEfetivos / diasUteisOriginal * 100) / 100 : vaMensal;
+        // Empresa não paga VA nos dias de férias: proporcional sempre que houver diasFerias > 0,
+        // admissão no meio do mês (isProporcional) ou afastamento INSS.
+        const vaEhProporcional = isProporcional || isAfastado || diasFerias > 0;
+        const valorVA = vaEhProporcional ? Math.round(vaMensal * diasEfetivos / diasUteisOriginal * 100) / 100 : vaMensal;
         const valorDiario = cafeDia + lancheDia + jantaDia;
         const valorBruto = Math.round((valorCafe + valorLanche + valorJanta + valorVA) * 100) / 100;
         const descontoVaPct = parseBRL(cfg.descontoVaPercentual) || 0;
@@ -820,7 +823,10 @@ export const valeAlimentacaoRouter = router({
           const valorCafe = (isFerias || isAfastado) ? 0 : Math.round(cafeDia * diasEfetivos * 100) / 100;
           const valorLanche = (isFerias || isAfastado) ? 0 : Math.round(lancheDia * diasEfetivos * 100) / 100;
           const valorJanta = (isFerias || isAfastado) ? 0 : Math.round(jantaDia * diasEfetivos * 100) / 100;
-          const valorVA = (isProporcional || isAfastado) ? Math.round(vaMensal * diasEfetivos / diasUteisOriginal * 100) / 100 : vaMensal;
+          // Empresa não paga VA nos dias de férias: proporcional sempre que houver diasFerias > 0,
+          // admissão no meio do mês (isProporcional) ou afastamento INSS.
+          const vaEhProporcional = isProporcional || isAfastado || diasFerias > 0;
+          const valorVA = vaEhProporcional ? Math.round(vaMensal * diasEfetivos / diasUteisOriginal * 100) / 100 : vaMensal;
           const valorDiario = cafeDia + lancheDia + jantaDia;
           const valorBruto = Math.round((valorCafe + valorLanche + valorJanta + valorVA) * 100) / 100;
           const descontoVaPct = parseBRL(cfg.descontoVaPercentual) || 0;

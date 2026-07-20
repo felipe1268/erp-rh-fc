@@ -1,4 +1,27 @@
 /**
+ * Rev. 4455 - FIX: VR/VA NÃO PAGO NOS DIAS DE FÉRIAS (CUSTO RH + GERAÇÃO DE VALE)
+ *
+ * Contexto: a empresa optou por NÃO pagar Vale Refeição / Vale Alimentação nos dias em que o
+ * funcionário está em gozo de férias. Apenas os dias efetivamente trabalhados geram benefício.
+ * Exemplo: funcionário entra de férias em 15/07 → VR/VA somente pelos 14 dias úteis anteriores.
+ * O sistema calculava erroneamente sobre o total de dias úteis na obra/mês, ignorando o gozo.
+ *
+ * Correções (Rev. 4455):
+ * 1. `server/routers/scorecard.ts` — loop sintético ("Previsão"):
+ *    - Novo helper `countVacationWorkingDaysInRange(empId, start, end)`: conta dias úteis
+ *      em gozo de férias dentro do intervalo [overlapStart, overlapEnd] usando `feriasGozoMap`.
+ *    - `diasVrVa = max(0, diasNaObra - diasFeriasNoMes)` substituiu `diasNaObra` nas fórmulas
+ *      de `va` e `custoEmpresa` do synthetic push.
+ * 2. `server/routers/valeAlimentacao.ts` — geração individual (rota `gerar`) e batch:
+ *    - `vaEhProporcional = isProporcional || isAfastado || diasFerias > 0`.
+ *    - `valorVA`: quando há dias de férias, passa a ser proporcional a `diasEfetivos / diasUteisOriginal`
+ *      (antes era o valor mensal cheio mesmo com `diasFerias > 0`).
+ *    - `diasEfetivos` já descontava `diasFerias` na subtração, agora a proporção é aplicada ao VA tb.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4454 - FEAT: LOOKUP CNPJ AUTOMÁTICO NO FORMULÁRIO DE CONTRATO PJ
  *
  * Contexto: o formulário "Editar/Criar Contrato PJ" tinha campos de CNPJ e Razão Social,
