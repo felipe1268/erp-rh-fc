@@ -20,7 +20,7 @@ import {
   CheckCircle2, XCircle, AlertTriangle, Loader2, X, ChevronDown, ChevronUp, Users,
   Star, Trophy, Medal, ShieldCheck, ShieldAlert, TrendingUp, Package, Clock, BarChart3, Truck,
   CreditCard, FileText, Tag, MessageSquare, Landmark, Hash, KeyRound,
-  Eye, ShieldQuestion, Wrench,
+  Eye, ShieldQuestion, Wrench, Trash2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -406,6 +406,8 @@ export default function Fornecedores() {
   const atualizarMut = trpc.compras.atualizarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira atualizada!"); }, onError: (e) => toast.error(e.message) });
   const excluirMut  = trpc.compras.excluirFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira desativada."); } });
   const reativarMut = trpc.compras.reativarFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira reativada!"); } });
+  const deletarMut  = trpc.compras.deletarFornecedor.useMutation({ onSuccess: () => { refetch(); setDeletarConfirmId(null); toast.success("Fornecedor excluído."); }, onError: (e) => { setDeletarConfirmId(null); toast.error(e.message); } });
+  const [deletarConfirmId, setDeletarConfirmId] = useState<number | null>(null);
 
   const avaliarMut  = trpc.compras.avaliarFornecedor.useMutation({
     onSuccess: () => {
@@ -1036,12 +1038,33 @@ export default function Fornecedores() {
                         <XCircle className="h-3.5 w-3.5" />
                       </Button>
                     ) : (
-                      <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50 gap-1"
-                        onClick={() => reativarMut.mutate({ id: f.id })}
-                        disabled={reativarMut.isPending}>
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Reativar
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50 gap-1"
+                          onClick={() => reativarMut.mutate({ id: f.id })}
+                          disabled={reativarMut.isPending}>
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Reativar
+                        </Button>
+                        {deletarConfirmId === f.id ? (
+                          <div className="flex items-center gap-1">
+                            <Button size="sm" variant="destructive" className="h-8 gap-1 text-xs"
+                              onClick={() => deletarMut.mutate({ id: f.id })}
+                              disabled={deletarMut.isPending}>
+                              {deletarMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                              Confirmar exclusão
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setDeletarConfirmId(null)}>
+                              Cancelar
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" className="h-8 w-8 p-0 text-red-500 border-red-200 hover:bg-red-50"
+                            title="Excluir fornecedor definitivamente"
+                            onClick={() => setDeletarConfirmId(f.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

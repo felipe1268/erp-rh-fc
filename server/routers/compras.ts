@@ -1819,6 +1819,28 @@ export const comprasRouter = router({
       return { success: true };
     }),
 
+  deletarFornecedor: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [existing] = await db.select().from(fornecedores).where(eq(fornecedores.id, input.id));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado." });
+      await _assertCompanyAccess(ctx.user, (existing as any).companyId);
+      if ((existing as any).ativo) throw new TRPCError({ code: "BAD_REQUEST", message: "Inative o fornecedor antes de excluí-lo." });
+      // Verifica vínculos em ordens de compra e cotações
+      const vinculos = await db.execute(sql`
+        SELECT COUNT(*) AS total FROM (
+          SELECT id FROM compras_ordens    WHERE fornecedor_id = ${input.id}
+          UNION ALL
+          SELECT id FROM compras_cotacoes  WHERE fornecedor_id = ${input.id}
+        ) t
+      `);
+      const total = Number((vinculos as any).rows?.[0]?.total ?? 0);
+      if (total > 0) throw new TRPCError({ code: "CONFLICT", message: `Não é possível excluir: este fornecedor possui ${total} pedido(s)/cotação(ões) vinculado(s).` });
+      await db.execute(sql`DELETE FROM fornecedores WHERE id = ${input.id}`);
+      return { success: true };
+    }),
+
   // ══════════════════════════════════════════════════════════════
   // DUPLICIDADES
   // ══════════════════════════════════════════════════════════════
