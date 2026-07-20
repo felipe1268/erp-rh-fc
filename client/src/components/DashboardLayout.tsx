@@ -117,6 +117,7 @@ const menuSectionsRHDP: MenuSection[] = [
       ]},
       { icon: Palmtree, label: "Férias", path: "/ferias" },
       { icon: ShieldCheck, label: "Seguro de Vida", path: "/seguro-vida" },
+      { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
     ],
   },
   {
