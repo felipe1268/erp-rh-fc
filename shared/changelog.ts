@@ -1,4 +1,29 @@
 /**
+ * Rev. 4464 - FEAT: CANCELAR CONTRATO PJ (SEM EXCLUIR) + FILTRO "CANCELADO" NA LISTA
+ *
+ * CONTEXTO: Para corrigir um contrato PJ, o usuário era obrigado a EXCLUIR o contrato (apaga
+ * o histórico) para depois criar um novo. A necessidade era ter uma opção "Cancelar" que:
+ *   (1) mantém o contrato visível no histórico com status "Cancelado";
+ *   (2) libera o prestador para receber um novo contrato imediatamente.
+ *
+ * BACKEND (server/routers/pjContracts.ts):
+ *   Nova mutation `contratos.cancelar`: recebe { id }, valida que o contrato existe (não deletado),
+ *   e faz UPDATE status → "cancelado". Sem alteração de schema (status já era text livre).
+ *
+ * FRONTEND (client/src/pages/ModuloPJ.tsx):
+ *   (1) Hook `cancelarContrato` wired na mutation nova.
+ *   (2) Botão 🚫 âmbar (ícone Ban) adicionado na linha da lista de contratos — aparece APENAS
+ *       quando status é "ativo" ou "pendente_assinatura". Confirm dialog com texto explicativo.
+ *   (3) Opção "Cancelado" adicionada ao Select de filtro de status da lista.
+ *   (4) Badge "Cancelado" (vermelho) já existia no mapa de status — nenhuma mudança necessária.
+ *
+ * FLUXO: Cancelar → prestador some do bloqueio de `empIdsComContratoVigente` → aparece no
+ * dropdown "Prestador" para criação de novo contrato na mesma sessão.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4463 - FIX: DROPDOWN "PRESTADOR" NO NOVO CONTRATO PJ NÃO MOSTRAVA FUNCIONÁRIOS SEM CONTRATO ATIVO
  *
  * CONTEXTO: Tela "Novo Contrato PJ" — campo Prestador — não listava funcionários PJ que deveriam

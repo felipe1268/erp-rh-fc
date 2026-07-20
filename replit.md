@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4464** — **FEAT: CANCELAR CONTRATO PJ (SEM EXCLUIR) + FILTRO "CANCELADO" NA LISTA.** Nova mutation `contratos.cancelar` (backend) muda status → "cancelado" preservando histórico. Frontend: botão 🚫 âmbar na linha (só para ativo/pendente), confirm dialog explicativo, opção "Cancelado" no filtro de status. Fluxo: cancelar → prestador fica disponível no dropdown para novo contrato. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4463** — **FIX: DROPDOWN "PRESTADOR" NO NOVO CONTRATO PJ NÃO MOSTRAVA FUNCIONÁRIOS SEM CONTRATO ATIVO.** 4 fixes em `ModuloPJ.tsx`: (1) `contratos.list` passa `companyIds` → contratos de todas as empresas do grupo carregados; (2) `empIdsComContratoVigente` bloqueia `ativo` E `pendente_assinatura` (evita contrato duplicado); (3) `pjEmployees` inclui Aviso/Afastado além de Ativo; (4) mensagem de dropdown vazio atualizada. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4462** — **FEAT: VALIDAÇÃO DE DADOS OBRIGATÓRIOS ANTES DE ENVIAR CONTRATO PJ PARA ASSINATURA.** CNPJ (14 dígitos), Endereço e Dados Bancários (banco+conta ou PIX) passam a ser obrigatórios para liberar o botão "Enviar para Assinatura". Implementado em 3 camadas: (1) ícone ⚠️ âmbar na lista com tooltip listando o que falta + toast ao clicar; (2) tarja âmbar no dialog de detalhes do contrato com botão "Preencher agora"; (3) banner + bloqueio no `handleSubmit` do `FCSignPJSendDialog`. Backend: 4 campos adicionados ao `contratos.list` SELECT. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4462** — **FEAT: VALIDAÇÃO DE DADOS OBRIGATÓRIOS ANTES DE ENVIAR CONTRATO PJ PARA ASSINATURA.** CNPJ, Endereço e Dados Bancários obrigatórios antes de enviar para FCSign. 3 camadas de validação. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4461** — **FIX: DESMARCAR SERVIÇO EAP NA SC E SALVAR NÃO PERSISTE (REABRE COM ITEM AINDA MARCADO).** Race condition entre cache stale do React Query e abertura do form de edição. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4460** — **FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR ITEM DO ALMOXARIFADO COMO EQUIPAMENTO.** Guard quebrado em `vincularItemAlmoxarifado`/`desvincularItemAlmoxarifado` — fix com `getUserCompanyLinks`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4459** — **FIX: ITENS NOVOS ERAM DELETADOS LOGO APÓS INSERT (ORDEM ERRADA NO BRANCH `hasLinkedCot`).** Mover DELETE para antes do INSERT. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4458** — **FIX: ITENS DA SC NÃO ERAM SALVOS AO EDITAR SC COM COTAÇÃO VINCULADA.** `ItemForm` sem `id`; servidor ignorava itens sem id. Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4457** — **FIX: CAMPOS DE LOCAÇÃO NÃO PERSISTIAM AO EDITAR SC DE EQUIPAMENTO.** `getSolicitacao` omitiu os 4 campos de locação no retorno. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

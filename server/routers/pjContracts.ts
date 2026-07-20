@@ -1026,6 +1026,19 @@ export const pjContractsRouter = router({
         return { success: true, novoContratoId: result[0].id, numero };
       }),
 
+    cancelar: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [contrato] = await db.select().from(pjContracts)
+          .where(and(eq(pjContracts.id, input.id), isNull(pjContracts.deletedAt)));
+        if (!contrato) throw new TRPCError({ code: "NOT_FOUND" });
+        await db.update(pjContracts)
+          .set({ status: 'cancelado' as any })
+          .where(eq(pjContracts.id, input.id));
+        return { success: true };
+      }),
+
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {

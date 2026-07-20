@@ -292,6 +292,10 @@ export default function ModuloPJ() {
   const deleteContrato = trpc.pj.contratos.delete.useMutation({
     onSuccess: () => { refetchContratos(); toast.success("Contrato excluído!"); },
   });
+  const cancelarContrato = trpc.pj.contratos.cancelar.useMutation({
+    onSuccess: () => { refetchContratos(); toast.success("Contrato cancelado. O prestador pode receber um novo contrato."); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const gerarMensal = trpc.pj.pagamentos.gerarMensal.useMutation({
     onSuccess: (data: any) => {
       refetchPagamentos();
@@ -840,6 +844,7 @@ export default function ModuloPJ() {
                   <SelectItem value="ativo">Ativo</SelectItem>
                   <SelectItem value="suspenso">Suspenso</SelectItem>
                   <SelectItem value="encerrado">Encerrado</SelectItem>
+                  <SelectItem value="cancelado">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
               <Button variant="outline" size="icon" title="Ajustar percentuais de todos os contratos ativos" onClick={() => { setAjusteForm({}); setShowAjusteDialog(true); }}>
@@ -982,6 +987,11 @@ export default function ModuloPJ() {
                                 {c.status === "pendente_assinatura" && (
                                   <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => { updateContrato.mutate({ id: c.id, status: "ativo" }); }}>
                                     Ativar
+                                  </Button>
+                                )}
+                                {(c.status === "ativo" || c.status === "pendente_assinatura") && (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600" title="Cancelar contrato (libera o prestador para novo contrato)" onClick={() => { if (confirm(`Cancelar o contrato ${c.numeroContrato}?\n\nO contrato ficará registrado como "Cancelado" e o prestador poderá receber um novo contrato.`)) cancelarContrato.mutate({ id: c.id }); }}>
+                                    <Ban className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir contrato?")) deleteContrato.mutate({ id: c.id }); }}>
