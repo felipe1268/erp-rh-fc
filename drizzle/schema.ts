@@ -660,6 +660,9 @@ export const companies = pgTable("companies", {
         heDestinoPadrao: text("heDestinoPadrao").default("banco_horas"),
         gestorFinanceiroId: integer("gestor_financeiro_id"),
         gestorFinanceiroNome: varchar("gestor_financeiro_nome", { length: 255 }),
+        // Rev. 4479 — Gestor RH: testemunha obrigatória em todos os contratos
+        gestorRhId: integer("gestor_rh_id"),
+        gestorRhNome: varchar("gestor_rh_nome", { length: 255 }),
         gestorProjetoId: integer("gestor_projeto_id"),
         gestorProjetoNome: varchar("gestor_projeto_nome", { length: 255 }),
         // Rev. 2400 — Toggle global de auditoria do Almoxarifado.
@@ -10594,5 +10597,33 @@ export const obraRetrabalho = pgTable("obra_retrabalho", {
   registradoPorId:    integer("registrado_por_id"),
   registradoPorNome:  varchar("registrado_por_nome", { length: 255 }),
   excluidoEm:         timestamp("excluido_em", { mode: "string" }),
+  criadoEm:           timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+// Rev. 4479 — Substituições temporárias/permanentes de gestores de contratos.
+// Registra quando RH indica um substituto para Gestor Financeiro ou Gestor RH
+// (em férias, afastamento ou desligamento). O Sócio Administrador aprova
+// antes de o substituto poder assinar contratos.
+export const gestorSubstituicaoSolicitacoes = pgTable("gestor_substituicao_solicitacoes", {
+  id:                 serial().primaryKey(),
+  companyId:          integer("company_id").notNull(),
+  papel:              varchar({ length: 20 }).notNull(),   // "financeiro" | "rh"
+  gestorOriginalId:   integer("gestor_original_id").notNull(),
+  gestorOriginalNome: varchar("gestor_original_nome", { length: 255 }),
+  substitutoId:       integer("substituto_id").notNull(),
+  substitutoNome:     varchar("substituto_nome", { length: 255 }),
+  substitutoEmail:    varchar("substituto_email", { length: 255 }),
+  status:             varchar({ length: 30 }).notNull().default("pendente"),
+  // "pendente" | "aprovado" | "rejeitado" | "encerrado"
+  motivo:             varchar({ length: 30 }).notNull(),
+  // "ferias" | "afastamento" | "desligamento"
+  periodoInicio:      date("periodo_inicio", { mode: "string" }),
+  periodoFim:         date("periodo_fim", { mode: "string" }),
+  aprovadoPorId:      integer("aprovado_por_id"),
+  aprovadoPorNome:    varchar("aprovado_por_nome", { length: 255 }),
+  aprovadoEm:         timestamp("aprovado_em", { mode: "string" }),
+  motivoRejeicao:     text("motivo_rejeicao"),
+  criadoPorId:        integer("criado_por_id"),
+  criadoPorNome:      varchar("criado_por_nome", { length: 255 }),
   criadoEm:           timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 });

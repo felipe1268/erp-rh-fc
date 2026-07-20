@@ -1,4 +1,70 @@
 /**
+ * Rev. 4479 - FEAT: GESTORES DE CONTRATOS — TESTEMUNHAS OBRIGATÓRIAS (RH + FINANCEIRO) COM FLUXO DE SUBSTITUIÇÃO
+ *
+ * CONTEXTO:
+ *   Todo contrato assinado via FCSign (PJ) ou Integrasign (terceiros) deve ter EXATAMENTE
+ *   dois gestores internos como testemunhas obrigatórias: o Gestor RH e o Gestor Financeiro.
+ *   Quando um deles entra em férias, afastamento ou desligamento, o RH indica um substituto
+ *   e o Sócio Administrador aprova antes que o substituto passe a assinar.
+ *
+ * IMPLEMENTAÇÃO:
+ *   1. SCHEMA — `drizzle/schema.ts`
+ *      · Coluna `gestor_rh_id` + `gestor_rh_nome` adicionadas à tabela `companies`.
+ *      · Nova tabela `gestor_substituicao_solicitacoes`: registra quem substituirá qual
+ *        gestor (papel: "financeiro"|"rh"), por qual motivo (férias/afastamento/desligamento),
+ *        por quanto tempo, e o status de aprovação (pendente/aprovado/rejeitado/encerrado).
+ *        O Sócio Administrador aprova/rejeita; encerrar restaura o gestor original.
+ *
+ *   2. BACKEND — `server/routers.ts` (sub-router companies)
+ *      · `getGestoresContrato` — agora retorna gestorRhId/Nome além do Financeiro.
+ *      · `salvarGestoresContrato` — aceita os três campos (Financeiro, RH, Projeto).
+ *      · `getGestoresAtivos` — resolve substituto aprovado e vigente vs. original;
+ *        busca email dos gestores via employees para pré-popular FCSign.
+ *      · `criarSolicitacaoSubstituicao` / `aprovarSolicitacao` / `rejeitarSolicitacao` /
+ *        `encerrarSolicitacao` / `listarSolicitacoes` — CRUD completo do fluxo de aprovação.
+ *
+ *   3. UI — `client/src/pages/Configuracoes.tsx` (aba "Gestores")
+ *      · Aba renomeada de "Terceiros / Gestores" para "Gestores".
+ *      · GestoresContratoTab reescrito: dois cards de gestor (RH + Financeiro) com
+ *        status de configuração; info do Gestor de Projeto (automático via obra).
+ *      · Painel de substituições pendentes visível para Admin Master: botão Aprovar/Rejeitar.
+ *      · Painel de substituições ativas com botão "Encerrar".
+ *      · Diagramas da ordem de assinatura exibidos inline.
+ *
+ *   4. FCSign PJ — `client/src/components/FCSignPJSendDialog.tsx`
+ *      · Dialog busca `getGestoresAtivos` ao abrir; pré-popula T1 (Gestor RH) e T2
+ *        (Gestor Financeiro) automaticamente.
+ *      · Labels das testemunhas renomeados: "Gestor RH — Testemunha 1" e
+ *        "Gestor Financeiro — Testemunha 2".
+ *      · Banner de aviso quando gestores não configurados (link para Configurações → Gestores).
+ *      · Badge "Substituto ativo" quando substituto está em vigor.
+ *      · Detecção de conflito de CPF com o Sócio Adm.
+ *
+ *   5. Integrasign — `server/routers/integrasign.ts`
+ *      · Enum `papel` agora inclui "rh".
+ *      · `criarEnvelope` (contratoTerceiroId): server-side injeta Gestor RH e Gestor
+ *        Financeiro determinísticos (com substituição se ativa).
+ *      · Nova ordem: FORNECEDOR → RH → FINANCEIRO → GESTOR_PROJETO → testemunhas → DIRETOR.
+ *
+ *   6. Desligamento — `server/routers/avisoPrevioFerias.ts`
+ *      · `darBaixa`: quando funcionário desligado era Gestor Financeiro ou Gestor RH, limpa
+ *        o campo na empresa e encerra substituições ativas automaticamente (try/catch
+ *        não-bloqueante para não impedir o desligamento).
+ *
+ *   ZERO ALTER destrutivo. Colunas novas via ADD COLUMN IF NOT EXISTS (syncSchema+).
+ *   Nova tabela criada via CREATE TABLE IF NOT EXISTS (syncSchema+).
+ *
+ * ARQUIVOS:
+ *   · drizzle/schema.ts — gestorRhId/Nome em companies + tabela gestorSubstituicaoSolicitacoes
+ *   · server/routers.ts — 6 endpoints novos/atualizados + import gestorSubstituicaoSolicitacoes
+ *   · client/src/pages/Configuracoes.tsx — GestoresContratoTab reescrito, tab label
+ *   · client/src/components/FCSignPJSendDialog.tsx — pre-populate + labels + warning
+ *   · server/routers/integrasign.ts — "rh" papel + injeção server-side RH+Financeiro
+ *   · server/routers/avisoPrevioFerias.ts — auto-clear gestor ao desligar
+ *   · shared/version.ts — bump 4478 → 4479
+ */
+
+/**
  * Rev. 4478 - FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR/DESMARCAR EQUIPAMENTO NO ALMOXARIFADO
  *
  * PROBLEMA RAIZ: `vincularItemAlmoxarifado` e `desvincularItemAlmoxarifado` em

@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4479** — **FEAT: GESTORES DE CONTRATOS — TESTEMUNHAS OBRIGATÓRIAS (RH + FINANCEIRO) COM FLUXO DE SUBSTITUIÇÃO.** Todo contrato FCSign/Integrasign passa a ter dois gestores internos obrigatórios: Gestor RH (T1) e Gestor Financeiro (T2). Quando um deles entra em férias/afastamento/desligamento, o RH solicita substituição e o Sócio Administrador aprova. Schema: `gestor_rh_id/nome` em companies + nova tabela `gestor_substituicao_solicitacoes`. Backend: 6 endpoints novos (`getGestoresAtivos`, `criarSolicitacaoSubstituicao`, `aprovarSolicitacao`, `rejeitarSolicitacao`, `encerrarSolicitacao`, `listarSolicitacoes`). UI: aba "Gestores" em Configurações com painéis de substituição pendente/ativa. FCSignPJSendDialog pré-popula T1/T2 automaticamente. Integrasign injeta RH+Financeiro server-side com nova ordem FORNECEDOR→RH→FINANCEIRO→GESTOR_PROJETO→DIRETOR. darBaixa auto-limpa campo gestor ao desligar.
 - **Rev. 4478** — **FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR/DESMARCAR EQUIPAMENTO NO ALMOXARIFADO.** `vincularItemAlmoxarifado` e `desvincularItemAlmoxarifado` usavam `getUserCompanyLinks` (legado, só `user_companies` direto). Usuários com acesso via obra concedida tinham `allowedIds` vazio → bloqueados. Fix: ambas passam a usar `getCompaniesForUser(userId, role)` — admin global + acesso derivado por obra, padrão do restante do arquivo. ZERO schema change.
-- **Rev. 4477** — **FEAT: TOOLBARS DO EDITOR ISO FICAM FIXAS ENQUANTO TEXTO ROLA.** Card do editor em `TemplatesDocsTab.tsx` agora é `sticky top-14 z-20` com `height: calc(100vh - 3.5rem - 0.5rem)` + `flex-col overflow-hidden`. Action toolbar = `flex-shrink-0` (nunca some). Conteúdo/texto = `flex-1 overflow-y-auto` (rola internamente). Em `RichTextEditor.tsx`: removido `overflow-hidden` do root (bloqueava sticky); toolbar de formatação ganha `sticky top-0 z-10`. ZERO schema change.
 
 ### 5 one-liners
 
-- **Rev. 4476** — **FIX: PRÉVIA DO CONTRATO NO DIÁLOGO FCSIGN ABRE O DOCUMENTO CORRETO.** `handlePreview()` gera HTML via `buildContratoPjSignHtml` (idêntico ao FCSign) em janela nova; toast se pop-up bloqueado. ZERO schema change.
+- **Rev. 4477** — **FEAT: TOOLBARS DO EDITOR ISO FICAM FIXAS ENQUANTO TEXTO ROLA.** Card do editor em `TemplatesDocsTab.tsx` agora é `sticky top-14 z-20`; toolbar de formatação `sticky top-0 z-10`; conteúdo rola internamente. ZERO schema change.
+- **Rev. 4476** — **FIX: PRÉVIA DO CONTRATO NO DIÁLOGO FCSIGN ABRE O DOCUMENTO CORRETO.** `handlePreview()` gera HTML via `buildContratoPjSignHtml` em janela nova; toast se pop-up bloqueado. ZERO schema change.
 - **Rev. 4475** — **FIX: BLOCO DE ASSINATURA DO CONTRATO PJ — REMOVE TEXTO REDUNDANTE + TESTEMUNHAS.** `stripPartyIdBlock()` em `contratoPjDocument.ts` remove blocos CONTRATANTE/CONTRATADA duplicados; `hasTestemunhas` renderiza slots de testemunha. ZERO schema change.
-- **Rev. 4474** — **FEAT: FCSIGN PJ EXIBE SESSÃO ATIVA BLOQUEANTE + BOTÃO CANCELAR.** Novo endpoint `signatures.getActiveByObservacoes`; `FCSignPJSendDialog.tsx` mostra painel laranja com status, signatários (✓/⏱) e botão "Cancelar sessão" (Admin Master). Formulário oculto enquanto houver sessão ativa. ZERO schema change.
-- **Rev. 4473** — **FIX: PRÉVIA DO CONTRATO PJ MOSTRA RASCUNHO + BANNER DE AVISO.** `pj.modeloContrato` aceita `forPreview: true` → fallback ao rascunho quando não há vigente + retorna `isRascunho`. `ContratoPJView.tsx` usa `forPreview: true`; banner âmbar quando `isRascunho=true`. ZERO schema change.
-- **Rev. 4472** — **FIX: PREVIEW DO CONTRATO PJ USA SOMENTE O TEMPLATE DA CENTRAL DE DOCUMENTOS.** `handlePreviewContrato` bloqueia com toast de erro se `modeloHtml=null`; botão desabilitado + spinner enquanto query não resolve. Template legado NUNCA mais exibido. ZERO schema change.
+- **Rev. 4474** — **FEAT: FCSIGN PJ EXIBE SESSÃO ATIVA BLOQUEANTE + BOTÃO CANCELAR.** Novo endpoint `signatures.getActiveByObservacoes`; painel laranja com status + botão "Cancelar sessão" (Admin Master). ZERO schema change.
+- **Rev. 4473** — **FIX: PRÉVIA DO CONTRATO PJ MOSTRA RASCUNHO + BANNER DE AVISO.** `pj.modeloContrato` aceita `forPreview: true` → fallback ao rascunho; banner âmbar quando `isRascunho=true`. ZERO schema change.
 
 ### Histórico completo
 

@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, createAuditLog, encerrarContratosPjDoFuncionario, userCanSeeAvisoStatus, getCompaniesForUser } from "../db";
-import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist, comboDemissaoSimulacoes, cipaMembers, cipaElections, dissidios } from "../../drizzle/schema";
+import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist, comboDemissaoSimulacoes, cipaMembers, cipaElections, dissidios, gestorSubstituicaoSolicitacoes } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -2084,6 +2084,45 @@ export const avisoPrevioFeriasRouter = router({
             entityId: aviso.employeeId,
             details: `Funcionário desligado via "Dar Baixa" do aviso prévio #${input.id}. Status: ${novoStatus}. Categoria: ${input.categoriaDesligamento}${input.incluirListaNegra ? '. Incluído na Blacklist.' : ''}`,
           });
+
+          // Rev. 4479 — Verifica se o funcionário desligado era Gestor Financeiro ou Gestor RH.
+          // Se sim, limpa o campo na empresa e auto-encerra substituições ativas para aquele gestor.
+          try {
+            const [co] = await db.select({
+              id: companies.id,
+              gestorFinanceiroId: companies.gestorFinanceiroId,
+              gestorRhId: (companies as any).gestorRhId,
+            }).from(companies).where(eq(companies.id, aviso.companyId)).limit(1);
+
+            const papeis: string[] = [];
+            if (co) {
+              const upd: Record<string, any> = {};
+              if (co.gestorFinanceiroId === aviso.employeeId) {
+                upd.gestorFinanceiroId = null;
+                upd.gestorFinanceiroNome = null;
+                papeis.push("Gestor Financeiro");
+              }
+              if ((co as any).gestorRhId === aviso.employeeId) {
+                upd.gestorRhId = null;
+                upd.gestorRhNome = null;
+                papeis.push("Gestor RH");
+              }
+              if (Object.keys(upd).length > 0) {
+                await db.update(companies).set(upd).where(eq(companies.id, aviso.companyId));
+                // Encerra substituições ativas para este gestor
+                await db.update(gestorSubstituicaoSolicitacoes)
+                  .set({ status: "encerrado" } as any)
+                  .where(and(
+                    eq(gestorSubstituicaoSolicitacoes.companyId, aviso.companyId),
+                    eq(gestorSubstituicaoSolicitacoes.status, "aprovado"),
+                    eq(gestorSubstituicaoSolicitacoes.gestorOriginalId, aviso.employeeId),
+                  ));
+                console.warn(`[darBaixa] Funcionário ${aviso.employeeId} desligado era ${papeis.join(" e ")}. Gestor removido da empresa ${aviso.companyId}.`);
+              }
+            }
+          } catch (e) {
+            console.error('[darBaixa] Erro ao verificar gestor de contrato:', e);
+          }
         }
 
         await createAuditLog({

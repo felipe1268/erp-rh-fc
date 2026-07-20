@@ -44,11 +44,11 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS, EMPLOYEE_STATUS_DESLIGADOS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens, obraFuncionarios, obraClientes, clientes, terminationNotices } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens, obraFuncionarios, obraClientes, clientes, terminationNotices, gestorSubstituicaoSolicitacoes } from "../drizzle/schema";
 import { calcularRescisaoCompleta, calcularAnosServico } from "./utils/rescisaoCalc";
 import { getIncluirMultaFgts } from "./utils/rescisaoMultaCfg";
 import { diasFeriasNoMesDaSaida } from "./routers/avisoPrevioFerias";
-import { eq, and, sql, or, ilike, isNull, inArray } from "drizzle-orm";
+import { eq, and, sql, or, ilike, isNull, inArray, desc } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
 import { dashboardsRouter } from "./routers/dashboards";
@@ -410,15 +410,19 @@ export const appRouter = router({
       const [company] = await db.select({
         gestorFinanceiroId: companies.gestorFinanceiroId,
         gestorFinanceiroNome: companies.gestorFinanceiroNome,
+        gestorRhId: (companies as any).gestorRhId,
+        gestorRhNome: (companies as any).gestorRhNome,
         gestorProjetoId: companies.gestorProjetoId,
         gestorProjetoNome: companies.gestorProjetoNome,
       }).from(companies).where(eq(companies.id, input.companyId));
-      return company || { gestorFinanceiroId: null, gestorFinanceiroNome: null, gestorProjetoId: null, gestorProjetoNome: null };
+      return company || { gestorFinanceiroId: null, gestorFinanceiroNome: null, gestorRhId: null, gestorRhNome: null, gestorProjetoId: null, gestorProjetoNome: null };
     }),
     salvarGestoresContrato: protectedProcedure.input(z.object({
       companyId: z.number(),
       gestorFinanceiroId: z.number().nullable(),
       gestorFinanceiroNome: z.string().nullable(),
+      gestorRhId: z.number().nullable(),
+      gestorRhNome: z.string().nullable(),
       gestorProjetoId: z.number().nullable(),
       gestorProjetoNome: z.string().nullable(),
     })).mutation(async ({ input, ctx }) => {
@@ -426,10 +430,149 @@ export const appRouter = router({
       await db.update(companies).set({
         gestorFinanceiroId: input.gestorFinanceiroId,
         gestorFinanceiroNome: input.gestorFinanceiroNome,
+        gestorRhId: input.gestorRhId,
+        gestorRhNome: input.gestorRhNome,
         gestorProjetoId: input.gestorProjetoId,
         gestorProjetoNome: input.gestorProjetoNome,
       } as any).where(eq(companies.id, input.companyId));
       return { success: true };
+    }),
+
+    // Rev. 4479 — Retorna gestores ATIVOS (substituto aprovado e vigente, senão original)
+    getGestoresAtivos: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [company] = await db.select({
+        gestorFinanceiroId: companies.gestorFinanceiroId,
+        gestorFinanceiroNome: companies.gestorFinanceiroNome,
+        gestorRhId: (companies as any).gestorRhId,
+        gestorRhNome: (companies as any).gestorRhNome,
+      }).from(companies).where(eq(companies.id, input.companyId));
+      if (!company) return { financeiro: null, rh: null };
+
+      // Busca substituições aprovadas e vigentes (sem periodoFim ou periodoFim >= hoje)
+      const hoje = new Date().toISOString().slice(0, 10);
+      const subs = await db.select().from(gestorSubstituicaoSolicitacoes)
+        .where(and(
+          eq(gestorSubstituicaoSolicitacoes.companyId, input.companyId),
+          eq(gestorSubstituicaoSolicitacoes.status, "aprovado"),
+          sql`(periodo_fim IS NULL OR periodo_fim >= ${hoje})`,
+        ))
+        .orderBy(desc(gestorSubstituicaoSolicitacoes.criadoEm));
+
+      const subFin = subs.find(s => s.papel === "financeiro");
+      const subRh = subs.find(s => s.papel === "rh");
+
+      // Busca email dos gestores ativos via employees
+      const idsToFetch: number[] = [];
+      const finId = subFin ? subFin.substitutoId : (company.gestorFinanceiroId ?? null);
+      const rhId = subRh ? subRh.substitutoId : ((company as any).gestorRhId ?? null);
+      if (finId) idsToFetch.push(finId);
+      if (rhId && rhId !== finId) idsToFetch.push(rhId);
+
+      const empRows = idsToFetch.length > 0
+        ? await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, email: employees.email, cpf: employees.cpf })
+            .from(employees).where(inArray(employees.id, idsToFetch))
+        : [];
+
+      const empMap = new Map(empRows.map(e => [e.id, e]));
+      const finEmp = finId ? empMap.get(finId) : null;
+      const rhEmp = rhId ? empMap.get(rhId) : null;
+
+      return {
+        financeiro: finEmp ? {
+          id: finEmp.id,
+          nome: finEmp.nomeCompleto || company.gestorFinanceiroNome || "",
+          email: finEmp.email || null,
+          cpf: finEmp.cpf || null,
+          isSubstituto: !!subFin,
+        } : (company.gestorFinanceiroId ? { id: company.gestorFinanceiroId, nome: company.gestorFinanceiroNome || "", email: null, cpf: null, isSubstituto: false } : null),
+        rh: rhEmp ? {
+          id: rhEmp.id,
+          nome: rhEmp.nomeCompleto || (company as any).gestorRhNome || "",
+          email: rhEmp.email || null,
+          cpf: rhEmp.cpf || null,
+          isSubstituto: !!subRh,
+        } : ((company as any).gestorRhId ? { id: (company as any).gestorRhId, nome: (company as any).gestorRhNome || "", email: null, cpf: null, isSubstituto: false } : null),
+      };
+    }),
+
+    // Rev. 4479 — Criação de solicitação de substituição de gestor
+    criarSolicitacaoSubstituicao: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      papel: z.enum(["financeiro", "rh"]),
+      gestorOriginalId: z.number(),
+      substitutoId: z.number(),
+      motivo: z.enum(["ferias", "afastamento", "desligamento"]),
+      periodoInicio: z.string().optional(),
+      periodoFim: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      // Busca dados do gestor original e do substituto
+      const [original] = await db.select({ nomeCompleto: employees.nomeCompleto }).from(employees).where(eq(employees.id, input.gestorOriginalId)).limit(1);
+      const [substituto] = await db.select({ nomeCompleto: employees.nomeCompleto, email: employees.email }).from(employees).where(eq(employees.id, input.substitutoId)).limit(1);
+      const [sol] = await db.insert(gestorSubstituicaoSolicitacoes).values({
+        companyId: input.companyId,
+        papel: input.papel,
+        gestorOriginalId: input.gestorOriginalId,
+        gestorOriginalNome: original?.nomeCompleto || null,
+        substitutoId: input.substitutoId,
+        substitutoNome: substituto?.nomeCompleto || null,
+        substitutoEmail: substituto?.email || null,
+        status: "pendente",
+        motivo: input.motivo,
+        periodoInicio: input.periodoInicio || null,
+        periodoFim: input.periodoFim || null,
+        criadoPorId: ctx.user.id,
+        criadoPorNome: ctx.user.name || null,
+      }).returning();
+      return sol;
+    }),
+
+    // Rev. 4479 — Aprovação da substituição pelo Sócio Adm
+    aprovarSolicitacao: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode aprovar substituições de gestores." });
+      const db = (await getDb())!;
+      await db.update(gestorSubstituicaoSolicitacoes).set({
+        status: "aprovado",
+        aprovadoPorId: ctx.user.id,
+        aprovadoPorNome: ctx.user.name || null,
+        aprovadoEm: new Date().toISOString(),
+      } as any).where(and(eq(gestorSubstituicaoSolicitacoes.id, input.id), eq(gestorSubstituicaoSolicitacoes.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+    // Rev. 4479 — Rejeição da substituição pelo Sócio Adm
+    rejeitarSolicitacao: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number(), motivo: z.string().min(1) })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode rejeitar substituições de gestores." });
+      const db = (await getDb())!;
+      await db.update(gestorSubstituicaoSolicitacoes).set({
+        status: "rejeitado",
+        aprovadoPorId: ctx.user.id,
+        aprovadoPorNome: ctx.user.name || null,
+        aprovadoEm: new Date().toISOString(),
+        motivoRejeicao: input.motivo,
+      } as any).where(and(eq(gestorSubstituicaoSolicitacoes.id, input.id), eq(gestorSubstituicaoSolicitacoes.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+    // Rev. 4479 — Encerramento (retorno do gestor original)
+    encerrarSolicitacao: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = (await getDb())!;
+      await db.update(gestorSubstituicaoSolicitacoes).set({ status: "encerrado" } as any)
+        .where(and(eq(gestorSubstituicaoSolicitacoes.id, input.id), eq(gestorSubstituicaoSolicitacoes.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+    // Rev. 4479 — Lista solicitações da empresa (pendentes + recentes)
+    listarSolicitacoes: protectedProcedure.input(z.object({ companyId: z.number(), status: z.string().optional() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const conds = [eq(gestorSubstituicaoSolicitacoes.companyId, input.companyId)];
+      if (input.status) conds.push(eq(gestorSubstituicaoSolicitacoes.status, input.status));
+      return db.select().from(gestorSubstituicaoSolicitacoes)
+        .where(and(...conds))
+        .orderBy(desc(gestorSubstituicaoSolicitacoes.criadoEm))
+        .limit(50);
     }),
   }),
 

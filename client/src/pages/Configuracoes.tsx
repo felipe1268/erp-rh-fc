@@ -342,7 +342,7 @@ export default function Configuracoes() {
     { key: "sindical" as TabKey, label: "Sindical / Dissídio", icon: Landmark, minRole: "admin", color: "orange" },
     { key: "sync_he" as TabKey, label: "Sincronizar HE", icon: RefreshCw, minRole: "admin", color: "cyan" },
     { key: "beneficios_alimentacao" as TabKey, label: "Benefícios Alimentação", icon: UtensilsCrossed, minRole: "admin", color: "lime" },
-    { key: "terceiros" as TabKey, label: "Terceiros / Gestores", icon: Building2, minRole: "admin", color: "fuchsia" },
+    { key: "terceiros" as TabKey, label: "Gestores", icon: Users, minRole: "admin", color: "fuchsia" },
     { key: "portal_cliente" as TabKey, label: "Portal do Cliente", icon: Shield, minRole: "admin", color: "purple" },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master", color: "rose" },
     { key: "smtp_config" as TabKey, label: "Config. SMTP", icon: Mail, minRole: "admin_master", color: "slate" },
@@ -1304,31 +1304,52 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
 }
 
 // ============================================================
-// COMPONENTE: Sincronizar HE com Critérios da Empresa
+// COMPONENTE: Gestores de Contratos
 // ============================================================
 function GestoresContratoTab({ companyId }: { companyId: number }) {
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
   const utils = trpc.useUtils();
   const gestoresQuery = trpc.companies.getGestoresContrato.useQuery({ companyId }, { enabled: companyId > 0 });
+  const solicitacoesQuery = trpc.companies.listarSolicitacoes.useQuery({ companyId }, { enabled: companyId > 0 });
   const empQuery = trpc.employees.list.useQuery({ companyId }, { enabled: companyId > 0 });
   const funcoesQuery = trpc.jobFunctions.list.useQuery({ companyId }, { enabled: companyId > 0 });
+
   const salvarMut = trpc.companies.salvarGestoresContrato.useMutation({
-    onSuccess: () => { toast.success("Gestores salvos com sucesso!"); utils.companies.getGestoresContrato.invalidate(); },
+    onSuccess: () => {
+      toast.success("Gestores salvos com sucesso!");
+      utils.companies.getGestoresContrato.invalidate();
+      utils.companies.getGestoresAtivos.invalidate();
+    },
     onError: (e: any) => toast.error("Erro: " + e.message),
+  });
+  const aprovarMut = trpc.companies.aprovarSolicitacao.useMutation({
+    onSuccess: () => { toast.success("Substituição aprovada!"); utils.companies.listarSolicitacoes.invalidate(); utils.companies.getGestoresAtivos.invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const rejeitarMut = trpc.companies.rejeitarSolicitacao.useMutation({
+    onSuccess: () => { toast.success("Substituição rejeitada."); utils.companies.listarSolicitacoes.invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const encerrarMut = trpc.companies.encerrarSolicitacao.useMutation({
+    onSuccess: () => { toast.success("Substituição encerrada. Gestor original restaurado."); utils.companies.listarSolicitacoes.invalidate(); utils.companies.getGestoresAtivos.invalidate(); },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const [finId, setFinId] = useState<string>("");
+  const [rhId, setRhId] = useState<string>("");
+  const [rejectId, setRejectId] = useState<number | null>(null);
+  const [rejectMotivo, setRejectMotivo] = useState("");
 
   useEffect(() => {
     if (gestoresQuery.data) {
       setFinId(gestoresQuery.data.gestorFinanceiroId ? String(gestoresQuery.data.gestorFinanceiroId) : "");
+      setRhId((gestoresQuery.data as any).gestorRhId ? String((gestoresQuery.data as any).gestorRhId) : "");
     }
   }, [gestoresQuery.data]);
 
   const ativos = useMemo(() => (empQuery.data || []).filter((e: any) => (e.status || "").toLowerCase() === "ativo").sort((a: any, b: any) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || "", "pt-BR")), [empQuery.data]);
 
-  // Rev. 2746 — Nestes seletores só se enquadram funções da categoria INDIRETA
-  // (jobFunctions.categoriaMO = "indireta_obra" | "escritorio_central"). Mão de
-  // obra direta (pedreiro, servente, armador...) não serve como gestor/testemunha.
   const catByFn = useMemo(() => {
     const m = new Map<string, string>();
     for (const f of (funcoesQuery.data || []) as any[]) {
@@ -1341,77 +1362,295 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
     return c === "indireta_obra" || c === "escritorio_central";
   };
   const ativosIndiretos = useMemo(() => ativos.filter((e: any) => isIndireta(e.funcao || e.cargo)), [ativos, catByFn]);
-  // Mantém o gestor já salvo visível mesmo que sua função não seja indireta.
   const withSelected = (base: any[], selId: string) => {
     if (!selId || base.some((e: any) => String(e.id) === selId)) return base;
     const sel = ativos.find((e: any) => String(e.id) === selId);
     return sel ? [sel, ...base] : base;
   };
   const optsFin = useMemo(() => withSelected(ativosIndiretos, finId), [ativosIndiretos, finId, ativos]);
+  const optsRh  = useMemo(() => withSelected(ativosIndiretos, rhId),  [ativosIndiretos, rhId, ativos]);
 
   const handleSalvar = () => {
     const finEmp = ativos.find((e: any) => String(e.id) === finId);
+    const rhEmp  = ativos.find((e: any) => String(e.id) === rhId);
+
+    // Aviso: sem email cadastrado → link de assinatura não será enviado
+    const semEmail: string[] = [];
+    if (finEmp && !finEmp.email) semEmail.push(`Financeiro (${finEmp.nomeCompleto})`);
+    if (rhEmp  && !rhEmp.email)  semEmail.push(`RH (${rhEmp.nomeCompleto})`);
+    if (semEmail.length > 0) {
+      toast.warning(`Atenção: ${semEmail.join(" e ")} não possuem e-mail cadastrado. O link de assinatura não será enviado por e-mail para eles — use o balão in-app ou WhatsApp.`);
+    }
+
     salvarMut.mutate({
       companyId,
       gestorFinanceiroId: finId ? Number(finId) : null,
-      gestorFinanceiroNome: finEmp ? finEmp.nomeCompleto : null,
-      // Gestor de Projeto (testemunha 2) deixou de ser configurado aqui — o ERP
-      // adota SEMPRE o "Engenheiro / Responsável" do cadastro da obra.
+      gestorFinanceiroNome: finEmp?.nomeCompleto ?? null,
+      gestorRhId: rhId ? Number(rhId) : null,
+      gestorRhNome: rhEmp?.nomeCompleto ?? null,
       gestorProjetoId: null,
       gestorProjetoNome: null,
     });
   };
 
+  const solicitacoes = (solicitacoesQuery.data || []) as any[];
+  const pendentes  = solicitacoes.filter(s => s.status === "pendente");
+  const aprovadas  = solicitacoes.filter(s => s.status === "aprovado");
+
+  const labelMotivo = (m: string) => ({ ferias: "Férias", afastamento: "Afastamento", desligamento: "Desligamento" }[m] || m);
+  const labelPapel  = (p: string) => ({ financeiro: "Gestor Financeiro", rh: "Gestor RH" }[p] || p);
+  const badgeStatus = (s: string) => {
+    if (s === "pendente")    return "bg-amber-100 text-amber-800 border border-amber-300";
+    if (s === "aprovado")    return "bg-emerald-100 text-emerald-800 border border-emerald-300";
+    if (s === "rejeitado")   return "bg-red-100 text-red-800 border border-red-300";
+    if (s === "encerrado")   return "bg-slate-100 text-slate-600 border border-slate-300";
+    return "bg-slate-100 text-slate-600";
+  };
+
   return (
-    <Card className="border-orange-200">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2 text-orange-600">
-          <Building2 className="w-5 h-5" />
-          Gestores para Contratos de Terceiros
-        </CardTitle>
-        <CardDescription>
-          Defina o colaborador que será automaticamente preenchido como <strong>Testemunha Financeiro</strong> nos contratos de terceiros. Apenas funções da categoria <strong>indireta</strong> aparecem na lista; digite o nome para filtrar. A <strong>Testemunha Gestor de Projeto</strong> é adotada automaticamente como o <strong>Engenheiro / Responsável</strong> do cadastro de cada obra.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label className="font-semibold flex items-center gap-1">
-              <DollarSign className="w-4 h-4 text-green-600" />
-              Gestor Financeiro (Testemunha)
-            </Label>
-            <EmployeeCombobox
-              value={finId}
-              onChange={setFinId}
-              options={optsFin}
-              placeholder="Selecione o gestor financeiro..."
-            />
-            {gestoresQuery.data?.gestorFinanceiroNome && (
-              <p className="text-xs text-muted-foreground">Atual: {gestoresQuery.data.gestorFinanceiroNome}</p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label className="font-semibold flex items-center gap-1">
-              <Hammer className="w-4 h-4 text-blue-600" />
-              Gestor de Projeto (Testemunha)
-            </Label>
-            <div className="rounded-md border border-dashed border-blue-200 bg-blue-50/50 px-3 py-2 text-xs text-blue-700">
-              Preenchido automaticamente com o <strong>Engenheiro / Responsável</strong> do cadastro da obra vinculada ao contrato.
+    <div className="space-y-6">
+      {/* ── Card principal: configuração dos gestores ── */}
+      <Card className="border-fuchsia-200">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2 text-fuchsia-700">
+            <Users className="w-5 h-5" />
+            Gestores de Contratos
+          </CardTitle>
+          <CardDescription className="text-sm leading-relaxed">
+            Defina os responsáveis que assinam como <strong>testemunhas obrigatórias</strong> em todos os contratos da empresa.
+            O <strong>Gestor de Projeto</strong> é adicionado automaticamente em contratos de terceiros (puxado do cadastro da obra).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Grid dos dois gestores */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Gestor Financeiro */}
+            <div className="rounded-xl border border-green-200 bg-green-50/40 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+                  <DollarSign className="w-4 h-4 text-green-700" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm text-green-900">Gestor Financeiro</p>
+                  <p className="text-xs text-green-700">Testemunha em todos os contratos</p>
+                </div>
+              </div>
+              <EmployeeCombobox value={finId} onChange={setFinId} options={optsFin} placeholder="Selecione o gestor financeiro..." />
+              {gestoresQuery.data?.gestorFinanceiroNome && !finId && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Check className="w-3 h-3 text-green-600" /> Atual: {gestoresQuery.data.gestorFinanceiroNome}
+                </p>
+              )}
+              {!finId && !gestoresQuery.data?.gestorFinanceiroId && (
+                <p className="text-xs text-amber-600 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> Não configurado — contratos não poderão ser enviados
+                </p>
+              )}
+            </div>
+
+            {/* Gestor RH */}
+            <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                  <Users className="w-4 h-4 text-blue-700" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm text-blue-900">Gestor RH</p>
+                  <p className="text-xs text-blue-700">Testemunha em todos os contratos</p>
+                </div>
+              </div>
+              <EmployeeCombobox value={rhId} onChange={setRhId} options={optsRh} placeholder="Selecione o gestor RH..." />
+              {(gestoresQuery.data as any)?.gestorRhNome && !rhId && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Check className="w-3 h-3 text-blue-600" /> Atual: {(gestoresQuery.data as any).gestorRhNome}
+                </p>
+              )}
+              {!rhId && !(gestoresQuery.data as any)?.gestorRhId && (
+                <p className="text-xs text-amber-600 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> Não configurado — contratos não poderão ser enviados
+                </p>
+              )}
             </div>
           </div>
+
+          {/* Gestor de Projeto (informativo) */}
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 mt-0.5">
+                <Hammer className="w-4 h-4 text-slate-500" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm text-slate-700">Gestor de Projeto</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Preenchido automaticamente com o <strong>Engenheiro / Responsável</strong> do cadastro de cada obra —
+                  adicionado apenas em contratos de terceiros. Não requer configuração manual.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Ordem de assinatura */}
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 px-4 py-3">
+            <p className="text-xs font-semibold text-indigo-700 mb-2">Ordem de assinatura nos contratos</p>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              {[
+                { label: "CONTRATADA", color: "bg-slate-200 text-slate-700" },
+                { label: "→", color: "" },
+                { label: "RH", color: "bg-blue-200 text-blue-800" },
+                { label: "→", color: "" },
+                { label: "FINANCEIRO", color: "bg-green-200 text-green-800" },
+                { label: "→", color: "" },
+                { label: "GESTOR PROJETO (terceiros)", color: "bg-amber-100 text-amber-800" },
+                { label: "→", color: "" },
+                { label: "CONTRATANTE (último)", color: "bg-indigo-200 text-indigo-800" },
+              ].map((item, i) => item.color ? (
+                <span key={i} className={`px-2 py-0.5 rounded-full font-medium ${item.color}`}>{item.label}</span>
+              ) : (
+                <span key={i} className="text-slate-400 font-bold">{item.label}</span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-1">
+            <Button onClick={handleSalvar} disabled={salvarMut.isPending} className="bg-fuchsia-600 hover:bg-fuchsia-700">
+              {salvarMut.isPending
+                ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Salvando...</>
+                : <><Save className="w-4 h-4 mr-1.5" /> Salvar Gestores</>}
+            </Button>
+            <p className="text-xs text-muted-foreground">Apenas funções de categoria indireta aparecem na lista.</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Card de substituições pendentes (visível para admin_master) ── */}
+      {pendentes.length > 0 && (
+        <Card className="border-amber-300">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="w-5 h-5" />
+              Substituições Aguardando Aprovação ({pendentes.length})
+            </CardTitle>
+            <CardDescription>
+              O RH indicou substitutos para gestores afastados. Como Sócio Administrador, aprove ou rejeite cada solicitação.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pendentes.map((sol: any) => (
+              <div key={sol.id} className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeStatus(sol.status)}`}>
+                        {sol.status === "pendente" ? "Pendente" : sol.status}
+                      </span>
+                      <span className="text-xs font-semibold text-amber-900">{labelPapel(sol.papel)}</span>
+                      <span className="text-xs text-amber-700">· {labelMotivo(sol.motivo)}</span>
+                    </div>
+                    <p className="text-sm text-slate-700">
+                      <span className="text-slate-500">Substituindo:</span>{" "}
+                      <strong>{sol.gestorOriginalNome}</strong>
+                    </p>
+                    <p className="text-sm text-slate-700">
+                      <span className="text-slate-500">Indicado pelo RH:</span>{" "}
+                      <strong>{sol.substitutoNome}</strong>
+                    </p>
+                    {(sol.periodoInicio || sol.periodoFim) && (
+                      <p className="text-xs text-slate-500">
+                        Período: {sol.periodoInicio || "—"} até {sol.periodoFim || "indeterminado"}
+                      </p>
+                    )}
+                  </div>
+                  {isMaster && (
+                    <div className="flex gap-2 shrink-0">
+                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        disabled={aprovarMut.isPending}
+                        onClick={() => aprovarMut.mutate({ id: sol.id, companyId })}>
+                        <Check className="w-3.5 h-3.5 mr-1" /> Aprovar
+                      </Button>
+                      <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-50"
+                        onClick={() => { setRejectId(sol.id); setRejectMotivo(""); }}>
+                        <X className="w-3.5 h-3.5 mr-1" /> Rejeitar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                {rejectId === sol.id && (
+                  <div className="flex gap-2 items-start pt-1 border-t border-amber-200">
+                    <Input
+                      className="flex-1 text-sm"
+                      placeholder="Informe o motivo da rejeição..."
+                      value={rejectMotivo}
+                      onChange={e => setRejectMotivo(e.target.value)}
+                    />
+                    <Button size="sm" variant="destructive"
+                      disabled={!rejectMotivo.trim() || rejeitarMut.isPending}
+                      onClick={() => rejeitarMut.mutate({ id: sol.id, companyId, motivo: rejectMotivo.trim() }).then(() => setRejectId(null))}>
+                      Confirmar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setRejectId(null)}>Cancelar</Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Card de substituições aprovadas e ativas ── */}
+      {aprovadas.length > 0 && (
+        <Card className="border-emerald-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-emerald-700">
+              <CheckCheck className="w-5 h-5" />
+              Substituições Ativas ({aprovadas.length})
+            </CardTitle>
+            <CardDescription>
+              Estes substitutos estão atualmente habilitados para assinar contratos no lugar dos gestores originais.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {aprovadas.map((sol: any) => (
+              <div key={sol.id} className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeStatus(sol.status)}`}>Ativo</span>
+                      <span className="text-xs font-semibold text-emerald-900">{labelPapel(sol.papel)}</span>
+                      <span className="text-xs text-emerald-700">· {labelMotivo(sol.motivo)}</span>
+                    </div>
+                    <p className="text-sm text-slate-700">
+                      <span className="text-slate-500">Substituto:</span> <strong>{sol.substitutoNome}</strong>
+                      {" "}por <span className="text-slate-500">{sol.gestorOriginalNome}</span>
+                    </p>
+                    {sol.periodoFim && (
+                      <p className="text-xs text-slate-500">Previsto até: {sol.periodoFim}</p>
+                    )}
+                  </div>
+                  {isMaster && (
+                    <Button size="sm" variant="outline" className="border-slate-300 text-slate-700 shrink-0"
+                      disabled={encerrarMut.isPending}
+                      onClick={() => encerrarMut.mutate({ id: sol.id, companyId })}>
+                      <X className="w-3.5 h-3.5 mr-1" /> Encerrar substituição
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Placeholder quando tudo ok e sem solicitações */}
+      {pendentes.length === 0 && aprovadas.length === 0 && !solicitacoesQuery.isLoading && (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-5 flex items-center gap-3 text-slate-500">
+          <BadgeCheck className="w-5 h-5 text-emerald-500 shrink-0" />
+          <p className="text-sm">Nenhuma substituição pendente. Os gestores configurados acima assinarão normalmente.</p>
         </div>
-        <div className="flex items-center gap-2 pt-2">
-          <Button onClick={handleSalvar} disabled={salvarMut.isPending}>
-            {salvarMut.isPending ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-1" /> Salvar Gestores</>}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            O nome selecionado será usado automaticamente como Testemunha Financeiro ao gerar novos contratos de terceiros.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }
+
 
 function SyncHETab({ companyId }: { companyId: number }) {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);

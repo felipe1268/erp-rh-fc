@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,13 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
     { companyId },
     { enabled: open && companyId > 0 }
   );
+
+  // Rev. 4479 — Gestores ativos (RH + Financeiro) para pré-popular testemunhas
+  const gestoresQ = trpc.companies.getGestoresAtivos.useQuery(
+    { companyId },
+    { enabled: open && companyId > 0 }
+  );
+
   const createMut = trpc.signatures.create.useMutation();
   const cancelMut = trpc.signatures.cancel.useMutation();
   const utils = trpc.useUtils();
@@ -74,6 +81,24 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
 
   const prestadorNome = contrato?.razaoSocialPrestador || contrato?.employeeName || "Prestador";
   const prestadorCnpj = contrato?.cnpjPrestador || "";
+
+  // Rev. 4479 — Pré-popula testemunhas com gestores ativos quando dialog abre
+  useEffect(() => {
+    if (!open || !gestoresQ.data) return;
+    const g = gestoresQ.data;
+    // T1 = Gestor RH, T2 = Gestor Financeiro
+    if (g.rh) {
+      setT1Nome(g.rh.nome || "");
+      // Normaliza CPF: remove não-dígitos, depois aplica máscara
+      const cpfRh = (g.rh.cpf || "").replace(/\D/g, "");
+      setT1Cpf(cpfRh ? maskCpf(cpfRh) : "");
+    }
+    if (g.financeiro) {
+      setT2Nome(g.financeiro.nome || "");
+      const cpfFin = (g.financeiro.cpf || "").replace(/\D/g, "");
+      setT2Cpf(cpfFin ? maskCpf(cpfFin) : "");
+    }
+  }, [open, gestoresQ.data]);
 
   const reset = () => {
     setT1Nome(""); setT1Cpf(""); setT2Nome(""); setT2Cpf("");
@@ -375,34 +400,79 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
                     })()}
                   </div>
 
-                  {/* TESTEMUNHAS */}
+                  {/* TESTEMUNHAS — Gestor RH (T1) + Gestor Financeiro (T2) */}
                   <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center gap-2">
-                      <Users className="h-4 w-4 text-amber-700" />
-                      <span className="text-xs font-bold uppercase tracking-wide text-amber-800">Testemunhas (opcional)</span>
+                    <div className="bg-fuchsia-50 border-b border-fuchsia-100 px-4 py-2 flex items-center gap-2">
+                      <Users className="h-4 w-4 text-fuchsia-700" />
+                      <span className="text-xs font-bold uppercase tracking-wide text-fuchsia-800">Gestores — Testemunhas Obrigatórias</span>
+                      {gestoresQ.isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-fuchsia-500 ml-auto" />}
+                      {gestoresQ.data?.rh?.isSubstituto && (
+                        <span className="ml-auto bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300">Substituto ativo</span>
+                      )}
                     </div>
+
+                    {/* Aviso se gestores não configurados */}
+                    {!gestoresQ.isLoading && gestoresQ.data && (!gestoresQ.data.rh || !gestoresQ.data.financeiro) && (
+                      <div className="px-4 pt-3 pb-0">
+                        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 flex items-start gap-2 text-xs text-amber-900">
+                          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                          <div>
+                            <b>Gestores não configurados.</b>{" "}
+                            {!gestoresQ.data.rh && !gestoresQ.data.financeiro
+                              ? "Gestor RH e Gestor Financeiro não foram definidos."
+                              : !gestoresQ.data.rh
+                              ? "Gestor RH não configurado."
+                              : "Gestor Financeiro não configurado."}{" "}
+                            Configure em <b>Configurações → Gestores</b> ou preencha manualmente abaixo.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Testemunha 1 — Gestor RH */}
                       <div className="space-y-2 lg:border-r lg:border-slate-100 lg:pr-4">
-                        <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Testemunha 1</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-[11px] font-bold uppercase tracking-wide text-blue-700">Gestor RH — Testemunha 1</div>
+                          {gestoresQ.data?.rh?.isSubstituto && (
+                            <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-px rounded border border-amber-200">Substituto</span>
+                          )}
+                        </div>
                         <div>
-                          <label htmlFor="pj-t1-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
+                          <label htmlFor="pj-t1-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo</label>
                           <Input id="pj-t1-nome" value={t1Nome} onChange={(e) => setT1Nome(e.target.value)} placeholder="Ex.: João da Silva" className="h-9 bg-white" />
                         </div>
                         <div>
-                          <label htmlFor="pj-t1-cpf" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
+                          <label htmlFor="pj-t1-cpf" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF</label>
                           <Input id="pj-t1-cpf" value={t1Cpf} onChange={(e) => setT1Cpf(maskCpf(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={14} className="h-9 bg-white" />
                         </div>
+                        {t1Cpf.replace(/\D/g, "") === FELIPE_SOCIO.cpf.replace(/\D/g, "") && t1Cpf && (
+                          <p className="text-[11px] text-amber-700 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" /> CPF igual ao Sócio Adm — a testemunha será omitida automaticamente.
+                          </p>
+                        )}
                       </div>
+                      {/* Testemunha 2 — Gestor Financeiro */}
                       <div className="space-y-2">
-                        <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Testemunha 2</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-[11px] font-bold uppercase tracking-wide text-green-700">Gestor Financeiro — Testemunha 2</div>
+                          {gestoresQ.data?.financeiro?.isSubstituto && (
+                            <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-px rounded border border-amber-200">Substituto</span>
+                          )}
+                        </div>
                         <div>
-                          <label htmlFor="pj-t2-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
+                          <label htmlFor="pj-t2-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo</label>
                           <Input id="pj-t2-nome" value={t2Nome} onChange={(e) => setT2Nome(e.target.value)} placeholder="Ex.: Maria Souza" className="h-9 bg-white" />
                         </div>
                         <div>
-                          <label htmlFor="pj-t2-cpf" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
+                          <label htmlFor="pj-t2-cpf" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF</label>
                           <Input id="pj-t2-cpf" value={t2Cpf} onChange={(e) => setT2Cpf(maskCpf(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={14} className="h-9 bg-white" />
                         </div>
+                        {t2Cpf.replace(/\D/g, "") === FELIPE_SOCIO.cpf.replace(/\D/g, "") && t2Cpf && (
+                          <p className="text-[11px] text-amber-700 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" /> CPF igual ao Sócio Adm — a testemunha será omitida automaticamente.
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

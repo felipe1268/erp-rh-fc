@@ -6,6 +6,9 @@ import {
   integrasignSignatarios,
   integrasignAuditLog,
   terceiroContratos,
+  companies,
+  employees,
+  gestorSubstituicaoSolicitacoes,
 } from "../../drizzle/schema";
 import { eq, and, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -232,7 +235,7 @@ export const integrasignRouter = router({
       descricao: z.string().optional(),
       textoContrato: z.string().optional(),
       signatarios: z.array(z.object({
-        papel: z.enum(["fornecedor", "gestor_projeto", "financeiro", "diretor", "testemunha"]),
+        papel: z.enum(["fornecedor", "gestor_projeto", "financeiro", "rh", "diretor", "testemunha"]),
         ordemAssinatura: z.number(),
         nome: z.string(),
         email: z.string().email(),
@@ -265,13 +268,46 @@ export const integrasignRouter = router({
 
       if (input.contratoTerceiroId) {
         const socioAdmin = await resolveSocioAdministradorSigner(db, input.companyId);
-        // Mantém só os papéis obrigatórios do contrato (fornecedor + gestor da obra);
-        // remove qualquer "diretor"/"financeiro" recebido para garantir EXATAMENTE 1
-        // sócio (re-rodar sobre uma lista já normalizada produz o mesmo resultado).
-        const obrigatorios = signatariosFinais.filter(
-          s => s.papel === "fornecedor" || s.papel === "gestor_projeto",
-        );
-        const testemunhas = signatariosFinais.filter(s => s.papel === "testemunha");
+
+        // Rev. 4479 — Busca gestores RH e Financeiro configurados (com substituições ativas)
+        const [company] = await db!.select({
+          gestorFinanceiroId: companies.gestorFinanceiroId,
+          gestorFinanceiroNome: companies.gestorFinanceiroNome,
+          gestorRhId: (companies as any).gestorRhId,
+          gestorRhNome: (companies as any).gestorRhNome,
+        }).from(companies).where(eq(companies.id, input.companyId)).limit(1);
+
+        const hoje = new Date().toISOString().slice(0, 10);
+        const subs = await db!.select().from(gestorSubstituicaoSolicitacoes)
+          .where(and(
+            eq(gestorSubstituicaoSolicitacoes.companyId, input.companyId),
+            eq(gestorSubstituicaoSolicitacoes.status, "aprovado"),
+            sql`(periodo_fim IS NULL OR periodo_fim >= ${hoje})`,
+          ))
+          .orderBy(desc(gestorSubstituicaoSolicitacoes.criadoEm));
+
+        const subFin = subs.find(s => s.papel === "financeiro");
+        const subRh  = subs.find(s => s.papel === "rh");
+
+        const finId = subFin ? subFin.substitutoId : (company?.gestorFinanceiroId ?? null);
+        const rhId  = subRh  ? subRh.substitutoId  : ((company as any)?.gestorRhId  ?? null);
+
+        const empIds = [...new Set([finId, rhId].filter(Boolean))] as number[];
+        const empRows = empIds.length > 0
+          ? await db!.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, email: employees.email, cpf: employees.cpf })
+              .from(employees).where(inArray(employees.id, empIds))
+          : [];
+        const empMap = new Map(empRows.map(e => [e.id, e]));
+
+        const finEmp = finId ? empMap.get(finId) : null;
+        const rhEmp  = rhId  ? empMap.get(rhId)  : null;
+
+        // Mantém fornecedor + gestor_projeto; descarta qualquer rh/financeiro/diretor
+        // que o cliente tenha eventualmente enviado (garante injeção determinística).
+        const fornecedores    = signatariosFinais.filter(s => s.papel === "fornecedor");
+        const gestoresProjeto = signatariosFinais.filter(s => s.papel === "gestor_projeto");
+        const testemunhas     = signatariosFinais.filter(s => s.papel === "testemunha");
+
         const diretor = {
           papel: "diretor" as const,
           ordemAssinatura: 0,
@@ -281,9 +317,34 @@ export const integrasignRouter = router({
           cargo: "Sócio Administrador",
           empresaNome: "FC Engenharia",
         };
-        // Ordem de assinatura: FORNECEDOR → GESTOR (obrigatórios) → testemunhas →
-        // SÓCIO ADMINISTRADOR por ÚLTIMO (autoridade final que fecha o contrato).
-        const reordenados = [...obrigatorios, ...testemunhas, diretor];
+
+        // Gestores injetados server-side (só inclui se configurados)
+        const gestoresInjetados: typeof signatariosFinais = [];
+        if (rhId) {
+          gestoresInjetados.push({
+            papel: "rh" as any,
+            ordemAssinatura: 0,
+            nome: rhEmp?.nomeCompleto || subRh?.substitutoNome || (company as any)?.gestorRhNome || "Gestor RH",
+            email: subRh?.substitutoEmail || rhEmp?.email || "",
+            cpfCnpj: rhEmp?.cpf ?? undefined,
+            cargo: "Gestor RH",
+            empresaNome: "FC Engenharia",
+          });
+        }
+        if (finId) {
+          gestoresInjetados.push({
+            papel: "financeiro" as any,
+            ordemAssinatura: 0,
+            nome: finEmp?.nomeCompleto || subFin?.substitutoNome || company?.gestorFinanceiroNome || "Gestor Financeiro",
+            email: subFin?.substitutoEmail || finEmp?.email || "",
+            cpfCnpj: finEmp?.cpf ?? undefined,
+            cargo: "Gestor Financeiro",
+            empresaNome: "FC Engenharia",
+          });
+        }
+
+        // Ordem Rev. 4479: FORNECEDOR → RH → FINANCEIRO → GESTOR_PROJETO → testemunhas → DIRETOR (último)
+        const reordenados = [...fornecedores, ...gestoresInjetados, ...gestoresProjeto, ...testemunhas, diretor];
         signatariosFinais.length = 0;
         signatariosFinais.push(...reordenados.map((s, i) => ({ ...s, ordemAssinatura: i + 1 })));
       }

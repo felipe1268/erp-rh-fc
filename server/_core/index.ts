@@ -5518,6 +5518,38 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4444: coluna valor_unitario garantida em oc_lista_recebimento.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4444 valor_unitario:", e?.message || e); }
 
+        // Rev. 4479 — Gestores de Contratos: Gestor RH + tabela de substituições
+        try {
+          await db.execute(sql.raw(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS gestor_rh_id INTEGER`));
+          await db.execute(sql.raw(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS gestor_rh_nome VARCHAR(255)`));
+          await db.execute(sql.raw(`
+            CREATE TABLE IF NOT EXISTS gestor_substituicao_solicitacoes (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              papel VARCHAR(20) NOT NULL,
+              gestor_original_id INTEGER NOT NULL,
+              gestor_original_nome VARCHAR(255),
+              substituto_id INTEGER NOT NULL,
+              substituto_nome VARCHAR(255),
+              substituto_email VARCHAR(255),
+              status VARCHAR(30) NOT NULL DEFAULT 'pendente',
+              motivo VARCHAR(30) NOT NULL,
+              periodo_inicio DATE,
+              periodo_fim DATE,
+              aprovado_por_id INTEGER,
+              aprovado_por_nome VARCHAR(255),
+              aprovado_em TIMESTAMP,
+              motivo_rejeicao TEXT,
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              criado_em TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `));
+          await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_gsol_company ON gestor_substituicao_solicitacoes(company_id)`));
+          await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_gsol_status ON gestor_substituicao_solicitacoes(status)`));
+          console.log("[SyncSchema+] Rev. 4479: gestor_rh_id/nome em companies + tabela gestor_substituicao_solicitacoes garantidos.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4479 gestores:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
