@@ -3361,12 +3361,11 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
-        const links = await getUserCompanyLinks(ctx.user.id);
-        const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
-        if (allowedIds.length > 0 && !allowedIds.includes(input.companyId)) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
-        }
+      // Rev. 4477 — substituído getUserCompanyLinks (legado, só user_companies direto)
+      // por getCompaniesForUser (correto: admin global + acesso via obra concedida).
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
 
       const [item] = await db.select().from(almoxarifadoItens)
@@ -3464,12 +3463,10 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
-        const links = await getUserCompanyLinks(ctx.user.id);
-        const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
-        if (allowedIds.length > 0 && !allowedIds.includes(input.companyId)) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
-        }
+      // Rev. 4477 — idem vincularItemAlmoxarifado: getCompaniesForUser correto.
+      const allowedDes = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedDes as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
       await db.update(almoxarifadoItens)
         .set({

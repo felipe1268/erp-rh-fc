@@ -1,4 +1,29 @@
 /**
+ * Rev. 4478 - FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR/DESMARCAR EQUIPAMENTO NO ALMOXARIFADO
+ *
+ * PROBLEMA RAIZ: `vincularItemAlmoxarifado` e `desvincularItemAlmoxarifado` em
+ * `equipamentos.ts` usavam o helper LEGADO `getUserCompanyLinks(userId)` para checar
+ * acesso, que apenas lê `user_companies` direto (vínculos explícitos).
+ * Usuários que chegam à empresa VIA OBRA CONCEDIDA (sem vínculo direto em `user_companies`)
+ * ficavam com `allowedIds` vazio ou incompleto → guard bloqueava com "Sem acesso a esta empresa"
+ * mesmo tendo acesso legítimo.
+ * Além disso, o padrão legado tinha uma dupla condição de role (`role !== "admin" && role !== "admin_master"`)
+ * que podia introduzir inconsistências futuras.
+ *
+ * FIX:
+ *   · Ambas as procedures substituem o padrão legado por
+ *     `getCompaniesForUser(ctx.user.id, ctx.user.role)` — helper correto que:
+ *       - Retorna TODAS as empresas para admin/admin_master (acesso global)
+ *       - Para demais roles: vínculos explícitos (user_companies) UNIÃO empresas
+ *         donas das obras concedidas ao usuário (via getEffectiveAllowedObraIds)
+ *   · Guard agora é simétrico ao padrão do restante do arquivo (~20 procedures).
+ *   ZERO schema change. ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS:
+ *   · server/routers/equipamentos.ts — vincularItemAlmoxarifado + desvincularItemAlmoxarifado
+ */
+
+/**
  * Rev. 4477 - FEAT: TOOLBARS DO EDITOR ISO FICAM FIXAS ENQUANTO TEXTO ROLA
  *
  * PROBLEMA RAIZ: no editor da Central de Documentos ISO (TemplatesDocsTab),
