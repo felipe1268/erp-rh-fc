@@ -1,4 +1,23 @@
 /**
+ * Rev. 4460 - FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR ITEM DO ALMOXARIFADO COMO EQUIPAMENTO
+ *
+ * `vincularItemAlmoxarifado` e `desvincularItemAlmoxarifado` em `server/routers/equipamentos.ts`
+ * usavam o guard quebrado `getCompaniesForUser(...) → allowed.includes(companyId)`.
+ * `getCompaniesForUser` retorna ARRAY DE OBJETOS Company ({id, razaoSocial,...}), não IDs.
+ * Logo `allowed.includes(numericId)` era SEMPRE false → FORBIDDEN para qualquer usuário,
+ * incluindo admin e admin_master.
+ *
+ * Fix: substituído pelo padrão canônico já usado em compras.ts, terceiros.ts, etc.:
+ *   - admin / admin_master → bypass imediato.
+ *   - Usuário com vínculos em user_companies → enforça membership real via getUserCompanyLinks.
+ *   - Usuário sem nenhum vínculo explícito → libera (acesso global por grupo/módulo).
+ * Import de `getUserCompanyLinks` adicionado ao router de equipamentos.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ * Arquivo: server/routers/equipamentos.ts.
+ */
+
+/**
  * Rev. 4459 - FIX: SALVAR/REMARCAR ITENS NA EAP (SC COM COTAÇÃO VINCULADA) — 2 BUGS
  *
  * BUG A — Servidor: ordem errada de operações no branch hasLinkedCot.

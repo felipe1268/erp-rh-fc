@@ -11,7 +11,7 @@ import dns from "node:dns/promises";
 import net from "node:net";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb, getEffectiveAllowedObraIds } from "../db";
+import { getDb, getEffectiveAllowedObraIds, getUserCompanyLinks } from "../db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter, companyInput } from "../companyHelper";
 import { getCompaniesForUser } from "../db";
@@ -3361,9 +3361,12 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
-      if (allowed !== null && !allowed.includes(input.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+        const links = await getUserCompanyLinks(ctx.user.id);
+        const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+        if (allowedIds.length > 0 && !allowedIds.includes(input.companyId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+        }
       }
 
       const [item] = await db.select().from(almoxarifadoItens)
@@ -3461,9 +3464,12 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
-      if (allowed !== null && !allowed.includes(input.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+        const links = await getUserCompanyLinks(ctx.user.id);
+        const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+        if (allowedIds.length > 0 && !allowedIds.includes(input.companyId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+        }
       }
       await db.update(almoxarifadoItens)
         .set({
