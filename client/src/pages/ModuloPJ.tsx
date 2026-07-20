@@ -91,6 +91,15 @@ function FornecedorCadastroBadge({ status, nome, cnpj }: { status?: string; nome
   );
 }
 
+function getInitials(name: string): string {
+  return (name || "?").split(" ").filter(Boolean).slice(0, 2).map(n => n[0].toUpperCase()).join("");
+}
+function getAvatarColor(name: string): string {
+  const palette = ["bg-blue-500","bg-violet-500","bg-emerald-500","bg-orange-500","bg-rose-500","bg-cyan-600","bg-amber-500","bg-indigo-500","bg-teal-500","bg-pink-500"];
+  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return palette[Math.abs(h) % palette.length];
+}
+
 const STATUS_CONTRATO: Record<string, { label: string; color: string; bg: string }> = {
   pendente_assinatura: { label: "Pendente Assinatura", color: "text-amber-700", bg: "bg-amber-100" },
   ativo: { label: "Ativo", color: "text-green-700", bg: "bg-green-100" },
@@ -1657,14 +1666,98 @@ export default function ModuloPJ() {
         <FullScreenDialog open={showContratoDialog} onClose={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); setCreatedContratoId(null); }} title={editingContratoId ? "Editar Contrato PJ" : "Novo Contrato PJ"} icon={<FileSignature className="h-5 w-5 text-white" />}>
           <div className="w-full max-w-7xl mx-auto">
 
+            {/* ═══ FASE 1 — Seleção de prestador (apenas novo contrato) ═══ */}
+            {!form.employeeId && !editingContratoId && (
+              <div className="space-y-6">
+                <div className="text-center pt-2">
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-100 mb-3">
+                    <Users className="h-7 w-7 text-blue-600" />
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900">Selecionar Prestador PJ</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {pjEmployeesSemContrato.length === 0
+                      ? "Todos os prestadores PJ já possuem contrato ativo ou pendente de assinatura"
+                      : <><span className="font-semibold text-blue-700">{pjEmployeesSemContrato.length}</span> prestador(es) disponível(is) para novo contrato</>}
+                  </p>
+                </div>
+                {pjEmployeesSemContrato.length > 0 && (
+                  <div className="relative max-w-sm mx-auto">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                    <input
+                      autoFocus
+                      value={empSearch}
+                      onChange={e => setEmpSearch(e.target.value)}
+                      placeholder="Buscar por nome ou CPF..."
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white shadow-sm"
+                    />
+                  </div>
+                )}
+                {filteredEmps.length === 0 ? (
+                  <div className="text-center py-14">
+                    <div className="text-5xl mb-3">👥</div>
+                    <p className="text-gray-500 font-medium text-sm">
+                      {pjEmployeesSemContrato.length === 0
+                        ? "Todos os prestadores PJ já possuem contrato ativo ou pendente de assinatura."
+                        : `Nenhum resultado para "${empSearch}"`}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                    {filteredEmps.map((e: any) => (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpSearch(""); }}
+                        className="group flex flex-col items-center gap-2.5 p-4 rounded-2xl border border-gray-200 bg-white hover:border-blue-400 hover:shadow-lg hover:bg-blue-50/40 transition-all duration-150 text-center w-full"
+                      >
+                        <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-base shrink-0 shadow-sm ${getAvatarColor(e.nomeCompleto || "")}`}>
+                          {getInitials(e.nomeCompleto || "")}
+                        </div>
+                        <div className="w-full min-w-0">
+                          <p className="text-xs font-semibold text-gray-900 leading-tight line-clamp-2 break-words">{e.nomeCompleto}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5 font-mono">{formatCPF(e.cpf)}</p>
+                          {e.codigoInterno && <p className="text-[10px] text-blue-600 font-bold mt-0.5">{e.codigoInterno}</p>}
+                        </div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${e.status === "Ativo" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                          {e.status}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ═══ FASE 2 — Formulário (prestador selecionado ou editando) ═══ */}
+            {(form.employeeId || editingContratoId) && (<>
+
             {/* Banner pós-criação */}
             {createdContratoId && !editingContratoId && (
-              <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+              <div className="mb-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
                 <div>
-                  <p className="text-sm font-semibold text-green-800">Contrato criado com sucesso!</p>
-                  <p className="text-xs text-green-600 mt-0.5">Adicione documentos na aba Documentos conforme necessário.</p>
+                  <p className="text-sm font-semibold text-emerald-800">Contrato criado com sucesso!</p>
+                  <p className="text-xs text-emerald-600 mt-0.5">Adicione documentos na aba Documentos conforme necessário.</p>
                 </div>
+              </div>
+            )}
+
+            {/* Banner prestador selecionado */}
+            {!editingContratoId && selectedEmp && (
+              <div className="mb-4 flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm ${getAvatarColor(selectedEmp.nomeCompleto || "")}`}>
+                  {getInitials(selectedEmp.nomeCompleto || "")}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-blue-900 truncate">{selectedEmp.nomeCompleto}</p>
+                  <p className="text-xs text-blue-500 font-mono">{formatCPF(selectedEmp.cpf)}</p>
+                </div>
+                {!createdContratoId && (
+                  <Button size="sm" variant="outline" className="shrink-0 text-xs border-blue-300 text-blue-700 hover:bg-blue-100"
+                    onClick={() => setForm({ ...form, employeeId: undefined })}>
+                    Trocar prestador
+                  </Button>
+                )}
               </div>
             )}
 
@@ -1673,57 +1766,27 @@ export default function ModuloPJ() {
               {/* ── COLUNA ESQUERDA: Dados cadastrais ── */}
               <div className="space-y-4">
 
-                {/* § 1 — Prestador */}
-                <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b">
-                    <div className="h-5 w-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">1</div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-700">Prestador de Serviços</p>
-                  </div>
-                  <div className="p-4">
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Prestador *</label>
-                    {editingContratoId ? (
-                      <div className="flex items-center border rounded-lg px-3 py-2.5 bg-muted/30 text-sm">
-                        <span className="font-medium">{selectedEmp ? `${selectedEmp.nomeCompleto} — ${formatCPF(selectedEmp.cpf)}` : "—"}</span>
-                        <span className="ml-2 text-xs text-muted-foreground">(não pode ser alterado)</span>
-                      </div>
-                    ) : (
-                      <div className="relative" style={{ zIndex: 60 }}>
-                        <div className="flex items-center border rounded-lg px-3 py-2.5 bg-background cursor-pointer hover:bg-muted/30" style={{ zIndex: 61 }} onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}>
-                          <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
-                          {empDropdownOpen ? (
-                            <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Digite nome, CPF ou código..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }} onClick={e => e.stopPropagation()} />
-                          ) : (
-                            <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
-                              {selectedEmp ? `${selectedEmp.nomeCompleto} — ${formatCPF(selectedEmp.cpf)}` : "Selecione um prestador..."}
-                            </span>
-                          )}
-                          {form.employeeId && (
-                            <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); setForm({ ...form, employeeId: undefined }); setEmpSearch(""); setEmpDropdownOpen(false); }}>
-                              <X className="h-4 w-4" />
-                            </button>
-                          )}
+                {/* § 1 — Prestador: apenas em edição (novo contrato usa Fase 1 com cards) */}
+                {editingContratoId && (
+                  <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b">
+                      <div className="h-5 w-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">1</div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-gray-700">Prestador de Serviços</p>
+                    </div>
+                    <div className="p-4">
+                      <div className="flex items-center gap-3 border rounded-xl px-3 py-2.5 bg-gray-50">
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${getAvatarColor(selectedEmp?.nomeCompleto || "")}`}>
+                          {getInitials(selectedEmp?.nomeCompleto || "")}
                         </div>
-                        {empDropdownOpen && (
-                          <>
-                            <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
-                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-56 overflow-y-auto" style={{ zIndex: 62 }}>
-                              {filteredEmps.length === 0 ? (
-                                <div className="p-3 text-sm text-muted-foreground text-center">
-                                  {pjEmployees.length === 0 ? "Nenhum prestador PJ cadastrado" : pjEmployeesSemContrato.length === 0 ? "Todos os prestadores PJ já possuem contrato ativo ou pendente de assinatura" : `Nenhum resultado para "${empSearch}"`}
-                                </div>
-                              ) : filteredEmps.slice(0, 20).map((e: any) => (
-                                <div key={e.id} className="px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm flex justify-between" onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>
-                                  <span className="font-medium">{e.nomeCompleto}</span>
-                                  <span className="text-muted-foreground">{e.codigoInterno && <span className="text-blue-600 font-medium mr-2">{e.codigoInterno}</span>}{formatCPF(e.cpf)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{selectedEmp?.nomeCompleto || "—"}</p>
+                          <p className="text-xs text-gray-500 font-mono">{formatCPF(selectedEmp?.cpf || "")}</p>
+                        </div>
+                        <span className="ml-auto text-xs text-gray-400 italic shrink-0">não editável</span>
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* § 2 — Dados da Empresa Contratada (CNPJ lookup) */}
                 <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
@@ -2062,6 +2125,7 @@ export default function ModuloPJ() {
                 </Button>
               )}
             </div>
+            </>)}
           </div>
         </FullScreenDialog>
 

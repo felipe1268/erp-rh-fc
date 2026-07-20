@@ -1,3 +1,4 @@
+- **Rev. 4458** — **FIX: ITENS DA SC NÃO ERAM SALVOS AO EDITAR SC COM COTAÇÃO VINCULADA.** `ItemForm` sem `id`; servidor ignorava itens sem id. Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4456** — **FEAT: FICHA COMPLETA DO FORNECEDOR (PÁGINA FULL-SCREEN) + EXCLUSÃO DEFINITIVA.** Clicar no nome da empresa navega para `/compras/fornecedores/:id`. Para inativas: hard DELETE com guard de vínculos. ZERO ALTER destrutivo.
 - **Rev. 4455** — **FIX: VR/VA NÃO PAGO NOS DIAS DE FÉRIAS (CUSTO RH + GERAÇÃO DE VALE).** Fix em scorecard.ts + valeAlimentacao.ts. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4454** — **FEAT: LOOKUP CNPJ AUTOMÁTICO NO CONTRATO PJ (ENDEREÇO + SÓCIOS).** BrasilAPI auto-preenche Razão Social, Endereço, Sócios. 5 novas colunas em `pj_contracts`. ZERO ALTER destrutivo.

@@ -1,4 +1,29 @@
 /**
+ * Rev. 4466 - FEAT: REDESIGN "NOVO CONTRATO PJ" — FASE 1 COM GRADE DE PRESTADORES + LAYOUT MODERNO
+ *
+ * CONTEXTO: O usuário reportou que o layout do dialog "Novo Contrato PJ" estava
+ * ruim e que a lista de prestadores PJ sem contrato havia "sumido" (antes aparecia,
+ * agora não aparecia mais). O form antigo era um grid de 2 colunas com seções
+ * numeradas e o dropdown de seleção de prestador escondido dentro da seção §1.
+ *
+ * SOLUÇÃO (client/src/pages/ModuloPJ.tsx):
+ *   (1) FASE 1 — Seleção de prestador: quando o dialog abre em modo "novo contrato"
+ *       e nenhum prestador está selecionado, exibe uma grade visual (2–6 colunas
+ *       responsiva) com cards de todos os prestadores PJ sem contrato ativo/pendente.
+ *       Cada card: avatar colorido com iniciais, nome, CPF mascarado, código interno,
+ *       badge de status. Busca inline por nome/CPF. Estado vazio com mensagem clara.
+ *   (2) FASE 2 — Formulário: após clicar num card (ou ao abrir em modo edição),
+ *       exibe o form redesenhado com banner do prestador selecionado (avatar + nome
+ *       + CPF + botão "Trocar prestador") e grid 2-col moderno.
+ *   (3) §1 Prestador: removido do form no modo "novo contrato" (seleção feita na
+ *       Fase 1); no modo edição aparece como card read-only (não editável).
+ *   (4) Helpers: `getInitials(name)` e `getAvatarColor(name)` adicionados antes do
+ *       componente principal para gerar avatar colorido determinístico.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4465 - FIX: SÓCIO ADMINISTRADOR ASSINA POR ÚLTIMO NO FCSIGN (CONTRATO PJ)
  *
  * CONTEXTO: No fluxo de assinatura digital do contrato PJ (FCSignPJSendDialog), o

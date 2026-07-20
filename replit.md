@@ -50,17 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4466** — **FEAT: REDESIGN "NOVO CONTRATO PJ" — FASE 1 COM GRADE DE PRESTADORES + LAYOUT MODERNO.** Quando o dialog abre em modo "novo", exibe grade visual (cards com avatar colorido, nome, CPF, status) de todos os PJTs sem contrato ativo/pendente + busca inline. Clicar no card avança para a Fase 2 com banner do prestador + form 2-col. Helpers `getInitials`/`getAvatarColor` adicionados. §1 escondido no modo "novo" (seleção feita na grade); modo edição = card read-only. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4465** — **FIX: SÓCIO ADMINISTRADOR ASSINA POR ÚLTIMO NO FCSIGN (CONTRATO PJ).** Array `signers` reordenado: contratado → testemunha(s) → contratante (último). Badge dinâmico mostra posição correta. Texto informativo e rótulo do card atualizados. Sistema já enforçava sequência — corrigida apenas a montagem do array. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4464** — **FEAT: CANCELAR CONTRATO PJ (SEM EXCLUIR) + FILTRO "CANCELADO" NA LISTA.** Nova mutation `contratos.cancelar` (backend) muda status → "cancelado" preservando histórico. Frontend: botão 🚫 âmbar na linha (só para ativo/pendente), confirm dialog explicativo, opção "Cancelado" no filtro de status. Fluxo: cancelar → prestador fica disponível no dropdown para novo contrato. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4464** — **FEAT: CANCELAR CONTRATO PJ (SEM EXCLUIR) + FILTRO "CANCELADO" NA LISTA.** Nova mutation `contratos.cancelar` (backend) muda status → "cancelado" preservando histórico. Frontend: botão 🚫 âmbar na linha (só para ativo/pendente), confirm dialog explicativo, opção "Cancelado" no filtro de status. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4463** — **FIX: DROPDOWN "PRESTADOR" NO NOVO CONTRATO PJ NÃO MOSTRAVA FUNCIONÁRIOS SEM CONTRATO ATIVO.** 4 fixes em `ModuloPJ.tsx`: contratos.list com companyIds; empIdsComContratoVigente bloqueia ativo+pendente; pjEmployees inclui Aviso/Afastado. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4462** — **FEAT: VALIDAÇÃO DE DADOS OBRIGATÓRIOS ANTES DE ENVIAR CONTRATO PJ PARA ASSINATURA.** CNPJ, Endereço e Dados Bancários obrigatórios antes de enviar para FCSign. 3 camadas de validação. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4461** — **FIX: DESMARCAR SERVIÇO EAP NA SC E SALVAR NÃO PERSISTE (REABRE COM ITEM AINDA MARCADO).** Race condition entre cache stale do React Query e abertura do form de edição. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4460** — **FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR ITEM DO ALMOXARIFADO COMO EQUIPAMENTO.** Guard quebrado em `vincularItemAlmoxarifado`/`desvincularItemAlmoxarifado` — fix com `getUserCompanyLinks`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4459** — **FIX: ITENS NOVOS ERAM DELETADOS LOGO APÓS INSERT (ORDEM ERRADA NO BRANCH `hasLinkedCot`).** Mover DELETE para antes do INSERT. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4458** — **FIX: ITENS DA SC NÃO ERAM SALVOS AO EDITAR SC COM COTAÇÃO VINCULADA.** `ItemForm` sem `id`; servidor ignorava itens sem id. Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
