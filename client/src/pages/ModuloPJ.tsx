@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { BANCOS_BRASIL, buscarBancos } from "@/lib/bancosBrasil";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -113,6 +116,63 @@ const STATUS_PAGAMENTO: Record<string, { label: string; color: string; bg: strin
   pago: { label: "Pago", color: "text-green-700", bg: "bg-green-100" },
   cancelado: { label: "Cancelado", color: "text-red-700", bg: "bg-red-100" },
 };
+
+function BancoCombobox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => buscarBancos(search).slice(0, 80), [search]);
+
+  const handleSelect = (nomeAbrev: string) => {
+    onChange(nomeAbrev);
+    setOpen(false);
+    setSearch("");
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="w-full flex items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 h-9 text-left"
+        >
+          <span className={value ? "text-foreground" : "text-muted-foreground"}>
+            {value || "Selecione ou busque o banco..."}
+          </span>
+          <svg className="h-4 w-4 opacity-50 shrink-0 ml-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Digite o nome ou código do banco..."
+            value={search}
+            onValueChange={setSearch}
+          />
+          <CommandList className="max-h-64">
+            <CommandEmpty>Nenhum banco encontrado.</CommandEmpty>
+            <CommandGroup>
+              {filtered.map(b => (
+                <CommandItem
+                  key={b.codigo}
+                  value={b.nomeAbrev}
+                  onSelect={() => handleSelect(b.nomeAbrev)}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <span className="text-xs text-muted-foreground w-8 shrink-0">{b.codigo}</span>
+                  <span className="truncate">{b.nomeAbrev}</span>
+                  {value === b.nomeAbrev && (
+                    <svg className="h-4 w-4 ml-auto shrink-0 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                  )}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function ModuloPJ() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
@@ -2147,7 +2207,10 @@ export default function ModuloPJ() {
                   <div className="p-4 grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-medium text-gray-600 mb-1 block">Banco</label>
-                      <Input value={form.bancoPrestador || ""} onChange={e => setForm({ ...form, bancoPrestador: e.target.value })} placeholder="Ex: Banco do Brasil, Itaú..." />
+                      <BancoCombobox
+                        value={form.bancoPrestador || ""}
+                        onChange={v => setForm({ ...form, bancoPrestador: v })}
+                      />
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-600 mb-1 block">Agência</label>

@@ -1,4 +1,27 @@
 /**
+ * Rev. 4470 - FEAT: COMBOBOX PESQUISÁVEL DE BANCOS BRASILEIROS NO CONTRATO PJ (§5 DADOS BANCÁRIOS)
+ *
+ * CONTEXTO: O campo "Banco" em §5 era um <Input> livre, causando erros de digitação
+ * (ex: "Banco Santander" vs "Santander" vs "Santande"). Usuário queria um dropdown
+ * com todos os bancos do Brasil filtrando conforme digita.
+ *
+ * IMPLEMENTAÇÃO:
+ *   · Novo arquivo `client/src/lib/bancosBrasil.ts`: lista completa de ~250 bancos
+ *     brasileiros com código de compensação, nome completo e nome abreviado.
+ *     Exporta `BANCOS_BRASIL`, `buscarBancos(texto)` (normaliza acentos e faz match
+ *     em código+nome abrev+nome completo) e `formatarBanco()`.
+ *   · Novo componente `BancoCombobox` (definido em ModuloPJ.tsx antes do export default):
+ *     usa Popover + Command (shadcn/ui, já presentes no projeto). Trigger mostra o
+ *     valor selecionado ou placeholder; CommandInput filtra em tempo real; cada item
+ *     exibe código (3 dígitos, muted) + nome abreviado + check mark no selecionado.
+ *     Lista limitada a 80 resultados por render (useMemo).
+ *   · Campo `form.bancoPrestador` continua armazenando o nomeAbrev (string), sem
+ *     mudança de schema ou API.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4469 - FEAT: REATIVAR CONTRATO PJ CANCELADO (DESFAZ CANCELAMENTO ACIDENTAL)
  *
  * CONTEXTO: Usuário cancelou acidentalmente o contrato de Enivaldo (PJ-2026-0211, Rev.06)

@@ -1,3 +1,4 @@
+- **Rev. 4462** — **FEAT: VALIDAÇÃO DE DADOS OBRIGATÓRIOS ANTES DE ENVIAR CONTRATO PJ PARA ASSINATURA.** CNPJ, Endereço e Dados Bancários obrigatórios antes de enviar para FCSign. 3 camadas de validação. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4461** — **FIX: DESMARCAR SERVIÇO EAP NA SC E SALVAR NÃO PERSISTE (REABRE COM ITEM AINDA MARCADO).** Race condition entre cache stale do React Query e abertura do form de edição. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4460** — **FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR ITEM DO ALMOXARIFADO COMO EQUIPAMENTO.** Guard quebrado em `vincularItemAlmoxarifado`/`desvincularItemAlmoxarifado` — fix com `getUserCompanyLinks`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4458** — **FIX: ITENS DA SC NÃO ERAM SALVOS AO EDITAR SC COM COTAÇÃO VINCULADA.** `ItemForm` sem `id`; servidor ignorava itens sem id. Fix em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
