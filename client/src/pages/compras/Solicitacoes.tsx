@@ -2941,9 +2941,9 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                 className="w-full h-8 px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
                 placeholder="Ex: Materiais de alvenaria - Bloco A"
                 value={form.titulo}
-                onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
+                onChange={e => setForm(p => ({ ...p, titulo: e.target.value.toUpperCase() }))}
                 onBlur={e => {
-                  const titulo = normalizarTexto(e.target.value);
+                  const titulo = normalizarTexto(e.target.value).toUpperCase();
                   setForm(p => {
                     const mdoPattern = /\bm\.?o\.?\b|mão\s*de\s*obra|\bmdo\b|pedreiro|servente|ajudante|auxiliar|encanador|eletricista|pintor|carpinteiro|armador|soldador|serralheiro|gesseiro|azulejista|marmorista|vidraceiro|impermeabilizador|operador/i;
                     if (p.tipo === "material" && mdoPattern.test(titulo)) {
