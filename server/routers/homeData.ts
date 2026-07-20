@@ -305,6 +305,10 @@ export const homeDataRouter = router({
         status: vacationPeriods.status,
         abonoPecuniario: vacationPeriods.abonoPecuniario,
         valorTotal: vacationPeriods.valorTotal,
+        // Rev. 4447 — inclui salarioBase direto no JOIN para evitar mismatch
+        // quando o funcionário pertence a empresa irmã do grupo (allEmps filtra
+        // só a empresa do input, mas vacation_periods pode ser de empresa diferente).
+        empSalarioBase: employees.salarioBase,
       }).from(vacationPeriods)
         .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
         .where(and(
@@ -381,14 +385,17 @@ export const homeDataRouter = router({
       const hoje90 = new Date(hoje);
       hoje90.setDate(hoje90.getDate() + 90);
       const hoje90Str = hoje90.toISOString().split('T')[0];
-      // salarioBase pode estar em formato BR ("3.500,00") — parseFloat puro pararia no ponto
-      // de milhar retornando 3.5. Normalizar: remove pontos → troca vírgula por ponto.
+      // Rev. 4447 — salário vem direto do JOIN (empSalarioBase) eliminando o problema
+      // de mismatch de empresa quando o funcionário pertence a empresa irmã do grupo.
+      // salarioBase é varchar("3.500,00") — normalizar BR antes de parseFloat.
       const parseSalarioBR = (val: any): number => {
         if (!val) return 0;
-        const str = String(val).replace(/\./g, '').replace(',', '.');
-        return parseFloat(str) || 0;
+        const str = String(val).trim();
+        // Se não tem vírgula, pode ser número puro ou formato "3500" / "3500.00"
+        if (!str.includes(',')) return parseFloat(str) || 0;
+        // Formato BR: remove pontos de milhar, troca vírgula por ponto decimal
+        return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
       };
-      const empSalarioMap = new Map(allEmps.map(e => [e.id, parseSalarioBR((e as any).salarioBase)]));
       const feriasCustoProximo = allVacations
         .filter(v => {
           if (!v.dataInicio || v.status === 'cancelada') return false;
@@ -397,9 +404,10 @@ export const homeDataRouter = router({
         })
         .reduce((total, v) => {
           // Se já tem valorTotal (folha processada), usa ele; senão estima pelo salário
-          const valorProcessado = parseFloat(v.valorTotal || '0') || 0;
+          const valorProcessado = parseFloat(String(v.valorTotal || '0').replace(',', '.')) || 0;
           if (valorProcessado > 0) return total + valorProcessado;
-          const salario = empSalarioMap.get(v.employeeId) || 0;
+          // Usa salário que veio direto no JOIN — sem risco de mismatch de empresa
+          const salario = parseSalarioBR((v as any).empSalarioBase);
           const diasGozo = v.diasGozo || 30;
           const diasAbono = (v.abonoPecuniario) ? 10 : 0;
           const diasTotais = diasGozo + diasAbono;

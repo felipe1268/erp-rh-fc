@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4446** — **UX: LAYOUT RESPONSIVO TABLET/MOBILE — SIDEBAR OVERLAY + FILTRO COLAPSÁVEL.** `useMobile.tsx` breakpoint 480→768px: tablets (<768px) usam sidebar como Sheet overlay (libera 100% da largura). `DashboardLayout`: TABLET_BREAKPOINT 1024→1200 (sidebar começa colapsada até 1199px). `Curriculos.tsx`: botão "Filtrar" visível só em mobile (md:hidden) abre/fecha painel de filtros; nomes de função: `truncate`→`break-words` (sem corte). ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4445** — **UX: MODAL "RECEBER LOCAÇÃO" TELA CHEIA + CONFERÊNCIA EM TABELA COMPACTA.** `Modal` component ganha prop `fullscreen` (98vw×96vh desktop, tela cheia mobile). Conferência dos Itens substituída de cards `text-3xl` que sobrepunham números (4.077,20; 103,25) por tabela compacta com colunas #/Item/Un./Esperado/Recebido em `text-sm tabular-nums`. Números formatados em pt-BR (ponto milhar + vírgula decimal). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4447** — **FIX: CUSTO ESTIMADO DE FÉRIAS — SALÁRIO VIA JOIN (mismatch de empresa).** `allVacations` select passa a incluir `empSalarioBase: employees.salarioBase` (JOIN já existia). `feriasCustoProximo` usa `v.empSalarioBase` direto, eliminando falha quando funcionário é de empresa irmã do grupo. `parseSalarioBR()` robusto para varchar BR e numérico. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4446** — **UX: LAYOUT RESPONSIVO TABLET/MOBILE — SIDEBAR OVERLAY + FILTRO COLAPSÁVEL.** `useMobile.tsx` breakpoint 480→768px: tablets (<768px) usam sidebar como Sheet overlay (libera 100% da largura). `DashboardLayout`: TABLET_BREAKPOINT 1024→1200. `Curriculos.tsx`: filtro colapsável em mobile. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

@@ -1,4 +1,30 @@
 /**
+ * Rev. 4447 - FIX: CUSTO ESTIMADO DE FÉRIAS — SALÁRIO VIA JOIN (elimina mismatch de empresa)
+ *
+ * Problema: "Custo estimado próximos 90 dias" mostrava R$ 42,41 mesmo com 8+ férias agendadas.
+ *
+ * CAUSA-RAIZ (dupla):
+ *   1. salarioBase é varchar com formato BR ("3.500,00"). parseFloat("3.500,00") = 3.5
+ *      (para no ponto de milhar). Custo por funcionário: (3.5/30)*30*(4/3) ≈ R$ 4,67.
+ *      Para ~9 férias: R$ 42 → exatamente o valor errado observado.
+ *   2. Mesmo após parseSalarioBR (Rev. 4446), o empSalarioMap era construído de allEmps
+ *      filtrado por companyFilter. Funcionários de empresa irmã do grupo (companyId diferente)
+ *      não entravam em allEmps → empSalarioMap.get(v.employeeId) = undefined → 0 → estimado=0.
+ *      Apenas o registro com valorTotal já processado (R$ 42,41 de folha anterior) somava.
+ *
+ * FIX:
+ *   1. allVacations.select() passou a incluir 
+ *      (o JOIN com employees JÁ existia; só adicionamos o campo no SELECT).
+ *   2. feriasCustoProximo.reduce usa  diretamente, eliminando o
+ *      mismatch de empresa. parseSalarioBR() atualizado para ser mais robusto:
+ *      - sem vírgula → parseFloat direto (suporta "3500" e "3500.00")
+ *      - com vírgula → remove pontos, troca vírgula → ponto (formato BR)
+ *   3. valorProcessado também normalizado via replace(",",".") para robustez.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4446 - UX: LAYOUT RESPONSIVO TABLET/MOBILE — SIDEBAR OVERLAY + FILTRO COLAPSÁVEL
  *
  * Problema: em tablets (iPad portrait ~768px) textos eram cortados na barra lateral

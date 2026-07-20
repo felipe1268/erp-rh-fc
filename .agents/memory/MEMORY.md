@@ -1,3 +1,4 @@
+- [Férias custo via JOIN cross-company](ferias-custo-join-cross-company.md) — empSalarioMap filtrado por companyFilter perde funcionários de empresa irmã; fix: incluir salarioBase no SELECT do JOIN que já existe.
 - [NFS-e Nacional SPED/RFB format](nfse-nacional-sped-format.md) — XMLs da Prefeitura de Guaratinguetá (e outros municípios RFB) usam root `<NFSe xmlns="sped.fazenda..."><infNFSe>`, campos abreviados (nNFSe/dhEmi/prest/toma/serv/valores), completamente diferente do ABRASF/SIAP GEO.
 - [Cotacao preco_unitario vs total drift](cotacao-preco-unitario-total-drift.md) — preco_unitario (4dp roundeado) × qty ≠ total salvo; usar resp.total para itens não-alterados; só recomputar preco*qty para itens mudados.
 - [Scorecard MO — equipe duplicada multi-obra](scorecard-mo-multi-obra.md) — Ramo B (obra_funcionarios sem history) incluía funcionário em TODAS as obras que ele estava alocado; fix: NOT EXISTS(obra mais recente) + remover time_records do relevant_emp.
