@@ -1,4 +1,30 @@
 /**
+ * Rev. 4465 - FIX: SÓCIO ADMINISTRADOR ASSINA POR ÚLTIMO NO FCSIGN (CONTRATO PJ)
+ *
+ * CONTEXTO: No fluxo de assinatura digital do contrato PJ (FCSignPJSendDialog), o
+ * sócio administrador (CONTRATANTE) era inserido no array `signers` ANTES das
+ * testemunhas — ficando em 2ª posição enquanto testemunhas ficavam em 3ª/4ª. Regra
+ * correta: sócio adm valida o documento por ÚLTIMO, após todos os demais terem
+ * assinado (o backend já enforça `ordem` sequencial — quem tem ordem menor bloqueia
+ * quem tem ordem maior).
+ *
+ * FIX (client/src/components/FCSignPJSendDialog.tsx):
+ *   (1) Array `signers`: contratado → testemunha_1? → testemunha_2? → contratante.
+ *       O contratante foi movido para `.push()` final (fora do bloco condicional das
+ *       testemunhas) — garante que independente de haver ou não testemunhas, o sócio
+ *       adm é sempre o último a receber a ordem N.
+ *   (2) Badge no card CONTRATANTE: de "2ª" fixo → `{ordemContratante}ª (último)`
+ *       calculado dinamicamente em função dos campos de testemunha preenchidos.
+ *   (3) Texto informativo atualizado: descreve o fluxo correto com o sócio adm por
+ *       último; conta total de signatários dinâmico.
+ *   (4) Rótulo do card: "Contratante — Sócio Adm (FC Engenharia)" para deixar claro.
+ *   (5) Nota no card do contratante explica que o sistema bloqueia a assinatura dele
+ *       até que todos os demais concluam.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4464 - FEAT: CANCELAR CONTRATO PJ (SEM EXCLUIR) + FILTRO "CANCELADO" NA LISTA
  *
  * CONTEXTO: Para corrigir um contrato PJ, o usuário era obrigado a EXCLUIR o contrato (apaga

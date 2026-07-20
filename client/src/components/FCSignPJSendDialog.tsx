@@ -90,13 +90,14 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
         geradoPor: geradoPor || "Sistema",
         margins: documentMargins,
       });
+      // Ordem PJ: prestador assina 1º, testemunhas no meio, sócio adm (CONTRATANTE) assina por ÚLTIMO.
       const signers: Array<{ role: "contratado" | "contratante" | "testemunha_1" | "testemunha_2"; nome: string; cpf: string | null }> = [
-        // Ordem PJ: prestador assina 1º, FC (CONTRATANTE) valida 2º.
         { role: "contratado", nome: prestadorNome, cpf: null },
-        { role: "contratante", nome: FELIPE_SOCIO.nome, cpf: FELIPE_SOCIO.cpf },
       ];
       if (t1Nome.trim()) signers.push({ role: "testemunha_1", nome: t1Nome.trim(), cpf: t1Cpf || null });
       if (t2Nome.trim()) signers.push({ role: "testemunha_2", nome: t2Nome.trim(), cpf: t2Cpf || null });
+      // Sócio adm sempre por último — garante que só valida após todos os demais
+      signers.push({ role: "contratante", nome: FELIPE_SOCIO.nome, cpf: FELIPE_SOCIO.cpf });
 
       const r = await createMut.mutateAsync({
         companyId: Number(contrato.companyId),
@@ -175,12 +176,18 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
                   </div>
                 );
               })()}
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-start gap-2 text-xs text-indigo-900">
-                <ShieldCheck className="h-4 w-4 mt-0.5 flex-shrink-0 text-indigo-700" />
-                <div>
-                  <b>Fluxo sequencial:</b> a CONTRATADA (prestador) assina em 1º; em seguida a CONTRATANTE (FC Engenharia). Testemunhas, se houver, assinam ao final.
-                </div>
-              </div>
+              {(() => {
+                const nTot = 2 + (t1Nome.trim() ? 1 : 0) + (t2Nome.trim() ? 1 : 0);
+                const temTest = t1Nome.trim() || t2Nome.trim();
+                return (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-start gap-2 text-xs text-indigo-900">
+                    <ShieldCheck className="h-4 w-4 mt-0.5 flex-shrink-0 text-indigo-700" />
+                    <div>
+                      <b>Fluxo sequencial:</b> a CONTRATADA (prestador) assina em 1º{temTest ? "; em seguida as testemunhas" : ""}; o SÓCIO ADMINISTRADOR (FC Engenharia) assina por <b>último ({nTot}ª)</b>, validando o documento após todos os demais.
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* CONTRATADA (Prestador) */}
@@ -198,32 +205,37 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
                   </div>
                 </div>
 
-                {/* CONTRATANTE (FC) */}
-                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-blue-700" />
-                    <span className="text-xs font-bold uppercase tracking-wide text-blue-800">Contratante (FC Engenharia)</span>
-                    <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">2ª</span>
-                  </div>
-                  <div className="p-4 space-y-3">
-                    <div>
-                      <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 flex items-center gap-1">
-                        Sócio responsável
-                        <Lock className="h-3 w-3 text-slate-400" />
-                        <span className="text-slate-400 normal-case font-normal ml-1">· fixo (única assinatura autorizada)</span>
-                      </label>
-                      <Input value={FELIPE_SOCIO.nome} disabled className="h-9 bg-slate-100 font-medium" />
+                {/* CONTRATANTE (FC) — sempre por último */}
+                {(() => {
+                  const ordemContratante = 2 + (t1Nome.trim() ? 1 : 0) + (t2Nome.trim() ? 1 : 0);
+                  return (
+                    <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-blue-700" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-blue-800">Contratante — Sócio Adm (FC Engenharia)</span>
+                        <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">{ordemContratante}ª (último)</span>
+                      </div>
+                      <div className="p-4 space-y-3">
+                        <div>
+                          <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 flex items-center gap-1">
+                            Sócio responsável
+                            <Lock className="h-3 w-3 text-slate-400" />
+                            <span className="text-slate-400 normal-case font-normal ml-1">· fixo (única assinatura autorizada)</span>
+                          </label>
+                          <Input value={FELIPE_SOCIO.nome} disabled className="h-9 bg-slate-100 font-medium" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF</label>
+                          <Input value={FELIPE_SOCIO.cpf} disabled className="h-9 bg-slate-100" />
+                        </div>
+                        <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-2.5 py-2 leading-tight">
+                          <ShieldCheck className="h-3 w-3 inline mr-1" />
+                          O sócio administrador assina <b>por último</b> — o sistema bloqueia sua assinatura até que todos os demais signatários concluam.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF</label>
-                      <Input value={FELIPE_SOCIO.cpf} disabled className="h-9 bg-slate-100" />
-                    </div>
-                    <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-2.5 py-2 leading-tight">
-                      <ShieldCheck className="h-3 w-3 inline mr-1" />
-                      Por política da FC Engenharia, <b>somente Felipe Costa Alves</b> pode assinar como CONTRATANTE.
-                    </p>
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
 
               {/* TESTEMUNHAS */}
