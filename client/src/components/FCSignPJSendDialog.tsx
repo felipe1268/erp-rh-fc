@@ -123,6 +123,8 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
         contratanteNome: FELIPE_SOCIO.nome,
         geradoPor: geradoPor || "Sistema",
         margins: documentMargins,
+        // Rev. 4475: adiciona slots de testemunha no doc quando ao menos uma é preenchida
+        hasTestemunhas: !!(t1Nome.trim() || t2Nome.trim()),
       });
       // Ordem PJ: prestador assina 1º, testemunhas no meio, sócio adm (CONTRATANTE) assina por ÚLTIMO.
       const signers: Array<{ role: "contratado" | "contratante" | "testemunha_1" | "testemunha_2"; nome: string; cpf: string | null }> = [

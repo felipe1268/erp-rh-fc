@@ -296,6 +296,24 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
   return t;
 }
 
+/**
+ * Remove do corpoHtml os blocos de identificação das partes que o template ISO
+ * às vezes inclui ao fim (ex: "CONTRATANTE: FC ENGENHARIA..." / "CNPJ: 29.353...").
+ * Essas linhas são redundantes — o bloco de assinaturas do buildFcDocument já exibe
+ * essa informação. Remove <p> cujo texto (sem tags internas) começa com
+ * "CONTRATANTE:" ou "CONTRATADA:", e também linhas avulsas "CNPJ: XXXX" que ficam
+ * órfãs logo depois.
+ */
+function stripPartyIdBlock(html: string): string {
+  const textOf = (inner: string) => inner.replace(/<[^>]+>/g, "").trim();
+  return html.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, (full, _attrs, inner) => {
+    const txt = textOf(inner);
+    if (/^(CONTRATANTE|CONTRATADA)\s*:/i.test(txt)) return "";
+    if (/^CNPJ\s*:\s*[\d.\/\-]+$/.test(txt)) return "";
+    return full;
+  });
+}
+
 /** Realça CONTRATANTE/CONTRATADA em negrito (texto já escapado). */
 function boldParts(escaped: string): string {
   return escaped.replace(/(CONTRATANTE|CONTRATADA)/g, "<strong>$1</strong>");
@@ -357,6 +375,12 @@ export interface BuildContratoPjSignHtmlArgs {
   geradoPor: string;
   /** Margens configuráveis da empresa (mm). Rev. 4440. */
   margins?: { top?: number; right?: number; bottom?: number; left?: number };
+  /**
+   * Rev. 4475 — se true, adiciona linhas de assinatura para Testemunha 1 e 2
+   * no bloco de assinaturas (passa `testemunhas: true` pro buildFcDocument).
+   * Deve ser true quando o usuário preencher ao menos uma testemunha no diálogo.
+   */
+  hasTestemunhas?: boolean;
 }
 
 /**
@@ -420,7 +444,10 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
     patchedHtml = patchedHtml.replace(/\x00OBJ\x00/g, objetoHtml);
 
     // Passo 2: substituir demais placeholders
-    const corpoHtml = replacePlaceholders(patchedHtml, c, true);
+    const corpoHtmlRaw = replacePlaceholders(patchedHtml, c, true);
+    // Rev. 4475 — remove blocos "CONTRATANTE: ..." / "CONTRATADA: ..." / "CNPJ: ..."
+    // que o template às vezes inclui ao fim. O bloco de assinaturas já os exibe.
+    const corpoHtml = stripPartyIdBlock(corpoHtmlRaw);
 
     // Passo 3: montar com buildFcDocument — idêntico ao preview da Central de Documentos.
     // Os slots FCSign (<!--FCSIGN:SIG:role-->) são injetados pelo buildFcDocument
@@ -428,6 +455,7 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
     const hojeStr = new Date().toLocaleDateString("pt-BR");
     const nomePrestador = c.razaoSocialPrestador || c.employeeName || "Prestador";
     const cnpjPrestador = c.cnpjPrestador || "";
+    const nomeEmpresaIso = c.companyRazaoSocial || c.companyNomeFantasia || "";
     const origin = typeof window !== "undefined" ? window.location.origin : "";
 
     const params: FcDocumentParams = {
@@ -447,10 +475,12 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
       corpoHtml,
       assinaturas: {
         partes: [
+          // Rev. 4475: CONTRATADA primeiro (1ª assinatura), CONTRATANTE por último
           { nome: nomePrestador, subtitulo: cnpjPrestador ? `CNPJ: ${cnpjPrestador}` : "CONTRATADA", role: "contratado" },
-          { nome: args.contratanteNome, subtitulo: `${c.companyRazaoSocial || c.companyNomeFantasia || ""} — CONTRATANTE`, role: "contratante" },
+          { nome: args.contratanteNome, subtitulo: nomeEmpresaIso ? `${nomeEmpresaIso} — CONTRATANTE` : "CONTRATANTE", role: "contratante" },
         ],
-        localData: `${c.companyCidade || "Guaratinguetá"}/${c.companyEstado || "SP"}, ${hojeStr}`,
+        testemunhas: args.hasTestemunhas,
+        localData: `${c.companyCidade || "Guaratinguetá"} - ${c.companyEstado || "SP"}, ${hojeStr}`,
       },
       geradoPor,
       pageTitle: `Contrato PJ ${c.numeroContrato || ""} — ${nomePrestador}`,
@@ -489,10 +519,12 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
     corpoHtml,
     assinaturas: {
       partes: [
+        // Rev. 4475: CONTRATADA primeiro, CONTRATANTE por último
         { nome: nomePrestador, subtitulo: cnpjPrestador ? `CNPJ: ${cnpjPrestador}` : "CONTRATADA", role: "contratado" },
-        { nome: args.contratanteNome, subtitulo: `${nomeEmpresa} — CONTRATANTE`, role: "contratante" },
+        { nome: args.contratanteNome, subtitulo: nomeEmpresa ? `${nomeEmpresa} — CONTRATANTE` : "CONTRATANTE", role: "contratante" },
       ],
-      localData: `${c.companyCidade || "São José dos Campos"}/${c.companyEstado || "SP"}, ${hojeStr}`,
+      testemunhas: args.hasTestemunhas,
+      localData: `${c.companyCidade || "São José dos Campos"} - ${c.companyEstado || "SP"}, ${hojeStr}`,
     },
     geradoPor,
     pageTitle: `Contrato PJ ${c.numeroContrato || ""} — ${nomePrestador}`,

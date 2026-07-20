@@ -1,4 +1,32 @@
 /**
+ * Rev. 4475 - FIX: BLOCO DE ASSINATURA DO CONTRATO PJ — REMOVE TEXTO REDUNDANTE + TESTEMUNHAS
+ *
+ * PROBLEMA RAIZ: o PDF/HTML do contrato PJ exibia, no corpo do documento (após a CLÁUSULA DÉCIMA
+ * SEGUNDA: DO FORO), um bloco de texto com CONTRATANTE/CONTRATADA + CNPJs que era parte do
+ * template ISO armazenado na Central de Documentos. Esse bloco era redundante pois o
+ * `buildFcDocument` já renderiza o bloco de assinaturas com nome e CNPJ abaixo da linha.
+ * Além disso, as testemunhas nunca apareciam no documento mesmo quando preenchidas no diálogo.
+ *
+ * FIX:
+ *   · `contratoPjDocument.ts` → nova função `stripPartyIdBlock(html)`: percorre `<p>` com regex
+ *     não-greedy, remove elementos cujo texto (sem tags internas) começa com "CONTRATANTE:" ou
+ *     "CONTRATADA:", e também remove linhas avulsas "CNPJ: XXXX" que ficam órfãs em seguida.
+ *     Aplicado no caminho ISO após `replacePlaceholders`.
+ *   · `BuildContratoPjSignHtmlArgs` → novo campo opcional `hasTestemunhas?: boolean`.
+ *     Quando true, `assinaturas.testemunhas = true` → `buildFcDocument` renderiza linha extra
+ *     com slots <!--FCSIGN:SIG:testemunha_1--> e <!--FCSIGN:SIG:testemunha_2-->.
+ *   · Ordem das partes já estava correta (CONTRATADA → CONTRATANTE); mantida.
+ *   · `localData` usa traço " - " como separador (ex: "Guaratinguetá - SP, 20/07/2026").
+ *   · `FCSignPJSendDialog.tsx` → passa `hasTestemunhas: !!(t1Nome.trim() || t2Nome.trim())`
+ *     para que o documento gerado tenha slots de testemunha quando ao menos uma for preenchida.
+ *   · ZERO schema change. ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS:
+ *   · client/src/lib/contratoPjDocument.ts — `stripPartyIdBlock`, `hasTestemunhas`, ambas as rotas.
+ *   · client/src/components/FCSignPJSendDialog.tsx — passa `hasTestemunhas`.
+ */
+
+/**
  * Rev. 4474 - FEAT: FCSIGN PJ EXIBE SESSÃO ATIVA BLOQUEANTE + BOTÃO CANCELAR
  *
  * PROBLEMA RAIZ: ao tentar enviar um contrato PJ para assinatura via FCSign, o usuário
