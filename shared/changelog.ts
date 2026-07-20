@@ -1,4 +1,25 @@
 /**
+ * Rev. 4467 - FEAT: CARD "CANCELADOS" + FILTRO NO MÓDULO PJ
+ *
+ * CONTEXTO: Após a Rev. 4464 que implementou o cancelamento de contratos PJ,
+ * o usuário cancelou 2 contratos mas percebeu que eles "sumiram" — a lista
+ * filtra por "Ativo" por padrão e não havia nenhum card/KPI mostrando o total
+ * de contratos cancelados nem forma visível de chegar neles.
+ *
+ * FIX (client/src/pages/ModuloPJ.tsx):
+ *   (1) stats useMemo: novo campo `cancelados` contando contratos com status
+ *       === "cancelado" (já existia o filtro de lista e o SelectItem, faltava só
+ *       o contador).
+ *   (2) Novo KPI card "Cancelados" (vermelho quando > 0, cinza quando 0) inserido
+ *       entre "Encerrados" e "Sem Assinatura" no array `kpis`. Clicar nele aplica
+ *       `setStatusFilter("cancelado")` mostrando os contratos cancelados na lista.
+ *   (3) Grid de contagem: `lg:grid-cols-5` → `lg:grid-cols-6` para acomodar o
+ *       novo card sem overflow.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4466 - FEAT: REDESIGN "NOVO CONTRATO PJ" — FASE 1 COM GRADE DE PRESTADORES + LAYOUT MODERNO
  *
  * CONTEXTO: O usuário reportou que o layout do dialog "Novo Contrato PJ" estava

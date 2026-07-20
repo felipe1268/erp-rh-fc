@@ -586,6 +586,7 @@ export default function ModuloPJ() {
       ativos: ativos.length,
       pendentes: list.filter(c => c.status === "pendente_assinatura").length,
       encerrados: list.filter(c => c.status === "encerrado").length,
+      cancelados: list.filter(c => c.status === "cancelado").length,
       totalMensal: totalValor,
       semAssinatura: ativos.filter(c => !c.contratoAssinadoUrl && !(c as any).fcSignDocumentUrl).length,
     };
@@ -733,6 +734,15 @@ export default function ModuloPJ() {
               onClick: () => setStatusFilter("encerrado"),
             },
             {
+              label: "Cancelados", value: stats.cancelados,
+              icon: XCircle,
+              color: stats.cancelados > 0 ? "text-red-600" : "text-slate-400",
+              iconBg: stats.cancelados > 0 ? "bg-red-100" : "bg-slate-100",
+              cardBg: stats.cancelados > 0 ? "bg-red-50" : "bg-white",
+              border: stats.cancelados > 0 ? "border-red-300" : "border-slate-200",
+              onClick: () => setStatusFilter("cancelado"),
+            },
+            {
               label: "Sem Assinatura", value: stats.semAssinatura,
               icon: FileSignature,
               color: stats.semAssinatura > 0 ? "text-orange-600" : "text-slate-400",
@@ -752,7 +762,7 @@ export default function ModuloPJ() {
           return (
             <div className="flex flex-col gap-3">
               {/* Linha superior: cards de contagem */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 {countCards.map((k) => (
                   <div
                     key={k.label}
