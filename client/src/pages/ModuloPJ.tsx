@@ -123,6 +123,7 @@ export default function ModuloPJ() {
   const [uploadingTipo, setUploadingTipo] = useState<string | null>(null);
   const [bulkProgress, setBulkProgress] = useState(0);
   const bulkProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const objetoTextareaRef = useRef<HTMLTextAreaElement>(null);
   // IA — Gerar cláusula de Objeto do Contrato (Rev. 4425)
   const [objetoIAInput, setObjetoIAInput] = useState("");
   const [objetoIALoading, setObjetoIALoading] = useState(false);
@@ -258,6 +259,17 @@ export default function ModuloPJ() {
         setTimeout(() => { setObjetoIALoading(false); setObjetoIAProgress(0); }, 700);
       });
   };
+  const insertTag = (tag: string) => {
+    const el = objetoTextareaRef.current;
+    if (!el) { setForm(f => ({ ...f, objetoContrato: (f.objetoContrato || "") + tag })); return; }
+    const start = el.selectionStart ?? (form.objetoContrato || "").length;
+    const end   = el.selectionEnd   ?? start;
+    const prev  = form.objetoContrato || "";
+    const next  = prev.slice(0, start) + tag + prev.slice(end);
+    setForm(f => ({ ...f, objetoContrato: next }));
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(start + tag.length, start + tag.length); });
+  };
+
   const deleteContrato = trpc.pj.contratos.delete.useMutation({
     onSuccess: () => { refetchContratos(); toast.success("Contrato excluído!"); },
   });
@@ -1846,12 +1858,71 @@ export default function ModuloPJ() {
                       </button>
                     </div>
                     <Textarea
+                      ref={objetoTextareaRef}
                       value={form.objetoContrato || ""}
                       onChange={e => setForm({ ...form, objetoContrato: e.target.value })}
                       rows={9}
                       placeholder="Digite o cargo no campo acima e clique 'Gerar com IA' — ou escreva a cláusula diretamente. A IA listará as responsabilidades do prestador de forma jurídica e detalhada."
                       className="bg-white text-xs leading-relaxed border-gray-200 resize-y font-[inherit]"
                     />
+                    {/* Painel de tags — Rev. 4454 */}
+                    <div className="rounded-md border border-dashed border-blue-200 bg-blue-50/50 p-2.5 space-y-2">
+                      <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">Tags disponíveis — clique para inserir no cursor</p>
+                      {([
+                        { group: "Contratada (Prestador PJ)", headCls: "text-blue-600", btnCls: "border-blue-200 text-blue-700 hover:bg-blue-50", tags: [
+                          { tag: "[CONTRATADA_RAZAO_SOCIAL]", label: "Razão Social" },
+                          { tag: "[CONTRATADA_CNPJ]",         label: "CNPJ" },
+                          { tag: "[CONTRATADA_ENDERECO]",     label: "Endereço" },
+                          { tag: "[CONTRATADA_CIDADE]",       label: "Cidade" },
+                          { tag: "[CONTRATADA_ESTADO]",       label: "Estado" },
+                          { tag: "[CONTRATADA_CEP]",          label: "CEP" },
+                          { tag: "[PRESTADOR_NOME]",          label: "Nome Físico" },
+                          { tag: "[PRESTADOR_CPF]",           label: "CPF" },
+                          { tag: "[DADOS_BANCARIOS_CONTRATADA]", label: "Dados Bancários" },
+                        ]},
+                        { group: "Contratante (Empresa)", headCls: "text-indigo-600", btnCls: "border-indigo-200 text-indigo-700 hover:bg-indigo-50", tags: [
+                          { tag: "[CONTRATANTE_NOME]",          label: "Nome" },
+                          { tag: "[CONTRATANTE_CNPJ]",          label: "CNPJ" },
+                          { tag: "[CONTRATANTE_ENDERECO]",      label: "Endereço" },
+                          { tag: "[CONTRATANTE_CIDADE]",        label: "Cidade" },
+                          { tag: "[CONTRATANTE_ESTADO]",        label: "Estado" },
+                          { tag: "[CONTRATANTE_REPRESENTANTE]", label: "Representante" },
+                        ]},
+                        { group: "Contrato", headCls: "text-violet-600", btnCls: "border-violet-200 text-violet-700 hover:bg-violet-50", tags: [
+                          { tag: "[VALOR_MENSAL]",            label: "Valor Mensal" },
+                          { tag: "[VALOR_EXTENSO]",           label: "Valor por Extenso" },
+                          { tag: "[PERCENTUAL_ADIANTAMENTO]", label: "% 1ª Medição" },
+                          { tag: "[PERCENTUAL_FECHAMENTO]",   label: "% 2ª Medição" },
+                          { tag: "[VALOR_ADIANTAMENTO]",      label: "R$ 1ª Medição" },
+                          { tag: "[VALOR_FECHAMENTO]",        label: "R$ 2ª Medição" },
+                          { tag: "[DIA_ADIANTAMENTO]",        label: "Dia 1ª Medição" },
+                          { tag: "[DIA_FECHAMENTO]",          label: "Dia 2ª Medição" },
+                          { tag: "[DATA_INICIO]",             label: "Data Início" },
+                          { tag: "[DATA_FIM]",                label: "Data Fim" },
+                          { tag: "[DATA_ASSINATURA]",         label: "Data Assinatura" },
+                          { tag: "[PRAZO_VIGENCIA]",          label: "Prazo Vigência" },
+                          { tag: "[OBJETO_CONTRATO]",         label: "Objeto" },
+                          { tag: "[FORO_COMARCA]",            label: "Foro/Comarca" },
+                        ]},
+                      ] as { group: string; headCls: string; btnCls: string; tags: { tag: string; label: string }[] }[]).map(({ group, headCls, btnCls, tags }) => (
+                        <div key={group}>
+                          <p className={`text-[9px] font-semibold uppercase tracking-wider mb-1 ${headCls}`}>{group}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {tags.map(({ tag, label }) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() => insertTag(tag)}
+                                className={`inline-flex items-center rounded border bg-white text-[10px] font-mono px-1.5 py-0.5 transition-colors ${btnCls}`}
+                                title={tag}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                     {form.objetoContrato && (
                       <p className="text-[10px] text-gray-400 text-right">{(form.objetoContrato || "").length} caracteres</p>
                     )}
