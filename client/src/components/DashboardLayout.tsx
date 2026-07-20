@@ -966,7 +966,9 @@ export default function DashboardLayout({
   // landscape) começa COLLAPSED em modo "ícone" — mas continua VISÍVEL
   // (`collapsible="icon"` no <Sidebar/> abaixo + Rev. 1813 useMobile reduzido
   // pra 480, evita que a barra vire Sheet overlay em tablets). SSR-safe.
-  const TABLET_BREAKPOINT = 1024;
+  // Rev. 4446 — Aumentado para 1200: tablets landscape (1024px) e iPad Pro
+  // agora começam com sidebar COLAPSADA, dando mais espaço ao conteúdo.
+  const TABLET_BREAKPOINT = 1200;
   const sidebarDefaultOpen =
     typeof window === "undefined" ? true : window.innerWidth >= TABLET_BREAKPOINT;
 

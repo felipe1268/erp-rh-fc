@@ -53,6 +53,7 @@ export default function Curriculos() {
   const utils = trpc.useUtils();
 
   const [funcoesSelecionadas, setFuncoesSelecionadas] = useState<number[]>([]);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [statusTab, setStatusTab] = useState<StatusTab>("ativo");
   const [search, setSearch] = useState("");
   const [showCurDialog, setShowCurDialog] = useState(false);
@@ -685,8 +686,24 @@ export default function Curriculos() {
           </div>
         </div>
 
+        {/* Botão toggle de filtros — visível apenas em mobile/tablet (<768px) */}
+        <div className="md:hidden mb-3">
+          <button
+            onClick={() => setFilterOpen(v => !v)}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition ${filterOpen ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+          >
+            <Briefcase className="h-4 w-4" />
+            {filterOpen ? "Ocultar filtros" : "Filtrar por função/status"}
+            {funcoesSelecionadas.length > 0 && (
+              <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-amber-600 text-white text-[10px] font-bold">
+                {funcoesSelecionadas.length}
+              </span>
+            )}
+          </button>
+        </div>
+
         <div className="grid grid-cols-12 gap-4 lg:gap-6">
-          <div className="col-span-12 md:col-span-3 space-y-4">
+          <div className={`col-span-12 md:col-span-3 space-y-4 ${filterOpen ? "" : "hidden md:block"}`}>
             <div className="bg-white rounded-2xl border border-slate-200/70 p-4">
               <div className="flex items-center justify-between mb-3 px-1">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Funções</h3>
@@ -708,7 +725,7 @@ export default function Curriculos() {
                         <span className={`inline-flex items-center justify-center w-4 h-4 rounded-[5px] border text-[10px] flex-shrink-0 transition ${checked ? "bg-amber-600 border-amber-600 text-white" : "border-slate-300"}`}>
                           {checked && "✓"}
                         </span>
-                        <span className="truncate">{f.nome}</span>
+                        <span className="break-words leading-tight">{f.nome}</span>
                         {contagens?.porFuncao?.[f.id] > 0 && <span className="text-xs text-slate-400 ml-auto tabular-nums">{contagens.porFuncao[f.id]}</span>}
                       </button>
                       <button

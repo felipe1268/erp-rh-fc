@@ -1,11 +1,11 @@
 import * as React from "react";
 
-// Rev. 1813 — Reduzido de 768 para 480: usuário pediu para MANTER a barra
-// lateral fixa em todas as telas (tablets/notebooks/iPad inclusive). Acima
-// deste limite o `<Sidebar collapsible="icon"/>` permanece como barra real
-// (modo ícone quando colapsada); abaixo continua virando Sheet overlay
-// (smartphones, onde não há espaço horizontal pra barra fixa).
-const MOBILE_BREAKPOINT = 480;
+// Rev. 4446 — Ajustado de 480 para 768: tablets (iPad portrait, ~768px) agora
+// usam o sidebar como Sheet overlay ao invés de barra fixa com ícones. Isso
+// libera toda a largura horizontal para o conteúdo no tablet, resolvendo
+// textos cortados e layout comprimido. Acima de 768px (tablet landscape,
+// notebooks) o sidebar continua fixo e colapsável.
+const MOBILE_BREAKPOINT = 768;
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(

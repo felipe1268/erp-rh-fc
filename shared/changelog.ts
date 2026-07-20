@@ -1,4 +1,28 @@
 /**
+ * Rev. 4446 - UX: LAYOUT RESPONSIVO TABLET/MOBILE — SIDEBAR OVERLAY + FILTRO COLAPSÁVEL
+ *
+ * Problema: em tablets (iPad portrait ~768px) textos eram cortados na barra lateral
+ * e no painel de filtros da página Currículos (ex: "AJUDAN...", "CARPINTEI...").
+ * O sidebar ficava fixo em modo ícone-only entre 480-1024px, comprimindo o conteúdo.
+ *
+ * MUDANÇAS:
+ *   1. `useMobile.tsx`: breakpoint 480 → 768px. Tablets (<768px) passam a receber
+ *      o sidebar como Sheet overlay (gaveta), liberando 100% da largura pro conteúdo.
+ *      O `sidebar.tsx` shadcn/ui já importa diretamente o hook — a mudança vale
+ *      automaticamente para todo o sistema (Sheet overlay + SidebarTrigger visível).
+ *   2. `DashboardLayout.tsx`: TABLET_BREAKPOINT 1024 → 1200. Sidebar começa colapsada
+ *      em telas até 1199px (iPad landscape, notebooks menores), abrindo apenas em
+ *      telas >= 1200px de largura.
+ *   3. `Curriculos.tsx`: painel de filtros (Funções/Status) colapsável em mobile.
+ *      - Botão "Filtrar por função/status" visível somente em <768px (md:hidden).
+ *      - Badge contador de funções selecionadas no botão.
+ *      - Painel oculto por padrão em mobile (filterOpen=false), exibido ao clicar.
+ *      - Nomes de funções: `truncate` → `break-words leading-tight` (sem corte).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4445 - UX: MODAL "RECEBER LOCAÇÃO" TELA CHEIA + CONFERÊNCIA EM TABELA COMPACTA
  *
  * Problema: modal estreito (max-w-2xl) + números text-3xl causavam sobreposição
