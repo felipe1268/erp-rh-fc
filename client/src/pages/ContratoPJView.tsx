@@ -221,6 +221,11 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
   const enderecoPrestador = (contrato as any).enderecoPrestador || "_______________";
   const cidadePrestador = (contrato as any).cidadePrestador || cidadeEmpresa;
   const estadoPrestador = (contrato as any).estadoPrestador || estadoEmpresa;
+  const cepPrestador = (contrato as any).cepPrestador || "";
+  // Sócios salvos da Receita Federal
+  const sociosPrestador: Array<{ nome: string; qual: string }> = (() => {
+    try { const s = JSON.parse((contrato as any).sociosPrestador || "[]"); return Array.isArray(s) ? s : []; } catch { return []; }
+  })();
 
   const bancoPrestador = (contrato as any).bancoPrestador || "";
   const agenciaPrestador = (contrato as any).agenciaPrestador || "";
@@ -255,6 +260,7 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
       .replace(/\[CONTRATADA_RAZAO_SOCIAL\]/g, nomePrestador)
       .replace(/\[CONTRATADA_CNPJ\]/g, cnpjPrestador)
       .replace(/\[CONTRATADA_ENDERECO\]/g, enderecoPrestador)
+      .replace(/\[CONTRATADA_CEP\]/g, cepPrestador)
       .replace(/\[CONTRATADA_CIDADE\]/g, cidadePrestador)
       .replace(/\[CONTRATADA_ESTADO\]/g, estadoPrestador)
       .replace(/\[OBJETO_CONTRATO\]/g, contrato.objetoContrato || contrato.employeeCargo || "engenharia civil")

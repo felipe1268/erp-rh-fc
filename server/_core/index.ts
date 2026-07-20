@@ -5482,6 +5482,18 @@ REGRAS DE EXTRAÇÃO:
           }
         }
 
+        // Rev. 4454 — endereço e sócios do prestador PJ (auto-lookup CNPJ)
+        try {
+          await db.execute(sql.raw(`
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS endereco_prestador VARCHAR(255);
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS cidade_prestador   VARCHAR(100);
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS estado_prestador   VARCHAR(2);
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS cep_prestador      VARCHAR(10);
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS socios_prestador   TEXT;
+          `));
+          console.log("[SyncSchema+] Rev. 4454: endereco/cidade/estado/cep/socios_prestador garantidos em pj_contracts.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4454 pj_contracts endereço:", e?.message || e); }
+
         // Rev. 4424 — tabela de lista de peças para recebimento de OC de locação
         try {
           await db.execute(sql.raw(`
@@ -5510,7 +5522,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4444-2026-07-19-lista-receb-valor";
+    const COLFIX_VERSION = "v4454-2026-07-20-pj-endereco-socios";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7358,6 +7370,20 @@ REGRAS DE EXTRAÇÃO:
           console.log("[Stripe] Não configurado (STRIPE_SECRET_KEY ausente) — módulo de billing desativado.");
         }
       } catch (e: any) { console.error("[Stripe] Falha ao inicializar:", e?.message ?? e); }
+
+      // Rev. 4454 — endereço e sócios do prestador PJ (lookup via CNPJ)
+      try {
+        const _db4454 = await getDb();
+        if (!_db4454) throw new Error("db indisponível");
+        await _db4454.$client.query(`
+          ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS endereco_prestador varchar(255);
+          ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS cidade_prestador   varchar(100);
+          ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS estado_prestador   varchar(2);
+          ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS cep_prestador      varchar(10);
+          ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS socios_prestador   text;
+        `);
+        console.log("[ColFix Rev.4454] pj_contracts: colunas endereco/cidade/estado/cep/socios_prestador garantidas.");
+      } catch (e: any) { console.error("[ColFix Rev.4454] FALHA pj_contracts endereco:", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

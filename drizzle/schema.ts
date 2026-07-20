@@ -2835,6 +2835,12 @@ export const pjContracts = pgTable("pj_contracts", {
         deletedAt: timestamp({ mode: 'string' }),
         deletedBy: varchar({ length: 255 }),
         deletedByUserId: integer(),
+        // Rev. 4454 — Dados de endereço e sócios do prestador (auto-preenchidos via CNPJ)
+        enderecoPrestador: varchar("endereco_prestador", { length: 255 }),
+        cidadePrestador: varchar("cidade_prestador", { length: 100 }),
+        estadoPrestador: varchar("estado_prestador", { length: 2 }),
+        cepPrestador: varchar("cep_prestador", { length: 10 }),
+        sociosPrestador: text("socios_prestador"),
 },
 (table) => [
         index("pjc_company").on(table.companyId),

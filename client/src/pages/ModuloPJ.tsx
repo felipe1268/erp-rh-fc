@@ -127,6 +127,9 @@ export default function ModuloPJ() {
   const [objetoIAInput, setObjetoIAInput] = useState("");
   const [objetoIALoading, setObjetoIALoading] = useState(false);
   const [objetoIAProgress, setObjetoIAProgress] = useState(0);
+  // Rev. 4454 — Lookup CNPJ via Receita Federal (BrasilAPI)
+  const [cnpjLookupLoading, setCnpjLookupLoading] = useState(false);
+  const [cnpjLookupSocios, setCnpjLookupSocios] = useState<Array<{ nome: string; qual: string }>>([]);
 
   // Mês referência para pagamentos — PeriodSelectorCard (padrão de ouro)
   const [pjAno, setPjAno] = useState(() => new Date().getFullYear());
@@ -209,6 +212,40 @@ export default function ModuloPJ() {
     onSuccess: (data) => { setForm((f: any) => ({ ...f, objetoContrato: data.clausula })); toast.success("Cláusula gerada com sucesso!"); },
     onError: (e: any) => toast.error(e.message || "Erro ao gerar cláusula"),
   });
+  // Rev. 4454 — Consulta CNPJ na Receita Federal via BrasilAPI e preenche campos
+  const handleCnpjLookup = async (rawCnpj: string) => {
+    const digits = (rawCnpj || "").replace(/\D/g, "");
+    if (digits.length !== 14) return;
+    setCnpjLookupLoading(true);
+    setCnpjLookupSocios([]);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+      if (!res.ok) throw new Error("CNPJ não encontrado na Receita Federal");
+      const data = await res.json();
+      const partes = [data.logradouro, data.numero, data.complemento, data.bairro].filter(Boolean);
+      const endereco = partes.join(", ");
+      const cepFmt = (data.cep || "").replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2");
+      setForm((f: any) => ({
+        ...f,
+        razaoSocialPrestador: data.razao_social || f.razaoSocialPrestador || "",
+        enderecoPrestador: endereco || f.enderecoPrestador || "",
+        cidadePrestador: data.municipio || f.cidadePrestador || "",
+        estadoPrestador: data.uf || f.estadoPrestador || "",
+        cepPrestador: cepFmt || f.cepPrestador || "",
+      }));
+      const socios = (data.qsa || []).map((s: any) => ({
+        nome: s.nome_socio || s.nome || "",
+        qual: s.qualificacao_socio || s.qualificacao || "",
+      })).filter((s: any) => s.nome);
+      setCnpjLookupSocios(socios);
+      toast.success("Dados da empresa preenchidos pela Receita Federal!");
+    } catch (e: any) {
+      toast.error(e.message || "Não foi possível consultar o CNPJ");
+    } finally {
+      setCnpjLookupLoading(false);
+    }
+  };
+
   const handleGerarClausulaPJ = () => {
     if (!objetoIAInput.trim()) return;
     setObjetoIAProgress(0);
@@ -514,6 +551,7 @@ export default function ModuloPJ() {
     setEditingContratoId(c.id);
     setMotivoAlteracao("");
     setCreatedContratoId(null);
+    setCnpjLookupSocios([]);
     setForm({
       employeeId: c.employeeId,
       cnpjPrestador: c.cnpjPrestador || "",
@@ -533,6 +571,11 @@ export default function ModuloPJ() {
       agenciaPrestador: c.agenciaPrestador || "",
       contaPrestador: c.contaPrestador || "",
       pixPrestador: c.pixPrestador || "",
+      // Rev. 4454 — endereço e sócios
+      enderecoPrestador: c.enderecoPrestador || "",
+      cidadePrestador: c.cidadePrestador || "",
+      estadoPrestador: c.estadoPrestador || "",
+      cepPrestador: c.cepPrestador || "",
     });
     setShowContratoDialog(true);
   };
@@ -563,6 +606,12 @@ export default function ModuloPJ() {
         contaPrestador: form.contaPrestador || undefined,
         pixPrestador: form.pixPrestador || undefined,
         formaPagamento: form.formaPagamento || undefined,
+        // Rev. 4454
+        enderecoPrestador: form.enderecoPrestador || undefined,
+        cidadePrestador: form.cidadePrestador || undefined,
+        estadoPrestador: form.estadoPrestador || undefined,
+        cepPrestador: form.cepPrestador || undefined,
+        sociosPrestador: cnpjLookupSocios.length > 0 ? JSON.stringify(cnpjLookupSocios) : (form.sociosPrestador || undefined),
       });
     } else {
       if (!form.employeeId) { toast.error("Selecione o prestador"); return; }
@@ -584,6 +633,12 @@ export default function ModuloPJ() {
         contaPrestador: form.contaPrestador || undefined,
         pixPrestador: form.pixPrestador || undefined,
         formaPagamento: form.formaPagamento || undefined,
+        // Rev. 4454
+        enderecoPrestador: form.enderecoPrestador || undefined,
+        cidadePrestador: form.cidadePrestador || undefined,
+        estadoPrestador: form.estadoPrestador || undefined,
+        cepPrestador: form.cepPrestador || undefined,
+        sociosPrestador: cnpjLookupSocios.length > 0 ? JSON.stringify(cnpjLookupSocios) : (form.sociosPrestador || undefined),
       });
     }
   };
@@ -1580,14 +1635,107 @@ export default function ModuloPJ() {
                 )}
               </div>
 
+              {/* Rev. 4454 — CNPJ com lookup automático Receita Federal */}
               <div>
                 <label className="text-sm font-medium">CNPJ do Prestador</label>
-                <Input value={form.cnpjPrestador || ""} onChange={e => setForm({ ...form, cnpjPrestador: e.target.value })} placeholder="00.000.000/0000-00" />
+                <div className="flex gap-2">
+                  <Input
+                    value={form.cnpjPrestador || ""}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setForm({ ...form, cnpjPrestador: val });
+                      const digits = val.replace(/\D/g, "");
+                      if (digits.length === 14) handleCnpjLookup(digits);
+                    }}
+                    placeholder="00.000.000/0000-00"
+                    className="flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCnpjLookup(form.cnpjPrestador || "")}
+                    disabled={cnpjLookupLoading || (form.cnpjPrestador || "").replace(/\D/g, "").length !== 14}
+                    title="Buscar dados na Receita Federal"
+                    className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-40 shrink-0 transition-colors"
+                  >
+                    {cnpjLookupLoading
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Search className="h-4 w-4" />}
+                  </button>
+                </div>
+                {cnpjLookupLoading && (
+                  <p className="text-xs text-muted-foreground mt-1">Consultando Receita Federal...</p>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium">Razão Social do Prestador</label>
                 <Input value={form.razaoSocialPrestador || ""} onChange={e => setForm({ ...form, razaoSocialPrestador: e.target.value })} />
               </div>
+
+              {/* Endereço da Contratada — auto-preenchido pelo lookup ou editável */}
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Endereço da Contratada</label>
+                <Input
+                  value={form.enderecoPrestador || ""}
+                  onChange={e => setForm({ ...form, enderecoPrestador: e.target.value })}
+                  placeholder="Logradouro, nº, Complemento, Bairro"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Cidade</label>
+                <Input value={form.cidadePrestador || ""} onChange={e => setForm({ ...form, cidadePrestador: e.target.value })} placeholder="Cidade" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-sm font-medium">Estado (UF)</label>
+                  <Input value={form.estadoPrestador || ""} onChange={e => setForm({ ...form, estadoPrestador: e.target.value.toUpperCase().slice(0, 2) })} placeholder="SP" maxLength={2} />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">CEP</label>
+                  <Input value={form.cepPrestador || ""} onChange={e => setForm({ ...form, cepPrestador: e.target.value })} placeholder="00000-000" />
+                </div>
+              </div>
+
+              {/* Painel de Sócios — exibido após lookup bem-sucedido */}
+              {cnpjLookupSocios.length > 0 && (
+                <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5" />
+                    Quadro Societário — Receita Federal
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {cnpjLookupSocios.map((s, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-200 text-amber-900 text-xs px-2.5 py-1">
+                        <span className="font-medium">{s.nome}</span>
+                        {s.qual && <span className="text-amber-600 font-normal">— {s.qual}</span>}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Sócios salvos anteriormente (quando lookup não foi refeito nesta sessão) */}
+              {cnpjLookupSocios.length === 0 && form.sociosPrestador && (() => {
+                try {
+                  const saved = JSON.parse(form.sociosPrestador);
+                  if (Array.isArray(saved) && saved.length > 0) return (
+                    <div className="col-span-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5" />
+                        Quadro Societário (salvo)
+                        <span className="font-normal text-gray-400 ml-1">— clique em 🔍 para atualizar</span>
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {saved.map((s: any, i: number) => (
+                          <span key={i} className="inline-flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 text-gray-700 text-xs px-2.5 py-1">
+                            <span className="font-medium">{s.nome}</span>
+                            {s.qual && <span className="text-gray-500 font-normal">— {s.qual}</span>}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                } catch {}
+                return null;
+              })()}
               <div>
                 <label className="text-sm font-medium">Data Início *</label>
                 <Input type="date" value={form.dataInicio || ""} onChange={e => setForm({ ...form, dataInicio: e.target.value })} />

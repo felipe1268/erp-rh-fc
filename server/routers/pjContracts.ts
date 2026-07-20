@@ -575,6 +575,12 @@ export const pjContractsRouter = router({
           contaPrestador: pjContracts.contaPrestador,
           pixPrestador: pjContracts.pixPrestador,
           formaPagamento: pjContracts.formaPagamento,
+          // Rev. 4454 — endereço e sócios do prestador (lookup CNPJ)
+          enderecoPrestador: pjContracts.enderecoPrestador,
+          cidadePrestador: pjContracts.cidadePrestador,
+          estadoPrestador: pjContracts.estadoPrestador,
+          cepPrestador: pjContracts.cepPrestador,
+          sociosPrestador: pjContracts.sociosPrestador,
           createdAt: pjContracts.createdAt,
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
@@ -742,6 +748,12 @@ export const pjContractsRouter = router({
         agenciaPrestador: z.string().optional(),
         contaPrestador: z.string().optional(),
         pixPrestador: z.string().optional(),
+        // Rev. 4454 — dados de endereço e sócios (lookup CNPJ)
+        enderecoPrestador: z.string().optional(),
+        cidadePrestador: z.string().optional(),
+        estadoPrestador: z.string().optional(),
+        cepPrestador: z.string().optional(),
+        sociosPrestador: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
@@ -779,6 +791,12 @@ export const pjContractsRouter = router({
           contaPrestador: input.contaPrestador || null,
           pixPrestador: input.pixPrestador || null,
           formaPagamento: input.formaPagamento || null,
+          // Rev. 4454
+          enderecoPrestador: input.enderecoPrestador || null,
+          cidadePrestador: input.cidadePrestador || null,
+          estadoPrestador: input.estadoPrestador || null,
+          cepPrestador: input.cepPrestador || null,
+          sociosPrestador: input.sociosPrestador || null,
         }).returning({ id: pjContracts.id, employeeId: pjContracts.employeeId, companyId: pjContracts.companyId });
 
         // Criar registro inicial de revisão ISO
@@ -856,6 +874,12 @@ export const pjContractsRouter = router({
         contaPrestador: z.string().optional(),
         pixPrestador: z.string().optional(),
         formaPagamento: z.string().optional(),
+        // Rev. 4454 — dados de endereço e sócios (lookup CNPJ)
+        enderecoPrestador: z.string().optional(),
+        cidadePrestador: z.string().optional(),
+        estadoPrestador: z.string().optional(),
+        cepPrestador: z.string().optional(),
+        sociosPrestador: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;

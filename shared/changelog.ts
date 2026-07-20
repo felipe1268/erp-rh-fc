@@ -1,4 +1,30 @@
 /**
+ * Rev. 4454 - FEAT: LOOKUP CNPJ AUTOMÁTICO NO FORMULÁRIO DE CONTRATO PJ
+ *
+ * Contexto: o formulário "Editar/Criar Contrato PJ" tinha campos de CNPJ e Razão Social,
+ * mas o usuário precisava digitar todos os dados da contratada manualmente — sem busca automática.
+ * O contrato PDF já usava placeholders [CONTRATADA_ENDERECO], [CONTRATADA_CIDADE],
+ * [CONTRATADA_ESTADO] mas esses campos não existiam no banco (ficavam como `_______________`).
+ *
+ * Solução (Rev. 4454):
+ * 1. Novas colunas em `pj_contracts`: `endereco_prestador`, `cidade_prestador`,
+ *    `estado_prestador`, `cep_prestador`, `socios_prestador` (JSON text).
+ *    Criadas via ColFix v4454 + schema Drizzle.
+ * 2. Quando o CNPJ atinge 14 dígitos (digitação) OU ao clicar no botão 🔍, o frontend
+ *    consulta BrasilAPI `GET /cnpj/v1/{cnpj}` (Receita Federal, gratuita, sem auth).
+ *    Auto-preenche: Razão Social, Endereço (logradouro+nº+complemento+bairro), Cidade, Estado, CEP.
+ * 3. Quadro Societário (qsa): exibido como pills coloridos logo abaixo do CNPJ — inclui
+ *    nome do sócio + qualificação. Salvo como JSON em `socios_prestador`.
+ * 4. Ao reabrir contrato existente, sócios salvos são exibidos num painel "Quadro Societário (salvo)".
+ * 5. `ContratoPJView.tsx`: adicionado suporte a `[CONTRATADA_CEP]` + parse de `sociosPrestador`.
+ *
+ * Arquivos: `drizzle/schema.ts`, `server/_core/index.ts` (ColFix), `server/routers/pjContracts.ts`
+ * (getById + create + update), `client/src/pages/ModuloPJ.tsx`, `client/src/pages/ContratoPJView.tsx`.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4453 - FIX: CNPJ DA CONTRATADA NÃO APARECIA NO CONTRATO PJ (getById SEM FALLBACK)
  *
  * Contexto: a tela "Contrato PJ" (ContratoPJView.tsx) chama `pj.contratos.getById` para buscar
