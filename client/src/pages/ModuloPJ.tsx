@@ -1591,285 +1591,349 @@ export default function ModuloPJ() {
           </FullScreenDialog>
         )}
 
-        {/* Create Contrato Dialog */}
+        {/* Create / Edit Contrato Dialog — layout 2 colunas Rev. 4454 */}
         <FullScreenDialog open={showContratoDialog} onClose={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); setCreatedContratoId(null); }} title={editingContratoId ? "Editar Contrato PJ" : "Novo Contrato PJ"} icon={<FileSignature className="h-5 w-5 text-white" />}>
-          <div className="w-full max-w-3xl mx-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Prestador *</label>
-                {editingContratoId ? (
-                  <div className="flex items-center border rounded-md px-3 py-2 bg-muted/30 text-sm text-foreground">
-                    <span className="font-medium">{selectedEmp ? `${selectedEmp.nomeCompleto} — ${formatCPF(selectedEmp.cpf)}` : "—"}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">(não pode ser alterado)</span>
+          <div className="w-full max-w-7xl mx-auto">
+
+            {/* Banner pós-criação */}
+            {createdContratoId && !editingContratoId && (
+              <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-green-800">Contrato criado com sucesso!</p>
+                  <p className="text-xs text-green-600 mt-0.5">Adicione documentos na aba Documentos conforme necessário.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+
+              {/* ── COLUNA ESQUERDA: Dados cadastrais ── */}
+              <div className="space-y-4">
+
+                {/* § 1 — Prestador */}
+                <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b">
+                    <div className="h-5 w-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">1</div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-700">Prestador de Serviços</p>
                   </div>
-                ) : (
-                <div className="relative" style={{ zIndex: 60 }}>
-                  <div className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30 relative" style={{ zIndex: 61 }} onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}>
-                    <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
-                    {empDropdownOpen ? (
-                      <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Digite nome, CPF ou código (JFC)..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }} onClick={e => e.stopPropagation()} />
-                    ) : (
-                      <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
-                        {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Selecione um prestador..."}
-                      </span>
-                    )}
-                    {form.employeeId && (
-                      <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); setForm({ ...form, employeeId: undefined }); setEmpSearch(""); setEmpDropdownOpen(false); }}>
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                  {empDropdownOpen && (
-                    <>
-                      <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 62 }}>
-                        {filteredEmps.length === 0 ? (
-                          <div className="p-3 text-sm text-muted-foreground text-center">
-                            {pjEmployees.length === 0
-                              ? "Nenhum prestador cadastrado"
-                              : pjEmployeesSemContrato.length === 0
-                                ? "Todos os prestadores PJ já possuem contrato ativo"
-                                : `Nenhum resultado para "${empSearch}"`}
-                          </div>
-                        ) : filteredEmps.slice(0, 20).map((e: any) => (
-                          <div key={e.id} className="px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm flex justify-between" onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>
-                            <span className="font-medium">{e.nomeCompleto}</span>
-                            <span className="text-muted-foreground">
-                              {e.codigoInterno && <span className="text-blue-600 font-medium mr-2">{e.codigoInterno}</span>}
-                              {formatCPF(e.cpf)}
-                            </span>
-                          </div>
-                        ))}
+                  <div className="p-4">
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">Prestador *</label>
+                    {editingContratoId ? (
+                      <div className="flex items-center border rounded-lg px-3 py-2.5 bg-muted/30 text-sm">
+                        <span className="font-medium">{selectedEmp ? `${selectedEmp.nomeCompleto} — ${formatCPF(selectedEmp.cpf)}` : "—"}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">(não pode ser alterado)</span>
                       </div>
-                    </>
-                  )}
-                </div>
-                )}
-              </div>
-
-              {/* Rev. 4454 — CNPJ com lookup automático Receita Federal */}
-              <div>
-                <label className="text-sm font-medium">CNPJ do Prestador</label>
-                <div className="flex gap-2">
-                  <Input
-                    value={form.cnpjPrestador || ""}
-                    onChange={e => {
-                      const val = e.target.value;
-                      setForm({ ...form, cnpjPrestador: val });
-                      const digits = val.replace(/\D/g, "");
-                      if (digits.length === 14) handleCnpjLookup(digits);
-                    }}
-                    placeholder="00.000.000/0000-00"
-                    className="flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleCnpjLookup(form.cnpjPrestador || "")}
-                    disabled={cnpjLookupLoading || (form.cnpjPrestador || "").replace(/\D/g, "").length !== 14}
-                    title="Buscar dados na Receita Federal"
-                    className="inline-flex items-center justify-center h-10 w-10 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-40 shrink-0 transition-colors"
-                  >
-                    {cnpjLookupLoading
-                      ? <Loader2 className="h-4 w-4 animate-spin" />
-                      : <Search className="h-4 w-4" />}
-                  </button>
-                </div>
-                {cnpjLookupLoading && (
-                  <p className="text-xs text-muted-foreground mt-1">Consultando Receita Federal...</p>
-                )}
-              </div>
-              <div>
-                <label className="text-sm font-medium">Razão Social do Prestador</label>
-                <Input value={form.razaoSocialPrestador || ""} onChange={e => setForm({ ...form, razaoSocialPrestador: e.target.value })} />
-              </div>
-
-              {/* Endereço da Contratada — auto-preenchido pelo lookup ou editável */}
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Endereço da Contratada</label>
-                <Input
-                  value={form.enderecoPrestador || ""}
-                  onChange={e => setForm({ ...form, enderecoPrestador: e.target.value })}
-                  placeholder="Logradouro, nº, Complemento, Bairro"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Cidade</label>
-                <Input value={form.cidadePrestador || ""} onChange={e => setForm({ ...form, cidadePrestador: e.target.value })} placeholder="Cidade" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-sm font-medium">Estado (UF)</label>
-                  <Input value={form.estadoPrestador || ""} onChange={e => setForm({ ...form, estadoPrestador: e.target.value.toUpperCase().slice(0, 2) })} placeholder="SP" maxLength={2} />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">CEP</label>
-                  <Input value={form.cepPrestador || ""} onChange={e => setForm({ ...form, cepPrestador: e.target.value })} placeholder="00000-000" />
-                </div>
-              </div>
-
-              {/* Painel de Sócios — exibido após lookup bem-sucedido */}
-              {cnpjLookupSocios.length > 0 && (
-                <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5" />
-                    Quadro Societário — Receita Federal
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {cnpjLookupSocios.map((s, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-200 text-amber-900 text-xs px-2.5 py-1">
-                        <span className="font-medium">{s.nome}</span>
-                        {s.qual && <span className="text-amber-600 font-normal">— {s.qual}</span>}
-                      </span>
-                    ))}
+                    ) : (
+                      <div className="relative" style={{ zIndex: 60 }}>
+                        <div className="flex items-center border rounded-lg px-3 py-2.5 bg-background cursor-pointer hover:bg-muted/30" style={{ zIndex: 61 }} onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}>
+                          <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
+                          {empDropdownOpen ? (
+                            <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Digite nome, CPF ou código..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }} onClick={e => e.stopPropagation()} />
+                          ) : (
+                            <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
+                              {selectedEmp ? `${selectedEmp.nomeCompleto} — ${formatCPF(selectedEmp.cpf)}` : "Selecione um prestador..."}
+                            </span>
+                          )}
+                          {form.employeeId && (
+                            <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); setForm({ ...form, employeeId: undefined }); setEmpSearch(""); setEmpDropdownOpen(false); }}>
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                        {empDropdownOpen && (
+                          <>
+                            <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-56 overflow-y-auto" style={{ zIndex: 62 }}>
+                              {filteredEmps.length === 0 ? (
+                                <div className="p-3 text-sm text-muted-foreground text-center">
+                                  {pjEmployees.length === 0 ? "Nenhum prestador cadastrado" : pjEmployeesSemContrato.length === 0 ? "Todos os prestadores PJ já possuem contrato ativo" : `Nenhum resultado para "${empSearch}"`}
+                                </div>
+                              ) : filteredEmps.slice(0, 20).map((e: any) => (
+                                <div key={e.id} className="px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm flex justify-between" onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>
+                                  <span className="font-medium">{e.nomeCompleto}</span>
+                                  <span className="text-muted-foreground">{e.codigoInterno && <span className="text-blue-600 font-medium mr-2">{e.codigoInterno}</span>}{formatCPF(e.cpf)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-              {/* Sócios salvos anteriormente (quando lookup não foi refeito nesta sessão) */}
-              {cnpjLookupSocios.length === 0 && form.sociosPrestador && (() => {
-                try {
-                  const saved = JSON.parse(form.sociosPrestador);
-                  if (Array.isArray(saved) && saved.length > 0) return (
-                    <div className="col-span-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                      <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5">
-                        <Users className="h-3.5 w-3.5" />
-                        Quadro Societário (salvo)
-                        <span className="font-normal text-gray-400 ml-1">— clique em 🔍 para atualizar</span>
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {saved.map((s: any, i: number) => (
-                          <span key={i} className="inline-flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 text-gray-700 text-xs px-2.5 py-1">
-                            <span className="font-medium">{s.nome}</span>
-                            {s.qual && <span className="text-gray-500 font-normal">— {s.qual}</span>}
-                          </span>
-                        ))}
+
+                {/* § 2 — Dados da Empresa Contratada (CNPJ lookup) */}
+                <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b">
+                    <div className="h-5 w-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">2</div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-700">Dados da Empresa Contratada</p>
+                    {cnpjLookupLoading && <span className="ml-auto text-[10px] text-blue-600 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Consultando Receita Federal...</span>}
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {/* CNPJ + Razão Social lado a lado */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">CNPJ</label>
+                        <div className="flex gap-1.5">
+                          <Input
+                            value={form.cnpjPrestador || ""}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setForm({ ...form, cnpjPrestador: val });
+                              const digits = val.replace(/\D/g, "");
+                              if (digits.length === 14) handleCnpjLookup(digits);
+                            }}
+                            placeholder="00.000.000/0000-00"
+                            className="flex-1 font-mono text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleCnpjLookup(form.cnpjPrestador || "")}
+                            disabled={cnpjLookupLoading || (form.cnpjPrestador || "").replace(/\D/g, "").length !== 14}
+                            title="Buscar dados na Receita Federal"
+                            className="inline-flex items-center justify-center h-10 w-10 rounded-md border bg-background hover:bg-accent disabled:opacity-40 shrink-0 transition-colors"
+                          >
+                            {cnpjLookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Digite 14 dígitos para busca automática</p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">Razão Social</label>
+                        <Input value={form.razaoSocialPrestador || ""} onChange={e => setForm({ ...form, razaoSocialPrestador: e.target.value })} placeholder="Auto-preenchida pelo CNPJ" />
                       </div>
                     </div>
-                  );
-                } catch {}
-                return null;
-              })()}
-              <div>
-                <label className="text-sm font-medium">Data Início *</label>
-                <Input type="date" value={form.dataInicio || ""} onChange={e => setForm({ ...form, dataInicio: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Data Fim *</label>
-                <Input type="date" value={form.dataFim || ""} onChange={e => setForm({ ...form, dataFim: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Valor Mensal (R$) *</label>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={form.valorMensal ? formatMoedaInput(String(parseFloat(form.valorMensal) || "").replace(".", ",")) : ""}
-                  onChange={e => {
-                    const fmt = formatMoedaInput(e.target.value);
-                    const raw = parseMoedaBR(fmt);
-                    setForm({ ...form, valorMensal: raw > 0 ? String(raw) : "" });
-                  }}
-                  placeholder="0,00"
-                />
-              </div>
-              {/* Renovação automática foi removida: contratos PJ são sempre
-                  vigentes pelo período definido (sem renovação automática).
-                  As medições previstas para toda a vigência são geradas
-                  automaticamente na criação do contrato. */}
-
-              <div className="col-span-2 bg-purple-50 rounded-lg p-4">
-                <p className="text-sm font-semibold text-purple-800 mb-3">Regra de Pagamento (Folha PJ)</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="text-xs font-medium">% 1ª Medição</label>
-                    <Input type="number" min={0} max={100} value={form.percentualAdiantamento ?? ""} placeholder="50"
-                      onChange={e => {
-                        const v = parseInt(e.target.value);
-                        const adiant = isNaN(v) ? undefined : Math.min(100, Math.max(0, v));
-                        const fech = adiant !== undefined ? 100 - adiant : undefined;
-                        setForm({ ...form, percentualAdiantamento: adiant, percentualFechamento: fech });
-                      }} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium">Dia 1ª Medição</label>
-                    <Input type="number" min={1} max={31} value={form.diaAdiantamento ?? ""} placeholder="15"
-                      onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaAdiantamento: isNaN(v) ? undefined : v }); }} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium">% 2ª Medição <span className="text-muted-foreground font-normal">(auto)</span></label>
-                    <Input type="number" min={0} max={100} value={form.percentualFechamento ?? ""} placeholder="50" readOnly
-                      className="bg-muted/40 cursor-not-allowed" title="Calculado automaticamente: 100% − % 1ª Medição" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium">Dia 2ª Medição</label>
-                    <Input type="number" min={1} max={31} value={form.diaFechamento ?? ""} placeholder="5"
-                      onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaFechamento: isNaN(v) ? undefined : v }); }} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="text-xs font-medium">Forma de Pagamento</label>
-                    <Select value={form.formaPagamento || ""} onValueChange={v => setForm({ ...form, formaPagamento: v || undefined })}>
-                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PIX">PIX</SelectItem>
-                        <SelectItem value="TED">TED</SelectItem>
-                        <SelectItem value="Boleto">Boleto</SelectItem>
-                        <SelectItem value="Depósito">Depósito</SelectItem>
-                        <SelectItem value="Cheque">Cheque</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {/* Endereço completo */}
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Endereço</label>
+                      <Input value={form.enderecoPrestador || ""} onChange={e => setForm({ ...form, enderecoPrestador: e.target.value })} placeholder="Logradouro, nº, Complemento, Bairro" />
+                    </div>
+                    <div className="grid grid-cols-5 gap-2">
+                      <div className="col-span-2">
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">Cidade</label>
+                        <Input value={form.cidadePrestador || ""} onChange={e => setForm({ ...form, cidadePrestador: e.target.value })} placeholder="Cidade" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">UF</label>
+                        <Input value={form.estadoPrestador || ""} onChange={e => setForm({ ...form, estadoPrestador: e.target.value.toUpperCase().slice(0, 2) })} placeholder="SP" maxLength={2} className="text-center font-mono" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">CEP</label>
+                        <Input value={form.cepPrestador || ""} onChange={e => setForm({ ...form, cepPrestador: e.target.value })} placeholder="00000-000" className="font-mono" />
+                      </div>
+                    </div>
+                    {/* Sócios — após lookup */}
+                    {cnpjLookupSocios.length > 0 && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Quadro Societário — Receita Federal</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {cnpjLookupSocios.map((s, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-200 text-amber-900 text-xs px-2.5 py-1">
+                              <span className="font-medium">{s.nome}</span>
+                              {s.qual && <span className="text-amber-600">— {s.qual}</span>}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Sócios salvos anteriormente */}
+                    {cnpjLookupSocios.length === 0 && form.sociosPrestador && (() => {
+                      try {
+                        const saved = JSON.parse(form.sociosPrestador);
+                        if (Array.isArray(saved) && saved.length > 0) return (
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                            <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Quadro Societário (salvo) <span className="font-normal text-gray-400">— clique 🔍 para atualizar</span></p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {saved.map((s: any, i: number) => (
+                                <span key={i} className="inline-flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 text-gray-700 text-xs px-2.5 py-1">
+                                  <span className="font-medium">{s.nome}</span>
+                                  {s.qual && <span className="text-gray-500">— {s.qual}</span>}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      } catch {}
+                      return null;
+                    })()}
                   </div>
                 </div>
-                {form.valorMensal && (
-                  <div className="mt-3 text-xs text-purple-700 flex gap-4 flex-wrap">
-                    <span>1ª Medição: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualAdiantamento ?? 50) / 100)}</strong> — dia {form.diaAdiantamento ?? 15}</span>
-                    <span>2ª Medição: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualFechamento ?? 50) / 100)}</strong> — dia {form.diaFechamento ?? 5} (mês seguinte)</span>
-                  </div>
-                )}
-              </div>
 
-              {/* §§ Cláusula de Objeto do Contrato com IA — Rev. 4425 */}
-              <div className="col-span-2">
-                <div className="rounded-lg border-2 border-blue-100 bg-gradient-to-b from-blue-50/60 to-white overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border-b border-blue-100">
-                    <FileText className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                    <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Cláusula — Objeto do Contrato</p>
+                {/* § 3 — Vigência e Valor */}
+                <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b">
+                    <div className="h-5 w-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">3</div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-700">Vigência e Valor</p>
                   </div>
-                  <div className="p-3 space-y-3">
+                  <div className="p-4 grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Data Início *</label>
+                      <Input type="date" value={form.dataInicio || ""} onChange={e => setForm({ ...form, dataInicio: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Data Fim *</label>
+                      <Input type="date" value={form.dataFim || ""} onChange={e => setForm({ ...form, dataFim: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Valor Mensal (R$) *</label>
+                      <Input
+                        type="text" inputMode="decimal"
+                        value={form.valorMensal ? formatMoedaInput(String(parseFloat(form.valorMensal) || "").replace(".", ",")) : ""}
+                        onChange={e => { const fmt = formatMoedaInput(e.target.value); const raw = parseMoedaBR(fmt); setForm({ ...form, valorMensal: raw > 0 ? String(raw) : "" }); }}
+                        placeholder="0,00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* § 4 — Regra de Pagamento */}
+                <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 border-b border-purple-100">
+                    <div className="h-5 w-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">4</div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-purple-800">Regra de Pagamento (Folha PJ)</p>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">% 1ª Medição</label>
+                        <Input type="number" min={0} max={100} value={form.percentualAdiantamento ?? ""} placeholder="50"
+                          onChange={e => { const v = parseInt(e.target.value); const a = isNaN(v) ? undefined : Math.min(100, Math.max(0, v)); setForm({ ...form, percentualAdiantamento: a, percentualFechamento: a !== undefined ? 100 - a : undefined }); }} />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">Dia 1ª Medição</label>
+                        <Input type="number" min={1} max={31} value={form.diaAdiantamento ?? ""} placeholder="15"
+                          onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaAdiantamento: isNaN(v) ? undefined : v }); }} />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">% 2ª Medição <span className="text-muted-foreground">(auto)</span></label>
+                        <Input type="number" value={form.percentualFechamento ?? ""} placeholder="50" readOnly className="bg-muted/40 cursor-not-allowed" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">Dia 2ª Medição</label>
+                        <Input type="number" min={1} max={31} value={form.diaFechamento ?? ""} placeholder="5"
+                          onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaFechamento: isNaN(v) ? undefined : v }); }} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">Forma de Pagamento</label>
+                        <Select value={form.formaPagamento || ""} onValueChange={v => setForm({ ...form, formaPagamento: v || undefined })}>
+                          <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="PIX">PIX</SelectItem>
+                            <SelectItem value="TED">TED</SelectItem>
+                            <SelectItem value="Boleto">Boleto</SelectItem>
+                            <SelectItem value="Depósito">Depósito</SelectItem>
+                            <SelectItem value="Cheque">Cheque</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {form.valorMensal && (
+                        <div className="flex items-end pb-1">
+                          <div className="text-xs text-purple-700 space-y-0.5">
+                            <div>1ª: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualAdiantamento ?? 50) / 100)}</strong> — dia {form.diaAdiantamento ?? 15}</div>
+                            <div>2ª: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualFechamento ?? 50) / 100)}</strong> — dia {form.diaFechamento ?? 5} (mês seg.)</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* § 5 — Dados Bancários */}
+                <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b">
+                    <div className="h-5 w-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">5</div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-700">Dados Bancários para Pagamento</p>
+                  </div>
+                  <div className="p-4 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Banco</label>
+                      <Input value={form.bancoPrestador || ""} onChange={e => setForm({ ...form, bancoPrestador: e.target.value })} placeholder="Ex: Banco do Brasil, Itaú..." />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Agência</label>
+                      <Input value={form.agenciaPrestador || ""} onChange={e => setForm({ ...form, agenciaPrestador: e.target.value })} placeholder="0000-0" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Conta Corrente</label>
+                      <Input value={form.contaPrestador || ""} onChange={e => setForm({ ...form, contaPrestador: e.target.value })} placeholder="00000-0" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Chave PIX</label>
+                      <Input value={form.pixPrestador || ""} onChange={e => setForm({ ...form, pixPrestador: e.target.value })} placeholder="CNPJ, e-mail, celular ou chave aleatória" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* § 6 — Observações + Motivo Alteração */}
+                <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b">
+                    <div className="h-5 w-5 rounded-full bg-gray-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">6</div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-700">Observações</p>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <Textarea value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} rows={2} placeholder="Observações gerais do contrato..." />
+                    {editingContratoId && (
+                      <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                        <label className="text-xs font-semibold text-amber-800 block mb-1">Motivo da Alteração (Revisão ISO)</label>
+                        <p className="text-[10px] text-amber-600 mb-2">Ao salvar, uma nova revisão ISO será gerada automaticamente.</p>
+                        <Input value={motivoAlteracao} onChange={e => setMotivoAlteracao(e.target.value)} placeholder="Ex: Reajuste de valor mensal, correção de data..." className="bg-white" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>{/* fim coluna esquerda */}
+
+              {/* ── COLUNA DIREITA: Editor do Contrato ── */}
+              <div className="space-y-4">
+                <div className="rounded-xl border-2 border-blue-100 bg-white shadow-sm overflow-hidden sticky top-4">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-600">
+                    <FileText className="h-4 w-4 text-white shrink-0" />
+                    <p className="text-xs font-bold uppercase tracking-wider text-white">Cláusula — Objeto do Contrato</p>
+                    <span className="ml-auto text-[10px] text-blue-200">as tags abaixo serão substituídas pelos dados reais</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {/* IA input */}
                     <div className="flex gap-2 items-center">
                       <input
                         value={objetoIAInput}
                         onChange={e => setObjetoIAInput(e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter") handleGerarClausulaPJ(); }}
-                        placeholder="Cargo / tipo de contrato (ex: Engenheiro de campo, Orçamentista, Mestre de obras...)"
-                        className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white placeholder-gray-400"
+                        placeholder="Cargo/tipo: Engenheiro de campo, Orçamentista, Mestre de obras..."
+                        className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-gray-50 placeholder-gray-400"
                       />
                       <button
                         type="button"
                         onClick={handleGerarClausulaPJ}
                         disabled={!objetoIAInput.trim() || objetoIALoading}
-                        className="relative overflow-hidden inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 text-xs font-semibold px-3 py-2 transition-colors disabled:opacity-50 whitespace-nowrap"
+                        className="relative overflow-hidden inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 text-xs font-semibold px-3 py-2 transition-colors disabled:opacity-50 whitespace-nowrap"
                       >
-                        {objetoIALoading && (
-                          <span className="absolute inset-0 bg-blue-400/25 transition-all" style={{ width: `${objetoIAProgress}%` }} />
-                        )}
+                        {objetoIALoading && <span className="absolute inset-0 bg-blue-400/25 transition-all" style={{ width: `${objetoIAProgress}%` }} />}
                         <span className="relative flex items-center gap-1.5">
-                          {objetoIALoading
-                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando... {objetoIAProgress}%</>
-                            : <><Sparkles className="h-3.5 w-3.5" /> Gerar com IA</>}
+                          {objetoIALoading ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {objetoIAProgress}%</> : <><Sparkles className="h-3.5 w-3.5" /> Gerar com IA</>}
                         </span>
                       </button>
                     </div>
+
+                    {/* Textarea */}
                     <Textarea
                       ref={objetoTextareaRef}
                       value={form.objetoContrato || ""}
                       onChange={e => setForm({ ...form, objetoContrato: e.target.value })}
-                      rows={9}
-                      placeholder="Digite o cargo no campo acima e clique 'Gerar com IA' — ou escreva a cláusula diretamente. A IA listará as responsabilidades do prestador de forma jurídica e detalhada."
-                      className="bg-white text-xs leading-relaxed border-gray-200 resize-y font-[inherit]"
+                      rows={12}
+                      placeholder="Escreva ou gere a cláusula com IA. Use as tags abaixo para inserir dados do contrato automaticamente."
+                      className="bg-gray-50 text-xs leading-relaxed border-gray-200 resize-y font-[inherit]"
                     />
-                    {/* Painel de tags — Rev. 4454 */}
-                    <div className="rounded-md border border-dashed border-blue-200 bg-blue-50/50 p-2.5 space-y-2">
-                      <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">Tags disponíveis — clique para inserir no cursor</p>
+                    {form.objetoContrato && <p className="text-[10px] text-gray-400 text-right">{form.objetoContrato.length} caracteres</p>}
+
+                    {/* Painel de tags */}
+                    <div className="rounded-lg border border-dashed border-blue-200 bg-blue-50/40 p-3 space-y-2.5">
+                      <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wide">↓ Clique numa tag para inserir no cursor</p>
                       {([
-                        { group: "Contratada (Prestador PJ)", headCls: "text-blue-600", btnCls: "border-blue-200 text-blue-700 hover:bg-blue-50", tags: [
+                        { group: "Contratada", headCls: "text-blue-600", btnCls: "border-blue-200 text-blue-700 hover:bg-blue-100", tags: [
                           { tag: "[CONTRATADA_RAZAO_SOCIAL]", label: "Razão Social" },
                           { tag: "[CONTRATADA_CNPJ]",         label: "CNPJ" },
                           { tag: "[CONTRATADA_ENDERECO]",     label: "Endereço" },
@@ -1880,7 +1944,7 @@ export default function ModuloPJ() {
                           { tag: "[PRESTADOR_CPF]",           label: "CPF" },
                           { tag: "[DADOS_BANCARIOS_CONTRATADA]", label: "Dados Bancários" },
                         ]},
-                        { group: "Contratante (Empresa)", headCls: "text-indigo-600", btnCls: "border-indigo-200 text-indigo-700 hover:bg-indigo-50", tags: [
+                        { group: "Contratante", headCls: "text-indigo-600", btnCls: "border-indigo-200 text-indigo-700 hover:bg-indigo-100", tags: [
                           { tag: "[CONTRATANTE_NOME]",          label: "Nome" },
                           { tag: "[CONTRATANTE_CNPJ]",          label: "CNPJ" },
                           { tag: "[CONTRATANTE_ENDERECO]",      label: "Endereço" },
@@ -1888,34 +1952,30 @@ export default function ModuloPJ() {
                           { tag: "[CONTRATANTE_ESTADO]",        label: "Estado" },
                           { tag: "[CONTRATANTE_REPRESENTANTE]", label: "Representante" },
                         ]},
-                        { group: "Contrato", headCls: "text-violet-600", btnCls: "border-violet-200 text-violet-700 hover:bg-violet-50", tags: [
+                        { group: "Contrato", headCls: "text-violet-600", btnCls: "border-violet-200 text-violet-700 hover:bg-violet-100", tags: [
                           { tag: "[VALOR_MENSAL]",            label: "Valor Mensal" },
-                          { tag: "[VALOR_EXTENSO]",           label: "Valor por Extenso" },
-                          { tag: "[PERCENTUAL_ADIANTAMENTO]", label: "% 1ª Medição" },
-                          { tag: "[PERCENTUAL_FECHAMENTO]",   label: "% 2ª Medição" },
-                          { tag: "[VALOR_ADIANTAMENTO]",      label: "R$ 1ª Medição" },
-                          { tag: "[VALOR_FECHAMENTO]",        label: "R$ 2ª Medição" },
-                          { tag: "[DIA_ADIANTAMENTO]",        label: "Dia 1ª Medição" },
-                          { tag: "[DIA_FECHAMENTO]",          label: "Dia 2ª Medição" },
-                          { tag: "[DATA_INICIO]",             label: "Data Início" },
-                          { tag: "[DATA_FIM]",                label: "Data Fim" },
-                          { tag: "[DATA_ASSINATURA]",         label: "Data Assinatura" },
-                          { tag: "[PRAZO_VIGENCIA]",          label: "Prazo Vigência" },
+                          { tag: "[VALOR_EXTENSO]",           label: "Por Extenso" },
+                          { tag: "[PERCENTUAL_ADIANTAMENTO]", label: "% 1ª Med." },
+                          { tag: "[PERCENTUAL_FECHAMENTO]",   label: "% 2ª Med." },
+                          { tag: "[VALOR_ADIANTAMENTO]",      label: "R$ 1ª Med." },
+                          { tag: "[VALOR_FECHAMENTO]",        label: "R$ 2ª Med." },
+                          { tag: "[DIA_ADIANTAMENTO]",        label: "Dia 1ª Med." },
+                          { tag: "[DIA_FECHAMENTO]",          label: "Dia 2ª Med." },
+                          { tag: "[DATA_INICIO]",             label: "Início" },
+                          { tag: "[DATA_FIM]",                label: "Fim" },
+                          { tag: "[DATA_ASSINATURA]",         label: "Assinatura" },
+                          { tag: "[PRAZO_VIGENCIA]",          label: "Prazo" },
                           { tag: "[OBJETO_CONTRATO]",         label: "Objeto" },
-                          { tag: "[FORO_COMARCA]",            label: "Foro/Comarca" },
+                          { tag: "[FORO_COMARCA]",            label: "Foro" },
                         ]},
                       ] as { group: string; headCls: string; btnCls: string; tags: { tag: string; label: string }[] }[]).map(({ group, headCls, btnCls, tags }) => (
                         <div key={group}>
-                          <p className={`text-[9px] font-semibold uppercase tracking-wider mb-1 ${headCls}`}>{group}</p>
+                          <p className={`text-[9px] font-bold uppercase tracking-wider mb-1 ${headCls}`}>{group}</p>
                           <div className="flex flex-wrap gap-1">
                             {tags.map(({ tag, label }) => (
-                              <button
-                                key={tag}
-                                type="button"
-                                onClick={() => insertTag(tag)}
+                              <button key={tag} type="button" onClick={() => insertTag(tag)}
                                 className={`inline-flex items-center rounded border bg-white text-[10px] font-mono px-1.5 py-0.5 transition-colors ${btnCls}`}
-                                title={tag}
-                              >
+                                title={tag}>
                                 {label}
                               </button>
                             ))}
@@ -1923,75 +1983,20 @@ export default function ModuloPJ() {
                         </div>
                       ))}
                     </div>
-                    {form.objetoContrato && (
-                      <p className="text-[10px] text-gray-400 text-right">{(form.objetoContrato || "").length} caracteres</p>
-                    )}
                   </div>
                 </div>
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Observações</label>
-                <Textarea value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} rows={2} />
-              </div>
+              </div>{/* fim coluna direita */}
 
-              {/* Dados Bancários do Prestador */}
-              <div className="col-span-2 bg-blue-50 rounded-lg p-4">
-                <p className="text-sm font-semibold text-blue-800 mb-3">Dados Bancários da Contratada (para pagamento)</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium">Banco</label>
-                    <Input value={form.bancoPrestador || ""} onChange={e => setForm({ ...form, bancoPrestador: e.target.value })} placeholder="Ex: Banco do Brasil, Itaú..." />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium">Agência</label>
-                    <Input value={form.agenciaPrestador || ""} onChange={e => setForm({ ...form, agenciaPrestador: e.target.value })} placeholder="0000-0" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium">Conta Corrente</label>
-                    <Input value={form.contaPrestador || ""} onChange={e => setForm({ ...form, contaPrestador: e.target.value })} placeholder="00000-0" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium">Chave PIX</label>
-                    <Input value={form.pixPrestador || ""} onChange={e => setForm({ ...form, pixPrestador: e.target.value })} placeholder="CNPJ, e-mail, celular ou chave aleatória" />
-                  </div>
-                </div>
-              </div>
+            </div>{/* fim grid 2 col */}
 
-              {/* Campo Motivo da Alteração (somente ao editar) */}
-              {editingContratoId && (
-                <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <label className="text-sm font-medium text-amber-800">Motivo da Alteração (Revisão ISO)</label>
-                  <p className="text-xs text-amber-600 mb-2">Descreva o motivo desta alteração. Ao salvar, uma nova revisão será gerada automaticamente.</p>
-                  <Input
-                    value={motivoAlteracao}
-                    onChange={e => setMotivoAlteracao(e.target.value)}
-                    placeholder="Ex: Reajuste de valor mensal, correção de data de vencimento..."
-                    className="bg-white"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Banner pós-criação */}
-            {createdContratoId && !editingContratoId && (
-              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-green-800">Contrato criado com sucesso!</p>
-                  <p className="text-xs text-green-600 mt-0.5">Contrato criado. Adicione documentos na aba Documentos conforme necessário.</p>
-                </div>
-              </div>
-            )}
-
+            {/* Botões de ação */}
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); setCreatedContratoId(null); }}>
                 {createdContratoId ? "Fechar" : "Cancelar"}
               </Button>
               {!createdContratoId && (
                 <Button onClick={handleSubmitContrato} disabled={createContrato.isPending || updateContrato.isPending}>
-                  {createContrato.isPending || updateContrato.isPending
-                    ? "Salvando..."
-                    : editingContratoId ? "Salvar Alterações" : "Criar Contrato"}
+                  {createContrato.isPending || updateContrato.isPending ? "Salvando..." : editingContratoId ? "Salvar Alterações" : "Criar Contrato"}
                 </Button>
               )}
             </div>
