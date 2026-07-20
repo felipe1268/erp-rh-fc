@@ -1,4 +1,19 @@
 /**
+ * Rev. 4451 - FIX: CUSTO RH — DATA INVÁLIDA "YYYY-MM-31" QUEBRAVA MESES COM <31 DIAS (JUNHO, ABR, SET, NOV, FEV)
+ *
+ * getCustosRH: query de férias (vacation_periods) usava `(mesFeriasFim || '-31')::date`
+ * para calcular o último dia do período. Para junho (30 dias), abril, setembro, novembro e
+ * fevereiro isso gerava "date/time field value out of range" → tRPC error → "Sem dados de folha"
+ * na tela mesmo havendo equipe alocada.
+ *
+ * Fix: substituído por `((mesFeriasFim || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date`
+ * nas 3 ocorrências (dataInicio, periodo2Inicio, periodo3Inicio). Padrão já usado em bridge_emps.
+ *
+ * Arquivo: server/routers/scorecard.ts (3 linhas, busca por vacation_periods)
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4450 - FEAT: CUSTO RH — PREVISÃO vs. CONSOLIDADO (badges de status + VR/VA estimado)
  *
  * Scorecard Custo RH (ScorecardTab.tsx) — tabela "Custo por Mês" agora exibe:

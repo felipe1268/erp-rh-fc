@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4451** — **FIX: CUSTO RH — DATA INVÁLIDA "YYYY-MM-31" QUEBRAVA MESES COM <31 DIAS.** `getCustosRH`: query de `vacation_periods` usava `(mesFeriasFim || '-31')::date` → `date/time field value out of range` para junho (e abril, setembro, novembro, fevereiro) → tRPC error → tela exibia "Sem dados de folha" mesmo com equipe alocada. Fix: 3 ocorrências substituídas por `((mesFeriasFim || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4450** — **FEAT: CUSTO RH — PREVISÃO vs. CONSOLIDADO (badges de status + VR/VA estimado).** Tabela "Custo por Mês" do scorecard ganha coluna "Folha" com badge de status por mês (~ Previsão / ◎ Aberta / ⊗ Fechada / ✓ Pago). Banner azul de aviso quando há meses sem folha. VR/VA estimado em meses sem folha: nova query `vrDiarioR` (último `valorDiario` do `vr_benefits`), integrado no loop sintético + `va_total`/`custo_total_empresa`. `payroll_frac` CTE ganha `folha_fechado`+`folha_pago`; mensalMap ganha `statusMes`. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4449** — **FEAT: RAIO-X — USUÁRIO + HORÁRIO NA MUDANÇA DE OBRA (Timeline).** Card de Mudança de Obra / Alocação / Saída exibe abaixo da descrição o nome do usuário que transferiu e o timestamp (DD/MM/AAAA HH:MM). Dados já existiam em `employee_site_history.registradoPor`+`createdAt`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4449** — **FEAT: RAIO-X — USUÁRIO + HORÁRIO NA MUDANÇA DE OBRA (Timeline).** Card de Mudança de Obra / Alocação / Saída exibe abaixo da descrição o nome do usuário que transferiu e o timestamp (DD/MM/AAAA HH:MM). Dados já existiam em `employee_site_history.registradoPor`+`createdAt`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4448b** — **FIX: CUSTO RH — PRIORIDADE 1 site_periods IGNORAVA isActive (raiz real).** Ramo A Prioridade 1: `WHEN BOOL_OR(dataFim IS NULL)` passa a exigir `NOT EXISTS(OF) OR EXISTS(OF.isActive=1)`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4444** — **FEAT: VALOR UNITÁRIO NA LISTA DE PEÇAS PARA RECEBIMENTO (OC Locação).** Coluna `valor_unitario NUMERIC(12,2)` adicionada a `oc_lista_recebimento` via ColFix v4444 + SyncSchema+. Backend + IA + Frontend atualizados. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4443** — **FIX: BADGE "SEM ASSINATURA" + BOTÃO ENVIO — Contrato PJ (ModuloPJ).** FCSign ao completar não atualizava `pj_contracts.contratoAssinadoUrl` → badge sempre vermelho + botão de envio nunca sumia. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4442** — **FIX: PÁGINAS EM BRANCO NO PRINT DO CONTRATO PJ (FCSign).** `print:hidden` no header/toolbar/aside; `<main>` → `print:block`; `@media print` reescrito. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4441** — **FEAT: MARGENS POR TEMPLATE — Aba Documentos ISO (TemplatesDocsTab).** 4 colunas em `system_document_templates`; ColFix `v4441`; tRPC `updateTemplateMargins`; aba "Configurações de Página" REMOVIDA. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

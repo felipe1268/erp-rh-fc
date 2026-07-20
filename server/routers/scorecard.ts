@@ -2345,15 +2345,15 @@ export const scorecardRouter = router({
             AND vp.status IN ('em_gozo', 'concluida', 'agendada', 'pago', 'paga')
             AND (
               (vp."dataInicio" IS NOT NULL AND vp."dataFim" IS NOT NULL
-               AND vp."dataInicio"::date <= (${mesFeriasFim} || '-31')::date
+               AND vp."dataInicio"::date <= ((${mesFeriasFim} || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
                AND vp."dataFim"::date    >= (${mesFeriasIni} || '-01')::date)
               OR
               (vp."periodo2Inicio" IS NOT NULL AND vp."periodo2Fim" IS NOT NULL
-               AND vp."periodo2Inicio"::date <= (${mesFeriasFim} || '-31')::date
+               AND vp."periodo2Inicio"::date <= ((${mesFeriasFim} || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
                AND vp."periodo2Fim"::date    >= (${mesFeriasIni} || '-01')::date)
               OR
               (vp."periodo3Inicio" IS NOT NULL AND vp."periodo3Fim" IS NOT NULL
-               AND vp."periodo3Inicio"::date <= (${mesFeriasFim} || '-31')::date
+               AND vp."periodo3Inicio"::date <= ((${mesFeriasFim} || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
                AND vp."periodo3Fim"::date    >= (${mesFeriasIni} || '-01')::date)
             )
             AND vp."employeeId" IN (${relevantEmpSql})

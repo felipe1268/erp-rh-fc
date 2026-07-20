@@ -1,3 +1,4 @@
+- **Rev. 4441** — **FEAT: MARGENS POR TEMPLATE — Aba Documentos ISO (TemplatesDocsTab).** 4 colunas em `system_document_templates`; ColFix `v4441`; tRPC `updateTemplateMargins`; aba "Configurações de Página" REMOVIDA. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4440** — **FEAT: MARGENS CONFIGURÁVEIS POR EMPRESA — Central de Documentos.** 4 colunas em `companies`; ColFix `v4440`; tRPC `getDocumentMargins`+`updateDocumentMargins`; hook `useDocumentMargins`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4438** — **LAYOUT: MARGENS 1cm EM TODOS OS LADOS — PADRÃO DEFINITIVO (buildFcDocument).** `@page`: `10mm`; `.fc-doc` padding: `1cm`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4435** — **FIX: BOTÃO VOLTAR — ContratoPJView e AditivoPJView.** `window.history.back()` no-op; substituído por `navigate("/modulo-pj")` / `navigate(\`/contrato-pj/${contractId}\`)`. ZERO DELETE · ZERO ALTER destrutivo.
