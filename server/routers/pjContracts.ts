@@ -1039,6 +1039,227 @@ export const pjContractsRouter = router({
         return { success: true };
       }),
 
+    // Rev. 4468 — Criar Revisão: substituto de contrato cancelado, Rev. auto-incrementada (ISO 9001)
+    criarRevisao: protectedProcedure
+      .input(z.object({
+        parentId: z.number(),
+        companyId: z.number().optional(),
+        companyIds: z.array(z.number()).optional(),
+        cnpjPrestador: z.string().optional(),
+        razaoSocialPrestador: z.string().optional(),
+        objetoContrato: z.string().optional(),
+        dataInicio: z.string(),
+        dataFim: z.string(),
+        valorMensal: z.string(),
+        percentualAdiantamento: z.number().default(50),
+        percentualFechamento: z.number().default(50),
+        diaAdiantamento: z.number().default(15),
+        diaFechamento: z.number().default(5),
+        formaPagamento: z.string().optional(),
+        observacoes: z.string().optional(),
+        bancoPrestador: z.string().optional(),
+        agenciaPrestador: z.string().optional(),
+        contaPrestador: z.string().optional(),
+        pixPrestador: z.string().optional(),
+        enderecoPrestador: z.string().optional(),
+        cidadePrestador: z.string().optional(),
+        estadoPrestador: z.string().optional(),
+        cepPrestador: z.string().optional(),
+        sociosPrestador: z.string().optional(),
+        motivoRevisao: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [parent] = await db.select().from(pjContracts)
+          .where(and(eq(pjContracts.id, input.parentId), isNull(pjContracts.deletedAt)));
+        if (!parent) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato original não encontrado" });
+
+        const companyId = input.companyId ?? parent.companyId;
+        const parentRevNum = parseInt(parent.revisao || '01', 10);
+        const novaRevisao = String(parentRevNum + 1).padStart(2, '0');
+
+        const ano = new Date().getFullYear();
+        const [countResult] = await db.select({ total: sql<number>`COUNT(*)` })
+          .from(pjContracts).where(eq(pjContracts.companyId, companyId));
+        const numero = `PJ-${ano}-${String((countResult?.total || 0) + 1).padStart(4, '0')}`;
+
+        const motivo = input.motivoRevisao || `Substituição do contrato ${parent.numeroContrato} (cancelado) — Rev.${parent.revisao || '01'}→${novaRevisao}`;
+
+        const [inserted] = await db.insert(pjContracts).values({
+          companyId,
+          employeeId: parent.employeeId,
+          numeroContrato: numero,
+          cnpjPrestador: input.cnpjPrestador ?? parent.cnpjPrestador,
+          razaoSocialPrestador: input.razaoSocialPrestador ?? parent.razaoSocialPrestador,
+          objetoContrato: input.objetoContrato ?? parent.objetoContrato,
+          dataInicio: input.dataInicio,
+          dataFim: input.dataFim,
+          renovacaoAutomatica: 0,
+          valorMensal: input.valorMensal,
+          percentualAdiantamento: input.percentualAdiantamento,
+          percentualFechamento: input.percentualFechamento,
+          diaAdiantamento: input.diaAdiantamento,
+          diaFechamento: input.diaFechamento,
+          status: 'pendente_assinatura',
+          revisao: novaRevisao,
+          revisaoMotivo: motivo,
+          criadoPor: ctx.user.name ?? 'Sistema',
+          criadoPorUserId: ctx.user.id,
+          observacoes: input.observacoes ?? parent.observacoes,
+          bancoPrestador: input.bancoPrestador ?? parent.bancoPrestador,
+          agenciaPrestador: input.agenciaPrestador ?? parent.agenciaPrestador,
+          contaPrestador: input.contaPrestador ?? parent.contaPrestador,
+          pixPrestador: input.pixPrestador ?? parent.pixPrestador,
+          formaPagamento: input.formaPagamento ?? parent.formaPagamento,
+          enderecoPrestador: input.enderecoPrestador ?? parent.enderecoPrestador,
+          cidadePrestador: input.cidadePrestador ?? parent.cidadePrestador,
+          estadoPrestador: input.estadoPrestador ?? parent.estadoPrestador,
+          cepPrestador: input.cepPrestador ?? parent.cepPrestador,
+          sociosPrestador: input.sociosPrestador ?? parent.sociosPrestador,
+        } as any).returning({ id: pjContracts.id, employeeId: pjContracts.employeeId, companyId: pjContracts.companyId });
+
+        await db.insert(pjContractRevisoes).values({
+          contractId: inserted.id,
+          companyId: inserted.companyId,
+          employeeId: inserted.employeeId,
+          revisaoNum: novaRevisao,
+          motivo,
+          criadoPor: ctx.user.name ?? 'Sistema',
+          criadoPorUserId: ctx.user.id,
+        });
+
+        let previsoesGeradas = 0;
+        try {
+          previsoesGeradas = await gerarPrevisoesDoContrato(db, {
+            id: inserted.id, companyId: inserted.companyId, employeeId: inserted.employeeId,
+            dataInicio: input.dataInicio, dataFim: input.dataFim,
+            valorMensal: input.valorMensal,
+            percentualAdiantamento: input.percentualAdiantamento,
+            percentualFechamento: input.percentualFechamento,
+            diaAdiantamento: input.diaAdiantamento,
+            diaFechamento: input.diaFechamento,
+          }, ctx.user.name ?? 'Sistema');
+        } catch (e: any) {
+          console.error('[pj.contratos.criarRevisao] Falha ao gerar previsões:', e?.message || e);
+        }
+
+        return { success: true, id: inserted.id, numeroContrato: numero, revisao: novaRevisao, previsoesGeradas };
+      }),
+
+    // Rev. 4468 — Renovar: novo contrato com datas ajustadas; anterior marcado como "encerrado" em transação
+    renovar: protectedProcedure
+      .input(z.object({
+        parentId: z.number(),
+        companyId: z.number().optional(),
+        companyIds: z.array(z.number()).optional(),
+        cnpjPrestador: z.string().optional(),
+        razaoSocialPrestador: z.string().optional(),
+        objetoContrato: z.string().optional(),
+        dataInicio: z.string(),
+        dataFim: z.string(),
+        valorMensal: z.string(),
+        percentualAdiantamento: z.number().default(50),
+        percentualFechamento: z.number().default(50),
+        diaAdiantamento: z.number().default(15),
+        diaFechamento: z.number().default(5),
+        formaPagamento: z.string().optional(),
+        observacoes: z.string().optional(),
+        bancoPrestador: z.string().optional(),
+        agenciaPrestador: z.string().optional(),
+        contaPrestador: z.string().optional(),
+        pixPrestador: z.string().optional(),
+        enderecoPrestador: z.string().optional(),
+        cidadePrestador: z.string().optional(),
+        estadoPrestador: z.string().optional(),
+        cepPrestador: z.string().optional(),
+        sociosPrestador: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [parent] = await db.select().from(pjContracts)
+          .where(and(eq(pjContracts.id, input.parentId), isNull(pjContracts.deletedAt)));
+        if (!parent) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato original não encontrado" });
+
+        const companyId = input.companyId ?? parent.companyId;
+        const parentRevNum = parseInt(parent.revisao || '01', 10);
+        const novaRevisao = String(parentRevNum + 1).padStart(2, '0');
+
+        const ano = new Date().getFullYear();
+        const [countResult] = await db.select({ total: sql<number>`COUNT(*)` })
+          .from(pjContracts).where(eq(pjContracts.companyId, companyId));
+        const numero = `PJ-${ano}-${String((countResult?.total || 0) + 1).padStart(4, '0')}`;
+
+        const motivo = `Renovação do contrato ${parent.numeroContrato} — nova vigência ${input.dataInicio} → ${input.dataFim}`;
+
+        const result = await db.transaction(async (tx: any) => {
+          await tx.update(pjContracts)
+            .set({ status: 'encerrado' as any })
+            .where(eq(pjContracts.id, input.parentId));
+
+          const [inserted] = await tx.insert(pjContracts).values({
+            companyId,
+            employeeId: parent.employeeId,
+            numeroContrato: numero,
+            cnpjPrestador: input.cnpjPrestador ?? parent.cnpjPrestador,
+            razaoSocialPrestador: input.razaoSocialPrestador ?? parent.razaoSocialPrestador,
+            objetoContrato: input.objetoContrato ?? parent.objetoContrato,
+            dataInicio: input.dataInicio,
+            dataFim: input.dataFim,
+            renovacaoAutomatica: 0,
+            valorMensal: input.valorMensal,
+            percentualAdiantamento: input.percentualAdiantamento,
+            percentualFechamento: input.percentualFechamento,
+            diaAdiantamento: input.diaAdiantamento,
+            diaFechamento: input.diaFechamento,
+            status: 'pendente_assinatura',
+            revisao: novaRevisao,
+            revisaoMotivo: motivo,
+            criadoPor: ctx.user.name ?? 'Sistema',
+            criadoPorUserId: ctx.user.id,
+            observacoes: input.observacoes ?? parent.observacoes,
+            bancoPrestador: input.bancoPrestador ?? parent.bancoPrestador,
+            agenciaPrestador: input.agenciaPrestador ?? parent.agenciaPrestador,
+            contaPrestador: input.contaPrestador ?? parent.contaPrestador,
+            pixPrestador: input.pixPrestador ?? parent.pixPrestador,
+            formaPagamento: input.formaPagamento ?? parent.formaPagamento,
+            enderecoPrestador: input.enderecoPrestador ?? parent.enderecoPrestador,
+            cidadePrestador: input.cidadePrestador ?? parent.cidadePrestador,
+            estadoPrestador: input.estadoPrestador ?? parent.estadoPrestador,
+            cepPrestador: input.cepPrestador ?? parent.cepPrestador,
+            sociosPrestador: input.sociosPrestador ?? parent.sociosPrestador,
+          } as any).returning({ id: pjContracts.id, employeeId: pjContracts.employeeId, companyId: pjContracts.companyId });
+
+          await tx.insert(pjContractRevisoes).values({
+            contractId: inserted.id,
+            companyId: inserted.companyId,
+            employeeId: inserted.employeeId,
+            revisaoNum: novaRevisao,
+            motivo,
+            criadoPor: ctx.user.name ?? 'Sistema',
+            criadoPorUserId: ctx.user.id,
+          });
+
+          return inserted;
+        });
+
+        let previsoesGeradas = 0;
+        try {
+          previsoesGeradas = await gerarPrevisoesDoContrato(db, {
+            id: result.id, companyId: result.companyId, employeeId: result.employeeId,
+            dataInicio: input.dataInicio, dataFim: input.dataFim,
+            valorMensal: input.valorMensal,
+            percentualAdiantamento: input.percentualAdiantamento,
+            percentualFechamento: input.percentualFechamento,
+            diaAdiantamento: input.diaAdiantamento,
+            diaFechamento: input.diaFechamento,
+          }, ctx.user.name ?? 'Sistema');
+        } catch (e: any) {
+          console.error('[pj.contratos.renovar] Falha ao gerar previsões:', e?.message || e);
+        }
+
+        return { success: true, id: result.id, numeroContrato: numero, revisao: novaRevisao, previsoesGeradas };
+      }),
+
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {

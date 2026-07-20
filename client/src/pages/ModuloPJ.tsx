@@ -20,7 +20,7 @@ import {
   Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar, Pencil,
   Users, TrendingUp, FileSignature, Ban, Send, Printer, Upload, FolderOpen,
   ExternalLink, File, XCircle, Award, Loader2, Check, Settings2,
-  ShieldCheck, Paperclip, FileMinus2, Sparkles,
+  ShieldCheck, Paperclip, FileMinus2, Sparkles, GitBranch, RotateCw,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
@@ -137,6 +137,8 @@ export default function ModuloPJ() {
   const [novoDocTipo, setNovoDocTipo] = useState("outro");
   const [motivoAlteracao, setMotivoAlteracao] = useState("");
   const [createdContratoId, setCreatedContratoId] = useState<number | null>(null);
+  const [formOrigemTipo, setFormOrigemTipo] = useState<'revisao' | 'renovacao' | null>(null);
+  const [formOrigemContrato, setFormOrigemContrato] = useState<any>(null);
   const [fcSignPJContratoId, setFcSignPJContratoId] = useState<number | null>(null);
   const [avisoEncerramentoContratoId, setAvisoEncerramentoContratoId] = useState<number | null>(null);
   const [showNovoDoc, setShowNovoDoc] = useState(false);
@@ -303,6 +305,14 @@ export default function ModuloPJ() {
   });
   const cancelarContrato = trpc.pj.contratos.cancelar.useMutation({
     onSuccess: () => { refetchContratos(); toast.success("Contrato cancelado. O prestador pode receber um novo contrato."); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const criarRevisaoMutation = (trpc as any).pj.contratos.criarRevisao.useMutation({
+    onSuccess: (data: any) => { refetchContratos(); setCreatedContratoId(data.id); toast.success(`Revisão Rev. ${data.revisao} criada! Contrato ${data.numeroContrato} aguardando assinatura.`); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const renovarMutation = (trpc as any).pj.contratos.renovar.useMutation({
+    onSuccess: (data: any) => { refetchContratos(); setCreatedContratoId(data.id); toast.success(`Renovação criada! Contrato ${data.numeroContrato} aguardando assinatura.`); },
     onError: (e: any) => toast.error(e.message),
   });
   const gerarMensal = trpc.pj.pagamentos.gerarMensal.useMutation({
@@ -592,6 +602,59 @@ export default function ModuloPJ() {
     };
   }, [contratos]);
 
+  const _buildFormFromContrato = (c: any) => ({
+    employeeId: c.employeeId,
+    cnpjPrestador: c.cnpjPrestador || "",
+    razaoSocialPrestador: c.razaoSocialPrestador || "",
+    objetoContrato: c.objetoContrato || "",
+    dataInicio: c.dataInicio?.slice(0, 10) || "",
+    dataFim: c.dataFim?.slice(0, 10) || "",
+    valorMensal: c.valorMensal || "",
+    percentualAdiantamento: c.percentualAdiantamento ?? 50,
+    percentualFechamento: c.percentualFechamento ?? 50,
+    diaAdiantamento: c.diaAdiantamento ?? 15,
+    diaFechamento: c.diaFechamento ?? 5,
+    formaPagamento: c.formaPagamento || "",
+    observacoes: c.observacoes || "",
+    bancoPrestador: c.bancoPrestador || "",
+    agenciaPrestador: c.agenciaPrestador || "",
+    contaPrestador: c.contaPrestador || "",
+    pixPrestador: c.pixPrestador || "",
+    enderecoPrestador: c.enderecoPrestador || "",
+    cidadePrestador: c.cidadePrestador || "",
+    estadoPrestador: c.estadoPrestador || "",
+    cepPrestador: c.cepPrestador || "",
+    sociosPrestador: c.sociosPrestador || "",
+  });
+
+  const openCriarRevisao = (c: any) => {
+    setFormOrigemTipo('revisao');
+    setFormOrigemContrato(c);
+    setEditingContratoId(null);
+    setCreatedContratoId(null);
+    setCnpjLookupSocios([]);
+    setMotivoAlteracao(`Substituição do contrato ${c.numeroContrato} (cancelado)`);
+    setForm(_buildFormFromContrato(c));
+    setShowContratoDialog(true);
+  };
+
+  const openRenovar = (c: any) => {
+    const oldStart = new Date((c.dataInicio || "").slice(0, 10) + "T00:00:00");
+    const oldEnd   = new Date((c.dataFim   || "").slice(0, 10) + "T00:00:00");
+    const duration = oldEnd.getTime() - oldStart.getTime();
+    const newStart = new Date(oldEnd.getTime() + 86400000);
+    const newEnd   = new Date(newStart.getTime() + duration);
+    const toISO    = (d: Date) => d.toISOString().slice(0, 10);
+    setFormOrigemTipo('renovacao');
+    setFormOrigemContrato(c);
+    setEditingContratoId(null);
+    setCreatedContratoId(null);
+    setCnpjLookupSocios([]);
+    setMotivoAlteracao(`Renovação do contrato ${c.numeroContrato}`);
+    setForm({ ..._buildFormFromContrato(c), dataInicio: toISO(newStart), dataFim: toISO(newEnd) });
+    setShowContratoDialog(true);
+  };
+
   const openEditContrato = (c: any) => {
     setEditingContratoId(c.id);
     setMotivoAlteracao("");
@@ -625,9 +688,50 @@ export default function ModuloPJ() {
     setShowContratoDialog(true);
   };
 
+  const _formPayload = () => ({
+    cnpjPrestador: form.cnpjPrestador,
+    razaoSocialPrestador: form.razaoSocialPrestador,
+    objetoContrato: form.objetoContrato,
+    dataInicio: form.dataInicio,
+    dataFim: form.dataFim,
+    valorMensal: form.valorMensal,
+    percentualAdiantamento: form.percentualAdiantamento ?? 50,
+    percentualFechamento: form.percentualFechamento ?? 50,
+    diaAdiantamento: form.diaAdiantamento ?? 15,
+    diaFechamento: form.diaFechamento ?? 5,
+    formaPagamento: form.formaPagamento || undefined,
+    observacoes: form.observacoes,
+    bancoPrestador: form.bancoPrestador || undefined,
+    agenciaPrestador: form.agenciaPrestador || undefined,
+    contaPrestador: form.contaPrestador || undefined,
+    pixPrestador: form.pixPrestador || undefined,
+    enderecoPrestador: form.enderecoPrestador || undefined,
+    cidadePrestador: form.cidadePrestador || undefined,
+    estadoPrestador: form.estadoPrestador || undefined,
+    cepPrestador: form.cepPrestador || undefined,
+    sociosPrestador: cnpjLookupSocios.length > 0 ? JSON.stringify(cnpjLookupSocios) : (form.sociosPrestador || undefined),
+  });
+
   const handleSubmitContrato = () => {
     if (!form.dataInicio || !form.dataFim || !form.valorMensal) {
       toast.error("Preencha os campos obrigatórios");
+      return;
+    }
+    if (formOrigemTipo === 'revisao' && formOrigemContrato) {
+      criarRevisaoMutation.mutate({
+        parentId: formOrigemContrato.id,
+        companyId, companyIds,
+        ..._formPayload(),
+        motivoRevisao: motivoAlteracao || undefined,
+      });
+      return;
+    }
+    if (formOrigemTipo === 'renovacao' && formOrigemContrato) {
+      renovarMutation.mutate({
+        parentId: formOrigemContrato.id,
+        companyId, companyIds,
+        ..._formPayload(),
+      });
       return;
     }
     if (editingContratoId) {
@@ -1008,6 +1112,22 @@ export default function ModuloPJ() {
                                     Ativar
                                   </Button>
                                 )}
+                                {c.status === "cancelado" && (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-600" title="Criar Revisão — novo contrato substituto com Rev. incrementada (ISO 9001)" onClick={() => openCriarRevisao(c)}>
+                                    <GitBranch className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                {(c.status === "ativo" || c.status === "encerrado") && c.dataFim && (() => {
+                                  const diasRestantes = Math.ceil((new Date(c.dataFim.slice(0,10) + "T00:00:00").getTime() - Date.now()) / 86400000);
+                                  if (diasRestantes <= 60) {
+                                    return (
+                                      <Button size="icon" variant="ghost" className="h-7 w-7 text-green-700" title={diasRestantes <= 0 ? "Renovar contrato vencido" : `Renovar — vence em ${diasRestantes} dia(s)`} onClick={() => openRenovar(c)}>
+                                        <RotateCw className="h-3.5 w-3.5" />
+                                      </Button>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                                 {(c.status === "ativo" || c.status === "pendente_assinatura") && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600" title="Cancelar contrato (libera o prestador para novo contrato)" onClick={() => { if (confirm(`Cancelar o contrato ${c.numeroContrato}?\n\nO contrato ficará registrado como "Cancelado" e o prestador poderá receber um novo contrato.`)) cancelarContrato.mutate({ id: c.id }); }}>
                                     <Ban className="h-3.5 w-3.5" />
@@ -1673,7 +1793,7 @@ export default function ModuloPJ() {
         )}
 
         {/* Create / Edit Contrato Dialog — layout 2 colunas Rev. 4454 */}
-        <FullScreenDialog open={showContratoDialog} onClose={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); setCreatedContratoId(null); }} title={editingContratoId ? "Editar Contrato PJ" : "Novo Contrato PJ"} icon={<FileSignature className="h-5 w-5 text-white" />}>
+        <FullScreenDialog open={showContratoDialog} onClose={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); setCreatedContratoId(null); setFormOrigemTipo(null); setFormOrigemContrato(null); }} title={editingContratoId ? "Editar Contrato PJ" : formOrigemTipo === 'revisao' ? "Criar Revisão de Contrato PJ" : formOrigemTipo === 'renovacao' ? "Renovar Contrato PJ" : "Novo Contrato PJ"} icon={<FileSignature className="h-5 w-5 text-white" />}>
           <div className="w-full max-w-7xl mx-auto">
 
             {/* ═══ FASE 1 — Seleção de prestador (apenas novo contrato) ═══ */}
@@ -1740,6 +1860,27 @@ export default function ModuloPJ() {
 
             {/* ═══ FASE 2 — Formulário (prestador selecionado ou editando) ═══ */}
             {(form.employeeId || editingContratoId) && (<>
+
+            {/* Banner de origem (revisão / renovação) */}
+            {formOrigemTipo && formOrigemContrato && !createdContratoId && (
+              <div className={`mb-4 p-3 rounded-xl border flex items-start gap-3 ${formOrigemTipo === 'revisao' ? "bg-purple-50 border-purple-200" : "bg-green-50 border-green-200"}`}>
+                {formOrigemTipo === 'revisao'
+                  ? <GitBranch className="h-5 w-5 text-purple-600 shrink-0 mt-0.5" />
+                  : <RotateCw className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold ${formOrigemTipo === 'revisao' ? "text-purple-900" : "text-green-900"}`}>
+                    {formOrigemTipo === 'revisao' ? "Criando revisão do contrato" : "Renovando contrato"}{" "}
+                    <span className="font-mono">{formOrigemContrato.numeroContrato}</span>
+                    {" "}— Rev.{String(parseInt(formOrigemContrato.revisao || '01', 10) + 1).padStart(2, '0')}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${formOrigemTipo === 'revisao' ? "text-purple-600" : "text-green-600"}`}>
+                    {formOrigemTipo === 'revisao'
+                      ? `Dados herdados do contrato cancelado (Rev.${formOrigemContrato.revisao || '01'}). Ajuste o que for necessário antes de salvar.`
+                      : `Vigência anterior: ${formatDate(formOrigemContrato.dataInicio)} → ${formatDate(formOrigemContrato.dataFim)}. O contrato original será encerrado automaticamente.`}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Banner pós-criação */}
             {createdContratoId && !editingContratoId && (

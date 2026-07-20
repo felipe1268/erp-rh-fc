@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4468** — **FEAT: "CRIAR REVISÃO" + "RENOVAR" NO MÓDULO PJ (ISO 9001).** Dois novos fluxos: (1) botão `<GitBranch>` roxo em contratos cancelados abre form Fase 2 pré-preenchido, cria substituto com Rev. incrementada via mutation `criarRevisao`; (2) botão `<RotateCw>` verde em ativos/encerrados ≤60 dias do vencimento, cria renovação com datas ajustadas (+1 dia, mesmo período) via mutation `renovar` em db.transaction (marca anterior como "encerrado" atomicamente). Banner colorido no topo da Fase 2 informa origem. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4467** — **FEAT: CARD "CANCELADOS" + FILTRO NO MÓDULO PJ.** Novo KPI card vermelho "Cancelados" nos stats (contador de `status=cancelado`); clicar aplica filtro automaticamente. Grid expandido de 5→6 colunas. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4466** — **FEAT: REDESIGN "NOVO CONTRATO PJ" — FASE 1 COM GRADE DE PRESTADORES + LAYOUT MODERNO.** Quando o dialog abre em modo "novo", exibe grade visual (cards com avatar colorido, nome, CPF, status) de todos os PJTs sem contrato ativo/pendente + busca inline. Clicar no card avança para a Fase 2 com banner do prestador + form 2-col. Helpers `getInitials`/`getAvatarColor` adicionados. §1 escondido no modo "novo"; modo edição = card read-only. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4466** — **FEAT: REDESIGN "NOVO CONTRATO PJ" — FASE 1 COM GRADE DE PRESTADORES + LAYOUT MODERNO.** Grade visual de PJTs sem contrato + busca inline; Fase 2 com banner + form 2-col. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4465** — **FIX: SÓCIO ADMINISTRADOR ASSINA POR ÚLTIMO NO FCSIGN (CONTRATO PJ).** Array `signers` reordenado: contratado → testemunha(s) → contratante (último). Badge dinâmico mostra posição correta. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4464** — **FEAT: CANCELAR CONTRATO PJ (SEM EXCLUIR) + FILTRO "CANCELADO" NA LISTA.** Nova mutation `contratos.cancelar` (backend) muda status → "cancelado" preservando histórico. Frontend: botão 🚫 âmbar na linha (só para ativo/pendente), confirm dialog explicativo. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4463** — **FIX: DROPDOWN "PRESTADOR" NO NOVO CONTRATO PJ NÃO MOSTRAVA FUNCIONÁRIOS SEM CONTRATO ATIVO.** 4 fixes em `ModuloPJ.tsx`: contratos.list com companyIds; empIdsComContratoVigente bloqueia ativo+pendente; pjEmployees inclui Aviso/Afastado. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4462** — **FEAT: VALIDAÇÃO DE DADOS OBRIGATÓRIOS ANTES DE ENVIAR CONTRATO PJ PARA ASSINATURA.** CNPJ, Endereço e Dados Bancários obrigatórios antes de enviar para FCSign. 3 camadas de validação. ZERO DELETE · ZERO ALTER destrutivo.
-- **Rev. 4461** — **FIX: DESMARCAR SERVIÇO EAP NA SC E SALVAR NÃO PERSISTE (REABRE COM ITEM AINDA MARCADO).** Race condition entre cache stale do React Query e abertura do form de edição. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

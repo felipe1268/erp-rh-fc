@@ -1,4 +1,45 @@
 /**
+ * Rev. 4468 - FEAT: "CRIAR REVISÃO" + "RENOVAR" NO MÓDULO PJ (ISO 9001)
+ *
+ * CONTEXTO: Após cancelar um contrato PJ, o usuário precisava de um fluxo para:
+ *   (1) criar um contrato substituto com número de revisão incrementado (ISO 9001 —
+ *       "Criar Revisão"), herdando todos os dados do cancelado;
+ *   (2) renovar um contrato prestes a vencer ou já encerrado ("Renovar"), com datas
+ *       ajustadas automaticamente (+1 dia do fim anterior, mesmo período), marcando o
+ *       contrato anterior como "encerrado" em transação atômica.
+ *
+ * BACKEND (server/routers/pjContracts.ts):
+ *   · Nova mutation `criarRevisao`: recebe parentId + form completo; busca contrato
+ *     original, calcula novaRevisao = parseInt(parent.revisao)+1 padded '02'…, gera
+ *     novo número PJ-AAAA-XXXX, insere pj_contracts herdando dados do pai (override
+ *     pelos campos do form), registra em pjContractRevisoes e gera previsões de
+ *     medição. Nenhuma schema change — revisao/revisaoMotivo já existiam.
+ *   · Nova mutation `renovar`: mesmo fluxo mas em db.transaction — marca parent como
+ *     'encerrado' ANTES de inserir o novo contrato, garantindo atomicidade.
+ *
+ * FRONTEND (client/src/pages/ModuloPJ.tsx):
+ *   · Novos estados: `formOrigemTipo: 'revisao'|'renovacao'|null` e
+ *     `formOrigemContrato: any`.
+ *   · `_buildFormFromContrato(c)` — helper que copia todos os campos do contrato
+ *     fonte para o estado do formulário.
+ *   · `openCriarRevisao(c)` e `openRenovar(c)` — handlers que setam origem e abrem
+ *     o dialog direto na Fase 2 (employeeId já setado, ignora grade de seleção).
+ *     openRenovar calcula novas datas: newStart = oldEnd+1d, newEnd = newStart+duration.
+ *   · `_formPayload()` — helper DRY que extrai o payload comum para create/revisão/renovação.
+ *   · `handleSubmitContrato` atualizado: branch em formOrigemTipo antes do fluxo normal.
+ *   · Botões na coluna de ações:
+ *     - <GitBranch> roxo em contratos "cancelado" → openCriarRevisao.
+ *     - <RotateCw> verde em contratos "ativo"/"encerrado" com dataFim ≤ 60 dias → openRenovar.
+ *   · Banner de origem no topo da Fase 2: roxo (revisão) ou verde (renovação), mostra
+ *     contrato de origem, nova Rev., datas anteriores.
+ *   · FullScreenDialog: título dinâmico ("Criar Revisão de Contrato PJ" / "Renovar
+ *     Contrato PJ"); onClose reseta formOrigem*.
+ *   · Importados: GitBranch, RotateCw.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · ZERO schema change
+ */
+
+/**
  * Rev. 4467 - FEAT: CARD "CANCELADOS" + FILTRO NO MÓDULO PJ
  *
  * CONTEXTO: Após a Rev. 4464 que implementou o cancelamento de contratos PJ,
