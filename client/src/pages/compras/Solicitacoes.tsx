@@ -2377,14 +2377,16 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
   const listaFiltradaObraSemBreakdown = filtroClassificacao === "todas"
     ? listaFiltradaObraStatus
     : listaFiltradaObraStatus.filter((r: any) => effectiveTipo(r) === filtroClassificacao);
-  // Rev. 1734 — Predicados dos 9 mini-blocos do card "Status das Solicitações"
-  // (mesma lógica do useMemo statusBreakdown, agora exposta como filtro clicável)
+  // Rev. 4486 — Predicados dos 10 mini-blocos do card "Status das Solicitações".
+  // emCotacao / pendente / emAndamento EXCLUEM _ocsEntregues (já derivadas p/ aguardandoPagamento).
+  // aguardandoPagamento: status cru em {pendente,cotacao,em_andamento} mas todas as OCs já entregues.
   const breakdownPredicates: Record<string, (r: any) => boolean> = {
     aguardandoAprov: (r) => (r.aprovacaoStatus ?? "aguardando") === "aguardando" && !["aprovado", "recusado", "cancelado"].includes(r.status),
     aprovadasSemOC: (r) => ["aprovada", "aprovado"].includes(r.aprovacaoStatus ?? "") && !r._hasOC && !["aprovado", "recusado", "cancelado"].includes(r.status),
-    pendente: (r) => r.status === "pendente",
-    emCotacao: (r) => r.status === "cotacao",
-    emAndamento: (r) => r.status === "em_andamento",
+    pendente: (r) => r.status === "pendente" && !r._ocsEntregues,
+    emCotacao: (r) => r.status === "cotacao" && !r._ocsEntregues,
+    aguardandoPagamento: (r) => r._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(r.status),
+    emAndamento: (r) => r.status === "em_andamento" && !r._ocsEntregues,
     entreguesParcial: (r) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r),
     concluidas: (r) => r.status === "aprovado" || scEntregueTotal(r),
     recusadas: (r) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? ""),
@@ -2448,7 +2450,8 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     recusado: listaKpisBase.filter((r: any) => r.status === "recusado").length,
   }), [listaKpisBase]);
 
-  // Rev. 1732 — Status detalhado das solicitações (card superior)
+  // Rev. 4486 — Status detalhado das solicitações (card superior).
+  // emCotacao / pendente / emAndamento EXCLUEM _ocsEntregues=true (contadas em aguardandoPagamento).
   const statusBreakdown = useMemo(() => {
     const ativas = listaKpisBase.filter((r: any) => !["aprovado", "recusado", "cancelado"].includes(r.status) && !scEntregueTotal(r));
     return {
@@ -2456,9 +2459,10 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       ativas: ativas.length,
       aguardandoAprov: listaKpisBase.filter((r: any) => (r.aprovacaoStatus ?? "aguardando") === "aguardando" && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
       aprovadasSemOC: listaKpisBase.filter((r: any) => ["aprovada", "aprovado"].includes(r.aprovacaoStatus ?? "") && !r._hasOC && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
-      emCotacao: listaKpisBase.filter((r: any) => r.status === "cotacao").length,
-      emAndamento: listaKpisBase.filter((r: any) => r.status === "em_andamento").length,
-      pendente: listaKpisBase.filter((r: any) => r.status === "pendente").length,
+      pendente: listaKpisBase.filter((r: any) => r.status === "pendente" && !r._ocsEntregues).length,
+      emCotacao: listaKpisBase.filter((r: any) => r.status === "cotacao" && !r._ocsEntregues).length,
+      aguardandoPagamento: listaKpisBase.filter((r: any) => r._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(r.status)).length,
+      emAndamento: listaKpisBase.filter((r: any) => r.status === "em_andamento" && !r._ocsEntregues).length,
       entreguesParcial: listaKpisBase.filter((r: any) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r)).length,
       concluidas: listaKpisBase.filter((r: any) => r.status === "aprovado" || scEntregueTotal(r)).length,
       recusadas: listaKpisBase.filter((r: any) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? "")).length,
@@ -2510,17 +2514,18 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             </span>
           )}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 divide-x divide-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 divide-x divide-slate-100">
           {[
-            { key: "aguardandoAprov",  label: "Aguardando aprovação",  count: statusBreakdown.aguardandoAprov, color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
-            { key: "aprovadasSemOC",   label: "Aprovadas (sem OC)",    count: statusBreakdown.aprovadasSemOC,  color: "text-emerald-700", bar: "bg-emerald-400", ring: "ring-emerald-400" },
-            { key: "pendente",         label: "Pendente",              count: statusBreakdown.pendente,        color: "text-slate-700",   bar: "bg-slate-400",   ring: "ring-slate-400"   },
-            { key: "emCotacao",        label: "Em cotação",            count: statusBreakdown.emCotacao,       color: "text-sky-700",     bar: "bg-sky-400",     ring: "ring-sky-400"     },
-            { key: "emAndamento",      label: "Em andamento",          count: statusBreakdown.emAndamento,     color: "text-indigo-700",  bar: "bg-indigo-400",  ring: "ring-indigo-400"  },
-            { key: "entreguesParcial", label: "Entrega parcial",       count: statusBreakdown.entreguesParcial, color: "text-orange-700", bar: "bg-orange-400", ring: "ring-orange-400"  },
-            { key: "concluidas",       label: "Concluídas",            count: statusBreakdown.concluidas,      color: "text-green-700",   bar: "bg-green-400",   ring: "ring-green-400"   },
-            { key: "recusadas",        label: "Recusadas",             count: statusBreakdown.recusadas,       color: "text-red-700",     bar: "bg-red-400",     ring: "ring-red-400"     },
-            { key: "canceladas",       label: "Canceladas",            count: statusBreakdown.canceladas,      color: "text-zinc-600",    bar: "bg-zinc-400",    ring: "ring-zinc-400"    },
+            { key: "aguardandoAprov",    label: "Aguardando aprovação",  count: statusBreakdown.aguardandoAprov,    color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
+            { key: "aprovadasSemOC",     label: "Aprovadas (sem OC)",    count: statusBreakdown.aprovadasSemOC,     color: "text-emerald-700", bar: "bg-emerald-400", ring: "ring-emerald-400" },
+            { key: "pendente",           label: "Pendente",              count: statusBreakdown.pendente,           color: "text-slate-700",   bar: "bg-slate-400",   ring: "ring-slate-400"   },
+            { key: "emCotacao",          label: "Em cotação",            count: statusBreakdown.emCotacao,          color: "text-sky-700",     bar: "bg-sky-400",     ring: "ring-sky-400"     },
+            { key: "aguardandoPagamento",label: "Aguardando Pagamento",  count: statusBreakdown.aguardandoPagamento,color: "text-violet-700",  bar: "bg-violet-400",  ring: "ring-violet-400"  },
+            { key: "emAndamento",        label: "Em andamento",          count: statusBreakdown.emAndamento,        color: "text-indigo-700",  bar: "bg-indigo-400",  ring: "ring-indigo-400"  },
+            { key: "entreguesParcial",   label: "Entrega parcial",       count: statusBreakdown.entreguesParcial,   color: "text-orange-700",  bar: "bg-orange-400",  ring: "ring-orange-400"  },
+            { key: "concluidas",         label: "Concluídas",            count: statusBreakdown.concluidas,         color: "text-green-700",   bar: "bg-green-400",   ring: "ring-green-400"   },
+            { key: "recusadas",          label: "Recusadas",             count: statusBreakdown.recusadas,          color: "text-red-700",     bar: "bg-red-400",     ring: "ring-red-400"     },
+            { key: "canceladas",         label: "Canceladas",            count: statusBreakdown.canceladas,         color: "text-zinc-600",    bar: "bg-zinc-400",    ring: "ring-zinc-400"    },
           ].map((s) => {
             const ativo = filtroBreakdown === s.key;
             return (

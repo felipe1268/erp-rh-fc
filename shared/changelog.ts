@@ -1,4 +1,40 @@
 /**
+ * Rev. 4486 - FIX: BUG DE CONTAGEM E FILTRO DE STATUS DAS SOLICITAÇÕES DE COMPRA (SC)
+ *
+ * CONTEXTO:
+ *   A função `statusEfetivoSC` (Rev. 1693) deriva corretamente o badge visual
+ *   "Aguardando Pagamento" para SCs cujas OCs já foram entregues mas o pagamento
+ *   ainda está pendente (_ocsEntregues === true + status in {pendente, cotacao,
+ *   em_andamento}). Porém os predicados de contagem (`statusBreakdown`) e os
+ *   predicados de filtro (`breakdownPredicates`) usavam `r.status` RAW —
+ *   ignoravam `_ocsEntregues` — contando essas SCs em "Em Cotação", "Pendente"
+ *   e "Em Andamento" ao mesmo tempo que exibiam o badge "Aguardando Pagamento".
+ *   Resultado visível: filtrar "Em Cotação" (177 itens) mostrava SCs com badge
+ *   "Aguardando Pagamento" na lista.
+ *
+ * CAUSA-RAIZ:
+ *   Desacoplamento entre a lógica de badge (statusEfetivoSC) e a lógica de
+ *   contagem/filtro (statusBreakdown + breakdownPredicates). As últimas nunca
+ *   foram atualizadas para excluir _ocsEntregues=true.
+ *
+ * CORREÇÃO:
+ *   1. statusBreakdown.emCotacao/pendente/emAndamento: adicionado `&& !r._ocsEntregues`.
+ *   2. statusBreakdown.aguardandoPagamento: novo contador
+ *      `r._ocsEntregues === true && ["pendente","cotacao","em_andamento"].includes(r.status)`.
+ *   3. breakdownPredicates.emCotacao/pendente/emAndamento: mesma exclusão.
+ *   4. breakdownPredicates.aguardandoPagamento: novo predicado espelhando a
+ *      mesma condição de statusEfetivoSC.
+ *   5. UI: adicionado bloco "Aguardando Pagamento" (violeta) entre "Em cotação"
+ *      e "Em andamento"; grid ajustado de lg:grid-cols-9 para lg:grid-cols-10.
+ *
+ * ARQUIVOS ALTERADOS:
+ *   - client/src/pages/compras/Solicitacoes.tsx (statusBreakdown, breakdownPredicates, UI)
+ *   - shared/version.ts (bump Rev. 4486)
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4485 - FIX: PLACEHOLDERS DE PRAZO DE NF NO TEMPLATE ISO DE CONTRATO PJ
  *
  * CONTEXTO:
