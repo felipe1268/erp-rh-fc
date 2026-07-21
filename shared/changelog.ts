@@ -21,14 +21,17 @@
  *      b) SE tem OC ativa (rastreabilidade financeira em curso):
  *         → UPDATE solicitacao_item_id = NULL (preserva o item da OC, apenas desvincula da SC)
  *
- * APLICADO EM 3 PONTOS (remoção) + PROPAGAÇÃO SIMÉTRICA (adição):
- *   1. cancelarItemSc — botão "Excluir Item" no detalhe da SC.
- *   2. updateSolicitacao → bloco removedIds (itens parcialmente removidos na edição).
- *   3. updateSolicitacao → bloco existingIds (quando SC não tem itens no payload — edge case).
+ * APLICADO EM 3 PONTOS (remoção) + PROPAGAÇÃO SIMÉTRICA (adição) + RECONCILIAÇÃO ROBUSTA:
+ *   1. cancelarItemSc — botão "Excluir Item": _cascadeRemoveCotItens por FK direto.
+ *   2. updateSolicitacao → bloco removedIds: _cascadeRemoveCotItens por FK.
+ *   3. updateSolicitacao → bloco existingIds: _cascadeRemoveCotItens por FK (edge case).
  *   4. updateSolicitacao → bloco newItens: ao ADICIONAR um item à SC que já tem cotação ativa,
  *      um item correspondente é automaticamente inserido em TODAS as cotações ativas vinculadas.
- *      O novo item entra com preço zero (pendente de cotação), refletindo imediatamente no
- *      Mapa de Cotação sem exigir ação manual do comprador.
+ *   5. updateSolicitacao → RECONCILIAÇÃO FINAL (_reconcileCotItensForSC): após todos os
+ *      inserts/updates/deletes, varre as cotações ativas via cotacao_id (não via FK) e
+ *      remove QUALQUER item de cotação que não corresponda a um item atual da SC.
+ *      Detecta orphans pré-existentes (solicitacao_item_id já NULL de edições com código
+ *      antigo) que _cascadeRemoveCotItens não alcançava via busca por FK.
  *
  * ZERO schema change.
  */

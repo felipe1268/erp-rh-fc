@@ -1466,6 +1466,46 @@ async function _cascadeRemoveCotItens(db: Awaited<ReturnType<typeof getDb>>, scI
   }
 }
 
+
+// Rev. 4493+ — Reconciliação robusta para updateSolicitacao: após editar uma SC, varre TODAS
+// as cotações ativas vinculadas e remove itens de cotação que NÃO correspondem a nenhum item
+// atual da SC. Detecta orphans tanto recém-criados quanto pré-existentes (solicitacao_item_id
+// já NULL de edições anteriores com código antigo) comparando via cotacao_id, não via FK.
+async function _reconcileCotItensForSC(db: Awaited<ReturnType<typeof getDb>>, scId: number, currentScItemIds: number[]) {
+  if (!db) return;
+  const activeCots = await db.select({ id: comprasCotacoes.id })
+    .from(comprasCotacoes)
+    .where(and(eq(comprasCotacoes.solicitacaoId, scId), sql`${comprasCotacoes.status} NOT IN ('cancelada', 'recusada')`));
+  if (activeCots.length === 0) return;
+  const cotIds = activeCots.map(c => c.id);
+  // Itens da cotação órfãos: FK NULL ou apontando para SC item que não existe mais.
+  const orphanRows = currentScItemIds.length > 0
+    ? await db.execute(sql`
+        SELECT id FROM compras_cotacoes_itens
+        WHERE cotacao_id = ANY(${sql.raw("ARRAY[" + cotIds.join(",") + "]::int[]")})
+        AND (solicitacao_item_id IS NULL
+             OR solicitacao_item_id NOT IN (${sql.raw(currentScItemIds.join(","))}))`)
+    : await db.execute(sql`
+        SELECT id FROM compras_cotacoes_itens
+        WHERE cotacao_id = ANY(${sql.raw("ARRAY[" + cotIds.join(",") + "]::int[]")})`);
+  const orphanIds: number[] = (orphanRows.rows as any[]).map((r: any) => Number(r.id));
+  if (orphanIds.length === 0) return;
+  const comOCRows = await db.select({ cotacaoItemId: comprasOrdensItens.cotacaoItemId })
+    .from(comprasOrdensItens)
+    .innerJoin(comprasOrdens, and(eq(comprasOrdens.id, comprasOrdensItens.ordemId), sql`${comprasOrdens.status} != 'cancelada'`))
+    .where(inArray(comprasOrdensItens.cotacaoItemId, orphanIds));
+  const comOCSet = new Set(comOCRows.map(r => r.cotacaoItemId).filter((x): x is number => x != null));
+  const semOCIds = orphanIds.filter(id => !comOCSet.has(id));
+  const comOCIds = orphanIds.filter(id => comOCSet.has(id));
+  if (semOCIds.length > 0) {
+    await db.delete(comprasCotacaoRespostas).where(inArray(comprasCotacaoRespostas.itemId, semOCIds));
+    await db.delete(comprasCotacoesItens).where(inArray(comprasCotacoesItens.id, semOCIds));
+  }
+  if (comOCIds.length > 0) {
+    await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE id = ANY(${sql.raw("ARRAY[" + comOCIds.join(",") + "]::int[]")})`);
+  }
+}
+
 export const comprasRouter = router({
 
   // ══════════════════════════════════════════════════════════════
@@ -13944,6 +13984,13 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               );
             }
           }
+          // Rev. 4493+ — Reconciliação final do Branch A: limpa orphans das cotações ativas
+          // vinculadas à SC (FK NULL de edições anteriores + itens recém-removidos).
+          // Consulta o estado FINAL dos itens após todos os updates/inserts/deletes acima.
+          const finalScItemRows = await db.select({ id: comprasSolicitacoesItens.id })
+            .from(comprasSolicitacoesItens)
+            .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+          await _reconcileCotItensForSC(db, input.id, finalScItemRows.map(r => r.id));
         } else {
           const existingItems = await db.select({ id: comprasSolicitacoesItens.id })
             .from(comprasSolicitacoesItens)
