@@ -219,6 +219,11 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
   const percFechamento = c.percentualFechamento || 60;
   const diaAdiantamento = c.diaAdiantamento || 20;
   const diaFechamento = c.diaFechamento || 5;
+  const isUltimoDia = diaFechamento === 31 || diaFechamento === 0;
+  const prazoNotaAdiant = Math.max(1, diaAdiantamento - 5);
+  const prazoNotaFechNum = isUltimoDia ? null : Math.max(1, diaFechamento - 5);
+  const textoDiaFechamento = isUltimoDia ? "no último dia do mês subsequente" : `no dia ${diaFechamento} do mês subsequente`;
+  const prazoNotaFechStr = isUltimoDia ? "5 (cinco) dias antes do último dia" : `o dia ${prazoNotaFechNum}`;
   const valorAdiantamento = formatMoeda((valorMensal * percAdiantamento) / 100);
   const valorFechamento = formatMoeda((valorMensal * percFechamento) / 100);
   const dataAssinatura = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
@@ -257,7 +262,10 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
     .replace(/\[PERCENTUAL_ADIANTAMENTO\]/g, String(percAdiantamento))
     .replace(/\[PERCENTUAL_FECHAMENTO\]/g, String(percFechamento))
     .replace(/\[DIA_ADIANTAMENTO\]/g, String(diaAdiantamento))
-    .replace(/\[DIA_FECHAMENTO\]/g, String(diaFechamento))
+    .replace(/\[DIA_FECHAMENTO\]/g, isUltimoDia ? "último dia do mês" : String(diaFechamento))
+    .replace(/\[TEXTO_DIA_FECHAMENTO\]/g, textoDiaFechamento)
+    .replace(/\[PRAZO_NOTA_ADIANTAMENTO\]/g, String(prazoNotaAdiant))
+    .replace(/\[PRAZO_NOTA_FECHAMENTO\]/g, prazoNotaFechStr)
     .replace(/\[PRAZO_VIGENCIA\]/g, prazoVigencia)
     .replace(/\[DATA_INICIO\]/g, dataInicioFmt)
     .replace(/\[DATA_FIM\]/g, dataFimFmt)
@@ -291,7 +299,16 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
     .replace(/\{\{docNumero\}\}/gi, numeroContrato)
     .replace(/\{\{dadosBancarios\}\}/gi, dadosBancarios)
     .replace(/\{\{empNome\}\}/gi, c.employeeName || nomePrestador)
-    .replace(/\{\{empCpf\}\}/gi, c.employeeCpf || "_______________");
+    .replace(/\{\{empCpf\}\}/gi, c.employeeCpf || "_______________")
+    .replace(/\{\{diaAdiantamento\}\}/gi, String(diaAdiantamento))
+    .replace(/\{\{diaFechamento\}\}/gi, isUltimoDia ? "último dia do mês" : String(diaFechamento))
+    .replace(/\{\{textoDiaFechamento\}\}/gi, textoDiaFechamento)
+    .replace(/\{\{prazoNotaAdiantamento\}\}/gi, String(prazoNotaAdiant))
+    .replace(/\{\{prazoNotaFechamento\}\}/gi, prazoNotaFechStr)
+    .replace(/\{\{percentualAdiantamento\}\}/gi, String(percAdiantamento))
+    .replace(/\{\{percentualFechamento\}\}/gi, String(percFechamento))
+    .replace(/\{\{valorAdiantamento\}\}/gi, valorAdiantamento)
+    .replace(/\{\{valorFechamento\}\}/gi, valorFechamento);
 
   return t;
 }

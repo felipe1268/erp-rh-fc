@@ -147,7 +147,10 @@ CLÁUSULA SEXTA: PREÇOS E FORMA DE PAGAMENTO
 Parágrafo Único \u2013 Sobre quaisquer hipóteses não poderá a contratada divulgar seus dividendos a terceiros.
 
 6.2 FATURAMENTO E PAGAMENTO:
-a) Pagamento realizado na proporção de 40% no dia 20 e 60% do pagamento no 5º dia útil do mês subsequente.
+
+Pagamento realizado na proporção de [PERCENTUAL_ADIANTAMENTO]% no dia [DIA_ADIANTAMENTO] do mês corrente e [PERCENTUAL_FECHAMENTO]% [TEXTO_DIA_FECHAMENTO].
+
+Parágrafo Único – Para recebimento dos pagamentos, a CONTRATADA deverá emitir e encaminhar a Nota Fiscal de Serviços com antecedência mínima de 5 (cinco) dias da data de pagamento, observando os seguintes prazos: (i) Nota Fiscal referente ao adiantamento: até o dia [PRAZO_NOTA_ADIANTAMENTO] do mês corrente; (ii) Nota Fiscal referente ao fechamento: até [PRAZO_NOTA_FECHAMENTO] do mês do pagamento. O não envio da Nota Fiscal dentro do prazo estipulado implicará no adiamento do pagamento para o mês subsequente, sem ônus para a CONTRATANTE.
 
 CLÁUSULA SÉTIMA: LIMITE DE RESPONSABILIDADE
 

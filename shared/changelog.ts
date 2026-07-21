@@ -1,4 +1,40 @@
 /**
+ * Rev. 4485 - FIX: PLACEHOLDERS DE PRAZO DE NF NO TEMPLATE ISO DE CONTRATO PJ
+ *
+ * CONTEXTO:
+ *   O template real de Contrato PJ é o da Central de Documentos ISO
+ *   (tabela systemDocumentTemplates, "Vigente"), não o modelo hardcoded em
+ *   pjContracts.ts. A substituição dos novos campos de prazo de NF (adicionados
+ *   na Rev. 4484) não ocorria porque os 4 paths de substituição não incluíam
+ *   os novos placeholders.
+ *
+ * IMPLEMENTAÇÃO:
+ *   Novos placeholders suportados em TODOS os paths:
+ *     [TEXTO_DIA_FECHAMENTO]    → ex: "no último dia do mês subsequente"
+ *                                  ou "no dia 5 do mês subsequente"
+ *     [PRAZO_NOTA_ADIANTAMENTO] → diaAdiantamento − 5 (mín. 1)
+ *     [PRAZO_NOTA_FECHAMENTO]   → "5 (cinco) dias antes do último dia"
+ *                                  ou "o dia N" (diaFechamento − 5)
+ *
+ *   Correção: [DIA_FECHAMENTO] = 31 agora exibe "último dia do mês" (antes
+ *   exibia "31" literalmente em ContratoPJView e contratoPjDocument).
+ *
+ *   Arquivos alterados:
+ *   - client/src/lib/contratoPjDocument.ts (path principal: prévia + FCSign)
+ *   - client/src/pages/ContratoPJView.tsx (path de visualização do contrato)
+ *   - client/src/pages/configuracoes/TemplatesDocsTab.tsx (FINANCIAL_RE bold)
+ *   - client/src/pages/ModuloPJ.tsx (sidebar "Placeholders Disponíveis")
+ *   - server/routers/controleDocumentos.ts (MODELO_CONTRATO_PJ_DEFAULT 6.2)
+ *
+ * AÇÃO NECESSÁRIA DO USUÁRIO:
+ *   O template customizado em Configurações → Central de Documentos ISO →
+ *   Contrato PJ (Vigente) deve ser editado manualmente para incluir os novos
+ *   placeholders na cláusula de pagamento (ex: 9.2). Usar os botões do painel
+ *   lateral "Placeholders Disponíveis" → grupo Contrato (Desc. 2ª Med.,
+ *   Prazo NF 1ª, Prazo NF 2ª) para inserir no editor.
+ */
+
+/**
  * Rev. 4484 - FEAT: DIA 2ª MEDIÇÃO PJ — OPÇÃO "ÚLTIMO DIA DO MÊS"
  *
  * CONTEXTO:
