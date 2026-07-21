@@ -13891,7 +13891,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           // INSERT novos itens (sem id) — ex.: usuário marcou nova atividade EAP
           const newItens = input.itens.filter(it => !it.id);
           if (newItens.length > 0) {
-            await db.insert(comprasSolicitacoesItens).values(
+            // Rev. 4493+ — usar .returning() para propagar os novos itens às cotações ativas.
+            const insertedScItens = await db.insert(comprasSolicitacoesItens).values(
               newItens.map(it => ({
                 solicitacaoId: input.id,
                 descricao: normalizarTexto(it.descricao),
@@ -13914,7 +13915,34 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
                 metaMdoAjudante: it.metaMdoAjudante ? String(it.metaMdoAjudante) : null,
                 somenteMo: it.somenteMo ?? false,
               }))
-            );
+            ).returning({ id: comprasSolicitacoesItens.id });
+            // Propagar novos itens de SC para todas as cotações ativas vinculadas.
+            // Assim o Mapa de Cotação reflete imediatamente o item adicionado.
+            const activeCotIds = await db.select({ id: comprasCotacoes.id })
+              .from(comprasCotacoes)
+              .where(and(eq(comprasCotacoes.solicitacaoId, input.id), sql`${comprasCotacoes.status} NOT IN ('cancelada', 'recusada')`));
+            if (activeCotIds.length > 0 && insertedScItens.length > 0) {
+              await db.insert(comprasCotacoesItens).values(
+                activeCotIds.flatMap(cot =>
+                  insertedScItens.map((scItem, idx) => {
+                    const inp = newItens[idx];
+                    return {
+                      cotacaoId: cot.id,
+                      solicitacaoItemId: scItem.id,
+                      descricao: normalizarTexto(inp.descricao),
+                      unidade: inp.unidade ?? "un",
+                      quantidade: String(inp.quantidade ?? 1),
+                      precoUnitario: "0",
+                      descontoPct: "0",
+                      total: "0",
+                      somenteMo: inp.somenteMo ?? false,
+                      semVerba: inp.semVerba ?? false,
+                      motivoSemVerba: inp.motivoSemVerba ?? null,
+                    };
+                  })
+                )
+              );
+            }
           }
         } else {
           const existingItems = await db.select({ id: comprasSolicitacoesItens.id })

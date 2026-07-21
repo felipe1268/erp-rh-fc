@@ -21,10 +21,14 @@
  *      b) SE tem OC ativa (rastreabilidade financeira em curso):
  *         → UPDATE solicitacao_item_id = NULL (preserva o item da OC, apenas desvincula da SC)
  *
- * APLICADO EM 3 PONTOS:
+ * APLICADO EM 3 PONTOS (remoção) + PROPAGAÇÃO SIMÉTRICA (adição):
  *   1. cancelarItemSc — botão "Excluir Item" no detalhe da SC.
  *   2. updateSolicitacao → bloco removedIds (itens parcialmente removidos na edição).
  *   3. updateSolicitacao → bloco existingIds (quando SC não tem itens no payload — edge case).
+ *   4. updateSolicitacao → bloco newItens: ao ADICIONAR um item à SC que já tem cotação ativa,
+ *      um item correspondente é automaticamente inserido em TODAS as cotações ativas vinculadas.
+ *      O novo item entra com preço zero (pendente de cotação), refletindo imediatamente no
+ *      Mapa de Cotação sem exigir ação manual do comprador.
  *
  * ZERO schema change.
  */
