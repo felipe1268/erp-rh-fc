@@ -494,7 +494,7 @@ export default function ComprasRealocacao() {
                       {debitos.map((d: any) => (
                         <TableRow key={d.id}>
                           <TableCell className="font-mono text-xs text-gray-400">#{d.id}</TableCell>
-                          <TableCell>{d.numeroCotacao ? <span className="font-medium text-blue-700">#{formatNumeroCotacaoDisplay(d.numeroCotacao)}</span> : <span className="text-gray-400">—</span>}</TableCell>
+                          <TableCell>{d.numeroCotacao && d.cotacaoId ? <button onClick={() => navigate(`/compras/cotacoes?destaque=${d.cotacaoId}`)} className="font-medium text-blue-700 hover:underline hover:text-blue-800 cursor-pointer">#{formatNumeroCotacaoDisplay(d.numeroCotacao)}</button> : d.numeroCotacao ? <span className="font-medium text-blue-700">#{formatNumeroCotacaoDisplay(d.numeroCotacao)}</span> : <span className="text-gray-400">—</span>}</TableCell>
                           <TableCell className="max-w-[180px] truncate">{d.obraNome || "—"}</TableCell>
                           <TableCell><span className="font-semibold text-orange-700">{fmt(Number(d.valor))}</span></TableCell>
                           <TableCell className="max-w-xs truncate text-xs text-gray-600">{d.observacao || "—"}</TableCell>

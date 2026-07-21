@@ -1,4 +1,27 @@
 /**
+ * Rev. 4495 - FEAT: LINK CLICÁVEL DA COTAÇÃO NO HISTÓRICO DE DÉBITOS (REALOCAÇÃO DE VERBA)
+ *
+ * PROBLEMA:
+ *   Na tela "Realocação de Verba", aba "Reserva de Risco (DI-08)", tabela "Histórico de Débitos",
+ *   a coluna "Cotação" exibia o número da cotação (ex: #COT-0519-2026) como <span> estático —
+ *   não era possível clicar para abrir a cotação e ver do que se tratava.
+ *   O campo cotacaoId já estava no payload retornado por listarDebitosRisco, mas não era usado
+ *   para navegação.
+ *
+ * CORREÇÃO:
+ *   Transformado em <button> com onClick que navega para
+ *   /compras/cotacoes?destaque=<cotacaoId>, abrindo o Mapa de Cotação com aquela cotação
+ *   em destaque. O usuário pode assim ver todos os itens, a SC vinculada, fornecedores e
+ *   o contexto completo da compra que gerou o débito na reserva.
+ *   Padrão idêntico ao que já existia na aba "Reservas em Andamento".
+ *
+ * ARQUIVO ALTERADO:
+ *   client/src/pages/compras/Realocacao.tsx
+ *
+ * ZERO SCHEMA CHANGE.
+ */
+
+/**
  * Rev. 4494 - FIX: "INCLUIR DA EAP" NA COTAÇÃO — 3 BUGS (VÍNCULO, PREÇO METAE SINCRONIA SC)
  *
  * PROBLEMAS:

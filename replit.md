@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4495** — **FEAT: LINK CLICÁVEL DA COTAÇÃO NO HISTÓRICO DE DÉBITOS (REALOCAÇÃO DE VERBA).** Número da cotação na tabela "Histórico de Débitos — Reserva de Risco BDI (DI-08)" era `<span>` sem ação. Agora é `<button>` que navega para `/compras/cotacoes?destaque=<id>` abrindo a cotação em destaque. `cotacaoId` já vinha no payload. ZERO schema change.
 - **Rev. 4494** — **FIX: "INCLUIR DA EAP" NA COTAÇÃO — 3 BUGS (VÍNCULO, PREÇO META E SINCRONIA SC).** `adicionarItensEAPCotacao` descartava `orcamentoItemId`/`eapCodigo`/`precoMeta` no frontend → SC entrava sem preço nem vínculo ao orçamento. `excluirItemCotacao` não removia item da SC quando originado na cotação. Picker não sinalizava itens já na cotação. Fix: (1) frontend passa os 3 campos, backend os grava em `comprasSolicitacoesItens`; (2) `getItensEAPParaCotacao` retorna `jaEmCotacao:boolean` + badge âmbar no picker; (3) exclusão da cotação cascateia para SC (tag `"Adicionado na Cot."`) + lote. ZERO schema change.
-- **Rev. 4493** — **BUG: ITEM REMOVIDO DA SC PERMANECIA NA COTAÇÃO.** `cancelarItemSc` e `updateSolicitacao` apenas nullavam `solicitacao_item_id` nos itens de cotação → item ficava órfão no Mapa de Cotação. Fix: helper `_cascadeRemoveCotItens` (por FK) + `_reconcileCotItensForSC` (por `cotacao_id`, detecta orphans pré-existentes com FK já NULL). Aplicado em 3 pontos. SIMÉTRICO: item ADICIONADO à SC é inserido automaticamente em todas as cotações ativas. ZERO schema change.
 
 ### 5 one-liners
 
