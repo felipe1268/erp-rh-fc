@@ -16,7 +16,7 @@ import {
   CalendarDays, BookOpen, Megaphone, Plus, Trash2, Pencil, Users, FileSignature,
   ClipboardCheck, Check, X as XIcon, ChevronRight, Sparkles, MapPin, UserCheck,
   ChevronDown, ChevronUp, Search, Wand2, Loader2, PenLine, Eraser, BarChart3,
-  Filter, FileDown,
+  Filter, FileDown, FolderDown, CalendarRange, Building2,
 } from "lucide-react";
 // Rev. 1960 — Catálogo de áreas temáticas (sub-classificação dos temas DDS).
 import { DDS_AREAS, DDS_AREA_VALUES } from "../../../../shared/ddsAreas";
@@ -294,6 +294,390 @@ const COR_CLASSES: Record<string, { bg: string; text: string; border: string; ch
 };
 function corCfg(c?: string | null) {
   return COR_CLASSES[(c ?? "").toLowerCase()] ?? { bg: "bg-slate-50", text: "text-slate-800", border: "border-slate-300", chip: "bg-slate-300 text-slate-900" };
+}
+
+// ─── Helpers para agrupamento por semana ─────────────────────────────────────
+const MESES_PT_BR = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+  "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+function getWeekOfYear(dateStr: string): number {
+  const d = new Date(dateStr + "T12:00:00");
+  const start = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil(((d.getTime() - start.getTime()) / 86400000 + start.getDay() + 1) / 7);
+}
+
+// ─── Componente SessoesList — lista responsiva de sessões DDS ─────────────────
+function SessoesList({
+  sessoes, companyId, selecionadasIds, setSelecionadasIds, toggleSelecionada,
+  setSelectedSessaoId, setEditarCategoriaId, abrirNovaSessao,
+  excluirSessaoMut, excluirSessoesMut, confirm,
+  buscaSessoes, setBuscaSessoes, filtroObraSessoes, setFiltroObraSessoes,
+  baixandoLote, setBaixandoLote,
+}: {
+  sessoes: any[]; companyId: number;
+  selecionadasIds: Set<number>; setSelecionadasIds: (s: Set<number>) => void;
+  toggleSelecionada: (id: number) => void;
+  setSelectedSessaoId: (id: number) => void;
+  setEditarCategoriaId: (id: number) => void;
+  abrirNovaSessao: () => void;
+  excluirSessaoMut: any; excluirSessoesMut: any; confirm: any;
+  buscaSessoes: string; setBuscaSessoes: (s: string) => void;
+  filtroObraSessoes: string; setFiltroObraSessoes: (s: string) => void;
+  baixandoLote: boolean; setBaixandoLote: (b: boolean) => void;
+}) {
+  // Obras únicas para o filtro
+  const obrasUnicas = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sessoes) {
+      if (s.obraNome) map.set(s.obraNome, s.obraNome);
+    }
+    return Array.from(map.values()).sort();
+  }, [sessoes]);
+
+  // Filtrar sessões
+  const sessoesFiltradas = useMemo(() => {
+    let lista = sessoes;
+    if (buscaSessoes.trim()) {
+      const q = buscaSessoes.toLowerCase();
+      lista = lista.filter((s) =>
+        s.tituloTema?.toLowerCase().includes(q) ||
+        s.obraNome?.toLowerCase().includes(q) ||
+        s.instrutor?.toLowerCase().includes(q)
+      );
+    }
+    if (filtroObraSessoes) {
+      lista = lista.filter((s) => s.obraNome === filtroObraSessoes);
+    }
+    return lista;
+  }, [sessoes, buscaSessoes, filtroObraSessoes]);
+
+  // Agrupar por semana
+  const grupos = useMemo(() => {
+    const map = new Map<string, { key: string; label: string; ano: number; mes: number; semana: number; itens: any[] }>();
+    for (const s of sessoesFiltradas) {
+      const dateStr = String(s.data || "").slice(0, 10);
+      let key = "sem-data";
+      let label = "Sem data";
+      let ano = 0, mes = 0, semana = 0;
+      if (dateStr.length === 10) {
+        const d = new Date(dateStr + "T12:00:00");
+        ano = d.getFullYear();
+        mes = d.getMonth();
+        semana = getWeekOfYear(dateStr);
+        key = `${ano}-${String(mes).padStart(2,"0")}-s${String(semana).padStart(2,"0")}`;
+        label = `Semana ${String(semana).padStart(2,"0")} · ${MESES_PT_BR[mes]} ${ano}`;
+      }
+      if (!map.has(key)) map.set(key, { key, label, ano, mes, semana, itens: [] });
+      map.get(key)!.itens.push(s);
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.ano !== b.ano) return b.ano - a.ano;
+      if (a.mes !== b.mes) return b.mes - a.mes;
+      return b.semana - a.semana;
+    });
+  }, [sessoesFiltradas]);
+
+  // Baixar ZIP com atas selecionadas
+  async function baixarLote() {
+    const ids = Array.from(selecionadasIds);
+    if (ids.length === 0) return;
+    setBaixandoLote(true);
+    try {
+      const resp = await fetch("/api/dds-ata-lote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId, ids }),
+        credentials: "include",
+      });
+      if (!resp.ok) { toast.error("Falha ao gerar os PDFs em lote"); return; }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `DDS_${new Date().getFullYear()}_atas.zip`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1000);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao baixar ZIP");
+    } finally {
+      setBaixandoLote(false);
+    }
+  }
+
+  const catStyle = (cat: string | null) => ({
+    NR: "bg-blue-100 text-blue-800",
+    CAMPANHA: "bg-amber-100 text-amber-800",
+    VACINACAO: "bg-emerald-100 text-emerald-800",
+    LIVRE: "bg-slate-100 text-slate-700",
+  } as any)[cat ?? ""] ?? "bg-slate-100 text-slate-400 italic";
+
+  const catLabel = (cat: string | null) => ({
+    NR: "NR",
+    CAMPANHA: "Campanha",
+    VACINACAO: "Vacinação",
+    LIVRE: "Livre",
+  } as any)[cat ?? ""] ?? "—";
+
+  return (
+    <div className="space-y-4">
+      {/* ── Barra de ações principais ── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Button size="sm" onClick={() => abrirNovaSessao()}>
+          <Plus className="h-4 w-4 mr-1.5" /> Nova sessão
+        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={buscaSessoes}
+              onChange={(e) => setBuscaSessoes(e.target.value)}
+              placeholder="Buscar tema, obra, instrutor…"
+              className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+          <select
+            value={filtroObraSessoes}
+            onChange={(e) => setFiltroObraSessoes(e.target.value)}
+            className="text-sm border border-slate-200 rounded-lg bg-white px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 min-w-[140px]"
+          >
+            <option value="">Todas as obras</option>
+            {obrasUnicas.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* ── Barra de seleção em lote ── */}
+      {selecionadasIds.size > 0 && (
+        <div className="flex items-center gap-2 flex-wrap bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
+          <span className="text-sm font-semibold text-blue-900 flex items-center gap-1.5">
+            <ClipboardCheck className="h-4 w-4" />
+            {selecionadasIds.size} selecionada{selecionadasIds.size > 1 ? "s" : ""}
+          </span>
+          <div className="flex gap-2 ml-auto flex-wrap">
+            <Button size="sm" variant="outline" onClick={() => setSelecionadasIds(new Set())}>
+              Limpar seleção
+            </Button>
+            <Button
+              size="sm"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5"
+              disabled={baixandoLote}
+              onClick={baixarLote}
+            >
+              {baixandoLote
+                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando…</>
+                : <><FolderDown className="h-3.5 w-3.5" /> Baixar PDFs (ZIP)</>}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={excluirSessoesMut.isPending}
+              onClick={async () => {
+                const ok = await confirm({
+                  title: `Excluir ${selecionadasIds.size} sessão${selecionadasIds.size > 1 ? "ões" : ""}?`,
+                  description: "As sessões e todos os registros de presença/assinaturas serão removidos. Não há volta.",
+                  tone: "destructive",
+                  confirmText: "Excluir tudo",
+                });
+                if (!ok) return;
+                excluirSessoesMut.mutate({ companyId, ids: Array.from(selecionadasIds) });
+              }}
+            >
+              {excluirSessoesMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+              Excluir
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Lista vazia ── */}
+      {sessoesFiltradas.length === 0 && (
+        <div className="text-center py-16 text-slate-400">
+          {buscaSessoes || filtroObraSessoes
+            ? <><Search className="h-8 w-8 mx-auto mb-3 opacity-40" /><p>Nenhuma sessão encontrada para este filtro.</p></>
+            : <><CalendarRange className="h-8 w-8 mx-auto mb-3 opacity-40" /><p>Nenhuma sessão registrada ainda.</p></>}
+        </div>
+      )}
+
+      {/* ── Seleção total (mostrar quando há sessões) ── */}
+      {sessoesFiltradas.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <input
+            type="checkbox"
+            className="rounded"
+            checked={sessoesFiltradas.length > 0 && selecionadasIds.size === sessoesFiltradas.length}
+            onChange={(e) => {
+              if (e.target.checked) setSelecionadasIds(new Set(sessoesFiltradas.map((s: any) => s.id)));
+              else setSelecionadasIds(new Set());
+            }}
+            aria-label="Selecionar todas"
+          />
+          <span>Selecionar todas ({sessoesFiltradas.length})</span>
+        </div>
+      )}
+
+      {/* ── Grupos por semana ── */}
+      {grupos.map((grupo) => (
+        <div key={grupo.key}>
+          {/* Cabeçalho do grupo */}
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <CalendarRange className="h-3.5 w-3.5" />
+              {grupo.label}
+            </div>
+            <div className="flex-1 h-px bg-slate-200" />
+            <span className="text-xs text-slate-400">{grupo.itens.length} sessão{grupo.itens.length > 1 ? "ões" : ""}</span>
+          </div>
+
+          {/* Cards da semana */}
+          <div className="space-y-2">
+            {grupo.itens.map((s: any) => {
+              const selecionada = selecionadasIds.has(s.id);
+              const cat = (s.categoria ?? s.categoriaTema ?? null) as string | null;
+              const dataPt = s.data ? new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR", {
+                weekday: "short", day: "2-digit", month: "2-digit", year: "numeric"
+              }) : "—";
+
+              return (
+                <div
+                  key={s.id}
+                  className={`bg-white rounded-xl border transition-all ${
+                    selecionada
+                      ? "border-blue-400 shadow-sm bg-blue-50/30"
+                      : "border-slate-200 hover:border-slate-300 hover:shadow-sm"
+                  }`}
+                >
+                  <div className="p-3 sm:p-4">
+                    {/* Linha superior: checkbox + data + status + PDF */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          type="checkbox"
+                          className="rounded mt-0.5 flex-shrink-0"
+                          checked={selecionada}
+                          onChange={() => toggleSelecionada(s.id)}
+                          aria-label={`Selecionar sessão ${s.id}`}
+                        />
+                        <span className="text-xs font-semibold text-slate-600 bg-slate-100 rounded-md px-2 py-0.5 whitespace-nowrap">
+                          {dataPt}{s.hora ? ` · ${s.hora}` : ""}
+                        </span>
+                        {/* Status */}
+                        {s.status === "finalizada"
+                          ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold"><Check className="h-3 w-3" /> Finalizada</span>
+                          : s.status === "cancelada"
+                          ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-semibold"><XIcon className="h-3 w-3" /> Cancelada</span>
+                          : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">● Aberta</span>
+                        }
+                        {/* Categoria (clicável) */}
+                        {cat && (
+                          <button
+                            type="button"
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs hover:ring-2 hover:ring-blue-300 transition ${catStyle(cat)}`}
+                            onClick={() => setEditarCategoriaId(s.id)}
+                            title="Editar categoria"
+                          >
+                            {catLabel(cat)} <Pencil className="h-2.5 w-2.5 opacity-60" />
+                          </button>
+                        )}
+                      </div>
+                      {/* PDF individual */}
+                      <button
+                        type="button"
+                        title="Baixar PDF / Ata"
+                        className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg px-2.5 py-1.5 border border-emerald-200 transition"
+                        onClick={(e) => { e.stopPropagation(); window.open(`/api/dds-ata/${s.id}?companyId=${companyId}`, "_blank"); }}
+                      >
+                        <FileDown className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">PDF</span>
+                      </button>
+                    </div>
+
+                    {/* Título do tema */}
+                    <div
+                      className="font-bold text-slate-900 text-sm sm:text-base cursor-pointer hover:text-blue-700 leading-snug mb-2"
+                      onClick={() => setSelectedSessaoId(s.id)}
+                    >
+                      {s.tituloTema}
+                    </div>
+
+                    {/* Metadados */}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 mb-3">
+                      {s.obraNome && (
+                        <span className="flex items-center gap-1">
+                          <Building2 className="h-3 w-3 text-slate-400" />
+                          {s.obraNome}
+                        </span>
+                      )}
+                      {s.instrutor && (
+                        <span className="flex items-center gap-1">
+                          <UserCheck className="h-3 w-3 text-slate-400" />
+                          {s.instrutor}
+                        </span>
+                      )}
+                      {!s.obraNome && !s.instrutor && (
+                        <span className="italic text-slate-400">Avulsa / Escritório</span>
+                      )}
+                    </div>
+
+                    {/* Rodapé: presentes + ações */}
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                      {/* Presentes / assinaturas */}
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="flex items-center gap-1">
+                          <Users className="h-3.5 w-3.5 text-slate-400" />
+                          <span className="font-semibold text-emerald-700">{s.presentes}</span>
+                          <span className="text-slate-400">/{s.totalParticipantes}</span>
+                          <span className="text-slate-500 hidden sm:inline">presente{s.presentes !== 1 ? "s" : ""}</span>
+                        </span>
+                        {s.assinados > 0 && (
+                          <span className="flex items-center gap-1 text-blue-600">
+                            <FileSignature className="h-3.5 w-3.5" />
+                            {s.assinados} assin.
+                          </span>
+                        )}
+                      </div>
+                      {/* Ações */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded-lg px-2.5 py-1.5 border border-blue-200 transition"
+                          onClick={() => setSelectedSessaoId(s.id)}
+                        >
+                          <PenLine className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Abrir</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg px-2.5 py-1.5 border border-rose-200 transition"
+                          disabled={excluirSessaoMut.isPending}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const ok = await confirm({
+                              title: "Excluir sessão DDS?",
+                              description: `"${s.tituloTema}"${s.data ? ` — ${new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}.\nPresença e assinaturas serão removidas. Sem volta.`,
+                              tone: "destructive",
+                              confirmText: "Excluir sessão",
+                            });
+                            if (!ok) return;
+                            try { await excluirSessaoMut.mutateAsync({ companyId, id: s.id }); }
+                            catch (_) { /* toast já mostrado */ }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Excluir</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function DDSGuia() {
@@ -719,6 +1103,11 @@ export default function DDSGuia() {
     onError: (e) => toast.error(e.message),
   });
   const [selecionadasIds, setSelecionadasIds] = useState<Set<number>>(new Set());
+  // Filtros da lista de sessões
+  const [buscaSessoes, setBuscaSessoes] = useState("");
+  const [filtroObraSessoes, setFiltroObraSessoes] = useState("");
+  const [baixandoLote, setBaixandoLote] = useState(false);
+
   // Rev. 1876 — Modal de edição de categoria por sessão (override granular).
   const [editarCategoriaId, setEditarCategoriaId] = useState<number | null>(null);
   const editarCategoriaMut = trpc.dds.atualizarSessao.useMutation({
@@ -1648,166 +2037,25 @@ export default function DDSGuia() {
               />
             ) : null
           ) : (
-            <div>
-              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-                <Button size="sm" onClick={() => abrirNovaSessao()}>
-                  <Plus className="h-4 w-4 mr-1" /> Nova sessão
-                </Button>
-                {selecionadasIds.size > 0 && (
-                  <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
-                    <span className="text-sm font-semibold text-rose-800">{selecionadasIds.size} selecionada(s)</span>
-                    <Button size="sm" variant="outline" onClick={() => setSelecionadasIds(new Set())}>Limpar</Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      disabled={excluirSessoesMut.isPending}
-                      onClick={async () => {
-                        const ok = await confirm({
-                          title: `Excluir ${selecionadasIds.size} sessão${selecionadasIds.size > 1 ? "ões" : ""}?`,
-                          description: "As sessões selecionadas e seus registros de presença/assinaturas serão removidos. Esta ação não pode ser desfeita.",
-                          tone: "destructive",
-                          confirmText: "Excluir tudo",
-                        });
-                        if (!ok) return;
-                        excluirSessoesMut.mutate({ companyId, ids: Array.from(selecionadasIds) });
-                      }}
-                    >
-                      {excluirSessoesMut.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Trash2 className="h-3 w-3 mr-1" />}
-                      Excluir selecionadas
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-600 text-xs uppercase">
-                    <tr>
-                      <th className="px-3 py-2 w-10">
-                        <input
-                          type="checkbox"
-                          aria-label="Selecionar todas"
-                          checked={sessoes.length > 0 && selecionadasIds.size === sessoes.length}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelecionadasIds(new Set(sessoes.map((s: any) => s.id)));
-                            else setSelecionadasIds(new Set());
-                          }}
-                        />
-                      </th>
-                      <th className="px-3 py-2 text-left">Data</th>
-                      <th className="px-3 py-2 text-left">Tema</th>
-                      <th className="px-3 py-2 text-left">Categoria</th>
-                      <th className="px-3 py-2 text-left">Obra</th>
-                      <th className="px-3 py-2 text-left">Instrutor</th>
-                      <th className="px-3 py-2 text-center">Presentes</th>
-                      <th className="px-3 py-2 text-center">Status</th>
-                      <th className="px-3 py-2 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sessoes.length === 0 && (
-                      <tr><td colSpan={9} className="text-center py-12 text-slate-400">Nenhuma sessão registrada ainda.</td></tr>
-                    )}
-                    {sessoes.map((s: any) => {
-                      const selecionada = selecionadasIds.has(s.id);
-                      return (
-                        <tr key={s.id} className={`border-t hover:bg-slate-50 ${selecionada ? "bg-rose-50/40" : ""}`}>
-                          <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              aria-label={`Selecionar sessão ${s.id}`}
-                              checked={selecionada}
-                              onChange={() => toggleSelecionada(s.id)}
-                            />
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>
-                            {s.data ? new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
-                            {s.hora && <span className="text-xs text-slate-400 ml-1">{s.hora}</span>}
-                          </td>
-                          <td className="px-3 py-2 font-medium text-slate-800 cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>{s.tituloTema}</td>
-                          <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                            {(() => {
-                              // Rev. 1876 — Categoria efetiva = override da sessão > categoria do tema > SEM_TEMA.
-                              // `categoriaOverride` boolean indica se está usando o override (para mostrar ícone ↻ "herda do tema" ao limpar).
-                              const cat = (s.categoria ?? s.categoriaTema ?? null) as string | null;
-                              const cls = cat === "NR" ? "bg-blue-100 text-blue-800"
-                                       : cat === "CAMPANHA" ? "bg-amber-100 text-amber-800"
-                                       : cat === "VACINACAO" ? "bg-emerald-100 text-emerald-800"
-                                       : cat === "LIVRE" ? "bg-slate-100 text-slate-700"
-                                       : "bg-slate-100 text-slate-400 italic";
-                              const label = cat === "NR" ? "Norma Regulamentadora"
-                                          : cat === "CAMPANHA" ? "Campanha Governamental"
-                                          : cat === "VACINACAO" ? "Vacinação"
-                                          : cat === "LIVRE" ? "Livre"
-                                          : "Sem categoria";
-                              return (
-                                <button
-                                  type="button"
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs hover:ring-2 hover:ring-blue-300 transition ${cls}`}
-                                  title="Clique para editar a categoria desta sessão"
-                                  onClick={() => setEditarCategoriaId(s.id)}
-                                  data-testid={`btn-editar-categoria-${s.id}`}
-                                >
-                                  {label}
-                                  <Pencil className="h-3 w-3 opacity-60" />
-                                </button>
-                              );
-                            })()}
-                          </td>
-                          <td className="px-3 py-2 text-slate-600 cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>{s.obraNome ?? <span className="italic text-slate-400">Avulsa/Escritório</span>}</td>
-                          <td className="px-3 py-2 text-slate-600 cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>{s.instrutor ?? "—"}</td>
-                          <td className="px-3 py-2 text-center cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>
-                            <span className="font-semibold text-emerald-700">{s.presentes}</span>
-                            <span className="text-slate-400">/{s.totalParticipantes}</span>
-                            {s.assinados > 0 && (
-                              <span className="ml-1 text-[10px] text-blue-600">({s.assinados} assin.)</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-center cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>
-                            {s.status === "finalizada" ? (
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs">Finalizada</span>
-                            ) : s.status === "cancelada" ? (
-                              <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs">Cancelada</span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">Aberta</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right whitespace-nowrap">
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded px-2 py-1 mr-1"
-                              onClick={(e) => { e.stopPropagation(); setSelectedSessaoId(s.id); }}
-                              title="Abrir / editar"
-                            >
-                              <PenLine className="h-3.5 w-3.5" /> Abrir
-                            </button>
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 hover:text-rose-900 hover:bg-rose-50 rounded px-2 py-1"
-                              disabled={excluirSessaoMut.isPending}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                const ok = await confirm({
-                                  title: "Excluir sessão DDS?",
-                                  description: `Sessão "${s.tituloTema}"${s.data ? ` de ${new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}.\nLista de presença e assinaturas serão removidas. Não há volta.`,
-                                  tone: "destructive",
-                                  confirmText: "Excluir sessão",
-                                });
-                                if (!ok) return;
-                                try { await excluirSessaoMut.mutateAsync({ companyId, id: s.id }); }
-                                catch (_) { /* toast já mostrado */ }
-                              }}
-                              title="Excluir"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" /> Excluir
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <SessoesList
+              sessoes={sessoes}
+              companyId={companyId}
+              selecionadasIds={selecionadasIds}
+              setSelecionadasIds={setSelecionadasIds}
+              toggleSelecionada={toggleSelecionada}
+              setSelectedSessaoId={setSelectedSessaoId}
+              setEditarCategoriaId={setEditarCategoriaId}
+              abrirNovaSessao={abrirNovaSessao}
+              excluirSessaoMut={excluirSessaoMut}
+              excluirSessoesMut={excluirSessoesMut}
+              confirm={confirm}
+              buscaSessoes={buscaSessoes}
+              setBuscaSessoes={setBuscaSessoes}
+              filtroObraSessoes={filtroObraSessoes}
+              setFiltroObraSessoes={setFiltroObraSessoes}
+              baixandoLote={baixandoLote}
+              setBaixandoLote={setBaixandoLote}
+            />
           )}
         </TabsContent>
       </Tabs>

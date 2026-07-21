@@ -50,11 +50,12 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4501** — **FEAT: DDS SESSÕES — CARDS RESPONSIVOS + PDF NA LISTA + ZIP EM LOTE.** Tabela de sessões substituída por componente `SessoesList` com cards agrupados por semana ("Semana 29 · Julho 2026"). Cada card: data/hora, status, categoria clicável, botão PDF direto (sem abrir a sessão), obra, instrutor, presentes/assinaturas, Abrir e Excluir. Barra de busca (tema/obra/instrutor) + filtro por obra. Seleção em lote → botão "Baixar PDFs (ZIP)" gera ZIP via POST `/api/dds-ata-lote` com pastas `YEAR/MM - Mês/Semana NN/DD-MM - Tema.html`. ZERO schema change.
 - **Rev. 4500** — **FEAT: PDF / ATA DO DDS COM FOTOS E ASSINATURAS.** Botão "Baixar PDF / Ata" na tela de detalhe da sessão DDS. Novo endpoint `getSessaoPdfData` retorna assinaturas + fotos; HTML self-contained abre em nova aba com logo, cabeçalho, tabela de presença (foto circular + assinatura + data) e terceiros com badge. ZERO schema change.
-- **Rev. 4499** — **FIX: VALOR DA OC DE LOCAÇÃO ZERADO NA SELEÇÃO DE RECEBIMENTO.** OCs com FD armazenam valor em `fdValor` (total=0); `ocsLocacaoPendentes` não incluía `fdValor` no SELECT → badge "R$ 0,00" e campo "Valor mensal" zerado. Fix: backend inclui `fdValor`; frontend usa `fdValor || total` no badge e em `receberDaOC`. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4499** — **FIX: VALOR DA OC DE LOCAÇÃO ZERADO NA SELEÇÃO DE RECEBIMENTO.** OCs com FD armazenam valor em `fdValor` (total=0); `ocsLocacaoPendentes` não incluía `fdValor` no SELECT → badge "R$ 0,00" e campo "Valor mensal" zerado. Fix: backend inclui `fdValor`; frontend usa `fdValor || total` no badge e em `receberDaOC`. ZERO schema change.
 - **Rev. 4498** — **FEAT: LOCAÇÃO = 100% MATERIAL NO FATURAMENTO DIRETO.** Split MAT/MDO do modal "Definir FD" usava ratio do orçamento para SC de equipamento, limitando o FD ao valor de MAT (R$ 8.152) em vez do total da locação (R$ 14.200). Fix: `tipoOrigem === "equipamento"` → `ratioMat = 1`. ZERO schema change.
 - **Rev. 4497** — **FIX: FORMATO BR NO CAMPO "DEBITAR DO RISCO" (7.358,10).** `type="number"` impedia formatação; "Usar tudo" exibia `7358.10`. Fix: `type="text"`, `toLocaleString("pt-BR")`. ZERO schema change.
 - **Rev. 4496** — **FEAT: BUSCA IRRESTRITA NA EAP DA SC.** Ao digitar, filtro de tipo é suspenso; todos os itens EAP aparecem com badge `MAT`/`MO`/`EQUIP`. ZERO schema change.

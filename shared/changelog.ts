@@ -1,4 +1,47 @@
 /**
+ * Rev. 4501 - FEAT: DDS SESSÕES — LAYOUT DE CARDS RESPONSIVO + PDF NA LISTA + ZIP EM LOTE
+ *
+ * PROBLEMA:
+ *   Lista de sessões DDS era uma tabela HTML que quebrava no tablet/celular.
+ *   PDF só era acessível abrindo cada sessão individualmente.
+ *   Sem mecanismo para baixar vários PDFs de uma vez.
+ *
+ * SOLUÇÃO:
+ *   Frontend (DDSGuia.tsx):
+ *   - Novo componente `SessoesList` (definido no mesmo arquivo) substitui a tabela.
+ *   - Cards responsivos agrupados por semana: "Semana 29 · Julho 2026" com separador.
+ *   - Cada card: data + hora | status badge (Finalizada/Aberta/Cancelada) | categoria
+ *     clicável (→ setEditarCategoriaId) | botão PDF direto (FileDown, abre
+ *     /api/dds-ata/:id sem entrar na sessão) | tema em negrito clicável |
+ *     obra + instrutor com ícones (Building2, UserCheck) | presentes/assinaturas
+ *     com FileSignature | botões Abrir (PenLine) e Excluir (Trash2).
+ *   - Barra superior: busca livre por tema/obra/instrutor + filtro por obra (select).
+ *   - Checkbox de seleção em cada card + "Selecionar todas (N)" global.
+ *   - Quando há seleção: barra azul com contagem + "Baixar PDFs (ZIP)" (FolderDown,
+ *     verde) + "Excluir" (destrutivo); limpar seleção.
+ *   - Batch ZIP: fetch POST /api/dds-ata-lote → blob → createObjectURL → <a>.click().
+ *   - 3 novos ícones importados: FolderDown, CalendarRange, Building2.
+ *   - 3 novos estados: buscaSessoes, filtroObraSessoes, baixandoLote.
+ *   - Helpers: getWeekOfYear(), MESES_PT_BR[].
+ *
+ *   Backend:
+ *   - Nova rota POST /api/dds-ata-lote (server/routers/downloadDdsAtaLote.ts):
+ *     • Aceita { companyId, ids[] } (máx 100 sessões por chamada).
+ *     • Para cada id: reutiliza a mesma lógica de getSessaoPdfData (fotos + assinaturas
+ *       em base64) e buildDdsHtml do downloadDdsAta.ts.
+ *     • Empacota em ZIP via `archiver` com estrutura de pastas:
+ *         2026/07 - Julho/Semana 29/21-07-2026 - NR-09 Poeira.html
+ *     • Retorna Content-Type application/zip, filename DDS_YYYY_atas.zip.
+ *   - Rotas registradas em server/_core/index.ts (já concluído em Rev. 4500).
+ *
+ * ARQUIVOS:
+ *   client/src/pages/sst/DDSGuia.tsx — SessoesList + helpers + imports
+ *   server/routers/downloadDdsAtaLote.ts — rota lote ZIP (já existia, completo)
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4500 - FEAT: PDF / ATA DO DDS COM FOTOS E ASSINATURAS
  *
  * PROBLEMA:
