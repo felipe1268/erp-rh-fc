@@ -29,6 +29,15 @@ export default function Login() {
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
 
+  // Rev. 4483 — após login, redireciona para URL salva pelo FCSign LoginGate (se existir).
+  const getPostLoginRedirect = () => {
+    try {
+      const saved = sessionStorage.getItem("fcsign_post_login_redirect");
+      if (saved) { sessionStorage.removeItem("fcsign_post_login_redirect"); return saved; }
+    } catch {}
+    return "/";
+  };
+
   const loginMutation = trpc.userManagement.loginLocal.useMutation({
     onSuccess: (data) => {
       if (data.mustChangePassword) {
@@ -36,7 +45,7 @@ export default function Login() {
         toast.info("Primeiro acesso! Por favor, defina uma nova senha.");
       } else {
         toast.success("Login realizado com sucesso!");
-        window.location.href = "/";
+        window.location.href = getPostLoginRedirect();
       }
     },
     onError: (err) => toast.error(err.message),
@@ -45,7 +54,7 @@ export default function Login() {
   const changePwdMutation = trpc.userManagement.changePassword.useMutation({
     onSuccess: () => {
       toast.success("Senha alterada com sucesso!");
-      window.location.href = "/";
+      window.location.href = getPostLoginRedirect();
     },
     onError: (err) => toast.error(err.message),
   });

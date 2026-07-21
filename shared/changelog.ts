@@ -1,4 +1,39 @@
 /**
+ * Rev. 4483 - FEAT: FCSIGN — AUTENTICAÇÃO OBRIGATÓRIA PARA SIGNATÁRIOS INTERNOS
+ *
+ * CONTEXTO:
+ *   Links de assinatura por token já garantiam um link único por signatário, mas qualquer
+ *   pessoa com acesso ao link podia assinar em nome de outra (link aberto no celular, link
+ *   compartilhado por engano, link visualizado por terceiro). Para os signatários internos
+ *   (testemunhas, contratante, empregador, empregado) isso era um risco de segurança.
+ *   O prestador PJ externo (contratado) continua sem obrigatoriedade de login, pois não
+ *   possui conta no sistema.
+ *
+ * IMPLEMENTAÇÃO:
+ *   Backend (server/routers/signatures.ts):
+ *   - `getByToken` agora recebe `ctx` e devolve: `requiresLogin` (true se role !== 'contratado'),
+ *     `loggedIn` (!!ctx.user), `loggedInUserCpf` (ctx.user?.cpf), `cpfMatches` (CPF normalizado).
+ *   - `sign` verifica: se role !== 'contratado' e ctx.user === null → UNAUTHORIZED;
+ *     se CPF do usuário logado ≠ CPF do signatário (normalizado) → FORBIDDEN.
+ *     Dupla defesa: frontend gatea + backend rejeita mesmo se gate for bypassado.
+ *
+ *   Frontend:
+ *   - `AssinarDocumento.tsx`: após carregar dados, verifica `requiresLogin && !loggedIn`
+ *     → exibe `LoginGate` (tela com header FCSign + card explicativo + botão "Entrar");
+ *     verifica `requiresLogin && loggedIn && !cpfMatches` → exibe `CpfMismatchBox`.
+ *   - `LoginGate`: salva `window.location.pathname` em `sessionStorage['fcsign_post_login_redirect']`
+ *     antes de redirecionar para /login.
+ *   - `Login.tsx`: `getPostLoginRedirect()` lê e limpa o sessionStorage após login bem-sucedido,
+ *     redirecionando de volta ao documento em vez de "/".
+ *
+ * ARQUIVOS TOCADOS:
+ *   server/routers/signatures.ts, client/src/pages/AssinarDocumento.tsx,
+ *   client/src/pages/Login.tsx
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4482 - FEAT: NOVO USUÁRIO OBRIGATORIAMENTE VINCULADO A COLABORADOR (CLT/PJ)
  *
  * CONTEXTO:

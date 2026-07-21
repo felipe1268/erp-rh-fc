@@ -2,7 +2,7 @@ import { useRoute } from "wouter";
 import { useRef, useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShieldCheck, AlertTriangle, CheckCircle2, FileText, Users, Building2, ZoomIn, ZoomOut, Printer, Maximize2, Eye, X, PenLine, Hourglass, RotateCcw, ChevronDown } from "lucide-react";
+import { Loader2, ShieldCheck, AlertTriangle, CheckCircle2, FileText, Users, Building2, ZoomIn, ZoomOut, Printer, Maximize2, Eye, X, PenLine, Hourglass, RotateCcw, ChevronDown, LogIn, UserX } from "lucide-react";
 import SignaturePad, { type SignaturePadHandle } from "@/components/SignaturePad";
 import { toast } from "sonner";
 import DOMPurify from "dompurify";
@@ -86,7 +86,19 @@ export default function AssinarDocumento() {
     return <CenteredCard><ErrorBox msg={q.error?.message || "Documento não encontrado."} /></CenteredCard>;
   }
 
-  const { signer, session, employee, company, allSigners, canSignNow, aguardando } = q.data as any;
+  const { signer, session, employee, company, allSigners, canSignNow, aguardando, requiresLogin, loggedIn, loggedInUserCpf, cpfMatches } = q.data as any;
+
+  // Rev. 4483 — Gate de autenticação: signatários internos (testemunhas, contratante,
+  // empregador, empregado) DEVEM estar logados no sistema FC Engenharia com o CPF certo.
+  // Apenas o "contratado" (prestador PJ externo) pode assinar sem conta no sistema.
+  if (requiresLogin && !loggedIn) {
+    const returnUrl = encodeURIComponent(window.location.pathname);
+    return <LoginGate signerNome={signer.nome} signerCpf={signer.cpf} signerRole={roleLabel[signer.role] || signer.role} returnUrl={returnUrl} />;
+  }
+  if (requiresLogin && loggedIn && !cpfMatches) {
+    return <CenteredCard><CpfMismatchBox signerNome={signer.nome} signerCpf={signer.cpf} loggedInUserCpf={loggedInUserCpf} /></CenteredCard>;
+  }
+
   const alreadySigned = !!signer.signedAt || justSigned;
   const sessionDone = session.status === "completo";
   const sessionCancelled = session.status === "cancelado";
@@ -518,6 +530,97 @@ function ErrorBox({ msg }: { msg: string }) {
       <div className="bg-red-50 p-4 rounded-full inline-block mb-3"><AlertTriangle className="h-8 w-8 text-red-600" /></div>
       <h2 className="text-lg font-bold text-slate-900">Erro ao abrir documento</h2>
       <p className="text-sm text-slate-600 mt-1">{msg}</p>
+    </div>
+  );
+}
+
+// Rev. 4483 — Tela de gate: exibida quando o signatário não está logado no sistema.
+// Salva a URL atual no sessionStorage para redirecionar de volta após o login.
+function LoginGate({ signerNome, signerCpf, signerRole, returnUrl }: { signerNome: string; signerCpf: string | null; signerRole: string; returnUrl: string }) {
+  const handleLogin = () => {
+    sessionStorage.setItem("fcsign_post_login_redirect", window.location.pathname);
+    window.location.href = "/login";
+  };
+  return (
+    <div className="min-h-screen bg-slate-100">
+      <header className="bg-[#1B2A4A] text-white">
+        <div className="max-w-[1400px] mx-auto px-4 py-4 flex items-center gap-3">
+          <div className="bg-white/10 p-2 rounded-lg">
+            <ShieldCheck className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold leading-tight">FCSign — Assinatura Digital</h1>
+            <p className="text-blue-100 text-xs">FC Engenharia · Acesso Seguro Requerido</p>
+          </div>
+        </div>
+      </header>
+      <div className="min-h-[calc(100vh-72px)] flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8 max-w-md w-full text-center space-y-5">
+          <div className="bg-blue-50 p-4 rounded-full inline-flex items-center justify-center">
+            <LogIn className="h-10 w-10 text-[#1B2A4A]" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Login necessário para assinar</h2>
+            <p className="text-sm text-slate-500 mt-1">Este documento requer autenticação no sistema FC Engenharia.</p>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-left space-y-1">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{signerRole}</div>
+            <div className="font-semibold text-slate-900 text-sm">{signerNome}</div>
+            {signerCpf && <div className="text-xs text-slate-500">CPF: {signerCpf}</div>}
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Por segurança, testemunhas, contratantes e empregadores precisam estar logados no sistema antes de assinar. Após o login, você será redirecionado automaticamente para este documento.
+          </p>
+          <Button
+            onClick={handleLogin}
+            className="w-full h-12 bg-[#1B2A4A] hover:bg-[#243658] text-white font-bold rounded-xl"
+          >
+            <LogIn className="h-4 w-4 mr-2" />
+            Entrar no Sistema FC Engenharia
+          </Button>
+          <p className="text-[11px] text-slate-400">
+            Caso não possua acesso, entre em contato com o RH.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Rev. 4483 — Tela de erro: usuário logado mas o CPF não bate com o signatário esperado.
+function CpfMismatchBox({ signerNome, signerCpf, loggedInUserCpf }: { signerNome: string; signerCpf: string | null; loggedInUserCpf: string | null }) {
+  return (
+    <div className="text-center space-y-4">
+      <div className="bg-red-50 p-4 rounded-full inline-flex items-center justify-center">
+        <UserX className="h-8 w-8 text-red-600" />
+      </div>
+      <h2 className="text-lg font-bold text-slate-900">Usuário incorreto</h2>
+      <p className="text-sm text-slate-600 leading-relaxed">
+        Você está logado com um CPF diferente do signatário esperado para este documento.
+      </p>
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-left text-xs space-y-2">
+        <div>
+          <div className="text-slate-400 font-semibold uppercase text-[10px]">Signatário esperado</div>
+          <div className="font-medium text-slate-800">{signerNome}</div>
+          {signerCpf && <div className="text-slate-500">CPF: {signerCpf}</div>}
+        </div>
+        {loggedInUserCpf && (
+          <div className="pt-2 border-t border-slate-200">
+            <div className="text-slate-400 font-semibold uppercase text-[10px]">Você está logado como</div>
+            <div className="text-slate-500">CPF: {loggedInUserCpf}</div>
+          </div>
+        )}
+      </div>
+      <p className="text-xs text-slate-500">
+        Faça logout e entre com a conta correta, ou entre em contato com o RH.
+      </p>
+      <button
+        type="button"
+        onClick={() => { window.location.href = "/login"; }}
+        className="text-xs text-blue-600 hover:underline"
+      >
+        Ir para o login
+      </button>
     </div>
   );
 }

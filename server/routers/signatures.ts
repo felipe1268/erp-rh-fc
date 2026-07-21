@@ -360,7 +360,7 @@ export const signaturesRouter = router({
   // PUBLICO: signatario abre o link e busca os dados
   getByToken: publicProcedure
     .input(z.object({ token: z.string().length(64) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const [signer] = await db.select().from(signatureSigners).where(eq(signatureSigners.token, input.token)).limit(1);
       if (!signer) throw new TRPCError({ code: "NOT_FOUND", message: "Link inválido ou expirado." });
@@ -416,6 +416,18 @@ export const signaturesRouter = router({
         ? { nome: proximoSigner.nome, role: proximoSigner.role, ordem: proximoSigner.ordem }
         : null;
 
+      // Segurança Rev.4483: signatários internos (todos exceto "contratado") precisam
+      // estar logados no sistema para assinar. Informamos ao frontend se login é exigido
+      // e se o usuário atual já está autenticado (ctx.user é preenchido pelo createContext
+      // mesmo em publicProcedure — null se não autenticado).
+      const requiresLogin = signer.role !== "contratado";
+      const normCpf = (c: string | null) => (c || "").replace(/[^0-9]/g, "");
+      const loggedIn = !!ctx.user;
+      const loggedInUserCpf = ctx.user?.cpf ?? null;
+      const cpfMatches = requiresLogin && loggedIn
+        ? normCpf(loggedInUserCpf) === normCpf(signer.cpf)
+        : true;
+
       return {
         signer: {
           id: signer.id, role: signer.role, ordem: signer.ordem, nome: signer.nome, cpf: signer.cpf,
@@ -433,6 +445,10 @@ export const signaturesRouter = router({
         })),
         canSignNow,
         aguardando,
+        requiresLogin,
+        loggedIn,
+        loggedInUserCpf,
+        cpfMatches,
       };
     }),
 
@@ -456,6 +472,19 @@ export const signaturesRouter = router({
       const [signer] = await db.select().from(signatureSigners).where(eq(signatureSigners.token, input.token)).limit(1);
       if (!signer) throw new TRPCError({ code: "NOT_FOUND", message: "Link inválido." });
       if (signer.signedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Este documento já foi assinado por você." });
+
+      // Rev. 4483 — Segurança: signatários internos (todos exceto "contratado")
+      // OBRIGATORIAMENTE precisam estar logados no sistema com o CPF correspondente.
+      // Previne que o link seja usado por outra pessoa ou fique aberto em navegador alheio.
+      if (signer.role !== "contratado") {
+        if (!ctx.user) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Você precisa estar logado no sistema FC Engenharia para assinar este documento." });
+        }
+        const normCpf = (c: string | null) => (c || "").replace(/[^0-9]/g, "");
+        if (normCpf(ctx.user.cpf) !== normCpf(signer.cpf)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "O usuário logado não corresponde ao signatário esperado para este documento." });
+        }
+      }
 
       const [session] = await db.select().from(signatureSessions).where(eq(signatureSessions.id, signer.sessionId)).limit(1);
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada." });
