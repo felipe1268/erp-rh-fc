@@ -430,9 +430,36 @@ export function registerDdsAtaRoute(app: Express) {
 </body>
 </html>`;
 
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      const puppeteer = await import("puppeteer");
+      const browser = await puppeteer.default.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      });
+      let pdfBuf: Buffer;
+      try {
+        const page = await browser.newPage();
+        await page.setContent(html, { waitUntil: "networkidle0" });
+        const raw = await page.pdf({
+          format: "A4",
+          printBackground: true,
+          margin: { top: "10mm", right: "12mm", bottom: "12mm", left: "12mm" },
+        });
+        pdfBuf = Buffer.from(raw);
+        await page.close();
+      } finally {
+        await browser.close();
+      }
+      const fnSafe = (s.tituloTema || `DDS_${sessaoId}`)
+        .replace(/[^a-zA-Z0-9À-úÀ-ÿ ]/g, "-").replace(/\s+/g, "_").slice(0, 60);
+      const dateStr2 = fmtDate(s.data).replace(/\//g, "-");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="DDS_${dateStr2}_${fnSafe}.pdf"`,
+      );
       res.setHeader("Cache-Control", "no-store");
-      res.send(html);
+      res.setHeader("Content-Length", String(pdfBuf.length));
+      res.send(pdfBuf);
     } catch (err) {
       console.error("[DdsAta] Erro ao gerar ata:", err);
       res.status(500).send("Erro interno ao gerar a ata");

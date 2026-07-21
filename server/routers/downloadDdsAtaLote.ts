@@ -273,51 +273,73 @@ export function registerDdsAtaLoteRoute(app: Express) {
       archive.on("error", (err) => { throw err; });
       archive.pipe(pass);
 
-      // Gerar HTML para cada sessão e organizar em pastas
-      for (const s of sessoesList) {
-        const funcs = await db.select({
-          id: ddsSessaoFuncionarios.id, nome: ddsSessaoFuncionarios.nome,
-          cpf: ddsSessaoFuncionarios.cpf, funcao: ddsSessaoFuncionarios.funcao,
-          presente: ddsSessaoFuncionarios.presente, assinadoEm: ddsSessaoFuncionarios.assinadoEm,
-          assinaturaImg: ddsSessaoFuncionarios.assinaturaImg, fotoUrl: employees.fotoUrl,
-        }).from(ddsSessaoFuncionarios)
-          .leftJoin(employees, eq(employees.id, ddsSessaoFuncionarios.employeeId))
-          .where(eq(ddsSessaoFuncionarios.sessaoId, s.id))
-          .orderBy(ddsSessaoFuncionarios.nome);
+      // Lança 1 browser puppeteer para todo o lote (mais eficiente)
+      const puppeteer = await import("puppeteer");
+      const browser = await puppeteer.default.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      });
 
-        let terceiros: any[] = [];
-        try {
-          terceiros = await db.select({
-            id: ddsParticipacoesTerceiros.id, nome: funcionariosTerceiros.nome,
-            cpf: funcionariosTerceiros.cpf, funcao: funcionariosTerceiros.funcao,
-            fotoUrl: funcionariosTerceiros.fotoUrl,
-          }).from(ddsParticipacoesTerceiros)
-            .leftJoin(funcionariosTerceiros, eq(funcionariosTerceiros.id, ddsParticipacoesTerceiros.funcTerceiroId))
-            .where(and(
-              eq(ddsParticipacoesTerceiros.companyId, companyId),
-              eq(ddsParticipacoesTerceiros.sessaoId, s.id),
-              isNull(ddsParticipacoesTerceiros.deletedAt),
-            )).orderBy(funcionariosTerceiros.nome);
-        } catch { /* opcional */ }
+      try {
+        // Gerar PDF para cada sessão e organizar em pastas
+        for (const s of sessoesList) {
+          const funcs = await db.select({
+            id: ddsSessaoFuncionarios.id, nome: ddsSessaoFuncionarios.nome,
+            cpf: ddsSessaoFuncionarios.cpf, funcao: ddsSessaoFuncionarios.funcao,
+            presente: ddsSessaoFuncionarios.presente, assinadoEm: ddsSessaoFuncionarios.assinadoEm,
+            assinaturaImg: ddsSessaoFuncionarios.assinaturaImg, fotoUrl: employees.fotoUrl,
+          }).from(ddsSessaoFuncionarios)
+            .leftJoin(employees, eq(employees.id, ddsSessaoFuncionarios.employeeId))
+            .where(eq(ddsSessaoFuncionarios.sessaoId, s.id))
+            .orderBy(ddsSessaoFuncionarios.nome);
 
-        const html = await buildSessionHtml(s, funcs, terceiros, company, logoB64);
+          let terceiros: any[] = [];
+          try {
+            terceiros = await db.select({
+              id: ddsParticipacoesTerceiros.id, nome: funcionariosTerceiros.nome,
+              cpf: funcionariosTerceiros.cpf, funcao: funcionariosTerceiros.funcao,
+              fotoUrl: funcionariosTerceiros.fotoUrl,
+            }).from(ddsParticipacoesTerceiros)
+              .leftJoin(funcionariosTerceiros, eq(funcionariosTerceiros.id, ddsParticipacoesTerceiros.funcTerceiroId))
+              .where(and(
+                eq(ddsParticipacoesTerceiros.companyId, companyId),
+                eq(ddsParticipacoesTerceiros.sessaoId, s.id),
+                isNull(ddsParticipacoesTerceiros.deletedAt),
+              )).orderBy(funcionariosTerceiros.nome);
+          } catch { /* opcional */ }
 
-        // Pasta: ANO/MM - Mês/Semana NN/
-        const dateStr = String(s.data || "").slice(0, 10);
-        let year = "0000", month = "00", monthName = "Mês", week = 0, dayStr = "00-00-0000";
-        if (dateStr.length === 10) {
-          const [y, m, d] = dateStr.split("-");
-          year = y; month = m;
-          monthName = MESES_PT[parseInt(m, 10) - 1] || m;
-          week = getWeekOfYear(dateStr);
-          dayStr = `${d}-${m}-${y}`;
+          const html = await buildSessionHtml(s, funcs, terceiros, company, logoB64);
+
+          // Converter HTML em PDF via puppeteer
+          const page = await browser.newPage();
+          await page.setContent(html, { waitUntil: "networkidle0" });
+          const raw = await page.pdf({
+            format: "A4",
+            printBackground: true,
+            margin: { top: "10mm", right: "12mm", bottom: "12mm", left: "12mm" },
+          });
+          await page.close();
+          const pdfBuf = Buffer.from(raw);
+
+          // Pasta: ANO/MM - Mês/Semana NN/
+          const dateStr = String(s.data || "").slice(0, 10);
+          let year = "0000", month = "00", monthName = "Mês", week = 0, dayStr = "00-00-0000";
+          if (dateStr.length === 10) {
+            const [y, m, d] = dateStr.split("-");
+            year = y; month = m;
+            monthName = MESES_PT[parseInt(m, 10) - 1] || m;
+            week = getWeekOfYear(dateStr);
+            dayStr = `${d}-${m}-${y}`;
+          }
+
+          const weekStr = week > 0 ? `Semana ${String(week).padStart(2, "0")}` : "Sem Data";
+          const temaClean = safeFileName(s.tituloTema || `Sessão ${s.id}`);
+          const fileName = `${dayStr} - ${temaClean}.pdf`;
+          const folderPath = `${year}/${month} - ${monthName}/${weekStr}/${fileName}`;
+          archive.append(pdfBuf, { name: folderPath });
         }
-
-        const weekStr = week > 0 ? `Semana ${String(week).padStart(2, "0")}` : "Sem Data";
-        const temaClean = safeFileName(s.tituloTema || `Sessão ${s.id}`);
-        const fileName = `${dayStr} - ${temaClean}.html`;
-        const folderPath = `${year}/${month} - ${monthName}/${weekStr}/${fileName}`;
-        archive.append(html, { name: folderPath });
+      } finally {
+        await browser.close();
       }
 
       await archive.finalize();

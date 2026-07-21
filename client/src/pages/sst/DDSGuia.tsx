@@ -610,7 +610,21 @@ function SessoesList({
                                 type="button"
                                 title="Baixar PDF / Ata"
                                 className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 ring-1 ring-emerald-200 rounded-full px-2.5 py-0.5 transition"
-                                onClick={(e) => { e.stopPropagation(); window.open(`/api/dds-ata/${s.id}?companyId=${companyId}`, "_blank"); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  (async () => {
+                                    try {
+                                      const resp = await fetch(`/api/dds-ata/${s.id}?companyId=${companyId}`);
+                                      if (!resp.ok) throw new Error("Erro ao gerar PDF");
+                                      const blob = await resp.blob();
+                                      const u = URL.createObjectURL(blob);
+                                      const a = document.createElement("a");
+                                      a.href = u; a.download = `DDS_Ata_${s.id}.pdf`;
+                                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                      setTimeout(() => URL.revokeObjectURL(u), 1000);
+                                    } catch { toast.error("Erro ao baixar PDF"); }
+                                  })();
+                                }}
                               >
                                 <FileDown className="h-3 w-3" /> PDF
                               </button>
@@ -3326,12 +3340,19 @@ function SessaoDetalhe({
   // PDF export — abre rota Express dedicada (evita crash por payload gigante de assinaturas via tRPC)
   const [gerandoPdf, setGerandoPdf] = useState(false);
 
-  function gerarPdfDds() {
+  async function gerarPdfDds() {
     setGerandoPdf(true);
     try {
-      const url = `/api/dds-ata/${sessao.id}?companyId=${companyId}`;
-      const w = window.open(url, "_blank");
-      if (!w) { toast.error("Permita pop-ups para baixar o PDF."); }
+      const resp = await fetch(`/api/dds-ata/${sessao.id}?companyId=${companyId}`);
+      if (!resp.ok) throw new Error("Erro ao gerar PDF");
+      const blob = await resp.blob();
+      const u = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = u; a.download = `DDS_Ata_${sessao.id}.pdf`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(u), 1000);
+    } catch {
+      toast.error("Erro ao baixar PDF");
     } finally {
       setTimeout(() => setGerandoPdf(false), 800);
     }

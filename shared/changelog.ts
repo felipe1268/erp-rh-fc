@@ -1,4 +1,14 @@
 /**
+ * Rev. 4506 - FEAT: DDS PDF — GERAÇÃO REAL DE PDF VIA PUPPETEER
+ *
+ * Rotas /api/dds-ata/:id e /api/dds-ata-lote passaram a usar puppeteer
+ * para converter o HTML gerado em PDF real (A4, fundo colorido, margens).
+ * Content-Type: application/pdf + Content-Disposition: attachment.
+ * Botões individuais na lista e na tela de detalhe usam fetch+blob para
+ * baixar diretamente sem abrir nova aba. ZIP em lote agora contém .pdf.
+ * ZERO schema change.
+ */
+/**
  * Rev. 4505 - FIX: DDS PDF — REMOVER BOTÃO "IMPRIMIR / SALVAR PDF" E AUTO-PRINT
  *
  * O HTML gerado pelas rotas de PDF individual e ZIP em lote exibia um botão
