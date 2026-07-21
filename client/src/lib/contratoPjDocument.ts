@@ -384,6 +384,8 @@ export interface BuildContratoPjSignHtmlArgs {
   t1Cpf?: string;
   t2Nome?: string;
   t2Cpf?: string;
+  /** Quando true, omite botão/script do template (obrigatório ao enviar para FCSign). */
+  forSign?: boolean;
 }
 
 /**
@@ -491,6 +493,7 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
       pageTitle: `Contrato PJ ${c.numeroContrato || ""} — ${nomePrestador}`,
       logoSrc: `${origin}/logo-fc.jpg`,
       margins,
+      forSign: args.forSign,
     };
 
     return buildFcDocument(params);
@@ -536,6 +539,7 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
     geradoPor,
     pageTitle: `Contrato PJ ${c.numeroContrato || ""} — ${nomePrestador}`,
     margins,
+    forSign: args.forSign,
   };
 
   return buildFcDocument(params);

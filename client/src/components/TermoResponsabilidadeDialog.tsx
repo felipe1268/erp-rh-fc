@@ -455,6 +455,7 @@ ${obsHtml}
 
       const documentTitle = `Termo de Responsabilidade ${numeroFmt} - ${empNome}`;
       const documentHtml = buildFcDocument({
+        forSign: true,
         empresa: {
           razaoSocial: comp?.razaoSocial || "",
           nomeFantasia: comp?.nomeFantasia,

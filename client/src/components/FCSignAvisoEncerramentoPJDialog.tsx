@@ -175,6 +175,7 @@ export default function FCSignAvisoEncerramentoPJDialog({ open, onOpenChange, co
 
     try {
       const documentHtml = buildFcDocument({
+        forSign: true,
         empresa: {
           razaoSocial: nomeEmpresa,
           cnpj:        cnpjEmpresa,
