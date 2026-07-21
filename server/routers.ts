@@ -778,10 +778,11 @@ export const appRouter = router({
       const db = (await getDb())!;
       // Garante que o userId pertence à empresa (se não-nulo)
       if (input.userId !== null) {
-        const [link] = await db.execute(sql`
+        const linkResult = await db.execute(sql`
           SELECT 1 FROM user_companies WHERE "userId" = ${input.userId} AND "companyId" = ${input.companyId}
         `) as any;
-        if (!(link as any)?.rows?.length) {
+        const hasLink = (linkResult?.rows ?? linkResult ?? []).length > 0;
+        if (!hasLink) {
           // Admins globais podem não ter vínculo — aceitar se role for admin/admin_master
           const [u] = await db.select({ role: users.role }).from(users).where(eq(users.id, input.userId));
           if (!u || (u.role !== 'admin' && u.role !== 'admin_master')) {
