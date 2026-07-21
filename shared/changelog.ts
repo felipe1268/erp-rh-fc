@@ -1,4 +1,35 @@
 /**
+ * Rev. 4493 - BUG: ITEM REMOVIDO DA SC PERMANECIA NA COTAÇÃO (MAPA DE COTAÇÃO DESATUALIZADO)
+ *
+ * PROBLEMA:
+ *   Usuário editou SC-0594-2026: tinha 2 itens EAP (05.02.14 + 07.04.07.26), removeu o segundo,
+ *   salvou. A SC ficou com 1 item (correto). Porém COT-0534-2026 (Mapa de Cotação) ainda exibia
+ *   ambos os itens — o [07.04.07.26] continuava com 19,6 m² aparecendo como "Sem verba".
+ *
+ * CAUSA-RAIZ:
+ *   cancelarItemSc (linha ~4892) e updateSolicitacao (linha ~13855 e ~13893) faziam:
+ *     UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = X
+ *   → o item da COTAÇÃO ficava "órfão" (FK nullada, mas registro permanecia) e continuava
+ *     aparecendo no Mapa de Cotação sem nenhuma ligação com a SC revisada.
+ *
+ * CORREÇÃO — helper _cascadeRemoveCotItens(db, scItemIds[]):
+ *   1. Busca todos os itens de cotação vinculados aos SC item IDs removidos.
+ *   2. Para cada item da cotação:
+ *      a) SE não tem OC ativa (compras_ordens_itens.cotacao_item_id + status != cancelada):
+ *         → DELETE compras_cotacao_respostas (respostas de fornecedores)
+ *         → DELETE compras_cotacoes_itens (o item em si)
+ *      b) SE tem OC ativa (rastreabilidade financeira em curso):
+ *         → UPDATE solicitacao_item_id = NULL (preserva o item da OC, apenas desvincula da SC)
+ *
+ * APLICADO EM 3 PONTOS:
+ *   1. cancelarItemSc — botão "Excluir Item" no detalhe da SC.
+ *   2. updateSolicitacao → bloco removedIds (itens parcialmente removidos na edição).
+ *   3. updateSolicitacao → bloco existingIds (quando SC não tem itens no payload — edge case).
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4492 - FEAT: DATAS E COUNTDOWN DE ENTREGA NA LISTA DE SCs (P2P)
  *
  * CONTEXTO:

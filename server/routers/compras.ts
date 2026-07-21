@@ -1436,6 +1436,36 @@ export function getItemFamilia(normKey: string): string {
   return first ?? normKey.split(" ").find(w => w.length > 0) ?? "OUTROS";
 }
 
+// Rev. 4493 — Helper: quando um item de SC é removido, verifica os itens de cotação vinculados.
+// Regra: se o item da cotação NÃO tem OC ativa → deletar (+ respostas). Se TEM OC ativa →
+// apenas NULL o FK (preservar rastreabilidade financeira da OC).
+// Aplicado em: cancelarItemSc, updateSolicitacao (removedIds + existingIds).
+async function _cascadeRemoveCotItens(db: Awaited<ReturnType<typeof getDb>>, scItemIds: number[]) {
+  if (!db || scItemIds.length === 0) return;
+  const cotItens = await db.select({ id: comprasCotacoesItens.id })
+    .from(comprasCotacoesItens)
+    .where(inArray(comprasCotacoesItens.solicitacaoItemId, scItemIds));
+  if (cotItens.length === 0) return;
+  const cotItemIds = cotItens.map(c => c.id);
+  // Quais desses já têm OC ativa?
+  const comOCRows = await db.select({ cotacaoItemId: comprasOrdensItens.cotacaoItemId })
+    .from(comprasOrdensItens)
+    .innerJoin(comprasOrdens, and(eq(comprasOrdens.id, comprasOrdensItens.ordemId), sql`${comprasOrdens.status} != 'cancelada'`))
+    .where(inArray(comprasOrdensItens.cotacaoItemId, cotItemIds));
+  const comOCSet = new Set(comOCRows.map(r => r.cotacaoItemId).filter((x): x is number => x != null));
+  const semOCIds = cotItemIds.filter(id => !comOCSet.has(id));
+  const comOCIds = cotItemIds.filter(id => comOCSet.has(id));
+  // Sem OC: deletar respostas + item da cotação
+  if (semOCIds.length > 0) {
+    await db.delete(comprasCotacaoRespostas).where(inArray(comprasCotacaoRespostas.itemId, semOCIds));
+    await db.delete(comprasCotacoesItens).where(inArray(comprasCotacoesItens.id, semOCIds));
+  }
+  // Com OC: preservar item, apenas desvincula da SC
+  if (comOCIds.length > 0) {
+    await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE id = ANY(${sql.raw("ARRAY[" + comOCIds.join(",") + "]::int[]")})`);
+  }
+}
+
 export const comprasRouter = router({
 
   // ══════════════════════════════════════════════════════════════
@@ -4889,7 +4919,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       const [item] = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.id, input.itemId));
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
       if (item.solicitacaoId !== input.solicitacaoId) throw new TRPCError({ code: "BAD_REQUEST", message: "Item não pertence a esta solicitação" });
-      await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ${input.itemId}`);
+      // Rev. 4493 — cascade: deletar item da cotação se sem OC ativa (antes: só nullava o FK).
+      await _cascadeRemoveCotItens(db, [input.itemId]);
       await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ${input.itemId}`);
       await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.id, input.itemId));
       await db.update(comprasSolicitacoes).set({ atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
@@ -13852,7 +13883,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
           const removedIds = existingItems.map(i => i.id).filter(id => !inputItemIds.includes(id));
           if (removedIds.length > 0) {
-            await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
+            // Rev. 4493 — cascade: deletar itens de cotação sem OC ativa (antes: só nullava o FK).
+            await _cascadeRemoveCotItens(db, removedIds);
             await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
             await db.delete(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, removedIds));
           }
@@ -13890,7 +13922,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
           if (existingItems.length > 0) {
             const existingIds = existingItems.map(i => i.id);
-            await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + existingIds.join(",") + "]::int[]")})`);
+            // Rev. 4493 — cascade: deletar itens de cotação sem OC ativa (antes: só nullava o FK).
+            await _cascadeRemoveCotItens(db, existingIds);
             await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + existingIds.join(",") + "]::int[]")})`);
             await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
           }
