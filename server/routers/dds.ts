@@ -1497,7 +1497,9 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
       companyId: z.number().int().positive(),
       obraId: z.number().optional(),
       status: z.string().optional(),
-      limit: z.number().int().positive().max(500).default(100),
+      limit: z.number().int().positive().max(500).default(200),
+      mes: z.number().int().min(1).max(12).optional(),
+      ano: z.number().int().min(2000).max(2100).optional(),
     }))
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
@@ -1505,6 +1507,8 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
       const conds: any[] = [eq(ddsSessoes.companyId, input.companyId), isNull(ddsSessoes.deletedAt)];
       if (input.obraId) conds.push(eq(ddsSessoes.obraId, input.obraId));
       if (input.status) conds.push(eq(ddsSessoes.status, input.status));
+      if (input.ano) conds.push(sql`EXTRACT(YEAR FROM ${ddsSessoes.data}) = ${input.ano}`);
+      if (input.mes) conds.push(sql`EXTRACT(MONTH FROM ${ddsSessoes.data}) = ${input.mes}`);
       // Rev. 1876 — LEFT JOIN com ddsTemas pra expor `categoriaTema` (fonte
       // herdada). Mantemos `categoria` da própria sessão como override; o
       // cliente prioriza `s.categoria ?? s.categoriaTema ?? "SEM_TEMA"` p/

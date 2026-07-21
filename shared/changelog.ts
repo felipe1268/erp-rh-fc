@@ -1,4 +1,13 @@
 /**
+ * Rev. 4507 - FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard)
+ *
+ * `listSessoes` no servidor ganhou inputs opcionais `mes` e `ano`; filtro SQL
+ * via EXTRACT(YEAR/MONTH FROM data). Limite padrão bumpeado para 200.
+ * Frontend: PeriodSelectorCard (regra de ouro) inserido acima da SessoesList
+ * na aba Sessões, com estado filtroAno (default=ano atual) + filtroMes (null=ano todo).
+ * Query re-dispara automaticamente ao trocar período. ZERO schema change.
+ */
+/**
  * Rev. 4506 - FEAT: DDS PDF — GERAÇÃO REAL DE PDF VIA PUPPETEER
  *
  * Rotas /api/dds-ata/:id e /api/dds-ata-lote passaram a usar puppeteer

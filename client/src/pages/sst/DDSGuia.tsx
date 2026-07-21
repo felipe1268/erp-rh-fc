@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 // Rev. 1960 — Catálogo de áreas temáticas (sub-classificação dos temas DDS).
 import { DDS_AREAS, DDS_AREA_VALUES } from "../../../../shared/ddsAreas";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 // Rev. 1746 — Pad de assinatura digital (canvas) usado no DDS.
 // Funciona com touch (iPad/celular) e mouse. Salva como PNG dataURL.
 function AssinaturaPad({
@@ -803,7 +804,12 @@ export default function DDSGuia() {
   // ===== queries
   const calendarioQ = trpc.dds.calendarioAnual.useQuery({ companyId }, { enabled: !!companyId });
   const temasQ = trpc.dds.listTemas.useQuery({ companyId }, { enabled: !!companyId });
-  const sessoesQ = trpc.dds.listSessoes.useQuery({ companyId }, { enabled: !!companyId });
+  const [filtroAno, setFiltroAno] = useState<number>(new Date().getFullYear());
+  const [filtroMes, setFiltroMes] = useState<number | null>(null);
+  const sessoesQ = trpc.dds.listSessoes.useQuery(
+    { companyId, ano: filtroAno, mes: filtroMes ?? undefined },
+    { enabled: !!companyId },
+  );
 
   // ===== mutations gerais
   const seedMut = trpc.dds.seedTemasPadrao.useMutation({
@@ -2139,6 +2145,15 @@ export default function DDSGuia() {
               />
             ) : null
           ) : (
+            <>
+              <PeriodSelectorCard
+                ano={filtroAno}
+                mes={filtroMes}
+                onAno={setFiltroAno}
+                onMes={setFiltroMes}
+                onAnoTodo={() => setFiltroMes(null)}
+                className="mb-4"
+              />
             <SessoesList
               sessoes={sessoes}
               companyId={companyId}
@@ -2160,6 +2175,7 @@ export default function DDSGuia() {
               loteProgress={loteProgress}
               setLoteProgress={setLoteProgress}
             />
+            </>
           )}
         </TabsContent>
       </Tabs>

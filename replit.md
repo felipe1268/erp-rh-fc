@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4507** — **FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard).** `listSessoes` ganhou inputs `mes` e `ano` (filtro SQL via `EXTRACT`); frontend usa `PeriodSelectorCard` (regra de ouro) acima da lista, com estado `filtroAno/filtroMes` e botão "Ano todo". Filtro server-side: query re-dispara automaticamente ao trocar período. ZERO schema change.
 - **Rev. 4506** — **FEAT: DDS PDF — GERAÇÃO REAL DE PDF VIA PUPPETEER.** Rotas `/api/dds-ata/:id` e `/api/dds-ata-lote` usam puppeteer para converter HTML em PDF real (A4, `printBackground:true`, margens). `Content-Type: application/pdf` + `Content-Disposition: attachment`. Botões individuais (lista e detalhe) usam `fetch+blob+anchor` — download direto, sem abrir nova aba. ZIP em lote agora contém `.pdf` (não `.html`). ZERO schema change.
 - **Rev. 4505** — **FIX: DDS PDF — REMOVE BOTÃO "IMPRIMIR/SALVAR PDF" E AUTO-PRINT.** HTML gerado pelas rotas de PDF individual e ZIP em lote não exibe mais o botão nem dispara `window.print()`. CSS `@media print` mantido. ZERO schema change.
 
