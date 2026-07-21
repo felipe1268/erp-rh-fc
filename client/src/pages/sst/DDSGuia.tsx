@@ -508,10 +508,10 @@ function SessoesList({
       {sessoesFiltradas.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           {[
-            { label: "Sessões", value: kpis.total, color: "text-slate-800" },
-            { label: "Finalizadas", value: `${kpis.finalizadas} / ${kpis.total}`, color: "text-emerald-700" },
-            { label: "Presenças", value: kpis.presentes, color: "text-blue-700" },
-            { label: "Assinaturas", value: kpis.assinados, color: "text-violet-700" },
+            { label: "Sessões", value: kpis.total.toLocaleString("pt-BR"), color: "text-slate-800" },
+            { label: "Finalizadas", value: `${kpis.finalizadas.toLocaleString("pt-BR")} / ${kpis.total.toLocaleString("pt-BR")}`, color: "text-emerald-700" },
+            { label: "Presenças", value: kpis.presentes.toLocaleString("pt-BR"), color: "text-blue-700" },
+            { label: "Assinaturas", value: kpis.assinados.toLocaleString("pt-BR"), color: "text-violet-700" },
           ].map((k) => (
             <div key={k.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3">
               <div className={`text-2xl font-bold tabular-nums ${k.color}`}>{k.value}</div>
