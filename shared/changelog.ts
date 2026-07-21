@@ -1,4 +1,25 @@
 /**
+ * Rev. 4490 - FIX: RÓTULOS P2P AJUSTADOS PARA CLAREZA OPERACIONAL
+ *
+ * CONTEXTO:
+ *   "Ag. Recebimento" era ambíguo — parecia que o comprador estava esperando para receber
+ *   algo que já chegou. O correto: a OC foi emitida e o FORNECEDOR ainda não entregou nada.
+ *   O rótulo correto é "Ag. Entrega" (ação esperada = o fornecedor entregar).
+ *   "Entrega Parcial" permanece para quando parte dos itens já chegou ao almoxarifado.
+ *
+ * ALTERAÇÕES:
+ *   STATUS_CFG: ag_recebimento.label "Ag. Recebimento" → "Ag. Entrega".
+ *   Painel breakdown: "Ag. recebimento" → "Ag. entrega".
+ *
+ * SEMÂNTICA FINAL:
+ *   🟠 Ag. Entrega     — OC emitida, fornecedor não entregou nada.
+ *   🟡 Entrega Parcial — Almoxarifado recebeu parte; aguardando complemento.
+ *   ✅ Concluído       — Tudo recebido; ciclo logístico encerrado.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4489 - FIX: SPLIT DO BUCKET "ENTREGA PARCIAL" → "AG. RECEBIMENTO" + "ENTREGA PARCIAL"
  *
  * CONTEXTO:

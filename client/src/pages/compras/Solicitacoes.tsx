@@ -33,10 +33,10 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   aprovado:      { label: "Concluído",        cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   recusado:      { label: "Recusado",         cls: "bg-red-50 text-red-700 border-red-200"         },
   cancelado:     { label: "Cancelado",        cls: "bg-gray-100 text-gray-500 border-gray-200"     },
-  // Rev. 4488 — Status derivados de entrega (P2P three-way matching: OC × Recebimento × NF).
-  // ag_recebimento: OC emitida, almoxarifado ainda não recebeu nenhum item.
-  // entrega_parcial: almoxarifado recebeu parte dos itens, restante pendente.
-  ag_recebimento: { label: "Ag. Recebimento", cls: "bg-orange-50 text-orange-700 border-orange-200" },
+  // Rev. 4490 — Rótulos P2P ajustados para clareza operacional.
+  // ag_recebimento: OC emitida, fornecedor ainda não entregou nada → "Aguardando Entrega".
+  // entrega_parcial: almoxarifado recebeu parte, restante pendente → "Entrega Parcial".
+  ag_recebimento: { label: "Ag. Entrega",     cls: "bg-orange-50 text-orange-700 border-orange-200" },
   entrega_parcial:{ label: "Entrega Parcial", cls: "bg-amber-50 text-amber-700 border-amber-200"   },
 };
 
@@ -2527,7 +2527,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             { key: "pendente",         label: "Pendente",             count: statusBreakdown.pendente,         color: "text-slate-700",   bar: "bg-slate-400",   ring: "ring-slate-400"   },
             { key: "emCotacao",        label: "Em cotação",           count: statusBreakdown.emCotacao,        color: "text-sky-700",     bar: "bg-sky-400",     ring: "ring-sky-400"     },
             { key: "emAndamento",      label: "Em andamento",         count: statusBreakdown.emAndamento,      color: "text-indigo-700",  bar: "bg-indigo-400",  ring: "ring-indigo-400"  },
-            { key: "agRecebimento",    label: "Ag. recebimento",      count: statusBreakdown.agRecebimento,    color: "text-orange-700",  bar: "bg-orange-400",  ring: "ring-orange-400"  },
+            { key: "agRecebimento",    label: "Ag. entrega",          count: statusBreakdown.agRecebimento,    color: "text-orange-700",  bar: "bg-orange-400",  ring: "ring-orange-400"  },
             { key: "entreguesParcial", label: "Entrega parcial",      count: statusBreakdown.entreguesParcial, color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
             { key: "concluidas",       label: "Concluídas",           count: statusBreakdown.concluidas,       color: "text-green-700",   bar: "bg-green-400",   ring: "ring-green-400"   },
             { key: "recusadas",        label: "Recusadas",            count: statusBreakdown.recusadas,        color: "text-red-700",     bar: "bg-red-400",     ring: "ring-red-400"     },

@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4489** — **FIX: SPLIT BUCKET "ENTREGA PARCIAL" → "AG. RECEBIMENTO" + "ENTREGA PARCIAL" (P2P).** Bucket único "Entrega Parcial" cobria SCs sem nada recebido (Ag. Recebimento) e com parte recebida (Entrega Parcial). Split em dois predicados/contadores: `_isAgRec` (`atendidos=0`) e `_isEntParcial` (`atendidos>0`). Grid `lg:grid-cols-9` → `lg:grid-cols-10`. Guards `!_hasOC` adicionados a emCotacao/emAndamento. ZERO schema change.
-- **Rev. 4488** — **FIX: BADGE CORRETO PARA SCs COM OC EMITIDA (P2P THREE-WAY MATCHING).** SCs no filtro "Entrega Parcial" exibiam badge "Em Cotação" (status cru vazando). Dois novos status derivados: `ag_recebimento` (OC emitida, nada recebido — laranja) e `entrega_parcial` (parte recebida — âmbar), derivados por `_itens.atendidos`. `statusEfetivoSC()` prioriza: `_ocsEntregues` → Concluído; `_hasOC+!entregues` → Ag.Recebimento ou Entrega Parcial. ZERO schema change.
+- **Rev. 4490** — **FIX: RÓTULOS P2P — "AG. RECEBIMENTO" → "AG. ENTREGA" PARA CLAREZA OPERACIONAL.** "Ag. Recebimento" era ambíguo (parecia que o comprador aguardava receber algo já entregue). Correto: OC emitida → fornecedor ainda não entregou → "Ag. Entrega". "Entrega Parcial" mantido para quando parte dos itens já chegou ao almoxarifado. ZERO schema change.
+- **Rev. 4489** — **FIX: SPLIT BUCKET "ENTREGA PARCIAL" → "AG. RECEBIMENTO" + "ENTREGA PARCIAL" (P2P).** Split em dois predicados/contadores: `_isAgRec` (`atendidos=0`) e `_isEntParcial` (`atendidos>0`). Grid `lg:grid-cols-9` → `lg:grid-cols-10`. ZERO schema change.
 
 ### 5 one-liners
 
