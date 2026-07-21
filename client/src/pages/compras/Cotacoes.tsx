@@ -5589,14 +5589,14 @@ export default function Cotacoes() {
                                         className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium transition-colors whitespace-nowrap"
                                       >
                                         <Plus className="h-3 w-3" />
-                                        Item avulso
+                                        Incluir item avulso
                                       </button>
                                       <button
                                         onClick={() => { setEapPickerOpen(true); setEapPickerSearch(""); setEapPickerSelected(new Set()); }}
                                         className="flex items-center gap-1 text-[11px] text-emerald-600 hover:text-emerald-800 font-medium transition-colors whitespace-nowrap"
                                       >
                                         <ClipboardList className="h-3 w-3" />
-                                        da EAP
+                                        Incluir item da EAP
                                       </button>
                                     </div>
                                   )}
