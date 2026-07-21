@@ -1,4 +1,27 @@
 /**
+ * Rev. 4504 - FEAT: DDS ZIP — BARRA DE PROGRESSO 0→100% NO BOTÃO "BAIXAR ZIP"
+ *
+ * Aplica a Regra de Ouro de botões de carregamento longo ao ZIP de DDS.
+ *
+ * LÓGICA:
+ *   - Novo estado `loteProgress: number` em DDSGuia, passado como prop para SessoesList.
+ *   - `baixarLote()` inicia setInterval que incrementa pct 1%/stepMs, onde
+ *     stepMs = clamp(200ms, 600ms, ids.length × 1.2s / 85).  Sobe até 85% (fase
+ *     não-determinística = servidor gerando). Ao receber resposta: salta para 95%,
+ *     depois 100% após o blob. clearInterval em todos os caminhos (ok + erro + finally).
+ *   - finally: setTimeout 800ms → setBaixandoLote(false) + setLoteProgress(0),
+ *     para o usuário ver "Gerando… 100%" por um instante antes de resetar.
+ *
+ * BOTÃO (barra flutuante):
+ *   - `relative overflow-hidden` + span absoluto `bg-white/20` crescendo via
+ *     `style={{ width: loteProgress% }}` com `transition-all duration-300`.
+ *   - Texto: `Gerando… XX%` (ícone spinner + percentual lado a lado).
+ *   - min-w-[110px] para evitar salto de largura ao trocar textos.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4503 - FIX: DDS ZIP "LOAD FAILED" — BUFFER EM MEMÓRIA + MENSAGEM AMIGÁVEL
  *
  * CAUSA:

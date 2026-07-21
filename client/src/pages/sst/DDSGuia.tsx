@@ -312,7 +312,7 @@ function SessoesList({
   setSelectedSessaoId, setEditarCategoriaId, abrirNovaSessao,
   excluirSessaoMut, excluirSessoesMut, confirm,
   buscaSessoes, setBuscaSessoes, filtroObraSessoes, setFiltroObraSessoes,
-  baixandoLote, setBaixandoLote,
+  baixandoLote, setBaixandoLote, loteProgress, setLoteProgress,
 }: {
   sessoes: any[]; companyId: number;
   selecionadasIds: Set<number>; setSelecionadasIds: (s: Set<number>) => void;
@@ -324,6 +324,7 @@ function SessoesList({
   buscaSessoes: string; setBuscaSessoes: (s: string) => void;
   filtroObraSessoes: string; setFiltroObraSessoes: (s: string) => void;
   baixandoLote: boolean; setBaixandoLote: (b: boolean) => void;
+  loteProgress: number; setLoteProgress: (n: number) => void;
 }) {
   const obrasUnicas = useMemo(() => {
     const m = new Map<string, string>();
@@ -371,6 +372,18 @@ function SessoesList({
     const ids = Array.from(selecionadasIds);
     if (!ids.length) return;
     setBaixandoLote(true);
+    setLoteProgress(0);
+
+    // Progresso simulado: sobe de 0 → 85% enquanto o servidor gera o ZIP
+    // (~1.2s por sessão estimado). Fase não-determinística.
+    let pct = 0;
+    const total = ids.length;
+    const stepMs = Math.max(200, Math.min(600, (total * 1200) / 85));
+    const timer = setInterval(() => {
+      pct = Math.min(pct + 1, 85);
+      setLoteProgress(pct);
+    }, stepMs);
+
     try {
       const resp = await fetch("/api/dds-ata-lote", {
         method: "POST",
@@ -378,12 +391,15 @@ function SessoesList({
         body: JSON.stringify({ companyId, ids }),
         credentials: "include",
       });
+      clearInterval(timer);
       if (!resp.ok) {
         let errMsg = "Falha ao gerar os PDFs em lote";
         try { const j = await resp.json(); errMsg = j.error || errMsg; } catch {}
         toast.error(errMsg); return;
       }
+      setLoteProgress(95);
       const blob = await resp.blob();
+      setLoteProgress(100);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `DDS_${new Date().getFullYear()}_atas.zip`;
@@ -391,14 +407,17 @@ function SessoesList({
       setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1000);
       toast.success("ZIP baixado com sucesso!");
     } catch (e: any) {
+      clearInterval(timer);
       const msg = String(e?.message ?? "");
       if (msg === "Load failed" || msg === "Failed to fetch") {
         toast.error("Falha de rede. Verifique a conexão e tente novamente.");
       } else {
         toast.error(msg || "Erro ao baixar ZIP");
       }
+    } finally {
+      clearInterval(timer);
+      setTimeout(() => { setBaixandoLote(false); setLoteProgress(0); }, 800);
     }
-    finally { setBaixandoLote(false); }
   }
 
   // Helpers de estilo por status
@@ -710,11 +729,19 @@ function SessoesList({
               type="button"
               disabled={baixandoLote}
               onClick={baixarLote}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-60"
+              className="relative inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-80 overflow-hidden min-w-[110px] justify-center"
             >
-              {baixandoLote
-                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando…</>
-                : <><FolderDown className="h-3.5 w-3.5" /> Baixar ZIP</>}
+              {baixandoLote && (
+                <span
+                  className="absolute inset-y-0 left-0 bg-white/20 transition-all duration-300"
+                  style={{ width: `${loteProgress}%` }}
+                />
+              )}
+              <span className="relative flex items-center gap-1.5">
+                {baixandoLote
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando… {loteProgress}%</>
+                  : <><FolderDown className="h-3.5 w-3.5" /> Baixar ZIP</>}
+              </span>
             </button>
             <button
               type="button"
@@ -1167,6 +1194,7 @@ export default function DDSGuia() {
   const [buscaSessoes, setBuscaSessoes] = useState("");
   const [filtroObraSessoes, setFiltroObraSessoes] = useState("");
   const [baixandoLote, setBaixandoLote] = useState(false);
+  const [loteProgress, setLoteProgress] = useState(0);
 
   // Rev. 1876 — Modal de edição de categoria por sessão (override granular).
   const [editarCategoriaId, setEditarCategoriaId] = useState<number | null>(null);
@@ -2115,6 +2143,8 @@ export default function DDSGuia() {
               setFiltroObraSessoes={setFiltroObraSessoes}
               baixandoLote={baixandoLote}
               setBaixandoLote={setBaixandoLote}
+              loteProgress={loteProgress}
+              setLoteProgress={setLoteProgress}
             />
           )}
         </TabsContent>
