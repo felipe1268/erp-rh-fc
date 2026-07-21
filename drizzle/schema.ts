@@ -660,9 +660,11 @@ export const companies = pgTable("companies", {
         heDestinoPadrao: text("heDestinoPadrao").default("banco_horas"),
         gestorFinanceiroId: integer("gestor_financeiro_id"),
         gestorFinanceiroNome: varchar("gestor_financeiro_nome", { length: 255 }),
+        gestorFinanceiroUserId: integer("gestor_financeiro_user_id"),
         // Rev. 4479 — Gestor RH: testemunha obrigatória em todos os contratos
         gestorRhId: integer("gestor_rh_id"),
         gestorRhNome: varchar("gestor_rh_nome", { length: 255 }),
+        gestorRhUserId: integer("gestor_rh_user_id"),
         gestorProjetoId: integer("gestor_projeto_id"),
         gestorProjetoNome: varchar("gestor_projeto_nome", { length: 255 }),
         // Rev. 2400 — Toggle global de auditoria do Almoxarifado.

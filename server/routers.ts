@@ -405,46 +405,75 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "company", entityId: input.companyId, details: `Numeração interna RESETADA para 1` });
       return { success: true };
     }),
+    // Lista usuários ativos vinculados à empresa (para seletor de conta do sistema dos gestores)
+    listUsuariosSistema: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const rows = await db.execute(sql`
+        SELECT u.id, u.name, u.email, u.role, u.status, u.avatar_url
+        FROM users u
+        INNER JOIN user_companies uc ON uc."userId" = u.id AND uc."companyId" = ${input.companyId}
+        WHERE u.status = 'ativo' AND u."deletedAt" IS NULL
+        ORDER BY u.name
+      `);
+      return (rows as any).rows as { id: number; name: string; email: string; role: string; status: string; avatar_url: string | null }[];
+    }),
+
     getGestoresContrato: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
       const db = (await getDb())!;
       const [company] = await db.select({
         gestorFinanceiroId: companies.gestorFinanceiroId,
         gestorFinanceiroNome: companies.gestorFinanceiroNome,
+        gestorFinanceiroUserId: companies.gestorFinanceiroUserId,
         gestorRhId: (companies as any).gestorRhId,
         gestorRhNome: (companies as any).gestorRhNome,
+        gestorRhUserId: companies.gestorRhUserId,
         gestorProjetoId: companies.gestorProjetoId,
         gestorProjetoNome: companies.gestorProjetoNome,
       }).from(companies).where(eq(companies.id, input.companyId));
-      if (!company) return { gestorFinanceiroId: null, gestorFinanceiroNome: null, gestorRhId: null, gestorRhNome: null, gestorProjetoId: null, gestorProjetoNome: null, finUser: null, rhUser: null };
+      if (!company) return { gestorFinanceiroId: null, gestorFinanceiroNome: null, gestorFinanceiroUserId: null, gestorRhId: null, gestorRhNome: null, gestorRhUserId: null, gestorProjetoId: null, gestorProjetoNome: null, finUser: null, rhUser: null };
 
-      // Busca status do usuário do sistema para cada gestor via employees.email → users.email
-      const gestorIds: number[] = [];
-      if (company.gestorFinanceiroId) gestorIds.push(company.gestorFinanceiroId);
-      if ((company as any).gestorRhId) gestorIds.push((company as any).gestorRhId);
-
-      type UserInfo = { userId: number; status: string; nome: string } | null;
+      type UserInfo = { userId: number; status: string; nome: string; email: string | null } | null;
       let finUser: UserInfo = null;
       let rhUser: UserInfo = null;
 
-      if (gestorIds.length > 0) {
-        const empRows = await db.select({ id: employees.id, email: employees.email })
-          .from(employees).where(inArray(employees.id, gestorIds));
+      // Busca por vínculo EXPLÍCITO (userId salvo) — fonte principal
+      const userIdsToFetch: number[] = [];
+      if (company.gestorFinanceiroUserId) userIdsToFetch.push(company.gestorFinanceiroUserId);
+      if (company.gestorRhUserId) userIdsToFetch.push(company.gestorRhUserId);
+
+      if (userIdsToFetch.length > 0) {
+        const userRows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, deletedAt: users.deletedAt })
+          .from(users).where(inArray(users.id, userIdsToFetch));
+        const userById = new Map(userRows.map(u => [u.id, u]));
+        const toInfo = (u: typeof userRows[0] | undefined): UserInfo =>
+          u ? { userId: u.id, status: u.deletedAt ? "deletado" : (u.status || "ativo"), nome: u.name || "", email: u.email || null } : null;
+        if (company.gestorFinanceiroUserId) finUser = toInfo(userById.get(company.gestorFinanceiroUserId));
+        if (company.gestorRhUserId) rhUser = toInfo(userById.get(company.gestorRhUserId));
+      }
+
+      // Fallback: tenta casar por e-mail quando userId não está salvo
+      const needFin = !finUser && !!company.gestorFinanceiroId;
+      const needRh  = !rhUser  && !!(company as any).gestorRhId;
+      if (needFin || needRh) {
+        const empIds: number[] = [];
+        if (needFin && company.gestorFinanceiroId) empIds.push(company.gestorFinanceiroId);
+        if (needRh  && (company as any).gestorRhId)  empIds.push((company as any).gestorRhId);
+        const empRows = await db.select({ id: employees.id, email: employees.email }).from(employees).where(inArray(employees.id, empIds));
         const emails = empRows.map(e => e.email).filter(Boolean) as string[];
         if (emails.length > 0) {
           const userRows = await db.select({ id: users.id, email: users.email, name: users.name, status: users.status, deletedAt: users.deletedAt })
             .from(users).where(inArray(users.email, emails));
           const userByEmail = new Map(userRows.map(u => [u.email?.toLowerCase() || "", u]));
           const empById = new Map(empRows.map(e => [e.id, e]));
-
-          if (company.gestorFinanceiroId) {
+          const toInfo2 = (u: typeof userRows[0] | undefined): UserInfo =>
+            u ? { userId: u.id, status: u.deletedAt ? "deletado" : (u.status || "ativo"), nome: u.name || "", email: u.email || null } : null;
+          if (needFin && company.gestorFinanceiroId) {
             const emp = empById.get(company.gestorFinanceiroId);
-            const u = emp?.email ? userByEmail.get(emp.email.toLowerCase()) : null;
-            finUser = u ? { userId: u.id, status: u.deletedAt ? "deletado" : (u.status || "ativo"), nome: u.name || "" } : null;
+            finUser = toInfo2(emp?.email ? userByEmail.get(emp.email.toLowerCase()) : undefined);
           }
-          if ((company as any).gestorRhId) {
+          if (needRh && (company as any).gestorRhId) {
             const emp = empById.get((company as any).gestorRhId);
-            const u = emp?.email ? userByEmail.get(emp.email.toLowerCase()) : null;
-            rhUser = u ? { userId: u.id, status: u.deletedAt ? "deletado" : (u.status || "ativo"), nome: u.name || "" } : null;
+            rhUser = toInfo2(emp?.email ? userByEmail.get(emp.email.toLowerCase()) : undefined);
           }
         }
       }
@@ -455,8 +484,10 @@ export const appRouter = router({
       companyId: z.number(),
       gestorFinanceiroId: z.number().nullable(),
       gestorFinanceiroNome: z.string().nullable(),
+      gestorFinanceiroUserId: z.number().nullable().optional(),
       gestorRhId: z.number().nullable(),
       gestorRhNome: z.string().nullable(),
+      gestorRhUserId: z.number().nullable().optional(),
       gestorProjetoId: z.number().nullable(),
       gestorProjetoNome: z.string().nullable(),
     })).mutation(async ({ input, ctx }) => {
@@ -464,8 +495,10 @@ export const appRouter = router({
       await db.update(companies).set({
         gestorFinanceiroId: input.gestorFinanceiroId,
         gestorFinanceiroNome: input.gestorFinanceiroNome,
+        gestorFinanceiroUserId: input.gestorFinanceiroUserId ?? null,
         gestorRhId: input.gestorRhId,
         gestorRhNome: input.gestorRhNome,
+        gestorRhUserId: input.gestorRhUserId ?? null,
         gestorProjetoId: input.gestorProjetoId,
         gestorProjetoNome: input.gestorProjetoNome,
       } as any).where(eq(companies.id, input.companyId));

@@ -5518,10 +5518,12 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4444: coluna valor_unitario garantida em oc_lista_recebimento.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4444 valor_unitario:", e?.message || e); }
 
-        // Rev. 4479 — Gestores de Contratos: Gestor RH + tabela de substituições
+        // Rev. 4479 — Gestores de Contratos: Gestor RH + userId explícito + tabela de substituições
         try {
           await db.execute(sql.raw(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS gestor_rh_id INTEGER`));
           await db.execute(sql.raw(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS gestor_rh_nome VARCHAR(255)`));
+          await db.execute(sql.raw(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS gestor_financeiro_user_id INTEGER`));
+          await db.execute(sql.raw(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS gestor_rh_user_id INTEGER`));
           await db.execute(sql.raw(`
             CREATE TABLE IF NOT EXISTS gestor_substituicao_solicitacoes (
               id SERIAL PRIMARY KEY,

@@ -1,4 +1,36 @@
 /**
+ * Rev. 4480 - FEAT: GESTORES — VÍNCULO EXPLÍCITO COM USUÁRIO DO SISTEMA (gestorFinanceiroUserId / gestorRhUserId)
+ *
+ * CONTEXTO:
+ *   O badge "Conta no sistema" dos gestores de contratos usava match por e-mail
+ *   (employees.email → users.email), o que falhava silenciosamente para gestoras como
+ *   Tatiane e Kelly cujos e-mails diferiam entre as tabelas.
+ *
+ * IMPLEMENTAÇÃO:
+ *   - Schema: 2 novas colunas INTEGER em companies
+ *       → gestor_financeiro_user_id
+ *       → gestor_rh_user_id
+ *   - SyncSchema+ (server/_core/index.ts): ALTER TABLE companies ADD COLUMN IF NOT EXISTS para ambas.
+ *   - Backend (server/routers.ts):
+ *       → Novo endpoint `listUsuariosSistema` — lista usuários ativos vinculados à empresa
+ *         (JOIN user_companies + users WHERE status='ativo' AND deletedAt IS NULL).
+ *       → `getGestoresContrato`: busca USER por userId explícito (principal); fallback por e-mail
+ *         só quando gestorFinanceiroUserId/gestorRhUserId NULL (compatibilidade retroativa).
+ *       → `salvarGestoresContrato`: aceita gestorFinanceiroUserId + gestorRhUserId opcionais.
+ *   - Frontend (GestoresContratoTab em Configuracoes.tsx):
+ *       → Novo estado finUserId / rhUserId hidratado do getGestoresContrato.
+ *       → Query usuariosSistemaQuery → popula <select> "Conta do sistema" em cada card.
+ *       → GestorUserStatusBadge atualizado: exibe "Vinculado: X — conta ativa" quando
+ *         selectedUserId já está em usuariosSistema; aviso âmbar se funcionário selecionado
+ *         mas sem usuário vinculado ainda.
+ *
+ * ARQUIVOS:
+ *   drizzle/schema.ts · server/_core/index.ts · server/routers.ts · client/src/pages/Configuracoes.tsx
+ *
+ * SCHEMA CHANGE: SIM — 2 colunas INTEGER nullable em companies (ADD COLUMN IF NOT EXISTS).
+ */
+
+/**
  * Rev. 4479 - FEAT: GESTORES DE CONTRATOS — TESTEMUNHAS OBRIGATÓRIAS (RH + FINANCEIRO) COM FLUXO DE SUBSTITUIÇÃO
  *
  * CONTEXTO:
