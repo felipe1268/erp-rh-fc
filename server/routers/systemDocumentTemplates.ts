@@ -247,7 +247,8 @@ export const systemDocumentTemplatesRouter = router({
       // Campos ISO normalizados (undefined = não mexe; null/"" = limpa)
       const isoSet: Record<string, any> = {};
       if (input.codigo !== undefined) isoSet.codigo = input.codigo || null;
-      if (input.dataVigencia !== undefined) isoSet.dataVigencia = input.dataVigencia || null;
+      // Data de vigência = sempre data de hoje (Brasília) ao criar nova revisão
+      isoSet.dataVigencia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
       if (input.proximaRevisao !== undefined) isoSet.proximaRevisao = input.proximaRevisao || null;
       if (input.elaboradoPorNome !== undefined) isoSet.elaboradoPorNome = input.elaboradoPorNome || null;
 
@@ -432,13 +433,13 @@ export const systemDocumentTemplatesRouter = router({
       const userName = (ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "Sistema";
       const [row] = await db.select().from(systemDocumentTemplates).where(and(eq(systemDocumentTemplates.tipo, input.tipo), isNull(systemDocumentTemplates.deletedAt)));
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Salve o template antes de aprovar." });
-      const hoje = new Date().toISOString().slice(0, 10);
+      const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
       await db.update(systemDocumentTemplates).set({
         status: "vigente",
         aprovadoPorId: userId,
         aprovadoPorNome: userName,
         aprovadoEm: sql`NOW()`,
-        dataVigencia: input.dataVigencia ?? row.dataVigencia ?? hoje,
+        dataVigencia: hoje,
         proximaRevisao: input.proximaRevisao ?? row.proximaRevisao ?? null,
         updatedAt: sql`NOW()`,
       } as any).where(eq(systemDocumentTemplates.id, row.id));
