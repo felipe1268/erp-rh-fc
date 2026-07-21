@@ -142,6 +142,10 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
       geradoPor: geradoPor || "Sistema",
       margins: documentMargins,
       hasTestemunhas: !!(t1Nome.trim() || t2Nome.trim()),
+      t1Nome: t1Nome.trim() || undefined,
+      t1Cpf: t1Cpf.trim() || undefined,
+      t2Nome: t2Nome.trim() || undefined,
+      t2Cpf: t2Cpf.trim() || undefined,
     });
     const w = window.open("", "_blank");
     if (w) { w.document.open(); w.document.write(html); w.document.close(); }

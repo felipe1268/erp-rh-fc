@@ -85,11 +85,22 @@ export interface FcAssinaturaParte {
   role?: "empregado" | "empregador" | "contratado" | "contratante" | "testemunha_1" | "testemunha_2";
 }
 
+export interface FcTestemunhasData {
+  t1Nome?: string;
+  t1Cpf?: string;
+  t2Nome?: string;
+  t2Cpf?: string;
+}
+
 export interface FcAssinaturasBlock {
   /** Pares principais (2 colunas). Ex: [empregador, empregado] ou [RH, Direção]. */
   partes: FcAssinaturaParte[];
-  /** Se true, adiciona uma 2ª linha com 2 testemunhas (nome/CPF em branco). */
-  testemunhas?: boolean;
+  /**
+   * Se true ou objeto, adiciona uma 2ª linha com 2 slots de testemunha.
+   * Quando é objeto, preenche nome/CPF de cada testemunha; quando boolean true,
+   * mantém os campos em branco (comportamento legado).
+   */
+  testemunhas?: boolean | FcTestemunhasData;
   /** Texto "Local/UF, dd/mm/aaaa" acima das assinaturas (opcional). */
   localData?: string;
 }
@@ -193,6 +204,10 @@ export function buildFcDocument(p: FcDocumentParams): string {
     )
     .join("");
 
+  const _testData: FcTestemunhasData | null =
+    p.assinaturas.testemunhas && typeof p.assinaturas.testemunhas === "object"
+      ? p.assinaturas.testemunhas
+      : null;
   const testemunhasHtml = p.assinaturas.testemunhas
     ? `
   <table style="margin-top:24px;width:100%;border-collapse:collapse;table-layout:fixed;page-break-inside:avoid"><tbody><tr>
@@ -201,8 +216,8 @@ export function buildFcDocument(p: FcDocumentParams): string {
         ${slotHtml("testemunha_1")}
         <div style="border-top:1px solid #6b7280;padding-top:8px">
           <div style="font-family:'Helvetica','Arial',sans-serif;font-size:10pt;font-weight:600;color:#1B2A4A">Testemunha 1</div>
-          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">Nome: ____________________________</div>
-          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:1px">CPF: __________________</div>
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">Nome: ${_testData?.t1Nome ? esc(_testData.t1Nome) : "____________________________"}</div>
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:1px">CPF: ${_testData?.t1Cpf ? esc(_testData.t1Cpf) : "__________________"}</div>
         </div>
       </div>
     </td>
@@ -211,8 +226,8 @@ export function buildFcDocument(p: FcDocumentParams): string {
         ${slotHtml("testemunha_2")}
         <div style="border-top:1px solid #6b7280;padding-top:8px">
           <div style="font-family:'Helvetica','Arial',sans-serif;font-size:10pt;font-weight:600;color:#1B2A4A">Testemunha 2</div>
-          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">Nome: ____________________________</div>
-          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:1px">CPF: __________________</div>
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">Nome: ${_testData?.t2Nome ? esc(_testData.t2Nome) : "____________________________"}</div>
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:1px">CPF: ${_testData?.t2Cpf ? esc(_testData.t2Cpf) : "__________________"}</div>
         </div>
       </div>
     </td>

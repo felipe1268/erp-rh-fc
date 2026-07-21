@@ -376,11 +376,14 @@ export interface BuildContratoPjSignHtmlArgs {
   /** Margens configuráveis da empresa (mm). Rev. 4440. */
   margins?: { top?: number; right?: number; bottom?: number; left?: number };
   /**
-   * Rev. 4475 — se true, adiciona linhas de assinatura para Testemunha 1 e 2
-   * no bloco de assinaturas (passa `testemunhas: true` pro buildFcDocument).
-   * Deve ser true quando o usuário preencher ao menos uma testemunha no diálogo.
+   * Rev. 4475 — se true, adiciona slots de testemunha. Rev. 4482+: quando
+   * os nomes/CPFs forem fornecidos, são exibidos diretamente na prévia.
    */
   hasTestemunhas?: boolean;
+  t1Nome?: string;
+  t1Cpf?: string;
+  t2Nome?: string;
+  t2Cpf?: string;
 }
 
 /**
@@ -479,7 +482,9 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
           { nome: nomePrestador, subtitulo: cnpjPrestador ? `CNPJ: ${cnpjPrestador}` : "CONTRATADA", role: "contratado" },
           { nome: args.contratanteNome, subtitulo: nomeEmpresaIso ? `${nomeEmpresaIso} — CONTRATANTE` : "CONTRATANTE", role: "contratante" },
         ],
-        testemunhas: args.hasTestemunhas,
+        testemunhas: args.hasTestemunhas
+          ? { t1Nome: args.t1Nome, t1Cpf: args.t1Cpf, t2Nome: args.t2Nome, t2Cpf: args.t2Cpf }
+          : false,
         localData: `${c.companyCidade || "Guaratinguetá"} - ${c.companyEstado || "SP"}, ${hojeStr}`,
       },
       geradoPor,
@@ -523,7 +528,9 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
         { nome: nomePrestador, subtitulo: cnpjPrestador ? `CNPJ: ${cnpjPrestador}` : "CONTRATADA", role: "contratado" },
         { nome: args.contratanteNome, subtitulo: nomeEmpresa ? `${nomeEmpresa} — CONTRATANTE` : "CONTRATANTE", role: "contratante" },
       ],
-      testemunhas: args.hasTestemunhas,
+      testemunhas: args.hasTestemunhas
+        ? { t1Nome: args.t1Nome, t1Cpf: args.t1Cpf, t2Nome: args.t2Nome, t2Cpf: args.t2Cpf }
+        : false,
       localData: `${c.companyCidade || "São José dos Campos"} - ${c.companyEstado || "SP"}, ${hojeStr}`,
     },
     geradoPor,
