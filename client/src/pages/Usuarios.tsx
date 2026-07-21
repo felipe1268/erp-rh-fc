@@ -693,9 +693,11 @@ export default function Usuarios() {
                     return (
                       <button key={u.id} onClick={() => openUser(u)}
                         className={`w-full text-left px-3 py-2.5 border-b transition-colors flex items-center gap-2.5 hover:bg-muted/50 ${isSel ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}>
-                        <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${
+                        <div className={`h-8 w-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center text-white font-bold text-sm ${
                           u.role==="admin_master" ? "bg-purple-600" : u.role==="admin" ? "bg-blue-600" : "bg-gray-400"}`}>
-                          {(u.name||u.username||"?").charAt(0).toUpperCase()}
+                          {u.employeeFotoUrl
+                            ? <img src={u.employeeFotoUrl} alt={u.name||u.username} className="w-full h-full object-cover" />
+                            : (u.name||u.username||"?").charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
@@ -890,8 +892,10 @@ export default function Usuarios() {
                         <div className="flex items-start justify-between gap-4 flex-wrap">
                           <div className="flex items-center gap-4 min-w-0">
                             <button className="lg:hidden shrink-0" onClick={()=>setUPanel("list")}><ArrowLeft className="h-4 w-4" /></button>
-                            <div className={`h-14 w-14 rounded-full flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-sm ${selectedUser.role==="admin_master"?"bg-purple-600":selectedUser.role==="admin"?"bg-blue-600":"bg-gray-400"}`}>
-                              {(selectedUser.name||selectedUser.username||"?").charAt(0).toUpperCase()}
+                            <div className={`h-14 w-14 rounded-full shrink-0 overflow-hidden shadow-sm flex items-center justify-center text-white font-bold text-xl ${selectedUser.role==="admin_master"?"bg-purple-600":selectedUser.role==="admin"?"bg-blue-600":"bg-gray-400"}`}>
+                              {selectedUser.employeeFotoUrl
+                                ? <img src={selectedUser.employeeFotoUrl} alt={selectedUser.name||selectedUser.username} className="w-full h-full object-cover" />
+                                : (selectedUser.name||selectedUser.username||"?").charAt(0).toUpperCase()}
                             </div>
                             <div className="min-w-0">
                               <h2 className="text-xl font-bold leading-tight">{selectedUser.name||selectedUser.username}</h2>

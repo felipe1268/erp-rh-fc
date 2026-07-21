@@ -2896,11 +2896,25 @@ export const appRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para listar usuários" });
       }
       const allUsers = await getAllUsers();
+      // Rev. 4482 — busca fotoUrl dos employees vinculados (employees.userId → users.id) em lote
+      const db = await getDb();
+      const userIds = allUsers.map((u: any) => u.id).filter(Boolean);
+      const empFotos: Map<number, string> = new Map();
+      if (db && userIds.length > 0) {
+        try {
+          const rows = await db.select({ userId: employees.userId, fotoUrl: employees.fotoUrl })
+            .from(employees)
+            .where(inArray(employees.userId as any, userIds));
+          for (const r of rows) {
+            if (r.userId && r.fotoUrl) empFotos.set(r.userId, r.fotoUrl);
+          }
+        } catch {}
+      }
       const usersWithCompanies = await Promise.all(allUsers.map(async (u: any) => {
         const links = await getUserCompanyLinks(u.id);
         let parsedObras: number[] = [];
         try { if (u.allowedObraIds) parsedObras = JSON.parse(u.allowedObraIds); } catch {}
-        return { ...u, password: undefined, companyIds: links.map((l: any) => l.companyId), allowedObraIds: parsedObras };
+        return { ...u, password: undefined, companyIds: links.map((l: any) => l.companyId), allowedObraIds: parsedObras, employeeFotoUrl: empFotos.get(u.id) || null };
       }));
       // Adm Cliente enxerga só usuários vinculados às SUAS empresas (isolamento cross-tenant).
       if (role === "adm_cliente") {
