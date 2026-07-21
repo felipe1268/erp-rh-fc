@@ -253,12 +253,17 @@ body{font-family:'Helvetica','Arial','Liberation Sans',sans-serif;font-size:11pt
 .fc-doc{max-width:760px;margin:0 auto;background:#fff;padding:${screenPadCss};box-sizing:border-box}
 .fc-doc p{margin:0 0 10px 0;text-align:justify}
 .fc-doc strong{font-weight:700;color:#1a1a1a}
+.fc-back-btn{position:fixed;top:14px;left:14px;z-index:9999;display:inline-flex;align-items:center;gap:6px;background:#1B2A4A;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-family:'Helvetica','Arial',sans-serif;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);text-decoration:none;transition:background .15s}
+.fc-back-btn:hover{background:#243b5e}
 @media print{
   body{background:#fff}
   .fc-doc{max-width:none;padding:0;box-shadow:none;border:none}
+  .fc-back-btn{display:none!important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
 }
 </style>
+
+<button class="fc-back-btn" onclick="window.close()">&#8592; Fechar</button>
 
 <div class="fc-doc">
 
