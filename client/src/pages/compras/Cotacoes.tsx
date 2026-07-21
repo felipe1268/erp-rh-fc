@@ -224,7 +224,7 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
     setSobrasSel(sel);
   }
 
-  const valorDebitoNum = parseFloat(valorDebito.replace(",", ".")) || 0;
+  const valorDebitoNum = parseFloat(valorDebito.replace(/\./g, "").replace(",", ".")) || 0;
 
   return (
     <div className="space-y-4">
@@ -277,10 +277,8 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
               <div className="relative flex-1">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
                 <input
-                  type="number"
-                  min={0}
-                  max={debitarMax}
-                  step={0.01}
+                  type="text"
+                  inputMode="decimal"
                   value={valorDebito}
                   onChange={e => setValorDebito(e.target.value)}
                   placeholder={`Máx. ${fmt(debitarMax)}`}
@@ -288,7 +286,7 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
                 />
               </div>
               <Button size="sm" variant="ghost"
-                onClick={() => setValorDebito(String(debitarMax.toFixed(2)))}
+                onClick={() => setValorDebito(debitarMax.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
                 className="h-7 text-xs text-orange-700 hover:bg-orange-100 whitespace-nowrap">
                 Usar tudo
               </Button>

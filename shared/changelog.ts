@@ -1,4 +1,25 @@
 /**
+ * Rev. 4497 - FIX: FORMATO BR NO CAMPO "DEBITAR DO RISCO" (7.358,10)
+ *
+ * PROBLEMA:
+ *   O campo de valor no bloco "Reserva de Risco — BDI (DI-08)" da cotação usava
+ *   type="number", que ignora formatação customizada. O botão "Usar tudo" gravava
+ *   o valor via toFixed(2) gerando "7358.10" (sem separador de milhar, ponto decimal).
+ *   O usuário esperava ver "7.358,10" no padrão monetário BR.
+ *
+ * CORREÇÃO:
+ *   - Input alterado para type="text" + inputMode="decimal"
+ *   - "Usar tudo" agora usa toLocaleString("pt-BR") → "7.358,10"
+ *   - valorDebitoNum strips pontos de milhar antes do parseFloat
+ *     (replace(/\./g,"").replace(",",".")) para suportar ambos os formatos
+ *
+ * ARQUIVO ALTERADO:
+ *   client/src/pages/compras/Cotacoes.tsx
+ *
+ * ZERO SCHEMA CHANGE.
+ */
+
+/**
  * Rev. 4496 - FEAT: BUSCA IRRESTRITA NA EAP DA SC (VIA EAP INTELIGENTE)
  *
  * PROBLEMA:
