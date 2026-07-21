@@ -314,6 +314,7 @@ function SessoesList({
   excluirSessaoMut, excluirSessoesMut, confirm,
   buscaSessoes, setBuscaSessoes, filtroObraSessoes, setFiltroObraSessoes,
   filtroSoPendentes, setFiltroSoPendentes,
+  filtroSoFinalizadas, setFiltroSoFinalizadas,
   baixandoLote, setBaixandoLote, loteProgress, setLoteProgress,
 }: {
   sessoes: any[]; companyId: number;
@@ -326,6 +327,7 @@ function SessoesList({
   buscaSessoes: string; setBuscaSessoes: (s: string) => void;
   filtroObraSessoes: string; setFiltroObraSessoes: (s: string) => void;
   filtroSoPendentes: boolean; setFiltroSoPendentes: (b: boolean) => void;
+  filtroSoFinalizadas: boolean; setFiltroSoFinalizadas: (b: boolean) => void;
   baixandoLote: boolean; setBaixandoLote: (b: boolean) => void;
   loteProgress: number; setLoteProgress: (n: number) => void;
 }) {
@@ -343,8 +345,9 @@ function SessoesList({
     }
     if (filtroObraSessoes) l = l.filter((s) => s.obraNome === filtroObraSessoes);
     if (filtroSoPendentes) l = l.filter((s) => s.status === "aberta");
+    if (filtroSoFinalizadas) l = l.filter((s) => s.status === "finalizada");
     return l;
-  }, [sessoes, buscaSessoes, filtroObraSessoes, filtroSoPendentes]);
+  }, [sessoes, buscaSessoes, filtroObraSessoes, filtroSoPendentes, filtroSoFinalizadas]);
 
   const grupos = useMemo(() => {
     const m = new Map<string, { key: string; label: string; ano: number; mes: number; semana: number; itens: any[] }>();
@@ -475,7 +478,7 @@ function SessoesList({
           {/* Pill: Só pendentes */}
           <button
             type="button"
-            onClick={() => setFiltroSoPendentes(!filtroSoPendentes)}
+            onClick={() => { setFiltroSoPendentes(!filtroSoPendentes); setFiltroSoFinalizadas(false); }}
             className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
               filtroSoPendentes
                 ? "bg-amber-500 border-amber-500 text-white shadow-sm"
@@ -485,6 +488,20 @@ function SessoesList({
             <span className={`w-1.5 h-1.5 rounded-full ${filtroSoPendentes ? "bg-white" : "bg-amber-400"}`} />
             Só pendentes
             {filtroSoPendentes && <XIcon className="h-3 w-3 ml-0.5" />}
+          </button>
+          {/* Pill: Só finalizadas */}
+          <button
+            type="button"
+            onClick={() => { setFiltroSoFinalizadas(!filtroSoFinalizadas); setFiltroSoPendentes(false); }}
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+              filtroSoFinalizadas
+                ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
+                : "bg-white border-slate-200 text-slate-600 hover:border-emerald-500 hover:text-emerald-700"
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${filtroSoFinalizadas ? "bg-white" : "bg-emerald-500"}`} />
+            Só finalizadas
+            {filtroSoFinalizadas && <XIcon className="h-3 w-3 ml-0.5" />}
           </button>
           {/* Filtro obra */}
           {obrasUnicas.length > 0 && (
@@ -1249,6 +1266,7 @@ export default function DDSGuia() {
   const [buscaSessoes, setBuscaSessoes] = useState("");
   const [filtroObraSessoes, setFiltroObraSessoes] = useState("");
   const [filtroSoPendentes, setFiltroSoPendentes] = useState(false);
+  const [filtroSoFinalizadas, setFiltroSoFinalizadas] = useState(false);
   const [baixandoLote, setBaixandoLote] = useState(false);
   const [loteProgress, setLoteProgress] = useState(0);
 
@@ -2210,6 +2228,8 @@ export default function DDSGuia() {
               setFiltroObraSessoes={setFiltroObraSessoes}
               filtroSoPendentes={filtroSoPendentes}
               setFiltroSoPendentes={setFiltroSoPendentes}
+              filtroSoFinalizadas={filtroSoFinalizadas}
+              setFiltroSoFinalizadas={setFiltroSoFinalizadas}
               baixandoLote={baixandoLote}
               setBaixandoLote={setBaixandoLote}
               loteProgress={loteProgress}
