@@ -1,4 +1,51 @@
 /**
+ * Rev. 4494 - FIX: "INCLUIR DA EAP" NA COTAÇÃO — 3 BUGS (VÍNCULO, PREÇO METAE SINCRONIA SC)
+ *
+ * PROBLEMAS:
+ *   1. adicionarItensEAPCotacao recebia só {descricao, unidade, quantidade} — orcamentoItemId,
+ *      eapCodigo e precoMeta eram descartados no frontend antes da mutation.
+ *      Resultado: item entrava na SC e na cotação sem vínculo ao orçamento, sem preço meta,
+ *      sem código EAP.
+ *   2. Paradoxo: semVerba=false + motivoSemVerba="cotacao_eap" ao mesmo tempo na SC.
+ *   3. Picker "Incluir da EAP" mostrava toda a EAP da obra sem indicar quais itens já estavam
+ *      na cotação — o usuário não sabia quais reaplicaria em duplicata.
+ *   4. excluirItemCotacao / excluirItensCotacao não removiam o item da SC quando o item havia
+ *      sido criado a partir da cotação (tag "Adicionado na Cot.") — SC ficava com itens
+ *      "fantasma" após exclusão na cotação.
+ *
+ * CORREÇÕES:
+ *   Etapa 1 — vínculo completo (ZERO schema change):
+ *     • Frontend: mutation adicionarItensEAP agora envia orcamentoItemId (it.id), eapCodigo e
+ *       precoMeta (metaUnitTotal) para todos os itens selecionados no picker.
+ *     • Backend: adicionarItensEAPCotacao amplia o schema de input com orcamentoItemId,
+ *       eapCodigo e precoMeta (todos opcionais para backward compat).
+ *     • Backend: comprasSolicitacoesItens insert agora grava orcamentoItemId, eapCodigo e
+ *       precoMeta — campos que já existem na tabela mas nunca eram preenchidos neste path.
+ *     • Paradoxo corrigido: motivoSemVerba definido como null quando semVerba=false.
+ *
+ *   Etapa 2 — picker sabe quais itens já estão na cotação (ZERO schema change):
+ *     • getItensEAPParaCotacao agora cruza os itens da cotação (via
+ *       cotacao_item.solicitacao_item_id → sc_item.orcamento_item_id) e adiciona
+ *       jaEmCotacao:boolean ao retorno.
+ *     • Frontend: linha com jaEmCotacao=true exibe badge âmbar "Já na cotação" e fica
+ *       levemente opacificada — pode ainda ser re-selecionada (usuario decide).
+ *
+ *   Etapa 3 — exclusão bidirecional cotacao ↔ SC (ZERO schema change):
+ *     • excluirItemCotacao: ao deletar item de cotação, verifica se o sc_item vinculado tem
+ *       observacoes.startsWith("Adicionado na Cot.") (tag gravada na criação). Se sim,
+ *       remove também o item da SC (+ nullifica FK em compras_ordens_itens). Itens originais
+ *       da SC (que deram origem à cotação) são preservados — apenas o FK é nullado.
+ *     • excluirItensCotacao (bulk): mesma lógica em lote com guard try/catch não-bloqueante.
+ *
+ * ARQUIVOS ALTERADOS:
+ *   server/routers/compras.ts — getItensEAPParaCotacao, adicionarItensEAPCotacao,
+ *                               excluirItemCotacao, excluirItensCotacao
+ *   client/src/pages/compras/Cotacoes.tsx — mutation call (envia novos campos) + picker badge
+ *
+ * ZERO SCHEMA CHANGE.
+ */
+
+/**
  * Rev. 4493 - BUG: ITEM REMOVIDO DA SC PERMANECIA NA COTAÇÃO (MAPA DE COTAÇÃO DESATUALIZADO)
  *
  * PROBLEMA:

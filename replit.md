@@ -50,11 +50,12 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4494** — **FIX: "INCLUIR DA EAP" NA COTAÇÃO — 3 BUGS (VÍNCULO, PREÇO META E SINCRONIA SC).** `adicionarItensEAPCotacao` descartava `orcamentoItemId`/`eapCodigo`/`precoMeta` no frontend → SC entrava sem preço nem vínculo ao orçamento. `excluirItemCotacao` não removia item da SC quando originado na cotação. Picker não sinalizava itens já na cotação. Fix: (1) frontend passa os 3 campos, backend os grava em `comprasSolicitacoesItens`; (2) `getItensEAPParaCotacao` retorna `jaEmCotacao:boolean` + badge âmbar no picker; (3) exclusão da cotação cascateia para SC (tag `"Adicionado na Cot."`) + lote. ZERO schema change.
 - **Rev. 4493** — **BUG: ITEM REMOVIDO DA SC PERMANECIA NA COTAÇÃO.** `cancelarItemSc` e `updateSolicitacao` apenas nullavam `solicitacao_item_id` nos itens de cotação → item ficava órfão no Mapa de Cotação. Fix: helper `_cascadeRemoveCotItens` (por FK) + `_reconcileCotItensForSC` (por `cotacao_id`, detecta orphans pré-existentes com FK já NULL). Aplicado em 3 pontos. SIMÉTRICO: item ADICIONADO à SC é inserido automaticamente em todas as cotações ativas. ZERO schema change.
-- **Rev. 4492** — **FEAT: DATAS E COUNTDOWN DE ENTREGA NA LISTA DE SCs.** Colunas "Previsão Entrega" (sortável + chip: verde/amarelo/azul/vermelho) e "Emissão OC" adicionadas. Servidor expõe `_ocEmitidaEm`+`_dataEntregaPrevista` (menor data p/ SC). Novo bucket "Ent. Atrasadas" (vermelho) no breakdown. Grid `lg:grid-cols-11`. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4492** — **FEAT: DATAS E COUNTDOWN DE ENTREGA NA LISTA DE SCs.** Colunas "Previsão Entrega" + "Emissão OC". Novo bucket "Ent. Atrasadas". Grid `lg:grid-cols-11`. ZERO schema change.
 - **Rev. 4487** — **SEGREGAÇÃO DE FUNÇÕES: REMOVER "AGUARDANDO PAGAMENTO" DO MÓDULO COMPRAS (COSO/LGPD).** Ciclo do comprador termina no recebimento. `statusEfetivoSC()` agora retorna `"aprovado"` (badge "Concluído") em vez de `"aguardando_pagamento"` para SCs com `_ocsEntregues=true`. Grid volta a `lg:grid-cols-9`. ZERO schema change.
 - **Rev. 4485** — **FIX: PLACEHOLDERS DE PRAZO DE NF NO TEMPLATE ISO DE CONTRATO PJ.** Novos placeholders `[TEXTO_DIA_FECHAMENTO]`, `[PRAZO_NOTA_ADIANTAMENTO]`, `[PRAZO_NOTA_FECHAMENTO]` adicionados aos 4 paths. `[DIA_FECHAMENTO]=31` exibe "último dia do mês". ZERO schema change.
 - **Rev. 4484** — **FEAT: DIA 2ª MEDIÇÃO PJ — OPÇÃO "ÚLTIMO DIA DO MÊS".** Campo "Dia 2ª Medição" no formulário de Contrato PJ substituído por toggle "Dia fixo | Último dia" + input numérico condicional. Convenção `diaFechamento = 31`. ZERO schema change.

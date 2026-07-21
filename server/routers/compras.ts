@@ -6509,7 +6509,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const [item] = await db.select({ cotacaoId: comprasCotacoesItens.cotacaoId }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, input.id));
+      const [item] = await db.select({
+        cotacaoId: comprasCotacoesItens.cotacaoId,
+        solicitacaoItemId: comprasCotacoesItens.solicitacaoItemId,
+      }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, input.id));
       if (!item) throw new TRPCError({ code: "NOT_FOUND" });
       const [cot] = await db.select({ companyId: comprasCotacoes.companyId, status: comprasCotacoes.status }).from(comprasCotacoes).where(eq(comprasCotacoes.id, item.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
@@ -6526,6 +6529,19 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       // Remover respostas do item antes de excluir
       await db.delete(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.itemId, input.id));
       await db.delete(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, input.id));
+      // Rev. 4493+ — se o item da SC foi criado a partir desta cotação (tag "Adicionado na Cot."),
+      // remover também da SC (bidirecional). Itens originais da SC são preservados.
+      if (item.solicitacaoItemId) {
+        try {
+          const [scItem] = await db.select({ id: comprasSolicitacoesItens.id, observacoes: comprasSolicitacoesItens.observacoes })
+            .from(comprasSolicitacoesItens)
+            .where(eq(comprasSolicitacoesItens.id, item.solicitacaoItemId));
+          if (scItem && scItem.observacoes && scItem.observacoes.startsWith("Adicionado na Cot.")) {
+            await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ${scItem.id}`);
+            await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.id, scItem.id));
+          }
+        } catch (_) { /* não bloqueia exclusão do item da cotação */ }
+      }
       return { ok: true };
     }),
 
@@ -6567,8 +6583,27 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           .where(inArray(comprasOrdensItens.cotacaoItemId, input.ids));
         if (ocItens.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Um ou mais itens já estão em Ordens de Compra ativas e não podem ser excluídos." });
       } catch (err: any) { if (err?.code === "BAD_REQUEST") throw err; }
+      // Rev. 4493+ — coletar solicitacaoItemIds antes de deletar para cascade na SC
+      const cotItensParaCascade = await db.select({ id: comprasCotacoesItens.id, solicitacaoItemId: comprasCotacoesItens.solicitacaoItemId })
+        .from(comprasCotacoesItens)
+        .where(inArray(comprasCotacoesItens.id, input.ids));
       await db.delete(comprasCotacaoRespostas).where(inArray(comprasCotacaoRespostas.itemId, input.ids));
       await db.delete(comprasCotacoesItens).where(inArray(comprasCotacoesItens.id, input.ids));
+      // Cascade: remover itens da SC que foram criados a partir desta cotação
+      const scIdsParaCascade = cotItensParaCascade.map(c => c.solicitacaoItemId).filter((x): x is number => x != null);
+      if (scIdsParaCascade.length > 0) {
+        try {
+          const scItens = await db.select({ id: comprasSolicitacoesItens.id, observacoes: comprasSolicitacoesItens.observacoes })
+            .from(comprasSolicitacoesItens)
+            .where(inArray(comprasSolicitacoesItens.id, scIdsParaCascade));
+          const scCriados = scItens.filter(s => s.observacoes && s.observacoes.startsWith("Adicionado na Cot."));
+          if (scCriados.length > 0) {
+            const scCriadosIds = scCriados.map(s => s.id);
+            await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + scCriadosIds.join(",") + "]::int[]")})`);
+            await db.delete(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scCriadosIds));
+          }
+        } catch (_) { /* não bloqueia exclusão em lote */ }
+      }
       return { ok: true, deleted: input.ids.length };
     }),
 
@@ -6628,6 +6663,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     }),
 
   // Rev. 4250 — Itens da EAP disponíveis para incluir na cotação
+  // Rev. 4493+ — marca itens já presentes na cotação com jaEmCotacao:true.
   getItensEAPParaCotacao: protectedProcedure
     .input(z.object({ cotacaoId: z.number() }))
     .query(async ({ input, ctx }) => {
@@ -6635,6 +6671,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       const [cot] = await db.select({
         companyId: comprasCotacoes.companyId,
         obraId: comprasCotacoes.obraId,
+        solicitacaoId: comprasCotacoes.solicitacaoId,
       }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       await _assertCompanyAccess(ctx.user, cot.companyId);
@@ -6662,11 +6699,26 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           sql`${orcamentoItens.servicoCodigo} IS NOT NULL`
         ))
         .orderBy(orcamentoItens.eapCodigo);
-      return itens;
+      // Rev. 4493+ — determinar quais itens do orçamento já têm item correspondente
+      // na cotação (via solicitacaoItemId → comprasSolicitacoesItens.orcamentoItemId).
+      const jaEmCotacaoOrcIds = new Set<number>();
+      const cotItensLinks = await db.select({ solicitacaoItemId: comprasCotacoesItens.solicitacaoItemId })
+        .from(comprasCotacoesItens)
+        .where(and(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId), sql`solicitacao_item_id IS NOT NULL`));
+      const scItemIds = cotItensLinks.map(c => c.solicitacaoItemId).filter((x): x is number => x != null);
+      if (scItemIds.length > 0) {
+        const scItens = await db.select({ orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId })
+          .from(comprasSolicitacoesItens)
+          .where(inArray(comprasSolicitacoesItens.id, scItemIds));
+        scItens.forEach(s => { if (s.orcamentoItemId) jaEmCotacaoOrcIds.add(s.orcamentoItemId); });
+      }
+      return itens.map(it => ({ ...it, jaEmCotacao: jaEmCotacaoOrcIds.has(it.id) }));
     }),
 
   // Rev. 4250/4251 — Adiciona em lote itens selecionados da EAP à cotação
   // Rev. 4251 — espelha automaticamente na SC vinculada (se existir)
+  // Rev. 4493+ — transmite orcamentoItemId/eapCodigo/precoMeta para vínculo completo;
+  //              também cria o item na SC com todos os campos (zero schema change).
   adicionarItensEAPCotacao: protectedProcedure
     .input(z.object({
       cotacaoId: z.number(),
@@ -6674,6 +6726,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         descricao: z.string(),
         unidade: z.string().optional(),
         quantidade: z.string(),
+        orcamentoItemId: z.number().optional(),
+        eapCodigo: z.string().optional(),
+        precoMeta: z.string().optional(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -6690,7 +6745,6 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (input.itens.length === 0) return { ok: true, count: 0 };
       const tag = `Adicionado na Cot. ${cot.numeroCotacao ?? `#${input.cotacaoId}`} por ${ctx.user.name ?? "usuário"}`;
       return await db.transaction(async tx => {
-        // Para cada item da EAP, criar item na SC (se vinculada) e na cotação
         const resultItems: { cotacaoItemId: number; scItemId: number | null }[] = [];
         for (const it of input.itens) {
           const descricao = it.descricao.trim();
@@ -6698,6 +6752,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           const quantidade = String(parseFloat(it.quantidade.replace(",", ".")) || 1);
           let solicitacaoItemId: number | null = null;
           if (cot.solicitacaoId) {
+            // Rev. 4493+ — gravar orcamentoItemId, eapCodigo e precoMeta para vínculo completo ao orçamento.
+            // motivoSemVerba: null (era "cotacao_eap" — paradoxo com semVerba=false corrigido).
             const [scItem] = await tx.insert(comprasSolicitacoesItens).values({
               solicitacaoId: cot.solicitacaoId,
               descricao,
@@ -6705,8 +6761,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
               quantidade,
               statusItem: "pendente",
               semVerba: false,
-              motivoSemVerba: "cotacao_eap",
+              motivoSemVerba: null,
               observacoes: tag,
+              orcamentoItemId: it.orcamentoItemId ?? null,
+              eapCodigo: it.eapCodigo ?? null,
+              precoMeta: it.precoMeta ?? null,
             }).returning({ id: comprasSolicitacoesItens.id });
             solicitacaoItemId = scItem?.id ?? null;
           }

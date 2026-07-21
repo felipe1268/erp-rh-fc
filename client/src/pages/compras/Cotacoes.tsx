@@ -7427,17 +7427,21 @@ export default function Cotacoes() {
                   <tbody>
                     {filtrados.map((it: any) => {
                       const sel = eapPickerSelected.has(it.id);
+                      const jaEmCot = !!it.jaEmCotacao;
                       return (
                         <tr
                           key={it.id}
                           onClick={() => setEapPickerSelected(prev => { const n = new Set(prev); sel ? n.delete(it.id) : n.add(it.id); return n; })}
-                          className={`border-b border-gray-100 cursor-pointer hover:bg-emerald-50/60 transition-colors ${sel ? "bg-emerald-50" : ""}`}
+                          className={`border-b border-gray-100 cursor-pointer hover:bg-emerald-50/60 transition-colors ${sel ? "bg-emerald-50" : jaEmCot ? "opacity-55" : ""}`}
                         >
                           <td className="px-2 py-1.5 text-center">
                             <input type="checkbox" checked={sel} readOnly className="rounded border-gray-400 text-emerald-600 h-3.5 w-3.5 pointer-events-none" />
                           </td>
                           <td className="px-2 py-1.5 font-mono text-gray-500 whitespace-nowrap">{it.eapCodigo}</td>
-                          <td className="px-2 py-1.5 text-gray-800 break-words max-w-xs">{it.descricao}</td>
+                          <td className="px-2 py-1.5 text-gray-800 break-words max-w-xs">
+                            {it.descricao}
+                            {jaEmCot && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 whitespace-nowrap">Já na cotação</span>}
+                          </td>
                           <td className="px-2 py-1.5 text-center text-gray-500">{it.unidade ?? "—"}</td>
                           <td className="px-2 py-1.5 text-right text-gray-700">{it.quantidade ? parseFloat(it.quantidade).toLocaleString("pt-BR", { maximumFractionDigits: 3 }) : "—"}</td>
                           <td className="px-2 py-1.5 text-right text-blue-700">
@@ -7464,6 +7468,9 @@ export default function Cotacoes() {
                     descricao: it.descricao ?? "",
                     unidade: it.unidade ?? "un",
                     quantidade: it.quantidade ?? "1",
+                    orcamentoItemId: it.id,
+                    eapCodigo: it.eapCodigo ?? undefined,
+                    precoMeta: it.metaUnitTotal ? String(it.metaUnitTotal) : undefined,
                   })),
                 });
               }}
