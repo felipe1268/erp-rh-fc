@@ -1,4 +1,30 @@
 /**
+ * Rev. 4503 - FIX: DDS ZIP "LOAD FAILED" — BUFFER EM MEMÓRIA + MENSAGEM AMIGÁVEL
+ *
+ * CAUSA:
+ *   `archiver` fazia `pipe(res)` antes de processar todas as sessões. Se qualquer
+ *   etapa falhasse depois dos headers serem enviados, o servidor dropava a conexão
+ *   silenciosamente. No iOS Safari isso aparece como "Load failed" no catch do fetch.
+ *   Além disso, o catch repassava `e.message` bruto ("Load failed") no toast.
+ *
+ * FIX:
+ *   Backend (downloadDdsAtaLote.ts):
+ *   - Trocar pipe direto para `res` por PassThrough: acumular todos os chunks em
+ *     memória, aguardar `archive.finalize()` + `zipDone`, depois enviar o Buffer
+ *     com `Content-Length` explícito via `res.send(zipBuffer)`.
+ *   - Agora qualquer erro durante a geração ainda pode retornar 500 JSON (headers
+ *     não foram enviados). Mensagem de erro inclui `err.message` real.
+ *
+ *   Frontend (DDSGuia.tsx – SessoesList):
+ *   - `resp.ok === false` → tenta ler `.json().error` e exibe mensagem do servidor.
+ *   - catch com `msg === "Load failed" || "Failed to fetch"` → exibe mensagem
+ *     amigável "Falha de rede. Verifique a conexão e tente novamente."
+ *   - Sucesso → toast.success("ZIP baixado com sucesso!").
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4502 - REDESIGN: DDS SESSÕES — LAYOUT MODERNO (TIMELINE + KPIs + BARRA FLUTUANTE)
  *
  * PROBLEMA:

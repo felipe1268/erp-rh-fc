@@ -378,14 +378,26 @@ function SessoesList({
         body: JSON.stringify({ companyId, ids }),
         credentials: "include",
       });
-      if (!resp.ok) { toast.error("Falha ao gerar os PDFs em lote"); return; }
+      if (!resp.ok) {
+        let errMsg = "Falha ao gerar os PDFs em lote";
+        try { const j = await resp.json(); errMsg = j.error || errMsg; } catch {}
+        toast.error(errMsg); return;
+      }
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `DDS_${new Date().getFullYear()}_atas.zip`;
       document.body.appendChild(a); a.click();
       setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1000);
-    } catch (e: any) { toast.error(e?.message ?? "Erro ao baixar ZIP"); }
+      toast.success("ZIP baixado com sucesso!");
+    } catch (e: any) {
+      const msg = String(e?.message ?? "");
+      if (msg === "Load failed" || msg === "Failed to fetch") {
+        toast.error("Falha de rede. Verifique a conexão e tente novamente.");
+      } else {
+        toast.error(msg || "Erro ao baixar ZIP");
+      }
+    }
     finally { setBaixandoLote(false); }
   }
 

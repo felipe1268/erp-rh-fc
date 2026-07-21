@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import * as fs from "fs";
 import * as path from "path";
+import { PassThrough } from "stream";
 import archiver from "archiver";
 import { getDb } from "../db";
 import { sdk } from "../_core/sdk";
@@ -268,13 +269,20 @@ export function registerDdsAtaLoteRoute(app: Express) {
       }).from(ddsSessoes)
         .where(and(eq(ddsSessoes.companyId, companyId), inArray(ddsSessoes.id, ids)));
 
-      // Configurar ZIP
-      res.setHeader("Content-Type", "application/zip");
-      res.setHeader("Content-Disposition", `attachment; filename="DDS_${new Date().getFullYear()}.zip"`);
-      res.setHeader("Cache-Control", "no-store");
+      // ── Montar ZIP completamente em memória antes de enviar ──────────────────
+      // Isso evita que um erro no meio da geração drope a conexão silenciosamente
+      // (o que no iOS Safari aparece como "Load failed").
+      const pass = new PassThrough();
+      const chunks: Buffer[] = [];
+      pass.on("data", (chunk: Buffer) => chunks.push(chunk));
+      const zipDone = new Promise<void>((resolve, reject) => {
+        pass.on("end", resolve);
+        pass.on("error", reject);
+      });
 
       const archive = archiver("zip", { zlib: { level: 6 } });
-      archive.pipe(res);
+      archive.on("error", (err) => { throw err; });
+      archive.pipe(pass);
 
       // Gerar HTML para cada sessão e organizar em pastas
       for (const s of sessoesList) {
@@ -310,8 +318,7 @@ export function registerDdsAtaLoteRoute(app: Express) {
         let year = "0000", month = "00", monthName = "Mês", week = 0, dayStr = "00-00-0000";
         if (dateStr.length === 10) {
           const [y, m, d] = dateStr.split("-");
-          year = y;
-          month = m;
+          year = y; month = m;
           monthName = MESES_PT[parseInt(m, 10) - 1] || m;
           week = getWeekOfYear(dateStr);
           dayStr = `${d}-${m}-${y}`;
@@ -321,14 +328,21 @@ export function registerDdsAtaLoteRoute(app: Express) {
         const temaClean = safeFileName(s.tituloTema || `Sessão ${s.id}`);
         const fileName = `${dayStr} - ${temaClean}.html`;
         const folderPath = `${year}/${month} - ${monthName}/${weekStr}/${fileName}`;
-
         archive.append(html, { name: folderPath });
       }
 
       await archive.finalize();
+      await zipDone;
+
+      const zipBuffer = Buffer.concat(chunks);
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="DDS_${new Date().getFullYear()}.zip"`);
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Content-Length", String(zipBuffer.length));
+      res.send(zipBuffer);
     } catch (err) {
       console.error("[DdsAtaLote] Erro:", err);
-      if (!res.headersSent) res.status(500).json({ error: "Erro interno" });
+      if (!res.headersSent) res.status(500).json({ error: String((err as any)?.message ?? "Erro interno ao gerar ZIP") });
     }
   });
 }
