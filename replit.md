@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4488** — **FIX: BADGE CORRETO PARA SCs COM OC EMITIDA (P2P THREE-WAY MATCHING).** SCs no filtro "Entrega Parcial" exibiam badge "Em Cotação" (status cru vazando). Dois novos status derivados: `ag_recebimento` (OC emitida, nada recebido — laranja) e `entrega_parcial` (parte recebida — âmbar), derivados por `_itens.atendidos`. `statusEfetivoSC()` prioriza: `_ocsEntregues` → Concluído; `_hasOC+!entregues` → Ag.Recebimento ou Entrega Parcial. ZERO schema change.
 - **Rev. 4487** — **SEGREGAÇÃO DE FUNÇÕES: REMOVER "AGUARDANDO PAGAMENTO" DO MÓDULO COMPRAS (COSO/LGPD).** Ciclo do comprador termina no recebimento. `statusEfetivoSC()` agora retorna `"aprovado"` (badge "Concluído") em vez de `"aguardando_pagamento"` para SCs com `_ocsEntregues=true`. `statusBreakdown.concluidas` incorpora `_ocsEntregues=true`. Bloco violeta e predicate `aguardandoPagamento` removidos. Grid volta a `lg:grid-cols-9`. ZERO schema change.
-- **Rev. 4486** — **FIX: BUG DE CONTAGEM E FILTRO DE STATUS DAS SCs.** `statusEfetivoSC` derivava o badge "Aguardando Pagamento" corretamente, mas `statusBreakdown` e `breakdownPredicates` usavam `r.status` RAW — contavam essas SCs em "Em Cotação" e o filtro exibia SCs com badge errado. Correção: contadores excluem `_ocsEntregues=true`. ZERO schema change.
 
 ### 5 one-liners
 

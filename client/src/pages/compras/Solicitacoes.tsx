@@ -29,21 +29,30 @@ import {
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   rascunho:  { label: "Rascunho",    cls: "bg-gray-100 text-gray-600 border-gray-200" },
   pendente:  { label: "Pendente",    cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  cotacao:   { label: "Em Cotação",  cls: "bg-blue-50 text-blue-700 border-blue-200" },
-  aprovado:  { label: "Concluído",   cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  recusado:  { label: "Recusado",    cls: "bg-red-50 text-red-700 border-red-200" },
-  cancelado: { label: "Cancelado",   cls: "bg-gray-100 text-gray-500 border-gray-200" },
+  cotacao:       { label: "Em Cotação",       cls: "bg-blue-50 text-blue-700 border-blue-200"     },
+  aprovado:      { label: "Concluído",        cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  recusado:      { label: "Recusado",         cls: "bg-red-50 text-red-700 border-red-200"         },
+  cancelado:     { label: "Cancelado",        cls: "bg-gray-100 text-gray-500 border-gray-200"     },
+  // Rev. 4488 — Status derivados de entrega (P2P three-way matching: OC × Recebimento × NF).
+  // ag_recebimento: OC emitida, almoxarifado ainda não recebeu nenhum item.
+  // entrega_parcial: almoxarifado recebeu parte dos itens, restante pendente.
+  ag_recebimento: { label: "Ag. Recebimento", cls: "bg-orange-50 text-orange-700 border-orange-200" },
+  entrega_parcial:{ label: "Entrega Parcial", cls: "bg-amber-50 text-amber-700 border-amber-200"   },
 };
 
-// Rev. 4487 — O ciclo do comprador termina na confirmação do recebimento (COSO/ISM).
-// Informações de pagamento ao fornecedor são responsabilidade exclusiva do Financeiro.
-// SCs com todas as OCs entregues (_ocsEntregues=true) são exibidas como "Concluído"
-// no módulo Compras — o status de pagamento não é visível aqui.
-// (Rev. 1693 exibia "Aguardando Pagamento" — removido por segregação de funções + LGPD Art. 6º III)
+// Rev. 4488 — Deriva status efetivo da SC para badge visual (P2P / three-way matching).
+// Prioridade: entrega > pagamento > status cru.
+// _ocsEntregues=true  → Concluído (ciclo logístico encerrado; pagamento é do Financeiro).
+// _hasOC + atendidos>0 → Entrega Parcial (almoxarifado recebeu parte).
+// _hasOC + atendidos=0 → Ag. Recebimento (OC emitida, nada recebido ainda).
 function statusEfetivoSC(r: any): string {
   const st = String(r?.status ?? "");
   if (r?._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(st)) {
     return "aprovado";
+  }
+  if (r?._hasOC === true && r?._ocsEntregues !== true && !["aprovado", "recusado", "cancelado"].includes(st)) {
+    const atendidos = Number(r?._itens?.atendidos ?? 0);
+    return atendidos > 0 ? "entrega_parcial" : "ag_recebimento";
   }
   return st;
 }

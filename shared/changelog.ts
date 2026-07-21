@@ -1,4 +1,37 @@
 /**
+ * Rev. 4488 - FIX: BADGE DE STATUS CORRETO PARA SCs COM OC EMITIDA (P2P THREE-WAY MATCHING)
+ *
+ * CONTEXTO:
+ *   SCs no filtro "Entrega Parcial" (14 itens) exibiam badge "Em Cotação" — mismatch
+ *   confuso para o comprador. O raw status "cotacao" vaza para o badge quando a SC
+ *   já tem OC emitida. O modelo P2P correto (NBC TG 16 / SAP MIGO) distingue:
+ *     1. OC emitida, nada recebido → "Ag. Recebimento" (almoxarifado aguardando entrega)
+ *     2. OC emitida, parte recebida → "Entrega Parcial" (recebimento em andamento)
+ *     3. Tudo recebido → "Concluído" (ciclo logístico encerrado; pagamento = Financeiro)
+ *
+ * IMPLEMENTAÇÃO:
+ *   STATUS_CFG: adicionados dois novos buckets derivados:
+ *     - ag_recebimento: laranja · "Ag. Recebimento"
+ *     - entrega_parcial: âmbar · "Entrega Parcial"
+ *
+ *   statusEfetivoSC(): lógica de derivação atualizada com prioridade:
+ *     1. _ocsEntregues=true → "aprovado" (Concluído) — ciclo logístico encerrado.
+ *     2. _hasOC=true && !_ocsEntregues:
+ *        - _itens.atendidos > 0 → "entrega_parcial"
+ *        - _itens.atendidos = 0 → "ag_recebimento"
+ *     3. fallback → status cru do banco.
+ *
+ *   O painel de status mantém bucket único "Entrega Parcial" cobrindo ambos os
+ *   sub-estados; os badges individualmente são granulares.
+ *
+ * ARQUIVOS ALTERADOS:
+ *   - client/src/pages/compras/Solicitacoes.tsx (STATUS_CFG, statusEfetivoSC)
+ *   - shared/version.ts (bump Rev. 4488)
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4487 - SEGREGAÇÃO DE FUNÇÕES: REMOVER "AGUARDANDO PAGAMENTO" DO MÓDULO COMPRAS
  *
  * CONTEXTO:
