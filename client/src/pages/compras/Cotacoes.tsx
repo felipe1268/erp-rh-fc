@@ -1484,6 +1484,10 @@ export default function Cotacoes() {
     { cotacaoId: showDetalhe!, companyId },
     { enabled: showDetalhe !== null && showFdCotDialog }
   );
+  const saldoFdQ = trpc.compras.getSaldoFd.useQuery(
+    { companyId, obraId: (detalheQ.data as any)?.obraId ?? 0 },
+    { enabled: showDetalhe !== null && showFdCotDialog && !!((detalheQ.data as any)?.obraId) }
+  );
   const adicionarForn = trpc.compras.adicionarFornecedorMapa.useMutation({
     onSuccess: () => { toast.success("Fornecedor adicionado!"); setMapaFornSelectId(""); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
@@ -7095,6 +7099,34 @@ export default function Cotacoes() {
                       </div>
                     )}
                   </div>
+                  {saldoFdQ.data && (
+                    <div className={`rounded-lg border p-3 ${saldoFdQ.data.totalFdOrcado <= 0 ? "bg-amber-50 border-amber-200" : saldoFdQ.data.saldoFd > 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Saldo de FD da Obra</p>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase">FD Orçado</p>
+                          <p className="text-sm font-bold text-gray-800">{fmt(saldoFdQ.data.totalFdOrcado)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase">Comprometido</p>
+                          <p className="text-sm font-bold text-amber-600">{fmt(saldoFdQ.data.totalFdComprometido)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase">Saldo</p>
+                          <p className={`text-sm font-bold ${saldoFdQ.data.saldoFd > 0 ? "text-emerald-700" : "text-red-600"}`}>{fmt(saldoFdQ.data.saldoFd)}</p>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex justify-center">
+                        {saldoFdQ.data.totalFdOrcado <= 0 ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Sem orçamento FD para esta obra</span>
+                        ) : saldoFdQ.data.saldoFd > 0 ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Saldo disponível</span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Sem saldo — pode bloquear aprovação</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   {semMat ? (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
                       <p className="text-sm text-red-700 font-medium">{sp.totalMdo > 0 ? "Esta cotação é 100% mão de obra" : "Nenhum valor de material identificado"}</p>
@@ -9279,6 +9311,34 @@ export default function Cotacoes() {
                     </div>
                   )}
                 </div>
+                {saldoFdQ.data && (
+                  <div className={`rounded-lg border p-3 ${saldoFdQ.data.totalFdOrcado <= 0 ? "bg-amber-50 border-amber-200" : saldoFdQ.data.saldoFd > 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Saldo de FD da Obra</p>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase">FD Orçado</p>
+                        <p className="text-sm font-bold text-gray-800">{fmt(saldoFdQ.data.totalFdOrcado)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase">Comprometido</p>
+                        <p className="text-sm font-bold text-amber-600">{fmt(saldoFdQ.data.totalFdComprometido)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase">Saldo</p>
+                        <p className={`text-sm font-bold ${saldoFdQ.data.saldoFd > 0 ? "text-emerald-700" : "text-red-600"}`}>{fmt(saldoFdQ.data.saldoFd)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex justify-center">
+                      {saldoFdQ.data.totalFdOrcado <= 0 ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Sem orçamento FD para esta obra</span>
+                      ) : saldoFdQ.data.saldoFd > 0 ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Saldo disponível</span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Sem saldo — pode bloquear aprovação</span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {semMat ? (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
                     <p className="text-sm text-red-700 font-medium">{sp.totalMdo > 0 ? "Esta cotação é 100% mão de obra" : "Nenhum valor de material identificado"}</p>
