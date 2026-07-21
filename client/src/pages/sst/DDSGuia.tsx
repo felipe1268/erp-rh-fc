@@ -313,6 +313,7 @@ function SessoesList({
   setSelectedSessaoId, setEditarCategoriaId, abrirNovaSessao,
   excluirSessaoMut, excluirSessoesMut, confirm,
   buscaSessoes, setBuscaSessoes, filtroObraSessoes, setFiltroObraSessoes,
+  filtroSoPendentes, setFiltroSoPendentes,
   baixandoLote, setBaixandoLote, loteProgress, setLoteProgress,
 }: {
   sessoes: any[]; companyId: number;
@@ -324,6 +325,7 @@ function SessoesList({
   excluirSessaoMut: any; excluirSessoesMut: any; confirm: any;
   buscaSessoes: string; setBuscaSessoes: (s: string) => void;
   filtroObraSessoes: string; setFiltroObraSessoes: (s: string) => void;
+  filtroSoPendentes: boolean; setFiltroSoPendentes: (b: boolean) => void;
   baixandoLote: boolean; setBaixandoLote: (b: boolean) => void;
   loteProgress: number; setLoteProgress: (n: number) => void;
 }) {
@@ -340,8 +342,9 @@ function SessoesList({
       l = l.filter((s) => s.tituloTema?.toLowerCase().includes(q) || s.obraNome?.toLowerCase().includes(q) || s.instrutor?.toLowerCase().includes(q));
     }
     if (filtroObraSessoes) l = l.filter((s) => s.obraNome === filtroObraSessoes);
+    if (filtroSoPendentes) l = l.filter((s) => s.status === "aberta");
     return l;
-  }, [sessoes, buscaSessoes, filtroObraSessoes]);
+  }, [sessoes, buscaSessoes, filtroObraSessoes, filtroSoPendentes]);
 
   const grupos = useMemo(() => {
     const m = new Map<string, { key: string; label: string; ano: number; mes: number; semana: number; itens: any[] }>();
@@ -441,19 +444,17 @@ function SessoesList({
     <div className="relative pb-20">
 
       {/* ══ TOOLBAR SUPERIOR ══ */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-5">
-        {/* Nova sessão */}
-        <button
-          type="button"
-          onClick={() => abrirNovaSessao()}
-          className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-sm transition-colors"
-        >
-          <Plus className="h-4 w-4" /> Nova sessão
-        </button>
-
-        {/* Busca + filtro obra */}
-        <div className="flex gap-2 flex-1 flex-wrap sm:justify-end">
-          <div className="relative flex-1 min-w-[190px] max-w-xs">
+      <div className="flex flex-col gap-2 mb-5">
+        {/* Linha 1: botão + busca */}
+        <div className="flex gap-2 items-center flex-wrap">
+          <button
+            type="button"
+            onClick={() => abrirNovaSessao()}
+            className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-sm transition-colors shrink-0"
+          >
+            <Plus className="h-4 w-4" /> Nova sessão
+          </button>
+          <div className="relative flex-1 min-w-[160px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
             <input
               type="text"
@@ -468,18 +469,36 @@ function SessoesList({
               </button>
             )}
           </div>
+        </div>
+        {/* Linha 2: filtros chips */}
+        <div className="flex gap-2 flex-wrap items-center">
+          {/* Pill: Só pendentes */}
+          <button
+            type="button"
+            onClick={() => setFiltroSoPendentes(!filtroSoPendentes)}
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+              filtroSoPendentes
+                ? "bg-amber-500 border-amber-500 text-white shadow-sm"
+                : "bg-white border-slate-200 text-slate-600 hover:border-amber-400 hover:text-amber-700"
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${filtroSoPendentes ? "bg-white" : "bg-amber-400"}`} />
+            Só pendentes
+            {filtroSoPendentes && <XIcon className="h-3 w-3 ml-0.5" />}
+          </button>
+          {/* Filtro obra */}
           {obrasUnicas.length > 0 && (
             <div className="relative">
               <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
               <select
                 value={filtroObraSessoes}
                 onChange={(e) => setFiltroObraSessoes(e.target.value)}
-                className="pl-8 pr-8 py-2 text-sm bg-white border border-slate-200 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 appearance-none min-w-[150px]"
+                className="pl-8 pr-8 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 appearance-none"
               >
                 <option value="">Todas as obras</option>
                 {obrasUnicas.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
             </div>
           )}
         </div>
@@ -519,14 +538,16 @@ function SessoesList({
       {sessoesFiltradas.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-slate-400">
           <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-            {buscaSessoes || filtroObraSessoes
+            {buscaSessoes || filtroObraSessoes || filtroSoPendentes
               ? <Search className="h-7 w-7 opacity-50" />
               : <CalendarRange className="h-7 w-7 opacity-50" />}
           </div>
           <p className="text-sm font-medium text-slate-500">
-            {buscaSessoes || filtroObraSessoes ? "Nenhuma sessão encontrada" : "Nenhuma sessão registrada ainda"}
+            {filtroSoPendentes && !buscaSessoes && !filtroObraSessoes
+              ? "Nenhuma sessão pendente neste período"
+              : buscaSessoes || filtroObraSessoes ? "Nenhuma sessão encontrada" : "Nenhuma sessão registrada ainda"}
           </p>
-          {!buscaSessoes && !filtroObraSessoes && (
+          {!buscaSessoes && !filtroObraSessoes && !filtroSoPendentes && (
             <button type="button" onClick={() => abrirNovaSessao()} className="mt-4 text-sm font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900">
               Criar primeira sessão
             </button>
@@ -1227,6 +1248,7 @@ export default function DDSGuia() {
   // Filtros da lista de sessões
   const [buscaSessoes, setBuscaSessoes] = useState("");
   const [filtroObraSessoes, setFiltroObraSessoes] = useState("");
+  const [filtroSoPendentes, setFiltroSoPendentes] = useState(false);
   const [baixandoLote, setBaixandoLote] = useState(false);
   const [loteProgress, setLoteProgress] = useState(0);
 
@@ -2186,6 +2208,8 @@ export default function DDSGuia() {
               setBuscaSessoes={setBuscaSessoes}
               filtroObraSessoes={filtroObraSessoes}
               setFiltroObraSessoes={setFiltroObraSessoes}
+              filtroSoPendentes={filtroSoPendentes}
+              setFiltroSoPendentes={setFiltroSoPendentes}
               baixandoLote={baixandoLote}
               setBaixandoLote={setBaixandoLote}
               loteProgress={loteProgress}
