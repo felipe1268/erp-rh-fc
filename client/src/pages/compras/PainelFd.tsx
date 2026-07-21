@@ -125,9 +125,13 @@ export default function PainelFd() {
 
   const todasQ = trpc.compras.getSaldoFdTodasObras.useQuery(
     { companyId },
-    { enabled: companyId > 0 && selectedObra === -1 }
+    { enabled: companyId > 0 }
   );
   const todas = todasQ.data;
+
+  // Obras que têm FD definido no orçamento (bdi_fd > 0 ou OCs com FD)
+  const obraIdsComFd = new Set((todas?.porObra ?? []).map((r: any) => r.obraId));
+  const obrasComFd = obras.filter((o: any) => obraIdsComFd.has(o.id));
 
   const historicoQ = trpc.compras.getHistoricoFdAjustes.useQuery(
     { companyId, orcamentoId },
@@ -190,7 +194,7 @@ export default function PainelFd() {
               <SelectTrigger className="h-9 bg-white border-gray-300 text-gray-900"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="-1">Todas as obras</SelectItem>
-                {obras.map((o: any) => (
+                {obrasComFd.map((o: any) => (
                   <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
                 ))}
               </SelectContent>
