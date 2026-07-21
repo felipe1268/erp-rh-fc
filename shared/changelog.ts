@@ -1,4 +1,29 @@
 /**
+ * Rev. 4489 - FIX: SPLIT DO BUCKET "ENTREGA PARCIAL" → "AG. RECEBIMENTO" + "ENTREGA PARCIAL"
+ *
+ * CONTEXTO:
+ *   Rev. 4488 adicionou os badges corretos mas manteve um único bucket "Entrega Parcial"
+ *   no painel de status, que cobria tanto SCs sem nada recebido quanto SCs com recebimento
+ *   parcial. Usuário identificou a inconsistência: no dado real, todas as 14 SCs desse
+ *   bucket tinham 0/N recebidos (Ag. Recebimento), não entrega parcial propriamente dita.
+ *
+ * IMPLEMENTAÇÃO:
+ *   _isAgRec:       _hasOC && !_ocsEntregues && _itens.atendidos = 0 → "Ag. recebimento"
+ *   _isEntParcial:  _hasOC && !_ocsEntregues && _itens.atendidos > 0 → "Entrega parcial"
+ *
+ *   breakdownPredicates: split "entreguesParcial" em "agRecebimento" + "entreguesParcial".
+ *   statusBreakdown:     dois contadores separados (agRecebimento, entreguesParcial).
+ *   UI grid: lg:grid-cols-9 → lg:grid-cols-10 (10 buckets P2P).
+ *   emCotacao/emAndamento: adicionado guard !_hasOC (SCs com OC vão para ag_recebimento).
+ *
+ * ARQUIVOS ALTERADOS:
+ *   - client/src/pages/compras/Solicitacoes.tsx (predicates, breakdown, grid)
+ *   - shared/version.ts (bump Rev. 4489)
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4488 - FIX: BADGE DE STATUS CORRETO PARA SCs COM OC EMITIDA (P2P THREE-WAY MATCHING)
  *
  * CONTEXTO:

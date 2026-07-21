@@ -2382,16 +2382,19 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
   const listaFiltradaObraSemBreakdown = filtroClassificacao === "todas"
     ? listaFiltradaObraStatus
     : listaFiltradaObraStatus.filter((r: any) => effectiveTipo(r) === filtroClassificacao);
-  // Rev. 4487 — Segregação de funções (COSO): ciclo do comprador termina no recebimento.
-  // SCs com _ocsEntregues=true são "Concluídas" do ponto de vista de Compras.
-  // Predicate "concluidas" incorpora _ocsEntregues=true independente do status cru.
+  // Rev. 4489 — 10 buckets P2P: split Entrega Parcial → Ag. Recebimento + Entrega Parcial.
+  // agRecebimento:  OC emitida, almoxarifado não recebeu nada (_itens.atendidos=0).
+  // entreguesParcial: almoxarifado recebeu PARTE (_itens.atendidos>0 mas não tudo).
+  const _isAgRec = (r: any) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r) && Number(r._itens?.atendidos ?? 0) === 0;
+  const _isEntParcial = (r: any) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r) && Number(r._itens?.atendidos ?? 0) > 0;
   const breakdownPredicates: Record<string, (r: any) => boolean> = {
     aguardandoAprov: (r) => (r.aprovacaoStatus ?? "aguardando") === "aguardando" && !["aprovado", "recusado", "cancelado"].includes(r.status),
     aprovadasSemOC: (r) => ["aprovada", "aprovado"].includes(r.aprovacaoStatus ?? "") && !r._hasOC && !["aprovado", "recusado", "cancelado"].includes(r.status),
     pendente: (r) => r.status === "pendente" && !r._ocsEntregues,
-    emCotacao: (r) => r.status === "cotacao" && !r._ocsEntregues,
-    emAndamento: (r) => r.status === "em_andamento" && !r._ocsEntregues,
-    entreguesParcial: (r) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r),
+    emCotacao: (r) => r.status === "cotacao" && !r._ocsEntregues && !r._hasOC,
+    emAndamento: (r) => r.status === "em_andamento" && !r._ocsEntregues && !r._hasOC,
+    agRecebimento: _isAgRec,
+    entreguesParcial: _isEntParcial,
     concluidas: (r) => r.status === "aprovado" || scEntregueTotal(r) || (r._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(r.status)),
     recusadas: (r) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? ""),
     canceladas: (r) => r.status === "cancelado",
@@ -2454,8 +2457,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     recusado: listaKpisBase.filter((r: any) => r.status === "recusado").length,
   }), [listaKpisBase]);
 
-  // Rev. 4487 — Status detalhado (card superior). Segregação de funções COSO:
-  // _ocsEntregues=true = concluída para Compras. Sem bucket de pagamento aqui.
+  // Rev. 4489 — Status detalhado (card superior). Split P2P: Ag.Recebimento + Entrega Parcial.
   const statusBreakdown = useMemo(() => {
     const ativas = listaKpisBase.filter((r: any) => !["aprovado", "recusado", "cancelado"].includes(r.status) && !scEntregueTotal(r) && !r._ocsEntregues);
     return {
@@ -2464,9 +2466,10 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       aguardandoAprov: listaKpisBase.filter((r: any) => (r.aprovacaoStatus ?? "aguardando") === "aguardando" && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
       aprovadasSemOC: listaKpisBase.filter((r: any) => ["aprovada", "aprovado"].includes(r.aprovacaoStatus ?? "") && !r._hasOC && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
       pendente: listaKpisBase.filter((r: any) => r.status === "pendente" && !r._ocsEntregues).length,
-      emCotacao: listaKpisBase.filter((r: any) => r.status === "cotacao" && !r._ocsEntregues).length,
-      emAndamento: listaKpisBase.filter((r: any) => r.status === "em_andamento" && !r._ocsEntregues).length,
-      entreguesParcial: listaKpisBase.filter((r: any) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r)).length,
+      emCotacao: listaKpisBase.filter((r: any) => r.status === "cotacao" && !r._ocsEntregues && !r._hasOC).length,
+      emAndamento: listaKpisBase.filter((r: any) => r.status === "em_andamento" && !r._ocsEntregues && !r._hasOC).length,
+      agRecebimento: listaKpisBase.filter(_isAgRec).length,
+      entreguesParcial: listaKpisBase.filter(_isEntParcial).length,
       concluidas: listaKpisBase.filter((r: any) => r.status === "aprovado" || scEntregueTotal(r) || (r._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(r.status))).length,
       recusadas: listaKpisBase.filter((r: any) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? "")).length,
       canceladas: listaKpisBase.filter((r: any) => r.status === "cancelado").length,
@@ -2517,17 +2520,18 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             </span>
           )}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 divide-x divide-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 divide-x divide-slate-100">
           {[
-            { key: "aguardandoAprov",  label: "Aguardando aprovação", count: statusBreakdown.aguardandoAprov, color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
-            { key: "aprovadasSemOC",   label: "Aprovadas (sem OC)",   count: statusBreakdown.aprovadasSemOC,  color: "text-emerald-700", bar: "bg-emerald-400", ring: "ring-emerald-400" },
-            { key: "pendente",         label: "Pendente",             count: statusBreakdown.pendente,        color: "text-slate-700",   bar: "bg-slate-400",   ring: "ring-slate-400"   },
-            { key: "emCotacao",        label: "Em cotação",           count: statusBreakdown.emCotacao,       color: "text-sky-700",     bar: "bg-sky-400",     ring: "ring-sky-400"     },
-            { key: "emAndamento",      label: "Em andamento",         count: statusBreakdown.emAndamento,     color: "text-indigo-700",  bar: "bg-indigo-400",  ring: "ring-indigo-400"  },
-            { key: "entreguesParcial", label: "Entrega parcial",      count: statusBreakdown.entreguesParcial, color: "text-orange-700", bar: "bg-orange-400",  ring: "ring-orange-400"  },
-            { key: "concluidas",       label: "Concluídas",           count: statusBreakdown.concluidas,      color: "text-green-700",   bar: "bg-green-400",   ring: "ring-green-400"   },
-            { key: "recusadas",        label: "Recusadas",            count: statusBreakdown.recusadas,       color: "text-red-700",     bar: "bg-red-400",     ring: "ring-red-400"     },
-            { key: "canceladas",       label: "Canceladas",           count: statusBreakdown.canceladas,      color: "text-zinc-600",    bar: "bg-zinc-400",    ring: "ring-zinc-400"    },
+            { key: "aguardandoAprov",  label: "Aguardando aprovação", count: statusBreakdown.aguardandoAprov,  color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
+            { key: "aprovadasSemOC",   label: "Aprovadas (sem OC)",   count: statusBreakdown.aprovadasSemOC,   color: "text-emerald-700", bar: "bg-emerald-400", ring: "ring-emerald-400" },
+            { key: "pendente",         label: "Pendente",             count: statusBreakdown.pendente,         color: "text-slate-700",   bar: "bg-slate-400",   ring: "ring-slate-400"   },
+            { key: "emCotacao",        label: "Em cotação",           count: statusBreakdown.emCotacao,        color: "text-sky-700",     bar: "bg-sky-400",     ring: "ring-sky-400"     },
+            { key: "emAndamento",      label: "Em andamento",         count: statusBreakdown.emAndamento,      color: "text-indigo-700",  bar: "bg-indigo-400",  ring: "ring-indigo-400"  },
+            { key: "agRecebimento",    label: "Ag. recebimento",      count: statusBreakdown.agRecebimento,    color: "text-orange-700",  bar: "bg-orange-400",  ring: "ring-orange-400"  },
+            { key: "entreguesParcial", label: "Entrega parcial",      count: statusBreakdown.entreguesParcial, color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
+            { key: "concluidas",       label: "Concluídas",           count: statusBreakdown.concluidas,       color: "text-green-700",   bar: "bg-green-400",   ring: "ring-green-400"   },
+            { key: "recusadas",        label: "Recusadas",            count: statusBreakdown.recusadas,        color: "text-red-700",     bar: "bg-red-400",     ring: "ring-red-400"     },
+            { key: "canceladas",       label: "Canceladas",           count: statusBreakdown.canceladas,       color: "text-zinc-600",    bar: "bg-zinc-400",    ring: "ring-zinc-400"    },
           ].map((s) => {
             const ativo = filtroBreakdown === s.key;
             return (
