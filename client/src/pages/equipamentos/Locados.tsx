@@ -1156,8 +1156,9 @@ export default function EquipamentosLocados() {
   // se forem múltiplos, o user edita depois). Datas vêm da locação da OC.
   function receberDaOC(oc: any) {
     const it = (oc.itens || [])[0];
-    const valorMes = oc.locacaoDuracaoDias && Number(oc.total) > 0 && Number(oc.locacaoDuracaoDias) > 0
-      ? (Number(oc.total) / Number(oc.locacaoDuracaoDias)) * 30
+    const ocTotalEfetivo = Number(oc.fdValor) > 0 ? Number(oc.fdValor) : Number(oc.total);
+    const valorMes = oc.locacaoDuracaoDias && ocTotalEfetivo > 0 && Number(oc.locacaoDuracaoDias) > 0
+      ? (ocTotalEfetivo / Number(oc.locacaoDuracaoDias)) * 30
       : null;
     setForm({
       ...EMPTY,
@@ -2760,9 +2761,12 @@ export default function EquipamentosLocados() {
                             <span className="px-3 py-1 rounded-full bg-violet-100 text-violet-800 font-bold text-sm">
                               OC {formatNumeroOcDisplay(oc.numeroOc)}
                             </span>
-                            {oc.total != null && (
-                              <span className="text-sm font-bold text-emerald-700">{fmtMoney(Number(oc.total))}</span>
-                            )}
+                            {(() => {
+                              const ocVal = Number(oc.fdValor) > 0 ? Number(oc.fdValor) : Number(oc.total);
+                              return ocVal > 0 ? (
+                                <span className="text-sm font-bold text-emerald-700">{fmtMoney(ocVal)}</span>
+                              ) : null;
+                            })()}
                           </div>
                           <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-blue-400 transition-colors" />
                         </div>

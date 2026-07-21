@@ -1,4 +1,28 @@
 /**
+ * Rev. 4499 - FIX: VALOR DA OC DE LOCAÇÃO ZERADO NA SELEÇÃO DE RECEBIMENTO
+ *
+ * PROBLEMA:
+ *   Na tela "Selecionar Pedido de Locação" (fluxo de recebimento de equipamento
+ *   locado), OCs do tipo locação com FD definido exibiam "R$ 0,00" no badge de valor
+ *   e, ao abrir a conferência, o campo "Valor mensal (R$)" também ficava zerado.
+ *   Isso ocorria porque:
+ *   (a) o backend `ocsLocacaoPendentes` selecionava apenas `total` da OC, mas
+ *       OCs com FD têm o valor armazenado em `fdValor` (total pode ser 0/null);
+ *   (b) o frontend usava `oc.total` diretamente tanto no badge quanto no cálculo
+ *       de valorMes = (total / duracaoDias) × 30 — se total=0, valorMes=null.
+ *
+ * FIX:
+ *   Backend: adicionado `fdValor: comprasOrdens.fdValor` ao SELECT de
+ *   `ocsLocacaoPendentes` em server/routers/equipamentos.ts.
+ *   Frontend (Locados.tsx):
+ *   - Badge de valor no card da OC: exibe `fdValor || total` (prioriza fdValor).
+ *   - `receberDaOC`: `ocTotalEfetivo = fdValor > 0 ? fdValor : total`; valorMes
+ *     calculado com ocTotalEfetivo, eliminando o 0,00 no campo "Valor mensal".
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4498 - FEAT: LOCAÇÃO = 100% MATERIAL NO FATURAMENTO DIRETO
  *
  * PROBLEMA:

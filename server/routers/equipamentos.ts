@@ -905,6 +905,7 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
         obraId: comprasOrdens.obraId,
         status: comprasOrdens.status,
         total: comprasOrdens.total,
+        fdValor: comprasOrdens.fdValor,
         dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
         locacaoDataInicio: comprasOrdens.locacaoDataInicio,
         locacaoDataFim: comprasOrdens.locacaoDataFim,
