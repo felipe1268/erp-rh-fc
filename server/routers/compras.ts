@@ -15145,12 +15145,18 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             const compCode = it.solicitacaoItemId ? fdScToComp[it.solicitacaoItemId] : undefined;
             const alocacao = (insCode && compCode ? fdInsumoAlocMap[`${compCode}|${insCode}`] : undefined) ?? (insCode ? fdInsumoAlocMap[insCode] : undefined);
 
-            let ratioMat = tipoOrigem === "material" || tipoOrigem === "pacote" ? 1 : 0;
-            if (orc && orc.total > 0) {
-              ratioMat = orc.mat / orc.total;
-            } else if (alocacao) {
-              const aTotal = alocacao.mat + alocacao.mdo;
-              ratioMat = aTotal > 0 ? alocacao.mat / aTotal : 1;
+            let ratioMat: number;
+            if (tipoOrigem === "equipamento") {
+              // Locação: 100% vai ao fornecedor como material — nunca usar ratio do orçamento
+              ratioMat = 1;
+            } else {
+              ratioMat = tipoOrigem === "material" || tipoOrigem === "pacote" ? 1 : 0;
+              if (orc && orc.total > 0) {
+                ratioMat = orc.mat / orc.total;
+              } else if (alocacao) {
+                const aTotal = alocacao.mat + alocacao.mdo;
+                ratioMat = aTotal > 0 ? alocacao.mat / aTotal : 1;
+              }
             }
 
             if (valorItem <= 0 && orc) {
@@ -15160,11 +15166,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             totalMatCalc += valorItem * ratioMat;
           }
           totalMatCalc = Math.round(totalMatCalc * 100) / 100;
+          const isLocacao = tipoOrigem === "equipamento";
           if (totalMatCalc <= 0 && fdItens.length > 0) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "FD não é permitido: nenhum valor de material identificado nesta cotação." });
+            throw new TRPCError({ code: "BAD_REQUEST", message: isLocacao ? "FD não é permitido: nenhum valor de locação identificado nesta cotação." : "FD não é permitido: nenhum valor de material identificado nesta cotação." });
           }
           if (totalMatCalc > 0 && input.valor > totalMatCalc * 1.001) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: `FD excede o valor de material da cotação. Máximo MAT: R$ ${totalMatCalc.toFixed(2)}. Valor solicitado: R$ ${input.valor.toFixed(2)}.` });
+            throw new TRPCError({ code: "BAD_REQUEST", message: isLocacao ? `FD excede o valor de locação da cotação. Máximo Locação: R$ ${totalMatCalc.toFixed(2)}. Valor solicitado: R$ ${input.valor.toFixed(2)}.` : `FD excede o valor de material da cotação. Máximo MAT: R$ ${totalMatCalc.toFixed(2)}. Valor solicitado: R$ ${input.valor.toFixed(2)}.` });
           }
         } catch (e: any) {
           if (e instanceof TRPCError) throw e;
