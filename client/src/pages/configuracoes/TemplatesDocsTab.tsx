@@ -42,6 +42,7 @@ import {
   type PlaceholderDef,
 } from "@shared/documentTemplates";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { parseAsUTC } from "@/lib/dateUtils";
 import XlsxTemplateTab from "./XlsxTemplateTab";
 import DocxTemplateTab from "./DocxTemplateTab";
 import ExtratoTemplateTab from "./ExtratoTemplateTab";
@@ -161,7 +162,8 @@ function buildFcPreviewHtml(bodyHtml: string, meta: DocumentTemplateMeta, gerado
 function formatDataHora(iso?: string | null) {
   if (!iso) return "—";
   try {
-    const d = new Date(iso);
+    const d = parseAsUTC(iso);
+    if (isNaN(d.getTime())) return "—";
     return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
   } catch { return "—"; }
 }
