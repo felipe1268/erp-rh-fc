@@ -50,20 +50,20 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4481** — **FEAT: COLABORADOR ↔ USUÁRIO — VÍNCULO EXPLÍCITO (employees.userId).** Toda integração colaborador ↔ sistema dependia de match por e-mail (frágil). Solução: nova coluna `user_id` em `employees`; SyncSchema+ idempotente; `updateEmployee` aceita `userId`; 2 novos endpoints (`employees.linkUser`, `employees.getLinkedEmployee`); `getGestoresContrato` usa `employee.userId` como fonte primária; `salvarGestoresContrato` auto-deriva userId do employee (remove seletor manual); ficha de Colaboradores ganha seção "Conta no Sistema" na aba Profissional; Usuários exibe card "Colaborador Vinculado" no painel de detalhe.
 - **Rev. 4480** — **FEAT: GESTORES — VÍNCULO EXPLÍCITO COM USUÁRIO DO SISTEMA.** Badge "Conta no sistema" dos gestores de contratos passava a usar match por e-mail, o que falhava quando o e-mail diferia entre employees e users. Solução: 2 novas colunas `gestor_financeiro_user_id` / `gestor_rh_user_id` em companies; endpoint `listUsuariosSistema` lista usuários ativos vinculados à empresa; `getGestoresContrato` busca por userId explícito (principal) com fallback por e-mail retroativo; UI adiciona `<select>` "Conta do sistema" em cada card de gestor; `GestorUserStatusBadge` atualizado para exibir vínculo direto.
-- **Rev. 4479** — **FEAT: GESTORES DE CONTRATOS — TESTEMUNHAS OBRIGATÓRIAS (RH + FINANCEIRO) COM FLUXO DE SUBSTITUIÇÃO.** Todo contrato FCSign/Integrasign passa a ter dois gestores internos obrigatórios: Gestor RH (T1) e Gestor Financeiro (T2). Quando um deles entra em férias/afastamento/desligamento, o RH solicita substituição e o Sócio Administrador aprova. Schema: `gestor_rh_id/nome` em companies + nova tabela `gestor_substituicao_solicitacoes`. Backend: 6 endpoints novos (`getGestoresAtivos`, `criarSolicitacaoSubstituicao`, `aprovarSolicitacao`, `rejeitarSolicitacao`, `encerrarSolicitacao`, `listarSolicitacoes`). UI: aba "Gestores" em Configurações com painéis de substituição pendente/ativa. FCSignPJSendDialog pré-popula T1/T2 automaticamente. Integrasign injeta RH+Financeiro server-side com nova ordem FORNECEDOR→RH→FINANCEIRO→GESTOR_PROJETO→DIRETOR. darBaixa auto-limpa campo gestor ao desligar.
 
 ### 5 one-liners
 
+- **Rev. 4479** — **FEAT: GESTORES DE CONTRATOS — TESTEMUNHAS OBRIGATÓRIAS (RH + FINANCEIRO) COM FLUXO DE SUBSTITUIÇÃO.** Schema: `gestor_rh_id/nome` em companies + tabela `gestor_substituicao_solicitacoes`. 6 endpoints. UI: aba "Gestores" em Configurações. FCSignPJSendDialog pré-popula T1/T2. Integrasign server-side.
 - **Rev. 4478** — **FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR/DESMARCAR EQUIPAMENTO NO ALMOXARIFADO.** `vincularItemAlmoxarifado` / `desvincularItemAlmoxarifado` usavam `getUserCompanyLinks` (legado). Fix: `getCompaniesForUser`. ZERO schema change.
 - **Rev. 4477** — **FEAT: TOOLBARS DO EDITOR ISO FICAM FIXAS ENQUANTO TEXTO ROLA.** Card do editor em `TemplatesDocsTab.tsx` agora é `sticky top-14 z-20`; toolbar de formatação `sticky top-0 z-10`; conteúdo rola internamente. ZERO schema change.
 - **Rev. 4476** — **FIX: PRÉVIA DO CONTRATO NO DIÁLOGO FCSIGN ABRE O DOCUMENTO CORRETO.** `handlePreview()` gera HTML via `buildContratoPjSignHtml` em janela nova; toast se pop-up bloqueado. ZERO schema change.
 - **Rev. 4475** — **FIX: BLOCO DE ASSINATURA DO CONTRATO PJ — REMOVE TEXTO REDUNDANTE + TESTEMUNHAS.** `stripPartyIdBlock()` em `contratoPjDocument.ts` remove blocos CONTRATANTE/CONTRATADA duplicados; `hasTestemunhas` renderiza slots de testemunha. ZERO schema change.
-- **Rev. 4474** — **FEAT: FCSIGN PJ EXIBE SESSÃO ATIVA BLOQUEANTE + BOTÃO CANCELAR.** Novo endpoint `signatures.getActiveByObservacoes`; painel laranja com status + botão "Cancelar sessão" (Admin Master). ZERO schema change.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4471 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4474 e anteriores.
 
 ## User preferences
 

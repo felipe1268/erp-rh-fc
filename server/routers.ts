@@ -436,44 +436,64 @@ export const appRouter = router({
       let finUser: UserInfo = null;
       let rhUser: UserInfo = null;
 
-      // Busca por vínculo EXPLÍCITO (userId salvo) — fonte principal
-      const userIdsToFetch: number[] = [];
-      if (company.gestorFinanceiroUserId) userIdsToFetch.push(company.gestorFinanceiroUserId);
-      if (company.gestorRhUserId) userIdsToFetch.push(company.gestorRhUserId);
+      // Busca os funcionários gestores para obter employee.userId (vínculo direto — Rev. 4481)
+      const empIdsToFetch: number[] = [];
+      if (company.gestorFinanceiroId) empIdsToFetch.push(company.gestorFinanceiroId);
+      if ((company as any).gestorRhId) empIdsToFetch.push((company as any).gestorRhId);
 
-      if (userIdsToFetch.length > 0) {
-        const userRows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, deletedAt: users.deletedAt })
-          .from(users).where(inArray(users.id, userIdsToFetch));
+      if (empIdsToFetch.length > 0) {
+        const empRows = await db.select({ id: employees.id, userId: (employees as any).userId, email: employees.email })
+          .from(employees).where(inArray(employees.id, empIdsToFetch));
+        const empById = new Map(empRows.map(e => [e.id, e]));
+
+        // Resolver userId: prioridade employee.userId > company.gestorXxxUserId > email match
+        const resolveUid = (empId: number | null, companyUid: number | null | undefined) => {
+          if (!empId) return null;
+          const emp = empById.get(empId);
+          return (emp as any)?.userId ?? companyUid ?? null;
+        };
+        const finUid = resolveUid(company.gestorFinanceiroId, company.gestorFinanceiroUserId);
+        const rhUid  = resolveUid((company as any).gestorRhId, company.gestorRhUserId);
+
+        // Fallback por e-mail quando nenhum userId está linkado
+        const emails: string[] = [];
+        const needEmailFin = !finUid && !!company.gestorFinanceiroId;
+        const needEmailRh  = !rhUid  && !!(company as any).gestorRhId;
+        if (needEmailFin) { const emp = empById.get(company.gestorFinanceiroId!); if (emp?.email) emails.push(emp.email); }
+        if (needEmailRh)  { const emp = empById.get((company as any).gestorRhId);  if (emp?.email) emails.push(emp.email); }
+
+        const allUids = [finUid, rhUid].filter(Boolean) as number[];
+        const allEmails = emails.filter(Boolean);
+
+        type URow = { id: number; name: string; email: string | null; status: string | null; deletedAt: Date | null };
+        const userRows: URow[] = [];
+        if (allUids.length > 0) {
+          const r = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, deletedAt: users.deletedAt })
+            .from(users).where(inArray(users.id, allUids));
+          userRows.push(...r);
+        }
+        if (allEmails.length > 0) {
+          const r = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, deletedAt: users.deletedAt })
+            .from(users).where(inArray(users.email, allEmails));
+          userRows.push(...r);
+        }
         const userById = new Map(userRows.map(u => [u.id, u]));
-        const toInfo = (u: typeof userRows[0] | undefined): UserInfo =>
+        const userByEmail = new Map(userRows.map(u => [u.email?.toLowerCase() || "", u]));
+        const toInfo = (u: URow | undefined): UserInfo =>
           u ? { userId: u.id, status: u.deletedAt ? "deletado" : (u.status || "ativo"), nome: u.name || "", email: u.email || null } : null;
-        if (company.gestorFinanceiroUserId) finUser = toInfo(userById.get(company.gestorFinanceiroUserId));
-        if (company.gestorRhUserId) rhUser = toInfo(userById.get(company.gestorRhUserId));
-      }
 
-      // Fallback: tenta casar por e-mail quando userId não está salvo
-      const needFin = !finUser && !!company.gestorFinanceiroId;
-      const needRh  = !rhUser  && !!(company as any).gestorRhId;
-      if (needFin || needRh) {
-        const empIds: number[] = [];
-        if (needFin && company.gestorFinanceiroId) empIds.push(company.gestorFinanceiroId);
-        if (needRh  && (company as any).gestorRhId)  empIds.push((company as any).gestorRhId);
-        const empRows = await db.select({ id: employees.id, email: employees.email }).from(employees).where(inArray(employees.id, empIds));
-        const emails = empRows.map(e => e.email).filter(Boolean) as string[];
-        if (emails.length > 0) {
-          const userRows = await db.select({ id: users.id, email: users.email, name: users.name, status: users.status, deletedAt: users.deletedAt })
-            .from(users).where(inArray(users.email, emails));
-          const userByEmail = new Map(userRows.map(u => [u.email?.toLowerCase() || "", u]));
-          const empById = new Map(empRows.map(e => [e.id, e]));
-          const toInfo2 = (u: typeof userRows[0] | undefined): UserInfo =>
-            u ? { userId: u.id, status: u.deletedAt ? "deletado" : (u.status || "ativo"), nome: u.name || "", email: u.email || null } : null;
-          if (needFin && company.gestorFinanceiroId) {
+        if (company.gestorFinanceiroId) {
+          if (finUid) finUser = toInfo(userById.get(finUid));
+          else if (needEmailFin) {
             const emp = empById.get(company.gestorFinanceiroId);
-            finUser = toInfo2(emp?.email ? userByEmail.get(emp.email.toLowerCase()) : undefined);
+            finUser = toInfo(emp?.email ? userByEmail.get(emp.email.toLowerCase()) : undefined);
           }
-          if (needRh && (company as any).gestorRhId) {
+        }
+        if ((company as any).gestorRhId) {
+          if (rhUid) rhUser = toInfo(userById.get(rhUid));
+          else if (needEmailRh) {
             const emp = empById.get((company as any).gestorRhId);
-            rhUser = toInfo2(emp?.email ? userByEmail.get(emp.email.toLowerCase()) : undefined);
+            rhUser = toInfo(emp?.email ? userByEmail.get(emp.email.toLowerCase()) : undefined);
           }
         }
       }
@@ -484,21 +504,30 @@ export const appRouter = router({
       companyId: z.number(),
       gestorFinanceiroId: z.number().nullable(),
       gestorFinanceiroNome: z.string().nullable(),
-      gestorFinanceiroUserId: z.number().nullable().optional(),
       gestorRhId: z.number().nullable(),
       gestorRhNome: z.string().nullable(),
-      gestorRhUserId: z.number().nullable().optional(),
       gestorProjetoId: z.number().nullable(),
       gestorProjetoNome: z.string().nullable(),
     })).mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      // Rev. 4481 — auto-deriva userId a partir de employees.userId (vínculo direto do perfil)
+      const empIds = [input.gestorFinanceiroId, input.gestorRhId].filter(Boolean) as number[];
+      let finUserId: number | null = null;
+      let rhUserId: number | null = null;
+      if (empIds.length > 0) {
+        const empRows = await db.select({ id: employees.id, userId: (employees as any).userId })
+          .from(employees).where(inArray(employees.id, empIds));
+        const empMap = new Map(empRows.map((e: any) => [e.id, e.userId ?? null]));
+        if (input.gestorFinanceiroId) finUserId = empMap.get(input.gestorFinanceiroId) ?? null;
+        if (input.gestorRhId) rhUserId = empMap.get(input.gestorRhId) ?? null;
+      }
       await db.update(companies).set({
         gestorFinanceiroId: input.gestorFinanceiroId,
         gestorFinanceiroNome: input.gestorFinanceiroNome,
-        gestorFinanceiroUserId: input.gestorFinanceiroUserId ?? null,
+        gestorFinanceiroUserId: finUserId,
         gestorRhId: input.gestorRhId,
         gestorRhNome: input.gestorRhNome,
-        gestorRhUserId: input.gestorRhUserId ?? null,
+        gestorRhUserId: rhUserId,
         gestorProjetoId: input.gestorProjetoId,
         gestorProjetoNome: input.gestorProjetoNome,
       } as any).where(eq(companies.id, input.companyId));
@@ -537,13 +566,13 @@ export const appRouter = router({
       if (rhId && rhId !== finId) idsToFetch.push(rhId);
 
       const empRows = idsToFetch.length > 0
-        ? await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, email: employees.email, cpf: employees.cpf })
+        ? await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, email: employees.email, cpf: employees.cpf, userId: (employees as any).userId })
             .from(employees).where(inArray(employees.id, idsToFetch))
         : [];
 
-      const empMap = new Map(empRows.map(e => [e.id, e]));
-      const finEmp = finId ? empMap.get(finId) : null;
-      const rhEmp = rhId ? empMap.get(rhId) : null;
+      const empMap = new Map(empRows.map((e: any) => [e.id, e]));
+      const finEmp: any = finId ? empMap.get(finId) : null;
+      const rhEmp: any = rhId ? empMap.get(rhId) : null;
 
       return {
         financeiro: finEmp ? {
@@ -551,15 +580,17 @@ export const appRouter = router({
           nome: finEmp.nomeCompleto || company.gestorFinanceiroNome || "",
           email: finEmp.email || null,
           cpf: finEmp.cpf || null,
+          userId: finEmp.userId ?? null,
           isSubstituto: !!subFin,
-        } : (company.gestorFinanceiroId ? { id: company.gestorFinanceiroId, nome: company.gestorFinanceiroNome || "", email: null, cpf: null, isSubstituto: false } : null),
+        } : (company.gestorFinanceiroId ? { id: company.gestorFinanceiroId, nome: company.gestorFinanceiroNome || "", email: null, cpf: null, userId: null, isSubstituto: false } : null),
         rh: rhEmp ? {
           id: rhEmp.id,
           nome: rhEmp.nomeCompleto || (company as any).gestorRhNome || "",
           email: rhEmp.email || null,
           cpf: rhEmp.cpf || null,
+          userId: rhEmp.userId ?? null,
           isSubstituto: !!subRh,
-        } : ((company as any).gestorRhId ? { id: (company as any).gestorRhId, nome: (company as any).gestorRhNome || "", email: null, cpf: null, isSubstituto: false } : null),
+        } : ((company as any).gestorRhId ? { id: (company as any).gestorRhId, nome: (company as any).gestorRhNome || "", email: null, cpf: null, userId: null, isSubstituto: false } : null),
       };
     }),
 
@@ -731,6 +762,54 @@ export const appRouter = router({
         if (!canSeeAviso) emp.status = 'Ativo';
       }
       return emp;
+    }),
+    // Rev. 4481 — Vincula/desvincula um usuário do sistema ao colaborador
+    linkUser: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      userId: z.number().nullable(),
+    })).mutation(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user.id, ctx.user.role, input.companyId);
+      const db = (await getDb())!;
+      // Garante que o userId pertence à empresa (se não-nulo)
+      if (input.userId !== null) {
+        const [link] = await db.execute(sql`
+          SELECT 1 FROM user_companies WHERE "userId" = ${input.userId} AND "companyId" = ${input.companyId}
+        `) as any;
+        if (!(link as any)?.rows?.length) {
+          // Admins globais podem não ter vínculo — aceitar se role for admin/admin_master
+          const [u] = await db.select({ role: users.role }).from(users).where(eq(users.id, input.userId));
+          if (!u || (u.role !== 'admin' && u.role !== 'admin_master')) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Usuário não pertence a esta empresa' });
+          }
+        }
+      }
+      await updateEmployee(input.employeeId, input.companyId, { userId: input.userId } as any, { name: ctx.user.name ?? 'Sistema', id: ctx.user.id });
+      return { success: true };
+    }),
+    // Rev. 4481 — Dado um userId, retorna o colaborador vinculado (se houver)
+    getLinkedEmployee: protectedProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const rows = await db.execute(sql`
+        SELECT e.id, e."companyId", e."nomeCompleto", e.cpf, e.cargo, e.funcao, e.status, e."fotoUrl",
+               c."nomeFantasia" AS empresa_nome
+        FROM employees e
+        LEFT JOIN companies c ON c.id = e."companyId"
+        WHERE e.user_id = ${input.userId} AND e."deletedAt" IS NULL
+        LIMIT 1
+      `);
+      const r = (rows as any).rows?.[0] ?? null;
+      return r ? {
+        id: r.id,
+        companyId: r.companyId,
+        nomeCompleto: r.nomeCompleto,
+        cpf: r.cpf,
+        cargo: r.cargo,
+        funcao: r.funcao,
+        status: r.status,
+        fotoUrl: r.fotoUrl,
+        empresaNome: r.empresa_nome,
+      } : null;
     }),
     stats: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
       const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);

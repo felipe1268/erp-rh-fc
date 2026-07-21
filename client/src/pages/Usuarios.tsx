@@ -343,6 +343,7 @@ export default function Usuarios() {
   const [uPanel, setUPanel]             = useState<"list"|"detail"|"new">("list");
   const [uSearch, setUSearch]           = useState("");
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const linkedEmployeeQ = trpc.employees.getLinkedEmployee.useQuery({ userId: selectedUser?.id ?? 0 }, { enabled: !!selectedUser?.id });
 
   // Formulário edição
   const [editName, setEditName]       = useState("");
@@ -836,6 +837,26 @@ export default function Usuarios() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Colaborador Vinculado (Rev. 4481) */}
+                      {linkedEmployeeQ.data && (
+                        <div className="rounded-xl border p-4 space-y-2 border-violet-200 bg-violet-50/30">
+                          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><UserCheck className="h-3.5 w-3.5 text-violet-500" /> Colaborador Vinculado</h3>
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-violet-100">
+                            <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                              <span className="text-sm font-bold text-violet-700">{(linkedEmployeeQ.data.nomeCompleto || "?").charAt(0)}</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold truncate">{linkedEmployeeQ.data.nomeCompleto}</p>
+                              <p className="text-xs text-muted-foreground truncate">{linkedEmployeeQ.data.cargo || linkedEmployeeQ.data.funcao || "—"} · {linkedEmployeeQ.data.empresaNome}</p>
+                            </div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${
+                              linkedEmployeeQ.data.status === "Ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}>{linkedEmployeeQ.data.status}</span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">Vínculo configurado na ficha do colaborador em Colaboradores.</p>
+                        </div>
+                      )}
 
                       {/* Dados básicos */}
                       <div className="rounded-xl border p-4 space-y-3">

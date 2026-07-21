@@ -1306,35 +1306,16 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
 // ============================================================
 // COMPONENTE: Gestores de Contratos
 // ============================================================
-function GestorUserStatusBadge({ userInfo, empId, selectedUserId, usuariosSistema }: {
+function GestorUserStatusBadge({ userInfo, empId }: {
   userInfo: { userId: number; status: string; nome: string; email?: string | null } | null;
   empId: number | null;
-  selectedUserId?: number | null;
-  usuariosSistema?: any[];
 }) {
-  // Se um usuário foi explicitamente selecionado no dropdown, mostrar status dele
-  if (selectedUserId && usuariosSistema) {
-    const u = usuariosSistema.find((x: any) => Number(x.id) === selectedUserId);
-    if (u) {
-      return (
-        <p className="text-xs text-emerald-700 flex items-center gap-1.5">
-          <Check className="w-3 h-3 shrink-0" />
-          Vinculado: <strong>{u.name}</strong> — conta ativa
-        </p>
-      );
-    }
-  }
-
-  // Sem seleção no dropdown mas sem funcionário selecionado → não exibe nada
-  if (!empId && !selectedUserId) return null;
-
-  // Caso tenha funcionário selecionado mas nenhuma conta do sistema vinculada
+  if (!empId) return null;
   if (!userInfo) {
-    if (!empId) return null;
     return (
       <p className="text-xs text-amber-600 flex items-center gap-1.5">
         <AlertTriangle className="w-3 h-3 shrink-0" />
-        Selecione a conta do sistema correspondente ao gestor
+        Vincule a conta do sistema ao funcionário na ficha de Colaboradores
       </p>
     );
   }
@@ -1362,7 +1343,6 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
   const solicitacoesQuery = trpc.companies.listarSolicitacoes.useQuery({ companyId }, { enabled: companyId > 0 });
   const empQuery = trpc.employees.list.useQuery({ companyId }, { enabled: companyId > 0 });
   const funcoesQuery = trpc.jobFunctions.list.useQuery({ companyId }, { enabled: companyId > 0 });
-  const usuariosSistemaQuery = trpc.companies.listUsuariosSistema.useQuery({ companyId }, { enabled: companyId > 0 });
 
   const salvarMut = trpc.companies.salvarGestoresContrato.useMutation({
     onSuccess: () => {
@@ -1387,8 +1367,6 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
 
   const [finId, setFinId] = useState<string>("");
   const [rhId, setRhId] = useState<string>("");
-  const [finUserId, setFinUserId] = useState<string>("");
-  const [rhUserId, setRhUserId] = useState<string>("");
   const [rejectId, setRejectId] = useState<number | null>(null);
   const [rejectMotivo, setRejectMotivo] = useState("");
 
@@ -1396,8 +1374,6 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
     if (gestoresQuery.data) {
       setFinId(gestoresQuery.data.gestorFinanceiroId ? String(gestoresQuery.data.gestorFinanceiroId) : "");
       setRhId((gestoresQuery.data as any).gestorRhId ? String((gestoresQuery.data as any).gestorRhId) : "");
-      setFinUserId(gestoresQuery.data.gestorFinanceiroUserId ? String(gestoresQuery.data.gestorFinanceiroUserId) : "");
-      setRhUserId((gestoresQuery.data as any).gestorRhUserId ? String((gestoresQuery.data as any).gestorRhUserId) : "");
     }
   }, [gestoresQuery.data]);
 
@@ -1423,8 +1399,6 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
   const optsFin = useMemo(() => withSelected(ativosIndiretos, finId), [ativosIndiretos, finId, ativos]);
   const optsRh  = useMemo(() => withSelected(ativosIndiretos, rhId),  [ativosIndiretos, rhId, ativos]);
 
-  const usuariosSistema = useMemo(() => (usuariosSistemaQuery.data || []) as any[], [usuariosSistemaQuery.data]);
-
   const handleSalvar = () => {
     const finEmp = ativos.find((e: any) => String(e.id) === finId);
     const rhEmp  = ativos.find((e: any) => String(e.id) === rhId);
@@ -1433,10 +1407,8 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
       companyId,
       gestorFinanceiroId: finId ? Number(finId) : null,
       gestorFinanceiroNome: finEmp?.nomeCompleto ?? null,
-      gestorFinanceiroUserId: finUserId ? Number(finUserId) : null,
       gestorRhId: rhId ? Number(rhId) : null,
       gestorRhNome: rhEmp?.nomeCompleto ?? null,
-      gestorRhUserId: rhUserId ? Number(rhUserId) : null,
       gestorProjetoId: null,
       gestorProjetoNome: null,
     });
@@ -1493,22 +1465,7 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
                   <AlertTriangle className="w-3 h-3" /> Não configurado — contratos não poderão ser enviados
                 </p>
               )}
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-green-800">Conta do sistema (usuário ativo)</p>
-                <select
-                  value={finUserId}
-                  onChange={e => setFinUserId(e.target.value)}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  <option value="">— Selecione o usuário do sistema —</option>
-                  {usuariosSistema.map((u: any) => (
-                    <option key={u.id} value={String(u.id)}>
-                      {u.name}{u.email ? ` — ${u.email}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <GestorUserStatusBadge userInfo={(gestoresQuery.data as any)?.finUser ?? null} empId={gestoresQuery.data?.gestorFinanceiroId ?? null} selectedUserId={finUserId ? Number(finUserId) : null} usuariosSistema={usuariosSistema} />
+              <GestorUserStatusBadge userInfo={(gestoresQuery.data as any)?.finUser ?? null} empId={gestoresQuery.data?.gestorFinanceiroId ?? null} />
             </div>
 
             {/* Gestor RH */}
@@ -1531,22 +1488,7 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
                   <AlertTriangle className="w-3 h-3" /> Não configurado — contratos não poderão ser enviados
                 </p>
               )}
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-blue-800">Conta do sistema (usuário ativo)</p>
-                <select
-                  value={rhUserId}
-                  onChange={e => setRhUserId(e.target.value)}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  <option value="">— Selecione o usuário do sistema —</option>
-                  {usuariosSistema.map((u: any) => (
-                    <option key={u.id} value={String(u.id)}>
-                      {u.name}{u.email ? ` — ${u.email}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <GestorUserStatusBadge userInfo={(gestoresQuery.data as any)?.rhUser ?? null} empId={(gestoresQuery.data as any)?.gestorRhId ?? null} selectedUserId={rhUserId ? Number(rhUserId) : null} usuariosSistema={usuariosSistema} />
+              <GestorUserStatusBadge userInfo={(gestoresQuery.data as any)?.rhUser ?? null} empId={(gestoresQuery.data as any)?.gestorRhId ?? null} />
             </div>
           </div>
 

@@ -1,4 +1,51 @@
 /**
+ * Rev. 4481 - FEAT: COLABORADOR ↔ USUÁRIO — VÍNCULO EXPLÍCITO (employees.userId)
+ *
+ * CONTEXTO:
+ *   Toda a integração colaborador ↔ sistema dependia de match por e-mail (employees.email → users.email),
+ *   frágil e silenciosamente quebrado quando os e-mails diferiam. A Rev. 4480 adicionou userId manual
+ *   nos gestores; esta revisão generaliza a solução: cada collaborador/employee pode ter um campo user_id
+ *   explícito que unifica as duas tabelas de forma confiável.
+ *
+ * IMPLEMENTAÇÃO:
+ *   - Schema: nova coluna INTEGER nullable em employees
+ *       → user_id (mapeado como userId no Drizzle)
+ *   - SyncSchema+ (server/_core/index.ts): ALTER TABLE employees ADD COLUMN IF NOT EXISTS user_id INTEGER
+ *       adicionado dentro do bloco Rev. 4479 (executa a cada boot, idempotente).
+ *   - Backend updateEmployee (server/db.ts):
+ *       → "userId" adicionado a validFields e intFields
+ *   - Backend (server/routers.ts):
+ *       → Novo endpoint `employees.linkUser` — vincula/desvincula userId com guard de empresa
+ *       → Novo endpoint `employees.getLinkedEmployee` — dado userId, retorna o colaborador vinculado
+ *       → `getGestoresAtivos` agora inclui `userId` no retorno de cada gestor (para routing de notificações)
+ *       → `salvarGestoresContrato` agora auto-deriva gestorFinanceiroUserId / gestorRhUserId
+ *         a partir de employees.userId (não precisa mais do seletor manual de usuário)
+ *       → `getGestoresContrato` reescrito com nova lógica de resolução:
+ *         prioridade: employees.userId > company.gestorXxxUserId > fallback por e-mail
+ *   - Frontend Configuracoes.tsx:
+ *       → GestorUserStatusBadge simplificado (remove selectedUserId/usuariosSistema props)
+ *       → Removido estado finUserId / rhUserId e usuariosSistema memo
+ *       → Removidos seletores duplos "Conta do sistema" de cada card gestor
+ *       → handleSalvar não passa mais userId manualmente (backend auto-deriva)
+ *       → Aviso instrui usuário a vincular via ficha de Colaboradores
+ *   - Frontend Colaboradores.tsx:
+ *       → Nova seção "Conta no Sistema" na aba Profissional (ao editar funcionário)
+ *       → Dropdown lista usuários ativos da empresa (listUsuariosSistema)
+ *       → Vínculo salvo junto com o formulário padrão (updateEmployee inclui userId)
+ *   - Frontend Usuarios.tsx:
+ *       → Card "Colaborador Vinculado" no painel de detalhe do usuário
+ *       → Query `employees.getLinkedEmployee` por userId do usuário selecionado
+ *       → Exibe nome, cargo, empresa e status do colaborador vinculado
+ *
+ * ARQUIVOS TOCADOS:
+ *   drizzle/schema.ts, server/_core/index.ts, server/db.ts, server/routers.ts,
+ *   client/src/pages/Colaboradores.tsx, client/src/pages/Usuarios.tsx,
+ *   client/src/pages/Configuracoes.tsx, shared/version.ts, shared/changelog.ts
+ *
+ * SCHEMA CHANGE: employees.user_id INTEGER NULL (ADD COLUMN IF NOT EXISTS — zero downtime)
+ */
+
+/**
  * Rev. 4480 - FEAT: GESTORES — VÍNCULO EXPLÍCITO COM USUÁRIO DO SISTEMA (gestorFinanceiroUserId / gestorRhUserId)
  *
  * CONTEXTO:

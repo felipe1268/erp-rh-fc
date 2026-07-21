@@ -5524,6 +5524,7 @@ REGRAS DE EXTRAÇÃO:
           await db.execute(sql.raw(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS gestor_rh_nome VARCHAR(255)`));
           await db.execute(sql.raw(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS gestor_financeiro_user_id INTEGER`));
           await db.execute(sql.raw(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS gestor_rh_user_id INTEGER`));
+          await db.execute(sql.raw(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS user_id INTEGER`));
           await db.execute(sql.raw(`
             CREATE TABLE IF NOT EXISTS gestor_substituicao_solicitacoes (
               id SERIAL PRIMARY KEY,

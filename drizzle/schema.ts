@@ -1233,6 +1233,7 @@ export const employeeSiteHistory = pgTable("employee_site_history", {
 export const employees = pgTable("employees", {
         id: serial().notNull(),
         companyId: integer().notNull(),
+        userId: integer("user_id"),
         matricula: varchar({ length: 20 }),
         nomeCompleto: varchar({ length: 255 }).notNull(),
         cpf: varchar({ length: 14 }).notNull(),

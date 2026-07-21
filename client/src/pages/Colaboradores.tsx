@@ -310,6 +310,7 @@ export default function Colaboradores() {
   const { data: funcoesList } = trpc.jobFunctions.list.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
   const { data: contasBancariasEmpresa } = trpc.folha.listarContasBancarias.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
   const contasAtivas = (contasBancariasEmpresa || []).filter((c: any) => c.ativo !== 0);
+  const usuariosSistemaQ = trpc.companies.listUsuariosSistema.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum && !!editingId });
 
   // Rev. 2747 — template VIGENTE do Contrato de Experiência (Central de Docs ISO).
   // Se aprovado/vigente, o corpo do contrato passa a sair deste template; senão,
@@ -3503,6 +3504,49 @@ ${(() => {
 
                 </div>
               </div>
+
+              {/* ── Conta no Sistema (Rev. 4481) ── */}
+              {editingId && (
+                <div className="rounded-xl border overflow-hidden shadow-sm">
+                  <div className="bg-gradient-to-r from-violet-700 to-violet-600 px-4 py-2.5 flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-white/80" />
+                    <span className="text-sm font-semibold text-white">Conta no Sistema</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                      Vincule este colaborador a uma conta de usuário do ERP para notificações automáticas, alertas de assinatura de contratos e rastreamento de ações.
+                    </p>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Usuário vinculado</Label>
+                      <select
+                        value={form.userId ? String(form.userId) : ""}
+                        onChange={e => set("userId", e.target.value ? Number(e.target.value) : null)}
+                        className="w-full h-9 rounded-md border border-input bg-input px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring mt-1"
+                      >
+                        <option value="">— Sem conta vinculada —</option>
+                        {(usuariosSistemaQ.data || []).map((u: any) => (
+                          <option key={u.id} value={String(u.id)}>
+                            {u.name}{u.email ? ` — ${u.email}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">Salve o formulário para confirmar o vínculo.</p>
+                    </div>
+                    {form.userId ? (
+                      <p className="text-xs text-emerald-700 flex items-center gap-1.5">
+                        <Check className="h-3 w-3 shrink-0" />
+                        Conta vinculada — visível em Usuários e Permissões
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-600 flex items-center gap-1.5">
+                        <UserX className="h-3 w-3 shrink-0" />
+                        Sem conta vinculada
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
             </TabsContent>
 
             {/* ===== ABA UNIFORME / EPI (Rev. 2856) — cartelas interativas, toque pra selecionar ===== */}
