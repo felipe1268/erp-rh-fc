@@ -16,7 +16,7 @@ import {
   CalendarDays, BookOpen, Megaphone, Plus, Trash2, Pencil, Users, FileSignature,
   ClipboardCheck, Check, X as XIcon, ChevronRight, Sparkles, MapPin, UserCheck,
   ChevronDown, ChevronUp, Search, Wand2, Loader2, PenLine, Eraser, BarChart3,
-  Filter,
+  Filter, FileDown,
 } from "lucide-react";
 // Rev. 1960 — Catálogo de áreas temáticas (sub-classificação dos temas DDS).
 import { DDS_AREAS, DDS_AREA_VALUES } from "../../../../shared/ddsAreas";
@@ -298,7 +298,7 @@ function corCfg(c?: string | null) {
 
 export default function DDSGuia() {
   // Rev. 1728: useCompany().selectedCompanyId é STRING — converter pra number antes de mandar pro tRPC
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, selectedCompany } = useCompany() as any;
   const companyId = parseInt(selectedCompanyId || "0") || 0;
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
@@ -1643,6 +1643,8 @@ export default function DDSGuia() {
                 gerarIAMut={gerarIAMut}
                 atualizarSessaoMut={atualizarSessaoMut}
                 voltar={() => setSelectedSessaoId(null)}
+                selectedCompany={selectedCompany}
+                userName={(user as any)?.name || (user as any)?.email || ""}
               />
             ) : null
           ) : (
@@ -2969,6 +2971,7 @@ export default function DDSGuia() {
 function SessaoDetalhe({
   companyId, sessao, employees, idsJaNaSessao, addFuncId, setAddFuncId,
   presencaMut, finalizarMut, excluirMut, gerarIAMut, atualizarSessaoMut, voltar,
+  selectedCompany, userName,
 }: any) {
   // Rev. 1740 — edição inline do roteiro detalhado da sessão
   const [editandoRoteiro, setEditandoRoteiro] = useState(false);
@@ -2981,6 +2984,154 @@ function SessaoDetalhe({
   const funcs = sessao.funcionarios ?? [];
   const presentes = funcs.filter((f: any) => f.presente === 1).length;
   const assinados = funcs.filter((f: any) => !!f.assinadoEm).length;
+
+  // PDF export
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+  const pdfDataQ = trpc.dds.getSessaoPdfData.useQuery(
+    { companyId, id: sessao.id },
+    { enabled: false },
+  );
+
+  async function gerarPdfDds() {
+    setGerandoPdf(true);
+    try {
+      const data = await pdfDataQ.refetch();
+      const s = data.data as any;
+      if (!s) { toast.error("Não foi possível carregar os dados da sessão."); return; }
+
+      const esc = (v: any) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const escAttr = (v: any) => esc(v).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+      const logoUrl = selectedCompany?.logoUrl || "";
+      const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "FC Engenharia";
+      const cnpj = selectedCompany?.cnpj ? ` — CNPJ: ${selectedCompany.cnpj}` : "";
+      const dataEmissao = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      const dataSessao = s.data ? new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR") : "—";
+      const todos: any[] = [
+        ...(s.funcionarios ?? []).map((f: any) => ({ ...f, _terceiro: false })),
+        ...(s.terceiros ?? []).map((f: any) => ({ ...f, presente: 1, _terceiro: true })),
+      ];
+      const totalPresentes = todos.filter((f: any) => f.presente === 1).length;
+      const totalAssinados = todos.filter((f: any) => !!f.assinadoEm || !!f.assinaturaImg).length;
+
+      const safeImg = (url: string | null | undefined) => {
+        if (!url) return null;
+        if (url.startsWith("data:")) return url;
+        if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/")) return url;
+        return null;
+      };
+
+      const css = `
+        @page{size:A4 portrait;margin:14mm 14mm 18mm 14mm}
+        @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.45}
+        .header{background:#1B2A4A;padding:14px 20px;display:flex;align-items:center;gap:16px;border-radius:6px;margin-bottom:14px}
+        .header img{height:48px;object-fit:contain;flex-shrink:0}
+        .header-text{color:#fff;flex:1}
+        .header-text h1{font-size:15px;font-weight:800;letter-spacing:1px;margin-bottom:3px}
+        .header-text p{font-size:9.5px;opacity:.85}
+        .header-right{color:#fff;text-align:right;font-size:9px;opacity:.9;white-space:nowrap}
+        .header-right p{margin-bottom:2px}
+        .info-card{background:#f0f5fb;border-left:4px solid #1B2A4A;border-radius:0 6px 6px 0;padding:10px 16px;margin-bottom:12px}
+        .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px}
+        .info-item label{font-size:8.5px;font-weight:600;text-transform:uppercase;color:#64748b;display:block;margin-bottom:1px}
+        .info-item span{font-size:10.5px;font-weight:600;color:#1B2A4A}
+        .roteiro-box{border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;margin-bottom:12px;background:#fafbfc}
+        .roteiro-box h3{font-size:10px;font-weight:700;color:#1B2A4A;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+        .roteiro-box p{font-size:9.5px;color:#374151;white-space:pre-wrap;line-height:1.55}
+        .section-title{font-size:11px;font-weight:700;color:#1B2A4A;border-bottom:2px solid #1B2A4A;padding-bottom:3px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+        .stats-bar{display:flex;gap:10px;margin-bottom:10px}
+        .stat-chip{background:#e8f0fb;border-radius:20px;padding:3px 12px;font-size:9px;font-weight:600;color:#1B2A4A}
+        .stat-chip.green{background:#dcfce7;color:#166534}
+        table{width:100%;border-collapse:collapse;font-size:9px}
+        thead th{background:#1B2A4A;color:#fff;font-weight:600;text-align:left;padding:5px 7px;border:1px solid #1B2A4A}
+        tbody td{padding:4px 7px;border:1px solid #e2e8f0;vertical-align:middle}
+        tbody tr:nth-child(even){background:#f8fafc}
+        .foto{width:36px;height:36px;border-radius:50%;object-fit:cover;border:1.5px solid #cbd5e1;display:block}
+        .foto-placeholder{width:36px;height:36px;border-radius:50%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#94a3b8}
+        .badge-sim{display:inline-block;background:#dcfce7;color:#166534;border-radius:3px;padding:1px 6px;font-size:8px;font-weight:700}
+        .badge-nao{display:inline-block;background:#fef2f2;color:#991b1b;border-radius:3px;padding:1px 6px;font-size:8px;font-weight:700}
+        .badge-terc{display:inline-block;background:#fef3c7;color:#92400e;border-radius:3px;padding:1px 5px;font-size:8px;font-weight:600}
+        .assinatura-cell{text-align:center}
+        .assinatura-cell img{max-height:40px;max-width:90px;object-fit:contain}
+        .assinatura-cell span{font-size:8px;color:#6b7280;display:block;margin-top:2px}
+        .footer{margin-top:18px;border-top:1px solid #e2e8f0;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#6b7280}
+      `;
+
+      let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>ATA DDS — ${esc(s.tituloTema)}</title><style>${css}</style></head><body>`;
+
+      // Cabeçalho
+      html += `<div class="header">`;
+      if (logoUrl) html += `<img src="${escAttr(logoUrl)}" alt="Logo" />`;
+      html += `<div class="header-text"><h1>ATA DE DDS — DIÁLOGO DIÁRIO DE SEGURANÇA</h1><p>${esc(nomeEmpresa.toUpperCase())}${esc(cnpj)}</p></div>`;
+      html += `<div class="header-right"><p>Emitido em: ${esc(dataEmissao)}</p><p>Emitido por: ${esc(userName)}</p></div>`;
+      html += `</div>`;
+
+      // Info da sessão
+      html += `<div class="info-card"><div class="info-grid">`;
+      html += `<div class="info-item"><label>Tema / Assunto</label><span>${esc(s.tituloTema || "—")}</span></div>`;
+      html += `<div class="info-item"><label>Data &amp; Hora</label><span>${esc(dataSessao)} ${esc(s.hora || "")}</span></div>`;
+      html += `<div class="info-item"><label>Obra</label><span>${esc(s.obraNome || "Avulsa")}</span></div>`;
+      html += `<div class="info-item"><label>Instrutor</label><span>${esc(s.instrutor || "—")}</span></div>`;
+      if (s.local) html += `<div class="info-item"><label>Local</label><span>${esc(s.local)}</span></div>`;
+      if (s.categoria) html += `<div class="info-item"><label>Categoria</label><span>${esc(s.categoria)}</span></div>`;
+      html += `</div>`;
+      if (s.observacoes) html += `<div style="margin-top:8px;font-size:9px;color:#374151"><b>Observações:</b> ${esc(s.observacoes)}</div>`;
+      html += `</div>`;
+
+      // Roteiro (se houver)
+      const rot = (s.conteudoMd ?? "").trim();
+      if (rot.length >= 20) {
+        html += `<div class="roteiro-box"><h3>📋 Roteiro da Sessão</h3><p>${esc(rot)}</p></div>`;
+      }
+
+      // Lista de Presença
+      html += `<div class="section-title">👥 Lista de Presença</div>`;
+      html += `<div class="stats-bar">`;
+      html += `<span class="stat-chip">${esc(String(todos.length))} colaboradores</span>`;
+      html += `<span class="stat-chip green">${esc(String(totalPresentes))} presentes</span>`;
+      html += `<span class="stat-chip green">${esc(String(totalAssinados))} assinaturas</span>`;
+      html += `</div>`;
+
+      html += `<table><thead><tr><th style="width:42px">Foto</th><th>Nome</th><th>CPF</th><th>Função</th><th style="width:48px">Presente</th><th style="width:100px">Assinatura</th></tr></thead><tbody>`;
+
+      for (const f of todos) {
+        const fotoSrc = safeImg(f.fotoUrl);
+        const fotoCell = fotoSrc
+          ? `<img class="foto" src="${escAttr(fotoSrc)}" alt="${escAttr(f.nome)}" />`
+          : `<div class="foto-placeholder">${esc((f.nome || "?")[0].toUpperCase())}</div>`;
+
+        const presente = f.presente === 1;
+        const presCell = presente ? `<span class="badge-sim">✓ Sim</span>` : `<span class="badge-nao">Não</span>`;
+
+        const assSrc = safeImg(f.assinaturaImg);
+        let assCell = `<span style="font-size:8px;color:#9ca3af">—</span>`;
+        if (assSrc) {
+          const dt = f.assinadoEm ? new Date(f.assinadoEm).toLocaleDateString("pt-BR") : "";
+          assCell = `<div class="assinatura-cell"><img src="${escAttr(assSrc)}" alt="assinatura" />${dt ? `<span>${esc(dt)}</span>` : ""}</div>`;
+        }
+
+        const terceiroTag = f._terceiro ? ` <span class="badge-terc">Terc.</span>` : "";
+
+        html += `<tr><td style="text-align:center">${fotoCell}</td><td><b>${esc(f.nome || "—")}</b>${terceiroTag}</td><td style="white-space:nowrap">${esc(f.cpf || "—")}</td><td>${esc(f.funcao || "—")}</td><td style="text-align:center">${presCell}</td><td>${assCell}</td></tr>`;
+      }
+
+      html += `</tbody></table>`;
+      html += `<div class="footer"><span>DDS — Diálogo Diário de Segurança · ${esc(nomeEmpresa)}</span><span>Sessão #${esc(String(s.id))} · Status: ${esc(s.status === "finalizada" ? "Finalizada" : "Aberta")}</span></div>`;
+      html += `</body></html>`;
+
+      const w = window.open("", "_blank");
+      if (!w) { toast.error("Permita pop-ups para baixar o PDF."); return; }
+      w.document.write(html);
+      w.document.close();
+      setTimeout(() => { w.focus(); w.print(); }, 400);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao gerar PDF");
+    } finally {
+      setGerandoPdf(false);
+    }
+  }
 
   // Rev. 1746 — Assinatura digital por funcionário (canvas)
   const utilsTrpc = trpc.useUtils();
@@ -3292,6 +3443,16 @@ function SessaoDetalhe({
       )}
 
       <div className="flex gap-2 justify-end flex-wrap">
+        <Button
+          variant="outline"
+          className="border-blue-300 text-blue-700 hover:bg-blue-50"
+          disabled={gerandoPdf}
+          onClick={gerarPdfDds}
+        >
+          {gerandoPdf
+            ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Gerando PDF…</>
+            : <><FileDown className="h-4 w-4 mr-1" /> Baixar PDF / Ata</>}
+        </Button>
         {sessao.status === "aberta" && (
           <Button variant="default" onClick={() => finalizarMut.mutate({ companyId, id: sessao.id, status: "finalizada" })}>
             <Check className="h-4 w-4 mr-1" /> Finalizar sessão

@@ -1,4 +1,35 @@
 /**
+ * Rev. 4500 - FEAT: PDF / ATA DO DDS COM FOTOS E ASSINATURAS
+ *
+ * PROBLEMA:
+ *   Não havia forma de baixar a ata de uma sessão DDS finalizada com as assinaturas
+ *   digitais dos colaboradores, fotos de perfil e formatação completa da empresa.
+ *
+ * FIX:
+ *   Backend: novo endpoint `dds.getSessaoPdfData` em server/routers/dds.ts.
+ *   Retorna todos os dados da sessão + `assinaturaImg` de cada funcionário
+ *   (incluído explicitamente, diferente do getSessao que omite por tamanho) +
+ *   `fotoUrl` via LEFT JOIN com employees + terceiros com fotoUrl.
+ *
+ *   Frontend (DDSGuia.tsx):
+ *   - Botão "Baixar PDF / Ata" (azul, ícone FileDown) adicionado na barra de ações
+ *     da sessão (ao lado de Finalizar/Reabrir/Excluir). Disponível em qualquer status.
+ *   - Ao clicar: refetch lazy do endpoint (só busca quando necessário), monta HTML
+ *     completo self-contained (padrão window.open + print — evita clip de fixed) com:
+ *       • Cabeçalho azul escuro (logo empresa, título "ATA DE DDS", CNPJ, data emissão)
+ *       • Card de info da sessão (tema, data/hora, obra, instrutor, local, categoria)
+ *       • Roteiro/conteúdo (se preenchido)
+ *       • Tabela de presença: foto circular | nome (+ badge "Terc." se terceiro) |
+ *         CPF | função | presente (sim/não) | imagem da assinatura + data
+ *       • Rodapé com nome empresa e nº da sessão
+ *   - Foto: exibe círculo inicial quando não há foto cadastrada
+ *   - Assinatura: imagem base64 PNG (até 40px altura) com data abaixo
+ *   - Terceiros: aparecem na mesma tabela com badge amarelo "Terc."
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4499 - FIX: VALOR DA OC DE LOCAÇÃO ZERADO NA SELEÇÃO DE RECEBIMENTO
  *
  * PROBLEMA:

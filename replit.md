@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4500** — **FEAT: PDF / ATA DO DDS COM FOTOS E ASSINATURAS.** Botão "Baixar PDF / Ata" na tela de detalhe da sessão DDS. Novo endpoint `getSessaoPdfData` retorna assinaturas + fotos; HTML self-contained abre em nova aba com logo, cabeçalho, tabela de presença (foto circular + assinatura + data) e terceiros com badge. ZERO schema change.
 - **Rev. 4499** — **FIX: VALOR DA OC DE LOCAÇÃO ZERADO NA SELEÇÃO DE RECEBIMENTO.** OCs com FD armazenam valor em `fdValor` (total=0); `ocsLocacaoPendentes` não incluía `fdValor` no SELECT → badge "R$ 0,00" e campo "Valor mensal" zerado. Fix: backend inclui `fdValor`; frontend usa `fdValor || total` no badge e em `receberDaOC`. ZERO schema change.
-- **Rev. 4498** — **FEAT: LOCAÇÃO = 100% MATERIAL NO FATURAMENTO DIRETO.** Split MAT/MDO do modal "Definir FD" usava ratio do orçamento para SC de equipamento, limitando o FD ao valor de MAT (R$ 8.152) em vez do total da locação (R$ 14.200). Fix: `tipoOrigem === "equipamento"` → `ratioMat = 1` no backend; frontend mostra card laranja "100% Locação", label "máximo Locação" e sem coluna MDO. ZERO schema change.
 
 ### 5 one-liners
 
-- **Rev. 4497** — **FIX: FORMATO BR NO CAMPO "DEBITAR DO RISCO" (7.358,10).** `type="number"` impedia formatação; "Usar tudo" exibia `7358.10`. Fix: `type="text"`, `toLocaleString("pt-BR")` → `7.358,10`, parse strip pontos de milhar. ZERO schema change.
-- **Rev. 4496** — **FEAT: BUSCA IRRESTRITA NA EAP DA SC.** Ao digitar, filtro de tipo é suspenso; todos os itens EAP aparecem com badge `MAT`/`MO`/`EQUIP`. Modo sem busca inalterado. ZERO schema change.
-- **Rev. 4495** — **FEAT: LINK CLICÁVEL DA COTAÇÃO NO HISTÓRICO DE DÉBITOS.** Número da cotação era `<span>` estático; agora navega para `/compras/cotacoes?destaque=<id>`. ZERO schema change.
-- **Rev. 4494** — **FIX: "INCLUIR DA EAP" NA COTAÇÃO — 3 BUGS.** `orcamentoItemId`/`eapCodigo`/`precoMeta` descartados; exclusão não cascateava para SC; picker não sinalizava itens já na cotação. ZERO schema change.
-- **Rev. 4492** — **FEAT: DATAS E COUNTDOWN DE ENTREGA NA LISTA DE SCs.** Colunas "Previsão Entrega" + "Emissão OC". Novo bucket "Ent. Atrasadas". ZERO schema change.
+- **Rev. 4498** — **FEAT: LOCAÇÃO = 100% MATERIAL NO FATURAMENTO DIRETO.** Split MAT/MDO do modal "Definir FD" usava ratio do orçamento para SC de equipamento, limitando o FD ao valor de MAT (R$ 8.152) em vez do total da locação (R$ 14.200). Fix: `tipoOrigem === "equipamento"` → `ratioMat = 1`. ZERO schema change.
+- **Rev. 4497** — **FIX: FORMATO BR NO CAMPO "DEBITAR DO RISCO" (7.358,10).** `type="number"` impedia formatação; "Usar tudo" exibia `7358.10`. Fix: `type="text"`, `toLocaleString("pt-BR")`. ZERO schema change.
+- **Rev. 4496** — **FEAT: BUSCA IRRESTRITA NA EAP DA SC.** Ao digitar, filtro de tipo é suspenso; todos os itens EAP aparecem com badge `MAT`/`MO`/`EQUIP`. ZERO schema change.
+- **Rev. 4495** — **FEAT: LINK CLICÁVEL DA COTAÇÃO NO HISTÓRICO DE DÉBITOS.** Número da cotação navega para `/compras/cotacoes?destaque=<id>`. ZERO schema change.
+- **Rev. 4494** — **FIX: "INCLUIR DA EAP" NA COTAÇÃO — 3 BUGS.** `orcamentoItemId`/`eapCodigo`/`precoMeta` descartados; exclusão não cascateava; picker não sinalizava itens já na cotação. ZERO schema change.
 - **Rev. 4485** — **FIX: PLACEHOLDERS DE PRAZO DE NF NO TEMPLATE ISO DE CONTRATO PJ.** Novos placeholders `[TEXTO_DIA_FECHAMENTO]`, `[PRAZO_NOTA_ADIANTAMENTO]`, `[PRAZO_NOTA_FECHAMENTO]` adicionados aos 4 paths. `[DIA_FECHAMENTO]=31` exibe "último dia do mês". ZERO schema change.
 - **Rev. 4484** — **FEAT: DIA 2ª MEDIÇÃO PJ — OPÇÃO "ÚLTIMO DIA DO MÊS".** Campo "Dia 2ª Medição" no formulário de Contrato PJ substituído por toggle "Dia fixo | Último dia" + input numérico condicional. Convenção `diaFechamento = 31`. ZERO schema change.
 - **Rev. 4483** — **FEAT: FCSIGN — AUTENTICAÇÃO OBRIGATÓRIA PARA SIGNATÁRIOS INTERNOS.** Testemunhas, contratante, empregador e empregado DEVEM estar logados no sistema para assinar via link. `getByToken` devolve `requiresLogin/loggedIn/cpfMatches`; `sign` rejeita UNAUTHORIZED/FORBIDDEN se CPF não bater. Frontend: `LoginGate` + `CpfMismatchBox`. ZERO schema change.

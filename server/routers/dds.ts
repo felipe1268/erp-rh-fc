@@ -2567,4 +2567,65 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
       ));
       return { ok: true };
     }),
+
+  getSessaoPdfData: protectedProcedure
+    .input(z.object({ companyId: z.number().int().positive(), id: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      const [s] = await db.select({
+        id: ddsSessoes.id,
+        companyId: ddsSessoes.companyId,
+        obraId: ddsSessoes.obraId,
+        obraNome: ddsSessoes.obraNome,
+        data: ddsSessoes.data,
+        hora: ddsSessoes.hora,
+        temaId: ddsSessoes.temaId,
+        tituloTema: ddsSessoes.tituloTema,
+        conteudoMd: ddsSessoes.conteudoMd,
+        instrutor: ddsSessoes.instrutor,
+        instrutorCpf: ddsSessoes.instrutorCpf,
+        local: ddsSessoes.local,
+        observacoes: ddsSessoes.observacoes,
+        status: ddsSessoes.status,
+        finalizadaEm: ddsSessoes.finalizadaEm,
+        categoria: ddsSessoes.categoria,
+      }).from(ddsSessoes)
+        .where(and(eq(ddsSessoes.id, input.id), eq(ddsSessoes.companyId, input.companyId)));
+      if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada" });
+
+      const funcs = await db.select({
+        id: ddsSessaoFuncionarios.id,
+        nome: ddsSessaoFuncionarios.nome,
+        cpf: ddsSessaoFuncionarios.cpf,
+        funcao: ddsSessaoFuncionarios.funcao,
+        presente: ddsSessaoFuncionarios.presente,
+        assinadoEm: ddsSessaoFuncionarios.assinadoEm,
+        assinaturaImg: ddsSessaoFuncionarios.assinaturaImg,
+        fotoUrl: employees.fotoUrl,
+      }).from(ddsSessaoFuncionarios)
+        .leftJoin(employees, eq(employees.id, ddsSessaoFuncionarios.employeeId))
+        .where(eq(ddsSessaoFuncionarios.sessaoId, input.id))
+        .orderBy(ddsSessaoFuncionarios.nome);
+
+      let terceiros: any[] = [];
+      try {
+        terceiros = await db.select({
+          id: ddsParticipacoesTerceiros.id,
+          nome: funcionariosTerceiros.nome,
+          cpf: funcionariosTerceiros.cpf,
+          funcao: funcionariosTerceiros.funcao,
+          fotoUrl: funcionariosTerceiros.fotoUrl,
+        }).from(ddsParticipacoesTerceiros)
+          .leftJoin(funcionariosTerceiros, eq(funcionariosTerceiros.id, ddsParticipacoesTerceiros.funcTerceiroId))
+          .where(and(
+            eq(ddsParticipacoesTerceiros.companyId, input.companyId),
+            eq(ddsParticipacoesTerceiros.sessaoId, input.id),
+            isNull(ddsParticipacoesTerceiros.deletedAt),
+          ))
+          .orderBy(funcionariosTerceiros.nome);
+      } catch { /* módulo terceiros opcional */ }
+
+      return { ...s, funcionarios: funcs ?? [], terceiros };
+    }),
 });
