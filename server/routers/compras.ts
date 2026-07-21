@@ -3982,6 +3982,14 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         if (!scOCStatuses.has(scId)) scOCStatuses.set(scId, []);
         scOCStatuses.get(scId)!.push(String(st ?? ""));
       };
+      // Rev. 4492 — datas de OC por SC: menor criadoEm (emissão) e menor dataEntregaPrevista.
+      const scOCEmitidaEm = new Map<number, string>();
+      const scDataEntregaPrevista = new Map<number, string>();
+      const _trackOCDates = (scId: number | null | undefined, criadoEm: string | null | undefined, dep: string | null | undefined) => {
+        if (!scId) return;
+        if (criadoEm) { const p = scOCEmitidaEm.get(scId); if (!p || criadoEm < p) scOCEmitidaEm.set(scId, criadoEm); }
+        if (dep)      { const p = scDataEntregaPrevista.get(scId); if (!p || dep < p) scDataEntregaPrevista.set(scId, dep); }
+      };
       if (ids.length > 0) {
         const activeCots = await db.select({ id: comprasCotacoes.id, solicitacaoId: comprasCotacoes.solicitacaoId, status: comprasCotacoes.status }).from(comprasCotacoes)
           .where(and(
@@ -3990,7 +3998,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           ));
         activeCots.forEach(c => { if (c.solicitacaoId) scWithCotacao.add(c.solicitacaoId); });
 
-        const activeOrdens = await db.select({ solicitacaoId: comprasOrdens.solicitacaoId, status: comprasOrdens.status }).from(comprasOrdens)
+        const activeOrdens = await db.select({ solicitacaoId: comprasOrdens.solicitacaoId, status: comprasOrdens.status, criadoEm: comprasOrdens.criadoEm, dataEntregaPrevista: comprasOrdens.dataEntregaPrevista }).from(comprasOrdens)
           .where(and(
             sql`${comprasOrdens.solicitacaoId} = ANY(${sql.raw("ARRAY[" + ids.join(",") + "]::int[]")})`,
             sql`${comprasOrdens.status} NOT IN ('cancelada')`,
@@ -3998,20 +4006,24 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         activeOrdens.forEach(o => {
           if (o.solicitacaoId) scWithOC.add(o.solicitacaoId);
           pushOCStatus(o.solicitacaoId, o.status);
+          _trackOCDates(o.solicitacaoId, o.criadoEm, o.dataEntregaPrevista);
         });
 
         const cotIds = activeCots.map(c => c.id);
         if (cotIds.length > 0) {
-          const ocsViaCot = await db.select({ cotacaoId: comprasOrdens.cotacaoId, status: comprasOrdens.status }).from(comprasOrdens)
+          const ocsViaCot = await db.select({ cotacaoId: comprasOrdens.cotacaoId, status: comprasOrdens.status, criadoEm: comprasOrdens.criadoEm, dataEntregaPrevista: comprasOrdens.dataEntregaPrevista }).from(comprasOrdens)
             .where(and(
               sql`${comprasOrdens.cotacaoId} = ANY(${sql.raw("ARRAY[" + cotIds.join(",") + "]::int[]")})`,
               sql`${comprasOrdens.status} NOT IN ('cancelada')`,
             ));
           const cotIdToStatuses = new Map<number, string[]>();
+          const cotIdToDates = new Map<number, Array<{ criadoEm?: string; dep?: string }>>();
           ocsViaCot.forEach(o => {
             if (!o.cotacaoId) return;
             if (!cotIdToStatuses.has(o.cotacaoId)) cotIdToStatuses.set(o.cotacaoId, []);
             cotIdToStatuses.get(o.cotacaoId)!.push(String(o.status ?? ""));
+            if (!cotIdToDates.has(o.cotacaoId)) cotIdToDates.set(o.cotacaoId, []);
+            cotIdToDates.get(o.cotacaoId)!.push({ criadoEm: o.criadoEm ?? undefined, dep: o.dataEntregaPrevista ?? undefined });
           });
           activeCots.forEach(c => {
             if (!c.solicitacaoId) return;
@@ -4020,6 +4032,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
               scWithOC.add(c.solicitacaoId);
               sts.forEach(st => pushOCStatus(c.solicitacaoId, st));
             }
+            const dates = cotIdToDates.get(c.id);
+            if (dates) dates.forEach(d => _trackOCDates(c.solicitacaoId, d.criadoEm, d.dep));
           });
         }
 
@@ -4043,7 +4057,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         }
         const ocSts = scOCStatuses.get(r.id) ?? [];
         const _ocsEntregues = ocSts.length > 0 && ocSts.every(st => OC_ENTREGUE_STATUSES.has(st));
-        return { ...r, status, _hasOC: scWithOC.has(r.id), _ocsEntregues, _itens: itensCounts[r.id] ?? { total: 0, atendidos: 0 } };
+        return { ...r, status, _hasOC: scWithOC.has(r.id), _ocsEntregues, _itens: itensCounts[r.id] ?? { total: 0, atendidos: 0 }, _ocEmitidaEm: scOCEmitidaEm.get(r.id) ?? null, _dataEntregaPrevista: scDataEntregaPrevista.get(r.id) ?? null };
       });
       if (input.busca) {
         const b = input.busca.toLowerCase();

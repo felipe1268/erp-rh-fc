@@ -1127,7 +1127,7 @@ export default function Solicitacoes() {
   const [filtroDataDe, setFiltroDataDe] = useState("");
   const [filtroDataAte, setFiltroDataAte] = useState("");
   // Rev. 2089 — Ordenação clicável por coluna. Default: criadoEm DESC (mais recentes primeiro).
-  type SortKey = "criadoEm" | "tipo" | "prioridade" | "status" | "numeroSc" | "titulo" | "obra" | "solicitante" | "dataNecessidade";
+  type SortKey = "criadoEm" | "tipo" | "prioridade" | "status" | "numeroSc" | "titulo" | "obra" | "solicitante" | "dataNecessidade" | "dataEntregaPrevista";
   const [sortKey, setSortKey] = useState<SortKey>("criadoEm");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   function toggleSort(k: SortKey) {
@@ -1136,7 +1136,7 @@ export default function Solicitacoes() {
     } else {
       setSortKey(k);
       // Defaults sensatos: datas/número DESC (mais recente/maior primeiro), textos ASC.
-      setSortDir(["criadoEm", "numeroSc", "dataNecessidade"].includes(k) ? "desc" : "asc");
+      setSortDir(["criadoEm", "numeroSc", "dataNecessidade", "dataEntregaPrevista"].includes(k) ? "desc" : "asc");
     }
   }
   const [showNova, setShowNova] = useState(false);
@@ -2393,6 +2393,21 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
   // entreguesParcial: almoxarifado recebeu PARTE (_itens.atendidos>0 mas não tudo).
   const _isAgRec = (r: any) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r) && Number(r._itens?.atendidos ?? 0) === 0;
   const _isEntParcial = (r: any) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r) && Number(r._itens?.atendidos ?? 0) > 0;
+  // Rev. 4492 — Entregas atrasadas: OC emitida, não entregue, data prevista já passou.
+  const _todayStr = new Date().toISOString().slice(0, 10);
+  const _isAtrasada = (r: any) => r._hasOC === true && !r._ocsEntregues && !scEntregueTotal(r) && !!r._dataEntregaPrevista && r._dataEntregaPrevista < _todayStr;
+  // Rev. 4492 — Countdown de entrega: "Faltam X dias / Falta 1 dia / Entrega hoje! / Atrasado X dias".
+  const deliveryCountdown = (dep: string | null | undefined): { label: string; variant: "ok" | "warning" | "today" | "danger" } | null => {
+    if (!dep) return null;
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const prevista = new Date(dep + "T00:00:00");
+    const dias = Math.round((prevista.getTime() - hoje.getTime()) / 86_400_000);
+    if (dias === 0)  return { label: "Entrega hoje!",                     variant: "today"   };
+    if (dias === 1)  return { label: "Falta 1 dia",                       variant: "warning" };
+    if (dias > 1)    return { label: `Faltam ${dias} dias`,               variant: dias <= 7 ? "warning" : "ok" };
+    if (dias === -1) return { label: "Atrasado 1 dia",                    variant: "danger"  };
+    return           { label: `Atrasado ${Math.abs(dias)} dias`,          variant: "danger"  };
+  };
   const breakdownPredicates: Record<string, (r: any) => boolean> = {
     aguardandoAprov: (r) => (r.aprovacaoStatus ?? "aguardando") === "aguardando" && !["aprovado", "recusado", "cancelado"].includes(r.status),
     aprovadasSemOC: (r) => ["aprovada", "aprovado"].includes(r.aprovacaoStatus ?? "") && !r._hasOC && !["aprovado", "recusado", "cancelado"].includes(r.status),
@@ -2401,6 +2416,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     emAndamento: (r) => r.status === "em_andamento" && !r._ocsEntregues && !r._hasOC,
     agRecebimento: _isAgRec,
     entreguesParcial: _isEntParcial,
+    atrasadas: _isAtrasada,
     concluidas: (r) => scEntregueTotal(r),
     recusadas: (r) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? ""),
     canceladas: (r) => r.status === "cancelado",
@@ -2415,6 +2431,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       switch (sortKey) {
         case "criadoEm": return r.criadoEm ? new Date(r.criadoEm).getTime() : 0;
         case "dataNecessidade": return r.dataNecessidade ? new Date(r.dataNecessidade + "T00:00:00").getTime() : 0;
+        case "dataEntregaPrevista": return r._dataEntregaPrevista ? new Date(r._dataEntregaPrevista + "T00:00:00").getTime() : 0;
         case "numeroSc": return String(r.numeroSc ?? "");  // ordenado via localeCompare numeric abaixo
         case "titulo": return String(r.titulo ?? "").toLowerCase();
         // Rev. 2295 — Ordenação por TIPO (badge MAT/MDO/EQUIP/etc.). Concatena `isLocacao`
@@ -2478,6 +2495,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       emAndamento: listaKpisBase.filter((r: any) => r.status === "em_andamento" && !r._ocsEntregues && !r._hasOC).length,
       agRecebimento: listaKpisBase.filter(_isAgRec).length,
       entreguesParcial: listaKpisBase.filter(_isEntParcial).length,
+      atrasadas: listaKpisBase.filter(_isAtrasada).length,
       concluidas: listaKpisBase.filter((r: any) => scEntregueTotal(r)).length,
       recusadas: listaKpisBase.filter((r: any) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? "")).length,
       canceladas: listaKpisBase.filter((r: any) => r.status === "cancelado").length,
@@ -2528,7 +2546,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             </span>
           )}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 divide-x divide-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-11 divide-x divide-slate-100">
           {[
             { key: "aguardandoAprov",  label: "Aguardando aprovação", count: statusBreakdown.aguardandoAprov,  color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
             { key: "aprovadasSemOC",   label: "Aprovadas (sem OC)",   count: statusBreakdown.aprovadasSemOC,   color: "text-emerald-700", bar: "bg-emerald-400", ring: "ring-emerald-400" },
@@ -2537,6 +2555,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             { key: "emAndamento",      label: "Em andamento",         count: statusBreakdown.emAndamento,      color: "text-indigo-700",  bar: "bg-indigo-400",  ring: "ring-indigo-400"  },
             { key: "agRecebimento",    label: "Ag. entrega",          count: statusBreakdown.agRecebimento,    color: "text-orange-700",  bar: "bg-orange-400",  ring: "ring-orange-400"  },
             { key: "entreguesParcial", label: "Entrega parcial",      count: statusBreakdown.entreguesParcial, color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
+            { key: "atrasadas",        label: "Ent. atrasadas",       count: statusBreakdown.atrasadas,        color: "text-red-700",     bar: "bg-red-500",     ring: "ring-red-500"     },
             { key: "concluidas",       label: "Concluídas",           count: statusBreakdown.concluidas,       color: "text-green-700",   bar: "bg-green-400",   ring: "ring-green-400"   },
             { key: "recusadas",        label: "Recusadas",            count: statusBreakdown.recusadas,        color: "text-red-700",     bar: "bg-red-400",     ring: "ring-red-400"     },
             { key: "canceladas",       label: "Canceladas",           count: statusBreakdown.canceladas,       color: "text-zinc-600",    bar: "bg-zinc-400",    ring: "ring-zinc-400"    },
@@ -2739,6 +2758,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             obra: "Obra",
             solicitante: "Solicitante",
             dataNecessidade: "Necessidade",
+            dataEntregaPrevista: "Prev. Entrega",
           } as Record<SortKey, string>)[sortKey]}
           {sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
         </span>
@@ -2782,6 +2802,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                 { k: "obra", label: "Obra" },
                 { k: "solicitante", label: "Solicitante" },
                 { k: "dataNecessidade", label: "Necessidade" },
+                { k: "dataEntregaPrevista", label: "Previsão Entrega" },
               ] as { k: SortKey; label: string }[]).map(col => {
                 const active = sortKey === col.k;
                 const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
@@ -2799,15 +2820,16 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   </TableHead>
                 );
               })}
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">Emissão OC</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">Recebido</TableHead>
               <TableHead className="w-8"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
-              <TableRow><TableCell colSpan={11} className="text-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={14} className="text-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
             ) : listaFiltradaObra.length === 0 ? (
-              <TableRow><TableCell colSpan={11} className="text-center py-10 text-gray-400">Nenhuma solicitação encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={14} className="text-center py-10 text-gray-400">Nenhuma solicitação encontrada</TableCell></TableRow>
             ) : listaFiltradaObra.map((sc: any) => {
               const itC = sc._itens ?? { total: 0, atendidos: 0 };
               const pct = itC.total > 0 ? Math.round((itC.atendidos / itC.total) * 100) : 0;
@@ -2897,7 +2919,24 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   <TableCell className="text-gray-600 text-xs break-words whitespace-normal max-w-[140px]">
                     {sc.criadoPorNome || <span className="text-gray-300">—</span>}
                   </TableCell>
-                  <TableCell className="text-gray-500 text-xs">{sc.dataNecessidade ? new Date(sc.dataNecessidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</TableCell>
+                  <TableCell className="text-gray-500 text-xs whitespace-nowrap">{sc.dataNecessidade ? new Date(sc.dataNecessidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</TableCell>
+                  {/* Rev. 4492 — Previsão de entrega + countdown chip */}
+                  <TableCell>
+                    {sc._dataEntregaPrevista ? (() => {
+                      const cd = deliveryCountdown(sc._dataEntregaPrevista);
+                      const chipCls = !cd ? "" : cd.variant === "danger" ? "bg-red-100 text-red-700 border-red-200" : cd.variant === "today" ? "bg-blue-100 text-blue-700 border-blue-200" : cd.variant === "warning" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-emerald-100 text-emerald-700 border-emerald-200";
+                      return (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs text-gray-500 whitespace-nowrap">{new Date(sc._dataEntregaPrevista + "T00:00:00").toLocaleDateString("pt-BR")}</span>
+                          {cd && <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${chipCls} whitespace-nowrap`}>{cd.label}</span>}
+                        </div>
+                      );
+                    })() : <span className="text-gray-300 text-xs">—</span>}
+                  </TableCell>
+                  {/* Rev. 4492 — Data de emissão da OC */}
+                  <TableCell className="text-gray-500 text-xs whitespace-nowrap">
+                    {sc._ocEmitidaEm ? new Date(sc._ocEmitidaEm).toLocaleDateString("pt-BR") : "—"}
+                  </TableCell>
                   <TableCell>
                     {itC.total > 0 ? (
                       <div className="flex items-center gap-2 min-w-[80px]">

@@ -1,4 +1,38 @@
 /**
+ * Rev. 4492 - FEAT: DATAS E COUNTDOWN DE ENTREGA NA LISTA DE SCs (P2P)
+ *
+ * CONTEXTO:
+ *   Solicitações com OC emitida não mostravam datas de emissão nem previsão de entrega,
+ *   tornando impossível saber se a entrega estava dentro do prazo ou atrasada.
+ *
+ * O QUE FOI ADICIONADO:
+ *
+ * SERVIDOR (compras.ts — listarSolicitacoes):
+ *   - activeOrdens e ocsViaCot agora trazem criadoEm + dataEntregaPrevista de cada OC.
+ *   - Helper _trackOCDates mantém, por SC, o menor criadoEm (primeira OC emitida) e a
+ *     menor dataEntregaPrevista (prazo mais urgente de entrega).
+ *   - Resultado da query inclui 2 novos campos: _ocEmitidaEm e _dataEntregaPrevista.
+ *
+ * FRONTEND (Solicitacoes.tsx):
+ *   - Nova coluna "Previsão Entrega" (sortável) mostra data + chip de countdown:
+ *       · verde   → "Faltam X dias" (>7d)
+ *       · amarelo → "Faltam X dias" (1–7d) / "Falta 1 dia"
+ *       · azul    → "Entrega hoje!"
+ *       · vermelho → "Atrasado X dias" / "Atrasado 1 dia"
+ *   - Nova coluna "Emissão OC" mostra a data de emissão da primeira OC da SC.
+ *   - Coluna "Necessidade" mantida (dataNecessidade do SC).
+ *   - Novo bucket "Ent. Atrasadas" no painel de breakdown:
+ *       predicate = _hasOC && !_ocsEntregues && !scEntregueTotal && _dataEntregaPrevista < hoje.
+ *       Cor: vermelho bold. Grid atualizado para lg:grid-cols-11.
+ *   - Helper deliveryCountdown(dep) puro (sem side-effects), reutilizável por linha.
+ *   - _isAtrasada predicate adicionado a breakdownPredicates + statusBreakdown.atrasadas.
+ *   - SortKey ampliado: "dataEntregaPrevista" (default desc).
+ *   - colSpan atualizado de 11 → 14.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4491 - FIX: AUDITORIA COMPLETA DE FILTROS P2P — SCs "APROVADO"+OC NÃO SÃO "CONCLUÍDO"
  *
  * PROBLEMA:

@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4492** — **FEAT: DATAS E COUNTDOWN DE ENTREGA NA LISTA DE SCs.** Colunas "Previsão Entrega" (sortável + chip: verde/amarelo/azul/vermelho) e "Emissão OC" adicionadas. Servidor expõe `_ocEmitidaEm`+`_dataEntregaPrevista` (menor data p/ SC). Novo bucket "Ent. Atrasadas" (vermelho) no breakdown. Grid `lg:grid-cols-11`. ZERO schema change.
 - **Rev. 4491** — **FIX: AUDITORIA COMPLETA DE FILTROS P2P — SCs "APROVADO"+OC NÃO SÃO "CONCLUÍDO".** `scEntregueTotal()` tratava `status="aprovado"` como terminal incondicional → SCs com OC emitida e 0/N recebidos apareciam em "Concluído". Nova prioridade estrita: `_ocsEntregues` → Concluído; `_itens.atendidos>=total>0` → Concluído; `aprovado+!_hasOC+itens=0` → legacy OK; senão → NÃO concluído. `statusEfetivoSC`, `kpis`, `statusBreakdown`, `breakdownPredicates` corrigidos. ZERO schema change.
-- **Rev. 4490** — **FIX: RÓTULOS P2P — "AG. RECEBIMENTO" → "AG. ENTREGA".** Badge clareza operacional: OC emitida → fornecedor ainda não entregou → "Ag. Entrega". ZERO schema change.
 
 ### 5 one-liners
 
