@@ -975,8 +975,10 @@ export default function Usuarios() {
 
                         {linkedEmployeeQ.data && !showLinkSearch && (
                           <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-violet-100">
-                            <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
-                              <span className="text-sm font-bold text-violet-700">{(linkedEmployeeQ.data.nomeCompleto || "?").charAt(0)}</span>
+                            <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0 overflow-hidden">
+                              {linkedEmployeeQ.data.fotoUrl
+                                ? <img src={linkedEmployeeQ.data.fotoUrl} alt={linkedEmployeeQ.data.nomeCompleto} className="w-full h-full object-cover" />
+                                : <span className="text-sm font-bold text-violet-700">{(linkedEmployeeQ.data.nomeCompleto || "?").charAt(0)}</span>}
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-semibold truncate">{linkedEmployeeQ.data.nomeCompleto}</p>
