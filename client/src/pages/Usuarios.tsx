@@ -376,6 +376,12 @@ export default function Usuarios() {
 
   // Formulário novo usuário
   const [newUser, setNewUser]   = useState({ username:"", name:"", email:"", role:"user" as any, password:"", companyIds:[] as number[], groupIds:[] as number[] });
+  const [newUserEmp, setNewUserEmp] = useState<any>(null);
+  const [newUserEmpSearch, setNewUserEmpSearch] = useState("");
+  const empForNewUserQ = trpc.employees.list.useQuery(
+    { companyId: (allCompaniesQuery.data ?? [])[0]?.id ?? 0, companyIds: (allCompaniesQuery.data ?? []).map((c: any) => c.id) },
+    { enabled: uPanel === "new" && (allCompaniesQuery.data?.length ?? 0) > 0 }
+  );
 
   // Mutations usuários
   const updateUserMut = trpc.userManagement.updateUser.useMutation({
@@ -403,7 +409,14 @@ export default function Usuarios() {
       if (newUser.companyIds.length > 0) {
         await setCosMut.mutateAsync({ userId: d.id, companyIds: newUser.companyIds });
       }
+      if (newUserEmp) {
+        try {
+          await linkEmpMut.mutateAsync({ employeeId: newUserEmp.id, companyId: newUserEmp.companyId, userId: d.id });
+        } catch {}
+      }
       setNewUser({ username:"", name:"", email:"", role:"user", password:"", companyIds:[], groupIds:[] });
+      setNewUserEmp(null);
+      setNewUserEmpSearch("");
       setUPanel("list");
       utils.userManagement.listUsers.invalidate();
     },
@@ -720,6 +733,76 @@ export default function Usuarios() {
                           <p className="text-xs text-muted-foreground mt-0.5">Crie o acesso e atribua um grupo de permissões</p>
                         </div>
                       </div>
+                      {/* Passo 0: Colaborador (obrigatório) */}
+                      <div className="rounded-xl border-2 p-4 space-y-2 border-violet-300 bg-violet-50/30">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                          <UserCheck className="h-3.5 w-3.5 text-violet-500" /> Colaborador (CLT ou PJ)
+                          <span className="ml-1 text-[10px] text-red-500 font-semibold normal-case">* obrigatório</span>
+                        </h3>
+                        {newUserEmp ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-violet-200">
+                              <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                                <span className="text-sm font-bold text-violet-700">{(newUserEmp.nomeCompleto||"?").charAt(0)}</span>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold">{newUserEmp.nomeCompleto}</p>
+                                <p className="text-xs text-muted-foreground">{newUserEmp.cargo||newUserEmp.funcao||"—"} · {newUserEmp.tipoContrato}</p>
+                              </div>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] text-muted-foreground" onClick={() => { setNewUserEmp(null); setNewUserEmpSearch(""); }}>
+                                <X className="h-3 w-3 mr-1" /> Trocar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                              <input
+                                autoFocus
+                                className="w-full pl-8 pr-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
+                                placeholder="Buscar colaborador pelo nome..."
+                                value={newUserEmpSearch}
+                                onChange={e => setNewUserEmpSearch(e.target.value)}
+                              />
+                            </div>
+                            <div className="max-h-44 overflow-y-auto space-y-1">
+                              {empForNewUserQ.isLoading && <p className="text-xs text-muted-foreground text-center py-3">Carregando...</p>}
+                              {(empForNewUserQ.data ?? [])
+                                .filter((e: any) => ["CLT","PJ"].includes(e.tipoContrato))
+                                .filter((e: any) => !e.userId)
+                                .filter((e: any) => e.status !== "Desligado" && e.status !== "Inativo" && e.status !== "Lista_Negra")
+                                .filter((e: any) => !newUserEmpSearch || e.nomeCompleto?.toLowerCase().includes(newUserEmpSearch.toLowerCase()))
+                                .slice(0, 40)
+                                .map((e: any) => (
+                                  <button key={e.id}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-border hover:border-violet-300 hover:bg-violet-50 text-left transition-colors"
+                                    onClick={() => {
+                                      setNewUserEmp(e);
+                                      setNewUser(p => ({
+                                        ...p,
+                                        name: e.nomeCompleto || p.name,
+                                        email: e.email || p.email,
+                                        companyIds: p.companyIds.includes(e.companyId) ? p.companyIds : [...p.companyIds, e.companyId],
+                                      }));
+                                    }}
+                                  >
+                                    <div className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center shrink-0 text-xs font-bold text-violet-700">{(e.nomeCompleto||"?").charAt(0)}</div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-semibold truncate">{e.nomeCompleto}</p>
+                                      <p className="text-[10px] text-muted-foreground">{e.cargo||e.funcao||"—"}</p>
+                                    </div>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${e.tipoContrato==="PJ"?"bg-blue-100 text-blue-700":"bg-green-100 text-green-700"}`}>{e.tipoContrato}</span>
+                                  </button>
+                                ))}
+                              {!empForNewUserQ.isLoading && (empForNewUserQ.data ?? []).filter((e: any) => ["CLT","PJ"].includes(e.tipoContrato) && !e.userId && e.status !== "Desligado" && e.status !== "Inativo" && e.status !== "Lista_Negra" && (!newUserEmpSearch || e.nomeCompleto?.toLowerCase().includes(newUserEmpSearch.toLowerCase()))).length === 0 && (
+                                <p className="text-xs text-muted-foreground text-center py-3">Nenhum colaborador disponível.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       {/* Passo 1: Dados básicos */}
                       <div className="rounded-xl border p-4 space-y-3">
                         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Dados Básicos</h3>
@@ -787,6 +870,7 @@ export default function Usuarios() {
                       </div>
                       <div className="flex gap-3">
                         <Button onClick={() => {
+                          if (!newUserEmp) { toast.error("Selecione um colaborador cadastrado no ERP (CLT ou PJ)"); return; }
                           if (!newUser.username||!newUser.name) { toast.error("Preencha usuário e nome"); return; }
                           createUserMut.mutate({ username:newUser.username, name:newUser.name, email:newUser.email||undefined, role:newUser.role, password:newUser.password||undefined, companyIds:newUser.companyIds.length>0?newUser.companyIds:undefined });
                         }} disabled={createUserMut.isPending} className="gap-1.5 bg-green-600 hover:bg-green-700">

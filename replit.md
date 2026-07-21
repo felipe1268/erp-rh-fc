@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4482** — **FEAT: NOVO USUÁRIO OBRIGATORIAMENTE VINCULADO A COLABORADOR (CLT/PJ).** Formulário "Novo Usuário" ganha "Passo 0: Colaborador" obrigatório no topo: busca por nome, filtra apenas CLT/PJ ativos sem userId, auto-preenche nome/e-mail/empresa ao selecionar. Botão "Criar Usuário" valida presença do colaborador antes de submeter. `createUserMut.onSuccess` chama `linkEmpMut` automaticamente, estabelecendo o vínculo `employees.userId ← users.id`. ZERO schema change.
 - **Rev. 4481** — **FEAT: COLABORADOR ↔ USUÁRIO — VÍNCULO EXPLÍCITO (employees.userId).** Toda integração colaborador ↔ sistema dependia de match por e-mail (frágil). Solução: nova coluna `user_id` em `employees`; SyncSchema+ idempotente; `updateEmployee` aceita `userId`; 2 novos endpoints (`employees.linkUser`, `employees.getLinkedEmployee`); `getGestoresContrato` usa `employee.userId` como fonte primária; `salvarGestoresContrato` auto-deriva userId do employee (remove seletor manual); ficha de Colaboradores ganha seção "Conta no Sistema" na aba Profissional; Usuários exibe card "Colaborador Vinculado" no painel de detalhe.
-- **Rev. 4480** — **FEAT: GESTORES — VÍNCULO EXPLÍCITO COM USUÁRIO DO SISTEMA.** Badge "Conta no sistema" dos gestores de contratos passava a usar match por e-mail, o que falhava quando o e-mail diferia entre employees e users. Solução: 2 novas colunas `gestor_financeiro_user_id` / `gestor_rh_user_id` em companies; endpoint `listUsuariosSistema` lista usuários ativos vinculados à empresa; `getGestoresContrato` busca por userId explícito (principal) com fallback por e-mail retroativo; UI adiciona `<select>` "Conta do sistema" em cada card de gestor; `GestorUserStatusBadge` atualizado para exibir vínculo direto.
 
 ### 5 one-liners
 
+- **Rev. 4480** — **FEAT: GESTORES — VÍNCULO EXPLÍCITO COM USUÁRIO DO SISTEMA.** Badge "Conta no sistema" dos gestores de contratos passava a usar match por e-mail. Solução: 2 novas colunas `gestor_financeiro_user_id` / `gestor_rh_user_id` em companies; endpoint `listUsuariosSistema`; `getGestoresContrato` busca por userId explícito com fallback por e-mail.
 - **Rev. 4479** — **FEAT: GESTORES DE CONTRATOS — TESTEMUNHAS OBRIGATÓRIAS (RH + FINANCEIRO) COM FLUXO DE SUBSTITUIÇÃO.** Schema: `gestor_rh_id/nome` em companies + tabela `gestor_substituicao_solicitacoes`. 6 endpoints. UI: aba "Gestores" em Configurações. FCSignPJSendDialog pré-popula T1/T2. Integrasign server-side.
 - **Rev. 4478** — **FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR/DESMARCAR EQUIPAMENTO NO ALMOXARIFADO.** `vincularItemAlmoxarifado` / `desvincularItemAlmoxarifado` usavam `getUserCompanyLinks` (legado). Fix: `getCompaniesForUser`. ZERO schema change.
 - **Rev. 4477** — **FEAT: TOOLBARS DO EDITOR ISO FICAM FIXAS ENQUANTO TEXTO ROLA.** Card do editor em `TemplatesDocsTab.tsx` agora é `sticky top-14 z-20`; toolbar de formatação `sticky top-0 z-10`; conteúdo rola internamente. ZERO schema change.
 - **Rev. 4476** — **FIX: PRÉVIA DO CONTRATO NO DIÁLOGO FCSIGN ABRE O DOCUMENTO CORRETO.** `handlePreview()` gera HTML via `buildContratoPjSignHtml` em janela nova; toast se pop-up bloqueado. ZERO schema change.
-- **Rev. 4475** — **FIX: BLOCO DE ASSINATURA DO CONTRATO PJ — REMOVE TEXTO REDUNDANTE + TESTEMUNHAS.** `stripPartyIdBlock()` em `contratoPjDocument.ts` remove blocos CONTRATANTE/CONTRATADA duplicados; `hasTestemunhas` renderiza slots de testemunha. ZERO schema change.
 
 ### Histórico completo
 

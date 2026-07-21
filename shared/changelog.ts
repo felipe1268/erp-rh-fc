@@ -1,4 +1,27 @@
 /**
+ * Rev. 4482 - FEAT: NOVO USUÁRIO OBRIGATORIAMENTE VINCULADO A COLABORADOR (CLT/PJ)
+ *
+ * CONTEXTO:
+ *   O formulário de criação de usuários permitia criar contas sem nenhuma raiz no cadastro
+ *   de colaboradores, gerando usuários "fantasma" sem vínculo com a estrutura de RH.
+ *   A regra agora é: todo usuário novo DEVE ser associado a um colaborador CLT ou PJ
+ *   ativo, já cadastrado no ERP.
+ *
+ * IMPLEMENTAÇÃO:
+ *   - "Passo 0: Colaborador" adicionado ao topo do formulário Novo Usuário (Usuarios.tsx).
+ *     Campo obrigatório com busca por nome, filtra apenas CLT/PJ ativos sem userId ainda.
+ *   - Ao selecionar o colaborador, auto-preenche nome, e-mail e seleciona a empresa dele.
+ *   - Botão "Criar Usuário" valida presença do colaborador antes de submeter.
+ *   - `createUserMut.onSuccess` chama `linkEmpMut.mutateAsync` automaticamente após
+ *     criação, estabelecendo o vínculo employees.userId ← novo users.id.
+ *   - Query `empForNewUserQ` carrega todos colaboradores das empresas acessíveis apenas
+ *     quando o painel "new" está aberto (lazy).
+ *
+ * ARQUIVOS TOCADOS:
+ *   client/src/pages/Usuarios.tsx
+ */
+
+/**
  * Rev. 4481 - FEAT: COLABORADOR ↔ USUÁRIO — VÍNCULO EXPLÍCITO (employees.userId)
  *
  * CONTEXTO:
