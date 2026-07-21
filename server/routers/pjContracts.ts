@@ -299,7 +299,9 @@ Parágrafo Único – Sob quaisquer hipóteses não poderá a contratada divulga
 
 6.2 FATURAMENTO E PAGAMENTO:
 
-Pagamento realizado na proporção de [PERCENTUAL_ADIANTAMENTO]% no dia [DIA_ADIANTAMENTO] e [PERCENTUAL_FECHAMENTO]% do pagamento no [DIA_FECHAMENTO]º dia útil do mês subsequente.
+Pagamento realizado na proporção de [PERCENTUAL_ADIANTAMENTO]% no dia [DIA_ADIANTAMENTO] do mês corrente e [PERCENTUAL_FECHAMENTO]% [TEXTO_DIA_FECHAMENTO].
+
+Parágrafo Único – Para recebimento dos pagamentos, a CONTRATADA deverá emitir e encaminhar a Nota Fiscal de Serviços com antecedência mínima de 5 (cinco) dias da data de pagamento, observando os seguintes prazos: (i) Nota Fiscal referente ao adiantamento: até o dia [PRAZO_NOTA_ADIANTAMENTO] do mês corrente; (ii) Nota Fiscal referente ao fechamento: até [PRAZO_NOTA_FECHAMENTO] do mês do pagamento. O não envio da Nota Fiscal dentro do prazo estipulado implicará no adiamento do pagamento para o mês subsequente, sem ônus para a CONTRATANTE.
 
 CLÁUSULA SÉTIMA: LIMITE DE RESPONSABILIDADE
 
@@ -727,8 +729,16 @@ export const pjContractsRouter = router({
         texto = texto.replace(/\[VALOR_ADIANTAMENTO\]/g, (valorMensal * percAdiant / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
         texto = texto.replace(/\[PERCENTUAL_FECHAMENTO\]/g, String(percFech));
         texto = texto.replace(/\[VALOR_FECHAMENTO\]/g, (valorMensal * percFech / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-        texto = texto.replace(/\[DIA_ADIANTAMENTO\]/g, String(contrato.diaAdiantamento || 15));
-        texto = texto.replace(/\[DIA_FECHAMENTO\]/g, (contrato.diaFechamento === 31 || contrato.diaFechamento === 0) ? "último dia do mês" : String(contrato.diaFechamento || 5));
+        const diaAdiant = contrato.diaAdiantamento || 15;
+        const diaFech = contrato.diaFechamento || 5;
+        const isUltimoDia = diaFech === 31 || diaFech === 0;
+        const prazoNotaAdiant = Math.max(1, diaAdiant - 5);
+        const prazoNotaFechNum = isUltimoDia ? null : Math.max(1, diaFech - 5);
+        texto = texto.replace(/\[DIA_ADIANTAMENTO\]/g, String(diaAdiant));
+        texto = texto.replace(/\[DIA_FECHAMENTO\]/g, isUltimoDia ? "último dia do mês" : String(diaFech));
+        texto = texto.replace(/\[TEXTO_DIA_FECHAMENTO\]/g, isUltimoDia ? "no último dia do mês subsequente" : `no dia ${diaFech} do mês subsequente`);
+        texto = texto.replace(/\[PRAZO_NOTA_ADIANTAMENTO\]/g, String(prazoNotaAdiant));
+        texto = texto.replace(/\[PRAZO_NOTA_FECHAMENTO\]/g, isUltimoDia ? "5 (cinco) dias antes do último dia" : `o dia ${prazoNotaFechNum}`);
         texto = texto.replace(/\[DATA_ASSINATURA\]/g, new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
         
         return { texto };
