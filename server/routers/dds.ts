@@ -1573,6 +1573,33 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
       }));
     }),
 
+  // Rev. 4507 — Resumo de sessões por mês para um ano (legenda do PeriodSelectorCard).
+  sessoesPorMes: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number().int().min(2000).max(2100) }))
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      const rows = await db.select({
+        mes: sql<number>`EXTRACT(MONTH FROM ${ddsSessoes.data})::int`,
+        total: sql<number>`COUNT(*)::int`,
+        finalizadas: sql<number>`SUM(CASE WHEN ${ddsSessoes.status} = 'finalizada' THEN 1 ELSE 0 END)::int`,
+      }).from(ddsSessoes)
+        .where(and(
+          eq(ddsSessoes.companyId, input.companyId),
+          isNull(ddsSessoes.deletedAt),
+          sql`EXTRACT(YEAR FROM ${ddsSessoes.data}) = ${input.ano}`,
+        ))
+        .groupBy(sql`EXTRACT(MONTH FROM ${ddsSessoes.data})`);
+      // Retorna map mes→{total,finalizadas} p/ todos os 12 meses
+      const byMes: Record<number, { total: number; finalizadas: number }> = {};
+      for (const r of rows) byMes[Number(r.mes)] = { total: Number(r.total), finalizadas: Number(r.finalizadas) };
+      return Array.from({ length: 12 }, (_, i) => ({
+        mes: i + 1,
+        total: byMes[i + 1]?.total ?? 0,
+        finalizadas: byMes[i + 1]?.finalizadas ?? 0,
+      }));
+    }),
+
   // Rev. 1733 — Lista colaboradores ATIVOS vinculados às obras informadas.
   // Aceita obraId (legado) OU obraIds[] (novo — consolida duplicatas com mesmo nome,
   // alinhado com getEfetivoPorObra/cadastro > aba Efetivo).

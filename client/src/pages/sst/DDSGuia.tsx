@@ -806,6 +806,20 @@ export default function DDSGuia() {
   const temasQ = trpc.dds.listTemas.useQuery({ companyId }, { enabled: !!companyId });
   const [filtroAno, setFiltroAno] = useState<number>(new Date().getFullYear());
   const [filtroMes, setFiltroMes] = useState<number | null>(null);
+  const sessoesPorMesQ = trpc.dds.sessoesPorMes.useQuery(
+    { companyId, ano: filtroAno },
+    { enabled: !!companyId },
+  );
+  const sessoesMesStatus = useMemo(() => {
+    const out: Record<number, "data" | "consolidated" | "none"> = {};
+    for (let m = 1; m <= 12; m++) out[m] = "none";
+    for (const r of sessoesPorMesQ.data ?? []) {
+      if (r.total === 0) out[r.mes] = "none";
+      else if (r.finalizadas === r.total) out[r.mes] = "consolidated";
+      else out[r.mes] = "data";
+    }
+    return out;
+  }, [sessoesPorMesQ.data]);
   const sessoesQ = trpc.dds.listSessoes.useQuery(
     { companyId, ano: filtroAno, mes: filtroMes ?? undefined },
     { enabled: !!companyId },
@@ -2152,6 +2166,8 @@ export default function DDSGuia() {
                 onAno={setFiltroAno}
                 onMes={setFiltroMes}
                 onAnoTodo={() => setFiltroMes(null)}
+                monthStatus={sessoesMesStatus}
+                showLegend
                 className="mb-4"
               />
             <SessoesList
