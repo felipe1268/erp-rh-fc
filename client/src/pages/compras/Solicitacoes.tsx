@@ -33,21 +33,17 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   aprovado:  { label: "Concluído",   cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   recusado:  { label: "Recusado",    cls: "bg-red-50 text-red-700 border-red-200" },
   cancelado: { label: "Cancelado",   cls: "bg-gray-100 text-gray-500 border-gray-200" },
-  // Rev. 1693 — Status derivado (não persistido). Usado quando todas as OCs
-  // vinculadas já foram entregues/recebidas e só o pagamento (financeiro)
-  // está em aberto. Separa pendência logística de pendência financeira.
-  aguardando_pagamento: { label: "Aguardando Pagamento", cls: "bg-violet-50 text-violet-700 border-violet-200" },
 };
 
-// Rev. 1693 — Deriva o status efetivo da SC para fins de badge visual.
-// Se todas as OCs estão entregues mas o status cru ainda é pendente/cotacao/
-// em_andamento (porque o pagamento não saiu), exibe "Aguardando Pagamento"
-// em vez de "Pendente" — clareza para o usuário e separação clara entre
-// pendência logística (entrega) e pendência financeira (pagamento).
+// Rev. 4487 — O ciclo do comprador termina na confirmação do recebimento (COSO/ISM).
+// Informações de pagamento ao fornecedor são responsabilidade exclusiva do Financeiro.
+// SCs com todas as OCs entregues (_ocsEntregues=true) são exibidas como "Concluído"
+// no módulo Compras — o status de pagamento não é visível aqui.
+// (Rev. 1693 exibia "Aguardando Pagamento" — removido por segregação de funções + LGPD Art. 6º III)
 function statusEfetivoSC(r: any): string {
   const st = String(r?.status ?? "");
   if (r?._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(st)) {
-    return "aguardando_pagamento";
+    return "aprovado";
   }
   return st;
 }
@@ -2377,18 +2373,17 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
   const listaFiltradaObraSemBreakdown = filtroClassificacao === "todas"
     ? listaFiltradaObraStatus
     : listaFiltradaObraStatus.filter((r: any) => effectiveTipo(r) === filtroClassificacao);
-  // Rev. 4486 — Predicados dos 10 mini-blocos do card "Status das Solicitações".
-  // emCotacao / pendente / emAndamento EXCLUEM _ocsEntregues (já derivadas p/ aguardandoPagamento).
-  // aguardandoPagamento: status cru em {pendente,cotacao,em_andamento} mas todas as OCs já entregues.
+  // Rev. 4487 — Segregação de funções (COSO): ciclo do comprador termina no recebimento.
+  // SCs com _ocsEntregues=true são "Concluídas" do ponto de vista de Compras.
+  // Predicate "concluidas" incorpora _ocsEntregues=true independente do status cru.
   const breakdownPredicates: Record<string, (r: any) => boolean> = {
     aguardandoAprov: (r) => (r.aprovacaoStatus ?? "aguardando") === "aguardando" && !["aprovado", "recusado", "cancelado"].includes(r.status),
     aprovadasSemOC: (r) => ["aprovada", "aprovado"].includes(r.aprovacaoStatus ?? "") && !r._hasOC && !["aprovado", "recusado", "cancelado"].includes(r.status),
     pendente: (r) => r.status === "pendente" && !r._ocsEntregues,
     emCotacao: (r) => r.status === "cotacao" && !r._ocsEntregues,
-    aguardandoPagamento: (r) => r._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(r.status),
     emAndamento: (r) => r.status === "em_andamento" && !r._ocsEntregues,
     entreguesParcial: (r) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r),
-    concluidas: (r) => r.status === "aprovado" || scEntregueTotal(r),
+    concluidas: (r) => r.status === "aprovado" || scEntregueTotal(r) || (r._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(r.status)),
     recusadas: (r) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? ""),
     canceladas: (r) => r.status === "cancelado",
   };
@@ -2450,10 +2445,10 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     recusado: listaKpisBase.filter((r: any) => r.status === "recusado").length,
   }), [listaKpisBase]);
 
-  // Rev. 4486 — Status detalhado das solicitações (card superior).
-  // emCotacao / pendente / emAndamento EXCLUEM _ocsEntregues=true (contadas em aguardandoPagamento).
+  // Rev. 4487 — Status detalhado (card superior). Segregação de funções COSO:
+  // _ocsEntregues=true = concluída para Compras. Sem bucket de pagamento aqui.
   const statusBreakdown = useMemo(() => {
-    const ativas = listaKpisBase.filter((r: any) => !["aprovado", "recusado", "cancelado"].includes(r.status) && !scEntregueTotal(r));
+    const ativas = listaKpisBase.filter((r: any) => !["aprovado", "recusado", "cancelado"].includes(r.status) && !scEntregueTotal(r) && !r._ocsEntregues);
     return {
       total: listaKpisBase.length,
       ativas: ativas.length,
@@ -2461,10 +2456,9 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       aprovadasSemOC: listaKpisBase.filter((r: any) => ["aprovada", "aprovado"].includes(r.aprovacaoStatus ?? "") && !r._hasOC && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
       pendente: listaKpisBase.filter((r: any) => r.status === "pendente" && !r._ocsEntregues).length,
       emCotacao: listaKpisBase.filter((r: any) => r.status === "cotacao" && !r._ocsEntregues).length,
-      aguardandoPagamento: listaKpisBase.filter((r: any) => r._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(r.status)).length,
       emAndamento: listaKpisBase.filter((r: any) => r.status === "em_andamento" && !r._ocsEntregues).length,
       entreguesParcial: listaKpisBase.filter((r: any) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r)).length,
-      concluidas: listaKpisBase.filter((r: any) => r.status === "aprovado" || scEntregueTotal(r)).length,
+      concluidas: listaKpisBase.filter((r: any) => r.status === "aprovado" || scEntregueTotal(r) || (r._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(r.status))).length,
       recusadas: listaKpisBase.filter((r: any) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? "")).length,
       canceladas: listaKpisBase.filter((r: any) => r.status === "cancelado").length,
       urgentes: listaKpisBase.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "recusado", "cancelado"].includes(r.status) && !r._hasOC).length,
@@ -2514,18 +2508,17 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             </span>
           )}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 divide-x divide-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 divide-x divide-slate-100">
           {[
-            { key: "aguardandoAprov",    label: "Aguardando aprovação",  count: statusBreakdown.aguardandoAprov,    color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
-            { key: "aprovadasSemOC",     label: "Aprovadas (sem OC)",    count: statusBreakdown.aprovadasSemOC,     color: "text-emerald-700", bar: "bg-emerald-400", ring: "ring-emerald-400" },
-            { key: "pendente",           label: "Pendente",              count: statusBreakdown.pendente,           color: "text-slate-700",   bar: "bg-slate-400",   ring: "ring-slate-400"   },
-            { key: "emCotacao",          label: "Em cotação",            count: statusBreakdown.emCotacao,          color: "text-sky-700",     bar: "bg-sky-400",     ring: "ring-sky-400"     },
-            { key: "aguardandoPagamento",label: "Aguardando Pagamento",  count: statusBreakdown.aguardandoPagamento,color: "text-violet-700",  bar: "bg-violet-400",  ring: "ring-violet-400"  },
-            { key: "emAndamento",        label: "Em andamento",          count: statusBreakdown.emAndamento,        color: "text-indigo-700",  bar: "bg-indigo-400",  ring: "ring-indigo-400"  },
-            { key: "entreguesParcial",   label: "Entrega parcial",       count: statusBreakdown.entreguesParcial,   color: "text-orange-700",  bar: "bg-orange-400",  ring: "ring-orange-400"  },
-            { key: "concluidas",         label: "Concluídas",            count: statusBreakdown.concluidas,         color: "text-green-700",   bar: "bg-green-400",   ring: "ring-green-400"   },
-            { key: "recusadas",          label: "Recusadas",             count: statusBreakdown.recusadas,          color: "text-red-700",     bar: "bg-red-400",     ring: "ring-red-400"     },
-            { key: "canceladas",         label: "Canceladas",            count: statusBreakdown.canceladas,         color: "text-zinc-600",    bar: "bg-zinc-400",    ring: "ring-zinc-400"    },
+            { key: "aguardandoAprov",  label: "Aguardando aprovação", count: statusBreakdown.aguardandoAprov, color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
+            { key: "aprovadasSemOC",   label: "Aprovadas (sem OC)",   count: statusBreakdown.aprovadasSemOC,  color: "text-emerald-700", bar: "bg-emerald-400", ring: "ring-emerald-400" },
+            { key: "pendente",         label: "Pendente",             count: statusBreakdown.pendente,        color: "text-slate-700",   bar: "bg-slate-400",   ring: "ring-slate-400"   },
+            { key: "emCotacao",        label: "Em cotação",           count: statusBreakdown.emCotacao,       color: "text-sky-700",     bar: "bg-sky-400",     ring: "ring-sky-400"     },
+            { key: "emAndamento",      label: "Em andamento",         count: statusBreakdown.emAndamento,     color: "text-indigo-700",  bar: "bg-indigo-400",  ring: "ring-indigo-400"  },
+            { key: "entreguesParcial", label: "Entrega parcial",      count: statusBreakdown.entreguesParcial, color: "text-orange-700", bar: "bg-orange-400",  ring: "ring-orange-400"  },
+            { key: "concluidas",       label: "Concluídas",           count: statusBreakdown.concluidas,      color: "text-green-700",   bar: "bg-green-400",   ring: "ring-green-400"   },
+            { key: "recusadas",        label: "Recusadas",            count: statusBreakdown.recusadas,       color: "text-red-700",     bar: "bg-red-400",     ring: "ring-red-400"     },
+            { key: "canceladas",       label: "Canceladas",           count: statusBreakdown.canceladas,      color: "text-zinc-600",    bar: "bg-zinc-400",    ring: "ring-zinc-400"    },
           ].map((s) => {
             const ativo = filtroBreakdown === s.key;
             return (

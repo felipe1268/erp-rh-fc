@@ -1,4 +1,39 @@
 /**
+ * Rev. 4487 - SEGREGAÇÃO DE FUNÇÕES: REMOVER "AGUARDANDO PAGAMENTO" DO MÓDULO COMPRAS
+ *
+ * CONTEXTO:
+ *   O ciclo do comprador termina na confirmação do recebimento (princípio COSO/ISM).
+ *   Informações de pagamento ao fornecedor (quando paga, valor, condição) são
+ *   responsabilidade exclusiva do Financeiro. Exibir "Aguardando Pagamento" no módulo
+ *   Compras viola a segregação de funções e expõe dados financeiros sensíveis a quem
+ *   não precisa deles (LGPD Art. 6º, III — princípio da necessidade).
+ *
+ * RISCO ADICIONAL:
+ *   Comprador com acesso ao status de pagamento pode revelar ao fornecedor que "ainda
+ *   não foi pago", invertendo o poder de negociação e expondo o fluxo de caixa.
+ *
+ * CORREÇÃO:
+ *   1. STATUS_CFG: removido bucket "aguardando_pagamento" — não existe mais como badge
+ *      visível no módulo Compras.
+ *   2. statusEfetivoSC(): quando _ocsEntregues=true, retorna "aprovado" (→ badge
+ *      "Concluído") em vez de "aguardando_pagamento". Do ponto de vista do comprador,
+ *      entrega = fim de ciclo.
+ *   3. statusBreakdown: removido contador "aguardandoPagamento"; "concluidas" agora
+ *      incorpora `_ocsEntregues===true && status in {pendente,cotacao,em_andamento}`.
+ *      "ativas" exclui _ocsEntregues=true.
+ *   4. breakdownPredicates: mesmo ajuste — sem predicate "aguardandoPagamento";
+ *      "concluidas" inclui _ocsEntregues=true.
+ *   5. UI: bloco violeta "Aguardando Pagamento" removido; grid volta a lg:grid-cols-9.
+ *
+ * ARQUIVOS ALTERADOS:
+ *   - client/src/pages/compras/Solicitacoes.tsx (STATUS_CFG, statusEfetivoSC,
+ *     statusBreakdown, breakdownPredicates, grid UI)
+ *   - shared/version.ts (bump Rev. 4487)
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4486 - FIX: BUG DE CONTAGEM E FILTRO DE STATUS DAS SOLICITAÇÕES DE COMPRA (SC)
  *
  * CONTEXTO:
