@@ -2601,7 +2601,6 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
         funcao: ddsSessaoFuncionarios.funcao,
         presente: ddsSessaoFuncionarios.presente,
         assinadoEm: ddsSessaoFuncionarios.assinadoEm,
-        assinaturaImg: ddsSessaoFuncionarios.assinaturaImg,
         fotoUrl: employees.fotoUrl,
       }).from(ddsSessaoFuncionarios)
         .leftJoin(employees, eq(employees.id, ddsSessaoFuncionarios.employeeId))

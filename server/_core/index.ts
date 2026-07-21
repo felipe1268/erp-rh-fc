@@ -19,6 +19,7 @@ import { registerEfdIcmsIpiRoute } from "../routers/downloadEfdIcmsIpi";
 import { registerEfdContribuicoesRoute } from "../routers/downloadEfdContribuicoes";
 import { registerSpedEcfRoute } from "../routers/downloadSpedEcf";
 import { registerSpedEcdRoute } from "../routers/downloadSpedEcd";
+import { registerDdsAtaRoute } from "../routers/downloadDdsAta";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -322,6 +323,7 @@ async function startServer() {
   registerEfdContribuicoesRoute(app);
   registerSpedEcfRoute(app);
   registerSpedEcdRoute(app);
+  registerDdsAtaRoute(app);
 
   // Upload multipart para documentos SST grandes (PGR/PCMSO/LTCAT — até 150MB)
   const multer = (await import("multer")).default;
