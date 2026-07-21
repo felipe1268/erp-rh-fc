@@ -769,7 +769,12 @@ export const appRouter = router({
       companyId: z.number(),
       userId: z.number().nullable(),
     })).mutation(async ({ input, ctx }) => {
-      await assertCompanyAccess(ctx.user.id, ctx.user.role, input.companyId);
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') {
+        const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        if (!allowed.some((c: any) => Number(c.id) === input.companyId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a esta empresa' });
+        }
+      }
       const db = (await getDb())!;
       // Garante que o userId pertence à empresa (se não-nulo)
       if (input.userId !== null) {
