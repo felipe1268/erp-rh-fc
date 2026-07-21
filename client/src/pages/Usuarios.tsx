@@ -11,6 +11,7 @@ import {
   Settings2, AlertTriangle, CheckSquare, Square, ArrowLeft,
   Layers, Plus, UserCheck, Edit2, Check, Palette, UsersRound,
   ShieldCheck, ShieldAlert, Crown, Info, ChevronRight, HardHat, Warehouse,
+  Link, Unlink2,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
@@ -355,6 +356,23 @@ export default function Usuarios() {
   const [editCos, setEditCos]         = useState<number[]>([]);
   const [editGroupIds, setEditGroupIds] = useState<number[]>([]);
   const [editObras, setEditObras]     = useState<number[]>([]);
+
+  // Vinculação manual colaborador ↔ usuário (Rev. 4481)
+  const [showLinkSearch, setShowLinkSearch] = useState(false);
+  const [linkEmpSearch, setLinkEmpSearch] = useState("");
+  const empLinkListQ = trpc.employees.list.useQuery(
+    { companyId: editCos[0] ?? 0, companyIds: editCos },
+    { enabled: showLinkSearch && editCos.length > 0 }
+  );
+  const linkEmpMut = trpc.employees.linkUser.useMutation({
+    onSuccess: () => {
+      linkedEmployeeQ.refetch();
+      setShowLinkSearch(false);
+      setLinkEmpSearch("");
+      toast.success("Colaborador vinculado!");
+    },
+    onError: (e: any) => toast.error("Erro: " + e.message),
+  });
 
   // Formulário novo usuário
   const [newUser, setNewUser]   = useState({ username:"", name:"", email:"", role:"user" as any, password:"", companyIds:[] as number[], groupIds:[] as number[] });
@@ -839,9 +857,35 @@ export default function Usuarios() {
                       </div>
 
                       {/* Colaborador Vinculado (Rev. 4481) */}
-                      {linkedEmployeeQ.data && (
-                        <div className="rounded-xl border p-4 space-y-2 border-violet-200 bg-violet-50/30">
-                          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><UserCheck className="h-3.5 w-3.5 text-violet-500" /> Colaborador Vinculado</h3>
+                      <div className="rounded-xl border p-4 space-y-2 border-violet-200 bg-violet-50/30">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                            <UserCheck className="h-3.5 w-3.5 text-violet-500" /> Colaborador Vinculado
+                          </h3>
+                          {linkedEmployeeQ.data ? (
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-violet-600 hover:text-violet-800"
+                                onClick={() => { setShowLinkSearch(v => !v); setLinkEmpSearch(""); }}>
+                                <Link className="h-3 w-3 mr-1" /> Trocar
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-red-500 hover:text-red-700"
+                                disabled={linkEmpMut.isPending}
+                                onClick={() => {
+                                  if (!confirm("Desvincular este colaborador do usuário?")) return;
+                                  linkEmpMut.mutate({ employeeId: linkedEmployeeQ.data!.id, companyId: linkedEmployeeQ.data!.companyId, userId: null });
+                                }}>
+                                <Unlink2 className="h-3 w-3 mr-1" /> Desvincular
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-violet-600 hover:text-violet-800"
+                              onClick={() => { setShowLinkSearch(v => !v); setLinkEmpSearch(""); }}>
+                              <Link className="h-3 w-3 mr-1" /> Vincular
+                            </Button>
+                          )}
+                        </div>
+
+                        {linkedEmployeeQ.data && !showLinkSearch && (
                           <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-violet-100">
                             <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
                               <span className="text-sm font-bold text-violet-700">{(linkedEmployeeQ.data.nomeCompleto || "?").charAt(0)}</span>
@@ -854,9 +898,59 @@ export default function Usuarios() {
                               linkedEmployeeQ.data.status === "Ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"
                             }`}>{linkedEmployeeQ.data.status}</span>
                           </div>
-                          <p className="text-[11px] text-muted-foreground">Vínculo configurado na ficha do colaborador em Colaboradores.</p>
-                        </div>
-                      )}
+                        )}
+
+                        {!linkedEmployeeQ.data && !showLinkSearch && (
+                          <p className="text-[11px] text-muted-foreground italic">Nenhum colaborador vinculado. Clique em "Vincular" para associar.</p>
+                        )}
+
+                        {showLinkSearch && (
+                          <div className="space-y-2">
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                              <input
+                                autoFocus
+                                className="w-full pl-8 pr-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
+                                placeholder="Buscar colaborador pelo nome..."
+                                value={linkEmpSearch}
+                                onChange={e => setLinkEmpSearch(e.target.value)}
+                              />
+                            </div>
+                            <div className="max-h-48 overflow-y-auto space-y-1">
+                              {empLinkListQ.isLoading && <p className="text-xs text-muted-foreground text-center py-3">Carregando...</p>}
+                              {!empLinkListQ.isLoading && editCos.length === 0 && (
+                                <p className="text-xs text-muted-foreground text-center py-3">Este usuário não tem empresas associadas.</p>
+                              )}
+                              {(empLinkListQ.data ?? [])
+                                .filter((e: any) => !linkEmpSearch || e.nomeCompleto?.toLowerCase().includes(linkEmpSearch.toLowerCase()))
+                                .filter((e: any) => e.status !== "Desligado" && e.status !== "Inativo" && e.status !== "Lista_Negra")
+                                .slice(0, 30)
+                                .map((e: any) => (
+                                  <button key={e.id}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-border hover:border-violet-300 hover:bg-violet-50/50 text-left transition-colors"
+                                    disabled={linkEmpMut.isPending}
+                                    onClick={() => linkEmpMut.mutate({ employeeId: e.id, companyId: e.companyId, userId: selectedUser!.id })}
+                                  >
+                                    <div className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center shrink-0 text-xs font-bold text-violet-700">
+                                      {(e.nomeCompleto || "?").charAt(0)}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-semibold truncate">{e.nomeCompleto}</p>
+                                      <p className="text-[10px] text-muted-foreground truncate">{e.cargo || e.funcao || "—"}</p>
+                                    </div>
+                                    <span className="text-[10px] text-muted-foreground shrink-0">{e.tipoContrato}</span>
+                                  </button>
+                                ))}
+                              {empLinkListQ.data && (empLinkListQ.data as any[]).filter((e: any) => !linkEmpSearch || e.nomeCompleto?.toLowerCase().includes(linkEmpSearch.toLowerCase())).filter((e: any) => e.status !== "Desligado" && e.status !== "Inativo" && e.status !== "Lista_Negra").length === 0 && (
+                                <p className="text-xs text-muted-foreground text-center py-3">Nenhum colaborador encontrado.</p>
+                              )}
+                            </div>
+                            <Button size="sm" variant="ghost" className="w-full h-7 text-xs text-muted-foreground" onClick={() => { setShowLinkSearch(false); setLinkEmpSearch(""); }}>
+                              Cancelar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Dados básicos */}
                       <div className="rounded-xl border p-4 space-y-3">
