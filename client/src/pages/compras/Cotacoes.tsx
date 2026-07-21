@@ -7120,12 +7120,23 @@ export default function Cotacoes() {
                         </p>
                       </div>
                       <div>
-                        <label className="text-xs font-medium text-gray-700 mb-1 block">
-                          Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo {sp.tipoOrigem === "equipamento" ? "Locação" : "MAT"}: {fmt(sp.tipoOrigem === "equipamento" ? sp.totalGeral : sp.totalMat)}</span>
-                        </label>
-                        <MoneyInput
+                        <div className="flex items-baseline justify-between mb-1">
+                          <label className="text-xs font-medium text-gray-700">
+                            Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo {sp.tipoOrigem === "equipamento" ? "Locação" : "MAT"}: {fmt(sp.tipoOrigem === "equipamento" ? sp.totalGeral : sp.totalMat)}</span>
+                          </label>
+                          <button
+                            type="button"
+                            className="text-[10px] text-amber-600 hover:text-amber-800 underline font-medium whitespace-nowrap ml-2"
+                            onClick={() => setFdCotForm(p => ({ ...p, valor: (sp.tipoOrigem === "equipamento" ? sp.totalGeral : sp.totalMat).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }))}
+                          >
+                            Usar todo o valor
+                          </button>
+                        </div>
+                        <Input
+                          type="text"
+                          inputMode="decimal"
                           value={fdCotForm.valor}
-                          onChange={(num) => setFdCotForm(p => ({ ...p, valor: num }))}
+                          onChange={(e) => setFdCotForm(p => ({ ...p, valor: e.target.value }))}
                           placeholder="0,00"
                           className={`bg-white border-gray-300 ${excedeMat ? "border-red-400 ring-1 ring-red-300" : ""}`}
                         />
@@ -9293,12 +9304,23 @@ export default function Cotacoes() {
                       </p>
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-700 mb-1 block">
-                        Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo {sp.tipoOrigem === "equipamento" ? "Locação" : "MAT"}: {fmt(sp.tipoOrigem === "equipamento" ? sp.totalGeral : sp.totalMat)}</span>
-                      </label>
-                      <MoneyInput
+                      <div className="flex items-baseline justify-between mb-1">
+                        <label className="text-xs font-medium text-gray-700">
+                          Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo {sp.tipoOrigem === "equipamento" ? "Locação" : "MAT"}: {fmt(sp.tipoOrigem === "equipamento" ? sp.totalGeral : sp.totalMat)}</span>
+                        </label>
+                        <button
+                          type="button"
+                          className="text-[10px] text-amber-600 hover:text-amber-800 underline font-medium whitespace-nowrap ml-2"
+                          onClick={() => setFdCotForm(p => ({ ...p, valor: (sp.tipoOrigem === "equipamento" ? sp.totalGeral : sp.totalMat).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }))}
+                        >
+                          Usar todo o valor
+                        </button>
+                      </div>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
                         value={fdCotForm.valor}
-                        onChange={(num) => setFdCotForm(p => ({ ...p, valor: num }))}
+                        onChange={(e) => setFdCotForm(p => ({ ...p, valor: e.target.value }))}
                         placeholder="0,00"
                         className={`bg-white border-gray-300 ${excedeMat ? "border-red-400 ring-1 ring-red-300" : ""}`}
                       />
