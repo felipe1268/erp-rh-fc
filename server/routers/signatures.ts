@@ -1071,4 +1071,46 @@ export const signaturesRouter = router({
         .orderBy(signatureSigners.ordem);
       return { ...s, signers: sgn };
     }),
+
+  // Rev. 4483 — Admin Master pode resetar assinatura individual de um signatário
+  resetSigner: protectedProcedure.input(z.object({
+    signerId: z.number(),
+    companyId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    if (ctx.user.role !== 'admin_master') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin Master pode resetar assinaturas.' });
+    }
+    const db = (await getDb())!;
+    // Verifica que o signer pertence a uma sessão da empresa
+    const [signer] = await db.select({
+      id: signatureSigners.id,
+      sessionId: signatureSigners.sessionId,
+      signedAt: signatureSigners.signedAt,
+    }).from(signatureSigners)
+      .innerJoin(signatureSessions, eq(signatureSessions.id, signatureSigners.sessionId))
+      .where(and(
+        eq(signatureSigners.id, input.signerId),
+        eq(signatureSessions.companyId, input.companyId),
+        sql`${signatureSessions.status} <> 'cancelado'`,
+      ))
+      .limit(1);
+    if (!signer) throw new TRPCError({ code: 'NOT_FOUND', message: 'Signatário não encontrado.' });
+    if (!signer.signedAt) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Este signatário ainda não assinou.' });
+    // Limpa a assinatura do signatário
+    await db.update(signatureSigners).set({
+      signedAt: null,
+      ip: null,
+      signatureDataUrl: null,
+      signatureHash: null,
+    } as any).where(eq(signatureSigners.id, input.signerId));
+    // Se a sessão estava completa, volta para em_andamento
+    await db.update(signatureSessions).set({
+      status: 'em_andamento',
+      completedAt: null,
+    } as any).where(and(
+      eq(signatureSessions.id, signer.sessionId),
+      sql`${signatureSessions.status} = 'completo'`,
+    ));
+    return { success: true };
+  }),
 });

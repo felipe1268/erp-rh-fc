@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, Users, Loader2, Copy, CheckCircle2, ExternalLink, Send, Lock, Building2, FileSignature, AlertTriangle, XCircle, Clock, Ban } from "lucide-react";
+import { ShieldCheck, Users, Loader2, Copy, CheckCircle2, ExternalLink, Send, Lock, Building2, FileSignature, AlertTriangle, XCircle, Clock, Ban, RotateCcw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { buildContratoPjSignHtml } from "@/lib/contratoPjDocument";
 import { useDocumentMargins } from "@/hooks/useDocumentMargins";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 type Props = {
   open: boolean;
@@ -44,6 +45,8 @@ function fmtDate(iso: string | null | undefined): string {
 
 export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, geradoPor }: Props) {
   const documentMargins = useDocumentMargins();
+  const { user } = useAuth();
+  const isAdminMaster = (user as any)?.role === "admin_master";
   const [t1Nome, setT1Nome] = useState("");
   const [t1Cpf, setT1Cpf] = useState("");
   const [t2Nome, setT2Nome] = useState("");
@@ -51,6 +54,7 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
   const [result, setResult] = useState<{ sessionId: number; signers: Array<{ id: number; role: string; nome: string; link: string }> } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [cancelando, setCancelando] = useState(false);
+  const [resettingId, setResettingId] = useState<number | null>(null);
 
   const contratoQ = (trpc as any).pj.contratos.getById.useQuery({ id: contratoId }, { enabled: open && contratoId > 0 });
   const contrato = contratoQ.data;
@@ -69,6 +73,7 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
 
   const createMut = trpc.signatures.create.useMutation();
   const cancelMut = trpc.signatures.cancel.useMutation();
+  const resetSignerMut = trpc.signatures.resetSigner.useMutation();
   const utils = trpc.useUtils();
 
   // Rev. 4474 — busca sessão ativa bloqueante para este contrato
@@ -102,7 +107,21 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
 
   const reset = () => {
     setT1Nome(""); setT1Cpf(""); setT2Nome(""); setT2Cpf("");
-    setResult(null); setCopied(null); setCancelando(false);
+    setResult(null); setCopied(null); setCancelando(false); setResettingId(null);
+  };
+
+  const handleResetSigner = async (signerId: number) => {
+    if (!confirm("Resetar a assinatura deste signatário? Ele precisará assinar novamente.")) return;
+    setResettingId(signerId);
+    try {
+      await resetSignerMut.mutateAsync({ signerId, companyId });
+      await utils.signatures.getActiveByObservacoes.invalidate({ companyId, observacoes: obsKey });
+      toast.success("Assinatura resetada. O signatário pode assinar novamente.");
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao resetar assinatura.");
+    } finally {
+      setResettingId(null);
+    }
   };
 
   const handleClose = (v: boolean) => {
@@ -314,6 +333,21 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
                                     {isCopiedThis
                                       ? <CheckCircle2 className="h-3 w-3" />
                                       : <Copy className="h-3 w-3" />}
+                                  </Button>
+                                </div>
+                              )}
+                              {s.signedAt && isAdminMaster && (
+                                <div className="mt-2 flex justify-end">
+                                  <Button
+                                    type="button" size="sm" variant="outline"
+                                    className="h-7 px-2 text-[10px] gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
+                                    disabled={resettingId === s.id}
+                                    onClick={() => handleResetSigner(s.id)}
+                                  >
+                                    {resettingId === s.id
+                                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                                      : <RotateCcw className="h-3 w-3" />}
+                                    Resetar assinatura
                                   </Button>
                                 </div>
                               )}
