@@ -275,22 +275,51 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
                   {sessaoAtiva.signers && sessaoAtiva.signers.length > 0 && (
                     <div className="px-4 py-3 space-y-2">
                       <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700 mb-2">Status dos signatários</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {sessaoAtiva.signers.map((s: any) => (
-                          <div key={s.id} className="flex items-center gap-2 bg-white rounded-md border border-orange-100 px-3 py-2">
-                            {s.signedAt
-                              ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                              : <Clock className="h-4 w-4 text-amber-500 shrink-0" />
-                            }
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-slate-800 truncate">{s.nome}</p>
-                              <p className="text-[10px] text-slate-500">{roleLabel[s.role] || s.role}</p>
+                      <div className="flex flex-col gap-2">
+                        {sessaoAtiva.signers.map((s: any) => {
+                          const signerLink = s.token ? `/assinar/${s.token}` : null;
+                          const isCopiedThis = copied === `active-${s.id}`;
+                          return (
+                            <div key={s.id} className="bg-white rounded-md border border-orange-100 px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                {s.signedAt
+                                  ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                                  : <Clock className="h-4 w-4 text-amber-500 shrink-0" />
+                                }
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-slate-800 truncate">{s.nome}</p>
+                                  <p className="text-[10px] text-slate-500">{roleLabel[s.role] || s.role}</p>
+                                </div>
+                                <span className={`text-[10px] font-bold shrink-0 ${s.signedAt ? "text-emerald-700" : "text-amber-600"}`}>
+                                  {s.signedAt ? `Assinou ${fmtDate(s.signedAt)}` : "Pendente"}
+                                </span>
+                              </div>
+                              {!s.signedAt && signerLink && (
+                                <div className="mt-2 flex items-center gap-1.5">
+                                  <code className="flex-1 text-[10px] bg-slate-50 border border-slate-200 rounded px-2 py-1 truncate text-slate-600 select-all">
+                                    {`${window.location.origin}${signerLink}`}
+                                  </code>
+                                  <Button
+                                    type="button" size="sm" variant="outline"
+                                    className="h-7 px-2 shrink-0"
+                                    onClick={() => { window.open(signerLink, "_blank"); }}
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    type="button" size="sm"
+                                    className={`h-7 px-2 shrink-0 ${isCopiedThis ? "bg-emerald-600 hover:bg-emerald-700" : ""}`}
+                                    onClick={() => { copyLink(signerLink, `active-${s.id}`); }}
+                                  >
+                                    {isCopiedThis
+                                      ? <CheckCircle2 className="h-3 w-3" />
+                                      : <Copy className="h-3 w-3" />}
+                                  </Button>
+                                </div>
+                              )}
                             </div>
-                            <span className={`text-[10px] font-bold shrink-0 ${s.signedAt ? "text-emerald-700" : "text-amber-600"}`}>
-                              {s.signedAt ? `Assinou ${fmtDate(s.signedAt)}` : "Pendente"}
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
