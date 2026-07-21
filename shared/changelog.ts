@@ -1,4 +1,33 @@
 /**
+ * Rev. 4496 - FEAT: BUSCA IRRESTRITA NA EAP DA SC (VIA EAP INTELIGENTE)
+ *
+ * PROBLEMA:
+ *   Na aba "Via EAP (Inteligente)" da SC, o filtro de tipo suprimia itens da EAP que não
+ *   correspondiam à categoria da SC. Ex.: SC de "Equipamento" exibia apenas 2 itens de
+ *   escoramento (os COMPOSTO), ocultando 9 outros itens "Escoramento pontaletado" classificados
+ *   como material nas composições — mesmo que o usuário digitasse "escoramento" na busca.
+ *   O picker da cotação mostrava todos os 11 porque não tem filtro de tipo.
+ *
+ * CORREÇÃO:
+ *   Quando o usuário digita qualquer texto na caixa de busca da EAP, o filtro de tipo é
+ *   suspenso: todos os itens folha com servicoCodigo preenchido aparecem, independente de
+ *   temEquip / temMdo / temMat. O modo sem busca continua idêntico (filtro inteligente por tipo).
+ *   Cada item exibido via busca recebe um badge indicando sua natureza:
+ *     - EQUIP (laranja) — alocacaoEquip > 0 ou sem mat/mdo
+ *     - MO (roxo)       — só mão de obra
+ *     - MAT (azul)      — material
+ *   Itens COMPOSTO já tinham badge próprio e não são afetados.
+ *
+ * ARQUIVOS ALTERADOS:
+ *   client/src/pages/compras/Solicitacoes.tsx
+ *     - visibleItems filter: skip tipo filter when eapSearch set
+ *     - isLeaf function: idem
+ *     - Item rendering: badge MAT/MO/EQUIP when searching
+ *
+ * ZERO SCHEMA CHANGE.
+ */
+
+/**
  * Rev. 4495 - FEAT: LINK CLICÁVEL DA COTAÇÃO NO HISTÓRICO DE DÉBITOS (REALOCAÇÃO DE VERBA)
  *
  * PROBLEMA:

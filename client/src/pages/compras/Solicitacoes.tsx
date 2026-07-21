@@ -3505,6 +3505,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                               .filter((it: any) => it.nivel >= 2 && it.tipo !== "grupo")
                               .filter((it: any) => {
                                 if (it.isComposto || it.tipo === "Composto" || it.servicoCodigo === "composto") return true;
+                                if (eapSearch) return !!it.servicoCodigo;
                                 if (form.tipo === "servico") return !!it.servicoCodigo && it.temMdo;
                                 if (form.tipo === "equipamento") return !!it.servicoCodigo && it.temEquip;
                                 if (!it.servicoCodigo) return true;
@@ -3556,6 +3557,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                             const allItems = eapQ.data.items;
                             const isLeaf = (it: any) => {
                               if (it.isComposto || it.tipo === "Composto" || it.servicoCodigo === "composto") return true;
+                              if (eapSearch) return !!it.servicoCodigo && it.servicoCodigo !== "composto";
                               if (form.tipo === "servico") return !!it.servicoCodigo && it.servicoCodigo !== "composto" && (it as any).temMdo;
                               if (form.tipo === "equipamento") return !!it.servicoCodigo && it.servicoCodigo !== "composto" && (it as any).temEquip;
                               if (it.tipo === "grupo" || it.tipo === "Etapa/Subetapa") return false;
@@ -3700,6 +3702,11 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                                         {it.descricao}
                                         {(it.isComposto || it.tipo === "Composto") && (
                                           <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 shrink-0">COMPOSTO</span>
+                                        )}
+                                        {eapSearch && !it.isComposto && it.tipo !== "Composto" && it.servicoCodigo && it.servicoCodigo !== "composto" && (
+                                          <span className={`ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${(it as any).temEquip ? "bg-orange-100 text-orange-700" : (it as any).temMdo && !(it as any).temMat ? "bg-purple-100 text-purple-700" : "bg-sky-100 text-sky-700"}`}>
+                                            {(it as any).temEquip ? "EQUIP" : (it as any).temMdo && !(it as any).temMat ? "MO" : "MAT"}
+                                          </span>
                                         )}
                                         {editingSc && editingOriginalEapIds.has(it.id) && (
                                           <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-100 text-blue-700 border border-blue-200">
