@@ -306,7 +306,7 @@ function getWeekOfYear(dateStr: string): number {
   return Math.ceil(((d.getTime() - start.getTime()) / 86400000 + start.getDay() + 1) / 7);
 }
 
-// ─── Componente SessoesList — lista responsiva de sessões DDS ─────────────────
+// ─── Componente SessoesList — design moderno ─────────────────────────────────
 function SessoesList({
   sessoes, companyId, selecionadasIds, setSelecionadasIds, toggleSelecionada,
   setSelectedSessaoId, setEditarCategoriaId, abrirNovaSessao,
@@ -325,62 +325,51 @@ function SessoesList({
   filtroObraSessoes: string; setFiltroObraSessoes: (s: string) => void;
   baixandoLote: boolean; setBaixandoLote: (b: boolean) => void;
 }) {
-  // Obras únicas para o filtro
   const obrasUnicas = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of sessoes) {
-      if (s.obraNome) map.set(s.obraNome, s.obraNome);
-    }
-    return Array.from(map.values()).sort();
+    const m = new Map<string, string>();
+    for (const s of sessoes) if (s.obraNome) m.set(s.obraNome, s.obraNome);
+    return Array.from(m.values()).sort();
   }, [sessoes]);
 
-  // Filtrar sessões
   const sessoesFiltradas = useMemo(() => {
-    let lista = sessoes;
+    let l = sessoes;
     if (buscaSessoes.trim()) {
       const q = buscaSessoes.toLowerCase();
-      lista = lista.filter((s) =>
-        s.tituloTema?.toLowerCase().includes(q) ||
-        s.obraNome?.toLowerCase().includes(q) ||
-        s.instrutor?.toLowerCase().includes(q)
-      );
+      l = l.filter((s) => s.tituloTema?.toLowerCase().includes(q) || s.obraNome?.toLowerCase().includes(q) || s.instrutor?.toLowerCase().includes(q));
     }
-    if (filtroObraSessoes) {
-      lista = lista.filter((s) => s.obraNome === filtroObraSessoes);
-    }
-    return lista;
+    if (filtroObraSessoes) l = l.filter((s) => s.obraNome === filtroObraSessoes);
+    return l;
   }, [sessoes, buscaSessoes, filtroObraSessoes]);
 
-  // Agrupar por semana
   const grupos = useMemo(() => {
-    const map = new Map<string, { key: string; label: string; ano: number; mes: number; semana: number; itens: any[] }>();
+    const m = new Map<string, { key: string; label: string; ano: number; mes: number; semana: number; itens: any[] }>();
     for (const s of sessoesFiltradas) {
-      const dateStr = String(s.data || "").slice(0, 10);
-      let key = "sem-data";
-      let label = "Sem data";
-      let ano = 0, mes = 0, semana = 0;
-      if (dateStr.length === 10) {
-        const d = new Date(dateStr + "T12:00:00");
-        ano = d.getFullYear();
-        mes = d.getMonth();
-        semana = getWeekOfYear(dateStr);
+      const ds = String(s.data || "").slice(0, 10);
+      let key = "sem-data", label = "Sem data", ano = 0, mes = 0, semana = 0;
+      if (ds.length === 10) {
+        const d = new Date(ds + "T12:00:00");
+        ano = d.getFullYear(); mes = d.getMonth(); semana = getWeekOfYear(ds);
         key = `${ano}-${String(mes).padStart(2,"0")}-s${String(semana).padStart(2,"0")}`;
         label = `Semana ${String(semana).padStart(2,"0")} · ${MESES_PT_BR[mes]} ${ano}`;
       }
-      if (!map.has(key)) map.set(key, { key, label, ano, mes, semana, itens: [] });
-      map.get(key)!.itens.push(s);
+      if (!m.has(key)) m.set(key, { key, label, ano, mes, semana, itens: [] });
+      m.get(key)!.itens.push(s);
     }
-    return Array.from(map.values()).sort((a, b) => {
-      if (a.ano !== b.ano) return b.ano - a.ano;
-      if (a.mes !== b.mes) return b.mes - a.mes;
-      return b.semana - a.semana;
-    });
+    return Array.from(m.values()).sort((a, b) => b.ano - a.ano || b.mes - a.mes || b.semana - a.semana);
   }, [sessoesFiltradas]);
 
-  // Baixar ZIP com atas selecionadas
+  // KPIs rápidos
+  const kpis = useMemo(() => {
+    const total = sessoesFiltradas.length;
+    const finalizadas = sessoesFiltradas.filter((s) => s.status === "finalizada").length;
+    const presentes = sessoesFiltradas.reduce((acc: number, s: any) => acc + (s.presentes || 0), 0);
+    const assinados = sessoesFiltradas.reduce((acc: number, s: any) => acc + (s.assinados || 0), 0);
+    return { total, finalizadas, presentes, assinados };
+  }, [sessoesFiltradas]);
+
   async function baixarLote() {
     const ids = Array.from(selecionadasIds);
-    if (ids.length === 0) return;
+    if (!ids.length) return;
     setBaixandoLote(true);
     try {
       const resp = await fetch("/api/dds-ata-lote", {
@@ -393,289 +382,348 @@ function SessoesList({
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = `DDS_${new Date().getFullYear()}_atas.zip`;
-      document.body.appendChild(a);
-      a.click();
+      a.href = url; a.download = `DDS_${new Date().getFullYear()}_atas.zip`;
+      document.body.appendChild(a); a.click();
       setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1000);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Erro ao baixar ZIP");
-    } finally {
-      setBaixandoLote(false);
-    }
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao baixar ZIP"); }
+    finally { setBaixandoLote(false); }
   }
 
-  const catStyle = (cat: string | null) => ({
-    NR: "bg-blue-100 text-blue-800",
-    CAMPANHA: "bg-amber-100 text-amber-800",
-    VACINACAO: "bg-emerald-100 text-emerald-800",
-    LIVRE: "bg-slate-100 text-slate-700",
-  } as any)[cat ?? ""] ?? "bg-slate-100 text-slate-400 italic";
+  // Helpers de estilo por status
+  const statusConfig = (status: string) => ({
+    finalizada: { border: "border-l-emerald-500", dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700 ring-emerald-200", label: "Finalizada" },
+    cancelada:  { border: "border-l-rose-400",    dot: "bg-rose-400",    badge: "bg-rose-50 text-rose-700 ring-rose-200",     label: "Cancelada" },
+    aberta:     { border: "border-l-amber-400",    dot: "bg-amber-400",   badge: "bg-amber-50 text-amber-700 ring-amber-200",   label: "Aberta" },
+  } as any)[status] ?? { border: "border-l-slate-300", dot: "bg-slate-400", badge: "bg-slate-50 text-slate-600 ring-slate-200", label: status };
 
-  const catLabel = (cat: string | null) => ({
-    NR: "NR",
-    CAMPANHA: "Campanha",
-    VACINACAO: "Vacinação",
-    LIVRE: "Livre",
-  } as any)[cat ?? ""] ?? "—";
+  const catCfg = (cat: string | null) => ({
+    NR:       { cls: "bg-blue-50 text-blue-700 ring-blue-200",     label: "NR" },
+    CAMPANHA: { cls: "bg-amber-50 text-amber-700 ring-amber-200",   label: "Campanha" },
+    VACINACAO:{ cls: "bg-emerald-50 text-emerald-700 ring-emerald-200", label: "Vacinação" },
+    LIVRE:    { cls: "bg-slate-100 text-slate-600 ring-slate-200",  label: "Livre" },
+  } as any)[cat ?? ""] ?? null;
+
+  const tudo = sessoesFiltradas.length > 0 && selecionadasIds.size === sessoesFiltradas.length;
 
   return (
-    <div className="space-y-4">
-      {/* ── Barra de ações principais ── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Button size="sm" onClick={() => abrirNovaSessao()}>
-          <Plus className="h-4 w-4 mr-1.5" /> Nova sessão
-        </Button>
-        <div className="flex gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[180px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+    <div className="relative pb-20">
+
+      {/* ══ TOOLBAR SUPERIOR ══ */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-5">
+        {/* Nova sessão */}
+        <button
+          type="button"
+          onClick={() => abrirNovaSessao()}
+          className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-sm transition-colors"
+        >
+          <Plus className="h-4 w-4" /> Nova sessão
+        </button>
+
+        {/* Busca + filtro obra */}
+        <div className="flex gap-2 flex-1 flex-wrap sm:justify-end">
+          <div className="relative flex-1 min-w-[190px] max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={buscaSessoes}
               onChange={(e) => setBuscaSessoes(e.target.value)}
               placeholder="Buscar tema, obra, instrutor…"
-              className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 placeholder:text-slate-400"
             />
+            {buscaSessoes && (
+              <button type="button" onClick={() => setBuscaSessoes("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
-          <select
-            value={filtroObraSessoes}
-            onChange={(e) => setFiltroObraSessoes(e.target.value)}
-            className="text-sm border border-slate-200 rounded-lg bg-white px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 min-w-[140px]"
-          >
-            <option value="">Todas as obras</option>
-            {obrasUnicas.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
+          {obrasUnicas.length > 0 && (
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+              <select
+                value={filtroObraSessoes}
+                onChange={(e) => setFiltroObraSessoes(e.target.value)}
+                className="pl-8 pr-8 py-2 text-sm bg-white border border-slate-200 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 appearance-none min-w-[150px]"
+              >
+                <option value="">Todas as obras</option>
+                {obrasUnicas.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── Barra de seleção em lote ── */}
+      {/* ══ KPIs RÁPIDOS ══ */}
+      {sessoesFiltradas.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {[
+            { label: "Sessões", value: kpis.total, color: "text-slate-800" },
+            { label: "Finalizadas", value: `${kpis.finalizadas} / ${kpis.total}`, color: "text-emerald-700" },
+            { label: "Presenças", value: kpis.presentes, color: "text-blue-700" },
+            { label: "Assinaturas", value: kpis.assinados, color: "text-violet-700" },
+          ].map((k) => (
+            <div key={k.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3">
+              <div className={`text-2xl font-bold tabular-nums ${k.color}`}>{k.value}</div>
+              <div className="text-xs text-slate-500 mt-0.5">{k.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ══ SELEÇÃO GLOBAL ══ */}
+      {sessoesFiltradas.length > 0 && (
+        <label className="inline-flex items-center gap-2 text-xs text-slate-500 mb-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            className="rounded border-slate-300 accent-slate-800"
+            checked={tudo}
+            onChange={(e) => setSelecionadasIds(e.target.checked ? new Set(sessoesFiltradas.map((s: any) => s.id)) : new Set())}
+          />
+          {tudo ? "Desmarcar todas" : `Selecionar todas (${sessoesFiltradas.length})`}
+        </label>
+      )}
+
+      {/* ══ VAZIO ══ */}
+      {sessoesFiltradas.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+          <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+            {buscaSessoes || filtroObraSessoes
+              ? <Search className="h-7 w-7 opacity-50" />
+              : <CalendarRange className="h-7 w-7 opacity-50" />}
+          </div>
+          <p className="text-sm font-medium text-slate-500">
+            {buscaSessoes || filtroObraSessoes ? "Nenhuma sessão encontrada" : "Nenhuma sessão registrada ainda"}
+          </p>
+          {!buscaSessoes && !filtroObraSessoes && (
+            <button type="button" onClick={() => abrirNovaSessao()} className="mt-4 text-sm font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900">
+              Criar primeira sessão
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ══ GRUPOS POR SEMANA ══ */}
+      <div className="space-y-8">
+        {grupos.map((grupo) => (
+          <div key={grupo.key}>
+            {/* Cabeçalho da semana */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 bg-slate-900 text-white text-[11px] font-bold px-3 py-1 rounded-full tracking-wide">
+                  <CalendarRange className="h-3 w-3" />
+                  {grupo.label}
+                </span>
+                <span className="text-xs text-slate-400 font-medium">{grupo.itens.length} sessão{grupo.itens.length > 1 ? "ões" : ""}</span>
+              </div>
+              <div className="flex-1 h-px bg-slate-150 bg-slate-200" />
+            </div>
+
+            {/* Timeline de cards */}
+            <div className="relative pl-6">
+              {/* Linha vertical da timeline */}
+              <div className="absolute left-[9px] top-3 bottom-3 w-px bg-gradient-to-b from-slate-300 via-slate-200 to-transparent" />
+
+              <div className="space-y-3">
+                {grupo.itens.map((s: any, idx: number) => {
+                  const sel = selecionadasIds.has(s.id);
+                  const cat = (s.categoria ?? s.categoriaTema ?? null) as string | null;
+                  const sc = statusConfig(s.status);
+                  const cc = catCfg(cat);
+                  const ds = String(s.data || "").slice(0, 10);
+                  const dateObj = ds.length === 10 ? new Date(ds + "T12:00:00") : null;
+                  const dia = dateObj ? String(dateObj.getDate()).padStart(2, "0") : "—";
+                  const semPt = dateObj ? dateObj.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "") : "";
+                  const pct = s.totalParticipantes > 0 ? Math.round((s.presentes / s.totalParticipantes) * 100) : 0;
+
+                  return (
+                    <div key={s.id} className="relative flex gap-3 group">
+                      {/* Ponto da timeline */}
+                      <div className={`absolute -left-6 mt-[18px] w-[19px] h-[19px] rounded-full border-2 border-white shadow flex items-center justify-center flex-shrink-0 z-10 transition-transform group-hover:scale-110 ${sc.dot} ${sel ? "scale-110 ring-2 ring-offset-1 ring-slate-400" : ""}`} />
+
+                      {/* Card */}
+                      <div
+                        className={`flex-1 bg-white rounded-2xl border-l-4 border border-slate-100 shadow-sm transition-all duration-200 overflow-hidden
+                          ${sc.border}
+                          ${sel ? "ring-2 ring-slate-400 ring-offset-1 shadow-md" : "hover:shadow-md hover:border-slate-200"}
+                        `}
+                      >
+                        {/* ── Cabeçalho do card ── */}
+                        <div className="flex items-stretch">
+                          {/* Bloco data */}
+                          <div className="flex flex-col items-center justify-center px-4 py-3 border-r border-slate-100 bg-slate-50/60 min-w-[56px]">
+                            <span className="text-2xl font-black text-slate-800 leading-none">{dia}</span>
+                            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-0.5">{semPt}</span>
+                            {s.hora && <span className="text-[10px] text-slate-400 mt-1">{s.hora}</span>}
+                          </div>
+
+                          {/* Conteúdo principal */}
+                          <div className="flex-1 px-4 py-3 min-w-0">
+                            {/* Linha: status + categoria + PDF */}
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ${sc.badge}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${sc.dot} opacity-80`} />
+                                {sc.label}
+                              </span>
+                              {cc && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditarCategoriaId(s.id)}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ring-1 transition hover:brightness-95 ${cc.cls}`}
+                                  title="Editar categoria"
+                                >
+                                  {cc.label} <Pencil className="h-2.5 w-2.5 opacity-60" />
+                                </button>
+                              )}
+                              {/* PDF — aparece sempre no cabeçalho */}
+                              <button
+                                type="button"
+                                title="Baixar PDF / Ata"
+                                className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 ring-1 ring-emerald-200 rounded-full px-2.5 py-0.5 transition"
+                                onClick={(e) => { e.stopPropagation(); window.open(`/api/dds-ata/${s.id}?companyId=${companyId}`, "_blank"); }}
+                              >
+                                <FileDown className="h-3 w-3" /> PDF
+                              </button>
+                            </div>
+
+                            {/* Título do tema */}
+                            <p
+                              className="font-bold text-slate-900 text-sm sm:text-[15px] leading-snug cursor-pointer hover:text-blue-700 transition-colors line-clamp-2"
+                              onClick={() => setSelectedSessaoId(s.id)}
+                            >
+                              {s.tituloTema}
+                            </p>
+
+                            {/* Obra + instrutor */}
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {s.obraNome && (
+                                <span className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">
+                                  <Building2 className="h-2.5 w-2.5" /> {s.obraNome}
+                                </span>
+                              )}
+                              {s.instrutor && (
+                                <span className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">
+                                  <UserCheck className="h-2.5 w-2.5" /> {s.instrutor}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Checkbox (lado direito) */}
+                          <div className="flex items-start px-3 pt-3" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              className="rounded border-slate-300 accent-slate-800 w-4 h-4"
+                              checked={sel}
+                              onChange={() => toggleSelecionada(s.id)}
+                              aria-label={`Selecionar sessão ${s.id}`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* ── Rodapé do card ── */}
+                        <div className="flex items-center gap-3 px-4 pb-3 pt-2 border-t border-slate-100">
+                          {/* Barra de presença */}
+                          <div className="flex-1 flex items-center gap-2 min-w-0">
+                            <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden max-w-[80px]">
+                              <div
+                                className="h-full rounded-full bg-emerald-500 transition-all"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="text-[11px] text-slate-500 whitespace-nowrap">
+                              <span className="font-bold text-emerald-700">{s.presentes}</span>/{s.totalParticipantes} presentes
+                            </span>
+                            {s.assinados > 0 && (
+                              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-violet-600">
+                                <FileSignature className="h-3 w-3" /> {s.assinados}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Ações */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSessaoId(s.id)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-2.5 py-1.5 transition"
+                            >
+                              <PenLine className="h-3 w-3" />
+                              <span className="hidden sm:inline">Abrir</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={excluirSessaoMut.isPending}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const ok = await confirm({
+                                  title: "Excluir sessão DDS?",
+                                  description: `"${s.tituloTema}"${s.data ? ` — ${new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}.\nPresença e assinaturas serão removidas.`,
+                                  tone: "destructive", confirmText: "Excluir sessão",
+                                });
+                                if (!ok) return;
+                                try { await excluirSessaoMut.mutateAsync({ companyId, id: s.id }); }
+                                catch (_) {}
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg px-2.5 py-1.5 transition"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ══ BARRA FLUTUANTE DE SELEÇÃO ══ */}
       {selecionadasIds.size > 0 && (
-        <div className="flex items-center gap-2 flex-wrap bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
-          <span className="text-sm font-semibold text-blue-900 flex items-center gap-1.5">
-            <ClipboardCheck className="h-4 w-4" />
-            {selecionadasIds.size} selecionada{selecionadasIds.size > 1 ? "s" : ""}
-          </span>
-          <div className="flex gap-2 ml-auto flex-wrap">
-            <Button size="sm" variant="outline" onClick={() => setSelecionadasIds(new Set())}>
-              Limpar seleção
-            </Button>
-            <Button
-              size="sm"
-              className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5"
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-auto max-w-[calc(100vw-2rem)]">
+          <div className="flex items-center gap-2 bg-slate-900/95 backdrop-blur-xl text-white px-4 py-2.5 rounded-2xl shadow-2xl ring-1 ring-white/10">
+            <span className="text-sm font-bold pr-2 border-r border-white/20">
+              {selecionadasIds.size} selecionada{selecionadasIds.size > 1 ? "s" : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelecionadasIds(new Set())}
+              className="text-xs text-slate-400 hover:text-white transition px-2 py-1 rounded-lg hover:bg-white/10"
+            >
+              Limpar
+            </button>
+            <button
+              type="button"
               disabled={baixandoLote}
               onClick={baixarLote}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-60"
             >
               {baixandoLote
                 ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando…</>
-                : <><FolderDown className="h-3.5 w-3.5" /> Baixar PDFs (ZIP)</>}
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
+                : <><FolderDown className="h-3.5 w-3.5" /> Baixar ZIP</>}
+            </button>
+            <button
+              type="button"
               disabled={excluirSessoesMut.isPending}
               onClick={async () => {
                 const ok = await confirm({
                   title: `Excluir ${selecionadasIds.size} sessão${selecionadasIds.size > 1 ? "ões" : ""}?`,
-                  description: "As sessões e todos os registros de presença/assinaturas serão removidos. Não há volta.",
-                  tone: "destructive",
-                  confirmText: "Excluir tudo",
+                  description: "Presença e assinaturas serão removidas. Sem volta.",
+                  tone: "destructive", confirmText: "Excluir tudo",
                 });
                 if (!ok) return;
                 excluirSessoesMut.mutate({ companyId, ids: Array.from(selecionadasIds) });
               }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold bg-rose-500 hover:bg-rose-400 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-60"
             >
-              {excluirSessoesMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
-              Excluir
-            </Button>
+              {excluirSessoesMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">Excluir</span>
+            </button>
           </div>
         </div>
       )}
-
-      {/* ── Lista vazia ── */}
-      {sessoesFiltradas.length === 0 && (
-        <div className="text-center py-16 text-slate-400">
-          {buscaSessoes || filtroObraSessoes
-            ? <><Search className="h-8 w-8 mx-auto mb-3 opacity-40" /><p>Nenhuma sessão encontrada para este filtro.</p></>
-            : <><CalendarRange className="h-8 w-8 mx-auto mb-3 opacity-40" /><p>Nenhuma sessão registrada ainda.</p></>}
-        </div>
-      )}
-
-      {/* ── Seleção total (mostrar quando há sessões) ── */}
-      {sessoesFiltradas.length > 0 && (
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <input
-            type="checkbox"
-            className="rounded"
-            checked={sessoesFiltradas.length > 0 && selecionadasIds.size === sessoesFiltradas.length}
-            onChange={(e) => {
-              if (e.target.checked) setSelecionadasIds(new Set(sessoesFiltradas.map((s: any) => s.id)));
-              else setSelecionadasIds(new Set());
-            }}
-            aria-label="Selecionar todas"
-          />
-          <span>Selecionar todas ({sessoesFiltradas.length})</span>
-        </div>
-      )}
-
-      {/* ── Grupos por semana ── */}
-      {grupos.map((grupo) => (
-        <div key={grupo.key}>
-          {/* Cabeçalho do grupo */}
-          <div className="flex items-center gap-2 mb-2">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider">
-              <CalendarRange className="h-3.5 w-3.5" />
-              {grupo.label}
-            </div>
-            <div className="flex-1 h-px bg-slate-200" />
-            <span className="text-xs text-slate-400">{grupo.itens.length} sessão{grupo.itens.length > 1 ? "ões" : ""}</span>
-          </div>
-
-          {/* Cards da semana */}
-          <div className="space-y-2">
-            {grupo.itens.map((s: any) => {
-              const selecionada = selecionadasIds.has(s.id);
-              const cat = (s.categoria ?? s.categoriaTema ?? null) as string | null;
-              const dataPt = s.data ? new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR", {
-                weekday: "short", day: "2-digit", month: "2-digit", year: "numeric"
-              }) : "—";
-
-              return (
-                <div
-                  key={s.id}
-                  className={`bg-white rounded-xl border transition-all ${
-                    selecionada
-                      ? "border-blue-400 shadow-sm bg-blue-50/30"
-                      : "border-slate-200 hover:border-slate-300 hover:shadow-sm"
-                  }`}
-                >
-                  <div className="p-3 sm:p-4">
-                    {/* Linha superior: checkbox + data + status + PDF */}
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <input
-                          type="checkbox"
-                          className="rounded mt-0.5 flex-shrink-0"
-                          checked={selecionada}
-                          onChange={() => toggleSelecionada(s.id)}
-                          aria-label={`Selecionar sessão ${s.id}`}
-                        />
-                        <span className="text-xs font-semibold text-slate-600 bg-slate-100 rounded-md px-2 py-0.5 whitespace-nowrap">
-                          {dataPt}{s.hora ? ` · ${s.hora}` : ""}
-                        </span>
-                        {/* Status */}
-                        {s.status === "finalizada"
-                          ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold"><Check className="h-3 w-3" /> Finalizada</span>
-                          : s.status === "cancelada"
-                          ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-semibold"><XIcon className="h-3 w-3" /> Cancelada</span>
-                          : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">● Aberta</span>
-                        }
-                        {/* Categoria (clicável) */}
-                        {cat && (
-                          <button
-                            type="button"
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs hover:ring-2 hover:ring-blue-300 transition ${catStyle(cat)}`}
-                            onClick={() => setEditarCategoriaId(s.id)}
-                            title="Editar categoria"
-                          >
-                            {catLabel(cat)} <Pencil className="h-2.5 w-2.5 opacity-60" />
-                          </button>
-                        )}
-                      </div>
-                      {/* PDF individual */}
-                      <button
-                        type="button"
-                        title="Baixar PDF / Ata"
-                        className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg px-2.5 py-1.5 border border-emerald-200 transition"
-                        onClick={(e) => { e.stopPropagation(); window.open(`/api/dds-ata/${s.id}?companyId=${companyId}`, "_blank"); }}
-                      >
-                        <FileDown className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">PDF</span>
-                      </button>
-                    </div>
-
-                    {/* Título do tema */}
-                    <div
-                      className="font-bold text-slate-900 text-sm sm:text-base cursor-pointer hover:text-blue-700 leading-snug mb-2"
-                      onClick={() => setSelectedSessaoId(s.id)}
-                    >
-                      {s.tituloTema}
-                    </div>
-
-                    {/* Metadados */}
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 mb-3">
-                      {s.obraNome && (
-                        <span className="flex items-center gap-1">
-                          <Building2 className="h-3 w-3 text-slate-400" />
-                          {s.obraNome}
-                        </span>
-                      )}
-                      {s.instrutor && (
-                        <span className="flex items-center gap-1">
-                          <UserCheck className="h-3 w-3 text-slate-400" />
-                          {s.instrutor}
-                        </span>
-                      )}
-                      {!s.obraNome && !s.instrutor && (
-                        <span className="italic text-slate-400">Avulsa / Escritório</span>
-                      )}
-                    </div>
-
-                    {/* Rodapé: presentes + ações */}
-                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
-                      {/* Presentes / assinaturas */}
-                      <div className="flex items-center gap-3 text-xs">
-                        <span className="flex items-center gap-1">
-                          <Users className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="font-semibold text-emerald-700">{s.presentes}</span>
-                          <span className="text-slate-400">/{s.totalParticipantes}</span>
-                          <span className="text-slate-500 hidden sm:inline">presente{s.presentes !== 1 ? "s" : ""}</span>
-                        </span>
-                        {s.assinados > 0 && (
-                          <span className="flex items-center gap-1 text-blue-600">
-                            <FileSignature className="h-3.5 w-3.5" />
-                            {s.assinados} assin.
-                          </span>
-                        )}
-                      </div>
-                      {/* Ações */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded-lg px-2.5 py-1.5 border border-blue-200 transition"
-                          onClick={() => setSelectedSessaoId(s.id)}
-                        >
-                          <PenLine className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Abrir</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg px-2.5 py-1.5 border border-rose-200 transition"
-                          disabled={excluirSessaoMut.isPending}
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            const ok = await confirm({
-                              title: "Excluir sessão DDS?",
-                              description: `"${s.tituloTema}"${s.data ? ` — ${new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}.\nPresença e assinaturas serão removidas. Sem volta.`,
-                              tone: "destructive",
-                              confirmText: "Excluir sessão",
-                            });
-                            if (!ok) return;
-                            try { await excluirSessaoMut.mutateAsync({ companyId, id: s.id }); }
-                            catch (_) { /* toast já mostrado */ }
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Excluir</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

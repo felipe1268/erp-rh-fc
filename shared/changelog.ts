@@ -1,4 +1,48 @@
 /**
+ * Rev. 4502 - REDESIGN: DDS SESSÕES — LAYOUT MODERNO (TIMELINE + KPIs + BARRA FLUTUANTE)
+ *
+ * PROBLEMA:
+ *   Layout de cards da Rev. 4501 era funcional mas sem identidade visual forte.
+ *
+ * SOLUÇÃO — redesign completo do componente SessoesList:
+ *
+ *   TOOLBAR:
+ *   - Botão "Nova sessão" em slate-900 sólido com cantos arredondados (rounded-xl).
+ *   - Busca pill (rounded-full, shadow, ícone de X para limpar).
+ *   - Filtro de obra com ícone Building2 + chevron embutidos (rounded-full).
+ *
+ *   KPI STRIP (4 cards compactos):
+ *   - Sessões totais | Finalizadas (X/Y) | Presenças acumuladas | Assinaturas.
+ *   - rounded-2xl, shadow-sm, número grande colorido por tipo.
+ *
+ *   TIMELINE LATERAL:
+ *   - Linha vertical com gradiente de cima a baixo (de slate-300 a transparente).
+ *   - Ponto colorido por status (emerge-500/amber-400/rose-400) com scale-110 no hover.
+ *   - Ponto fica anulado com ring quando o card está selecionado.
+ *
+ *   CARDS (rounded-2xl, border-l-4 colorida por status):
+ *   - Bloco data à esquerda: número do dia grande + abreviação do dia + hora.
+ *   - Status badge (pill com anel ring-1) + categoria clicável + botão PDF (pill verde).
+ *   - Título do tema (bold, hover azul, line-clamp-2).
+ *   - Pills de obra e instrutor (bg-slate-100 rounded-full).
+ *   - Checkbox no canto superior direito.
+ *   - Rodapé: barra de progresso de presença (emerald, 80px max) + contador + ações.
+ *   - Ações: "Abrir" (bg-slate-100) + Excluir (ícone Trash2, hover rose).
+ *
+ *   BARRA FLUTUANTE (bottom-6, fixed):
+ *   - Aparece ao selecionar ≥1 sessão. Pill dark (slate-900/95 backdrop-blur-xl).
+ *   - Conteúdo: contagem | Limpar | Baixar ZIP (emerald) | Excluir (rose).
+ *   - max-w calc(100vw-2rem) para caber em mobile.
+ *
+ *   ESTADO VAZIO:
+ *   - Círculo cinza + ícone + mensagem contextual (busca vs. lista vazia) +
+ *     link "Criar primeira sessão".
+ *
+ * ARQUIVOS: client/src/pages/sst/DDSGuia.tsx
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4501 - FEAT: DDS SESSÕES — LAYOUT DE CARDS RESPONSIVO + PDF NA LISTA + ZIP EM LOTE
  *
  * PROBLEMA:
