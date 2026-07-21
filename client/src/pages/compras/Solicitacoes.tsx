@@ -40,17 +40,18 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   entrega_parcial:{ label: "Entrega Parcial", cls: "bg-amber-50 text-amber-700 border-amber-200"   },
 };
 
-// Rev. 4488 — Deriva status efetivo da SC para badge visual (P2P / three-way matching).
-// Prioridade: entrega > pagamento > status cru.
-// _ocsEntregues=true  → Concluído (ciclo logístico encerrado; pagamento é do Financeiro).
-// _hasOC + atendidos>0 → Entrega Parcial (almoxarifado recebeu parte).
-// _hasOC + atendidos=0 → Ag. Recebimento (OC emitida, nada recebido ainda).
+// Rev. 4491 — Deriva status efetivo da SC para badge visual (P2P / three-way matching).
+// Prioridade estrita:
+//   1. _ocsEntregues=true (qualquer status cru) → "aprovado" (Concluído).
+//   2. _hasOC=true && !_ocsEntregues (qualquer status cru exceto recusado/cancelado)
+//      → "entrega_parcial" ou "ag_recebimento" por _itens.atendidos.
+//      INCLUI status="aprovado" com OC não entregue — evita vazar para "Concluído".
+//   3. fallback → status cru (pendente, cotacao, em_andamento, recusado, cancelado,
+//      ou "aprovado" sem OC = legacy aprovado manualmente).
 function statusEfetivoSC(r: any): string {
   const st = String(r?.status ?? "");
-  if (r?._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(st)) {
-    return "aprovado";
-  }
-  if (r?._hasOC === true && r?._ocsEntregues !== true && !["aprovado", "recusado", "cancelado"].includes(st)) {
+  if (r?._ocsEntregues === true) return "aprovado";
+  if (r?._hasOC === true && !["recusado", "cancelado"].includes(st)) {
     const atendidos = Number(r?._itens?.atendidos ?? 0);
     return atendidos > 0 ? "entrega_parcial" : "ag_recebimento";
   }
@@ -2350,19 +2351,24 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     return true;
   };
   const listaFiltradaObraBase = (filtroObra === "todas" ? lista : lista.filter((r: any) => String(r.obraId) === filtroObra)).filter(dentroDoPeriodo);
-  // Considera SC como "totalmente entregue" quando:
-  //  - já está num status final (concluida/recebido/aprovado/recusado/cancelado), OU
-  //  - todos os itens da SC têm quantidadeAtendida >= quantidade
-  //    (atendidos === total e total > 0)
+  // Rev. 4491 — scEntregueTotal: auditoria completa P2P.
+  // REGRA: uma SC só é "totalmente entregue" quando:
+  //   1. _ocsEntregues=true (todas as OCs vinculadas foram entregues pelo almoxarifado), OU
+  //   2. _itens.atendidos >= _itens.total > 0 (todos os itens de SC recebidos), OU
+  //   3. Status terminal sem rastreamento: recusado/cancelado, OU
+  //   4. Legacy: status="aprovado" sem nenhuma OC e sem itens rastreados
+  //      (SCs antigas aprovadas manualmente antes do sistema de OC/recebimento).
+  // ATENÇÃO: status="aprovado" WITH _hasOC=true NÃO é "entregue" — a OC ainda não chegou.
+  // Isso corrige o vazamento de SCs com 0/N recebidos para o bucket "Concluído".
   const scEntregueTotal = (r: any) => {
     const st = String(r.status || "");
-    if (["aprovado", "concluida", "recebido", "recusado", "cancelado"].includes(st)) return true;
-    // Rev. 1684: separar entrega (logística) de pagamento (financeiro).
-    // Quando TODAS as OCs vinculadas estão em status de entrega, a SC é considerada
-    // entregue mesmo que o pagamento ainda esteja pendente.
+    if (["recusado", "cancelado", "concluida", "recebido"].includes(st)) return true;
     if (r._ocsEntregues === true) return true;
     const it = r._itens || { total: 0, atendidos: 0 };
-    return it.total > 0 && it.atendidos >= it.total;
+    if (it.total > 0 && it.atendidos >= it.total) return true;
+    // Legacy: SC aprovada manualmente sem OC e sem rastreamento de itens
+    if (st === "aprovado" && !r._hasOC && it.total === 0) return true;
+    return false;
   };
   const listaFiltradaObraStatus = filtroStatus === "pendente_oc"
     ? listaFiltradaObraBase.filter((r: any) => !(r._hasOC) && !["aprovado", "recusado", "cancelado"].includes(r.status))
@@ -2395,7 +2401,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     emAndamento: (r) => r.status === "em_andamento" && !r._ocsEntregues && !r._hasOC,
     agRecebimento: _isAgRec,
     entreguesParcial: _isEntParcial,
-    concluidas: (r) => r.status === "aprovado" || scEntregueTotal(r) || (r._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(r.status)),
+    concluidas: (r) => scEntregueTotal(r),
     recusadas: (r) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? ""),
     canceladas: (r) => r.status === "cancelado",
   };
@@ -2450,16 +2456,18 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
   const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status) && !r._hasOC), [todasSCs]);
   // KPIs sempre calculados a partir do total sem filtro de status (apenas filtro de obra aplicado)
   const listaKpisBase = (filtroObra === "todas" ? todasSCs : todasSCs.filter((r: any) => String(r.obraId) === filtroObra)).filter(dentroDoPeriodo);
+  // Rev. 4491 — kpis usa scEntregueTotal corrigido (sem vazar "aprovado"+OC para Concluído).
   const kpis = useMemo(() => ({
-    pendenteOC:       listaKpisBase.filter((r: any) => !(r._hasOC) && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
-    pendenteEntrega:  listaKpisBase.filter((r: any) => r._hasOC === true && !scEntregueTotal(r)).length,
-    aprovado: listaKpisBase.filter((r: any) => r.status === "aprovado" || scEntregueTotal(r)).length,
-    recusado: listaKpisBase.filter((r: any) => r.status === "recusado").length,
+    pendenteOC:      listaKpisBase.filter((r: any) => !r._hasOC && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
+    pendenteEntrega: listaKpisBase.filter((r: any) => r._hasOC === true && !scEntregueTotal(r)).length,
+    aprovado:        listaKpisBase.filter((r: any) => scEntregueTotal(r)).length,
+    recusado:        listaKpisBase.filter((r: any) => r.status === "recusado").length,
   }), [listaKpisBase]);
 
-  // Rev. 4489 — Status detalhado (card superior). Split P2P: Ag.Recebimento + Entrega Parcial.
+  // Rev. 4491 — Status detalhado corrigido: scEntregueTotal é a fonte única de "Concluído".
+  // "ativas" = não-terminal e não-concluída (nem "aprovado" legado sem OC).
   const statusBreakdown = useMemo(() => {
-    const ativas = listaKpisBase.filter((r: any) => !["aprovado", "recusado", "cancelado"].includes(r.status) && !scEntregueTotal(r) && !r._ocsEntregues);
+    const ativas = listaKpisBase.filter((r: any) => !scEntregueTotal(r) && !["recusado", "cancelado"].includes(r.status));
     return {
       total: listaKpisBase.length,
       ativas: ativas.length,
@@ -2470,7 +2478,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       emAndamento: listaKpisBase.filter((r: any) => r.status === "em_andamento" && !r._ocsEntregues && !r._hasOC).length,
       agRecebimento: listaKpisBase.filter(_isAgRec).length,
       entreguesParcial: listaKpisBase.filter(_isEntParcial).length,
-      concluidas: listaKpisBase.filter((r: any) => r.status === "aprovado" || scEntregueTotal(r) || (r._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(r.status))).length,
+      concluidas: listaKpisBase.filter((r: any) => scEntregueTotal(r)).length,
       recusadas: listaKpisBase.filter((r: any) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? "")).length,
       canceladas: listaKpisBase.filter((r: any) => r.status === "cancelado").length,
       urgentes: listaKpisBase.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "recusado", "cancelado"].includes(r.status) && !r._hasOC).length,

@@ -1,4 +1,41 @@
 /**
+ * Rev. 4491 - FIX: AUDITORIA COMPLETA DE FILTROS P2P — SCs "APROVADO"+OC NÃO SÃO "CONCLUÍDO"
+ *
+ * PROBLEMA:
+ *   scEntregueTotal() tratava status="aprovado" (DB raw) como terminal INCONDICIONALMENTE.
+ *   Resultado: SCs com OC emitida mas 0/N itens recebidos apareciam no filtro "Concluído"
+ *   com badge "Concluído" — dado errado e operacionalmente perigoso (compra parece encerrada
+ *   mas o material nunca chegou).
+ *
+ * CAUSA-RAIZ:
+ *   Linha: if (["aprovado","concluida","recebido",...].includes(st)) return true;
+ *   Isso inclui status="aprovado" mesmo quando _hasOC=true && _ocsEntregues=false.
+ *   SCs com OC não entregue: _hasOC=true, _ocsEntregues=false, _itens={total:N, atendidos:0}.
+ *
+ * CORREÇÃO (scEntregueTotal — fonte única de verdade):
+ *   Nova prioridade estrita:
+ *   1. ["recusado","cancelado","concluida","recebido"] → terminal (sem rastreamento).
+ *   2. _ocsEntregues=true → todas as OCs entregues → Concluído.
+ *   3. _itens.atendidos >= _itens.total > 0 → todos os itens SC recebidos → Concluído.
+ *   4. status="aprovado" && !_hasOC && _itens.total=0 → legacy manual (aprovado antes do
+ *      sistema de OC) → Concluído.
+ *   5. Tudo mais → NÃO é Concluído (incluindo "aprovado"+OC não entregue).
+ *
+ * CORREÇÃO (statusEfetivoSC):
+ *   Prioridade agora: _ocsEntregues=true → "aprovado"; _hasOC=true → ag/parcial.
+ *   Removido "aprovado" da lista de exclusão do bloco _hasOC — SCs com status="aprovado"
+ *   e OC não entregue agora exibem "Ag. Entrega" ou "Entrega Parcial" corretamente.
+ *
+ * EFEITOS COLATERAIS CORRIGIDOS:
+ *   kpis.aprovado: r.status==="aprovado"||... → scEntregueTotal(r) apenas.
+ *   statusBreakdown.ativas: usa scEntregueTotal em vez de lista de raw status.
+ *   statusBreakdown.concluidas: scEntregueTotal(r) apenas.
+ *   breakdownPredicates.concluidas: idem.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4490 - FIX: RÓTULOS P2P AJUSTADOS PARA CLAREZA OPERACIONAL
  *
  * CONTEXTO:

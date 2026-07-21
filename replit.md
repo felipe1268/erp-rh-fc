@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4490** — **FIX: RÓTULOS P2P — "AG. RECEBIMENTO" → "AG. ENTREGA" PARA CLAREZA OPERACIONAL.** "Ag. Recebimento" era ambíguo (parecia que o comprador aguardava receber algo já entregue). Correto: OC emitida → fornecedor ainda não entregou → "Ag. Entrega". "Entrega Parcial" mantido para quando parte dos itens já chegou ao almoxarifado. ZERO schema change.
-- **Rev. 4489** — **FIX: SPLIT BUCKET "ENTREGA PARCIAL" → "AG. RECEBIMENTO" + "ENTREGA PARCIAL" (P2P).** Split em dois predicados/contadores: `_isAgRec` (`atendidos=0`) e `_isEntParcial` (`atendidos>0`). Grid `lg:grid-cols-9` → `lg:grid-cols-10`. ZERO schema change.
+- **Rev. 4491** — **FIX: AUDITORIA COMPLETA DE FILTROS P2P — SCs "APROVADO"+OC NÃO SÃO "CONCLUÍDO".** `scEntregueTotal()` tratava `status="aprovado"` como terminal incondicional → SCs com OC emitida e 0/N recebidos apareciam em "Concluído". Nova prioridade estrita: `_ocsEntregues` → Concluído; `_itens.atendidos>=total>0` → Concluído; `aprovado+!_hasOC+itens=0` → legacy OK; senão → NÃO concluído. `statusEfetivoSC`, `kpis`, `statusBreakdown`, `breakdownPredicates` corrigidos. ZERO schema change.
+- **Rev. 4490** — **FIX: RÓTULOS P2P — "AG. RECEBIMENTO" → "AG. ENTREGA".** Badge clareza operacional: OC emitida → fornecedor ainda não entregou → "Ag. Entrega". ZERO schema change.
 
 ### 5 one-liners
 
