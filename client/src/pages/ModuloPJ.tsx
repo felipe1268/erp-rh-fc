@@ -1649,7 +1649,7 @@ export default function ModuloPJ() {
                         <p className="text-lg font-bold text-green-600">
                           {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualFechamento ?? 50) / 100)}
                         </p>
-                        <p className="text-xs text-muted-foreground">2ª Medição ({selectedContrato.percentualFechamento ?? 50}%) — Dia {selectedContrato.diaFechamento ?? 5}</p>
+                        <p className="text-xs text-muted-foreground">2ª Medição ({selectedContrato.percentualFechamento ?? 50}%) — {selectedContrato.diaFechamento === 31 ? "Último dia" : `Dia ${selectedContrato.diaFechamento ?? 5}`}</p>
                       </div>
                     </div>
                   </div>
@@ -2173,8 +2173,28 @@ export default function ModuloPJ() {
                       </div>
                       <div>
                         <label className="text-xs font-medium text-gray-600 mb-1 block">Dia 2ª Medição</label>
-                        <Input type="number" min={1} max={31} value={form.diaFechamento ?? ""} placeholder="5"
-                          onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaFechamento: isNaN(v) ? undefined : v }); }} />
+                        <div className="space-y-1.5">
+                          <div className="flex rounded-md border border-input overflow-hidden text-xs h-9">
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, diaFechamento: form.diaFechamento === 31 ? 5 : (form.diaFechamento ?? 5) })}
+                              className={`flex-1 px-2 py-1.5 transition-colors font-medium ${form.diaFechamento !== 31 ? "bg-purple-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                            >
+                              Dia fixo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, diaFechamento: 31 })}
+                              className={`flex-1 px-2 py-1.5 transition-colors font-medium ${form.diaFechamento === 31 ? "bg-purple-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                            >
+                              Último dia
+                            </button>
+                          </div>
+                          {form.diaFechamento !== 31 && (
+                            <Input type="number" min={1} max={30} value={form.diaFechamento ?? ""} placeholder="5"
+                              onChange={e => { const v = parseInt(e.target.value); setForm({ ...form, diaFechamento: isNaN(v) ? undefined : Math.min(30, v) }); }} />
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -2195,7 +2215,7 @@ export default function ModuloPJ() {
                         <div className="flex items-end pb-1">
                           <div className="text-xs text-purple-700 space-y-0.5">
                             <div>1ª: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualAdiantamento ?? 50) / 100)}</strong> — dia {form.diaAdiantamento ?? 15}</div>
-                            <div>2ª: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualFechamento ?? 50) / 100)}</strong> — dia {form.diaFechamento ?? 5} (mês seg.)</div>
+                            <div>2ª: <strong>{formatMoeda(parseFloat(form.valorMensal) * (form.percentualFechamento ?? 50) / 100)}</strong> — {form.diaFechamento === 31 ? "último dia" : `dia ${form.diaFechamento ?? 5}`} (mês seg.)</div>
                           </div>
                         </div>
                       )}

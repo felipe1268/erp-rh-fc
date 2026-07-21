@@ -24,7 +24,8 @@ function diasDoMes(ano: number, mes1a12: number): number {
  */
 function dataIsoSegura(ano: number, mes1a12: number, dia: number): string {
   const max = diasDoMes(ano, mes1a12);
-  const d = Math.min(Math.max(1, dia | 0), max);
+  // dia === 0 é o marcador para "último dia do mês" (ex: diaFechamento=0)
+  const d = dia === 0 ? max : Math.min(Math.max(1, dia | 0), max);
   return `${ano}-${String(mes1a12).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
@@ -727,7 +728,7 @@ export const pjContractsRouter = router({
         texto = texto.replace(/\[PERCENTUAL_FECHAMENTO\]/g, String(percFech));
         texto = texto.replace(/\[VALOR_FECHAMENTO\]/g, (valorMensal * percFech / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
         texto = texto.replace(/\[DIA_ADIANTAMENTO\]/g, String(contrato.diaAdiantamento || 15));
-        texto = texto.replace(/\[DIA_FECHAMENTO\]/g, String(contrato.diaFechamento || 5));
+        texto = texto.replace(/\[DIA_FECHAMENTO\]/g, (contrato.diaFechamento === 31 || contrato.diaFechamento === 0) ? "último dia do mês" : String(contrato.diaFechamento || 5));
         texto = texto.replace(/\[DATA_ASSINATURA\]/g, new Date().toLocaleDateString('pt-BR'));
         
         return { texto };

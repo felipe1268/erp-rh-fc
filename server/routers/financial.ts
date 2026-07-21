@@ -3872,7 +3872,7 @@ export const financialRouter = router({
               pjAtual.funcionario_matricula ? `Matr. ${pjAtual.funcionario_matricula}` : null,
               pjAtual.dataInicio && pjAtual.dataFim ? `Vigência ${String(pjAtual.dataInicio).slice(0,10).split("-").reverse().join("/")} a ${String(pjAtual.dataFim).slice(0,10).split("-").reverse().join("/")}` : null,
             ].filter(Boolean).join(" · ") : null,
-            formula: `Valor mensal contratado para o prestador, projetado para o vencimento configurado (dia ${pjAtual?.diaFechamento ?? 5} de cada mês, recuando para dia útil anterior).`,
+            formula: `Valor mensal contratado para o prestador, projetado para o vencimento configurado (${(pjAtual?.diaFechamento === 31 || pjAtual?.diaFechamento === 0) ? "último dia de cada mês" : `dia ${pjAtual?.diaFechamento ?? 5} de cada mês`}, recuando para dia útil anterior).`,
             campos: pjAtual ? [
               { label: "Funcionário Vinculado", value: pjAtual.funcionario_nome ?? "—" },
               { label: "Matrícula", value: pjAtual.funcionario_matricula ?? "—" },
@@ -3880,7 +3880,7 @@ export const financialRouter = router({
               { label: "Razão Social", value: pjAtual.razao || "—" },
               { label: "CNPJ", value: pjAtual.cnpj || "—" },
               { label: "Valor Mensal", value: `R$ ${Number(pjAtual.valorMensal ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` },
-              { label: "Dia Fechamento", value: pjAtual.diaFechamento ?? 5 },
+              { label: "Dia Fechamento", value: (pjAtual.diaFechamento === 31 || pjAtual.diaFechamento === 0) ? "Último dia" : (pjAtual.diaFechamento ?? 5) },
               { label: "Status Contrato", value: pjAtual.status ?? "—" },
             ] : [
               { label: "Origem", value: entry.origemDescricao ?? "—" },

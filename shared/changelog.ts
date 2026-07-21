@@ -1,4 +1,37 @@
 /**
+ * Rev. 4484 - FEAT: DIA 2ª MEDIÇÃO PJ — OPÇÃO "ÚLTIMO DIA DO MÊS"
+ *
+ * CONTEXTO:
+ *   O campo "Dia 2ª Medição" no formulário de Contrato PJ (§4 Regra de Pagamento)
+ *   aceitava apenas um número fixo de 1 a 31. O usuário pediu a opção de escolher
+ *   sempre o último dia do mês (independente do mês ter 28, 29, 30 ou 31 dias).
+ *
+ * IMPLEMENTAÇÃO:
+ *   Convenção: diaFechamento = 31 (valor já usado pelo form de Ajuste em lote).
+ *   `dataIsoSegura()` já clampava para o último dia do mês quando dia > max —
+ *   portanto 31 já funcionava corretamente via clamping sem mudança de schema.
+ *
+ *   Frontend (ModuloPJ.tsx):
+ *   - Campo "Dia 2ª Medição" substituído por toggle "Dia fixo | Último dia" +
+ *     input numérico condicional (máx 30, pois 31 = marcador "último dia").
+ *   - Preview "2ª: R$ X,XX — dia N (mês seg.)" exibe "último dia" quando = 31.
+ *   - Card de detalhe do contrato seleccionado também atualizado.
+ *
+ *   Backend (pjContracts.ts):
+ *   - `dataIsoSegura`: adicionada guarda explícita para dia === 0 (safety net).
+ *   - Substituição de [DIA_FECHAMENTO] no texto do contrato: = 31 → "último dia do mês".
+ *
+ *   Backend (financial.ts):
+ *   - Tooltip/fórmula e campo "Dia Fechamento" tratam = 31 → "Último dia".
+ *
+ * ARQUIVOS TOCADOS:
+ *   client/src/pages/ModuloPJ.tsx, server/routers/pjContracts.ts,
+ *   server/routers/financial.ts
+ *
+ * ZERO schema change. Consistente com o form de Ajuste em lote (que já usava 31).
+ */
+
+/**
  * Rev. 4483 - FEAT: FCSIGN — AUTENTICAÇÃO OBRIGATÓRIA PARA SIGNATÁRIOS INTERNOS
  *
  * CONTEXTO:
