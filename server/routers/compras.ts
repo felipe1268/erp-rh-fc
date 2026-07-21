@@ -15000,7 +15000,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         let ratioMat = 1;
         let itemTipo = "material";
 
-        if (orc && orc.custoUnitTotal > 0) {
+        if (tipoOrigem === "equipamento") {
+          // Locação: o fornecedor recebe 100% como aluguel (material).
+          // O MDO do orçamento é custo interno dos operadores — não vai ao fornecedor.
+          ratioMat = 1;
+          itemTipo = "material";
+        } else if (orc && orc.custoUnitTotal > 0) {
           ratioMat = orc.custoUnitMat / orc.custoUnitTotal;
           itemTipo = ratioMat >= 0.99 ? "material" : ratioMat <= 0.01 ? "servico" : "pacote";
         } else if (alocacao) {

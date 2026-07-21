@@ -7038,25 +7038,39 @@ export default function Cotacoes() {
                 <div className="space-y-4 py-2">
                   <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Composição da Cotação</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="text-center p-2 bg-white rounded border border-gray-100">
-                        <p className="text-[10px] text-gray-400 uppercase">Total</p>
-                        <p className="text-sm font-bold text-gray-800">{fmt(sp.totalGeral)}</p>
+                    {sp.tipoOrigem === "equipamento" ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="text-center p-2 bg-white rounded border border-gray-100">
+                          <p className="text-[10px] text-gray-400 uppercase">Total Locação</p>
+                          <p className="text-sm font-bold text-gray-800">{fmt(sp.totalGeral)}</p>
+                        </div>
+                        <div className="text-center p-2 bg-orange-50 rounded border border-orange-200">
+                          <p className="text-[10px] text-orange-500 uppercase font-medium">100% Locação</p>
+                          <p className="text-sm font-bold text-orange-700">{fmt(sp.totalGeral)}</p>
+                          <p className="text-[10px] text-orange-400">vai ao fornecedor</p>
+                        </div>
                       </div>
-                      <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
-                        <p className="text-[10px] text-blue-500 uppercase font-medium">Material</p>
-                        <p className="text-sm font-bold text-blue-700">{fmt(sp.totalMat)}</p>
-                        {sp.totalGeral > 0 && <p className="text-[10px] text-blue-400">{((sp.totalMat / sp.totalGeral) * 100).toFixed(1)}%</p>}
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="text-center p-2 bg-white rounded border border-gray-100">
+                          <p className="text-[10px] text-gray-400 uppercase">Total</p>
+                          <p className="text-sm font-bold text-gray-800">{fmt(sp.totalGeral)}</p>
+                        </div>
+                        <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
+                          <p className="text-[10px] text-blue-500 uppercase font-medium">Material</p>
+                          <p className="text-sm font-bold text-blue-700">{fmt(sp.totalMat)}</p>
+                          {sp.totalGeral > 0 && <p className="text-[10px] text-blue-400">{((sp.totalMat / sp.totalGeral) * 100).toFixed(1)}%</p>}
+                        </div>
+                        <div className="text-center p-2 bg-purple-50 rounded border border-purple-200">
+                          <p className="text-[10px] text-purple-500 uppercase font-medium">Mão de Obra</p>
+                          <p className="text-sm font-bold text-purple-700">{fmt(sp.totalMdo)}</p>
+                          {sp.totalGeral > 0 && <p className="text-[10px] text-purple-400">{((sp.totalMdo / sp.totalGeral) * 100).toFixed(1)}%</p>}
+                        </div>
                       </div>
-                      <div className="text-center p-2 bg-purple-50 rounded border border-purple-200">
-                        <p className="text-[10px] text-purple-500 uppercase font-medium">Mão de Obra</p>
-                        <p className="text-sm font-bold text-purple-700">{fmt(sp.totalMdo)}</p>
-                        {sp.totalGeral > 0 && <p className="text-[10px] text-purple-400">{((sp.totalMdo / sp.totalGeral) * 100).toFixed(1)}%</p>}
-                      </div>
-                    </div>
+                    )}
                     {sp.tipoOrigem && (
                       <p className="text-[10px] text-gray-500 mt-1">
-                        Tipo SC: <span className="font-semibold">{sp.tipoOrigem === "material" ? "Material" : sp.tipoOrigem === "servico" ? "Serviço/MDO" : sp.tipoOrigem === "pacote" ? "Pacote (Mat+MDO)" : sp.tipoOrigem}</span>
+                        Tipo SC: <span className="font-semibold">{sp.tipoOrigem === "material" ? "Material" : sp.tipoOrigem === "servico" ? "Serviço/MDO" : sp.tipoOrigem === "pacote" ? "Pacote (Mat+MDO)" : sp.tipoOrigem === "equipamento" ? "Equipamento (Locação)" : sp.tipoOrigem}</span>
                       </p>
                     )}
                     {!sp.temVencedor && sp.totalGeral > 0 && (
@@ -7107,7 +7121,7 @@ export default function Cotacoes() {
                       </div>
                       <div>
                         <label className="text-xs font-medium text-gray-700 mb-1 block">
-                          Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo MAT: {fmt(sp.totalMat)}</span>
+                          Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo {sp.tipoOrigem === "equipamento" ? "Locação" : "MAT"}: {fmt(sp.tipoOrigem === "equipamento" ? sp.totalGeral : sp.totalMat)}</span>
                         </label>
                         <MoneyInput
                           value={fdCotForm.valor}
@@ -7119,7 +7133,7 @@ export default function Cotacoes() {
                           return fdVal > 0 ? (
                             <p className={`text-xs mt-1 font-medium ${excedeMat ? "text-red-600" : "text-emerald-600"}`}>
                               {fmt(fdVal)}
-                              {excedeMat && " — Excede o valor de material!"}
+                              {excedeMat && " — Excede o valor de locação!"}
                             </p>
                           ) : null;
                         })()}
@@ -9197,25 +9211,39 @@ export default function Cotacoes() {
               <div className="space-y-4 py-2">
                 <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Composição da Cotação</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center p-2 bg-white rounded border border-gray-100">
-                      <p className="text-[10px] text-gray-400 uppercase">Total</p>
-                      <p className="text-sm font-bold text-gray-800">{fmt(sp.totalGeral)}</p>
+                  {sp.tipoOrigem === "equipamento" ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="text-center p-2 bg-white rounded border border-gray-100">
+                        <p className="text-[10px] text-gray-400 uppercase">Total Locação</p>
+                        <p className="text-sm font-bold text-gray-800">{fmt(sp.totalGeral)}</p>
+                      </div>
+                      <div className="text-center p-2 bg-orange-50 rounded border border-orange-200">
+                        <p className="text-[10px] text-orange-500 uppercase font-medium">100% Locação</p>
+                        <p className="text-sm font-bold text-orange-700">{fmt(sp.totalGeral)}</p>
+                        <p className="text-[10px] text-orange-400">vai ao fornecedor</p>
+                      </div>
                     </div>
-                    <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
-                      <p className="text-[10px] text-blue-500 uppercase font-medium">Material</p>
-                      <p className="text-sm font-bold text-blue-700">{fmt(sp.totalMat)}</p>
-                      {sp.totalGeral > 0 && <p className="text-[10px] text-blue-400">{((sp.totalMat / sp.totalGeral) * 100).toFixed(1)}%</p>}
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-center p-2 bg-white rounded border border-gray-100">
+                        <p className="text-[10px] text-gray-400 uppercase">Total</p>
+                        <p className="text-sm font-bold text-gray-800">{fmt(sp.totalGeral)}</p>
+                      </div>
+                      <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
+                        <p className="text-[10px] text-blue-500 uppercase font-medium">Material</p>
+                        <p className="text-sm font-bold text-blue-700">{fmt(sp.totalMat)}</p>
+                        {sp.totalGeral > 0 && <p className="text-[10px] text-blue-400">{((sp.totalMat / sp.totalGeral) * 100).toFixed(1)}%</p>}
+                      </div>
+                      <div className="text-center p-2 bg-purple-50 rounded border border-purple-200">
+                        <p className="text-[10px] text-purple-500 uppercase font-medium">Mão de Obra</p>
+                        <p className="text-sm font-bold text-purple-700">{fmt(sp.totalMdo)}</p>
+                        {sp.totalGeral > 0 && <p className="text-[10px] text-purple-400">{((sp.totalMdo / sp.totalGeral) * 100).toFixed(1)}%</p>}
+                      </div>
                     </div>
-                    <div className="text-center p-2 bg-purple-50 rounded border border-purple-200">
-                      <p className="text-[10px] text-purple-500 uppercase font-medium">Mão de Obra</p>
-                      <p className="text-sm font-bold text-purple-700">{fmt(sp.totalMdo)}</p>
-                      {sp.totalGeral > 0 && <p className="text-[10px] text-purple-400">{((sp.totalMdo / sp.totalGeral) * 100).toFixed(1)}%</p>}
-                    </div>
-                  </div>
+                  )}
                   {sp.tipoOrigem && (
                     <p className="text-[10px] text-gray-500 mt-1">
-                      Tipo SC: <span className="font-semibold">{sp.tipoOrigem === "material" ? "Material" : sp.tipoOrigem === "servico" ? "Serviço/MDO" : sp.tipoOrigem === "pacote" ? "Pacote (Mat+MDO)" : sp.tipoOrigem}</span>
+                      Tipo SC: <span className="font-semibold">{sp.tipoOrigem === "material" ? "Material" : sp.tipoOrigem === "servico" ? "Serviço/MDO" : sp.tipoOrigem === "pacote" ? "Pacote (Mat+MDO)" : sp.tipoOrigem === "equipamento" ? "Equipamento (Locação)" : sp.tipoOrigem}</span>
                     </p>
                   )}
                   {!sp.temVencedor && sp.totalGeral > 0 && (
@@ -9266,7 +9294,7 @@ export default function Cotacoes() {
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-700 mb-1 block">
-                        Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo MAT: {fmt(sp.totalMat)}</span>
+                        Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo {sp.tipoOrigem === "equipamento" ? "Locação" : "MAT"}: {fmt(sp.tipoOrigem === "equipamento" ? sp.totalGeral : sp.totalMat)}</span>
                       </label>
                       <MoneyInput
                         value={fdCotForm.valor}
@@ -9278,7 +9306,7 @@ export default function Cotacoes() {
                         return fdVal > 0 ? (
                           <p className={`text-xs mt-1 font-medium ${excedeMat ? "text-red-600" : "text-emerald-600"}`}>
                             {fmt(fdVal)}
-                            {excedeMat && " — Excede o valor de material!"}
+                            {excedeMat && (sp.tipoOrigem === "equipamento" ? " — Excede o valor de locação!" : " — Excede o valor de material!")}
                           </p>
                         ) : null;
                       })()}

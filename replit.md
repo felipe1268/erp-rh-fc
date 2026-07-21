@@ -50,14 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4497** — **FIX: FORMATO BR NO CAMPO "DEBITAR DO RISCO" (7.358,10).** Campo de valor no bloco "Reserva de Risco — BDI (DI-08)" usava `type="number"` que impedia formatação. "Usar tudo" exibia `7358.10` sem milhar. Fix: `type="text"`, "Usar tudo" usa `toLocaleString("pt-BR")` → `7.358,10`, parse strip pontos de milhar antes do `parseFloat`. ZERO schema change.
-- **Rev. 4496** — **FEAT: BUSCA IRRESTRITA NA EAP DA SC (VIA EAP INTELIGENTE).** Ao digitar na caixa de busca da aba "Via EAP (Inteligente)", o filtro de tipo é suspenso: todos os itens folha com `servicoCodigo` aparecem (ex.: SC de Equipamento passava a mostrar só 2 escoramentos; agora mostra todos os 11 ao digitar "escoramento"). Cada item extra recebe badge `MAT` / `MO` / `EQUIP`. Modo sem busca continua com filtro inteligente por tipo. ZERO schema change.
+- **Rev. 4498** — **FEAT: LOCAÇÃO = 100% MATERIAL NO FATURAMENTO DIRETO.** Split MAT/MDO do modal "Definir FD" usava ratio do orçamento para SC de equipamento, limitando o FD ao valor de MAT (R$ 8.152) em vez do total da locação (R$ 14.200). Fix: `tipoOrigem === "equipamento"` → `ratioMat = 1` no backend; frontend mostra card laranja "100% Locação", label "máximo Locação" e sem coluna MDO. ZERO schema change.
+- **Rev. 4497** — **FIX: FORMATO BR NO CAMPO "DEBITAR DO RISCO" (7.358,10).** `type="number"` impedia formatação; "Usar tudo" exibia `7358.10`. Fix: `type="text"`, `toLocaleString("pt-BR")` → `7.358,10`, parse strip pontos de milhar. ZERO schema change.
 
 ### 5 one-liners
 
-- **Rev. 4495** — **FEAT: LINK CLICÁVEL DA COTAÇÃO NO HISTÓRICO DE DÉBITOS.** Número da cotação era `<span>` estático; agora é `<button>` que navega para `/compras/cotacoes?destaque=<id>`. ZERO schema change.
+- **Rev. 4496** — **FEAT: BUSCA IRRESTRITA NA EAP DA SC.** Ao digitar, filtro de tipo é suspenso; todos os itens EAP aparecem com badge `MAT`/`MO`/`EQUIP`. Modo sem busca inalterado. ZERO schema change.
+- **Rev. 4495** — **FEAT: LINK CLICÁVEL DA COTAÇÃO NO HISTÓRICO DE DÉBITOS.** Número da cotação era `<span>` estático; agora navega para `/compras/cotacoes?destaque=<id>`. ZERO schema change.
 - **Rev. 4494** — **FIX: "INCLUIR DA EAP" NA COTAÇÃO — 3 BUGS.** `orcamentoItemId`/`eapCodigo`/`precoMeta` descartados; exclusão não cascateava para SC; picker não sinalizava itens já na cotação. ZERO schema change.
-- **Rev. 4492** — **FEAT: DATAS E COUNTDOWN DE ENTREGA NA LISTA DE SCs.** Colunas "Previsão Entrega" + "Emissão OC". Novo bucket "Ent. Atrasadas". Grid `lg:grid-cols-11`. ZERO schema change.
+- **Rev. 4492** — **FEAT: DATAS E COUNTDOWN DE ENTREGA NA LISTA DE SCs.** Colunas "Previsão Entrega" + "Emissão OC". Novo bucket "Ent. Atrasadas". ZERO schema change.
 - **Rev. 4487** — **SEGREGAÇÃO DE FUNÇÕES: REMOVER "AGUARDANDO PAGAMENTO" DO MÓDULO COMPRAS (COSO/LGPD).** Ciclo do comprador termina no recebimento. `statusEfetivoSC()` agora retorna `"aprovado"` (badge "Concluído") em vez de `"aguardando_pagamento"` para SCs com `_ocsEntregues=true`. Grid volta a `lg:grid-cols-9`. ZERO schema change.
 - **Rev. 4485** — **FIX: PLACEHOLDERS DE PRAZO DE NF NO TEMPLATE ISO DE CONTRATO PJ.** Novos placeholders `[TEXTO_DIA_FECHAMENTO]`, `[PRAZO_NOTA_ADIANTAMENTO]`, `[PRAZO_NOTA_FECHAMENTO]` adicionados aos 4 paths. `[DIA_FECHAMENTO]=31` exibe "último dia do mês". ZERO schema change.
 - **Rev. 4484** — **FEAT: DIA 2ª MEDIÇÃO PJ — OPÇÃO "ÚLTIMO DIA DO MÊS".** Campo "Dia 2ª Medição" no formulário de Contrato PJ substituído por toggle "Dia fixo | Último dia" + input numérico condicional. Convenção `diaFechamento = 31`. ZERO schema change.

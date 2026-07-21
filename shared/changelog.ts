@@ -1,4 +1,34 @@
 /**
+ * Rev. 4498 - FEAT: LOCAÇÃO = 100% MATERIAL NO FATURAMENTO DIRETO
+ *
+ * PROBLEMA:
+ *   Para SCs de tipo "equipamento" (locação), o modal "Definir FD" dividia o valor da
+ *   cotação em MAT/MDO usando o ratio do orçamento (ex: 57% MAT / 43% MDO). Isso era
+ *   incorreto: o MDO do orçamento representa os funcionários INTERNOS que operam o
+ *   equipamento — não é pago ao fornecedor de locação. Toda a locação vai ao fornecedor
+ *   como "material". O cap do FD ficava em totalMat (R$ 8.152) em vez do total da
+ *   cotação (R$ 14.200), impedindo faturar o valor real da locação.
+ *
+ * CORREÇÃO:
+ *   Backend (getCotacaoSplitMatMdo): quando tipoOrigem === "equipamento", força
+ *   ratioMat = 1 ANTES de qualquer lógica de orçamento/alocação. Resultado: totalMat
+ *   = totalGeral, totalMdo = 0.
+ *
+ *   Frontend (Cotacoes.tsx — 2 instâncias do modal FD):
+ *   - Card de composição: para locação, exibe grade 2 colunas ("Total Locação" +
+ *     "100% Locação — vai ao fornecedor") em laranja, sem coluna MDO.
+ *   - Label do valor: "máximo MAT" → "máximo Locação" com totalGeral como limite.
+ *   - Tipo SC label: "equipamento" → "Equipamento (Locação)".
+ *   - Mensagem de excesso: "Excede o valor de locação!" para equipamento.
+ *
+ * ARQUIVOS ALTERADOS:
+ *   server/routers/compras.ts — getCotacaoSplitMatMdo
+ *   client/src/pages/compras/Cotacoes.tsx — 2 instâncias do modal FD
+ *
+ * ZERO SCHEMA CHANGE.
+ */
+
+/**
  * Rev. 4497 - FIX: FORMATO BR NO CAMPO "DEBITAR DO RISCO" (7.358,10)
  *
  * PROBLEMA:
