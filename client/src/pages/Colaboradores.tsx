@@ -17,7 +17,7 @@ import { buildFcDocument } from "@/lib/fcDocumentTemplate";
 import { useDocumentMargins } from "@/hooks/useDocumentMargins";
 import { renderTemplate } from "@shared/documentTemplates";
 import { formatBRL, valorPorExtenso } from "@/lib/numeroExtenso";
-import { Users, UsersRound, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save, ChevronsUpDown, Check, RefreshCw, Footprints, Shirt, Ruler } from "lucide-react";
+import { Users, UsersRound, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save, ChevronsUpDown, Check, RefreshCw, Footprints, Shirt, Ruler, Link as LinkIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -863,6 +863,13 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
     },
     onError: (e: any) => toast.error("Erro ao normalizar: " + e.message),
   });
+  const autoLinkMut = trpc.employees.autoLinkByEmail.useMutation({
+    onSuccess: (data: any) => {
+      utils.employees.list.invalidate();
+      toast.success(`Vinculação concluída: ${data.linked} novo(s) vínculo(s) criado(s). Total vinculados: ${data.alreadyLinked}.`);
+    },
+    onError: (e: any) => toast.error("Erro ao vincular: " + e.message),
+  });
 
   // Verificação de lista negra (desativado - módulo removido)
   const checkBlacklistMut = { data: null } as any;
@@ -1298,7 +1305,10 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
             { id: "print", node: <PrintActions title="Colaboradores" /> },
             { id: "importar", node: <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={!hasValidSelection} className="gap-2"><Upload className="h-4 w-4" /> Importar Excel</Button> },
             { id: "gradeEpi", node: <Button variant="outline" onClick={() => setGradeOpen(true)} disabled={!hasValidSelection} className="gap-2 text-sky-700 border-sky-300 hover:bg-sky-50"><HardHat className="h-4 w-4" /> Grade de Tamanhos</Button> },
-            ...(user?.role === "admin" || user?.role === "admin_master" ? [{ id: "normalizarCidades", node: <Button variant="outline" onClick={() => { if (confirm("Corrigir caixa e acentos de todas as cidades cadastradas? Esta ação atualiza o banco de dados.")) normalizarCidadesMut.mutate({ companyId: companyId!, companyIds: queryCompanyIds }); }} disabled={normalizarCidadesMut.isPending || !hasValidSelection} className="gap-2 text-amber-700 border-amber-300 hover:bg-amber-50"><Wrench className="h-4 w-4" /> {normalizarCidadesMut.isPending ? "Corrigindo..." : "Padronizar Cidades"}</Button> }] : []),
+            ...(user?.role === "admin" || user?.role === "admin_master" ? [
+              { id: "normalizarCidades", node: <Button variant="outline" onClick={() => { if (confirm("Corrigir caixa e acentos de todas as cidades cadastradas? Esta ação atualiza o banco de dados.")) normalizarCidadesMut.mutate({ companyId: companyId!, companyIds: queryCompanyIds }); }} disabled={normalizarCidadesMut.isPending || !hasValidSelection} className="gap-2 text-amber-700 border-amber-300 hover:bg-amber-50"><Wrench className="h-4 w-4" /> {normalizarCidadesMut.isPending ? "Corrigindo..." : "Padronizar Cidades"}</Button> },
+              { id: "autoLinkUsuarios", node: <Button variant="outline" onClick={() => { if (confirm("Vincular automaticamente colaboradores ↔ usuários pelo e-mail?\n\nApenas colaboradores SEM vínculo serão afetados. Vínculos existentes são preservados.")) autoLinkMut.mutate({ companyIds: queryCompanyIds }); }} disabled={autoLinkMut.isPending} className="gap-2 text-violet-700 border-violet-300 hover:bg-violet-50"><LinkIcon className="h-4 w-4" /> {autoLinkMut.isPending ? "Vinculando..." : "Vincular Usuários"}</Button> },
+            ] : []),
             { id: "novo", node: <Button onClick={openNew} disabled={!hasValidSelection} className="gap-2"><Plus className="h-4 w-4" /> Novo</Button> },
           ]} />
         </div>

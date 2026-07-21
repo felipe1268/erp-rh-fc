@@ -811,6 +811,35 @@ export const appRouter = router({
         empresaNome: r.empresa_nome,
       } : null;
     }),
+    autoLinkByEmail: protectedProcedure
+      .input(z.object({ companyIds: z.array(z.number()).optional() }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user.role !== 'admin_master' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas administradores podem executar esta ação.' });
+        }
+        const db = (await getDb())!;
+        const ids = input.companyIds ?? [];
+        const companyFilter = ids.length > 0
+          ? sql` AND e."companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`
+          : sql``;
+        const result = await db.execute(sql`
+          UPDATE employees e
+          SET user_id = u.id
+          FROM users u
+          WHERE LOWER(u.email) = LOWER(e.email)
+            AND u."deletedAt" IS NULL
+            AND COALESCE(u.status, 'ativo') != 'desligado'
+            AND e."deletedAt" IS NULL
+            AND e.user_id IS NULL
+            ${companyFilter}
+        `);
+        const linked = Number((result as any).rowCount ?? 0);
+        const alreadyRows = await db.execute(sql`
+          SELECT COUNT(*) AS cnt FROM employees WHERE user_id IS NOT NULL AND "deletedAt" IS NULL
+        `);
+        const alreadyLinked = Number((alreadyRows as any).rows?.[0]?.cnt ?? 0);
+        return { linked, alreadyLinked };
+      }),
     stats: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
       const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
       const cacheKey = `emp:stats:${input.companyId}:${(input.companyIds ?? []).join(',')}:av${canSeeAviso ? 1 : 0}`;
