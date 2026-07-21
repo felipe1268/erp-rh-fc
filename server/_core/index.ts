@@ -5557,7 +5557,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4454-2026-07-20-pj-endereco-socios";
+    const COLFIX_VERSION = "v4485-2026-07-21-prazo-nf-template-pj";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7419,6 +7419,33 @@ REGRAS DE EXTRAÇÃO:
         `);
         console.log("[ColFix Rev.4454] pj_contracts: colunas endereco/cidade/estado/cep/socios_prestador garantidas.");
       } catch (e: any) { console.error("[ColFix Rev.4454] FALHA pj_contracts endereco:", e?.message ?? e); }
+
+      // Rev. 4485 — Injetar parágrafo de prazo de NF na cláusula 9.x do template ISO Contrato PJ
+      try {
+        const _db4485 = await getDb();
+        if (!_db4485) throw new Error("db indisponível");
+        const paragrafoNfHtml = `<p><em><strong>Parágrafo Único</strong> — Para recebimento dos pagamentos, a <strong>CONTRATADA</strong> deverá emitir a Nota Fiscal com antecedência mínima de 5 (cinco) dias da data de pagamento, observando os seguintes prazos: (i) Nota Fiscal referente ao adiantamento: até o dia <strong>[PRAZO_NOTA_ADIANTAMENTO]</strong> do mês corrente; (ii) Nota Fiscal referente ao fechamento: até <strong>[PRAZO_NOTA_FECHAMENTO]</strong> do mês do pagamento. O não envio da Nota Fiscal dentro do prazo estipulado implicará no adiamento do pagamento para o mês subsequente, sem ônus para a <strong>CONTRATANTE</strong>.</em></p>`;
+        const rows4485 = await _db4485.$client.query(
+          `SELECT id, conteudo_html FROM system_document_templates WHERE tipo = 'contrato_pj' AND conteudo_html NOT LIKE '%PRAZO_NOTA_ADIANTAMENTO%'`
+        );
+        for (const row of rows4485.rows ?? []) {
+          let html: string = row.conteudo_html || "";
+          // Encontra o início da tag que contém "9.3" e injeta o novo parágrafo antes dela
+          const idx93 = html.indexOf("9.3");
+          if (idx93 !== -1) {
+            const tagStart = html.lastIndexOf("<", idx93);
+            const insertAt = tagStart !== -1 ? tagStart : idx93;
+            html = html.slice(0, insertAt) + paragrafoNfHtml + html.slice(insertAt);
+          } else {
+            html += paragrafoNfHtml;
+          }
+          await _db4485.$client.query(
+            `UPDATE system_document_templates SET conteudo_html = $1 WHERE id = $2`,
+            [html, row.id]
+          );
+        }
+        console.log(`[ColFix Rev.4485] template contrato_pj: parágrafo de prazo de NF injetado (${rows4485.rows?.length ?? 0} registro(s) atualizado(s)).`);
+      } catch (e: any) { console.error("[ColFix Rev.4485] FALHA prazo NF template:", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>
