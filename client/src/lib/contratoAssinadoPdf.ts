@@ -726,7 +726,7 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
   pdf.setTextColor(110, 110, 110);
   pdf.text("Documento gerado via FcSign — ERP Gestão Integrada", MARGIN, y);
   y += 4;
-  pdf.text(`Data de download: ${new Date().toLocaleString("pt-BR")}`, MARGIN, y);
+  pdf.text(`Data de download: ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`, MARGIN, y);
   y += 4;
   pdf.setFontSize(6.5);
   pdf.setTextColor(140, 140, 140);

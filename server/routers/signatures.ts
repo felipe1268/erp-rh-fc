@@ -91,7 +91,7 @@ function renderFinalHtml(
   // Ordena por `ordem` quando disponível (fallback: mantém ordem do array)
   const ordered = [...signers].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
   const sigsHtml = ordered.map((s) => {
-    const dt = s.signedAt ? new Date(s.signedAt).toLocaleString("pt-BR") : "—";
+    const dt = s.signedAt ? new Date(s.signedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—";
     const nomeSafe = escapeHtml(s.nome);
     const cpfSafe = escapeHtml(s.cpf);
     const roleSafe = escapeHtml(roleLabel[s.role] || s.role);
@@ -997,7 +997,7 @@ export const signaturesRouter = router({
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada." });
       if (session.status === "cancelado") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta sessão já foi cancelada." });
       if (session.status === "completo") throw new TRPCError({ code: "BAD_REQUEST", message: "Este documento já foi assinado por todos. Não é possível solicitar revisão." });
-      const dataFmt = new Date().toLocaleDateString("pt-BR");
+      const dataFmt = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
       const obs = `[Revisão solicitada por ${signer.nome} em ${dataFmt}] ${input.motivo.trim()}`;
       await db.update(signatureSessions).set({
         status: "cancelado",
@@ -1037,7 +1037,7 @@ export const signaturesRouter = router({
         )).limit(1);
       const obsAtual = (sessC as any)?.observacoes || "";
       const novaObs = input.observacoes?.trim()
-        ? `${obsAtual ? obsAtual + "\n" : ""}[Cancelado por ${ctx.user.name ?? "Admin Master"} em ${new Date().toLocaleDateString("pt-BR")}] ${input.observacoes.trim()}`
+        ? `${obsAtual ? obsAtual + "\n" : ""}[Cancelado por ${ctx.user.name ?? "Admin Master"} em ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}] ${input.observacoes.trim()}`
         : obsAtual || null;
       await db.update(signatureSessions).set({
         status: "cancelado",

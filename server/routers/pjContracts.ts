@@ -729,7 +729,7 @@ export const pjContractsRouter = router({
         texto = texto.replace(/\[VALOR_FECHAMENTO\]/g, (valorMensal * percFech / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
         texto = texto.replace(/\[DIA_ADIANTAMENTO\]/g, String(contrato.diaAdiantamento || 15));
         texto = texto.replace(/\[DIA_FECHAMENTO\]/g, (contrato.diaFechamento === 31 || contrato.diaFechamento === 0) ? "último dia do mês" : String(contrato.diaFechamento || 5));
-        texto = texto.replace(/\[DATA_ASSINATURA\]/g, new Date().toLocaleDateString('pt-BR'));
+        texto = texto.replace(/\[DATA_ASSINATURA\]/g, new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
         
         return { texto };
       }),
