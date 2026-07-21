@@ -1,4 +1,21 @@
 /**
+ * Rev. 4505 - FIX: DDS PDF — REMOVER BOTÃO "IMPRIMIR / SALVAR PDF" E AUTO-PRINT
+ *
+ * O HTML gerado pelas rotas de PDF individual e ZIP em lote exibia um botão
+ * "🖨️ Imprimir / Salvar PDF" no rodapé e disparava window.print() automaticamente
+ * ao carregar a página.
+ *
+ * FIX:
+ *   - downloadDdsAta.ts: removido o bloco `<div class="no-print">` com o botão
+ *     e o `<script>` que aguardava imagens e chamava window.print().
+ *   - downloadDdsAtaLote.ts (buildSessionHtml): mesma remoção.
+ *   O CSS @media print foi mantido (continua funcionando se o usuário acionar
+ *   Ctrl+P / Compartilhar → Imprimir manualmente pelo browser).
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4504 - FEAT: DDS ZIP — BARRA DE PROGRESSO 0→100% NO BOTÃO "BAIXAR ZIP"
  *
  * Aplica a Regra de Ouro de botões de carregamento longo ao ZIP de DDS.

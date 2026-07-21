@@ -425,32 +425,8 @@ export function registerDdsAtaRoute(app: Express) {
     <div style="font-size:9.5px;color:#94a3b8;">DDS #${sessaoId} &nbsp;·&nbsp; ${esc(dataEmissao)}</div>
   </div>
 
-  <!-- BOTÃO IMPRIMIR (oculto no print) -->
-  <div class="no-print" style="padding:20px 24px;text-align:center;background:#f8fafc;border-top:1px solid #e2e8f0;">
-    <button onclick="window.print()"
-      style="background:#1e3a5f;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(30,58,95,.3);">
-      🖨️ &nbsp;Imprimir / Salvar PDF
-    </button>
-  </div>
 
 </div>
-<script>
-  // Aguardar todas as imagens carregarem antes de imprimir
-  window.addEventListener('load', function() {
-    var imgs = document.querySelectorAll('img');
-    var total = imgs.length;
-    if (total === 0) { setTimeout(function(){ window.print(); }, 300); return; }
-    var loaded = 0;
-    function checkDone() {
-      loaded++;
-      if (loaded >= total) setTimeout(function(){ window.print(); }, 300);
-    }
-    imgs.forEach(function(img) {
-      if (img.complete) { checkDone(); }
-      else { img.addEventListener('load', checkDone); img.addEventListener('error', checkDone); }
-    });
-  });
-</script>
 </body>
 </html>`;
 

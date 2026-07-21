@@ -215,18 +215,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#1e293b;-webk
     <div style="font-size:10px;color:#64748b;font-weight:600;">${esc(nomeEmpresa)}</div>
     <div style="font-size:9.5px;color:#94a3b8;">DDS #${s.id} · ${esc(dataEmissao)}</div>
   </div>
-  <div class="no-print" style="padding:20px 24px;text-align:center;">
-    <button onclick="window.print()" style="background:#1e3a5f;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">🖨️ Imprimir / Salvar PDF</button>
-  </div>
 </div>
-<script>
-window.addEventListener('load',function(){
-  var imgs=document.querySelectorAll('img');var total=imgs.length;
-  if(total===0){setTimeout(function(){window.print();},300);return;}
-  var loaded=0;function checkDone(){loaded++;if(loaded>=total)setTimeout(function(){window.print();},300);}
-  imgs.forEach(function(img){if(img.complete){checkDone();}else{img.addEventListener('load',checkDone);img.addEventListener('error',checkDone);}});
-});
-</script>
 </body></html>`;
 }
 
