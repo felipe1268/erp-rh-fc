@@ -237,17 +237,24 @@ export default function PropriosUtilizacao() {
   const maxDia = Math.max(...porDiaSemana.map(d => d.count), 1);
 
   const porHora = useMemo(() => {
-    const counts = Array(24).fill(0);
+    const cRetirada = Array(24).fill(0);
+    const cDevol    = Array(24).fill(0);
     for (const c of ciclos) {
-      if (!c.saiuEm) continue;
-      const d = new Date(c.saiuEm);
-      if (!isNaN(d.getTime())) counts[d.getHours()]++;
+      if (c.saiuEm) {
+        const d = new Date(c.saiuEm);
+        if (!isNaN(d.getTime())) cRetirada[d.getHours()]++;
+      }
+      if (c.devolvidoEm) {
+        const d = new Date(c.devolvidoEm);
+        if (!isNaN(d.getTime())) cDevol[d.getHours()]++;
+      }
     }
-    return Array.from({ length: 24 }, (_, h) => ({ hora: h, label: HORA_LABEL(h), count: counts[h] }))
-      .filter(h => h.hora >= 5 && h.hora <= 20);
+    return Array.from({ length: 24 }, (_, h) => ({
+      hora: h, label: HORA_LABEL(h), count: cRetirada[h], countDevol: cDevol[h],
+    })).filter(h => h.hora >= 5 && h.hora <= 20);
   }, [ciclos]);
 
-  const maxHora = Math.max(...porHora.map(h => h.count), 1);
+  const maxHora = Math.max(...porHora.map(h => Math.max(h.count, h.countDevol)), 1);
 
   const ciclosFiltrados = useMemo(() => {
     if (!busca.trim()) return ciclos;
@@ -533,36 +540,51 @@ export default function PropriosUtilizacao() {
           {/* Por hora do dia */}
           <div className="bg-white border rounded-xl shadow-sm p-5">
             <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-blue-500" /> Horário de retirada
+              <Clock className="h-4 w-4 text-blue-500" /> Horário de entrega e devolução
             </h3>
-            <p className="text-xs text-slate-400 mb-4">Distribuição ao longo do dia</p>
-            {porHora.every(h => h.count === 0) ? (
+            <p className="text-xs text-slate-400 mb-2">Distribuição ao longo do dia</p>
+            {/* Legenda */}
+            <div className="flex items-center gap-4 mb-3">
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-blue-500" /> Entrega
+              </span>
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" /> Devolução
+              </span>
+            </div>
+            {porHora.every(h => h.count === 0 && h.countDevol === 0) ? (
               <div className="py-8 text-center text-sm text-slate-400">Sem dados no período</div>
             ) : (
               <>
                 <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={porHora} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+                  <BarChart data={porHora} margin={{ top: 4, right: 4, left: -20, bottom: 4 }} barGap={2}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={1} />
                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                    <RechTooltip formatter={(v: any, _: any, props: any) => [v, `${props.payload?.label}`]}
-                      contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                    <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={28}>
-                      {porHora.map((h, i) => (
-                        <Cell key={i} fill={h.count === maxHora ? barColorHora(h.hora) : "#e2e8f0"} />
-                      ))}
-                    </Bar>
+                    <RechTooltip
+                      formatter={(v: any, name: any) => [v, name === "count" ? "Entrega" : "Devolução"]}
+                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                    />
+                    <Bar dataKey="count"     name="count"     radius={[3, 3, 0, 0]} maxBarSize={16} fill="#2563eb" />
+                    <Bar dataKey="countDevol" name="countDevol" radius={[3, 3, 0, 0]} maxBarSize={16} fill="#10b981" />
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-[10px]">
                   {[
-                    { icon: <Sunrise className="h-3 w-3 text-blue-600" />, label: "Manhã (5-11h)", total: porHora.filter(h => h.hora < 12).reduce((s, h) => s + h.count, 0) },
-                    { icon: <Sun className="h-3 w-3 text-amber-500" />, label: "Tarde (12-16h)", total: porHora.filter(h => h.hora >= 12 && h.hora < 17).reduce((s, h) => s + h.count, 0) },
-                    { icon: <Sunset className="h-3 w-3 text-indigo-500" />, label: "Final (17h+)", total: porHora.filter(h => h.hora >= 17).reduce((s, h) => s + h.count, 0) },
+                    { icon: <Sunrise className="h-3 w-3 text-blue-600" />, label: "Manhã (5-11h)",
+                      ret: porHora.filter(h => h.hora < 12).reduce((s, h) => s + h.count, 0),
+                      dev: porHora.filter(h => h.hora < 12).reduce((s, h) => s + h.countDevol, 0) },
+                    { icon: <Sun className="h-3 w-3 text-amber-500" />, label: "Tarde (12-16h)",
+                      ret: porHora.filter(h => h.hora >= 12 && h.hora < 17).reduce((s, h) => s + h.count, 0),
+                      dev: porHora.filter(h => h.hora >= 12 && h.hora < 17).reduce((s, h) => s + h.countDevol, 0) },
+                    { icon: <Sunset className="h-3 w-3 text-indigo-500" />, label: "Final (17h+)",
+                      ret: porHora.filter(h => h.hora >= 17).reduce((s, h) => s + h.count, 0),
+                      dev: porHora.filter(h => h.hora >= 17).reduce((s, h) => s + h.countDevol, 0) },
                   ].map((t, i) => (
-                    <div key={i} className="bg-slate-50 rounded-lg p-2 flex flex-col items-center gap-1">
+                    <div key={i} className="bg-slate-50 rounded-lg p-2 flex flex-col items-center gap-0.5">
                       {t.icon}
-                      <span className="font-black text-slate-800 text-sm">{t.total}</span>
+                      <span className="font-black text-blue-700 text-sm">{t.ret}</span>
+                      <span className="font-semibold text-emerald-600 text-[11px]">↩ {t.dev}</span>
                       <span className="text-slate-500 text-center leading-tight">{t.label}</span>
                     </div>
                   ))}
