@@ -1,3 +1,4 @@
+- **Rev. 4507** — **FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard).** `listSessoes` ganhou inputs `mes` e `ano` (filtro SQL via `EXTRACT`); frontend usa `PeriodSelectorCard` com `monthStatus`. ZERO schema change.
 - **Rev. 4506** — **FEAT: DDS PDF — GERAÇÃO REAL DE PDF VIA PUPPETEER.** Rotas `/api/dds-ata/:id` e `/api/dds-ata-lote` usam puppeteer para converter HTML em PDF real (A4, `printBackground:true`, margens). ZIP em lote contém `.pdf`. ZERO schema change.
 - **Rev. 4505** — **FIX: DDS PDF — REMOVE BOTÃO "IMPRIMIR/SALVAR PDF" E AUTO-PRINT.** HTML gerado não exibe botão nem dispara `window.print()`. ZERO schema change.
 - **Rev. 4504** — **FEAT: DDS ZIP — PROGRESSO 0→100% NO BOTÃO.** `baixarLote` usa setInterval p/ simular 0→85% enquanto servidor gera; pula p/ 95→100% ao receber resposta; barra `bg-white/20` absoluta cresce via `width: loteProgress%`; texto "Gerando… XX%". ZERO schema change.

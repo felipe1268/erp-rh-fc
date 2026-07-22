@@ -1,4 +1,44 @@
 /**
+ * Rev. 4514 - FEAT: RAIO-X DE EQUIPAMENTO LOCADO
+ *
+ * Nova procedure tRPC `equipamentos.locadoRaioX` + modal `EquipamentoLocadoRaioXModal.tsx`
+ * integrado ao painel de Detalhes (modalEventos) de Locados.tsx via botão "Raio-X" no header.
+ *
+ * O Raio-X replica o conceito do `proprioRaioX` (Rev. 4509) adaptado à realidade dos
+ * equipamentos locados: sem ciclos SAIDA/RETORNO (não existem nesse sistema), mas com
+ * timeline completa de eventos, KPIs de locação e identificação de responsáveis.
+ *
+ * Backend (server/routers/equipamentos.ts):
+ *   - Query 1: equipamentos_locados JOIN obras JOIN employees (responsável foto+matrícula)
+ *   - Query 2: equipamento_locado_eventos LEFT JOIN employees (foto+matrícula do funcionário)
+ *   - KPIs calculados: totalDias (data_inicio→hoje/data_fim_real), valorTotal (dias×valor_dia),
+ *     qtdEventos, qtdPessoas distintas
+ *   - "Responsáveis": agrupa por nome → responsável do locado (isResp=true, topo da lista) +
+ *     todos que aparecem em eventos (funcionario_nome, usuario_nome, assinatura_*)
+ *   - Mensal (12 meses): interseção do período de locação com cada mês → diasPagos + valorPago
+ *   - Timeline: eventos normalizados com foto+matrícula do funcionário
+ *
+ * Frontend (client/src/pages/equipamentos/EquipamentoLocadoRaioXModal.tsx — novo arquivo):
+ *   - Tab "Visão Geral": 4 KPIs (dias pagos, custo total, qtd eventos, pessoas) + galeria
+ *     "Quem movimentou" (Avatar com foto circular + matrícula + badge Responsável) + gráfico
+ *     de barras de custo mensal (Cell vermelha ≥25d, laranja <25d) + pills de distribuição
+ *     de tipos de evento clicáveis → abre Tab Timeline
+ *   - Tab "Timeline": timeline vertical com ícone por tipo, foto do funcionário, matrícula,
+ *     obra, observação, assinaturas de devolução (entregador FC + recebedor locadora)
+ *   - Tab "Dados da Locação": rows Fornecedor, N° contrato, Categoria, Patrimônio, datas,
+ *     valores, Obra, Responsável com Avatar
+ *
+ * Integração (Locados.tsx):
+ *   - Import de EquipamentoLocadoRaioXModal
+ *   - State `raioXLocado` (null | { id: number })
+ *   - Botão "Raio-X" absolutamente posicionado em `right-12` no header gradient do modalEventos
+ *     (ao lado esquerdo do X de fechar)
+ *   - Modal renderizado logo após ModalConfirmacaoAuditoria
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4513 - MIGRAÇÃO DE DADOS: EQUIPAMENTOS DA FC ENGENHARIA DE LOCADOS → PRÓPRIOS
  *
  * 47 registros de `equipamentos_locados` que tinham "FC ENGENHARIA E CONSTRUÇÃO LTDA"

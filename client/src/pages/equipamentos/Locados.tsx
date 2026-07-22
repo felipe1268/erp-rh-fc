@@ -12,6 +12,7 @@ import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 import { compressImageIfNeeded } from "@/lib/imageCompress";
 import { SignaturePad } from "@/components/SignaturePad"; // Rev. 2453
 import { useAuth } from "@/_core/hooks/useAuth"; // Rev. 2456
+import { EquipamentoLocadoRaioXModal } from "./EquipamentoLocadoRaioXModal"; // Rev. 4514
 
 // Rev. 2346 — formata inteiros pt-BR (≥1000 ganha separador "." de milhar). Ex: 1220 → "1.220".
 const fmtN = (n: number) => n.toLocaleString("pt-BR");
@@ -263,6 +264,7 @@ export default function EquipamentosLocados() {
     { companyId, equipamentoLocadoId: modalEventos?.id || 0 },
     { enabled: !!modalEventos }
   );
+  const [raioXLocado, setRaioXLocado] = useState<null | { id: number }>(null); // Rev. 4514
 
   // Rev. 2460 — Desfazer devolução (senha + motivo, padrão auditoria almox).
   const [modalDesfazerDev, setModalDesfazerDev] = useState<any>(null); // recebe `l` (equipamento)
@@ -3593,6 +3595,15 @@ export default function EquipamentosLocados() {
         }}
       />
 
+      {/* Rev. 4514 — Modal Raio-X do Equipamento Locado */}
+      {raioXLocado && (
+        <EquipamentoLocadoRaioXModal
+          locadoId={raioXLocado.id}
+          companyId={companyId}
+          onClose={() => setRaioXLocado(null)}
+        />
+      )}
+
       {modalCheckin && (
         <Modal title={`Check-in: ${modalCheckin.descricao}`} onClose={() => setModalCheckin(null)} onSave={fazerCheckIn}
           saveLabel="Confirmar presença" loading={checkIn.isPending}>
@@ -3640,6 +3651,14 @@ export default function EquipamentosLocados() {
             <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
               {/* Header gradient */}
               <div className="relative bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white px-5 py-4 sm:px-6 sm:py-5">
+                {/* Rev. 4514 — botão Raio-X */}
+                <button
+                  onClick={() => setRaioXLocado(l)}
+                  className="absolute top-3 right-12 h-8 px-2.5 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center gap-1.5 transition text-xs font-semibold"
+                  title="Raio-X — Analytics completo deste equipamento"
+                >
+                  <Activity className="h-3.5 w-3.5" /> Raio-X
+                </button>
                 <button onClick={() => setModalEventos(null)} className="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition" title="Fechar">
                   <X className="h-5 w-5" />
                 </button>

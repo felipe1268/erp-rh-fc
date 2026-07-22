@@ -4383,6 +4383,162 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         mensal,
       };
     }),
+
+  // ── Rev. 4514 — Raio-X do Equipamento Locado ────────────────────────────
+  // Retorna timeline completa de eventos, KPIs (dias pagos, valor total),
+  // lista de responsáveis com foto/matrícula e dados mensais.
+  // ─────────────────────────────────────────────────────────────────────────
+  locadoRaioX: protectedProcedure
+    .input(z.object({ companyId: z.number(), locadoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const cid = input.companyId;
+      const lid = input.locadoId;
+
+      // 1. Locado + obra + funcionário responsável (foto e matrícula)
+      const locRows = ((await db.execute(sql`
+        SELECT el.*,
+               o.nome                AS obra_nome,
+               emp.matricula         AS resp_matricula,
+               emp."fotoUrl"         AS resp_foto_url,
+               emp.nome              AS resp_nome_emp
+          FROM equipamentos_locados el
+          LEFT JOIN obras o    ON o.id    = el.obra_id
+          LEFT JOIN employees emp ON emp.id = el.funcionario_responsavel_id
+         WHERE el.id = ${lid} AND el.company_id = ${cid}
+         LIMIT 1
+      `)) as any)?.rows ?? [];
+      const loc = locRows[0];
+      if (!loc) throw new TRPCError({ code: "NOT_FOUND", message: "Equipamento locado não encontrado." });
+
+      // 2. Todos os eventos com join de employee (foto + matrícula)
+      const evRows: any[] = ((await db.execute(sql`
+        SELECT ev.*,
+               emp.matricula  AS emp_matricula,
+               emp."fotoUrl"  AS emp_foto_url,
+               emp.nome       AS emp_nome
+          FROM equipamento_locado_eventos ev
+          LEFT JOIN employees emp ON emp.id = ev.funcionario_id
+         WHERE ev.equipamento_locado_id = ${lid}
+           AND ev.company_id = ${cid}
+         ORDER BY ev.data_evento ASC, ev.created_at ASC
+      `)) as any)?.rows ?? [];
+
+      // 3. KPIs
+      const hoje = new Date();
+      const rawIni = (loc.data_inicio ?? "").slice(0, 10);
+      const dataIni = rawIni
+        ? new Date(rawIni + "T00:00:00Z")
+        : new Date(loc.created_at);
+      const rawFim = (loc.data_fim_real ?? "").slice(0, 10);
+      const dataFim = rawFim ? new Date(rawFim + "T00:00:00Z") : hoje;
+      const totalDias = Math.max(1, Math.ceil((dataFim.getTime() - dataIni.getTime()) / 86400000));
+      const valorDia = Number(loc.valor_diario) || (loc.valor_mensal ? Number(loc.valor_mensal) / 30 : 0);
+      const valorTotal = Math.round(valorDia * totalDias * 100) / 100;
+      const ativo = loc.status !== "devolvido";
+
+      // 4. Responsáveis — agrupa pessoas distintas por participação
+      const pessoaMap: Record<string, {
+        nome: string; foto: string | null; matricula: string | null;
+        qtd: number; tipos: string[]; isResp: boolean;
+      }> = {};
+
+      const addPessoa = (
+        nome: string | null, foto: string | null, mat: string | null,
+        tipo: string, isResp = false,
+      ) => {
+        if (!nome) return;
+        if (!pessoaMap[nome]) {
+          pessoaMap[nome] = { nome, foto, matricula: mat, qtd: 0, tipos: [], isResp };
+        }
+        if (isResp) pessoaMap[nome].isResp = true;
+        pessoaMap[nome].qtd++;
+        if (!pessoaMap[nome].tipos.includes(tipo)) pessoaMap[nome].tipos.push(tipo);
+      };
+
+      // Responsável do locado
+      if (loc.funcionario_responsavel_nome) {
+        addPessoa(loc.funcionario_responsavel_nome, loc.resp_foto_url ?? null, loc.resp_matricula ?? null, "Responsável", true);
+      }
+      for (const ev of evRows) {
+        addPessoa(ev.funcionario_nome ?? ev.emp_nome, ev.emp_foto_url ?? null, ev.emp_matricula ?? null, ev.tipo);
+        if (!ev.funcionario_id && ev.usuario_nome) {
+          addPessoa(ev.usuario_nome, null, null, ev.tipo);
+        }
+        if (ev.assinatura_entregador_nome) addPessoa(ev.assinatura_entregador_nome, null, null, "DEVOLUCAO_FORNECEDOR");
+        if (ev.assinatura_recebedor_nome)  addPessoa(ev.assinatura_recebedor_nome,  null, null, "DEVOLUCAO_FORNECEDOR");
+      }
+      const responsaveis = Object.values(pessoaMap).sort((a, b) => (b.isResp ? 1 : 0) - (a.isResp ? 1 : 0) || b.qtd - a.qtd);
+
+      // 5. Dados mensais — últimos 12 meses
+      const mensal: Array<{ mes: string; label: string; diasPagos: number; valorPago: number }> = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(1);
+        d.setMonth(d.getMonth() - i);
+        const ym = d.toISOString().slice(0, 7);
+        const label = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+        const mStart = new Date(ym + "-01T00:00:00Z");
+        const mEnd = new Date(mStart);
+        mEnd.setMonth(mEnd.getMonth() + 1);
+        const from = mStart < dataIni ? dataIni : mStart;
+        const to   = mEnd  > dataFim  ? dataFim  : mEnd;
+        const diasPagos = Math.max(0, Math.ceil((to.getTime() - from.getTime()) / 86400000));
+        mensal.push({ mes: ym, label, diasPagos, valorPago: Math.round(diasPagos * valorDia * 100) / 100 });
+      }
+
+      // 6. Timeline normalizada
+      const timeline = evRows.map((ev: any) => ({
+        id:                      ev.id,
+        tipo:                    ev.tipo,
+        dataEvento:              ev.data_evento,
+        funcionarioNome:         ev.funcionario_nome ?? ev.emp_nome ?? null,
+        funcionarioFoto:         ev.emp_foto_url ?? null,
+        funcionarioMatricula:    ev.emp_matricula ?? null,
+        usuarioNome:             ev.usuario_nome ?? null,
+        obraNome:                ev.obra_nome ?? null,
+        observacao:              ev.observacao ?? null,
+        assinaturaEntregadorNome: ev.assinatura_entregador_nome ?? null,
+        assinaturaEntregadorUrl:  ev.assinatura_entregador_url  ?? null,
+        assinaturaRecebedorNome:  ev.assinatura_recebedor_nome  ?? null,
+        assinaturaRecebedorUrl:   ev.assinatura_recebedor_url   ?? null,
+        pdfComprovanteToken:      ev.pdf_comprovante_token       ?? null,
+      }));
+
+      return {
+        locado: {
+          id:                      loc.id,
+          descricao:               loc.descricao,
+          categoria:               loc.categoria,
+          fornecedorNome:          loc.fornecedor_nome,
+          status:                  loc.status,
+          patrimonio:              loc.codigo_patrimonio_fornecedor,
+          dataInicio:              loc.data_inicio,
+          dataFimPrevista:         loc.data_fim_prevista,
+          dataFimReal:             loc.data_fim_real,
+          valorMensal:             loc.valor_mensal,
+          valorDiario:             loc.valor_diario,
+          obraId:                  loc.obra_id,
+          obraNome:                loc.obra_nome,
+          fotoUrl:                 loc.foto_url,
+          numeroContratoFornecedor: loc.numero_contrato_fornecedor,
+          funcionarioResponsavelNome: loc.funcionario_responsavel_nome,
+          respFoto:                loc.resp_foto_url ?? null,
+          respMatricula:           loc.resp_matricula ?? null,
+        },
+        stats: {
+          totalDias,
+          valorTotal,
+          ativo,
+          qtdEventos: evRows.length,
+          qtdPessoas: Object.keys(pessoaMap).length,
+        },
+        responsaveis,
+        timeline,
+        mensal,
+      };
+    }),
 });
 
 // ── Rev. 2321 — Job store in-memory pra parse de PDF (polling).

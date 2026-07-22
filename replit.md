@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4514** — **FEAT: RAIO-X DE EQUIPAMENTO LOCADO.** Nova procedure tRPC `locadoRaioX` + modal `EquipamentoLocadoRaioXModal.tsx` integrado ao painel de Detalhes (modalEventos) via botão "Raio-X" no header. 3 abas: Visão Geral (4 KPIs: dias pagos, custo total, qtd eventos, qtd pessoas + galeria "Quem movimentou" com foto circular + matrícula + badge Responsável + gráfico de barras mensal + pills de tipos de evento), Timeline (vertical com ícone por tipo, foto+matrícula do funcionário, obra, observação, assinaturas de devolução) e Dados da Locação (fornecedor, datas, valores, responsável com Avatar). Backend: JOIN employees para foto+"fotoUrl"+matrícula; agregação de responsáveis com isResp=true para o responsável do locado; cálculo mensal por interseção de período. ZERO schema change.
 - **Rev. 4513** — **MIGRAÇÃO DE DADOS: EQUIPAMENTOS DA FC ENGENHARIA DE LOCADOS → PRÓPRIOS.** 47 registros de `equipamentos_locados` com fornecedor "FC ENGENHARIA E CONSTRUÇÃO LTDA" migrados atomicamente para `equipamentos_proprios`: em_uso→em_obra (obra preservada), devolvido→disponivel. Patrimônios únicos mantidos como-estão; múltiplas unidades do mesmo código recebem sufixo -01/-02… (ex: 1051-01 a 1051-12 para os 12 andaimes). Locados marcados como devolvido com data_fim_real=hoje + nota de migração. ZERO schema change. Também: campo "Valor de aquisição" sempre visível no modal de Editar Equip. Próprio (saiu do acordeão "Mais detalhes"). Rev. 4512b.
-- **Rev. 4512** — **FEAT: DASH UTILIZAÇÃO DE EQUIPAMENTOS LOCADOS.** Nova página `/equipamentos/locados-utilizacao`: KPIs (em campo, em almox/ocioso, **custo de ociosidade** em vermelho, utilização %), seção "Pagando parado no almox" com custo acumulado e diário por equipamento + badge Crítico/Atenção/Recente, gráfico de barras mensais, rankings "Quem mais retirou" e "Mais movimentados", histórico de ciclos SAIDA_ALMOX→RETORNO_ALMOX. Backend: procedure `locadosUtilizacao` (3 queries: ciclos via CTE+LATERAL, idle items, em-campo count). Botão "Utilização" (amber) no header de Locados. Card âmbar no hub. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4512** — **FEAT: DASH UTILIZAÇÃO DE EQUIPAMENTOS LOCADOS.** Nova página `/equipamentos/locados-utilizacao`: KPIs, seção "Pagando parado no almox", gráfico barras mensais, rankings, histórico de ciclos. ZERO schema change.
 - **Rev. 4511** — **FEAT: DASH RETIRADAS DO ALMOXARIFADO (corrigido).** Nova página `/equipamentos/entregas`: KPIs, gráfico mensal, ranking quem/obras, seção "Ferramentas não devolvidas" com badge dias em aberto. ZERO schema change.
 - **Rev. 4510** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO + FOTOS NA PRESENÇA DDS.** Modal redesenhado com 3 abas, donut, area chart, bar chart dias da semana, "quem mais usa". Fotos de colaborador na lista de presença das sessões DDS. ZERO schema change.
 - **Rev. 4509** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO.** Modal Raio-X com KPIs, gráfico de ocupação mensal, timeline. `proprioRaioX` tRPC. ZERO schema change.
 - **Rev. 4508** — **FEAT: CP — APAGAR EM LOTE (cancelEntryBulk).** Botão "Apagar selecionados" + Dialog confirmação + motivo. ZERO schema change.
-- **Rev. 4507** — **FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard).** `listSessoes` ganhou inputs `mes` e `ano` (filtro SQL via `EXTRACT`); frontend usa `PeriodSelectorCard` com `monthStatus`. ZERO schema change.
 
 ### Histórico completo
 
