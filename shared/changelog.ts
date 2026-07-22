@@ -1,4 +1,43 @@
 /**
+ * Rev. 4518 - FEAT: REPAGINAÇÃO — Dashboard Utilização Equipamentos Locados
+ *
+ * MOTIVAÇÃO:
+ *   Tela anterior mostrava apenas gráfico mensal + rankings + lista de ciclos.
+ *   Faltava: insight de mais/menos usado, sugestão de devolução, itens pendentes
+ *   de devolução (regra: pegar e devolver no mesmo dia), distribuição por dia da
+ *   semana e por hora do dia.
+ *
+ * NOVA ESTRUTURA (client/src/pages/equipamentos/LocadosUtilizacao.tsx):
+ *   1. KPIs (4 cards): em campo / em almox / custo ociosidade / taxa utilização
+ *   2. Insights (3 cards lado a lado):
+ *      - "Mais utilizado": topEquipamentos[0] + barra de 100%
+ *      - "Menos utilizado": emAlmox[0] — ocioso há mais tempo + custo acumulado
+ *      - "Devolver hoje": ciclo com maior horasFora ainda em campo; badge com
+ *        contador de atrasados (> 16h = passou do dia)
+ *   3. Pendentes de devolução: ciclos com devolvidoEm=null, ordenados por horasFora
+ *      DESC. Badge "Atrasado" (> 16h) vs "Em campo". Expansível.
+ *   4. Análise temporal — 2 gráficos lado a lado:
+ *      - Saídas por dia da semana (Seg–Sáb): barra do pico em verde escuro,
+ *        demais em verde claro.
+ *      - Saídas por hora do dia (5h–20h): barra do pico na cor do turno
+ *        (manhã=emerald, tarde=amber, noite=blue); 3 cards de totais por turno
+ *        (Manhã / Tarde / Final).
+ *   5. Gráfico mensal + Rankings (Quem mais retirou + Mais movimentados)
+ *   6. Pagando parado no almox (collapsible, 6 visíveis por padrão)
+ *   7. Histórico de ciclos com busca (10 visíveis, expansível)
+ *
+ * COMO FUNCIONA (zero backend change):
+ *   - porDiaSemana: useMemo sobre ciclos → new Date(c.saiuEm).getDay()
+ *   - porHora: useMemo sobre ciclos → new Date(c.saiuEm).getHours()
+ *   - pendentes: ciclos.filter(c => !c.devolvidoEm).sort(desc horasFora)
+ *   - atrasados: pendentes.filter(c => c.horasFora > 16)
+ *   O campo saiuEm é construído no backend como data_emprestimo+'T'+hora_emprestimo+':00'
+ *   (sem fuso) → new Date() interpreta como horário local → correto para Brasil.
+ *
+ * ZERO schema change. ZERO backend change.
+ */
+
+/**
  * Rev. 4517 - FIX: FONTE DE DADOS DE UTILIZAÇÃO — warehouse_loans como verdade única
  *
  * PROBLEMA IDENTIFICADO:

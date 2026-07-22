@@ -1,6 +1,6 @@
-// Rev. 4512 — Dashboard de Utilização de Equipamentos Locados
-// Rastreia ciclos SAIDA_ALMOX→RETORNO_ALMOX e mede custo de ociosidade:
-// cada dia que o equipamento fica parado no almox é dinheiro gasto sem retorno.
+// Rev. 4518 — REPAGINAÇÃO: Dashboard de Utilização — Equipamentos Locados
+// Insights: mais/menos usado, sugestão de devolução, pendentes, por dia da semana,
+// por hora do dia, gráfico mensal, rankings, histórico de ciclos.
 import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import PeriodSelectorCard from "@/components/PeriodSelectorCard";
@@ -11,84 +11,62 @@ import {
   ResponsiveContainer, Cell,
 } from "recharts";
 import {
-  ArrowLeft, Search, HardHat, Trophy, CalendarDays, Boxes,
+  ArrowLeft, Search, Trophy, CalendarDays, Boxes,
   AlertTriangle, RotateCcw, Clock, ChevronDown, ChevronUp,
   Package, TrendingDown, DollarSign, Activity, Truck,
-  BadgeDollarSign, Hourglass,
+  BadgeDollarSign, Hourglass, Zap, ThumbsDown, Bell,
+  Timer, Sun, Sunset, Sunrise,
 } from "lucide-react";
 import { Link } from "wouter";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function fmtDt(iso?: string | null) {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("pt-BR", {
-      day: "2-digit", month: "short", year: "numeric",
-    });
-  } catch { return String(iso).slice(0, 10); }
+  try { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }); }
+  catch { return String(iso).slice(0, 10); }
 }
-
 function fmtDias(d: number): string {
-  if (d < 1)    return `${Math.round(d * 24)}h`;
+  if (d < 1) return `${Math.round(d * 24)}h`;
   const dias = Math.floor(d);
-  const hrs  = Math.round((d - dias) * 24);
+  const hrs = Math.round((d - dias) * 24);
   return hrs > 0 ? `${dias}d ${hrs}h` : `${dias} dia${dias !== 1 ? "s" : ""}`;
 }
-
 function fmtHoras(h: number): string {
-  if (h < 1)   return `${Math.round(h * 60)} min`;
-  if (h < 24)  return `${h.toFixed(1).replace(".", ",")}h`;
+  if (h < 1)  return `${Math.round(h * 60)} min`;
+  if (h < 24) return `${h.toFixed(1).replace(".", ",")}h`;
   const d = Math.floor(h / 24);
   const hr = Math.round(h % 24);
   return hr > 0 ? `${d}d ${hr}h` : `${d} dia${d !== 1 ? "s" : ""}`;
 }
-
 function fmtMoeda(v: number): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 }
+function initials(nome?: string | null) {
+  return (nome ?? "?").split(" ").filter(Boolean).slice(0, 2).map(n => n[0]).join("").toUpperCase();
+}
 
-function Avatar({ nome, size = "md", bg = "emerald" }: {
-  nome?: string | null;
-  size?: "sm" | "md" | "lg";
-  bg?: "emerald" | "amber" | "red";
-}) {
-  const initials = (nome ?? "?")
-    .split(" ").filter(Boolean).slice(0, 2)
-    .map(n => n[0]).join("").toUpperCase();
-  const sz  = size === "sm" ? "h-7 w-7 text-[10px]"
-            : size === "lg" ? "h-11 w-11 text-sm"
-            : "h-9 w-9 text-xs";
-  const col = bg === "amber" ? "bg-amber-700"
-            : bg === "red"   ? "bg-red-700"
-            : "bg-emerald-700";
+function Avatar({ nome, size = "md" }: { nome?: string | null; size?: "sm" | "md" }) {
+  const sz = size === "sm" ? "h-7 w-7 text-[10px]" : "h-9 w-9 text-xs";
   return (
-    <span className={`rounded-full ${col} text-white font-bold flex items-center justify-center shrink-0 select-none ${sz}`}>
-      {initials}
+    <span className={`rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center shrink-0 ${sz}`}>
+      {initials(nome)}
     </span>
   );
 }
 
-function EquipFoto({ fotoUrl, descricao, sm = false }: {
-  fotoUrl?: string | null;
-  descricao?: string;
-  sm?: boolean;
-}) {
+function EquipFoto({ fotoUrl, descricao, sm }: { fotoUrl?: string | null; descricao?: string; sm?: boolean }) {
   const sz = sm ? "h-9 w-9 rounded-lg" : "h-12 w-12 rounded-xl";
   return (
     <div className={`${sz} bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0`}>
       {fotoUrl
         ? <img src={fotoUrl} alt={descricao} className="h-full w-full object-cover" />
-        : <Truck className="h-4 w-4 text-slate-400" />
-      }
+        : <Truck className="h-4 w-4 text-slate-400" />}
     </div>
   );
 }
 
-function urgenciaBadge(dias: number) {
-  if (dias > 30) return { bg: "bg-red-100",    text: "text-red-700",    ring: "ring-red-200",    label: "Crítico" };
-  if (dias > 7)  return { bg: "bg-amber-100",  text: "text-amber-700",  ring: "ring-amber-200",  label: "Atenção" };
-  return              { bg: "bg-slate-100",   text: "text-slate-600",  ring: "ring-slate-200",  label: "Recente" };
-}
+const HORA_LABEL = (h: number) => `${String(h).padStart(2, "0")}h`;
+const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 // ─── componente principal ─────────────────────────────────────────────────────
 export default function LocadosUtilizacao() {
@@ -96,25 +74,60 @@ export default function LocadosUtilizacao() {
   const companyId = Number(selectedCompany?.id) || 0;
 
   const hoje = new Date();
-  const [mes, setMes]  = useState<number | null>(hoje.getMonth() + 1);
-  const [ano, setAno]  = useState(hoje.getFullYear());
-  const [busca, setBusca]   = useState("");
+  const [mes, setMes] = useState<number | null>(hoje.getMonth() + 1);
+  const [ano, setAno] = useState(hoje.getFullYear());
+  const [busca, setBusca] = useState("");
   const [expandCiclos, setExpandCiclos] = useState(false);
-  const [expandAlmox,  setExpandAlmox]  = useState(false);
+  const [expandAlmox, setExpandAlmox] = useState(false);
+  const [expandPendentes, setExpandPendentes] = useState(false);
 
   const { data, isLoading } = trpc.equipamentos.locadosUtilizacao.useQuery(
     { companyId, mes, ano },
     { enabled: !!companyId },
   );
 
-  const ciclos       = data?.ciclos     ?? [];
-  const emAlmox      = data?.emAlmox    ?? [];
-  const stats        = data?.stats;
-  const mensal       = data?.mensal     ?? [];
-  const topQuem      = data?.topQuemPegou    ?? [];
-  const topEquip     = data?.topEquipamentos ?? [];
+  const ciclos    = data?.ciclos     ?? [];
+  const emAlmox   = data?.emAlmox    ?? [];
+  const stats     = data?.stats;
+  const mensal    = data?.mensal     ?? [];
+  const topQuem   = data?.topQuemPegou    ?? [];
+  const topEquip  = data?.topEquipamentos ?? [];
 
-  // Filtro de busca nos ciclos
+  // ── Insights derivados dos ciclos ─────────────────────────────────────────
+  const pendentes = useMemo(() =>
+    ciclos.filter(c => c.devolvidoEm === null).sort((a, b) => b.horasFora - a.horasFora),
+  [ciclos]);
+
+  const atrasados = useMemo(() =>
+    pendentes.filter(c => c.horasFora > 16), // mais de 16h = passou do dia
+  [pendentes]);
+
+  const porDiaSemana = useMemo(() => {
+    const counts = Array(7).fill(0);
+    for (const c of ciclos) {
+      if (!c.saiuEm) continue;
+      const d = new Date(c.saiuEm);
+      if (!isNaN(d.getTime())) counts[d.getDay()]++;
+    }
+    // Seg–Sáb (índices 1–6)
+    return [1, 2, 3, 4, 5, 6].map(i => ({ dia: DIAS_SEMANA[i], count: counts[i], idx: i }));
+  }, [ciclos]);
+
+  const maxDia = Math.max(...porDiaSemana.map(d => d.count), 1);
+
+  const porHora = useMemo(() => {
+    const counts = Array(24).fill(0);
+    for (const c of ciclos) {
+      if (!c.saiuEm) continue;
+      const d = new Date(c.saiuEm);
+      if (!isNaN(d.getTime())) counts[d.getHours()]++;
+    }
+    return Array.from({ length: 24 }, (_, h) => ({ hora: h, label: HORA_LABEL(h), count: counts[h] }))
+      .filter(h => h.hora >= 5 && h.hora <= 20);
+  }, [ciclos]);
+
+  const maxHora = Math.max(...porHora.map(h => h.count), 1);
+
   const ciclosFiltrados = useMemo(() => {
     if (!busca.trim()) return ciclos;
     const q = busca.toLowerCase();
@@ -125,23 +138,25 @@ export default function LocadosUtilizacao() {
     );
   }, [ciclos, busca]);
 
-  const visivelCiclos = expandCiclos ? ciclosFiltrados : ciclosFiltrados.slice(0, 12);
-  const visivelAlmox  = expandAlmox  ? emAlmox : emAlmox.slice(0, 8);
-
-  const BAR_COLORS = ["#10b981", "#059669", "#047857", "#065f46"];
+  const visivelCiclos    = expandCiclos    ? ciclosFiltrados : ciclosFiltrados.slice(0, 10);
+  const visivelAlmox     = expandAlmox     ? emAlmox : emAlmox.slice(0, 6);
+  const visivelPendentes = expandPendentes ? pendentes : pendentes.slice(0, 5);
 
   const kpiUtilizacao = stats?.utilizacaoMedia != null
-    ? `${stats.utilizacaoMedia.toFixed(1).replace(".", ",")}%`
-    : "—";
+    ? `${stats.utilizacaoMedia.toFixed(1).replace(".", ",")}%` : "—";
+
+  // Cor da barra da hora (manhã/tarde/noite)
+  const barColorHora = (h: number) =>
+    h < 12 ? "#10b981" : h < 17 ? "#f59e0b" : "#3b82f6";
 
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="flex items-center gap-3">
           <Link href="/equipamentos">
-            <a className="p-2 hover:bg-slate-100 rounded-lg transition" title="Voltar ao hub">
+            <a className="p-2 hover:bg-slate-100 rounded-lg transition">
               <ArrowLeft className="h-4 w-4 text-slate-500" />
             </a>
           </Link>
@@ -151,61 +166,347 @@ export default function LocadosUtilizacao() {
               Utilização — Equipamentos Locados
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Ciclos de saída e retorno ao almox. Equipamentos parados geram custo sem retorno.
+              Ciclos de saída e retorno ao almox · Equipamentos parados geram custo sem retorno.
             </p>
           </div>
         </div>
 
-        {/* Seletor de período */}
+        {/* ── Seletor de período ── */}
         <PeriodSelectorCard mes={mes} ano={ano} onMes={setMes} onAno={setAno} onAnoTodo={() => setMes(null)} />
 
-        {/* KPIs */}
+        {/* ── KPIs ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiCard
-            icon={<Truck className="h-5 w-5" />}
-            label="Em campo agora"
+          <KpiCard icon={<Truck className="h-5 w-5" />} label="Em campo agora"
             value={isLoading ? "…" : (stats?.emCampoCount ?? 0).toLocaleString("pt-BR")}
-            sub="com SAIDA registrada"
-            tone="emerald"
-          />
-          <KpiCard
-            icon={<Boxes className="h-5 w-5" />}
-            label="Em almox (ocioso)"
+            sub="com retirada ativa" tone="emerald" />
+          <KpiCard icon={<Boxes className="h-5 w-5" />} label="Em almox (ocioso)"
             value={isLoading ? "…" : (stats?.emAlmoxCount ?? 0).toLocaleString("pt-BR")}
-            sub="pagando sem usar"
-            tone="amber"
-          />
-          <KpiCard
-            icon={<BadgeDollarSign className="h-5 w-5" />}
-            label="Custo de ociosidade"
+            sub="pagando sem usar" tone="amber" />
+          <KpiCard icon={<BadgeDollarSign className="h-5 w-5" />} label="Custo de ociosidade"
             value={isLoading ? "…" : fmtMoeda(stats?.custoOciosidadeTotal ?? 0)}
-            sub="total acumulado em almox"
-            tone="red"
-            big
-          />
-          <KpiCard
-            icon={<Activity className="h-5 w-5" />}
-            label="Utilização"
+            sub="acumulado no almox" tone="red" big />
+          <KpiCard icon={<Activity className="h-5 w-5" />} label="Utilização"
             value={isLoading ? "…" : kpiUtilizacao}
-            sub="em campo / total ativo"
-            tone="blue"
-          />
+            sub="em campo / total ativo" tone="blue" />
         </div>
 
-        {/* Seção "Pagando parado" — destaque principal */}
+        {/* ── Insights: mais/menos usado + pendentes de devolução ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+          {/* Mais utilizado */}
+          <div className="bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <Zap className="h-4 w-4 text-emerald-600" />
+              </div>
+              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Mais utilizado</span>
+            </div>
+            {topEquip[0] ? (
+              <>
+                <div className="font-bold text-slate-900 text-sm leading-tight">{topEquip[0].descricao}</div>
+                <div className="mt-auto flex items-center justify-between">
+                  <span className="text-xs text-slate-500">retiradas no período</span>
+                  <span className="text-2xl font-black text-emerald-600 tabular-nums">{topEquip[0].count}×</span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-1.5 mt-1">
+                  <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: "100%" }} />
+                </div>
+              </>
+            ) : (
+              <div className="text-xs text-slate-400 py-3 text-center">Sem dados no período</div>
+            )}
+          </div>
+
+          {/* Menos utilizado (ocioso há mais tempo) */}
+          <div className="bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                <ThumbsDown className="h-4 w-4 text-slate-500" />
+              </div>
+              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Menos utilizado</span>
+            </div>
+            {emAlmox[0] ? (
+              <>
+                <div className="font-bold text-slate-900 text-sm leading-tight">{emAlmox[0].descricao}</div>
+                <div className="mt-auto flex items-center justify-between gap-2">
+                  <span className="text-xs text-slate-500 flex items-center gap-1">
+                    <Hourglass className="h-3 w-3" /> parado há
+                  </span>
+                  <span className="font-bold text-slate-700 text-sm tabular-nums">
+                    {fmtDias(emAlmox[0].diasOciosos)}
+                  </span>
+                </div>
+                {emAlmox[0].custoDiario > 0 && (
+                  <div className="text-[11px] text-red-600 font-semibold text-right">
+                    {fmtMoeda(emAlmox[0].custoOciosidade)} acumulado
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-xs text-slate-400 py-3 text-center">
+                {isLoading ? "…" : "Todos em campo!"}
+              </div>
+            )}
+          </div>
+
+          {/* Sugestão de devolução */}
+          <div className={`border rounded-xl shadow-sm p-4 flex flex-col gap-2 ${atrasados.length > 0 ? "bg-red-50 border-red-200" : "bg-white"}`}>
+            <div className="flex items-center gap-2">
+              <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${atrasados.length > 0 ? "bg-red-100" : "bg-amber-100"}`}>
+                <Bell className={`h-4 w-4 ${atrasados.length > 0 ? "text-red-600" : "text-amber-600"}`} />
+              </div>
+              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Devolver hoje</span>
+              {atrasados.length > 0 && (
+                <span className="ml-auto text-[10px] font-bold bg-red-600 text-white rounded-full px-2 py-0.5">
+                  {atrasados.length}
+                </span>
+              )}
+            </div>
+            {atrasados[0] ? (
+              <>
+                <div className="font-bold text-slate-900 text-sm leading-tight truncate">{atrasados[0].descricao}</div>
+                <div className="text-xs text-slate-600 truncate">
+                  {atrasados[0].quemSaiu && <span>Com {atrasados[0].quemSaiu.split(" ")[0]}</span>}
+                </div>
+                <div className="mt-auto flex items-center justify-between">
+                  <span className="text-xs text-slate-500 flex items-center gap-1"><Timer className="h-3 w-3" />fora há</span>
+                  <span className="font-black text-red-600 text-sm tabular-nums">{fmtHoras(atrasados[0].horasFora)}</span>
+                </div>
+              </>
+            ) : pendentes.length > 0 ? (
+              <div className="text-xs text-amber-700 py-2">{pendentes.length} item(s) ainda em campo, todos dentro do prazo.</div>
+            ) : (
+              <div className="text-xs text-emerald-700 py-3 text-center font-medium">✓ Nenhum pendente!</div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Pendentes de devolução ── */}
+        {pendentes.length > 0 && (
+          <section className="bg-white border border-amber-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span className="font-semibold text-slate-800 text-sm">Pendentes de devolução</span>
+                <span className="text-[11px] bg-amber-100 text-amber-700 ring-1 ring-amber-200 rounded-full px-2 py-0.5 font-semibold">
+                  {pendentes.length}
+                </span>
+              </div>
+              <span className="text-xs text-slate-500">
+                {atrasados.length > 0 && <span className="text-red-600 font-semibold">{atrasados.length} passou de 1 dia</span>}
+              </span>
+            </div>
+            <ul className="divide-y divide-amber-50">
+              {visivelPendentes.map(c => {
+                const atrasado = c.horasFora > 16;
+                return (
+                  <li key={c.id} className={`flex items-center gap-3 px-5 py-3 ${atrasado ? "bg-red-50/30" : ""}`}>
+                    <EquipFoto fotoUrl={c.fotoUrl} descricao={c.descricao} sm />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-slate-900 text-sm truncate">{c.descricao}</div>
+                      <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" /> saiu {fmtDt(c.saiuEm)}
+                        </span>
+                        {c.quemSaiu && (
+                          <span className="flex items-center gap-1">
+                            <Avatar nome={c.quemSaiu} size="sm" />
+                            {c.quemSaiu}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className={`font-black text-sm tabular-nums flex items-center gap-1 ${atrasado ? "text-red-600" : "text-amber-600"}`}>
+                        <Clock className="h-3.5 w-3.5" />
+                        {fmtHoras(c.horasFora)}
+                      </div>
+                      <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 inline-block mt-0.5 ${atrasado ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                        {atrasado ? "Atrasado" : "Em campo"}
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            {pendentes.length > 5 && (
+              <div className="border-t border-amber-100 px-5 py-2">
+                <button
+                  onClick={() => setExpandPendentes(v => !v)}
+                  className="w-full text-center py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 rounded transition flex items-center justify-center gap-1"
+                >
+                  {expandPendentes
+                    ? <><ChevronUp className="h-3 w-3" /> Mostrar menos</>
+                    : <><ChevronDown className="h-3 w-3" /> Ver mais {pendentes.length - 5} item(s)</>}
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Análise temporal: dia da semana + hora do dia ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Por dia da semana */}
+          <div className="bg-white border rounded-xl shadow-sm p-5">
+            <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-emerald-600" />
+              Saídas por dia da semana
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">Quais dias a equipe mais retira equipamentos</p>
+            {porDiaSemana.every(d => d.count === 0) ? (
+              <div className="py-8 text-center text-sm text-slate-400">Sem dados no período</div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={porDiaSemana} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                    <RechTooltip formatter={(v: any) => [v, "Saídas"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                      {porDiaSemana.map((d, i) => (
+                        <Cell key={i} fill={d.count === maxDia ? "#059669" : "#d1fae5"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Dia mais movimentado:
+                    <span className="font-bold text-emerald-700 ml-1">
+                      {porDiaSemana.reduce((a, b) => b.count > a.count ? b : a, porDiaSemana[0])?.dia ?? "—"}
+                    </span>
+                  </span>
+                  <span>{ciclos.length} saídas no período</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Por hora do dia */}
+          <div className="bg-white border rounded-xl shadow-sm p-5">
+            <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-blue-500" />
+              Horário de retirada
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">Distribuição ao longo do dia</p>
+            {porHora.every(h => h.count === 0) ? (
+              <div className="py-8 text-center text-sm text-slate-400">Sem dados no período</div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={porHora} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={1} />
+                    <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                    <RechTooltip formatter={(v: any, _: any, props: any) => [v, `${props.payload?.label}`]}
+                      contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={28}>
+                      {porHora.map((h, i) => (
+                        <Cell key={i} fill={h.count === maxHora ? barColorHora(h.hora) : "#e2e8f0"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                {/* Turnos */}
+                <div className="mt-3 grid grid-cols-3 gap-2 text-[10px]">
+                  {[
+                    { icon: <Sunrise className="h-3 w-3 text-emerald-600" />, label: "Manhã (5-11h)", cor: "#10b981",
+                      total: porHora.filter(h => h.hora < 12).reduce((s, h) => s + h.count, 0) },
+                    { icon: <Sun className="h-3 w-3 text-amber-500" />, label: "Tarde (12-16h)", cor: "#f59e0b",
+                      total: porHora.filter(h => h.hora >= 12 && h.hora < 17).reduce((s, h) => s + h.count, 0) },
+                    { icon: <Sunset className="h-3 w-3 text-blue-500" />, label: "Final (17h+)", cor: "#3b82f6",
+                      total: porHora.filter(h => h.hora >= 17).reduce((s, h) => s + h.count, 0) },
+                  ].map((t, i) => (
+                    <div key={i} className="bg-slate-50 rounded-lg p-2 flex flex-col items-center gap-1">
+                      {t.icon}
+                      <span className="font-black text-slate-800 text-sm">{t.total}</span>
+                      <span className="text-slate-500 text-center leading-tight">{t.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ── Gráfico mensal + rankings ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* Mensal */}
+          <div className="lg:col-span-2 bg-white border rounded-xl shadow-sm p-5">
+            <h3 className="font-semibold text-slate-800 text-sm mb-4 flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-emerald-600" /> Saídas por mês
+            </h3>
+            {mensal.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-400">Nenhuma saída registrada no período</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={mensal} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <RechTooltip formatter={(v: any) => [v, "Saídas"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="#10b981" maxBarSize={48} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Rankings */}
+          <div className="space-y-4">
+            <div className="bg-white border rounded-xl shadow-sm p-4">
+              <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-amber-500" /> Quem mais retirou
+              </h3>
+              {topQuem.length === 0
+                ? <p className="text-xs text-slate-400 text-center py-4">Sem dados</p>
+                : <ul className="space-y-2">
+                  {topQuem.slice(0, 5).map((p, i) => (
+                    <li key={p.nome} className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-slate-400 w-4 text-right shrink-0">{i + 1}</span>
+                      <Avatar nome={p.nome} size="sm" />
+                      <span className="flex-1 text-xs text-slate-700 truncate">{p.nome}</span>
+                      <span className="text-xs font-semibold text-emerald-700 tabular-nums">{p.count}×</span>
+                    </li>
+                  ))}
+                </ul>
+              }
+            </div>
+            <div className="bg-white border rounded-xl shadow-sm p-4">
+              <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
+                <Truck className="h-4 w-4 text-emerald-600" /> Mais movimentados
+              </h3>
+              {topEquip.length === 0
+                ? <p className="text-xs text-slate-400 text-center py-4">Sem dados</p>
+                : <ul className="space-y-2">
+                  {topEquip.slice(0, 5).map((e, i) => (
+                    <li key={e.descricao} className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-slate-400 w-4 text-right shrink-0">{i + 1}</span>
+                      <span className="flex-1 text-xs text-slate-700 truncate">{e.descricao}</span>
+                      <span className="text-xs font-semibold text-emerald-700 tabular-nums">{e.count}×</span>
+                    </li>
+                  ))}
+                </ul>
+              }
+            </div>
+          </div>
+        </div>
+
+        {/* ── Pagando parado no almox ── */}
         {!isLoading && emAlmox.length > 0 && (
-          <section className="bg-gradient-to-br from-amber-50 via-white to-red-50 border border-amber-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-amber-100 bg-amber-50/60 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="h-9 w-9 rounded-lg bg-red-100 ring-1 ring-red-200 flex items-center justify-center shrink-0">
+          <section className="bg-white border border-amber-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-3 bg-amber-50/80 border-b border-amber-100 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-red-100 flex items-center justify-center">
                   <DollarSign className="h-4 w-4 text-red-600" />
                 </div>
-                <div className="min-w-0">
-                  <h2 className="font-semibold text-slate-900 text-sm">Pagando parado no almox</h2>
-                  <p className="text-xs text-slate-500 truncate">
+                <div>
+                  <div className="font-semibold text-slate-900 text-sm">Pagando parado no almox</div>
+                  <div className="text-xs text-slate-500">
                     {emAlmox.length} equipamento{emAlmox.length !== 1 ? "s" : ""} ·{" "}
                     custo acumulado {fmtMoeda(stats?.custoOciosidadeTotal ?? 0)}
-                  </p>
+                  </div>
                 </div>
               </div>
               <span className="shrink-0 inline-flex items-center gap-1 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full px-3 py-1 text-xs font-semibold">
@@ -214,41 +515,29 @@ export default function LocadosUtilizacao() {
             </div>
             <div className="divide-y divide-amber-100/60">
               {visivelAlmox.map(item => {
-                const urg = urgenciaBadge(item.diasOciosos);
+                const urgBg = item.diasOciosos > 30 ? "bg-red-100 text-red-700 ring-red-200"
+                  : item.diasOciosos > 7 ? "bg-amber-100 text-amber-700 ring-amber-200"
+                  : "bg-slate-100 text-slate-600 ring-slate-200";
+                const urgLabel = item.diasOciosos > 30 ? "Crítico" : item.diasOciosos > 7 ? "Atenção" : "Recente";
                 return (
                   <div key={item.id} className="flex items-center gap-3 px-5 py-3 hover:bg-amber-50/40 transition">
                     <EquipFoto fotoUrl={item.fotoUrl} descricao={item.descricao} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 flex-wrap">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-slate-900 text-sm truncate">{item.descricao}</span>
-                            {item.quantidade > 1 && (
-                              <span className="text-[10px] font-bold bg-slate-900 text-white rounded px-1.5 py-0.5">×{item.quantidade}</span>
-                            )}
-                          </div>
+                          <span className="font-semibold text-slate-900 text-sm truncate block">{item.descricao}</span>
                           <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
                             {item.fornecedorNome && <span>{item.fornecedorNome}</span>}
-                            {item.fornecedorNome && <span className="text-slate-300">·</span>}
                             <span className="flex items-center gap-1">
-                              <Hourglass className="h-3 w-3" />
-                              parado há {fmtDias(item.diasOciosos)}
+                              <Hourglass className="h-3 w-3" /> parado há {fmtDias(item.diasOciosos)}
                             </span>
-                            {item.ultimoEvento && (
-                              <>
-                                <span className="text-slate-300">·</span>
-                                <span className="text-[10px] uppercase tracking-wide">
-                                  {item.ultimoEvento === "RECEBIMENTO" ? "nunca saiu" : "retornou"}
-                                </span>
-                              </>
-                            )}
                           </div>
                         </div>
-                        <div className="text-right shrink-0 space-y-0.5">
+                        <div className="text-right shrink-0">
                           <div className="font-bold text-red-700 text-sm tabular-nums">{fmtMoeda(item.custoOciosidade)}</div>
                           <div className="text-[11px] text-slate-500 tabular-nums">{fmtMoeda(item.custoDiario)}/dia</div>
-                          <span className={`inline-flex items-center gap-1 ${urg.bg} ${urg.text} ring-1 ${urg.ring} rounded-full px-2 py-0.5 text-[10px] font-semibold`}>
-                            {urg.label}
+                          <span className={`inline-flex items-center ring-1 rounded-full px-2 py-0.5 text-[10px] font-semibold mt-0.5 ${urgBg}`}>
+                            {urgLabel}
                           </span>
                         </div>
                       </div>
@@ -257,144 +546,52 @@ export default function LocadosUtilizacao() {
                 );
               })}
             </div>
-            {emAlmox.length > 8 && (
+            {emAlmox.length > 6 && (
               <div className="border-t border-amber-100 px-5 py-2">
-                <button
-                  onClick={() => setExpandAlmox(v => !v)}
+                <button onClick={() => setExpandAlmox(v => !v)}
                   className="w-full text-center py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 rounded transition flex items-center justify-center gap-1"
                 >
                   {expandAlmox
                     ? <><ChevronUp className="h-3 w-3" /> Mostrar menos</>
-                    : <><ChevronDown className="h-3 w-3" /> Ver mais {emAlmox.length - 8} equipamento(s)</>
-                  }
+                    : <><ChevronDown className="h-3 w-3" /> Ver mais {emAlmox.length - 6} equipamento(s)</>}
                 </button>
               </div>
             )}
           </section>
         )}
-
         {!isLoading && emAlmox.length === 0 && stats && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-4 flex items-center gap-3">
             <TrendingDown className="h-5 w-5 text-emerald-600 shrink-0" />
             <div>
               <div className="font-semibold text-emerald-900 text-sm">Nenhum equipamento parado!</div>
-              <div className="text-xs text-emerald-700 mt-0.5">Todos os equipamentos ativos estão em campo. Ótima utilização.</div>
+              <div className="text-xs text-emerald-700 mt-0.5">Todos os equipamentos ativos estão em campo.</div>
             </div>
           </div>
         )}
 
-        {/* Gráfico mensal + rankings lado a lado */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          {/* Gráfico de ciclos por mês */}
-          <div className="lg:col-span-2 bg-white border rounded-xl shadow-sm p-5">
-            <h3 className="font-semibold text-slate-800 text-sm mb-4 flex items-center gap-2">
-              <CalendarDays className="h-4 w-4 text-emerald-600" />
-              Saídas por mês
-            </h3>
-            {mensal.length === 0 ? (
-              <div className="py-10 text-center text-sm text-slate-400">
-                Nenhuma saída registrada no período
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={mensal} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <RechTooltip
-                    formatter={(v: any) => [v, "Saídas"]}
-                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                  />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={48}>
-                    {mensal.map((_, i) => (
-                      <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          {/* Rankings */}
-          <div className="space-y-4">
-            {/* Top quem retirou */}
-            <div className="bg-white border rounded-xl shadow-sm p-4">
-              <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-amber-500" /> Quem mais retirou
-              </h3>
-              {topQuem.length === 0
-                ? <p className="text-xs text-slate-400 text-center py-4">Sem dados no período</p>
-                : (
-                  <ul className="space-y-2">
-                    {topQuem.slice(0, 5).map((p, i) => (
-                      <li key={p.nome} className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-slate-400 w-4 text-right shrink-0">{i + 1}</span>
-                        <Avatar nome={p.nome} size="sm" bg="emerald" />
-                        <span className="flex-1 text-xs text-slate-700 truncate">{p.nome}</span>
-                        <span className="text-xs font-semibold text-emerald-700 tabular-nums">{p.count}×</span>
-                      </li>
-                    ))}
-                  </ul>
-                )
-              }
-            </div>
-
-            {/* Top equipamentos */}
-            <div className="bg-white border rounded-xl shadow-sm p-4">
-              <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
-                <Truck className="h-4 w-4 text-emerald-600" /> Mais movimentados
-              </h3>
-              {topEquip.length === 0
-                ? <p className="text-xs text-slate-400 text-center py-4">Sem dados no período</p>
-                : (
-                  <ul className="space-y-2">
-                    {topEquip.slice(0, 5).map((e, i) => (
-                      <li key={e.descricao} className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-slate-400 w-4 text-right shrink-0">{i + 1}</span>
-                        <span className="flex-1 text-xs text-slate-700 truncate">{e.descricao}</span>
-                        <span className="text-xs font-semibold text-emerald-700 tabular-nums">{e.count}×</span>
-                      </li>
-                    ))}
-                  </ul>
-                )
-              }
-            </div>
-          </div>
-        </div>
-
-        {/* Histórico de ciclos */}
+        {/* ── Histórico de ciclos ── */}
         <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b flex items-center justify-between gap-3 flex-wrap">
             <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-              <RotateCcw className="h-4 w-4 text-emerald-600" />
-              Ciclos de saída no período
+              <Package className="h-4 w-4 text-slate-500" />
+              Histórico de ciclos
               {ciclos.length > 0 && (
-                <span className="text-[11px] bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 font-medium">
-                  {ciclos.length}
-                </span>
+                <span className="text-[11px] bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 font-medium">{ciclos.length}</span>
               )}
             </h3>
             <div className="relative w-52">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-              <input
-                value={busca}
-                onChange={e => setBusca(e.target.value)}
-                placeholder="Buscar equipamento…"
-                className="w-full pl-8 pr-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              />
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar equipamento…"
+                className="w-full pl-8 pr-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400" />
             </div>
           </div>
 
-          {isLoading && (
-            <div className="py-12 text-center text-sm text-slate-400">Carregando…</div>
-          )}
+          {isLoading && <div className="py-12 text-center text-sm text-slate-400">Carregando…</div>}
 
           {!isLoading && ciclosFiltrados.length === 0 && (
             <div className="py-12 text-center">
               <Package className="h-8 w-8 text-slate-300 mx-auto mb-2" />
               <div className="text-sm text-slate-500">Nenhuma saída registrada no período</div>
-              <div className="text-xs text-slate-400 mt-1">Eventos SAIDA_ALMOX aparecem aqui quando registrados na página de Locados</div>
             </div>
           )}
 
@@ -402,38 +599,35 @@ export default function LocadosUtilizacao() {
             <ul className="divide-y">
               {visivelCiclos.map(c => (
                 <li key={c.id} className="flex items-start gap-3 px-5 py-3 hover:bg-slate-50 transition">
-                  <EquipFoto fotoUrl={c.fotoUrl} descricao={c.descricao} />
+                  <EquipFoto fotoUrl={c.fotoUrl} descricao={c.descricao} sm />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-slate-900 text-sm truncate">{c.descricao}</span>
-                          {c.quantidade > 1 && (
-                            <span className="text-[10px] font-bold bg-slate-900 text-white rounded px-1.5 py-0.5">×{c.quantidade}</span>
-                          )}
                           {c.fornecedorNome && (
-                            <span className="text-[10px] text-slate-500 border border-slate-200 rounded px-1.5 py-0.5">{c.fornecedorNome}</span>
+                            <span className="text-[10px] text-slate-500 border border-slate-200 rounded px-1.5 py-0.5">
+                              {c.fornecedorNome}
+                            </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 mt-1 flex-wrap">
-                          <span className="text-xs text-slate-500 flex items-center gap-1">
+                        <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-slate-500">
+                          <span className="flex items-center gap-1">
                             <CalendarDays className="h-3 w-3" /> saiu {fmtDt(c.saiuEm)}
                           </span>
                           {c.devolvidoEm ? (
-                            <span className="text-xs text-emerald-600 flex items-center gap-1">
+                            <span className="flex items-center gap-1 text-emerald-600">
                               <RotateCcw className="h-3 w-3" /> devolveu {fmtDt(c.devolvidoEm)}
                             </span>
                           ) : (
-                            <span className="text-xs text-amber-600 flex items-center gap-1">
+                            <span className="flex items-center gap-1 text-amber-600">
                               <Clock className="h-3 w-3" /> ainda fora
                             </span>
                           )}
-                        </div>
-                        <div className="flex items-center gap-3 mt-1 flex-wrap">
                           {c.quemSaiu && (
                             <span className="flex items-center gap-1">
-                              <Avatar nome={c.quemSaiu} size="sm" bg="emerald" />
-                              <span className="text-xs text-slate-600">{c.quemSaiu}</span>
+                              <Avatar nome={c.quemSaiu} size="sm" />
+                              {c.quemSaiu}
                             </span>
                           )}
                         </div>
@@ -444,18 +638,12 @@ export default function LocadosUtilizacao() {
                           {fmtHoras(c.horasFora)}
                         </div>
                         {c.devolvidoEm ? (
-                          <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 text-[10px] font-semibold mt-1">
-                            Devolvido
-                          </span>
+                          <span className="inline-flex bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 text-[10px] font-semibold mt-1">Devolvido</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 text-[10px] font-semibold mt-1">
-                            Em campo
-                          </span>
+                          <span className="inline-flex bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 text-[10px] font-semibold mt-1">Em campo</span>
                         )}
                         {c.valorMensal > 0 && (
-                          <div className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
-                            {fmtMoeda(c.valorMensal)}/mês
-                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5 tabular-nums">{fmtMoeda(c.valorMensal)}/mês</div>
                         )}
                       </div>
                     </div>
@@ -465,16 +653,14 @@ export default function LocadosUtilizacao() {
             </ul>
           )}
 
-          {ciclosFiltrados.length > 12 && (
+          {ciclosFiltrados.length > 10 && (
             <div className="border-t px-5 py-2">
-              <button
-                onClick={() => setExpandCiclos(v => !v)}
+              <button onClick={() => setExpandCiclos(v => !v)}
                 className="w-full text-center py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 rounded transition flex items-center justify-center gap-1"
               >
                 {expandCiclos
                   ? <><ChevronUp className="h-3 w-3" /> Mostrar menos</>
-                  : <><ChevronDown className="h-3 w-3" /> Ver mais {ciclosFiltrados.length - 12} ciclo(s)</>
-                }
+                  : <><ChevronDown className="h-3 w-3" /> Ver mais {ciclosFiltrados.length - 10} ciclo(s)</>}
               </button>
             </div>
           )}
@@ -486,31 +672,25 @@ export default function LocadosUtilizacao() {
 }
 
 // ─── KpiCard ─────────────────────────────────────────────────────────────────
-function KpiCard({
-  icon, label, value, sub, tone, big = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub?: string;
-  tone: "emerald" | "amber" | "red" | "blue";
-  big?: boolean;
+function KpiCard({ icon, label, value, sub, tone, big = false }: {
+  icon: React.ReactNode; label: string; value: string; sub?: string;
+  tone: "emerald" | "amber" | "red" | "blue"; big?: boolean;
 }) {
-  const toneMap: Record<string, { ic: string; val: string; bg: string; ring: string }> = {
-    emerald: { ic: "text-emerald-600 bg-emerald-100", val: "text-emerald-700", bg: "bg-white",        ring: "ring-1 ring-slate-200" },
-    amber:   { ic: "text-amber-600  bg-amber-100",   val: "text-amber-700",   bg: "bg-amber-50",     ring: "ring-1 ring-amber-200" },
-    red:     { ic: "text-red-600    bg-red-100",     val: "text-red-700",     bg: "bg-red-50",       ring: "ring-1 ring-red-200"   },
-    blue:    { ic: "text-blue-600   bg-blue-100",    val: "text-blue-700",    bg: "bg-white",        ring: "ring-1 ring-slate-200" },
+  const toneMap = {
+    emerald: { ic: "text-emerald-600 bg-emerald-100", val: "text-emerald-700" },
+    amber:   { ic: "text-amber-600 bg-amber-100",     val: "text-amber-700"   },
+    red:     { ic: "text-red-600 bg-red-100",         val: "text-red-700"     },
+    blue:    { ic: "text-blue-600 bg-blue-100",       val: "text-blue-700"    },
   };
   const t = toneMap[tone];
   return (
-    <div className={`${t.bg} ${t.ring} rounded-xl p-4 shadow-sm`}>
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-slate-500 font-medium">
-        <span className={`h-6 w-6 rounded-lg ${t.ic} flex items-center justify-center shrink-0`}>{icon}</span>
-        {label}
+    <div className="bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-2">
+      <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${t.ic}`}>{icon}</div>
+      <div className={`font-black ${big ? "text-lg" : "text-2xl"} tabular-nums ${t.val}`}>{value}</div>
+      <div>
+        <div className="text-xs font-semibold text-slate-700">{label}</div>
+        {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
       </div>
-      <div className={`mt-1.5 ${big ? "text-lg" : "text-2xl"} font-bold tabular-nums ${t.val}`}>{value}</div>
-      {sub && <div className="text-[11px] text-slate-500 mt-0.5 truncate">{sub}</div>}
     </div>
   );
 }

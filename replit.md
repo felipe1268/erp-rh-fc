@@ -50,19 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4518** — **FEAT: REPAGINAÇÃO — Dashboard Utilização Equipamentos Locados.** Nova estrutura: 3 insight-cards (mais usado / menos usado / devolver hoje), seção Pendentes de devolução (badge "Atrasado" > 16h), 2 gráficos lado a lado (por dia da semana + por hora com turnos manhã/tarde/final), gráfico mensal, rankings, pagando parado, histórico. ZERO backend change.
 - **Rev. 4517** — **FIX: FONTE DE DADOS DE UTILIZAÇÃO — warehouse_loans.** `locadosUtilizacao` reescrito para usar `warehouse_loans` via `almoxarifado_itens.equipamento_vinculado_id` (antes lia `equipamento_locado_eventos` vazia → 0 em campo). `proprioRaioX` "Quem mais utiliza" idem. `locadoRaioX` inclui retiradas do almox na timeline e responsáveis. ZERO schema change.
-- **Rev. 4516** — **FEAT: CONVERSÃO DE TIPO (PRÓPRIO ↔ LOCADO).** Badge "LOCADO → Próprio" no card de Locados + badge "PRÓPRIO" (hover) nos cards de Proprios + botões "→ Próprio" / "→ Locado" na barra de ação em lote. Próprio→Locado pede fornecedor+data. 2 novas mutations tRPC. ZERO schema change.
 
 ### 5 one-liners
 
-- **Rev. 4515** — **REVERSÃO Rev. 4513:** 47 proprios deletados; 41 locados restaurados para em_uso; 6 locados nota limpa. Transação atômica no Neon.
-- **Rev. 4514b** — **FIX: EDIÇÃO INLINE DE CATEGORIA (LOCADOS DETALHES).** `locadoAtualizar`+schema; seção Categoria com datalist no modalEventos. ZERO schema change.
-- **Rev. 4514** — **FEAT: RAIO-X DE EQUIPAMENTO LOCADO.** `locadoRaioX` tRPC + `EquipamentoLocadoRaioXModal.tsx` (3 abas: KPIs, Timeline, Dados). ZERO schema change.
+- **Rev. 4516** — **FEAT: CONVERSÃO DE TIPO (PRÓPRIO ↔ LOCADO).** Badge "LOCADO → Próprio" + botões em lote. 2 mutations tRPC. ZERO schema change.
+- **Rev. 4515** — **REVERSÃO Rev. 4513:** 47 proprios deletados; 41 locados restaurados. Transação atômica no Neon.
+- **Rev. 4514b** — **FIX: EDIÇÃO INLINE DE CATEGORIA (LOCADOS DETALHES).** `locadoAtualizar`+schema; datalist no modalEventos. ZERO schema change.
+- **Rev. 4514** — **FEAT: RAIO-X DE EQUIPAMENTO LOCADO.** `locadoRaioX` tRPC + `EquipamentoLocadoRaioXModal.tsx` (3 abas). ZERO schema change.
 - **Rev. 4513** — REVERTIDA (Rev. 4515). Migração Locados→Próprios desfeita.
-- **Rev. 4512** — **FEAT: DASH UTILIZAÇÃO DE EQUIPAMENTOS LOCADOS.** Nova página `/equipamentos/locados-utilizacao`: KPIs, seção "Pagando parado no almox", gráfico barras mensais, rankings, histórico de ciclos. ZERO schema change.
-- **Rev. 4510** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO + FOTOS NA PRESENÇA DDS.** Modal redesenhado com 3 abas, donut, area chart, bar chart dias da semana, "quem mais usa". Fotos de colaborador na lista de presença das sessões DDS. ZERO schema change.
-- **Rev. 4509** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO.** Modal Raio-X com KPIs, gráfico de ocupação mensal, timeline. `proprioRaioX` tRPC. ZERO schema change.
-- **Rev. 4508** — **FEAT: CP — APAGAR EM LOTE (cancelEntryBulk).** Botão "Apagar selecionados" + Dialog confirmação + motivo. ZERO schema change.
 
 ### Histórico completo
 
