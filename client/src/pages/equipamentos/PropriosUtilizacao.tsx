@@ -200,7 +200,7 @@ export default function PropriosUtilizacao() {
   const [expandCiclos, setExpandCiclos] = useState(false);
   const [expandAlmox, setExpandAlmox] = useState(false);
   const [expandPendentes, setExpandPendentes] = useState(false);
-  const [drill, setDrill] = useState<"campo" | "almox" | "custo" | null>(null);
+  const [drill, setDrill] = useState<"campo" | "almox" | "custo" | "mais" | "retornar" | null>(null);
   const [drillHora, setDrillHora] = useState<number | null>(null);
 
   const { data, isLoading } = trpc.equipamentos.propriosUtilizacao.useQuery(
@@ -355,6 +355,36 @@ export default function PropriosUtilizacao() {
           </DrillModal>
         )}
 
+        {/* ── Drill-down: Mais utilizados (ranking) ── */}
+        {drill === "mais" && (
+          <DrillModal
+            titulo="Ranking — Mais utilizados"
+            subtitulo={`${topEquip.length} equipamento${topEquip.length !== 1 ? "s" : ""} movimentados no período`}
+            onClose={() => setDrill(null)}
+          >
+            {topEquip.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-400">Sem dados no período.</div>
+            ) : topEquip.map((e: any, i: number) => (
+              <DrillItemMais key={e.descricao} item={e} idx={i} max={topEquip[0]?.count ?? 1} />
+            ))}
+          </DrillModal>
+        )}
+
+        {/* ── Drill-down: Retornar hoje (pendentes) ── */}
+        {drill === "retornar" && (
+          <DrillModal
+            titulo="Pendentes de retorno"
+            subtitulo={`${pendentes.length} item${pendentes.length !== 1 ? "s" : ""} fora do almox · ${atrasados.length} atrasado${atrasados.length !== 1 ? "s" : ""}`}
+            onClose={() => setDrill(null)}
+          >
+            {pendentes.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-400">Nenhum pendente.</div>
+            ) : pendentes.map((c: any) => (
+              <DrillItemRetornar key={c.id} item={c} />
+            ))}
+          </DrillModal>
+        )}
+
         {/* ── Drill-down: Horário ── */}
         {drillHora !== null && (() => {
           const label = `${String(drillHora).padStart(2, "0")}h`;
@@ -421,7 +451,12 @@ export default function PropriosUtilizacao() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
           {/* Mais utilizado */}
-          <div className="bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-2">
+          <div
+            onClick={() => topEquip.length > 0 && setDrill("mais")}
+            className={`relative bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-2 transition
+              ${topEquip.length > 0 ? "cursor-pointer hover:shadow-md active:scale-[0.98]" : ""}`}
+          >
+            {topEquip.length > 0 && <ExternalLink className="absolute top-3 right-3 h-3.5 w-3.5 text-slate-300" />}
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center">
                 <Zap className="h-4 w-4 text-blue-600" />
@@ -445,7 +480,12 @@ export default function PropriosUtilizacao() {
           </div>
 
           {/* Menos utilizado (ocioso há mais tempo) */}
-          <div className="bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-2">
+          <div
+            onClick={() => emAlmox.length > 0 && setDrill("almox")}
+            className={`relative bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-2 transition
+              ${emAlmox.length > 0 ? "cursor-pointer hover:shadow-md active:scale-[0.98]" : ""}`}
+          >
+            {emAlmox.length > 0 && <ExternalLink className="absolute top-3 right-3 h-3.5 w-3.5 text-slate-300" />}
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
                 <ThumbsDown className="h-4 w-4 text-slate-500" />
@@ -477,7 +517,13 @@ export default function PropriosUtilizacao() {
           </div>
 
           {/* Pendentes de devolução ao almox */}
-          <div className={`border rounded-xl shadow-sm p-4 flex flex-col gap-2 ${atrasados.length > 0 ? "bg-red-50 border-red-200" : "bg-white"}`}>
+          <div
+            onClick={() => pendentes.length > 0 && setDrill("retornar")}
+            className={`relative border rounded-xl shadow-sm p-4 flex flex-col gap-2 transition
+              ${atrasados.length > 0 ? "bg-red-50 border-red-200" : "bg-white"}
+              ${pendentes.length > 0 ? "cursor-pointer hover:shadow-md active:scale-[0.98]" : ""}`}
+          >
+            {pendentes.length > 0 && <ExternalLink className="absolute top-3 right-3 h-3.5 w-3.5 text-slate-300" />}
             <div className="flex items-center gap-2">
               <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${atrasados.length > 0 ? "bg-red-100" : "bg-amber-100"}`}>
                 <Bell className={`h-4 w-4 ${atrasados.length > 0 ? "text-red-600" : "text-amber-600"}`} />
@@ -891,6 +937,77 @@ export default function PropriosUtilizacao() {
 }
 
 // ─── Sub-componentes para os drills (consomem o filtro de contexto) ───────────
+function DrillItemMais({ item, idx, max }: { item: any; idx: number; max: number }) {
+  const q = useDrillFilter();
+  const nome = (item.descricao ?? "").toLowerCase();
+  if (q && !nome.includes(q)) return null;
+  const pct = Math.round((item.count / max) * 100);
+  const tones = ["text-amber-500", "text-slate-400", "text-amber-700"];
+  const medals = ["🥇", "🥈", "🥉"];
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-slate-50">
+      <span className="text-base w-6 text-center shrink-0">{idx < 3 ? medals[idx] : <span className="text-[11px] font-bold text-slate-400">{idx + 1}</span>}</span>
+      <EquipFoto fotoUrl={item.fotoUrl} descricao={item.descricao} sm />
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-slate-900 text-sm truncate">{item.descricao}</div>
+        {item.codigoPatrimonio && (
+          <span className="font-mono text-[10px] bg-slate-100 px-1.5 rounded">{item.codigoPatrimonio}</span>
+        )}
+        <div className="mt-1.5 flex items-center gap-2">
+          <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+            <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          <span className={`text-[10px] font-semibold ${tones[idx] ?? "text-slate-500"}`}>{pct}%</span>
+        </div>
+      </div>
+      <div className="text-right shrink-0">
+        <span className="text-xl font-black text-blue-600 tabular-nums">{item.count}</span>
+        <div className="text-[10px] text-slate-400">retiradas</div>
+      </div>
+    </div>
+  );
+}
+
+function DrillItemRetornar({ item }: { item: any }) {
+  const q = useDrillFilter();
+  const nome = (item.descricao ?? "").toLowerCase();
+  const quem = (item.quemSaiu ?? "").toLowerCase();
+  if (q && !nome.includes(q) && !quem.includes(q)) return null;
+  const atrasado = (item.horasFora ?? 0) > 16;
+  const muitoAtrasado = (item.horasFora ?? 0) > 48;
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-slate-50 ${muitoAtrasado ? "bg-red-50/40" : ""}`}>
+      <EquipFoto fotoUrl={item.fotoUrl} descricao={item.descricao} sm />
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-slate-900 text-sm truncate">{item.descricao}</div>
+        <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+          {item.codigoPatrimonio && (
+            <span className="font-mono text-[10px] bg-slate-100 px-1.5 rounded">{item.codigoPatrimonio}</span>
+          )}
+          <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" /> saiu {fmtDt(item.saiuEm)}</span>
+          {item.quemSaiu && (
+            <span className="flex items-center gap-1">
+              <FotoFuncionario fotoUrl={item.fotoFuncionario} nome={item.quemSaiu} size="sm" />
+              {item.quemSaiu}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="text-right shrink-0">
+        <div className={`font-black text-sm tabular-nums flex items-center gap-1 justify-end ${atrasado ? "text-red-600" : "text-amber-600"}`}>
+          <Clock className="h-3.5 w-3.5" />{fmtHoras(item.horasFora ?? 0)}
+        </div>
+        <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 inline-block mt-0.5
+          ${muitoAtrasado ? "bg-red-200 text-red-800"
+            : atrasado ? "bg-red-100 text-red-700"
+            : "bg-amber-100 text-amber-700"}`}>
+          {muitoAtrasado ? "Crítico" : atrasado ? "Atrasado" : "Em campo"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function DrillItemCampo({ item }: { item: any }) {
   const q = useDrillFilter();
   const nome = (item.descricao ?? "").toLowerCase();
