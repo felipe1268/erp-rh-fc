@@ -3664,6 +3664,134 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       }));
     }),
 
+  // ── Rev. 4510 — Dash de Entregas do Almoxarifado ─────────────────────────
+  // Lista todas as transferências com origem NO almoxarifado (origem_obra_id IS
+  // NULL) que foram aceitas, com filtros por mês/ano, obra e pessoa.
+  // ─────────────────────────────────────────────────────────────────────────
+  listarEntregasAlmox: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mes:       z.number().min(1).max(12).nullable().optional(),
+      ano:       z.number().min(2020).max(2100).nullable().optional(),
+      obraId:    z.number().nullable().optional(),
+      busca:     z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const rows: any[] = ((await db.execute(sql`
+        SELECT
+          t.id,
+          t.equipamento_id,
+          t.equipamento_patrimonio   AS codigo_patrimonio,
+          t.equipamento_descricao    AS descricao,
+          t.destino_obra_id,
+          t.destino_obra_nome,
+          t.remetente_id,
+          t.remetente_nome,
+          t.aceite_por_nome,
+          t.created_at,
+          t.aceite_em,
+          t.motivo,
+          ep.fotos_json,
+          ep.categoria,
+          ep.marca
+        FROM equipamentos_proprios_transferencias t
+        LEFT JOIN equipamentos_proprios ep ON ep.id = t.equipamento_id
+        WHERE t.company_id      = ${input.companyId}
+          AND t.status          = 'aceito'
+          AND t.origem_obra_id  IS NULL
+          AND t.destino_obra_id IS NOT NULL
+          ${input.ano  ? sql`AND EXTRACT(YEAR  FROM t.aceite_em::timestamptz) = ${input.ano}`  : sql``}
+          ${input.mes  ? sql`AND EXTRACT(MONTH FROM t.aceite_em::timestamptz) = ${input.mes}`  : sql``}
+          ${input.obraId ? sql`AND t.destino_obra_id = ${input.obraId}` : sql``}
+          ${input.busca ? sql`AND (
+            t.equipamento_descricao ILIKE ${'%' + (input.busca ?? '') + '%'}
+            OR t.equipamento_patrimonio ILIKE ${'%' + (input.busca ?? '') + '%'}
+            OR t.remetente_nome ILIKE ${'%' + (input.busca ?? '') + '%'}
+            OR t.aceite_por_nome ILIKE ${'%' + (input.busca ?? '') + '%'}
+            OR t.destino_obra_nome ILIKE ${'%' + (input.busca ?? '') + '%'}
+          )` : sql``}
+        ORDER BY t.aceite_em DESC NULLS LAST
+        LIMIT 500
+      `)) as any)?.rows ?? [];
+
+      // ── KPIs ─────────────────────────────────────────────────────────────
+      const totalEntregas       = rows.length;
+      const equipamentosSet     = new Set(rows.map(r => r.equipamento_id));
+      const obrasSet            = new Set(rows.map(r => r.destino_obra_id));
+      const entregadoresCont: Record<string, number> = {};
+      for (const r of rows) {
+        if (r.remetente_nome) {
+          entregadoresCont[r.remetente_nome] = (entregadoresCont[r.remetente_nome] ?? 0) + 1;
+        }
+      }
+      const topEntregadores = Object.entries(entregadoresCont)
+        .map(([nome, qtd]) => ({ nome, qtd }))
+        .sort((a, b) => b.qtd - a.qtd)
+        .slice(0, 5);
+
+      // ── Obras atendidas ───────────────────────────────────────────────────
+      const obrasCont: Record<string, { nome: string; qtd: number }> = {};
+      for (const r of rows) {
+        if (r.destino_obra_id) {
+          const k = String(r.destino_obra_id);
+          if (!obrasCont[k]) obrasCont[k] = { nome: r.destino_obra_nome ?? "—", qtd: 0 };
+          obrasCont[k].qtd++;
+        }
+      }
+      const topObras = Object.values(obrasCont)
+        .sort((a, b) => b.qtd - a.qtd)
+        .slice(0, 5);
+
+      // ── Entregas por mês (últimos 12 meses para gráfico) ─────────────────
+      const porMes: Record<string, number> = {};
+      for (const r of rows) {
+        const ym = (r.aceite_em ?? r.created_at ?? "").slice(0, 7);
+        if (ym) porMes[ym] = (porMes[ym] ?? 0) + 1;
+      }
+      const mensal = Object.entries(porMes)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(-12)
+        .map(([mes, qtd]) => {
+          const d = new Date(mes + "-01T12:00:00Z");
+          return {
+            mes,
+            label: d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+            qtd,
+          };
+        });
+
+      return {
+        entregas: rows.map(r => ({
+          id:               r.id,
+          equipamentoId:    r.equipamento_id,
+          codigoPatrimonio: r.codigo_patrimonio,
+          descricao:        r.descricao,
+          categoria:        r.categoria,
+          marca:            r.marca,
+          fotosJson:        r.fotos_json,
+          obraId:           r.destino_obra_id,
+          obraNome:         r.destino_obra_nome,
+          entreguePor:      r.remetente_nome,
+          recebidoPor:      r.aceite_por_nome,
+          solicitadoEm:     r.created_at,
+          entregueEm:       r.aceite_em,
+          motivo:           r.motivo,
+        })),
+        stats: {
+          totalEntregas,
+          equipamentosDistintos: equipamentosSet.size,
+          obrasAtendidas:        obrasSet.size,
+          topEntregador:         topEntregadores[0]?.nome ?? null,
+        },
+        topEntregadores,
+        topObras,
+        mensal,
+      };
+    }),
+
   // ── Rev. 4509 — Raio-X do Equipamento Próprio ────────────────────────────
   // Retorna histórico completo de transferências, KPIs de utilização e
   // dados mensais para o gráfico de ocupação.

@@ -5,7 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import {
   HardHat, Package, Truck, AlertTriangle, ChevronRight,
   Clock, TrendingDown, Building2, CalendarClock, Layers,
-  CircleDollarSign, ArrowUpRight,
+  CircleDollarSign, ArrowUpRight, Boxes,
 } from "lucide-react";
 import { fmtDate, fmtMoney } from "./_shared";
 import { useMemo, useState } from "react";
@@ -101,7 +101,7 @@ export default function EquipamentosHub() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Link href="/equipamentos/proprios">
             <a className="block bg-white border rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition overflow-hidden">
               <div className="bg-gradient-to-br from-blue-500 to-blue-700 text-white p-4 flex items-center gap-3">
@@ -152,6 +152,20 @@ export default function EquipamentosHub() {
                   </div>
                 )}
                 <div className="flex items-center justify-end mt-3 text-emerald-700 text-xs font-medium">Abrir <ChevronRight className="h-3 w-3" /></div>
+              </div>
+            </a>
+          </Link>
+          <Link href="/equipamentos/entregas">
+            <a className="block bg-white border rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition overflow-hidden">
+              <div className="bg-gradient-to-br from-violet-500 to-violet-700 text-white p-4 flex items-center gap-3">
+                <Boxes className="h-6 w-6" />
+                <div className="font-semibold text-sm">Entregas do Almoxarifado</div>
+              </div>
+              <div className="p-4">
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Monitore cada ferramenta que saiu do estoque: quem entregou, para qual obra e quando foi confirmado o recebimento.
+                </p>
+                <div className="flex items-center justify-end mt-3 text-violet-700 text-xs font-medium">Abrir <ChevronRight className="h-3 w-3" /></div>
               </div>
             </a>
           </Link>

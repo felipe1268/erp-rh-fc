@@ -1,4 +1,37 @@
 /**
+ * Rev. 4511 - FEAT: DASH DE ENTREGAS DO ALMOXARIFADO
+ *
+ * Nova página `/equipamentos/entregas` que monitora toda ferramenta própria
+ * que saiu do almoxarifado para uma obra:
+ *
+ * KPIs: total de entregas confirmadas, ferramentas distintas, obras atendidas,
+ * top entregador do período.
+ *
+ * Gráficos: BarChart de entregas por mês (últimos 12 meses, barra mais alta
+ * em azul escuro).
+ *
+ * Rankings: "Quem mais entregou" (top 5 com avatar de iniciais + barra de
+ * progresso relativa) e "Obras que mais receberam" (top 5 com barra violeta).
+ *
+ * Filtros: PeriodSelectorCard (REGRA DE OURO), busca livre por texto (nome
+ * ferramenta / patrimônio / pessoa / obra), filtro rápido por obra em pills.
+ *
+ * Lista: foto do equipamento, código patrimônio, categoria, descrição, obra
+ * destino, "Entregue por" (remetente_nome), "Recebido por" (aceite_por_nome),
+ * data da entrega.
+ *
+ * Backend: procedure `listarEntregasAlmox` filtra transferências com
+ * origem_obra_id IS NULL + status='aceito' + destino_obra_id NOT NULL.
+ * Suporta filtros de mes/ano/obraId/busca. Retorna entregas, stats, rankings
+ * e série mensal. ZERO schema change.
+ *
+ * Hub de Equipamentos: novo card "Entregas do Almoxarifado" (violeta) adicionado
+ * ao grid que agora é 3 colunas em lg.
+ *
+ * @author Rev. 4511
+ */
+
+/**
  * Rev. 4510 - FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO — REDESIGN COMPLETO
  *
  * Redesign total do modal Raio-X com 3 abas (Visão Geral / Timeline / Dados):
