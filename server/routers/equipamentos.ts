@@ -1243,6 +1243,56 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       return { ok: true as const, vinculados: total };
     }),
 
+  // Alterar categoria em lote (por IDs selecionados).
+  locadosAtualizarCategoriaLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ids: z.array(z.number()).min(1).max(500),
+      categoria: z.string().max(100).nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const cat = input.categoria && input.categoria.trim() ? input.categoria.trim() : null;
+      const updated = await db.update(equipamentosLocados)
+        .set({ categoria: cat, updatedAt: sql`now()` })
+        .where(and(
+          inArray(equipamentosLocados.id, input.ids),
+          eq(equipamentosLocados.companyId, input.companyId),
+        ))
+        .returning({ id: equipamentosLocados.id });
+      return { ok: true as const, atualizados: updated.length };
+    }),
+
+  // Alterar fornecedor em lote (por IDs selecionados).
+  locadosAtualizarFornecedorLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ids: z.array(z.number()).min(1).max(500),
+      fornecedorNome: z.string().max(255).nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const forn = input.fornecedorNome && input.fornecedorNome.trim() ? input.fornecedorNome.trim() : null;
+      const updated = await db.update(equipamentosLocados)
+        .set({ fornecedorNome: forn, updatedAt: sql`now()` })
+        .where(and(
+          inArray(equipamentosLocados.id, input.ids),
+          eq(equipamentosLocados.companyId, input.companyId),
+        ))
+        .returning({ id: equipamentosLocados.id });
+      return { ok: true as const, atualizados: updated.length };
+    }),
+
   // Rev. 2518 — Renomear locadora (fornecedor) em lote.
   // Sobrescreve `fornecedorNome` em TODAS as unidades da empresa cujo
   // nome atual (uppercase + trim) bate com `nomeAtual`. Pedido user:

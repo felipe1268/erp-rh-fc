@@ -357,6 +357,16 @@ export default function EquipamentosLocados() {
   const CHUNK = 500;
   const vincularLote = trpc.equipamentos.locadosVincularObraLote.useMutation();
   const excluirLote  = trpc.equipamentos.locadosExcluirLote.useMutation();
+  const categoriaLoteMut = trpc.equipamentos.locadosAtualizarCategoriaLote.useMutation({
+    onSuccess: (d) => { utils.equipamentos.locadosListar.invalidate(); setSelecionados(new Set()); toast.success(`Categoria atualizada em ${d.atualizados} item(ns).`); setLoteCategoria(""); },
+    onError: (e) => toast.error(formatTrpcError(e)),
+  });
+  const fornecedorLoteMut = trpc.equipamentos.locadosAtualizarFornecedorLote.useMutation({
+    onSuccess: (d) => { utils.equipamentos.locadosListar.invalidate(); setSelecionados(new Set()); toast.success(`Fornecedor atualizado em ${d.atualizados} item(ns).`); setLoteFornecedor(""); },
+    onError: (e) => toast.error(formatTrpcError(e)),
+  });
+  const [loteCategoria, setLoteCategoria] = useState("");
+  const [loteFornecedor, setLoteFornecedor] = useState("");
 
   // Estados pra modais (substituem window.confirm + toast invisível no iPad)
   const [confirmExcluir, setConfirmExcluir] = useState<number | null>(null); // total a excluir
@@ -2740,28 +2750,86 @@ export default function EquipamentosLocados() {
       {/* Rev. 2323 — Action bar flutuante (sticky bottom) quando há seleção */}
       {selecionados.size > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t-2 border-emerald-500 shadow-2xl">
-          <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <div className="max-w-7xl mx-auto px-3 py-2.5 flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 shrink-0">
               <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">{fmtN(selecionados.size)}</span>
               selecionado(s)
             </div>
-            <div className="flex-1 flex flex-wrap items-center gap-2 min-w-[260px]">
+
+            {/* Vincular Obra */}
+            <div className="flex items-center gap-1.5">
               <select value={obraParaVincular} onChange={e => setObraParaVincular(e.target.value)}
-                className="px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none min-w-[200px]">
-                <option value="">— escolher obra —</option>
+                className="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none max-w-[160px]">
+                <option value="">— obra —</option>
                 {((obrasAtivasQ.data || []) as any[]).map(o => (
                   <option key={o.id} value={String(o.id)}>{o.nome}</option>
                 ))}
-                <option value="__null__">⊘ Desvincular obra</option>
+                <option value="__null__">⊘ Desvincular</option>
               </select>
               <button onClick={confirmarVincular}
                 disabled={!obraParaVincular || vincularLote.isPending}
-                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
-                <MapPin className="h-4 w-4" /> {vincularLote.isPending ? "Vinculando…" : "Vincular"}
+                className="px-2.5 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium shrink-0">
+                <MapPin className="h-3.5 w-3.5" /> {vincularLote.isPending ? "…" : "Vincular"}
               </button>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setSelecionados(new Set())} className="px-3 py-1.5 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50">Cancelar</button>
+
+            {/* Alterar Categoria em lote */}
+            <div className="flex items-center gap-1.5">
+              {(() => {
+                const cats = Array.from(new Set((data as any[]).map((l: any) => l.categoria).filter(Boolean))).sort() as string[];
+                return (
+                  <>
+                    <datalist id="lote-cat-datalist">
+                      {cats.map(c => <option key={c} value={c} />)}
+                    </datalist>
+                    <input
+                      list="lote-cat-datalist"
+                      value={loteCategoria}
+                      onChange={e => setLoteCategoria(e.target.value)}
+                      className="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500 outline-none w-[150px]"
+                      placeholder="— categoria —"
+                    />
+                  </>
+                );
+              })()}
+              <button
+                onClick={() => {
+                  if (!loteCategoria.trim()) { toast.warning("Digite a categoria."); return; }
+                  categoriaLoteMut.mutate({ companyId, ids: Array.from(selecionados), categoria: loteCategoria.trim() });
+                }}
+                disabled={!loteCategoria.trim() || categoriaLoteMut.isPending}
+                className="px-2.5 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium shrink-0">
+                <Tag className="h-3.5 w-3.5" /> {categoriaLoteMut.isPending ? "…" : "Categoria"}
+              </button>
+            </div>
+
+            {/* Alterar Fornecedor em lote */}
+            <div className="flex items-center gap-1.5">
+              <datalist id="lote-forn-datalist">
+                {fornecedoresComItens.filter(f => f.key !== "__null__").map(f => (
+                  <option key={f.key} value={f.nome} />
+                ))}
+              </datalist>
+              <input
+                list="lote-forn-datalist"
+                value={loteFornecedor}
+                onChange={e => setLoteFornecedor(e.target.value)}
+                className="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none w-[160px]"
+                placeholder="— fornecedor —"
+              />
+              <button
+                onClick={() => {
+                  if (!loteFornecedor.trim()) { toast.warning("Digite o fornecedor."); return; }
+                  fornecedorLoteMut.mutate({ companyId, ids: Array.from(selecionados), fornecedorNome: loteFornecedor.trim() });
+                }}
+                disabled={!loteFornecedor.trim() || fornecedorLoteMut.isPending}
+                className="px-2.5 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium shrink-0">
+                <Building2 className="h-3.5 w-3.5" /> {fornecedorLoteMut.isPending ? "…" : "Fornecedor"}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto">
+              <button onClick={() => setSelecionados(new Set())} className="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50">Cancelar</button>
               {/* Rev. 4516 — converter lote para Próprio */}
               <button
                 onClick={() => {
@@ -2769,12 +2837,12 @@ export default function EquipamentosLocados() {
                   setModalConverterProprio({ ids, nomes: `${fmtN(ids.length)} equipamento(s) selecionado(s)` });
                 }}
                 disabled={!!loteProgresso || converterParaProprioMut.isPending}
-                className="px-3 py-1.5 text-sm bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
-                <RefreshCw className="h-4 w-4" /> → Próprio
+                className="px-2.5 py-1.5 text-sm bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
+                <RefreshCw className="h-3.5 w-3.5" /> → Próprio
               </button>
               <button onClick={confirmarExcluir} disabled={!!loteProgresso}
-                className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
-                <Trash2 className="h-4 w-4" /> Excluir {fmtN(selecionados.size)}
+                className="px-2.5 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
+                <Trash2 className="h-3.5 w-3.5" /> Excluir {fmtN(selecionados.size)}
               </button>
             </div>
           </div>
