@@ -3692,7 +3692,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
          ORDER BY created_at ASC
       `)) as any)?.rows ?? [];
 
-      // ── Calcular KPIs ──────────────────────────────────────────────────
+      // ── Data de referência ─────────────────────────────────────────────
       const hoje = new Date();
       const dataRefStr = (equip.data_aquisicao ?? "").slice(0, 10);
       const dataRef = dataRefStr
@@ -3700,42 +3700,139 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         : new Date(equip.created_at);
       const totalDias = Math.max(1, Math.floor((hoje.getTime() - dataRef.getTime()) / 86400000));
 
-      // Transferências aceitas ordenadas por aceite_em
+      const parseDate = (s: string) =>
+        new Date(s.includes("T") ? s : s + "T00:00:00Z");
+
+      // Transferências aceitas em ordem cronológica
       const accepted = transfs
         .filter(t => t.status === "aceito" && t.aceite_em)
         .sort((a, b) => (a.aceite_em < b.aceite_em ? -1 : 1));
 
-      // Calcula dias em obra por segmento: do aceite até o próximo movimento
-      let diasEmObra = 0;
+      // ── Segmentos de ocupação ──────────────────────────────────────────
+      interface Seg { from: Date; to: Date; inObra: boolean; }
+      const segs: Seg[] = [];
+
       if (accepted.length === 0) {
-        if (equip.status === "em_obra") diasEmObra = totalDias;
+        segs.push({ from: dataRef, to: hoje, inObra: equip.status === "em_obra" });
       } else {
-        for (let i = 0; i < accepted.length; i++) {
-          const t = accepted[i];
-          const from = new Date(t.aceite_em.includes("T") ? t.aceite_em : t.aceite_em + "T00:00:00Z");
-          const nextMov = transfs
-            .filter(tt => tt.status !== "cancelado" && tt.created_at > t.aceite_em)
-            .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))[0];
-          const to = nextMov
-            ? new Date(nextMov.created_at.includes("T") ? nextMov.created_at : nextMov.created_at + "T00:00:00Z")
-            : hoje;
-          if (t.destino_obra_id) {
-            diasEmObra += Math.max(0, Math.floor((to.getTime() - from.getTime()) / 86400000));
-          }
+        const firstAcceite = parseDate(accepted[0].aceite_em);
+        if (firstAcceite > dataRef) {
+          segs.push({ from: dataRef, to: firstAcceite, inObra: false });
         }
+        for (let i = 0; i < accepted.length; i++) {
+          const from = parseDate(accepted[i].aceite_em);
+          const to = i < accepted.length - 1
+            ? parseDate(accepted[i + 1].aceite_em)
+            : hoje;
+          segs.push({ from, to, inObra: !!accepted[i].destino_obra_id });
+        }
+      }
+
+      const dayInObra = (d: Date) => segs.some(s => s.inObra && s.from <= d && s.to > d);
+
+      // ── KPIs ───────────────────────────────────────────────────────────
+      let diasEmObra = 0;
+      for (const s of segs) {
+        if (s.inObra) diasEmObra += Math.max(0, Math.floor((s.to.getTime() - s.from.getTime()) / 86400000));
       }
       diasEmObra = Math.min(diasEmObra, totalDias);
 
-      // Obras distintas visitadas
       const obrasSet = new Set<string>();
       for (const t of transfs) {
         if (t.status === "aceito" && t.destino_obra_nome) obrasSet.add(t.destino_obra_nome);
       }
       if (equip.obra_nome && equip.status === "em_obra") obrasSet.add(equip.obra_nome);
 
+      // ── Atividade por dia da semana (Seg-Sex) ──────────────────────────
+      const dwCount = [0,1,2,3,4].map(i => ({ dia: ["Seg","Ter","Qua","Qui","Sex"][i], total: 0, obra: 0 }));
+      {
+        const cur = new Date(dataRef);
+        cur.setHours(12, 0, 0, 0);
+        const fim = new Date(hoje);
+        fim.setHours(12, 0, 0, 0);
+        while (cur <= fim) {
+          const dow = cur.getDay(); // 0=Dom
+          if (dow >= 1 && dow <= 5) {
+            const idx = dow - 1;
+            dwCount[idx].total++;
+            if (dayInObra(cur)) dwCount[idx].obra++;
+          }
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+      const diasSemana = dwCount.map(d => ({
+        dia: d.dia,
+        pct: d.total > 0 ? Math.round((d.obra / d.total) * 100) : 0,
+        obra: d.obra,
+        total: d.total,
+      }));
+
+      // ── Curva de semanas (últimas 16) ──────────────────────────────────
+      const semanasResult: { label: string; pct: number; week: string }[] = [];
+      {
+        const todayNoon = new Date(hoje);
+        todayNoon.setHours(12, 0, 0, 0);
+        const dow = todayNoon.getDay();
+        const daysToMon = dow === 0 ? 6 : dow - 1;
+        for (let w = 15; w >= 0; w--) {
+          const mon = new Date(todayNoon);
+          mon.setDate(mon.getDate() - daysToMon - w * 7);
+          mon.setHours(12, 0, 0, 0);
+          const fri = new Date(mon);
+          fri.setDate(fri.getDate() + 4);
+          if (fri < dataRef) continue;
+          let total = 0, obra = 0;
+          for (let d = 0; d < 5; d++) {
+            const day = new Date(mon);
+            day.setDate(day.getDate() + d);
+            if (day < dataRef || day > hoje) continue;
+            total++;
+            if (dayInObra(day)) obra++;
+          }
+          const label = mon.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+          semanasResult.push({
+            label,
+            pct: total > 0 ? Math.round((obra / total) * 100) : 0,
+            week: mon.toISOString().slice(0, 10),
+          });
+        }
+      }
+
+      // ── Quem mais usa ─────────────────────────────────────────────────
+      const usageMap: Record<string, { nome: string; remetenteId: number | null; count: number }> = {};
+      for (const t of transfs) {
+        if (t.status === "aceito" && t.destino_obra_id && t.remetente_nome) {
+          if (!usageMap[t.remetente_nome]) {
+            usageMap[t.remetente_nome] = { nome: t.remetente_nome, remetenteId: t.remetente_id ?? null, count: 0 };
+          }
+          usageMap[t.remetente_nome].count++;
+        }
+      }
+      const topUser = Object.values(usageMap).sort((a, b) => b.count - a.count)[0] ?? null;
+      let topUserFoto: string | null = null;
+      if (topUser?.remetenteId) {
+        try {
+          const rows = ((await db.execute(sql`
+            SELECT foto_url FROM employees WHERE user_id = ${topUser.remetenteId} LIMIT 1
+          `)) as any)?.rows ?? [];
+          topUserFoto = rows[0]?.foto_url ?? null;
+        } catch { /* opcional */ }
+      }
+      const maisUsadoPor = topUser
+        ? { nome: topUser.nome, qtdMovimentacoes: topUser.count, fotoUrl: topUserFoto }
+        : null;
+
+      // ── Primeira obra ─────────────────────────────────────────────────
+      const primeiraTransfObra = accepted.find(t => !!t.destino_obra_id) ?? null;
+      const primeiraObraData  = primeiraTransfObra?.aceite_em ?? null;
+      const primeiraObraNome  = primeiraTransfObra?.destino_obra_nome ?? null;
+
       // ── Timeline de eventos ────────────────────────────────────────────
-      type TimelineEvent = { tipo: string; data: string; titulo: string; descricao: string };
+      type TimelineEvent = {
+        tipo: string; data: string; titulo: string; descricao: string; destaque?: boolean;
+      };
       const events: TimelineEvent[] = [];
+      let primeiraObraMarcada = false;
 
       events.push({
         tipo: "cadastro",
@@ -3745,20 +3842,30 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       });
 
       for (const t of transfs) {
+        const paraObra   = !!t.destino_obra_id;
+        const origemNome = t.origem_obra_nome || "Almoxarifado";
+        const destinoNome = t.destino_obra_nome || "Almoxarifado";
+
+        // Evento: retirada solicitada
         events.push({
-          tipo: "transf_iniciada",
+          tipo: paraObra ? "retirada_solicitada" : "devolucao_solicitada",
           data: t.created_at,
-          titulo: "Transferência solicitada",
-          descricao: `${t.origem_obra_nome || "Almoxarifado"} → ${t.destino_obra_nome}` +
-            (t.remetente_nome ? ` · Por: ${t.remetente_nome}` : ""),
+          titulo: paraObra
+            ? `Retirado para ${destinoNome}`
+            : `Devolução para Almoxarifado`,
+          descricao: (t.remetente_nome ? `Por ${t.remetente_nome}` : "") +
+            (origemNome !== "Almoxarifado" ? ` · Era em ${origemNome}` : ""),
         });
+
         if (t.status === "aceito" && t.aceite_em) {
+          const isFirst = paraObra && !primeiraObraMarcada;
+          if (isFirst) primeiraObraMarcada = true;
           events.push({
-            tipo: "transf_aceita",
+            tipo: paraObra ? "transf_aceita" : "devolucao_aceita",
             data: t.aceite_em,
-            titulo: "Transferência confirmada",
-            descricao: `Chegou em ${t.destino_obra_nome}` +
-              (t.aceite_por_nome ? ` · Confirmado: ${t.aceite_por_nome}` : ""),
+            titulo: paraObra ? `Chegou em ${destinoNome}` : "Devolvido ao Almoxarifado",
+            descricao: t.aceite_por_nome ? `Confirmado por ${t.aceite_por_nome}` : "Recebido sem confirmação nominal",
+            destaque: isFirst,
           });
         } else if (t.status === "rejeitado") {
           events.push({
@@ -3778,8 +3885,8 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       }
       events.sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
 
-      // ── Dados mensais para o gráfico (últimos 12 meses) ───────────────
-      const mensal: Array<{ mes: string; label: string; emObra: boolean }> = [];
+      // ── Dados mensais (últimos 12 meses) ───────────────────────────────
+      const mensal: Array<{ mes: string; label: string; pct: number }> = [];
       for (let i = 11; i >= 0; i--) {
         const d = new Date();
         d.setDate(1);
@@ -3787,25 +3894,25 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         const ym = d.toISOString().slice(0, 7);
         const label = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
         const mStart = new Date(ym + "-01T00:00:00Z");
-        const mEnd = new Date(mStart);
+        const mEnd   = new Date(mStart);
         mEnd.setMonth(mEnd.getMonth() + 1);
-
-        // Só inclui meses a partir da data de referência
         if (mEnd <= dataRef) continue;
 
-        let emObra = false;
-        for (const t of accepted) {
-          const from = new Date(t.aceite_em.includes("T") ? t.aceite_em : t.aceite_em + "T00:00:00Z");
-          const nextMov = transfs
-            .filter(tt => tt.status !== "cancelado" && tt.created_at > t.aceite_em)
-            .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))[0];
-          const to = nextMov
-            ? new Date(nextMov.created_at.includes("T") ? nextMov.created_at : nextMov.created_at + "T00:00:00Z")
-            : hoje;
-          if (t.destino_obra_id && from < mEnd && to > mStart) { emObra = true; break; }
+        // Conta dias úteis em obra neste mês
+        let diasMes = 0, diasObraMes = 0;
+        const cur = new Date(mStart);
+        cur.setHours(12, 0, 0, 0);
+        while (cur < mEnd) {
+          if (cur >= dataRef && cur <= hoje) {
+            const dow = cur.getDay();
+            if (dow >= 1 && dow <= 5) { diasMes++; if (dayInObra(cur)) diasObraMes++; }
+          }
+          cur.setDate(cur.getDate() + 1);
         }
-        if (!emObra && accepted.length === 0 && equip.status === "em_obra") emObra = true;
-        mensal.push({ mes: ym, label, emObra });
+        mensal.push({
+          mes: ym, label,
+          pct: diasMes > 0 ? Math.round((diasObraMes / diasMes) * 100) : 0,
+        });
       }
 
       return {
@@ -3834,6 +3941,11 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           qtdObras: obrasSet.size,
           qtdTransferencias: transfs.filter(t => t.status === "aceito").length,
         },
+        maisUsadoPor,
+        diasSemana,
+        semanas: semanasResult,
+        primeiraObraData,
+        primeiraObraNome,
         timeline: events,
         mensal,
       };

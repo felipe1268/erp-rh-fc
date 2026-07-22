@@ -1,4 +1,38 @@
 /**
+ * Rev. 4510 - FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO — REDESIGN COMPLETO
+ *
+ * Redesign total do modal Raio-X com 3 abas (Visão Geral / Timeline / Dados):
+ *
+ * Visão Geral:
+ *   - Donut chart (recharts PieChart innerRadius) mostrando % em obra vs disponível
+ *   - Card "Quem mais usa" com foto circular do funcionário (via employees.foto_url)
+ *     ou avatar de iniciais; conta movimentações para obra
+ *   - Area chart suave das últimas 16 semanas (ocupação %)
+ *   - Bar chart Seg–Sex com cores por faixa (azul ≥70%, violeta 40–69%, cinza <40%)
+ *   - Barras mensais de ocupação (dias úteis em obra / total dias úteis)
+ *
+ * Timeline:
+ *   - Eventos renomeados: "Retirado para obra" / "Devolvido ao Almoxarifado"
+ *   - Primeiro evento de saída para obra marcado com estrela dourada
+ *   - Cards coloridos por tipo (verde=cadastro, azul=chegou, âmbar=retirada, etc.)
+ *
+ * Dados Técnicos:
+ *   - Grid com cards de fundo slate-50 por campo
+ *   - Snapshot de situação atual + primeira obra com data
+ *
+ * Backend (proprioRaioX):
+ *   - Refatorado com segmentos explícitos de ocupação (Seg[])
+ *   - Novo: diasSemana (Mon–Fri % utilização), semanas (16 semanas % por semana)
+ *   - Novo: maisUsadoPor (nome + fotoUrl via JOIN employees WHERE user_id)
+ *   - Novo: primeiraObraData / primeiraObraNome
+ *   - mensal agora retorna pct real de dias úteis (não binário)
+ *
+ * ZERO schema change.
+ *
+ * @author Rev. 4510
+ */
+
+/**
  * Rev. 4509 - FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO
  *
  * Clique no card de equipamento na tela Equipamentos Próprios abre o modal
