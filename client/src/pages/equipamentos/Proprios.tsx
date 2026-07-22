@@ -8,7 +8,7 @@ import {
   Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp,
   Sparkles, Trash2, Boxes, Wrench, CheckCircle2, Check, Layers, Hash,
   Building2, User as UserIcon, Loader2, ListChecks, Database, DollarSign,
-  ArrowRightLeft, Clock, ChevronRight, MapPin,
+  ArrowRightLeft, Clock, ChevronRight, MapPin, Eye,
 } from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 import {
@@ -1038,17 +1038,12 @@ export default function EquipamentosProprios() {
                           <Hash className="h-3 w-3" /> {p.codigoPatrimonio}
                         </span>
                         <div className="flex items-center gap-1">
-                          {/* Rev. 4516 — badge tipo clicável */}
+                          {/* Rev. 4516 — badge de tipo clicável → abre Raio-X */}
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLocFornecedor(""); setLocDataFim(""); setLocValorMensal("");
-                              setLocDataInicio(new Date().toISOString().slice(0, 10));
-                              setModalConverterLocado({ ids: [p.id], equips: [p] });
-                            }}
+                            onClick={(e) => { e.stopPropagation(); abrirRaioX(p); }}
                             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200 transition opacity-0 group-hover:opacity-100"
-                            title="Clique para converter para Locado">
-                            <ArrowRightLeft className="h-2.5 w-2.5" /> PRÓPRIO
+                            title="Ver gráficos e histórico deste equipamento">
+                            <Eye className="h-2.5 w-2.5" /> PRÓPRIO
                           </button>
                           {(p as any).transferenciaPendenteId ? (
                             <button

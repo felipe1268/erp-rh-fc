@@ -2209,17 +2209,12 @@ export default function EquipamentosLocados() {
                     <div className="font-bold text-emerald-700">{fmtMoney(g.valorMensalTotal)}<span className="text-[10px] text-slate-500 font-normal">/mês</span></div>
                   </div>
                   <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between gap-1">
-                    {/* Rev. 4516 — badge de tipo clicável */}
+                    {/* Rev. 4516 — badge de tipo clicável → abre o modal do grupo */}
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const ativas = g.unidades.filter((u: any) => u.status !== "devolvido");
-                        if (ativas.length === 0) { toast.error("Todas as unidades já foram devolvidas."); return; }
-                        setModalConverterProprio({ ids: ativas.map((u: any) => u.id), nomes: `${g.descricao} (${ativas.length} un.)` });
-                      }}
+                      onClick={(e) => { e.stopPropagation(); setModalGrupo(g); }}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition"
-                      title="Clique para converter este equipamento para Próprio">
-                      <RefreshCw className="h-2.5 w-2.5" /> LOCADO → Próprio
+                      title="Ver detalhes e unidades do grupo">
+                      <Eye className="h-2.5 w-2.5" /> LOCADO
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); setModalGrupo(g); }} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title={`Ver as ${g.unidades.length} unidades`}>
                       <Eye className="h-3.5 w-3.5" /> Ver {fmtN(g.unidades.length)} unidade(s)
@@ -2323,7 +2318,15 @@ export default function EquipamentosLocados() {
                     </div>
                     <div className="font-bold text-emerald-700">{fmtMoney(l.valorMensal)}<span className="text-[10px] text-slate-500 font-normal">/mês</span></div>
                   </div>
-                  <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-end gap-1">
+                  <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between gap-1">
+                    {/* Rev. 4516 — badge de tipo: LOCADO → abre Raio-X do locado */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setRaioXLocado({ id: l.id }); }}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition"
+                      title="Ver gráficos e histórico detalhado deste equipamento">
+                      <Eye className="h-2.5 w-2.5" /> LOCADO
+                    </button>
+                    <div className="flex items-center gap-1">
                     <button onClick={(e) => { e.stopPropagation(); setModalEventos(l); }} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title="Detalhes completos">
                       <Eye className="h-3.5 w-3.5" /> Detalhes
                     </button>
@@ -2338,6 +2341,7 @@ export default function EquipamentosLocados() {
                         </button>
                       </>
                     )}
+                    </div>
                   </div>
                 </div>
               );
