@@ -478,7 +478,7 @@ export default function LocadosUtilizacao() {
                 <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" /> Entrega
               </span>
               <span className="flex items-center gap-1.5 text-[11px] text-slate-600">
-                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-400" /> Devolução
+                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-500" /> Devolução
               </span>
             </div>
             {porHora.every(h => h.count === 0 && h.countDevol === 0) ? (
@@ -495,7 +495,7 @@ export default function LocadosUtilizacao() {
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
                     />
                     <Bar dataKey="count"      name="count"      radius={[3, 3, 0, 0]} maxBarSize={16} fill="#10b981" />
-                    <Bar dataKey="countDevol" name="countDevol" radius={[3, 3, 0, 0]} maxBarSize={16} fill="#f59e0b" />
+                    <Bar dataKey="countDevol" name="countDevol" radius={[3, 3, 0, 0]} maxBarSize={16} fill="#ef4444" />
                   </BarChart>
                 </ResponsiveContainer>
                 {/* Turnos */}
@@ -514,7 +514,7 @@ export default function LocadosUtilizacao() {
                     <div key={i} className="bg-slate-50 rounded-lg p-2 flex flex-col items-center gap-0.5">
                       {t.icon}
                       <span className="font-black text-emerald-700 text-sm">{t.ret}</span>
-                      <span className="font-semibold text-amber-600 text-[11px]">↩ {t.dev}</span>
+                      <span className="font-semibold text-red-600 text-[11px]">↩ {t.dev}</span>
                       <span className="text-slate-500 text-center leading-tight">{t.label}</span>
                     </div>
                   ))}
