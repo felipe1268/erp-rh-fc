@@ -252,14 +252,25 @@ export default function EquipamentosLocados() {
   const [editCategoria, setEditCategoria] = useState<null | { id: number; val: string }>(null); // Rev. 4514
   // Rev. 4516 — Conversão de tipo: Locado → Próprio
   const [modalConverterProprio, setModalConverterProprio] = useState<{ ids: number[]; nomes: string } | null>(null);
+  const [convertProgress, setConvertProgress] = useState(0);
+  const convertTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const converterParaProprioMut = trpc.equipamentos.locadoConverterParaProprio.useMutation({
     onSuccess: (data) => {
-      utils.equipamentos.locadosListar.invalidate();
-      setModalConverterProprio(null);
-      setSelecionados(new Set());
-      toast.success(`${data.convertidos.length} equipamento(s) convertido(s) para Próprio (${data.convertidos.map(c => c.codigoPatrimonio).join(", ")})`);
+      if (convertTimerRef.current) { clearInterval(convertTimerRef.current); convertTimerRef.current = null; }
+      setConvertProgress(100);
+      setTimeout(() => {
+        setConvertProgress(0);
+        utils.equipamentos.locadosListar.invalidate();
+        setModalConverterProprio(null);
+        setSelecionados(new Set());
+        toast.success(`${data.convertidos.length} equipamento(s) convertido(s) para Próprio (${data.convertidos.map(c => c.codigoPatrimonio).join(", ")})`);
+      }, 800);
     },
-    onError: (e) => toast.error(formatTrpcError(e)),
+    onError: (e) => {
+      if (convertTimerRef.current) { clearInterval(convertTimerRef.current); convertTimerRef.current = null; }
+      setConvertProgress(0);
+      toast.error(formatTrpcError(e));
+    },
   });
   const atualizarLocadoMut = trpc.equipamentos.locadoAtualizar.useMutation({
     onSuccess: (_data, variables: any) => {
@@ -2767,10 +2778,25 @@ export default function EquipamentosLocados() {
                 Cancelar
               </button>
               <button
-                onClick={() => converterParaProprioMut.mutate({ companyId, ids: modalConverterProprio.ids })}
+                onClick={() => {
+                  if (converterParaProprioMut.isPending) return;
+                  setConvertProgress(0);
+                  if (convertTimerRef.current) clearInterval(convertTimerRef.current);
+                  convertTimerRef.current = setInterval(() => {
+                    setConvertProgress(p => p < 88 ? p + 2 : p);
+                  }, 300);
+                  converterParaProprioMut.mutate({ companyId, ids: modalConverterProprio.ids });
+                }}
                 disabled={converterParaProprioMut.isPending}
-                className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold inline-flex items-center gap-2 disabled:opacity-50">
-                {converterParaProprioMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Convertendo…</> : <><Check className="h-4 w-4" /> Confirmar conversão</>}
+                className="relative overflow-hidden px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold inline-flex items-center gap-2 disabled:opacity-90 min-w-[180px] justify-center">
+                {converterParaProprioMut.isPending && (
+                  <span className="absolute inset-0 bg-white/15 transition-all duration-300 rounded-lg" style={{ width: `${convertProgress}%` }} />
+                )}
+                <span className="relative z-10 inline-flex items-center gap-2">
+                  {converterParaProprioMut.isPending
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Convertendo… {convertProgress}%</>
+                    : <><Check className="h-4 w-4" /> Confirmar conversão</>}
+                </span>
               </button>
             </div>
           </div>
