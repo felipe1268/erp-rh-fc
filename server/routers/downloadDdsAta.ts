@@ -433,6 +433,7 @@ export function registerDdsAtaRoute(app: Express) {
       const puppeteer = await import("puppeteer");
       const browser = await puppeteer.default.launch({
         headless: true,
+        executablePath: puppeteer.default.executablePath(),
         args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
       });
       let pdfBuf: Buffer;
