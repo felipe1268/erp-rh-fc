@@ -1,4 +1,31 @@
 /**
+ * Rev. 4519 - FEAT: FOTO E EXPANDIR TUDO — Ranking "Quem mais retirou"
+ *
+ * PROBLEMA:
+ *   Ranking exibia apenas iniciais (avatar de letra) e limitava a 5 nomes.
+ *   Usuário quer foto real do funcionário e poder ver TODOS.
+ *
+ * MUDANÇAS:
+ *
+ *   server/routers/equipamentos.ts — locadosUtilizacao:
+ *     - cycleRaw SELECT: adiciona `wl.funcionario_id` (coluna existe em warehouse_loans)
+ *     - quemMap: passa de `Map<string,number>` para `Map<string,{count,funcionarioId}>`
+ *     - Remove `.slice(0,10)` — retorna TODOS os funcionários sem limite
+ *     - Batch photo lookup: `SELECT id, foto_url FROM employees WHERE id = ANY(ids) AND company_id`
+ *     - topQuemPegou agora tem shape `{ nome, count, funcionarioId, fotoUrl }`
+ *
+ *   client/src/pages/equipamentos/LocadosUtilizacao.tsx — componente RankingQuem:
+ *     - Novo componente `FotoFuncionario`: img circular (ring + shadow) se fotoUrl,
+ *       fallback para iniciais verdes se null
+ *     - Mini barra proporcional ao máximo do período abaixo do nome
+ *     - Cabeçalho mostra total de pessoas no período
+ *     - Botão "Ver todos (N mais)" / "Mostrar menos" expansível inline
+ *     - Mostra 5 por padrão; expande para lista completa ao clicar
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4518 - FEAT: REPAGINAÇÃO — Dashboard Utilização Equipamentos Locados
  *
  * MOTIVAÇÃO:

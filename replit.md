@@ -50,12 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4518** — **FEAT: REPAGINAÇÃO — Dashboard Utilização Equipamentos Locados.** Nova estrutura: 3 insight-cards (mais usado / menos usado / devolver hoje), seção Pendentes de devolução (badge "Atrasado" > 16h), 2 gráficos lado a lado (por dia da semana + por hora com turnos manhã/tarde/final), gráfico mensal, rankings, pagando parado, histórico. ZERO backend change.
-- **Rev. 4517** — **FIX: FONTE DE DADOS DE UTILIZAÇÃO — warehouse_loans.** `locadosUtilizacao` reescrito para usar `warehouse_loans` via `almoxarifado_itens.equipamento_vinculado_id` (antes lia `equipamento_locado_eventos` vazia → 0 em campo). `proprioRaioX` "Quem mais utiliza" idem. `locadoRaioX` inclui retiradas do almox na timeline e responsáveis. ZERO schema change.
+- **Rev. 4519** — **FEAT: FOTO + EXPANDIR TODOS — Ranking "Quem mais retirou".** `funcionario_id` adicionado ao cycleRaw; batch photo lookup em `employees`; `topQuemPegou` sem limite; componente `RankingQuem` com foto circular + barra proporcional + botão "Ver todos". ZERO schema change.
+- **Rev. 4518** — **FEAT: REPAGINAÇÃO — Dashboard Utilização Equipamentos Locados.** Nova estrutura: 3 insight-cards (mais usado / menos usado / devolver hoje), Pendentes de devolução, gráficos por dia da semana e hora do dia, turnos manhã/tarde/final. ZERO backend change.
 
 ### 5 one-liners
 
-- **Rev. 4516** — **FEAT: CONVERSÃO DE TIPO (PRÓPRIO ↔ LOCADO).** Badge "LOCADO → Próprio" + botões em lote. 2 mutations tRPC. ZERO schema change.
+- **Rev. 4517** — **FIX: FONTE DE DADOS DE UTILIZAÇÃO — warehouse_loans.** cycleRaw/idleRaw/emCampoRaw reescritos. ZERO schema change.
+- **Rev. 4516** — **FEAT: CONVERSÃO DE TIPO (PRÓPRIO ↔ LOCADO).** Badge + botões em lote. 2 mutations tRPC. ZERO schema change.
 - **Rev. 4515** — **REVERSÃO Rev. 4513:** 47 proprios deletados; 41 locados restaurados. Transação atômica no Neon.
 - **Rev. 4514b** — **FIX: EDIÇÃO INLINE DE CATEGORIA (LOCADOS DETALHES).** `locadoAtualizar`+schema; datalist no modalEventos. ZERO schema change.
 - **Rev. 4514** — **FEAT: RAIO-X DE EQUIPAMENTO LOCADO.** `locadoRaioX` tRPC + `EquipamentoLocadoRaioXModal.tsx` (3 abas). ZERO schema change.

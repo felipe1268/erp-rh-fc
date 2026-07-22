@@ -455,24 +455,7 @@ export default function LocadosUtilizacao() {
 
           {/* Rankings */}
           <div className="space-y-4">
-            <div className="bg-white border rounded-xl shadow-sm p-4">
-              <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-amber-500" /> Quem mais retirou
-              </h3>
-              {topQuem.length === 0
-                ? <p className="text-xs text-slate-400 text-center py-4">Sem dados</p>
-                : <ul className="space-y-2">
-                  {topQuem.slice(0, 5).map((p, i) => (
-                    <li key={p.nome} className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-slate-400 w-4 text-right shrink-0">{i + 1}</span>
-                      <Avatar nome={p.nome} size="sm" />
-                      <span className="flex-1 text-xs text-slate-700 truncate">{p.nome}</span>
-                      <span className="text-xs font-semibold text-emerald-700 tabular-nums">{p.count}×</span>
-                    </li>
-                  ))}
-                </ul>
-              }
-            </div>
+            <RankingQuem topQuem={topQuem} />
             <div className="bg-white border rounded-xl shadow-sm p-4">
               <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
                 <Truck className="h-4 w-4 text-emerald-600" /> Mais movimentados
@@ -668,6 +651,84 @@ export default function LocadosUtilizacao() {
 
       </div>
     </DashboardLayout>
+  );
+}
+
+// ─── RankingQuem ─────────────────────────────────────────────────────────────
+function FotoFuncionario({ fotoUrl, nome, size = "sm" }: {
+  fotoUrl?: string | null; nome?: string | null; size?: "sm" | "md";
+}) {
+  const sz = size === "sm" ? "h-8 w-8 text-[10px]" : "h-10 w-10 text-xs";
+  if (fotoUrl) {
+    return (
+      <img
+        src={fotoUrl}
+        alt={nome ?? ""}
+        className={`${sz} rounded-full object-cover shrink-0 ring-2 ring-white shadow-sm`}
+      />
+    );
+  }
+  const ini = (nome ?? "?").split(" ").filter(Boolean).slice(0, 2).map(n => n[0]).join("").toUpperCase();
+  return (
+    <span className={`${sz} rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center shrink-0`}>
+      {ini}
+    </span>
+  );
+}
+
+function RankingQuem({ topQuem }: {
+  topQuem: { nome: string; count: number; fotoUrl?: string | null; funcionarioId?: number | null }[];
+}) {
+  const [expandido, setExpandido] = useState(false);
+  const VISIBLE = 5;
+  const lista = expandido ? topQuem : topQuem.slice(0, VISIBLE);
+  const maxCount = topQuem[0]?.count ?? 1;
+
+  return (
+    <div className="bg-white border rounded-xl shadow-sm p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+          <Trophy className="h-4 w-4 text-amber-500" /> Quem mais retirou
+        </h3>
+        {topQuem.length > 0 && (
+          <span className="text-[10px] text-slate-400">{topQuem.length} pessoa{topQuem.length !== 1 ? "s" : ""}</span>
+        )}
+      </div>
+      {topQuem.length === 0 ? (
+        <p className="text-xs text-slate-400 text-center py-4">Sem dados</p>
+      ) : (
+        <>
+          <ul className="space-y-2.5">
+            {lista.map((p, i) => (
+              <li key={p.nome} className="flex items-center gap-2.5">
+                <span className="text-[10px] font-bold text-slate-400 w-4 text-right shrink-0">{i + 1}</span>
+                <FotoFuncionario fotoUrl={p.fotoUrl} nome={p.nome} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-slate-700 font-medium truncate">{p.nome}</div>
+                  <div className="mt-1 w-full bg-slate-100 rounded-full h-1">
+                    <div
+                      className="bg-emerald-400 h-1 rounded-full transition-all"
+                      style={{ width: `${(p.count / maxCount) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-emerald-700 tabular-nums shrink-0">{p.count}×</span>
+              </li>
+            ))}
+          </ul>
+          {topQuem.length > VISIBLE && (
+            <button
+              onClick={() => setExpandido(v => !v)}
+              className="mt-3 w-full text-center py-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg transition flex items-center justify-center gap-1 border border-emerald-100"
+            >
+              {expandido
+                ? <><ChevronUp className="h-3 w-3" /> Mostrar menos</>
+                : <><ChevronDown className="h-3 w-3" /> Ver todos ({topQuem.length - VISIBLE} mais)</>}
+            </button>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

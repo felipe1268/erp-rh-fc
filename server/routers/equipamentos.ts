@@ -4041,6 +4041,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           el.foto_url,
           el.quantidade,
           wl.funcionario_nome           AS quem_saiu,
+          wl.funcionario_id             AS funcionario_id,
           wl.almoxarife_nome            AS registrado_por,
           (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp AS saiu_em,
           CASE WHEN wl.data_devolucao IS NOT NULL
@@ -4167,15 +4168,40 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           return { ym, label: `${MESES[Number(m)-1]}/${String(y).slice(2)}`, count };
         });
 
-      // Ranking: quem mais retirou
-      const quemMap = new Map<string, number>();
+      // Ranking: quem mais retirou (sem limite — frontend pagina)
+      const quemMap = new Map<string, { count: number; funcionarioId: number | null }>();
       for (const r of cycleRaw) {
         const n = r.quem_saiu || "Não informado";
-        quemMap.set(n, (quemMap.get(n) || 0) + 1);
+        const entry = quemMap.get(n);
+        if (entry) {
+          entry.count++;
+        } else {
+          quemMap.set(n, { count: 1, funcionarioId: r.funcionario_id ? Number(r.funcionario_id) : null });
+        }
       }
-      const topQuemPegou = Array.from(quemMap.entries())
-        .sort((a, b) => b[1] - a[1]).slice(0, 10)
-        .map(([nome, count]) => ({ nome, count }));
+      const quemSorted = Array.from(quemMap.entries())
+        .sort((a, b) => b[1].count - a[1].count);
+
+      // Busca fotos em lote para todos os funcionários com id
+      const funcionarioIds = quemSorted
+        .map(([, v]) => v.funcionarioId)
+        .filter((id): id is number => id !== null);
+      const fotoMap = new Map<number, string | null>();
+      if (funcionarioIds.length > 0) {
+        const fotosRows = (await db.execute(sql`
+          SELECT id, foto_url FROM employees
+          WHERE id = ANY(ARRAY[${sql.raw(funcionarioIds.join(","))}]::int[])
+            AND company_id = ${cid}
+        `)).rows as { id: number; foto_url: string | null }[];
+        for (const f of fotosRows) fotoMap.set(Number(f.id), f.foto_url ?? null);
+      }
+
+      const topQuemPegou = quemSorted.map(([nome, v]) => ({
+        nome,
+        count:         v.count,
+        funcionarioId: v.funcionarioId,
+        fotoUrl:       v.funcionarioId != null ? (fotoMap.get(v.funcionarioId) ?? null) : null,
+      }));
 
       // Ranking: equipamentos mais movimentados
       const equipMap = new Map<string, number>();
