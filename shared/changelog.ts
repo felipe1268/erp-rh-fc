@@ -1,4 +1,35 @@
 /**
+ * Rev. 4509 - FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO
+ *
+ * Clique no card de equipamento na tela Equipamentos Próprios abre o modal
+ * "Raio-X", um painel completo de diagnóstico do equipamento:
+ *
+ * KPIs: % de utilização (dias em obra / total), dias em obra, obras visitadas
+ * (locais distintos), transferências confirmadas.
+ *
+ * Gráfico de ocupação mensal: barra azul = em obra, cinza = disponível/almox,
+ * cobre os últimos 12 meses a partir da data de aquisição.
+ *
+ * Timeline completa: todos os eventos do equipamento (cadastro, transferência
+ * solicitada/confirmada/rejeitada/cancelada) ordenados cronologicamente,
+ * com ícone colorido, data, responsável e locais de origem/destino.
+ *
+ * Dados técnicos: marca, modelo, nº série, data/valor de aquisição, vida útil,
+ * observações, responsável pelo cadastro.
+ *
+ * Rodapé: botão "Editar equipamento" que abre o modal de edição existente sem
+ * perder o contexto.
+ *
+ * Backend: nova procedure tRPC `equipamentos.proprioRaioX` que une
+ * equipamentos_proprios + equipamentos_proprios_transferencias e calcula os
+ * KPIs e dados mensais em SQL/Node puro.
+ *
+ * Arquivos: server/routers/equipamentos.ts (+procedure proprioRaioX),
+ * client/src/pages/equipamentos/EquipamentoRaioXModal.tsx (novo),
+ * client/src/pages/equipamentos/Proprios.tsx (onClick card → abrirRaioX).
+ * ZERO schema change.
+ */
+/**
  * Rev. 4508 - FEAT: CP — APAGAR EM LOTE (cancelEntryBulk + botão na barra de seleção)
  *
  * Contas a Pagar ganhou botão "Apagar selecionados" na barra de ações em lote

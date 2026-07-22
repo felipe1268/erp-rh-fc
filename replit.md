@@ -50,11 +50,12 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4509** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO.** Clique no card de equipamento abre modal "Raio-X" com KPIs (% utilização, dias em obra, obras visitadas, transferências), gráfico de barras de ocupação mensal (12 meses, azul=em obra / cinza=almox), timeline completa de eventos (cadastro → transferências solicitadas/confirmadas/rejeitadas), e dados técnicos. Rodapé com botão "Editar equipamento". Backend: `proprioRaioX` (tRPC) une `equipamentos_proprios` + `equipamentos_proprios_transferencias` e calcula KPIs/segmentos em Node. ZERO schema change.
 - **Rev. 4508** — **FEAT: CP — APAGAR EM LOTE (cancelEntryBulk + botão na barra de seleção).** Contas a Pagar ganhou botão "Apagar selecionados" vermelho na barra de ações em lote. Abre Dialog de confirmação com resumo (qtd + total) + campo motivo obrigatório (mín. 5 chars). Backend: `cancelEntryBulk` — UPDATE via `ANY($ids)`, protege `status='pago'/'recebido'`, grava audit log. ZERO schema change.
-- **Rev. 4507** — **FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard).** `listSessoes` ganhou inputs `mes` e `ano` (filtro SQL via `EXTRACT`); nova procedure `sessoesPorMes` retorna resumo por mês (total/finalizadas) para o ano; frontend usa `PeriodSelectorCard` (regra de ouro) com `monthStatus` (● azul=com sessões, ● verde=todas finalizadas, ● cinza=sem sessões) + `showLegend`. Estado `filtroAno/filtroMes` + botão "Ano todo". ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4507** — **FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard).** `listSessoes` ganhou inputs `mes` e `ano` (filtro SQL via `EXTRACT`); frontend usa `PeriodSelectorCard` com `monthStatus`. ZERO schema change.
 - **Rev. 4506** — **FEAT: DDS PDF — GERAÇÃO REAL DE PDF VIA PUPPETEER.** Rotas `/api/dds-ata/:id` e `/api/dds-ata-lote` usam puppeteer para converter HTML em PDF real (A4, `printBackground:true`, margens). ZIP em lote contém `.pdf`. ZERO schema change.
 - **Rev. 4505** — **FIX: DDS PDF — REMOVE BOTÃO "IMPRIMIR/SALVAR PDF" E AUTO-PRINT.** HTML gerado não exibe botão nem dispara `window.print()`. ZERO schema change.
 - **Rev. 4504** — **FEAT: DDS ZIP — PROGRESSO 0→100% NO BOTÃO.** `baixarLote` usa setInterval p/ simular 0→85% enquanto servidor gera; pula p/ 95→100% ao receber resposta; barra `bg-white/20` absoluta cresce via `width: loteProgress%`; texto "Gerando… XX%". Aplica Regra de Ouro de carregamento longo. ZERO schema change.

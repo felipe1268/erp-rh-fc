@@ -3663,6 +3663,181 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         createdAt: r.created_at,
       }));
     }),
+
+  // ── Rev. 4509 — Raio-X do Equipamento Próprio ────────────────────────────
+  // Retorna histórico completo de transferências, KPIs de utilização e
+  // dados mensais para o gráfico de ocupação.
+  // ─────────────────────────────────────────────────────────────────────────
+  proprioRaioX: protectedProcedure
+    .input(z.object({ companyId: z.number(), equipamentoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Equipamento + nome da obra atual
+      const equipRows = ((await db.execute(sql`
+        SELECT ep.*, o.nome AS obra_nome
+          FROM equipamentos_proprios ep
+          LEFT JOIN obras o ON o.id = ep.localizacao_atual_obra_id
+         WHERE ep.id = ${input.equipamentoId} AND ep.company_id = ${input.companyId}
+         LIMIT 1
+      `)) as any)?.rows ?? [];
+      const equip = equipRows[0];
+      if (!equip) throw new TRPCError({ code: "NOT_FOUND", message: "Equipamento não encontrado." });
+
+      // Histórico completo de transferências (todas as situações)
+      const transfs: any[] = ((await db.execute(sql`
+        SELECT * FROM equipamentos_proprios_transferencias
+         WHERE equipamento_id = ${input.equipamentoId} AND company_id = ${input.companyId}
+         ORDER BY created_at ASC
+      `)) as any)?.rows ?? [];
+
+      // ── Calcular KPIs ──────────────────────────────────────────────────
+      const hoje = new Date();
+      const dataRefStr = (equip.data_aquisicao ?? "").slice(0, 10);
+      const dataRef = dataRefStr
+        ? new Date(dataRefStr + "T00:00:00Z")
+        : new Date(equip.created_at);
+      const totalDias = Math.max(1, Math.floor((hoje.getTime() - dataRef.getTime()) / 86400000));
+
+      // Transferências aceitas ordenadas por aceite_em
+      const accepted = transfs
+        .filter(t => t.status === "aceito" && t.aceite_em)
+        .sort((a, b) => (a.aceite_em < b.aceite_em ? -1 : 1));
+
+      // Calcula dias em obra por segmento: do aceite até o próximo movimento
+      let diasEmObra = 0;
+      if (accepted.length === 0) {
+        if (equip.status === "em_obra") diasEmObra = totalDias;
+      } else {
+        for (let i = 0; i < accepted.length; i++) {
+          const t = accepted[i];
+          const from = new Date(t.aceite_em.includes("T") ? t.aceite_em : t.aceite_em + "T00:00:00Z");
+          const nextMov = transfs
+            .filter(tt => tt.status !== "cancelado" && tt.created_at > t.aceite_em)
+            .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))[0];
+          const to = nextMov
+            ? new Date(nextMov.created_at.includes("T") ? nextMov.created_at : nextMov.created_at + "T00:00:00Z")
+            : hoje;
+          if (t.destino_obra_id) {
+            diasEmObra += Math.max(0, Math.floor((to.getTime() - from.getTime()) / 86400000));
+          }
+        }
+      }
+      diasEmObra = Math.min(diasEmObra, totalDias);
+
+      // Obras distintas visitadas
+      const obrasSet = new Set<string>();
+      for (const t of transfs) {
+        if (t.status === "aceito" && t.destino_obra_nome) obrasSet.add(t.destino_obra_nome);
+      }
+      if (equip.obra_nome && equip.status === "em_obra") obrasSet.add(equip.obra_nome);
+
+      // ── Timeline de eventos ────────────────────────────────────────────
+      type TimelineEvent = { tipo: string; data: string; titulo: string; descricao: string };
+      const events: TimelineEvent[] = [];
+
+      events.push({
+        tipo: "cadastro",
+        data: equip.created_at,
+        titulo: "Cadastrado no patrimônio",
+        descricao: equip.criado_por_nome ? `Por ${equip.criado_por_nome}` : "Entrada no sistema",
+      });
+
+      for (const t of transfs) {
+        events.push({
+          tipo: "transf_iniciada",
+          data: t.created_at,
+          titulo: "Transferência solicitada",
+          descricao: `${t.origem_obra_nome || "Almoxarifado"} → ${t.destino_obra_nome}` +
+            (t.remetente_nome ? ` · Por: ${t.remetente_nome}` : ""),
+        });
+        if (t.status === "aceito" && t.aceite_em) {
+          events.push({
+            tipo: "transf_aceita",
+            data: t.aceite_em,
+            titulo: "Transferência confirmada",
+            descricao: `Chegou em ${t.destino_obra_nome}` +
+              (t.aceite_por_nome ? ` · Confirmado: ${t.aceite_por_nome}` : ""),
+          });
+        } else if (t.status === "rejeitado") {
+          events.push({
+            tipo: "transf_rejeitada",
+            data: t.aceite_em || t.created_at,
+            titulo: "Transferência rejeitada",
+            descricao: t.obs_aceite || "Sem motivo informado",
+          });
+        } else if (t.status === "cancelado") {
+          events.push({
+            tipo: "transf_cancelada",
+            data: t.created_at,
+            titulo: "Transferência cancelada",
+            descricao: "Cancelada pelo remetente",
+          });
+        }
+      }
+      events.sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
+
+      // ── Dados mensais para o gráfico (últimos 12 meses) ───────────────
+      const mensal: Array<{ mes: string; label: string; emObra: boolean }> = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(1);
+        d.setMonth(d.getMonth() - i);
+        const ym = d.toISOString().slice(0, 7);
+        const label = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+        const mStart = new Date(ym + "-01T00:00:00Z");
+        const mEnd = new Date(mStart);
+        mEnd.setMonth(mEnd.getMonth() + 1);
+
+        // Só inclui meses a partir da data de referência
+        if (mEnd <= dataRef) continue;
+
+        let emObra = false;
+        for (const t of accepted) {
+          const from = new Date(t.aceite_em.includes("T") ? t.aceite_em : t.aceite_em + "T00:00:00Z");
+          const nextMov = transfs
+            .filter(tt => tt.status !== "cancelado" && tt.created_at > t.aceite_em)
+            .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))[0];
+          const to = nextMov
+            ? new Date(nextMov.created_at.includes("T") ? nextMov.created_at : nextMov.created_at + "T00:00:00Z")
+            : hoje;
+          if (t.destino_obra_id && from < mEnd && to > mStart) { emObra = true; break; }
+        }
+        if (!emObra && accepted.length === 0 && equip.status === "em_obra") emObra = true;
+        mensal.push({ mes: ym, label, emObra });
+      }
+
+      return {
+        equipamento: {
+          id: equip.id,
+          codigoPatrimonio: equip.codigo_patrimonio,
+          descricao: equip.descricao,
+          categoria: equip.categoria,
+          marca: equip.marca,
+          modelo: equip.modelo,
+          numeroSerie: equip.numero_serie,
+          dataAquisicao: equip.data_aquisicao,
+          valorAquisicao: equip.valor_aquisicao,
+          vidaUtilMeses: equip.vida_util_meses,
+          status: equip.status,
+          obraNome: equip.obra_nome,
+          fotosJson: equip.fotos_json,
+          criadoPorNome: equip.criado_por_nome,
+          createdAt: equip.created_at,
+          observacoes: equip.observacoes,
+        },
+        stats: {
+          totalDias,
+          diasEmObra,
+          taxaUtilizacao: totalDias > 0 ? Math.round((diasEmObra / totalDias) * 100) : 0,
+          qtdObras: obrasSet.size,
+          qtdTransferencias: transfs.filter(t => t.status === "aceito").length,
+        },
+        timeline: events,
+        mensal,
+      };
+    }),
 });
 
 // ── Rev. 2321 — Job store in-memory pra parse de PDF (polling).

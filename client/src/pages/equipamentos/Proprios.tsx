@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useMemo, useRef, useEffect } from "react";
+import { EquipamentoRaioXModal } from "./EquipamentoRaioXModal";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
@@ -181,6 +182,9 @@ export default function EquipamentosProprios() {
   } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  // Rev. 4509 — Raio-X: clique no card abre o painel de histórico/KPIs
+  const [raioXEquip, setRaioXEquip] = useState<any | null>(null);
+  function abrirRaioX(p: any) { setRaioXEquip(p); }
   // Rev. 2515 — lightbox: foto clicada amplia em overlay full-screen.
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
   function openLightbox(urls: string[], index = 0) {
@@ -658,6 +662,16 @@ export default function EquipamentosProprios() {
         </div>
       </div>
 
+      {/* Rev. 4509 — Raio-X do equipamento (abre ao clicar no card) */}
+      {raioXEquip && (
+        <EquipamentoRaioXModal
+          equipamentoId={raioXEquip.id}
+          companyId={companyId}
+          onClose={() => setRaioXEquip(null)}
+          onEdit={() => abrirEdit(raioXEquip)}
+        />
+      )}
+
       {/* Modal estilizado de confirmação da estimativa por IA (substitui o confirm() nativo) */}
       <AlertDialog open={!!confirmPrecos} onOpenChange={(o) => { if (!o) setConfirmPrecos(null); }}>
         <AlertDialogContent className="max-w-md">
@@ -954,10 +968,10 @@ export default function EquipamentosProprios() {
                   <div
                     key={p.id}
                     className={`group relative bg-white border hover:shadow-md rounded-xl overflow-hidden shadow-sm transition cursor-pointer flex ${isSel ? "border-blue-500 ring-2 ring-blue-400 shadow-blue-100" : "border-slate-200 hover:border-blue-400"}`}
-                    onClick={() => abrirEdit(p)}
+                    onClick={() => abrirRaioX(p)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === "Enter") abrirEdit(p); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") abrirRaioX(p); }}
                   >
                     {/* Rev. 4343 — Checkbox de seleção múltipla */}
                     <button
