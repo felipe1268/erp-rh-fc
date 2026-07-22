@@ -68,15 +68,59 @@ function EquipFoto({ fotoUrl, descricao, sm }: { fotoUrl?: string | null; descri
 function FotoFuncionario({ fotoUrl, nome, size = "sm" }: {
   fotoUrl?: string | null; nome?: string | null; size?: "sm" | "md";
 }) {
+  const onFotoClick = useColaboradorClick();
   const sz = size === "sm" ? "h-8 w-8 text-[10px]" : "h-10 w-10 text-xs";
+  const clickable = !!onFotoClick;
+  const handleClick = onFotoClick
+    ? (e: React.MouseEvent) => { e.stopPropagation(); onFotoClick(fotoUrl ?? null, nome ?? ""); }
+    : undefined;
   if (fotoUrl) {
-    return <img src={fotoUrl} alt={nome ?? ""} className={`${sz} rounded-full object-cover shrink-0 ring-2 ring-white shadow-sm`} />;
+    return (
+      <img
+        src={fotoUrl} alt={nome ?? ""}
+        onClick={handleClick}
+        className={`${sz} rounded-full object-cover shrink-0 ring-2 ring-white shadow-sm
+          ${clickable ? "cursor-pointer hover:ring-blue-400 hover:scale-110 transition-transform" : ""}`}
+      />
+    );
   }
   const ini = (nome ?? "?").split(" ").filter(Boolean).slice(0, 2).map(n => n[0]).join("").toUpperCase();
   return (
-    <span className={`${sz} rounded-full bg-blue-700 text-white font-bold flex items-center justify-center shrink-0`}>
+    <span
+      onClick={handleClick}
+      className={`${sz} rounded-full bg-blue-700 text-white font-bold flex items-center justify-center shrink-0
+        ${clickable ? "cursor-pointer hover:bg-blue-800 hover:scale-110 transition-transform" : ""}`}
+    >
       {ini}
     </span>
+  );
+}
+
+// ─── Overlay de expansão de foto ──────────────────────────────────────────────
+function ColaboradorFotoOverlay({ fotoUrl, nome, onClose }: {
+  fotoUrl: string | null; nome: string; onClose: () => void;
+}) {
+  const ini = nome.split(" ").filter(Boolean).slice(0, 2).map(n => n[0]).join("").toUpperCase();
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/75 flex items-center justify-center p-6"
+      onClick={onClose}
+    >
+      <div className="flex flex-col items-center gap-5" onClick={e => e.stopPropagation()}>
+        {fotoUrl
+          ? <img src={fotoUrl} alt={nome}
+              className="h-52 w-52 rounded-full object-cover ring-4 ring-white shadow-2xl" />
+          : <div className="h-52 w-52 rounded-full bg-blue-700 flex items-center justify-center ring-4 ring-white shadow-2xl">
+              <span className="text-7xl font-bold text-white">{ini}</span>
+            </div>
+        }
+        <div className="text-white font-bold text-lg text-center leading-snug max-w-xs break-words">{nome}</div>
+        <button onClick={onClose}
+          className="mt-1 text-white/60 text-sm hover:text-white transition flex items-center gap-1.5">
+          <X className="h-4 w-4" /> Fechar
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -86,6 +130,10 @@ const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 // ─── DrillModal — tela cheia ─────────────────────────────────────────────────
 const DrillFilterContext = createContext("");
 function useDrillFilter() { return useContext(DrillFilterContext); }
+
+// ─── Contexto de clique em foto de colaborador ────────────────────────────────
+const ColaboradorClickContext = createContext<((fotoUrl: string | null, nome: string) => void) | null>(null);
+function useColaboradorClick() { return useContext(ColaboradorClickContext); }
 
 function DrillModal({ titulo, subtitulo, onClose, children }: {
   titulo: string; subtitulo?: string; onClose: () => void; children: React.ReactNode;
@@ -202,6 +250,7 @@ export default function PropriosUtilizacao() {
   const [expandPendentes, setExpandPendentes] = useState(false);
   const [drill, setDrill] = useState<"campo" | "almox" | "custo" | "mais" | "retornar" | "manut" | null>(null);
   const [drillHora, setDrillHora] = useState<number | null>(null);
+  const [expandedColaborador, setExpandedColaborador] = useState<{ fotoUrl: string | null; nome: string } | null>(null);
 
   const { data, isLoading } = trpc.equipamentos.propriosUtilizacao.useQuery(
     { companyId, mes, ano },
@@ -282,6 +331,14 @@ export default function PropriosUtilizacao() {
   const drillCampoItens = emCampo.length > 0 ? emCampo : pendentes;
 
   return (
+    <ColaboradorClickContext.Provider value={(fotoUrl, nome) => setExpandedColaborador({ fotoUrl, nome })}>
+    {expandedColaborador && (
+      <ColaboradorFotoOverlay
+        fotoUrl={expandedColaborador.fotoUrl}
+        nome={expandedColaborador.nome}
+        onClose={() => setExpandedColaborador(null)}
+      />
+    )}
     <DashboardLayout>
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
@@ -950,6 +1007,7 @@ export default function PropriosUtilizacao() {
 
       </div>
     </DashboardLayout>
+    </ColaboradorClickContext.Provider>
   );
 }
 
@@ -1073,7 +1131,12 @@ function DrillItemCampo({ item }: { item: any }) {
         <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-2">
           {item.codigoPatrimonio && <span className="font-mono text-[10px] bg-slate-100 px-1.5 rounded">{item.codigoPatrimonio}</span>}
           <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" /> saiu {fmtDt(item.saiuEm ?? item.saiu_em)}</span>
-          {(item.quemTem ?? item.quemSaiu) && <span>{item.quemTem ?? item.quemSaiu}</span>}
+          {(item.quemTem ?? item.quemSaiu) && (
+            <span className="flex items-center gap-1">
+              <FotoFuncionario fotoUrl={item.fotoFuncionario ?? null} nome={item.quemTem ?? item.quemSaiu} size="sm" />
+              {item.quemTem ?? item.quemSaiu}
+            </span>
+          )}
         </div>
       </div>
       <div className="text-right shrink-0">
