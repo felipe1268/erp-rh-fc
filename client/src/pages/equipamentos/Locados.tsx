@@ -253,7 +253,7 @@ export default function EquipamentosLocados() {
   // Rev. 4516 — Conversão de tipo: Locado → Próprio
   const [modalConverterProprio, setModalConverterProprio] = useState<{ ids: number[]; nomes: string } | null>(null);
   const [convertProgress, setConvertProgress] = useState(0);
-  const convertTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const convertTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const converterParaProprioMut = trpc.equipamentos.locadoConverterParaProprio.useMutation({
     onSuccess: (data) => {
       if (convertTimerRef.current) { clearInterval(convertTimerRef.current); convertTimerRef.current = null; }
