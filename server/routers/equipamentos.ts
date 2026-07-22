@@ -3696,7 +3696,8 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           t.motivo,
           ep.fotos_json,
           ep.categoria,
-          ep.marca
+          ep.marca,
+          ep.status AS equip_status
         FROM equipamentos_proprios_transferencias t
         LEFT JOIN equipamentos_proprios ep ON ep.id = t.equipamento_id
         WHERE t.company_id      = ${input.companyId}
@@ -3718,16 +3719,18 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       `)) as any)?.rows ?? [];
 
       // ── KPIs ─────────────────────────────────────────────────────────────
-      const totalEntregas       = rows.length;
+      const totalRetiradas      = rows.length;
       const equipamentosSet     = new Set(rows.map(r => r.equipamento_id));
       const obrasSet            = new Set(rows.map(r => r.destino_obra_id));
-      const entregadoresCont: Record<string, number> = {};
+
+      // Quem mais pegou (remetente = quem iniciou a retirada do almox)
+      const quemPegouCont: Record<string, number> = {};
       for (const r of rows) {
         if (r.remetente_nome) {
-          entregadoresCont[r.remetente_nome] = (entregadoresCont[r.remetente_nome] ?? 0) + 1;
+          quemPegouCont[r.remetente_nome] = (quemPegouCont[r.remetente_nome] ?? 0) + 1;
         }
       }
-      const topEntregadores = Object.entries(entregadoresCont)
+      const topQuemPegou = Object.entries(quemPegouCont)
         .map(([nome, qtd]) => ({ nome, qtd }))
         .sort((a, b) => b.qtd - a.qtd)
         .slice(0, 5);
@@ -3745,7 +3748,75 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         .sort((a, b) => b.qtd - a.qtd)
         .slice(0, 5);
 
-      // ── Entregas por mês (últimos 12 meses para gráfico) ─────────────────
+      // ── Não devolvidas: equip_status ainda 'em_obra' (nunca voltou ao almox)
+      // Para essa contagem, consultamos TODOS os registros (sem filtro de período)
+      // para pegar o estado atual real da ferramenta.
+      const naoDevolvidas: {
+        equipamentoId: number;
+        codigoPatrimonio: string;
+        descricao: string;
+        fotosJson: any;
+        categoria: string | null;
+        obraNome: string;
+        quemPegou: string;
+        pegouEm: string;
+      }[] = [];
+
+      // Usamos os próprios rows mas olhamos equip_status
+      // (a query já faz LEFT JOIN ep, que traz o status ATUAL)
+      // Para "não devolveu" o filtro de mês/ano pode esconder retiradas antigas
+      // que ainda estão em aberto — então buscamos SEPARADO sem filtro de período.
+      const rowsAberto: any[] = ((await db.execute(sql`
+        SELECT DISTINCT ON (t.equipamento_id)
+          t.equipamento_id,
+          t.equipamento_patrimonio   AS codigo_patrimonio,
+          t.equipamento_descricao    AS descricao,
+          t.destino_obra_nome,
+          t.remetente_nome,
+          t.aceite_em,
+          ep.fotos_json,
+          ep.categoria,
+          ep.status AS equip_status
+        FROM equipamentos_proprios_transferencias t
+        LEFT JOIN equipamentos_proprios ep ON ep.id = t.equipamento_id
+        WHERE t.company_id      = ${input.companyId}
+          AND t.status          = 'aceito'
+          AND t.origem_obra_id  IS NULL
+          AND t.destino_obra_id IS NOT NULL
+        ORDER BY t.equipamento_id, t.aceite_em DESC
+      `)) as any)?.rows ?? [];
+
+      for (const r of rowsAberto) {
+        if (r.equip_status === "em_obra" && r.remetente_nome) {
+          naoDevolvidas.push({
+            equipamentoId:    r.equipamento_id,
+            codigoPatrimonio: r.codigo_patrimonio ?? "",
+            descricao:        r.descricao ?? "—",
+            fotosJson:        r.fotos_json,
+            categoria:        r.categoria ?? null,
+            obraNome:         r.destino_obra_nome ?? "—",
+            quemPegou:        r.remetente_nome,
+            pegouEm:          r.aceite_em ?? "",
+          });
+        }
+      }
+      naoDevolvidas.sort((a, b) => a.pegouEm.localeCompare(b.pegouEm)); // mais antigos primeiro
+
+      // Agrupa naoDevolvidas por pessoa
+      const naoDevPorPessoa: Record<string, {
+        nome: string;
+        itens: typeof naoDevolvidas;
+      }> = {};
+      for (const nd of naoDevolvidas) {
+        if (!naoDevPorPessoa[nd.quemPegou]) {
+          naoDevPorPessoa[nd.quemPegou] = { nome: nd.quemPegou, itens: [] };
+        }
+        naoDevPorPessoa[nd.quemPegou].itens.push(nd);
+      }
+      const naoDevPorPessoaArr = Object.values(naoDevPorPessoa)
+        .sort((a, b) => b.itens.length - a.itens.length);
+
+      // ── Retiradas por mês (últimos 12 meses para gráfico) ────────────────
       const porMes: Record<string, number> = {};
       for (const r of rows) {
         const ym = (r.aceite_em ?? r.created_at ?? "").slice(0, 7);
@@ -3774,20 +3845,22 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           fotosJson:        r.fotos_json,
           obraId:           r.destino_obra_id,
           obraNome:         r.destino_obra_nome,
-          entreguePor:      r.remetente_nome,
-          recebidoPor:      r.aceite_por_nome,
-          solicitadoEm:     r.created_at,
-          entregueEm:       r.aceite_em,
+          quemPegou:        r.remetente_nome,
+          pegouEm:          r.aceite_em,
+          emAberto:         r.equip_status === "em_obra",
           motivo:           r.motivo,
         })),
         stats: {
-          totalEntregas,
+          totalRetiradas,
           equipamentosDistintos: equipamentosSet.size,
           obrasAtendidas:        obrasSet.size,
-          topEntregador:         topEntregadores[0]?.nome ?? null,
+          topQuemPegou:          topQuemPegou[0]?.nome ?? null,
+          naoDevolvidas:         naoDevolvidas.length,
         },
-        topEntregadores,
+        topQuemPegou,
         topObras,
+        naoDevolvidas,
+        naoDevPorPessoa: naoDevPorPessoaArr,
         mensal,
       };
     }),

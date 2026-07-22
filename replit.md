@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4509** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO.** Clique no card de equipamento abre modal "Raio-X" com KPIs (% utilização, dias em obra, obras visitadas, transferências), gráfico de barras de ocupação mensal (12 meses, azul=em obra / cinza=almox), timeline completa de eventos (cadastro → transferências solicitadas/confirmadas/rejeitadas), e dados técnicos. Rodapé com botão "Editar equipamento". Backend: `proprioRaioX` (tRPC) une `equipamentos_proprios` + `equipamentos_proprios_transferencias` e calcula KPIs/segmentos em Node. ZERO schema change.
-- **Rev. 4508** — **FEAT: CP — APAGAR EM LOTE (cancelEntryBulk + botão na barra de seleção).** Contas a Pagar ganhou botão "Apagar selecionados" vermelho na barra de ações em lote. Abre Dialog de confirmação com resumo (qtd + total) + campo motivo obrigatório (mín. 5 chars). Backend: `cancelEntryBulk` — UPDATE via `ANY($ids)`, protege `status='pago'/'recebido'`, grava audit log. ZERO schema change.
+- **Rev. 4511** — **FEAT: DASH RETIRADAS DO ALMOXARIFADO (corrigido).** Nova página `/equipamentos/entregas`: KPIs (retiradas, ferramentas distintas, obras, **não devolvidas** em vermelho), gráfico de barras mensais, ranking "Quem mais pegou" e "Obras que mais receberam". Seção expandível "Ferramentas não devolvidas" agrupa por pessoa com badge de dias em aberto (vermelho >30d, âmbar >7d). Lista de retiradas mostra badge "Não devolvida/Devolvida" por item. Backend: query separada `DISTINCT ON (equipamento_id)` pega o status ATUAL (`ep.status='em_obra'`) sem filtro de período. Hub de Equipamentos: card violeta na grade de 3 colunas. ZERO schema change.
+- **Rev. 4510** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO + FOTOS NA PRESENÇA DDS.** Modal redesenhado com 3 abas, donut, area chart, bar chart dias da semana, "quem mais usa". Fotos de colaborador na lista de presença das sessões DDS. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4509** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO.** Modal Raio-X com KPIs, gráfico de ocupação mensal, timeline. `proprioRaioX` tRPC. ZERO schema change.
+- **Rev. 4508** — **FEAT: CP — APAGAR EM LOTE (cancelEntryBulk).** Botão "Apagar selecionados" + Dialog confirmação + motivo. ZERO schema change.
 - **Rev. 4507** — **FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard).** `listSessoes` ganhou inputs `mes` e `ano` (filtro SQL via `EXTRACT`); frontend usa `PeriodSelectorCard` com `monthStatus`. ZERO schema change.
 - **Rev. 4506** — **FEAT: DDS PDF — GERAÇÃO REAL DE PDF VIA PUPPETEER.** Rotas `/api/dds-ata/:id` e `/api/dds-ata-lote` usam puppeteer para converter HTML em PDF real (A4, `printBackground:true`, margens). ZIP em lote contém `.pdf`. ZERO schema change.
 - **Rev. 4505** — **FIX: DDS PDF — REMOVE BOTÃO "IMPRIMIR/SALVAR PDF" E AUTO-PRINT.** HTML gerado não exibe botão nem dispara `window.print()`. ZERO schema change.
