@@ -1,5 +1,5 @@
 /**
- * Rev. 4511 - FEAT: DASH DE ENTREGAS DO ALMOXARIFADO
+ * Rev. 4511 - FEAT: CONTROLE DE SAÍDAS DO ALMOXARIFADO (ciclos saída↔devolução)
  *
  * Nova página `/equipamentos/entregas` que monitora toda ferramenta própria
  * que saiu do almoxarifado para uma obra:

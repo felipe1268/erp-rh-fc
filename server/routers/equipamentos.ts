@@ -3670,156 +3670,156 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
   // ─────────────────────────────────────────────────────────────────────────
   listarEntregasAlmox: protectedProcedure
     .input(z.object({
-      companyId: z.number(),
-      mes:       z.number().min(1).max(12).nullable().optional(),
-      ano:       z.number().min(2020).max(2100).nullable().optional(),
-      obraId:    z.number().nullable().optional(),
-      busca:     z.string().optional(),
+      companyId:  z.number(),
+      mes:        z.number().min(1).max(12).nullable().optional(),
+      ano:        z.number().min(2020).max(2100).nullable().optional(),
+      equipId:    z.number().nullable().optional(),
+      busca:      z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const rows: any[] = ((await db.execute(sql`
+      // ── 1. Ciclos saída↔devolução ─────────────────────────────────────────
+      // Saída  = transfer origem_obra_id IS NULL  AND destino_obra_id IS NOT NULL
+      // Retorno= transfer origem_obra_id IS NOT NULL AND destino_obra_id IS NULL
+      // Emparelha cada saída com o próximo retorno do mesmo equipamento via LATERAL.
+      // "devolvido_em IS NULL" = ainda em uso (ciclo aberto).
+      const ciclosRows: any[] = ((await db.execute(sql`
+        WITH saidas AS (
+          SELECT
+            s.id,
+            s.equipamento_id,
+            s.equipamento_patrimonio   AS codigo_patrimonio,
+            s.equipamento_descricao    AS descricao,
+            s.destino_obra_id,
+            s.destino_obra_nome,
+            s.remetente_nome,
+            s.aceite_em                AS saiu_em,
+            s.motivo,
+            ep.fotos_json,
+            ep.categoria,
+            ep.marca,
+            ep.status                  AS equip_status
+          FROM equipamentos_proprios_transferencias s
+          LEFT JOIN equipamentos_proprios ep ON ep.id = s.equipamento_id
+          WHERE s.company_id      = ${input.companyId}
+            AND s.status          = 'aceito'
+            AND s.origem_obra_id  IS NULL
+            AND s.destino_obra_id IS NOT NULL
+        )
         SELECT
-          t.id,
-          t.equipamento_id,
-          t.equipamento_patrimonio   AS codigo_patrimonio,
-          t.equipamento_descricao    AS descricao,
-          t.destino_obra_id,
-          t.destino_obra_nome,
-          t.remetente_id,
-          t.remetente_nome,
-          t.aceite_por_nome,
-          t.created_at,
-          t.aceite_em,
-          t.motivo,
-          ep.fotos_json,
-          ep.categoria,
-          ep.marca,
-          ep.status AS equip_status
-        FROM equipamentos_proprios_transferencias t
-        LEFT JOIN equipamentos_proprios ep ON ep.id = t.equipamento_id
-        WHERE t.company_id      = ${input.companyId}
-          AND t.status          = 'aceito'
-          AND t.origem_obra_id  IS NULL
-          AND t.destino_obra_id IS NOT NULL
-          ${input.ano  ? sql`AND EXTRACT(YEAR  FROM t.aceite_em::timestamptz) = ${input.ano}`  : sql``}
-          ${input.mes  ? sql`AND EXTRACT(MONTH FROM t.aceite_em::timestamptz) = ${input.mes}`  : sql``}
-          ${input.obraId ? sql`AND t.destino_obra_id = ${input.obraId}` : sql``}
+          s.*,
+          dev.aceite_em         AS devolvido_em,
+          dev.aceite_por_nome   AS devolvido_por,
+          CASE
+            WHEN dev.aceite_em IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (dev.aceite_em::timestamptz - s.saiu_em::timestamptz))/3600
+            ELSE EXTRACT(EPOCH FROM (NOW() - s.saiu_em::timestamptz))/3600
+          END                   AS horas_fora
+        FROM saidas s
+        LEFT JOIN LATERAL (
+          SELECT d.aceite_em, d.aceite_por_nome
+          FROM equipamentos_proprios_transferencias d
+          WHERE d.company_id      = ${input.companyId}
+            AND d.status          = 'aceito'
+            AND d.equipamento_id  = s.equipamento_id
+            AND d.origem_obra_id  IS NOT NULL
+            AND d.destino_obra_id IS NULL
+            AND d.aceite_em       > s.saiu_em
+          ORDER BY d.aceite_em ASC
+          LIMIT 1
+        ) dev ON true
+        WHERE TRUE
+          ${input.ano ? sql`AND EXTRACT(YEAR  FROM s.saiu_em::timestamptz) = ${input.ano}` : sql``}
+          ${input.mes ? sql`AND EXTRACT(MONTH FROM s.saiu_em::timestamptz) = ${input.mes}` : sql``}
+          ${input.equipId ? sql`AND s.equipamento_id = ${input.equipId}` : sql``}
           ${input.busca ? sql`AND (
-            t.equipamento_descricao ILIKE ${'%' + (input.busca ?? '') + '%'}
-            OR t.equipamento_patrimonio ILIKE ${'%' + (input.busca ?? '') + '%'}
-            OR t.remetente_nome ILIKE ${'%' + (input.busca ?? '') + '%'}
-            OR t.aceite_por_nome ILIKE ${'%' + (input.busca ?? '') + '%'}
-            OR t.destino_obra_nome ILIKE ${'%' + (input.busca ?? '') + '%'}
+            s.descricao     ILIKE ${'%' + (input.busca ?? '') + '%'}
+            OR s.codigo_patrimonio ILIKE ${'%' + (input.busca ?? '') + '%'}
+            OR s.remetente_nome   ILIKE ${'%' + (input.busca ?? '') + '%'}
+            OR s.destino_obra_nome ILIKE ${'%' + (input.busca ?? '') + '%'}
           )` : sql``}
-        ORDER BY t.aceite_em DESC NULLS LAST
+        ORDER BY s.saiu_em DESC NULLS LAST
         LIMIT 500
       `)) as any)?.rows ?? [];
 
-      // ── KPIs ─────────────────────────────────────────────────────────────
-      const totalRetiradas      = rows.length;
-      const equipamentosSet     = new Set(rows.map(r => r.equipamento_id));
-      const obrasSet            = new Set(rows.map(r => r.destino_obra_id));
+      // ── 2. Ferramentas em uso AGORA (sem filtro de período) ───────────────
+      // = saída sem retorno correspondente até agora (ciclo aberto)
+      const emUsoRows: any[] = ((await db.execute(sql`
+        WITH saidas AS (
+          SELECT DISTINCT ON (s.equipamento_id)
+            s.equipamento_id,
+            s.equipamento_patrimonio   AS codigo_patrimonio,
+            s.equipamento_descricao    AS descricao,
+            s.destino_obra_nome,
+            s.remetente_nome,
+            s.aceite_em                AS saiu_em,
+            ep.fotos_json,
+            ep.categoria,
+            ep.status                  AS equip_status
+          FROM equipamentos_proprios_transferencias s
+          LEFT JOIN equipamentos_proprios ep ON ep.id = s.equipamento_id
+          WHERE s.company_id      = ${input.companyId}
+            AND s.status          = 'aceito'
+            AND s.origem_obra_id  IS NULL
+            AND s.destino_obra_id IS NOT NULL
+          ORDER BY s.equipamento_id, s.aceite_em DESC
+        )
+        SELECT s.*
+        FROM saidas s
+        LEFT JOIN LATERAL (
+          SELECT 1 FROM equipamentos_proprios_transferencias d
+          WHERE d.company_id      = ${input.companyId}
+            AND d.status          = 'aceito'
+            AND d.equipamento_id  = s.equipamento_id
+            AND d.origem_obra_id  IS NOT NULL
+            AND d.destino_obra_id IS NULL
+            AND d.aceite_em       > s.saiu_em
+          LIMIT 1
+        ) dev ON true
+        WHERE dev IS NULL
+        ORDER BY s.saiu_em ASC
+      `)) as any)?.rows ?? [];
 
-      // Quem mais pegou (remetente = quem iniciou a retirada do almox)
-      const quemPegouCont: Record<string, number> = {};
-      for (const r of rows) {
-        if (r.remetente_nome) {
-          quemPegouCont[r.remetente_nome] = (quemPegouCont[r.remetente_nome] ?? 0) + 1;
-        }
+      // ── 3. KPIs agregados ─────────────────────────────────────────────────
+      const totalCiclos         = ciclosRows.length;
+      const ciclosCompletos     = ciclosRows.filter(r => r.devolvido_em != null).length;
+      const emUsoAgora          = emUsoRows.length;
+
+      // Tempo médio de uso (horas) dos ciclos completos
+      const ciclosComplArray    = ciclosRows.filter(r => r.devolvido_em != null && Number(r.horas_fora) > 0);
+      const mediaHoras          = ciclosComplArray.length > 0
+        ? ciclosComplArray.reduce((acc, r) => acc + Number(r.horas_fora), 0) / ciclosComplArray.length
+        : 0;
+
+      // ── Ranking: quem mais retira ─────────────────────────────────────────
+      const quemCont: Record<string, number> = {};
+      for (const r of ciclosRows) {
+        if (r.remetente_nome) quemCont[r.remetente_nome] = (quemCont[r.remetente_nome] ?? 0) + 1;
       }
-      const topQuemPegou = Object.entries(quemPegouCont)
+      const topQuemPegou = Object.entries(quemCont)
         .map(([nome, qtd]) => ({ nome, qtd }))
         .sort((a, b) => b.qtd - a.qtd)
         .slice(0, 5);
 
-      // ── Obras atendidas ───────────────────────────────────────────────────
-      const obrasCont: Record<string, { nome: string; qtd: number }> = {};
-      for (const r of rows) {
-        if (r.destino_obra_id) {
-          const k = String(r.destino_obra_id);
-          if (!obrasCont[k]) obrasCont[k] = { nome: r.destino_obra_nome ?? "—", qtd: 0 };
-          obrasCont[k].qtd++;
-        }
+      // ── Ranking: ferramentas mais retiradas ───────────────────────────────
+      const equipCont: Record<string, { descricao: string; qtd: number; totalHoras: number }> = {};
+      for (const r of ciclosRows) {
+        const k = String(r.equipamento_id);
+        if (!equipCont[k]) equipCont[k] = { descricao: r.descricao ?? "—", qtd: 0, totalHoras: 0 };
+        equipCont[k].qtd++;
+        equipCont[k].totalHoras += Number(r.horas_fora ?? 0);
       }
-      const topObras = Object.values(obrasCont)
+      const topEquipamentos = Object.entries(equipCont)
+        .map(([, v]) => v)
         .sort((a, b) => b.qtd - a.qtd)
         .slice(0, 5);
 
-      // ── Não devolvidas: equip_status ainda 'em_obra' (nunca voltou ao almox)
-      // Para essa contagem, consultamos TODOS os registros (sem filtro de período)
-      // para pegar o estado atual real da ferramenta.
-      const naoDevolvidas: {
-        equipamentoId: number;
-        codigoPatrimonio: string;
-        descricao: string;
-        fotosJson: any;
-        categoria: string | null;
-        obraNome: string;
-        quemPegou: string;
-        pegouEm: string;
-      }[] = [];
-
-      // Usamos os próprios rows mas olhamos equip_status
-      // (a query já faz LEFT JOIN ep, que traz o status ATUAL)
-      // Para "não devolveu" o filtro de mês/ano pode esconder retiradas antigas
-      // que ainda estão em aberto — então buscamos SEPARADO sem filtro de período.
-      const rowsAberto: any[] = ((await db.execute(sql`
-        SELECT DISTINCT ON (t.equipamento_id)
-          t.equipamento_id,
-          t.equipamento_patrimonio   AS codigo_patrimonio,
-          t.equipamento_descricao    AS descricao,
-          t.destino_obra_nome,
-          t.remetente_nome,
-          t.aceite_em,
-          ep.fotos_json,
-          ep.categoria,
-          ep.status AS equip_status
-        FROM equipamentos_proprios_transferencias t
-        LEFT JOIN equipamentos_proprios ep ON ep.id = t.equipamento_id
-        WHERE t.company_id      = ${input.companyId}
-          AND t.status          = 'aceito'
-          AND t.origem_obra_id  IS NULL
-          AND t.destino_obra_id IS NOT NULL
-        ORDER BY t.equipamento_id, t.aceite_em DESC
-      `)) as any)?.rows ?? [];
-
-      for (const r of rowsAberto) {
-        if (r.equip_status === "em_obra" && r.remetente_nome) {
-          naoDevolvidas.push({
-            equipamentoId:    r.equipamento_id,
-            codigoPatrimonio: r.codigo_patrimonio ?? "",
-            descricao:        r.descricao ?? "—",
-            fotosJson:        r.fotos_json,
-            categoria:        r.categoria ?? null,
-            obraNome:         r.destino_obra_nome ?? "—",
-            quemPegou:        r.remetente_nome,
-            pegouEm:          r.aceite_em ?? "",
-          });
-        }
-      }
-      naoDevolvidas.sort((a, b) => a.pegouEm.localeCompare(b.pegouEm)); // mais antigos primeiro
-
-      // Agrupa naoDevolvidas por pessoa
-      const naoDevPorPessoa: Record<string, {
-        nome: string;
-        itens: typeof naoDevolvidas;
-      }> = {};
-      for (const nd of naoDevolvidas) {
-        if (!naoDevPorPessoa[nd.quemPegou]) {
-          naoDevPorPessoa[nd.quemPegou] = { nome: nd.quemPegou, itens: [] };
-        }
-        naoDevPorPessoa[nd.quemPegou].itens.push(nd);
-      }
-      const naoDevPorPessoaArr = Object.values(naoDevPorPessoa)
-        .sort((a, b) => b.itens.length - a.itens.length);
-
-      // ── Retiradas por mês (últimos 12 meses para gráfico) ────────────────
+      // ── Ciclos por mês (gráfico barras últimos 12 meses) ─────────────────
       const porMes: Record<string, number> = {};
-      for (const r of rows) {
-        const ym = (r.aceite_em ?? r.created_at ?? "").slice(0, 7);
+      for (const r of ciclosRows) {
+        const ym = (r.saiu_em ?? "").slice(0, 7);
         if (ym) porMes[ym] = (porMes[ym] ?? 0) + 1;
       }
       const mensal = Object.entries(porMes)
@@ -3827,40 +3827,44 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         .slice(-12)
         .map(([mes, qtd]) => {
           const d = new Date(mes + "-01T12:00:00Z");
-          return {
-            mes,
-            label: d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-            qtd,
-          };
+          return { mes, label: d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }), qtd };
         });
 
       return {
-        entregas: rows.map(r => ({
+        ciclos: ciclosRows.map(r => ({
           id:               r.id,
           equipamentoId:    r.equipamento_id,
           codigoPatrimonio: r.codigo_patrimonio,
           descricao:        r.descricao,
           categoria:        r.categoria,
-          marca:            r.marca,
           fotosJson:        r.fotos_json,
-          obraId:           r.destino_obra_id,
           obraNome:         r.destino_obra_nome,
           quemPegou:        r.remetente_nome,
-          pegouEm:          r.aceite_em,
-          emAberto:         r.equip_status === "em_obra",
-          motivo:           r.motivo,
+          saiuEm:           r.saiu_em,
+          devolvidoEm:      r.devolvido_em ?? null,
+          devolvidoPor:     r.devolvido_por ?? null,
+          horasFora:        Number(r.horas_fora ?? 0),
+          emAberto:         r.devolvido_em == null,
+        })),
+        emUso: emUsoRows.map(r => ({
+          equipamentoId:    r.equipamento_id,
+          codigoPatrimonio: r.codigo_patrimonio,
+          descricao:        r.descricao,
+          categoria:        r.categoria,
+          fotosJson:        r.fotos_json,
+          obraNome:         r.destino_obra_nome,
+          quemPegou:        r.remetente_nome,
+          saiuEm:           r.saiu_em,
+          horasForaAgora:   Math.floor((Date.now() - new Date(r.saiu_em).getTime()) / 3600000),
         })),
         stats: {
-          totalRetiradas,
-          equipamentosDistintos: equipamentosSet.size,
-          obrasAtendidas:        obrasSet.size,
-          topQuemPegou:          topQuemPegou[0]?.nome ?? null,
-          naoDevolvidas:         naoDevolvidas.length,
+          totalCiclos,
+          ciclosCompletos,
+          emUsoAgora,
+          mediaHorasPorCiclo: Math.round(mediaHoras * 10) / 10,
         },
         topQuemPegou,
-        topObras,
-        naoDevolvidas,
-        naoDevPorPessoa: naoDevPorPessoaArr,
+        topEquipamentos,
         mensal,
       };
     }),
