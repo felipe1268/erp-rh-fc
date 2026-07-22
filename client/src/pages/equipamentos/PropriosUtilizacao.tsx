@@ -201,6 +201,7 @@ export default function PropriosUtilizacao() {
   const [expandAlmox, setExpandAlmox] = useState(false);
   const [expandPendentes, setExpandPendentes] = useState(false);
   const [drill, setDrill] = useState<"campo" | "almox" | "custo" | null>(null);
+  const [drillHora, setDrillHora] = useState<number | null>(null);
 
   const { data, isLoading } = trpc.equipamentos.propriosUtilizacao.useQuery(
     { companyId, mes, ano },
@@ -353,6 +354,68 @@ export default function PropriosUtilizacao() {
             }
           </DrillModal>
         )}
+
+        {/* ── Drill-down: Horário ── */}
+        {drillHora !== null && (() => {
+          const label = `${String(drillHora).padStart(2, "0")}h`;
+          const fmtHM = (d: string | null | undefined) => {
+            if (!d) return "";
+            try { const dt = new Date(d); return `${String(dt.getHours()).padStart(2,"0")}:${String(dt.getMinutes()).padStart(2,"0")}`; } catch { return ""; }
+          };
+          const entregas = ciclos.filter((c: any) => c.saiuEm && new Date(c.saiuEm).getHours() === drillHora);
+          const devols   = ciclos.filter((c: any) => c.devolvidoEm && new Date(c.devolvidoEm).getHours() === drillHora);
+          return (
+            <DrillModal
+              titulo={`${label} — Entregas e devoluções`}
+              subtitulo={`${entregas.length} entrega${entregas.length !== 1 ? "s" : ""} · ${devols.length} devolução${devols.length !== 1 ? "ões" : ""}`}
+              onClose={() => setDrillHora(null)}
+            >
+              {entregas.length === 0 && devols.length === 0 && (
+                <div className="py-10 text-center text-sm text-slate-400">Nenhum registro nesse horário.</div>
+              )}
+              {entregas.length > 0 && (
+                <>
+                  <div className="px-4 py-2 bg-emerald-50 border-b text-xs font-semibold text-emerald-700 flex items-center gap-1.5 sticky top-0">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" /> Entregas — {label} ({entregas.length})
+                  </div>
+                  {entregas.map((c: any) => (
+                    <div key={`e-${c.id}`} className="flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-slate-50">
+                      <EquipFoto fotoUrl={c.fotoUrl} descricao={c.descricao} sm />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-slate-900 text-sm truncate">{c.descricao}</div>
+                        <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-2">
+                          {c.codigoPatrimonio && <span className="font-mono text-[10px] bg-slate-100 px-1.5 rounded">{c.codigoPatrimonio}</span>}
+                          {c.quemSaiu && <span className="flex items-center gap-1"><FotoFuncionario fotoUrl={c.fotoFuncionario} nome={c.quemSaiu} />{c.quemSaiu}</span>}
+                        </div>
+                      </div>
+                      <div className="text-xs font-black text-emerald-600 tabular-nums">{fmtHM(c.saiuEm)}</div>
+                    </div>
+                  ))}
+                </>
+              )}
+              {devols.length > 0 && (
+                <>
+                  <div className="px-4 py-2 bg-red-50 border-b text-xs font-semibold text-red-700 flex items-center gap-1.5 sticky top-0">
+                    <span className="h-2 w-2 rounded-full bg-red-500 inline-block" /> Devoluções — {label} ({devols.length})
+                  </div>
+                  {devols.map((c: any) => (
+                    <div key={`d-${c.id}`} className="flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-slate-50">
+                      <EquipFoto fotoUrl={c.fotoUrl} descricao={c.descricao} sm />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-slate-900 text-sm truncate">{c.descricao}</div>
+                        <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-2">
+                          {c.codigoPatrimonio && <span className="font-mono text-[10px] bg-slate-100 px-1.5 rounded">{c.codigoPatrimonio}</span>}
+                          {c.quemSaiu && <span className="flex items-center gap-1"><FotoFuncionario fotoUrl={c.fotoFuncionario} nome={c.quemSaiu} />{c.quemSaiu}</span>}
+                        </div>
+                      </div>
+                      <div className="text-xs font-black text-red-600 tabular-nums">{fmtHM(c.devolvidoEm)}</div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </DrillModal>
+          );
+        })()}
 
         {/* ── Insights ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -557,13 +620,23 @@ export default function PropriosUtilizacao() {
             ) : (
               <>
                 <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={porHora} margin={{ top: 4, right: 4, left: -20, bottom: 4 }} barGap={2}>
+                  <BarChart
+                    data={porHora}
+                    margin={{ top: 4, right: 4, left: -20, bottom: 4 }}
+                    barGap={2}
+                    style={{ cursor: "pointer" }}
+                    onClick={(data) => {
+                      const hora = data?.activePayload?.[0]?.payload?.hora;
+                      if (hora !== undefined) setDrillHora(hora);
+                    }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={1} />
                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                     <RechTooltip
                       formatter={(v: any, name: any) => [v, name === "count" ? "Entrega" : "Devolução"]}
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                      cursor={{ fill: "#f0f9ff", radius: 4 }}
                     />
                     <Bar dataKey="count"      name="count"      radius={[3, 3, 0, 0]} maxBarSize={16} fill="#10b981" />
                     <Bar dataKey="countDevol" name="countDevol" radius={[3, 3, 0, 0]} maxBarSize={16} fill="#ef4444" />
