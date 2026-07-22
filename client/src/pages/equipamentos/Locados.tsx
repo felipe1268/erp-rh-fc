@@ -367,6 +367,8 @@ export default function EquipamentosLocados() {
   });
   const [loteCategoria, setLoteCategoria] = useState("");
   const [loteFornecedor, setLoteFornecedor] = useState("");
+  const [loteFornecedorManual, setLoteFornecedorManual] = useState(false);
+  const [loteCategoriaManual, setLoteCategoriaManual] = useState(false);
 
   // Estados pra modais (substituem window.confirm + toast invisível no iPad)
   const [confirmExcluir, setConfirmExcluir] = useState<number | null>(null); // total a excluir
@@ -2774,52 +2776,74 @@ export default function EquipamentosLocados() {
             </div>
 
             {/* Alterar Categoria em lote */}
-            <div className="flex items-center gap-1.5">
-              {(() => {
-                const cats = Array.from(new Set((data as any[]).map((l: any) => l.categoria).filter(Boolean))).sort() as string[];
-                return (
-                  <>
-                    <datalist id="lote-cat-datalist">
-                      {cats.map(c => <option key={c} value={c} />)}
-                    </datalist>
+            {(() => {
+              const cats = Array.from(new Set((data as any[]).map((l: any) => l.categoria).filter(Boolean))).sort() as string[];
+              return (
+                <div className="flex items-center gap-1.5">
+                  {loteCategoriaManual ? (
                     <input
-                      list="lote-cat-datalist"
+                      autoFocus
                       value={loteCategoria}
                       onChange={e => setLoteCategoria(e.target.value)}
-                      className="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500 outline-none w-[150px]"
-                      placeholder="— categoria —"
+                      onKeyDown={e => { if (e.key === "Escape") { setLoteCategoriaManual(false); setLoteCategoria(""); } }}
+                      className="px-2 py-1.5 border border-violet-400 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 w-[150px]"
+                      placeholder="Nova categoria…"
                     />
-                  </>
-                );
-              })()}
-              <button
-                onClick={() => {
-                  if (!loteCategoria.trim()) { toast.warning("Digite a categoria."); return; }
-                  categoriaLoteMut.mutate({ companyId, ids: Array.from(selecionados), categoria: loteCategoria.trim() });
-                }}
-                disabled={!loteCategoria.trim() || categoriaLoteMut.isPending}
-                className="px-2.5 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium shrink-0">
-                <Tag className="h-3.5 w-3.5" /> {categoriaLoteMut.isPending ? "…" : "Categoria"}
-              </button>
-            </div>
+                  ) : (
+                    <select
+                      value={loteCategoria}
+                      onChange={e => {
+                        if (e.target.value === "__manual__") { setLoteCategoriaManual(true); setLoteCategoria(""); }
+                        else setLoteCategoria(e.target.value);
+                      }}
+                      className="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500 outline-none max-w-[150px]">
+                      <option value="">— categoria —</option>
+                      {cats.map(c => <option key={c} value={c}>{c}</option>)}
+                      <option value="__manual__">✏️ Digitar…</option>
+                    </select>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (!loteCategoria.trim()) { toast.warning("Selecione ou digite a categoria."); return; }
+                      categoriaLoteMut.mutate({ companyId, ids: Array.from(selecionados), categoria: loteCategoria.trim() });
+                    }}
+                    disabled={!loteCategoria.trim() || categoriaLoteMut.isPending}
+                    className="px-2.5 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium shrink-0">
+                    <Tag className="h-3.5 w-3.5" /> {categoriaLoteMut.isPending ? "…" : "Categoria"}
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Alterar Fornecedor em lote */}
             <div className="flex items-center gap-1.5">
-              <datalist id="lote-forn-datalist">
-                {fornecedoresComItens.filter(f => f.key !== "__null__").map(f => (
-                  <option key={f.key} value={f.nome} />
-                ))}
-              </datalist>
-              <input
-                list="lote-forn-datalist"
-                value={loteFornecedor}
-                onChange={e => setLoteFornecedor(e.target.value)}
-                className="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none w-[160px]"
-                placeholder="— fornecedor —"
-              />
+              {loteFornecedorManual ? (
+                <input
+                  autoFocus
+                  value={loteFornecedor}
+                  onChange={e => setLoteFornecedor(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Escape") { setLoteFornecedorManual(false); setLoteFornecedor(""); } }}
+                  className="px-2 py-1.5 border border-emerald-400 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 w-[170px]"
+                  placeholder="Nome da locadora…"
+                />
+              ) : (
+                <select
+                  value={loteFornecedor}
+                  onChange={e => {
+                    if (e.target.value === "__manual__") { setLoteFornecedorManual(true); setLoteFornecedor(""); }
+                    else setLoteFornecedor(e.target.value);
+                  }}
+                  className="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none max-w-[170px]">
+                  <option value="">— fornecedor —</option>
+                  {fornecedoresComItens.filter(f => f.key !== "__null__").map(f => (
+                    <option key={f.key} value={f.nome}>{f.nome}</option>
+                  ))}
+                  <option value="__manual__">✏️ Digitar (não está na lista)…</option>
+                </select>
+              )}
               <button
                 onClick={() => {
-                  if (!loteFornecedor.trim()) { toast.warning("Digite o fornecedor."); return; }
+                  if (!loteFornecedor.trim()) { toast.warning("Selecione ou digite o fornecedor."); return; }
                   fornecedorLoteMut.mutate({ companyId, ids: Array.from(selecionados), fornecedorNome: loteFornecedor.trim() });
                 }}
                 disabled={!loteFornecedor.trim() || fornecedorLoteMut.isPending}
