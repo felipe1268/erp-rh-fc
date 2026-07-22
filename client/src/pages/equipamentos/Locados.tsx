@@ -2312,9 +2312,44 @@ export default function EquipamentosLocados() {
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-slate-600 mt-1 flex items-center gap-1.5 truncate">
-                        <Building2 className="h-3 w-3 text-slate-400" /> {l.fornecedorNome || "Sem fornecedor"}
-                      </div>
+                      {editForn?.id === l.id ? (
+                        <div className="mt-1 flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                          <Building2 className="h-3 w-3 text-slate-400 shrink-0" />
+                          <datalist id="forn-card-datalist">
+                            {fornecedoresComItens.filter(f => f.key !== "__null__").map(f => (
+                              <option key={f.key} value={f.nome} />
+                            ))}
+                          </datalist>
+                          <input
+                            list="forn-card-datalist"
+                            autoFocus
+                            value={editForn.val}
+                            onChange={e => setEditForn(prev => prev ? { ...prev, val: e.target.value } : prev)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") atualizarLocadoMut.mutate({ companyId, id: l.id, fornecedorNome: editForn.val.trim() || null });
+                              if (e.key === "Escape") setEditForn(null);
+                            }}
+                            className="flex-1 min-w-0 text-xs border border-emerald-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            placeholder="Nome da locadora…"
+                          />
+                          <button
+                            onClick={() => atualizarLocadoMut.mutate({ companyId, id: l.id, fornecedorNome: editForn.val.trim() || null })}
+                            disabled={atualizarLocadoMut.isPending}
+                            className="shrink-0 px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                            {atualizarLocadoMut.isPending ? "…" : "OK"}
+                          </button>
+                          <button onClick={() => setEditForn(null)} className="shrink-0 text-slate-400 hover:text-slate-600 text-xs">✕</button>
+                        </div>
+                      ) : (
+                        <div
+                          className="text-xs text-slate-600 mt-1 flex items-center gap-1.5 truncate group/forn cursor-pointer hover:text-emerald-700"
+                          onClick={e => { e.stopPropagation(); setEditForn({ id: l.id, val: l.fornecedorNome || "" }); }}
+                          title="Clique para alterar a empresa locatária">
+                          <Building2 className="h-3 w-3 text-slate-400 group-hover/forn:text-emerald-600 shrink-0" />
+                          <span className="truncate">{l.fornecedorNome || <span className="italic text-slate-400">Sem fornecedor</span>}</span>
+                          <Pencil className="h-2.5 w-2.5 text-emerald-500 opacity-0 group-hover/forn:opacity-100 transition shrink-0" />
+                        </div>
+                      )}
                       {/* Rev. 2323 — Linha da obra vinculada (ou aviso quando sem) */}
                       <div className={`text-xs mt-1 flex items-center gap-1.5 truncate ${obraNome ? "text-emerald-700" : "text-amber-700"}`} title={obraNome || "Sem obra vinculada"}>
                         <MapPin className="h-3 w-3" />
