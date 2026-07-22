@@ -50,12 +50,14 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4514b** — **FIX: EDIÇÃO INLINE DE CATEGORIA NO PAINEL DE DETALHES (LOCADOS).** `locadoAtualizar` ganhou campo `categoria` no input schema + map. Painel de detalhes (`modalEventos`) ganhou seção "Categoria" com botão "Definir/Trocar" + input com datalist das categorias existentes + Salvar/Cancelar, exatamente como o inline edit de Fornecedor. ZERO schema change.
-- **Rev. 4514** — **FEAT: RAIO-X DE EQUIPAMENTO LOCADO.** Nova procedure tRPC `locadoRaioX` + modal `EquipamentoLocadoRaioXModal.tsx` integrado ao painel de Detalhes (modalEventos) via botão "Raio-X" no header. 3 abas: Visão Geral (4 KPIs: dias pagos, custo total, qtd eventos, qtd pessoas + galeria "Quem movimentou" com foto circular + matrícula + badge Responsável + gráfico de barras mensal + pills de tipos de evento), Timeline (vertical com ícone por tipo, foto+matrícula do funcionário, obra, observação, assinaturas de devolução) e Dados da Locação (fornecedor, datas, valores, responsável com Avatar). Backend: JOIN employees para foto+"fotoUrl"+matrícula; agregação de responsáveis com isResp=true para o responsável do locado; cálculo mensal por interseção de período. ZERO schema change.
-- **Rev. 4513** — **MIGRAÇÃO DE DADOS: EQUIPAMENTOS DA FC ENGENHARIA DE LOCADOS → PRÓPRIOS.** 47 registros de `equipamentos_locados` com fornecedor "FC ENGENHARIA E CONSTRUÇÃO LTDA" migrados atomicamente para `equipamentos_proprios`: em_uso→em_obra (obra preservada), devolvido→disponivel. Patrimônios únicos mantidos como-estão; múltiplas unidades do mesmo código recebem sufixo -01/-02… (ex: 1051-01 a 1051-12 para os 12 andaimes). Locados marcados como devolvido com data_fim_real=hoje + nota de migração. ZERO schema change. Também: campo "Valor de aquisição" sempre visível no modal de Editar Equip. Próprio (saiu do acordeão "Mais detalhes"). Rev. 4512b.
+- **Rev. 4516** — **FEAT: CONVERSÃO DE TIPO (PRÓPRIO ↔ LOCADO).** Badge "LOCADO → Próprio" no card de Locados + badge "PRÓPRIO" (hover) nos cards de Proprios + botões "→ Próprio" / "→ Locado" na barra de ação em lote. Próprio→Locado pede fornecedor+data. 2 novas mutations tRPC. ZERO schema change.
+- **Rev. 4515** — **REVERSÃO Rev. 4513:** 47 proprios deletados; 41 locados restaurados para em_uso; 6 locados nota limpa. Transação atômica no Neon.
 
 ### 5 one-liners
 
+- **Rev. 4514b** — **FIX: EDIÇÃO INLINE DE CATEGORIA (LOCADOS DETALHES).** `locadoAtualizar`+schema; seção Categoria com datalist no modalEventos. ZERO schema change.
+- **Rev. 4514** — **FEAT: RAIO-X DE EQUIPAMENTO LOCADO.** `locadoRaioX` tRPC + `EquipamentoLocadoRaioXModal.tsx` (3 abas: KPIs, Timeline, Dados). ZERO schema change.
+- **Rev. 4513** — REVERTIDA (Rev. 4515). Migração Locados→Próprios desfeita.
 - **Rev. 4512** — **FEAT: DASH UTILIZAÇÃO DE EQUIPAMENTOS LOCADOS.** Nova página `/equipamentos/locados-utilizacao`: KPIs, seção "Pagando parado no almox", gráfico barras mensais, rankings, histórico de ciclos. ZERO schema change.
 - **Rev. 4511** — **FEAT: DASH RETIRADAS DO ALMOXARIFADO (corrigido).** Nova página `/equipamentos/entregas`: KPIs, gráfico mensal, ranking quem/obras, seção "Ferramentas não devolvidas" com badge dias em aberto. ZERO schema change.
 - **Rev. 4510** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO + FOTOS NA PRESENÇA DDS.** Modal redesenhado com 3 abas, donut, area chart, bar chart dias da semana, "quem mais usa". Fotos de colaborador na lista de presença das sessões DDS. ZERO schema change.

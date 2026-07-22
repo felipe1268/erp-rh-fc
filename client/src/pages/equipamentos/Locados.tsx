@@ -250,6 +250,17 @@ export default function EquipamentosLocados() {
   // rename em lote, atinge só o item aberto.
   const [editForn, setEditForn] = useState<null | { id: number; val: string }>(null);
   const [editCategoria, setEditCategoria] = useState<null | { id: number; val: string }>(null); // Rev. 4514
+  // Rev. 4516 — Conversão de tipo: Locado → Próprio
+  const [modalConverterProprio, setModalConverterProprio] = useState<{ ids: number[]; nomes: string } | null>(null);
+  const converterParaProprioMut = trpc.equipamentos.locadoConverterParaProprio.useMutation({
+    onSuccess: (data) => {
+      utils.equipamentos.locadosListar.invalidate();
+      setModalConverterProprio(null);
+      setSelecionados(new Set());
+      toast.success(`${data.convertidos.length} equipamento(s) convertido(s) para Próprio (${data.convertidos.map(c => c.codigoPatrimonio).join(", ")})`);
+    },
+    onError: (e) => toast.error(formatTrpcError(e)),
+  });
   const atualizarLocadoMut = trpc.equipamentos.locadoAtualizar.useMutation({
     onSuccess: (_data, variables: any) => {
       utils.equipamentos.locadosListar.invalidate();
@@ -2197,7 +2208,19 @@ export default function EquipamentosLocados() {
                     </div>
                     <div className="font-bold text-emerald-700">{fmtMoney(g.valorMensalTotal)}<span className="text-[10px] text-slate-500 font-normal">/mês</span></div>
                   </div>
-                  <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-end gap-1">
+                  <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between gap-1">
+                    {/* Rev. 4516 — badge de tipo clicável */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const ativas = g.unidades.filter((u: any) => u.status !== "devolvido");
+                        if (ativas.length === 0) { toast.error("Todas as unidades já foram devolvidas."); return; }
+                        setModalConverterProprio({ ids: ativas.map((u: any) => u.id), nomes: `${g.descricao} (${ativas.length} un.)` });
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition"
+                      title="Clique para converter este equipamento para Próprio">
+                      <RefreshCw className="h-2.5 w-2.5" /> LOCADO → Próprio
+                    </button>
                     <button onClick={(e) => { e.stopPropagation(); setModalGrupo(g); }} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title={`Ver as ${g.unidades.length} unidades`}>
                       <Eye className="h-3.5 w-3.5" /> Ver {fmtN(g.unidades.length)} unidade(s)
                     </button>
@@ -2689,9 +2712,61 @@ export default function EquipamentosLocados() {
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setSelecionados(new Set())} className="px-3 py-1.5 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50">Cancelar</button>
+              {/* Rev. 4516 — converter lote para Próprio */}
+              <button
+                onClick={() => {
+                  const ids = Array.from(selecionados);
+                  setModalConverterProprio({ ids, nomes: `${fmtN(ids.length)} equipamento(s) selecionado(s)` });
+                }}
+                disabled={!!loteProgresso || converterParaProprioMut.isPending}
+                className="px-3 py-1.5 text-sm bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
+                <RefreshCw className="h-4 w-4" /> → Próprio
+              </button>
               <button onClick={confirmarExcluir} disabled={!!loteProgresso}
                 className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
                 <Trash2 className="h-4 w-4" /> Excluir {fmtN(selecionados.size)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 4516 — Modal confirmar conversão Locado → Próprio */}
+      {modalConverterProprio && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => !converterParaProprioMut.isPending && setModalConverterProprio(null)} />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="bg-amber-600 px-5 py-4 flex items-center justify-between">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <RefreshCw className="h-5 w-5" /> Converter para Equipamento Próprio
+              </h2>
+              {!converterParaProprioMut.isPending && (
+                <button onClick={() => setModalConverterProprio(null)} className="text-white/70 hover:text-white"><X className="h-4 w-4" /></button>
+              )}
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">Equipamento(s)</p>
+                <p className="text-sm font-semibold text-slate-800">{modalConverterProprio.nomes}</p>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3 space-y-1 text-xs text-slate-600">
+                <p>• Cada unidade ativa receberá um <strong>código de patrimônio</strong> automático (EQP-NNNN)</p>
+                <p>• O registro atual como <strong>Locado</strong> será marcado como devolvido</p>
+                <p>• O histórico de eventos é preservado</p>
+              </div>
+            </div>
+            <div className="px-5 pb-5 flex justify-end gap-2">
+              <button
+                onClick={() => setModalConverterProprio(null)}
+                disabled={converterParaProprioMut.isPending}
+                className="px-4 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button
+                onClick={() => converterParaProprioMut.mutate({ companyId, ids: modalConverterProprio.ids })}
+                disabled={converterParaProprioMut.isPending}
+                className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold inline-flex items-center gap-2 disabled:opacity-50">
+                {converterParaProprioMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Convertendo…</> : <><Check className="h-4 w-4" /> Confirmar conversão</>}
               </button>
             </div>
           </div>

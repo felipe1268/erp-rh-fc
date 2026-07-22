@@ -1,4 +1,57 @@
 /**
+ * Rev. 4516 - FEAT: CONVERSÃO DE TIPO DE EQUIPAMENTO (PRÓPRIO ↔ LOCADO)
+ *
+ * Feature permanente que substitui a migração manual (Rev. 4513): qualquer
+ * equipamento pode ter seu tipo alterado diretamente na UI, individualmente
+ * ou em lote, sem precisar de script no banco.
+ *
+ * INTERFACE:
+ *   - Equipamentos Locados: badge laranja "LOCADO → Próprio" no rodapé de cada
+ *     card de grupo (clique individual) + botão "→ Próprio" na barra de ação
+ *     quando há seleção múltipla.
+ *   - Equipamentos Próprios: badge azul "PRÓPRIO" (com ↔) visível no hover de
+ *     cada card (clique individual) + botão "→ Locado" na barra de ação de
+ *     seleção múltipla.
+ *
+ * LÓGICA DE CONVERSÃO:
+ *   Locado → Próprio:
+ *     - Cria registro em equipamentos_proprios com código de patrimônio
+ *       automático (EQP-NNNN), preserva descricao/categoria/obra/fotos
+ *     - status: em_uso→em_obra, qualquer outro→disponivel
+ *     - Marca locado como devolvido (data_fim_real=hoje) + nota em observacoes
+ *     - Suporta lote: processa todos os IDs ativos do grupo
+ *   Próprio → Locado:
+ *     - Pede: fornecedorNome (obrigatório), dataInicio, dataFimPrevista
+ *       (padrão +1 ano), valorMensal (opcional)
+ *     - Cria registro em equipamentos_locados preservando descricao/categoria/obra
+ *     - status: em_obra→em_uso, qualquer outro→aguardando_chegada
+ *     - Marca proprios como ativo=false + nota em observacoes
+ *
+ * BACKEND: 2 novas tRPC mutations:
+ *   - equipamentos.locadoConverterParaProprio({ companyId, ids[] })
+ *   - equipamentos.proprioConverterParaLocado({ companyId, ids[], fornecedorNome,
+ *     dataInicio, dataFimPrevista?, valorMensal? })
+ *
+ * ZERO schema change.
+ */
+
+/**
+ * Rev. 4515 - REVERSÃO DA MIGRAÇÃO Rev. 4513 (LOCADOS → PRÓPRIOS)
+ *
+ * Reverteu a migração de dados executada na Rev. 4513, que havia movido 47
+ * equipamentos de "equipamentos_locados" para "equipamentos_proprios".
+ *
+ * Executado via script Node.js direto no Neon em transação atômica:
+ *   - Passo 1: 41 locados com proprios.status='em_obra' restaurados para
+ *     status='em_uso', data_fim_real=NULL, nota de migração removida
+ *   - Passo 2: 6 locados com proprios.status='disponivel' mantidos como
+ *     devolvidos (já o eram antes), data_fim_real=NULL, nota removida
+ *   - Passo 3: 47 registros de equipamentos_proprios deletados
+ *
+ * ZERO schema change. Os equipamentos voltaram a aparecer na lista de Locados.
+ */
+
+/**
  * Rev. 4514 - FEAT: RAIO-X DE EQUIPAMENTO LOCADO
  *
  * Nova procedure tRPC `equipamentos.locadoRaioX` + modal `EquipamentoLocadoRaioXModal.tsx`

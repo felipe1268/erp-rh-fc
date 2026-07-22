@@ -130,6 +130,23 @@ export default function EquipamentosProprios() {
   }
   // Progresso do envio em lote (done/total)
   const [bulkTransfProgress, setBulkTransfProgress] = useState<{ done: number; total: number } | null>(null);
+  // Rev. 4516 — Conversão de tipo: Próprio → Locado
+  const [modalConverterLocado, setModalConverterLocado] = useState<{ ids: number[]; equips: any[] } | null>(null);
+  const [locFornecedor, setLocFornecedor] = useState("");
+  const [locDataInicio, setLocDataInicio] = useState(() => new Date().toISOString().slice(0, 10));
+  const [locDataFim, setLocDataFim] = useState("");
+  const [locValorMensal, setLocValorMensal] = useState("");
+  const converterParaLocadoMut = trpc.equipamentos.proprioConverterParaLocado.useMutation({
+    onSuccess: (data) => {
+      utils.equipamentos.propriosListar.invalidate();
+      setModalConverterLocado(null);
+      setSelecionados(new Set());
+      setLocFornecedor(""); setLocDataFim(""); setLocValorMensal("");
+      setLocDataInicio(new Date().toISOString().slice(0, 10));
+      toast.success(`${data.convertidos.length} equipamento(s) convertido(s) para Locado!`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const { data: obrasParaTransferir = [] } = trpc.obras.listForAlmoxarifado.useQuery(
     { companyId, forTransfer: true },
     { enabled: !!companyId }
@@ -1021,6 +1038,18 @@ export default function EquipamentosProprios() {
                           <Hash className="h-3 w-3" /> {p.codigoPatrimonio}
                         </span>
                         <div className="flex items-center gap-1">
+                          {/* Rev. 4516 — badge tipo clicável */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLocFornecedor(""); setLocDataFim(""); setLocValorMensal("");
+                              setLocDataInicio(new Date().toISOString().slice(0, 10));
+                              setModalConverterLocado({ ids: [p.id], equips: [p] });
+                            }}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200 transition opacity-0 group-hover:opacity-100"
+                            title="Clique para converter para Locado">
+                            <ArrowRightLeft className="h-2.5 w-2.5" /> PRÓPRIO
+                          </button>
                           {(p as any).transferenciaPendenteId ? (
                             <button
                               onClick={(e) => {
@@ -1766,6 +1795,19 @@ export default function EquipamentosProprios() {
             >
               Cancelar
             </button>
+            {/* Rev. 4516 — converter lote para Locado */}
+            <button
+              onClick={() => {
+                const itens = (data as any[]).filter((p: any) => selecionados.has(p.id));
+                setLocFornecedor(""); setLocDataFim(""); setLocValorMensal("");
+                setLocDataInicio(new Date().toISOString().slice(0, 10));
+                setModalConverterLocado({ ids: itens.map((p: any) => p.id), equips: itens });
+              }}
+              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 px-4 py-2 rounded-lg text-sm font-bold text-white transition"
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+              → Locado
+            </button>
             <button
               onClick={() => {
                 const itens = (data as any[]).filter((p: any) => selecionados.has(p.id));
@@ -1777,6 +1819,111 @@ export default function EquipamentosProprios() {
               <ArrowRightLeft className="h-4 w-4" />
               Transferir {selecionados.size}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 4516 — Modal conversão Próprio → Locado */}
+      {modalConverterLocado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => !converterParaLocadoMut.isPending && setModalConverterLocado(null)} />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="px-5 py-4 flex items-center justify-between" style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#2E4373 100%)" }}>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <ArrowRightLeft className="h-5 w-5" />
+                {modalConverterLocado.equips.length > 1 ? `Converter ${modalConverterLocado.equips.length} para Locado` : "Converter para Equipamento Locado"}
+              </h2>
+              {!converterParaLocadoMut.isPending && (
+                <button onClick={() => setModalConverterLocado(null)} className="text-white/70 hover:text-white"><X className="h-4 w-4" /></button>
+              )}
+            </div>
+            <div className="p-5 space-y-4">
+              {modalConverterLocado.equips.length > 1 ? (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-28 overflow-y-auto space-y-1">
+                  {modalConverterLocado.equips.map((e: any) => (
+                    <p key={e.id} className="text-xs text-slate-700 font-medium">{e.descricao} <span className="text-slate-400 font-mono">({e.codigoPatrimonio})</span></p>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Equipamento</p>
+                  <p className="text-sm font-semibold text-slate-800">{modalConverterLocado.equips[0]?.descricao}</p>
+                  <p className="text-[11px] text-slate-500 font-mono">{modalConverterLocado.equips[0]?.codigoPatrimonio}</p>
+                </div>
+              )}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Locadora / Fornecedor *</label>
+                  <input
+                    value={locFornecedor}
+                    onChange={e => setLocFornecedor(e.target.value)}
+                    placeholder="Nome da empresa locadora"
+                    className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                    autoFocus
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Início da locação *</label>
+                    <input
+                      type="date"
+                      value={locDataInicio}
+                      onChange={e => setLocDataInicio(e.target.value)}
+                      className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Previsão fim</label>
+                    <input
+                      type="date"
+                      value={locDataFim}
+                      onChange={e => setLocDataFim(e.target.value)}
+                      placeholder="Opcional"
+                      className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Valor mensal (R$)</label>
+                  <input
+                    type="number"
+                    value={locValorMensal}
+                    onChange={e => setLocValorMensal(e.target.value)}
+                    placeholder="Opcional"
+                    className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                    min={0}
+                    step={0.01}
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500">O registro em Equipamentos Próprios será desativado e o equipamento aparecerá na lista de Locados.</p>
+            </div>
+            <div className="px-5 pb-5 flex justify-end gap-2">
+              <button
+                onClick={() => setModalConverterLocado(null)}
+                disabled={converterParaLocadoMut.isPending}
+                className="px-4 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (!locFornecedor.trim()) { toast.error("Informe o nome da locadora."); return; }
+                  if (!locDataInicio) { toast.error("Informe a data de início."); return; }
+                  converterParaLocadoMut.mutate({
+                    companyId,
+                    ids: modalConverterLocado.ids,
+                    fornecedorNome: locFornecedor.trim(),
+                    dataInicio: locDataInicio,
+                    dataFimPrevista: locDataFim || undefined,
+                    valorMensal: locValorMensal ? parseFloat(locValorMensal) : undefined,
+                  });
+                }}
+                disabled={converterParaLocadoMut.isPending || !locFornecedor.trim()}
+                className="px-4 py-2 text-sm font-semibold text-white rounded-lg inline-flex items-center gap-2 disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#2E4373 100%)" }}>
+                {converterParaLocadoMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Convertendo…</> : <><Check className="h-4 w-4" /> Confirmar conversão</>}
+              </button>
+            </div>
           </div>
         </div>
       )}

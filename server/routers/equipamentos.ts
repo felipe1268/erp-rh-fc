@@ -1365,6 +1365,133 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       return { ok: true as const, excluidos: deleted.length, almoxRemovidos };
     }),
 
+  // Rev. 4516 — Conversão de tipo Locado → Próprio (individual ou lote até 50).
+  // Para cada locado: gera codigoPatrimonio automático, cria registro em
+  // equipamentos_proprios e marca o locado como devolvido (mesmo fluxo da
+  // migração Rev. 4513, mas disponível permanentemente via UI).
+  locadoConverterParaProprio: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ids: z.array(z.number()).min(1).max(50),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      const criadorNome = (ctx.user as any).nome || (ctx.user as any).email || "Sistema";
+      const convertidos: { id: number; codigoPatrimonio: string }[] = [];
+      for (const locadoId of input.ids) {
+        const locRes: any = await db.execute(sql`
+          SELECT id, obra_id, descricao, categoria, status, foto_url, fotos_recebimento_json, fornecedor_nome
+          FROM equipamentos_locados
+          WHERE id = ${locadoId} AND company_id = ${input.companyId}
+          LIMIT 1
+        `);
+        const loc = (locRes?.rows ?? locRes)[0];
+        if (!loc || loc.status === "devolvido") continue;
+        const fotosRec = Array.isArray(loc.fotos_recebimento_json) ? loc.fotos_recebimento_json : [];
+        const fotosJson = fotosRec.length > 0 ? fotosRec : (loc.foto_url ? [{ url: loc.foto_url, caption: "" }] : null);
+        const status = loc.status === "em_uso" ? "em_obra" : "disponivel";
+        const obraId = loc.status === "em_uso" ? (loc.obra_id ?? null) : null;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          try {
+            const codigoPatrimonio = await proximoCodigoPatrimonio(db, input.companyId);
+            const [created] = await db.insert(equipamentosProprios).values({
+              companyId: input.companyId,
+              codigoPatrimonio,
+              descricao: loc.descricao,
+              categoria: loc.categoria ?? null,
+              status,
+              localizacaoAtualTipo: obraId ? "obra" : "almoxarifado",
+              localizacaoAtualObraId: obraId,
+              fotosJson,
+              observacoes: `Convertido de Equipamentos Locados${loc.fornecedor_nome ? ` (antes locado de: ${loc.fornecedor_nome})` : ""}`,
+              ativo: true,
+              criadoPorUserId: ctx.user.id,
+              criadoPorNome: criadorNome,
+            } as any).returning({ id: equipamentosProprios.id, codigoPatrimonio: equipamentosProprios.codigoPatrimonio });
+            await db.execute(sql`
+              UPDATE equipamentos_locados
+              SET status = 'devolvido', data_fim_real = ${today},
+                  observacoes = COALESCE(observacoes, '') || ' | Convertido para Equipamento Próprio'
+              WHERE id = ${locadoId} AND company_id = ${input.companyId}
+            `);
+            convertidos.push({ id: created.id, codigoPatrimonio: created.codigoPatrimonio });
+            break;
+          } catch (e: any) {
+            if (e?.code === "23505" && attempt < 7) continue;
+            throw e;
+          }
+        }
+      }
+      return { ok: true as const, convertidos };
+    }),
+
+  // Rev. 4516 — Conversão de tipo Próprio → Locado (individual ou lote até 50).
+  // Para cada próprio: cria registro em equipamentos_locados e marca o próprio
+  // como inativo (ativo=false). O fornecedor é pedido uma vez para todo o lote.
+  proprioConverterParaLocado: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ids: z.array(z.number()).min(1).max(50),
+      fornecedorNome: z.string().min(1).max(255),
+      dataInicio: z.string().min(10).max(10),
+      dataFimPrevista: z.string().min(10).max(10).optional(),
+      valorMensal: z.number().nullable().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const dataFim = input.dataFimPrevista ?? (() => {
+        const d = new Date(input.dataInicio + "T00:00:00");
+        d.setFullYear(d.getFullYear() + 1);
+        return d.toISOString().slice(0, 10);
+      })();
+      const convertidos: number[] = [];
+      for (const proprioId of input.ids) {
+        const pRes: any = await db.execute(sql`
+          SELECT id, descricao, categoria, status, fotos_json, localizacao_atual_obra_id
+          FROM equipamentos_proprios
+          WHERE id = ${proprioId} AND company_id = ${input.companyId} AND ativo = true
+          LIMIT 1
+        `);
+        const pr = (pRes?.rows ?? pRes)[0];
+        if (!pr) continue;
+        const fotos = Array.isArray(pr.fotos_json) ? pr.fotos_json : [];
+        const fotoUrl = fotos.length > 0 ? (fotos[0] as any)?.url ?? null : null;
+        const locStatus = pr.status === "em_obra" ? "em_uso" : "aguardando_chegada";
+        const [created] = await db.insert(equipamentosLocados).values({
+          companyId: input.companyId,
+          obraId: pr.localizacao_atual_obra_id ?? null,
+          descricao: pr.descricao,
+          categoria: pr.categoria ?? null,
+          fornecedorNome: input.fornecedorNome,
+          status: locStatus,
+          dataInicio: input.dataInicio,
+          dataFimPrevista: dataFim,
+          valorMensal: input.valorMensal != null ? String(input.valorMensal) : null,
+          fotoUrl,
+          observacoes: `Convertido de Equipamento Próprio (tipo alterado via painel)`,
+        } as any).returning({ id: equipamentosLocados.id });
+        await db.execute(sql`
+          UPDATE equipamentos_proprios
+          SET ativo = false,
+              observacoes = COALESCE(observacoes, '') || ' | Convertido para Equipamento Locado'
+          WHERE id = ${proprioId} AND company_id = ${input.companyId}
+        `);
+        convertidos.push(created.id);
+      }
+      return { ok: true as const, convertidos };
+    }),
+
   locadoDevolver: protectedProcedure
     .input(z.object({
       companyId: z.number(),
