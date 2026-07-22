@@ -1,3 +1,4 @@
+- [Equipamento utilização fonte de dados](equipamento-utilizacao-fonte-dados.md) — utilização diária vem de warehouse_loans (não equipamento_locado_eventos); link via almoxarifado_itens.equipamento_vinculado_id.
 - [Scorecard month-end date construction](scorecard-month-end-date.md) — `|| '-31'` rejeita junho/abr/set/nov/fev; sempre usar `|| '-01')::date + INTERVAL '1 month' - 1 day`.
 - [Férias custo via JOIN cross-company](ferias-custo-join-cross-company.md) — empSalarioMap filtrado por companyFilter perde funcionários de empresa irmã; fix: incluir salarioBase no SELECT do JOIN que já existe.
 - [site_periods isActive fallback bug](site-periods-isactive-fallback.md) — Ramo B usa CURRENT_DATE quando isActive=0; Ramo A Prioridade 2 precisa de isActive=1 no OF check; ex-funcionários aparecem no mês corrente.

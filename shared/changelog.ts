@@ -1,4 +1,46 @@
 /**
+ * Rev. 4517 - FIX: FONTE DE DADOS DE UTILIZAÇÃO — warehouse_loans como verdade única
+ *
+ * PROBLEMA IDENTIFICADO:
+ *   Os dashboards de utilização de equipamentos liam de `equipamento_locado_eventos`
+ *   (tabela nunca populada pelo fluxo de almoxarifado) e de
+ *   `equipamentos_proprios_transferencias.remetente_nome` (transferências inter-obras,
+ *   raras). Por isso "Em campo agora = 0" e "Quem mais utiliza = Sem movimentações"
+ *   mesmo com 60+ empréstimos ativos visíveis na tela "Fechar Dia".
+ *
+ * FONTE CORRETA:
+ *   `warehouse_loans` é a tabela de verdade para utilização diária.
+ *   Link: warehouse_loans.item_id → almoxarifado_itens.equipamento_vinculado_id
+ *         WHERE equipamento_vinculado_tipo IN ('locado','proprio')
+ *
+ * MUDANÇAS (server/routers/equipamentos.ts):
+ *
+ *   locadosUtilizacao:
+ *     - cycleRaw: reescrito para JOIN warehouse_loans → almoxarifado_itens → equipamentos_locados
+ *       (antes: equipamento_locado_eventos SAIDA_ALMOX — vazia)
+ *     - idleRaw: LEFT JOIN almoxarifado_itens + LATERAL warehouse_loans; idle = último
+ *       empréstimo NULL/devolvido/perdido (antes: eventos vazia → todos mostravam idle)
+ *     - emCampoRaw: JOIN almoxarifado_itens + LATERAL WHERE status='emprestado'
+ *       (antes: 0 sempre)
+ *     - periodFilter: agora filtra por wl.data_emprestimo::date (VARCHAR YYYY-MM-DD)
+ *
+ *   proprioRaioX — "Quem mais utiliza":
+ *     - wlUsageRaw: GROUP BY funcionario_nome/id em warehouse_loans
+ *       via almoxarifado_itens equipamento_vinculado_tipo='proprio'
+ *     - Fallback para transferencias se não há retiradas de almoxarifado
+ *     - Busca foto do funcionário por employees.id (não user_id — era bug anterior)
+ *
+ *   locadoRaioX:
+ *     - wlRows: nova query traz retiradas do almoxarifado vinculadas ao locado
+ *     - responsáveis: wlRows incluídos no addPessoa loop (tipo SAIDA_ALMOX)
+ *     - timeline: fusão evRows + wlRows ordenada por dataEvento; IDs negativos
+ *       para distinguir de eventos do sistema
+ *     - stats.qtdEventos: soma evRows + wlRows; stats.qtdRetiradas novo campo
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4516 - FEAT: CONVERSÃO DE TIPO DE EQUIPAMENTO (PRÓPRIO ↔ LOCADO)
  *
  * Feature permanente que substitui a migração manual (Rev. 4513): qualquer

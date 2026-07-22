@@ -4021,61 +4021,58 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       const mes = input.mes ?? null;
       const ano = input.ano;
 
-      // Filtro de período: mes=null → ano todo
+      // Filtro de período: usa data_emprestimo (VARCHAR 'YYYY-MM-DD') de warehouse_loans
       const periodFilter = mes != null
-        ? sql`AND EXTRACT(MONTH FROM ev.data_evento::date) = ${mes}
-              AND EXTRACT(YEAR  FROM ev.data_evento::date) = ${ano}`
-        : sql`AND EXTRACT(YEAR FROM ev.data_evento::date) = ${ano}`;
+        ? sql`AND EXTRACT(MONTH FROM wl.data_emprestimo::date) = ${mes}
+              AND EXTRACT(YEAR  FROM wl.data_emprestimo::date) = ${ano}`
+        : sql`AND EXTRACT(YEAR FROM wl.data_emprestimo::date) = ${ano}`;
 
-      // ── Ciclos: SAIDA_ALMOX emparelhada com próximo RETORNO_ALMOX ─────────
+      // ── Ciclos: cada linha de warehouse_loans vinculada a um equipamento locado ──
+      // Link: warehouse_loans.item_id → almoxarifado_itens.equipamento_vinculado_id
+      //       onde equipamento_vinculado_tipo = 'locado'
       const cycleRaw = (await db.execute(sql`
-        WITH saidas AS (
-          SELECT
-            ev.id,
-            ev.equipamento_locado_id,
-            ev.data_evento              AS saiu_em,
-            ev.funcionario_nome         AS quem_saiu,
-            ev.usuario_nome             AS registrado_por,
-            el.descricao,
-            el.categoria,
-            el.valor_mensal::numeric    AS valor_mensal,
-            el.fornecedor_nome,
-            el.foto_url,
-            el.quantidade
-          FROM equipamento_locado_eventos ev
-          JOIN equipamentos_locados el
-            ON el.id            = ev.equipamento_locado_id
-           AND el.company_id    = ${cid}
-          WHERE ev.company_id   = ${cid}
-            AND ev.tipo         = 'SAIDA_ALMOX'
-            ${periodFilter}
-        )
         SELECT
-          s.*,
-          ret.data_evento       AS devolvido_em,
-          ret.funcionario_nome  AS quem_devolveu,
+          wl.id,
+          el.id                         AS equipamento_locado_id,
+          el.descricao,
+          el.categoria,
+          el.valor_mensal::numeric      AS valor_mensal,
+          el.fornecedor_nome,
+          el.foto_url,
+          el.quantidade,
+          wl.funcionario_nome           AS quem_saiu,
+          wl.almoxarife_nome            AS registrado_por,
+          (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp AS saiu_em,
+          CASE WHEN wl.data_devolucao IS NOT NULL
+            THEN (wl.data_devolucao || 'T' || COALESCE(wl.hora_devolucao,'00:00') || ':00')::timestamp
+          END AS devolvido_em,
+          wl.funcionario_nome           AS quem_devolveu,
           CASE
-            WHEN ret.data_evento IS NOT NULL
-            THEN EXTRACT(EPOCH FROM (ret.data_evento::timestamptz - s.saiu_em::timestamptz))/3600
-            ELSE EXTRACT(EPOCH FROM (NOW() - s.saiu_em::timestamptz))/3600
+            WHEN wl.data_devolucao IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (
+              (wl.data_devolucao || 'T' || COALESCE(wl.hora_devolucao,'00:00') || ':00')::timestamp
+              - (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp
+            ))/3600
+            ELSE EXTRACT(EPOCH FROM (
+              NOW() - (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp
+            ))/3600
           END AS horas_fora
-        FROM saidas s
-        LEFT JOIN LATERAL (
-          SELECT data_evento, funcionario_nome
-          FROM equipamento_locado_eventos
-          WHERE company_id           = ${cid}
-            AND equipamento_locado_id = s.equipamento_locado_id
-            AND tipo                 = 'RETORNO_ALMOX'
-            AND data_evento          > s.saiu_em
-          ORDER BY data_evento ASC
-          LIMIT 1
-        ) ret ON true
-        ORDER BY s.saiu_em DESC
+        FROM warehouse_loans wl
+        JOIN almoxarifado_itens ai
+          ON ai.id                         = wl.item_id
+         AND ai.equipamento_vinculado_tipo = 'locado'
+         AND ai.company_id                = ${cid}
+        JOIN equipamentos_locados el
+          ON el.id         = ai.equipamento_vinculado_id
+         AND el.company_id = ${cid}
+        WHERE wl.company_id = ${cid}
+          ${periodFilter}
+        ORDER BY saiu_em DESC
         LIMIT 500
       `)).rows as any[];
 
-      // ── Em almox agora: equipamentos ativos cujo último evento relevante
-      //    não é SAIDA_ALMOX (= parado no almox, pagando locação sem usar) ──
+      // ── Em almox (ocioso): locados sem empréstimo ativo no momento ────────
+      // Usa LEFT JOIN ao almoxarifado_itens; sem link → fallback "sempre ocioso"
       const idleRaw = (await db.execute(sql`
         SELECT
           el.id,
@@ -4085,49 +4082,55 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           el.valor_mensal::numeric         AS valor_mensal,
           el.fornecedor_nome,
           el.foto_url,
-          last_ev.tipo                     AS ultimo_evento,
+          last_loan.status                 AS ultimo_evento,
           COALESCE(
-            last_ev.data_evento,
+            CASE WHEN last_loan.data_devolucao IS NOT NULL
+              THEN (last_loan.data_devolucao || 'T' || COALESCE(last_loan.hora_devolucao,'00:00') || ':00')::timestamp
+            END,
             (el.data_inicio || 'T00:00:00')::timestamp
           )                                AS parado_desde,
-          EXTRACT(EPOCH FROM (
-            NOW() - COALESCE(
-              last_ev.data_evento::timestamptz,
-              (el.data_inicio || 'T00:00:00')::timestamptz
-            )
-          ))/86400                         AS dias_ociosos
+          EXTRACT(EPOCH FROM (NOW() - COALESCE(
+            CASE WHEN last_loan.data_devolucao IS NOT NULL
+              THEN (last_loan.data_devolucao || 'T' || COALESCE(last_loan.hora_devolucao,'00:00') || ':00')::timestamp
+            END,
+            (el.data_inicio || 'T00:00:00')::timestamp
+          )))/86400                        AS dias_ociosos
         FROM equipamentos_locados el
+        LEFT JOIN almoxarifado_itens ai
+          ON ai.equipamento_vinculado_tipo = 'locado'
+         AND ai.equipamento_vinculado_id  = el.id
+         AND ai.company_id                = ${cid}
         LEFT JOIN LATERAL (
-          SELECT tipo, data_evento
-          FROM equipamento_locado_eventos
-          WHERE company_id            = ${cid}
-            AND equipamento_locado_id = el.id
-            AND tipo IN ('SAIDA_ALMOX','RETORNO_ALMOX','RECEBIMENTO')
-          ORDER BY data_evento DESC
+          SELECT status, data_devolucao, hora_devolucao
+          FROM warehouse_loans
+          WHERE item_id    = ai.id
+            AND company_id = ${cid}
+          ORDER BY id DESC
           LIMIT 1
-        ) last_ev ON true
+        ) last_loan ON ai.id IS NOT NULL
         WHERE el.company_id = ${cid}
           AND el.status NOT IN ('devolvido','aguardando_chegada')
-          AND (last_ev.tipo IS NULL OR last_ev.tipo IN ('RETORNO_ALMOX','RECEBIMENTO'))
+          AND (last_loan.status IS NULL OR last_loan.status IN ('devolvido','perdido'))
         ORDER BY parado_desde ASC
       `)).rows as any[];
 
-      // ── Em campo agora (SAIDA_ALMOX como último evento) ───────────────────
+      // ── Em campo agora: locados com empréstimo ativo (status='emprestado') ─
       const emCampoRaw = (await db.execute(sql`
-        SELECT COUNT(*)::int AS cnt
+        SELECT COUNT(DISTINCT el.id)::int AS cnt
         FROM equipamentos_locados el
+        JOIN almoxarifado_itens ai
+          ON ai.equipamento_vinculado_tipo = 'locado'
+         AND ai.equipamento_vinculado_id  = el.id
+         AND ai.company_id                = ${cid}
         INNER JOIN LATERAL (
-          SELECT tipo
-          FROM equipamento_locado_eventos
-          WHERE company_id            = ${cid}
-            AND equipamento_locado_id = el.id
-            AND tipo IN ('SAIDA_ALMOX','RETORNO_ALMOX','RECEBIMENTO')
-          ORDER BY data_evento DESC
+          SELECT status FROM warehouse_loans
+          WHERE item_id    = ai.id
+            AND company_id = ${cid}
+          ORDER BY id DESC
           LIMIT 1
-        ) last_ev ON true
+        ) last_loan ON last_loan.status = 'emprestado'
         WHERE el.company_id = ${cid}
           AND el.status NOT IN ('devolvido','aguardando_chegada')
-          AND last_ev.tipo = 'SAIDA_ALMOX'
       `)).rows as any[];
 
       // ── Derivações JS ─────────────────────────────────────────────────────
@@ -4364,29 +4367,64 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         }
       }
 
-      // ── Quem mais usa ─────────────────────────────────────────────────
-      const usageMap: Record<string, { nome: string; remetenteId: number | null; count: number }> = {};
-      for (const t of transfs) {
-        if (t.status === "aceito" && t.destino_obra_id && t.remetente_nome) {
-          if (!usageMap[t.remetente_nome]) {
-            usageMap[t.remetente_nome] = { nome: t.remetente_nome, remetenteId: t.remetente_id ?? null, count: 0 };
+      // ── Quem mais usa — via warehouse_loans (retiradas do almoxarifado) ──
+      // Link: warehouse_loans.item_id → almoxarifado_itens onde
+      //       equipamento_vinculado_tipo='proprio' AND equipamento_vinculado_id=equipamentoId
+      const wlUsageRaw: any[] = ((await db.execute(sql`
+        SELECT
+          wl.funcionario_nome,
+          wl.funcionario_id,
+          COUNT(*) AS count
+        FROM warehouse_loans wl
+        JOIN almoxarifado_itens ai
+          ON ai.id                         = wl.item_id
+         AND ai.equipamento_vinculado_tipo = 'proprio'
+         AND ai.equipamento_vinculado_id  = ${input.equipamentoId}
+         AND ai.company_id                = ${input.companyId}
+        WHERE wl.company_id = ${input.companyId}
+        GROUP BY wl.funcionario_nome, wl.funcionario_id
+        ORDER BY count DESC
+        LIMIT 5
+      `)) as any)?.rows ?? [];
+
+      let maisUsadoPor: { nome: string; qtdMovimentacoes: number; fotoUrl: string | null } | null = null;
+      if (wlUsageRaw.length > 0) {
+        const top = wlUsageRaw[0];
+        let topUserFoto: string | null = null;
+        if (top.funcionario_id) {
+          try {
+            const rows = ((await db.execute(sql`
+              SELECT foto_url FROM employees WHERE id = ${top.funcionario_id} LIMIT 1
+            `)) as any)?.rows ?? [];
+            topUserFoto = rows[0]?.foto_url ?? null;
+          } catch { /* opcional */ }
+        }
+        maisUsadoPor = { nome: top.funcionario_nome, qtdMovimentacoes: Number(top.count), fotoUrl: topUserFoto };
+      } else {
+        // Fallback: transferências inter-obras (caso não haja retiradas de almoxarifado)
+        const usageMap: Record<string, { nome: string; remetenteId: number | null; count: number }> = {};
+        for (const t of transfs) {
+          if (t.status === "aceito" && t.destino_obra_id && t.remetente_nome) {
+            if (!usageMap[t.remetente_nome]) {
+              usageMap[t.remetente_nome] = { nome: t.remetente_nome, remetenteId: t.remetente_id ?? null, count: 0 };
+            }
+            usageMap[t.remetente_nome].count++;
           }
-          usageMap[t.remetente_nome].count++;
+        }
+        const topUser = Object.values(usageMap).sort((a, b) => b.count - a.count)[0] ?? null;
+        if (topUser) {
+          let topUserFoto: string | null = null;
+          if (topUser.remetenteId) {
+            try {
+              const rows = ((await db.execute(sql`
+                SELECT foto_url FROM employees WHERE user_id = ${topUser.remetenteId} LIMIT 1
+              `)) as any)?.rows ?? [];
+              topUserFoto = rows[0]?.foto_url ?? null;
+            } catch { /* opcional */ }
+          }
+          maisUsadoPor = { nome: topUser.nome, qtdMovimentacoes: topUser.count, fotoUrl: topUserFoto };
         }
       }
-      const topUser = Object.values(usageMap).sort((a, b) => b.count - a.count)[0] ?? null;
-      let topUserFoto: string | null = null;
-      if (topUser?.remetenteId) {
-        try {
-          const rows = ((await db.execute(sql`
-            SELECT foto_url FROM employees WHERE user_id = ${topUser.remetenteId} LIMIT 1
-          `)) as any)?.rows ?? [];
-          topUserFoto = rows[0]?.foto_url ?? null;
-        } catch { /* opcional */ }
-      }
-      const maisUsadoPor = topUser
-        ? { nome: topUser.nome, qtdMovimentacoes: topUser.count, fotoUrl: topUserFoto }
-        : null;
 
       // ── Primeira obra ─────────────────────────────────────────────────
       const primeiraTransfObra = accepted.find(t => !!t.destino_obra_id) ?? null;
@@ -4571,6 +4609,34 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       const valorTotal = Math.round(valorDia * totalDias * 100) / 100;
       const ativo = loc.status !== "devolvido";
 
+      // 3b. Retiradas do almoxarifado (warehouse_loans) — fonte real de utilização
+      const wlRows: any[] = ((await db.execute(sql`
+        SELECT
+          wl.id,
+          wl.funcionario_id,
+          wl.funcionario_nome,
+          wl.obra_id,
+          wl.data_emprestimo,
+          wl.hora_emprestimo,
+          wl.data_devolucao,
+          wl.hora_devolucao,
+          wl.status,
+          wl.almoxarife_nome,
+          o.nome AS obra_nome,
+          emp."fotoUrl" AS emp_foto_url,
+          emp.matricula  AS emp_matricula
+        FROM warehouse_loans wl
+        JOIN almoxarifado_itens ai
+          ON ai.id                         = wl.item_id
+         AND ai.equipamento_vinculado_tipo = 'locado'
+         AND ai.equipamento_vinculado_id  = ${lid}
+         AND ai.company_id                = ${cid}
+        LEFT JOIN obras o ON o.id = wl.obra_id
+        LEFT JOIN employees emp ON emp.id = wl.funcionario_id
+        WHERE wl.company_id = ${cid}
+        ORDER BY wl.data_emprestimo ASC, wl.id ASC
+      `)) as any)?.rows ?? [];
+
       // 4. Responsáveis — agrupa pessoas distintas por participação
       const pessoaMap: Record<string, {
         nome: string; foto: string | null; matricula: string | null;
@@ -4602,6 +4668,10 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         if (ev.assinatura_entregador_nome) addPessoa(ev.assinatura_entregador_nome, null, null, "DEVOLUCAO_FORNECEDOR");
         if (ev.assinatura_recebedor_nome)  addPessoa(ev.assinatura_recebedor_nome,  null, null, "DEVOLUCAO_FORNECEDOR");
       }
+      // Inclui retiradas do almoxarifado na lista de responsáveis
+      for (const wl of wlRows) {
+        addPessoa(wl.funcionario_nome, wl.emp_foto_url ?? null, wl.emp_matricula ?? null, "SAIDA_ALMOX");
+      }
       const responsaveis = Object.values(pessoaMap).sort((a, b) => (b.isResp ? 1 : 0) - (a.isResp ? 1 : 0) || b.qtd - a.qtd);
 
       // 5. Dados mensais — últimos 12 meses
@@ -4621,23 +4691,43 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         mensal.push({ mes: ym, label, diasPagos, valorPago: Math.round(diasPagos * valorDia * 100) / 100 });
       }
 
-      // 6. Timeline normalizada
-      const timeline = evRows.map((ev: any) => ({
-        id:                      ev.id,
-        tipo:                    ev.tipo,
-        dataEvento:              ev.data_evento,
-        funcionarioNome:         ev.funcionario_nome ?? ev.emp_nome ?? null,
-        funcionarioFoto:         ev.emp_foto_url ?? null,
-        funcionarioMatricula:    ev.emp_matricula ?? null,
-        usuarioNome:             ev.usuario_nome ?? null,
-        obraNome:                ev.obra_nome ?? null,
-        observacao:              ev.observacao ?? null,
-        assinaturaEntregadorNome: ev.assinatura_entregador_nome ?? null,
-        assinaturaEntregadorUrl:  ev.assinatura_entregador_url  ?? null,
-        assinaturaRecebedorNome:  ev.assinatura_recebedor_nome  ?? null,
-        assinaturaRecebedorUrl:   ev.assinatura_recebedor_url   ?? null,
-        pdfComprovanteToken:      ev.pdf_comprovante_token       ?? null,
-      }));
+      // 6. Timeline normalizada — eventos do sistema + retiradas do almoxarifado
+      const timeline = [
+        ...evRows.map((ev: any) => ({
+          id:                      ev.id,
+          tipo:                    ev.tipo,
+          dataEvento:              ev.data_evento,
+          funcionarioNome:         ev.funcionario_nome ?? ev.emp_nome ?? null,
+          funcionarioFoto:         ev.emp_foto_url ?? null,
+          funcionarioMatricula:    ev.emp_matricula ?? null,
+          usuarioNome:             ev.usuario_nome ?? null,
+          obraNome:                ev.obra_nome ?? null,
+          observacao:              ev.observacao ?? null,
+          assinaturaEntregadorNome: ev.assinatura_entregador_nome ?? null,
+          assinaturaEntregadorUrl:  ev.assinatura_entregador_url  ?? null,
+          assinaturaRecebedorNome:  ev.assinatura_recebedor_nome  ?? null,
+          assinaturaRecebedorUrl:   ev.assinatura_recebedor_url   ?? null,
+          pdfComprovanteToken:      ev.pdf_comprovante_token       ?? null,
+        })),
+        ...wlRows.map((wl: any) => ({
+          id:                      -(wl.id as number),
+          tipo:                    wl.status === "devolvido" ? "RETORNO_ALMOX" : "SAIDA_ALMOX",
+          dataEvento:              wl.data_emprestimo + (wl.hora_emprestimo ? `T${wl.hora_emprestimo}:00` : "T00:00:00"),
+          funcionarioNome:         wl.funcionario_nome ?? null,
+          funcionarioFoto:         wl.emp_foto_url ?? null,
+          funcionarioMatricula:    wl.emp_matricula ?? null,
+          usuarioNome:             wl.almoxarife_nome ?? null,
+          obraNome:                wl.obra_nome ?? null,
+          observacao:              wl.data_devolucao
+            ? `Devolvido em ${wl.data_devolucao}${wl.hora_devolucao ? ` às ${wl.hora_devolucao}` : ""}`
+            : null,
+          assinaturaEntregadorNome: null,
+          assinaturaEntregadorUrl:  null,
+          assinaturaRecebedorNome:  null,
+          assinaturaRecebedorUrl:   null,
+          pdfComprovanteToken:      null,
+        })),
+      ].sort((a, b) => (a.dataEvento < b.dataEvento ? -1 : a.dataEvento > b.dataEvento ? 1 : 0));
 
       return {
         locado: {
@@ -4664,8 +4754,9 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           totalDias,
           valorTotal,
           ativo,
-          qtdEventos: evRows.length,
+          qtdEventos: evRows.length + wlRows.length,
           qtdPessoas: Object.keys(pessoaMap).length,
+          qtdRetiradas: wlRows.length,
         },
         responsaveis,
         timeline,
