@@ -367,8 +367,6 @@ export default function EquipamentosLocados() {
   });
   const [loteCategoria, setLoteCategoria] = useState("");
   const [loteFornecedor, setLoteFornecedor] = useState("");
-  const [loteFornecedorManual, setLoteFornecedorManual] = useState(false);
-  const [loteCategoriaManual, setLoteCategoriaManual] = useState(false);
 
   // Estados pra modais (substituem window.confirm + toast invisível no iPad)
   const [confirmExcluir, setConfirmExcluir] = useState<number | null>(null); // total a excluir
@@ -2811,9 +2809,21 @@ export default function EquipamentosLocados() {
                   <option key={f.key} value={f.nome}>{f.nome}</option>
                 ))}
               </select>
+              {/* Renomear locadora selecionada — corrige typos/duplicatas em lote */}
+              {loteFornecedor && (
+                <button
+                  title="Renomear esta locadora em todos os equipamentos"
+                  onClick={() => {
+                    const f = fornecedoresComItens.find(x => x.nome === loteFornecedor);
+                    setRenomearForn({ nomeAtual: loteFornecedor, nomeNovo: loteFornecedor, count: f?.count ?? 0, valorMes: f?.valorMes ?? 0 });
+                  }}
+                  className="p-1.5 border border-slate-300 rounded-md text-slate-500 hover:text-violet-700 hover:border-violet-400 shrink-0">
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
               <button
                 onClick={() => {
-                  if (!loteFornecedor.trim()) { toast.warning("Selecione ou digite o fornecedor."); return; }
+                  if (!loteFornecedor.trim()) { toast.warning("Selecione o fornecedor."); return; }
                   fornecedorLoteMut.mutate({ companyId, ids: Array.from(selecionados), fornecedorNome: loteFornecedor.trim() });
                 }}
                 disabled={!loteFornecedor.trim() || fornecedorLoteMut.isPending}
