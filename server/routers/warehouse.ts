@@ -1706,8 +1706,13 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         if (!destinoObraIdAuthz || !Number.isInteger(destinoObraIdAuthz) || destinoObraIdAuthz <= 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Destino do tipo 'obra' exige destinoObraId inteiro positivo." });
         }
-        if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, destinoObraIdAuthz))) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra destino." });
+        // Destino: apenas valida que a obra pertence à mesma empresa (tenant guard).
+        // Não exige acesso do usuário à obra destino — qualquer operador com acesso
+        // ao módulo almoxarifado pode transferir material para qualquer obra ativa.
+        const destinoObraCheck = await db.execute(sql`SELECT id FROM obras WHERE id = ${destinoObraIdAuthz} AND "companyId" = ${input.companyId} AND "deletedAt" IS NULL LIMIT 1`);
+        const destinoObraRows = (destinoObraCheck as any)?.rows ?? destinoObraCheck ?? [];
+        if (destinoObraRows.length === 0) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Obra destino não pertence a esta empresa." });
         }
       }
 
@@ -1856,10 +1861,13 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         if (!destinoObraId || !Number.isInteger(destinoObraId) || destinoObraId <= 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Destino do tipo 'obra' exige destinoObraId inteiro positivo." });
         }
-        // Rev. 4016 — Item 5: mesmo guard almox-específico (ver comentário
-        // em createTransferenciaOrigemDestino acima).
-        if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, destinoObraId))) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra destino." });
+        // Destino: apenas valida que a obra pertence à mesma empresa (tenant guard).
+        // Não exige acesso do usuário à obra destino — qualquer operador com acesso
+        // ao módulo almoxarifado pode transferir material para qualquer obra ativa.
+        const destinoCheckLote = await db.execute(sql`SELECT id FROM obras WHERE id = ${destinoObraId} AND "companyId" = ${input.companyId} AND "deletedAt" IS NULL LIMIT 1`);
+        const destinoRowsLote = (destinoCheckLote as any)?.rows ?? destinoCheckLote ?? [];
+        if (destinoRowsLote.length === 0) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Obra destino não pertence a esta empresa." });
         }
       }
 
