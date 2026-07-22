@@ -200,7 +200,7 @@ export default function PropriosUtilizacao() {
   const [expandCiclos, setExpandCiclos] = useState(false);
   const [expandAlmox, setExpandAlmox] = useState(false);
   const [expandPendentes, setExpandPendentes] = useState(false);
-  const [drill, setDrill] = useState<"campo" | "almox" | "custo" | "mais" | "retornar" | null>(null);
+  const [drill, setDrill] = useState<"campo" | "almox" | "custo" | "mais" | "retornar" | "manut" | null>(null);
   const [drillHora, setDrillHora] = useState<number | null>(null);
 
   const { data, isLoading } = trpc.equipamentos.propriosUtilizacao.useQuery(
@@ -211,6 +211,7 @@ export default function PropriosUtilizacao() {
   const ciclos   = data?.ciclos     ?? [];
   const emAlmox  = data?.emAlmox    ?? [];
   const emCampo  = data?.emCampo    ?? [];
+  const emManut  = data?.emManut    ?? [];
   const stats    = data?.stats;
   const mensal   = data?.mensal     ?? [];
   const topQuem  = data?.topQuemPegou    ?? [];
@@ -321,7 +322,8 @@ export default function PropriosUtilizacao() {
             onClick={() => setDrill("custo")} />
           <KpiCard icon={<Wrench className="h-5 w-5" />} label="Em manutenção"
             value={isLoading ? "…" : (stats?.emManutCount ?? 0).toLocaleString("pt-BR")}
-            sub="em campo / total ativo" tone="slate" />
+            sub="toque para ver itens" tone="slate"
+            onClick={emManut.length > 0 ? () => setDrill("manut") : undefined} />
         </div>
 
         {/* ── Drill-down: Em obra ── */}
@@ -352,6 +354,21 @@ export default function PropriosUtilizacao() {
               .sort((a, b) => drill === "custo" ? b.custoOciosidade - a.custoOciosidade : b.diasOciosos - a.diasOciosos)
               .map((item, i) => <DrillItemAlmox key={item.id} item={item} idx={i} />)
             }
+          </DrillModal>
+        )}
+
+        {/* ── Drill-down: Em manutenção ── */}
+        {drill === "manut" && (
+          <DrillModal
+            titulo="Em manutenção"
+            subtitulo={`${emManut.length} equipamento${emManut.length !== 1 ? "s" : ""} em manutenção`}
+            onClose={() => setDrill(null)}
+          >
+            {emManut.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-400">Nenhum equipamento em manutenção.</div>
+            ) : emManut.map((item: any, i: number) => (
+              <DrillItemManut key={item.id} item={item} idx={i} />
+            ))}
           </DrillModal>
         )}
 
@@ -937,6 +954,40 @@ export default function PropriosUtilizacao() {
 }
 
 // ─── Sub-componentes para os drills (consomem o filtro de contexto) ───────────
+function DrillItemManut({ item, idx }: { item: any; idx: number }) {
+  const q = useDrillFilter();
+  const nome = (item.descricao ?? "").toLowerCase();
+  if (q && !nome.includes(q)) return null;
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-slate-50">
+      <span className="text-[11px] font-bold text-slate-400 w-5 text-right shrink-0">{idx + 1}</span>
+      <EquipFoto fotoUrl={item.fotoUrl} descricao={item.descricao} sm />
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-slate-900 text-sm truncate">{item.descricao}</div>
+        <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+          {item.codigoPatrimonio && (
+            <span className="font-mono text-[10px] bg-slate-100 px-1.5 rounded">{item.codigoPatrimonio}</span>
+          )}
+          {item.categoria && <span className="text-slate-400">{item.categoria}</span>}
+          {item.manutDesde && (
+            <span className="flex items-center gap-1">
+              <Wrench className="h-3 w-3 text-slate-400" /> desde {fmtDt(item.manutDesde)}
+            </span>
+          )}
+        </div>
+        {item.observacoes && (
+          <div className="mt-1 text-[11px] text-amber-700 bg-amber-50 rounded px-2 py-0.5 break-words">
+            {item.observacoes}
+          </div>
+        )}
+      </div>
+      <span className="shrink-0 inline-flex items-center gap-1 bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 text-[10px] font-semibold">
+        <Wrench className="h-3 w-3" /> Manutenção
+      </span>
+    </div>
+  );
+}
+
 function DrillItemMais({ item, idx, max }: { item: any; idx: number; max: number }) {
   const q = useDrillFilter();
   const nome = (item.descricao ?? "").toLowerCase();

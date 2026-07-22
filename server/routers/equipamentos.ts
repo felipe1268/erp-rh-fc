@@ -4391,6 +4391,23 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         ORDER BY ep.id, wl.id DESC
       `)).rows as any[];
 
+      // ── Em manutenção: lista completa ─────────────────────────────────────
+      const emManutRaw = (await db.execute(sql`
+        SELECT
+          ep.id,
+          ep.descricao,
+          ep.categoria,
+          ep.codigo_patrimonio,
+          (ep.fotos_json->0->>'url') AS foto_url,
+          ep.observacoes,
+          ep.updated_at              AS manut_desde
+        FROM equipamentos_proprios ep
+        WHERE ep.company_id = ${cid}
+          AND ep.ativo = true
+          AND ep.status = 'manutencao'
+        ORDER BY ep.updated_at ASC
+      `)).rows as any[];
+
       // ── Contagens por status ───────────────────────────────────────────────
       const statusRaw = (await db.execute(sql`
         SELECT status, COUNT(*)::int AS cnt
@@ -4525,6 +4542,15 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           utilizacaoMedia,
         },
         topQuemPegou, topEquipamentos, mensal,
+        emManut: emManutRaw.map((r: any) => ({
+          id:               Number(r.id),
+          descricao:        r.descricao         as string,
+          categoria:        r.categoria         as string | null,
+          codigoPatrimonio: r.codigo_patrimonio  as string | null,
+          fotoUrl:          r.foto_url           as string | null,
+          observacoes:      r.observacoes        as string | null,
+          manutDesde:       r.manut_desde        as string | null,
+        })),
       };
     }),
 
