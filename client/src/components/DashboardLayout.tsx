@@ -39,7 +39,7 @@ import {
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel, MapPin,
   UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse, Award,
-  RefreshCw, HandCoins, Scissors, Archive, FileOutput,
+  RefreshCw, HandCoins, Scissors, Archive, FileOutput, Activity,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -462,8 +462,10 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
     title: "Controle de Equipamentos",
     items: [
       { icon: Package,   label: "Visão Geral",       path: "/equipamentos" },
-      { icon: HardHat,   label: "Equipamentos Próprios", path: "/equipamentos/proprios" },
-      { icon: Truck,     label: "Equipamentos Locados", path: "/equipamentos/locados" },
+      { icon: HardHat,   label: "Equipamentos Próprios",   path: "/equipamentos/proprios" },
+      { icon: Activity,  label: "Utilização · Próprios",  path: "/equipamentos/proprios-utilizacao" },
+      { icon: Truck,     label: "Equipamentos Locados",   path: "/equipamentos/locados" },
+      { icon: Activity,  label: "Utilização · Locados",   path: "/equipamentos/locados-utilizacao" },
     ],
   },
   // Rev. 2324 — Dashboard consolidada (estoque + movimentações + equipamentos

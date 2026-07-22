@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4520** — **FEAT: KPIs CLICÁVEIS + MODAL DRILL-DOWN + RESPONSIVO.** 3 KPIs abrem DrillModal (sheet mobile / modal desktop) com lista completa + busca. Grid insights: 1→2→3 colunas. FIX: employees."fotoUrl"/"companyId" com aspas duplas. ZERO schema change.
-- **Rev. 4519** — **FEAT: FOTO + EXPANDIR TODOS — Ranking "Quem mais retirou".** `funcionario_id` + batch photo lookup; `topQuemPegou` sem limite; `RankingQuem` com foto circular + barra proporcional + "Ver todos". ZERO schema change.
+- **Rev. 4521** — **FEAT: DASHBOARD UTILIZAÇÃO — EQUIPAMENTOS PRÓPRIOS.** `propriosUtilizacao` tRPC + `PropriosUtilizacao.tsx` (tema azul). KPIs: Em obra | Disponível | Custo depreciação | Em manutenção. DrillModals tela-cheia. Rota + menu. ZERO schema change.
+- **Rev. 4520** — **FEAT: KPIs CLICÁVEIS + MODAL DRILL-DOWN + RESPONSIVO.** 3 KPIs abrem DrillModal tela-cheia. Grid insights: 1→2→3 colunas. FIX: employees."fotoUrl"/"companyId" aspas duplas. ZERO schema change.
 
 ### 5 one-liners
 

@@ -4259,6 +4259,273 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       };
     }),
 
+  // ── Rev. 4521 — Dashboard de Utilização — Equipamentos Próprios ──────────
+  propriosUtilizacao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mes: z.number().nullable().optional(),
+      ano: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const cid = input.companyId;
+      const mes = input.mes ?? null;
+      const ano = input.ano;
+
+      const periodFilter = mes != null
+        ? sql`AND EXTRACT(MONTH FROM wl.data_emprestimo::date) = ${mes}
+              AND EXTRACT(YEAR  FROM wl.data_emprestimo::date) = ${ano}`
+        : sql`AND EXTRACT(YEAR FROM wl.data_emprestimo::date) = ${ano}`;
+
+      // ── Ciclos: warehouse_loans vinculados a equipamentos próprios ─────────
+      const cycleRaw = (await db.execute(sql`
+        SELECT
+          wl.id,
+          ep.id                                     AS equipamento_proprio_id,
+          ep.descricao,
+          ep.categoria,
+          ep.codigo_patrimonio,
+          ep.valor_aquisicao::numeric               AS valor_aquisicao,
+          ep.vida_util_meses,
+          (ep.fotos_json->0->>'url')                AS foto_url,
+          wl.funcionario_nome                       AS quem_saiu,
+          wl.funcionario_id,
+          wl.almoxarife_nome                        AS registrado_por,
+          (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp AS saiu_em,
+          CASE WHEN wl.data_devolucao IS NOT NULL
+            THEN (wl.data_devolucao || 'T' || COALESCE(wl.hora_devolucao,'00:00') || ':00')::timestamp
+          END AS devolvido_em,
+          CASE
+            WHEN wl.data_devolucao IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (
+              (wl.data_devolucao || 'T' || COALESCE(wl.hora_devolucao,'00:00') || ':00')::timestamp
+              - (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp
+            ))/3600
+            ELSE EXTRACT(EPOCH FROM (
+              NOW() - (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp
+            ))/3600
+          END AS horas_fora
+        FROM warehouse_loans wl
+        JOIN almoxarifado_itens ai
+          ON ai.id                         = wl.item_id
+         AND ai.equipamento_vinculado_tipo = 'proprio'
+         AND ai.company_id                = ${cid}
+        JOIN equipamentos_proprios ep
+          ON ep.id         = ai.equipamento_vinculado_id
+         AND ep.company_id = ${cid}
+        WHERE wl.company_id = ${cid}
+          ${periodFilter}
+        ORDER BY saiu_em DESC
+        LIMIT 500
+      `)).rows as any[];
+
+      // ── Disponíveis (ociosos): status='disponivel' ─────────────────────────
+      const idleRaw = (await db.execute(sql`
+        SELECT
+          ep.id,
+          ep.descricao,
+          ep.categoria,
+          ep.codigo_patrimonio,
+          ep.valor_aquisicao::numeric               AS valor_aquisicao,
+          ep.vida_util_meses,
+          (ep.fotos_json->0->>'url')                AS foto_url,
+          last_loan.status                          AS ultimo_evento,
+          COALESCE(
+            CASE WHEN last_loan.data_devolucao IS NOT NULL
+              THEN (last_loan.data_devolucao || 'T' || COALESCE(last_loan.hora_devolucao,'00:00') || ':00')::timestamp
+            END,
+            ep.created_at::timestamp
+          )                                         AS parado_desde,
+          EXTRACT(EPOCH FROM (NOW() - COALESCE(
+            CASE WHEN last_loan.data_devolucao IS NOT NULL
+              THEN (last_loan.data_devolucao || 'T' || COALESCE(last_loan.hora_devolucao,'00:00') || ':00')::timestamp
+            END,
+            ep.created_at::timestamp
+          )))/86400                                 AS dias_ociosos
+        FROM equipamentos_proprios ep
+        LEFT JOIN almoxarifado_itens ai
+          ON ai.equipamento_vinculado_tipo = 'proprio'
+         AND ai.equipamento_vinculado_id  = ep.id
+         AND ai.company_id                = ${cid}
+        LEFT JOIN LATERAL (
+          SELECT status, data_devolucao, hora_devolucao
+          FROM warehouse_loans
+          WHERE item_id    = ai.id
+            AND company_id = ${cid}
+          ORDER BY id DESC
+          LIMIT 1
+        ) last_loan ON ai.id IS NOT NULL
+        WHERE ep.company_id = ${cid}
+          AND ep.ativo = true
+          AND ep.status = 'disponivel'
+          AND (last_loan.status IS NULL OR last_loan.status IN ('devolvido','perdido'))
+        ORDER BY parado_desde ASC
+      `)).rows as any[];
+
+      // ── Em campo (em_obra): lista com quem está com o equipamento ──────────
+      const emCampoListRaw = (await db.execute(sql`
+        SELECT DISTINCT ON (ep.id)
+          ep.id,
+          ep.descricao,
+          ep.categoria,
+          ep.codigo_patrimonio,
+          (ep.fotos_json->0->>'url')                AS foto_url,
+          wl.funcionario_nome                       AS quem_tem,
+          EXTRACT(EPOCH FROM (
+            NOW() - (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp
+          ))/3600                                   AS horas_fora,
+          (wl.data_emprestimo || 'T' || COALESCE(wl.hora_emprestimo,'00:00') || ':00')::timestamp AS saiu_em
+        FROM equipamentos_proprios ep
+        JOIN almoxarifado_itens ai
+          ON ai.equipamento_vinculado_tipo = 'proprio'
+         AND ai.equipamento_vinculado_id  = ep.id
+         AND ai.company_id                = ${cid}
+        JOIN warehouse_loans wl
+          ON wl.item_id    = ai.id
+         AND wl.company_id = ${cid}
+         AND wl.status     = 'emprestado'
+         AND wl.data_devolucao IS NULL
+        WHERE ep.company_id = ${cid}
+          AND ep.ativo = true
+        ORDER BY ep.id, wl.id DESC
+      `)).rows as any[];
+
+      // ── Contagens por status ───────────────────────────────────────────────
+      const statusRaw = (await db.execute(sql`
+        SELECT status, COUNT(*)::int AS cnt
+        FROM equipamentos_proprios
+        WHERE company_id = ${cid} AND ativo = true
+        GROUP BY status
+      `)).rows as { status: string; cnt: number }[];
+
+      const statusMap = Object.fromEntries(statusRaw.map(r => [r.status, Number(r.cnt)]));
+      const emCampoCount   = statusMap["em_obra"]    ?? 0;
+      const emAlmoxCount   = statusMap["disponivel"] ?? 0;
+      const emManutCount   = statusMap["manutencao"] ?? 0;
+      const totalAtivo     = emCampoCount + emAlmoxCount + emManutCount;
+      const utilizacaoMedia = totalAtivo > 0 ? (emCampoCount / totalAtivo) * 100 : null;
+
+      // ── Custo de ociosidade (depreciação) ──────────────────────────────────
+      const custoOciosidadeTotal = idleRaw.reduce((s: number, r: any) => {
+        const va   = Number(r.valor_aquisicao) || 0;
+        const vum  = Number(r.vida_util_meses) || 0;
+        const dias = Number(r.dias_ociosos) || 0;
+        if (!vum) return s;
+        return s + (va / (vum * 30)) * dias;
+      }, 0);
+
+      // ── Derivações ────────────────────────────────────────────────────────
+      const totalCiclos     = cycleRaw.length;
+      const ciclosCompletos = cycleRaw.filter((r: any) => r.devolvido_em != null).length;
+      const horasArr        = cycleRaw.map((r: any) => Number(r.horas_fora) || 0);
+      const mediaHoras      = horasArr.length > 0 ? horasArr.reduce((a: number, b: number) => a + b, 0) / horasArr.length : 0;
+
+      // Mensal
+      const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+      const mensalMap = new Map<string, number>();
+      for (const r of cycleRaw) {
+        const key = String(r.saiu_em || "").slice(0, 7);
+        mensalMap.set(key, (mensalMap.get(key) || 0) + 1);
+      }
+      const mensal = Array.from(mensalMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([ym, count]) => {
+          const [y, m] = ym.split("-");
+          return { ym, label: `${MESES[Number(m)-1]}/${String(y).slice(2)}`, count };
+        });
+
+      // Ranking: quem mais retirou
+      const quemMap = new Map<string, { count: number; funcionarioId: number | null }>();
+      for (const r of cycleRaw) {
+        const n = r.quem_saiu || "Não informado";
+        const entry = quemMap.get(n);
+        if (entry) { entry.count++; }
+        else { quemMap.set(n, { count: 1, funcionarioId: r.funcionario_id ? Number(r.funcionario_id) : null }); }
+      }
+      const quemSorted = Array.from(quemMap.entries()).sort((a, b) => b[1].count - a[1].count);
+
+      // Fotos em lote
+      const funcionarioIds = quemSorted.map(([, v]) => v.funcionarioId).filter((id): id is number => id !== null);
+      const fotoMap = new Map<number, string | null>();
+      if (funcionarioIds.length > 0) {
+        const fotosRows = (await db.execute(sql`
+          SELECT id, "fotoUrl" AS foto_url FROM employees
+          WHERE id = ANY(ARRAY[${sql.raw(funcionarioIds.join(","))}]::int[])
+            AND "companyId" = ${cid}
+        `)).rows as { id: number; foto_url: string | null }[];
+        for (const f of fotosRows) fotoMap.set(Number(f.id), f.foto_url ?? null);
+      }
+      const topQuemPegou = quemSorted.map(([nome, v]) => ({
+        nome, count: v.count, funcionarioId: v.funcionarioId,
+        fotoUrl: v.funcionarioId != null ? (fotoMap.get(v.funcionarioId) ?? null) : null,
+      }));
+
+      // Ranking: equipamentos mais movimentados
+      const equipMap = new Map<string, number>();
+      for (const r of cycleRaw) {
+        const n = r.descricao || "—";
+        equipMap.set(n, (equipMap.get(n) || 0) + 1);
+      }
+      const topEquipamentos = Array.from(equipMap.entries())
+        .sort((a, b) => b[1] - a[1]).slice(0, 10)
+        .map(([descricao, count]) => ({ descricao, count }));
+
+      return {
+        ciclos: cycleRaw.map((r: any) => ({
+          id:               Number(r.id),
+          equipamentoId:    Number(r.equipamento_proprio_id),
+          descricao:        r.descricao        as string,
+          categoria:        r.categoria        as string | null,
+          codigoPatrimonio: r.codigo_patrimonio as string | null,
+          fotoUrl:          r.foto_url         as string | null,
+          quemSaiu:         r.quem_saiu        as string | null,
+          registradoPor:    r.registrado_por   as string | null,
+          saiuEm:           r.saiu_em          as string,
+          devolvidoEm:      r.devolvido_em     as string | null ?? null,
+          horasFora:        Number(r.horas_fora) || 0,
+          valorAquisicao:   Number(r.valor_aquisicao) || 0,
+          vidaUtilMeses:    Number(r.vida_util_meses) || 0,
+        })),
+        emAlmox: idleRaw.map((r: any) => {
+          const va  = Number(r.valor_aquisicao) || 0;
+          const vum = Number(r.vida_util_meses) || 0;
+          const dias = Number(r.dias_ociosos) || 0;
+          const custoDiario     = vum > 0 ? va / (vum * 30) : 0;
+          const custoOciosidade = custoDiario * dias;
+          return {
+            id:               Number(r.id),
+            descricao:        r.descricao         as string,
+            categoria:        r.categoria         as string | null,
+            codigoPatrimonio: r.codigo_patrimonio  as string | null,
+            fotoUrl:          r.foto_url           as string | null,
+            paradoDesde:      r.parado_desde       as string,
+            diasOciosos:      dias,
+            custoDiario,
+            custoOciosidade,
+          };
+        }),
+        emCampo: emCampoListRaw.map((r: any) => ({
+          id:               Number(r.id),
+          descricao:        r.descricao         as string,
+          categoria:        r.categoria         as string | null,
+          codigoPatrimonio: r.codigo_patrimonio  as string | null,
+          fotoUrl:          r.foto_url           as string | null,
+          quemTem:          r.quem_tem           as string | null,
+          horasFora:        Number(r.horas_fora) || 0,
+          saiuEm:           r.saiu_em            as string,
+        })),
+        stats: {
+          totalCiclos, ciclosCompletos,
+          emAlmoxCount, emCampoCount, emManutCount,
+          custoOciosidadeTotal,
+          mediaHorasPorCiclo: Math.round(mediaHoras * 10) / 10,
+          utilizacaoMedia,
+        },
+        topQuemPegou, topEquipamentos, mensal,
+      };
+    }),
+
   // ── Rev. 4509 — Raio-X do Equipamento Próprio ────────────────────────────
   // Retorna histórico completo de transferências, KPIs de utilização e
   // dados mensais para o gráfico de ocupação.

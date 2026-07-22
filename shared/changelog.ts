@@ -1,4 +1,40 @@
 /**
+ * Rev. 4521 - FEAT: DASHBOARD DE UTILIZAÇÃO — EQUIPAMENTOS PRÓPRIOS
+ *
+ * MOTIVAÇÃO:
+ *   Usuário tinha análise de ociosidade apenas para locados; próprios careciam
+ *   da mesma visão para tomar decisões de reaproveitamento e CAPEX.
+ *
+ * MUDANÇAS:
+ *
+ *   Backend (server/routers/equipamentos.ts):
+ *     - Nova procedure `propriosUtilizacao` (inserida antes de `proprioRaioX`):
+ *       · cycleRaw: warehouse_loans → almoxarifado_itens (tipo='proprio') → equipamentos_proprios
+ *       · idleRaw: equipamentos_proprios WHERE status='disponivel' + LEFT JOIN last_loan
+ *       · emCampoListRaw: DISTINCT ON ep.id active loans (status='emprestado')
+ *       · statusRaw: COUNT por status (disponivel/em_obra/manutencao)
+ *       · custoOciosidade = (valor_aquisicao / (vida_util_meses×30)) × dias_ociosos
+ *       · topQuemPegou com batch foto (mesmo padrão de locadosUtilizacao)
+ *       · Retorno: { ciclos, emAlmox, emCampo, stats, topQuemPegou, topEquipamentos, mensal }
+ *
+ *   Frontend (client/src/pages/equipamentos/PropriosUtilizacao.tsx — NOVO):
+ *     - Estrutura idêntica ao LocadosUtilizacao, tema azul (blue) em vez de verde
+ *     - KPIs: Em obra agora | Disponível (ocioso) | Custo de ociosidade | Em manutenção
+ *     - 3 KPIs clicáveis abrem DrillModal tela-cheia (mesmo padrão Rev. 4520)
+ *     - DrillItemCampo: usa `emCampo` (active loans) com quemTem + horasFora
+ *     - DrillItemAlmox: mesma lógica de locados (mostra custo de depreciação)
+ *     - codigoPatrimonio exibido em badge mono onde havia fornecedorNome (locados)
+ *     - Sub-componentes DrillItemCampo/DrillItemAlmox consomem DrillFilterContext
+ *     - ZERO schema change
+ *
+ *   Rota + Menu (client/src/App.tsx, DashboardLayout.tsx):
+ *     - Nova rota `/equipamentos/proprios-utilizacao`
+ *     - 4 itens no sidebar "Controle de Equipamentos":
+ *       Próprios | Utilização·Próprios | Locados | Utilização·Locados
+ *     - `Activity` adicionado ao import lucide-react do DashboardLayout
+ */
+
+/**
  * Rev. 4520 - FEAT: KPIs CLICÁVEIS + MODAL DRILL-DOWN + RESPONSIVO
  *
  * MOTIVAÇÃO:
