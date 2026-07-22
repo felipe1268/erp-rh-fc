@@ -3623,7 +3623,22 @@ function SessaoDetalhe({
             <tbody>
               {funcs.map((f: any) => (
                 <tr key={`clt-${f.id}`} className="border-t">
-                  <td className="py-2 font-medium">{f.nome}</td>
+                  <td className="py-2 font-medium">
+                    <div className="flex items-center gap-2">
+                      {f.fotoUrl ? (
+                        <img
+                          src={f.fotoUrl}
+                          alt={f.nome}
+                          className="h-8 w-8 rounded-full object-cover shrink-0 ring-1 ring-slate-200"
+                        />
+                      ) : (
+                        <span className="h-8 w-8 rounded-full bg-[#1B2A4A] text-white text-[11px] font-bold flex items-center justify-center shrink-0 select-none">
+                          {(f.nome ?? "?").split(" ").filter(Boolean).slice(0, 2).map((n: string) => n[0]).join("").toUpperCase()}
+                        </span>
+                      )}
+                      <span>{f.nome}</span>
+                    </div>
+                  </td>
                   <td className="py-2 text-slate-600">{f.cpf ?? "—"}</td>
                   <td className="py-2 text-slate-600">{f.funcao ?? "—"}</td>
                   <td className="py-2 text-center">
@@ -3682,14 +3697,27 @@ function SessaoDetalhe({
               {((sessao as any).terceiros ?? []).map((t: any) => (
                 <tr key={`terc-${t.id}`} className="border-t bg-orange-50/30">
                   <td className="py-2 font-medium">
-                    <div className="flex items-center gap-1.5">
-                      <span>{t.nome ?? <span className="italic text-slate-400">Terceiro removido</span>}</span>
-                      <span
-                        className="text-[9px] font-bold uppercase tracking-wide bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded"
-                        title="Funcionário terceirizado — histórico individual em Terceiros › aba DDS"
-                      >
-                        Terceiro
-                      </span>
+                    <div className="flex items-center gap-2">
+                      {t.fotoUrl ? (
+                        <img
+                          src={t.fotoUrl}
+                          alt={t.nome ?? "Terceiro"}
+                          className="h-8 w-8 rounded-full object-cover shrink-0 ring-1 ring-orange-200"
+                        />
+                      ) : (
+                        <span className="h-8 w-8 rounded-full bg-orange-400 text-white text-[11px] font-bold flex items-center justify-center shrink-0 select-none">
+                          {(t.nome ?? "?").split(" ").filter(Boolean).slice(0, 2).map((n: string) => n[0]).join("").toUpperCase()}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span>{t.nome ?? <span className="italic text-slate-400">Terceiro removido</span>}</span>
+                        <span
+                          className="text-[9px] font-bold uppercase tracking-wide bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded shrink-0"
+                          title="Funcionário terceirizado — histórico individual em Terceiros › aba DDS"
+                        >
+                          Terceiro
+                        </span>
+                      </div>
                     </div>
                   </td>
                   <td className="py-2 text-slate-600">{t.cpf ?? "—"}</td>
