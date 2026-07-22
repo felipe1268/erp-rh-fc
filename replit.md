@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4519** — **FEAT: FOTO + EXPANDIR TODOS — Ranking "Quem mais retirou".** `funcionario_id` adicionado ao cycleRaw; batch photo lookup em `employees`; `topQuemPegou` sem limite; componente `RankingQuem` com foto circular + barra proporcional + botão "Ver todos". ZERO schema change.
-- **Rev. 4518** — **FEAT: REPAGINAÇÃO — Dashboard Utilização Equipamentos Locados.** Nova estrutura: 3 insight-cards (mais usado / menos usado / devolver hoje), Pendentes de devolução, gráficos por dia da semana e hora do dia, turnos manhã/tarde/final. ZERO backend change.
+- **Rev. 4520** — **FEAT: KPIs CLICÁVEIS + MODAL DRILL-DOWN + RESPONSIVO.** 3 KPIs abrem DrillModal (sheet mobile / modal desktop) com lista completa + busca. Grid insights: 1→2→3 colunas. FIX: employees."fotoUrl"/"companyId" com aspas duplas. ZERO schema change.
+- **Rev. 4519** — **FEAT: FOTO + EXPANDIR TODOS — Ranking "Quem mais retirou".** `funcionario_id` + batch photo lookup; `topQuemPegou` sem limite; `RankingQuem` com foto circular + barra proporcional + "Ver todos". ZERO schema change.
 
 ### 5 one-liners
 

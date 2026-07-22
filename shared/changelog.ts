@@ -1,4 +1,40 @@
 /**
+ * Rev. 4520 - FEAT: KPIs CLICÁVEIS + MODAL DRILL-DOWN + RESPONSIVO
+ *
+ * MOTIVAÇÃO:
+ *   KPIs mostravam apenas número sem possibilidade de ver os itens por trás.
+ *   Layout não era totalmente responsivo no mobile (3 colunas de insights quebravam).
+ *
+ * MUDANÇAS (client/src/pages/equipamentos/LocadosUtilizacao.tsx):
+ *
+ *   KPIs clicáveis (3 dos 4):
+ *     - "Em campo agora" → DrillModal com todos os itens atualmente fora (pendentes)
+ *       ordenados por horasFora DESC, badge Atrasado/Em campo
+ *     - "Em almox (ocioso)" → DrillModal com todos os itens ociosos
+ *       ordenados por diasOciosos DESC
+ *     - "Custo de ociosidade" → mesma lista, ordenada por custoOciosidade DESC
+ *     - Todos os 3 KPIs clicáveis recebem ícone ExternalLink no canto + hover shadow +
+ *       active:scale-[0.98] para feedback tátil no mobile
+ *
+ *   DrillModal (novo componente):
+ *     - Em mobile: sheet bottom-up (rounded-t-2xl, items-end)
+ *     - Em desktop: modal centralizado (max-w-lg, items-center, rounded-2xl)
+ *     - Campo de busca interno para filtrar por nome
+ *     - Lista rolável (overflow-y-auto, max-h-[90vh])
+ *     - Fechar via botão X ou clique no overlay
+ *
+ *   Responsivo:
+ *     - Grid de KPIs: grid-cols-2 lg:grid-cols-4 (era sm:grid-cols-4)
+ *     - Grid de insights: grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
+ *       (era grid-cols-1 sm:grid-cols-3 — 3 colunas em telas médias quebrava)
+ *
+ *   FIX DB: employees.fotoUrl usa nome de coluna camelCase ("fotoUrl") e
+ *   "companyId" também — consulta batch corrigida com aspas duplas.
+ *
+ * ZERO schema change. Apenas frontend + fix SQL de foto.
+ */
+
+/**
  * Rev. 4519 - FEAT: FOTO E EXPANDIR TUDO — Ranking "Quem mais retirou"
  *
  * PROBLEMA:

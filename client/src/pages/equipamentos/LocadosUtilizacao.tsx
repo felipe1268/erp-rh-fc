@@ -15,7 +15,7 @@ import {
   AlertTriangle, RotateCcw, Clock, ChevronDown, ChevronUp,
   Package, TrendingDown, DollarSign, Activity, Truck,
   BadgeDollarSign, Hourglass, Zap, ThumbsDown, Bell,
-  Timer, Sun, Sunset, Sunrise,
+  Timer, Sun, Sunset, Sunrise, X, ExternalLink,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -80,6 +80,7 @@ export default function LocadosUtilizacao() {
   const [expandCiclos, setExpandCiclos] = useState(false);
   const [expandAlmox, setExpandAlmox] = useState(false);
   const [expandPendentes, setExpandPendentes] = useState(false);
+  const [drill, setDrill] = useState<"campo" | "almox" | "custo" | null>(null);
 
   const { data, isLoading } = trpc.equipamentos.locadosUtilizacao.useQuery(
     { companyId, mes, ano },
@@ -175,23 +176,97 @@ export default function LocadosUtilizacao() {
         <PeriodSelectorCard mes={mes} ano={ano} onMes={setMes} onAno={setAno} onAnoTodo={() => setMes(null)} />
 
         {/* ── KPIs ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard icon={<Truck className="h-5 w-5" />} label="Em campo agora"
             value={isLoading ? "…" : (stats?.emCampoCount ?? 0).toLocaleString("pt-BR")}
-            sub="com retirada ativa" tone="emerald" />
+            sub="toque para ver itens" tone="emerald"
+            onClick={() => setDrill("campo")} />
           <KpiCard icon={<Boxes className="h-5 w-5" />} label="Em almox (ocioso)"
             value={isLoading ? "…" : (stats?.emAlmoxCount ?? 0).toLocaleString("pt-BR")}
-            sub="pagando sem usar" tone="amber" />
+            sub="toque para ver itens" tone="amber"
+            onClick={() => setDrill("almox")} />
           <KpiCard icon={<BadgeDollarSign className="h-5 w-5" />} label="Custo de ociosidade"
             value={isLoading ? "…" : fmtMoeda(stats?.custoOciosidadeTotal ?? 0)}
-            sub="acumulado no almox" tone="red" big />
+            sub="toque para ver ranking" tone="red" big
+            onClick={() => setDrill("custo")} />
           <KpiCard icon={<Activity className="h-5 w-5" />} label="Utilização"
             value={isLoading ? "…" : kpiUtilizacao}
             sub="em campo / total ativo" tone="blue" />
         </div>
 
+        {/* ── Modal de drill-down ── */}
+        {drill === "campo" && (
+          <DrillModal
+            titulo="Em campo agora"
+            subtitulo={`${pendentes.length} item${pendentes.length !== 1 ? "s" : ""} retirado${pendentes.length !== 1 ? "s" : ""} sem devolução`}
+            onClose={() => setDrill(null)}
+          >
+            {pendentes.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-400">Nenhum item em campo no momento.</div>
+            ) : pendentes.map(c => (
+              <div key={c.id} className="flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-slate-50">
+                <EquipFoto fotoUrl={c.fotoUrl} descricao={c.descricao} sm />
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-900 text-sm truncate">{c.descricao}</div>
+                  <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-2">
+                    <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" /> saiu {fmtDt(c.saiuEm)}</span>
+                    {c.quemSaiu && <span>{c.quemSaiu}</span>}
+                    {c.fornecedorNome && <span className="text-slate-400">{c.fornecedorNome}</span>}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className={`font-black text-sm tabular-nums ${c.horasFora > 16 ? "text-red-600" : "text-amber-600"}`}>
+                    {fmtHoras(c.horasFora)}
+                  </span>
+                  <div className={`text-[10px] font-semibold mt-0.5 ${c.horasFora > 16 ? "text-red-500" : "text-amber-500"}`}>
+                    {c.horasFora > 16 ? "Atrasado" : "Em campo"}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </DrillModal>
+        )}
+
+        {(drill === "almox" || drill === "custo") && (
+          <DrillModal
+            titulo={drill === "custo" ? "Custo de ociosidade — ranking" : "Em almox (ocioso)"}
+            subtitulo={`${emAlmox.length} equipamento${emAlmox.length !== 1 ? "s" : ""} parados no almox`}
+            onClose={() => setDrill(null)}
+          >
+            {emAlmox.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-400">Nenhum equipamento ocioso.</div>
+            ) : [...emAlmox]
+              .sort((a, b) => drill === "custo" ? b.custoOciosidade - a.custoOciosidade : b.diasOciosos - a.diasOciosos)
+              .map((item, i) => {
+                const urgBg = item.diasOciosos > 30 ? "bg-red-100 text-red-700"
+                  : item.diasOciosos > 7 ? "bg-amber-100 text-amber-700"
+                  : "bg-slate-100 text-slate-600";
+                return (
+                  <div key={item.id} className="flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-slate-50">
+                    <span className="text-[11px] font-bold text-slate-400 w-5 text-right shrink-0">{i + 1}</span>
+                    <EquipFoto fotoUrl={item.fotoUrl} descricao={item.descricao} sm />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-slate-900 text-sm truncate">{item.descricao}</div>
+                      <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-2">
+                        {item.fornecedorNome && <span>{item.fornecedorNome}</span>}
+                        <span className="flex items-center gap-1"><Hourglass className="h-3 w-3" /> parado há {fmtDias(item.diasOciosos)}</span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-red-700 text-sm tabular-nums">{fmtMoeda(item.custoOciosidade)}</div>
+                      <div className="text-[10px] text-slate-400">{fmtMoeda(item.custoDiario)}/dia</div>
+                      <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 ${urgBg}`}>
+                        {item.diasOciosos > 30 ? "Crítico" : item.diasOciosos > 7 ? "Atenção" : "Recente"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+          </DrillModal>
+        )}
+
         {/* ── Insights: mais/menos usado + pendentes de devolução ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
           {/* Mais utilizado */}
           <div className="bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-2">
@@ -732,10 +807,58 @@ function RankingQuem({ topQuem }: {
   );
 }
 
+// ─── DrillModal ───────────────────────────────────────────────────────────────
+function DrillModal({ titulo, subtitulo, onClose, children }: {
+  titulo: string; subtitulo?: string; onClose: () => void; children: React.ReactNode;
+}) {
+  const [q, setQ] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      {/* Sheet */}
+      <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b">
+          <div>
+            <h2 className="font-bold text-slate-900 text-base">{titulo}</h2>
+            {subtitulo && <p className="text-xs text-slate-500 mt-0.5">{subtitulo}</p>}
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition shrink-0">
+            <X className="h-4 w-4 text-slate-500" />
+          </button>
+        </div>
+        {/* Busca */}
+        <div className="px-5 py-3 border-b bg-slate-50">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            <input
+              value={q} onChange={e => setQ(e.target.value)}
+              placeholder="Filtrar por nome…"
+              className="w-full pl-8 pr-3 py-1.5 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+          </div>
+        </div>
+        {/* Lista */}
+        <div className="overflow-y-auto flex-1">
+          <DrillFilterContext.Provider value={q.toLowerCase()}>
+            {children}
+          </DrillFilterContext.Provider>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+import { createContext, useContext } from "react";
+const DrillFilterContext = createContext("");
+function useDrillFilter() { return useContext(DrillFilterContext); }
+
 // ─── KpiCard ─────────────────────────────────────────────────────────────────
-function KpiCard({ icon, label, value, sub, tone, big = false }: {
+function KpiCard({ icon, label, value, sub, tone, big = false, onClick }: {
   icon: React.ReactNode; label: string; value: string; sub?: string;
   tone: "emerald" | "amber" | "red" | "blue"; big?: boolean;
+  onClick?: () => void;
 }) {
   const toneMap = {
     emerald: { ic: "text-emerald-600 bg-emerald-100", val: "text-emerald-700" },
@@ -745,8 +868,14 @@ function KpiCard({ icon, label, value, sub, tone, big = false }: {
   };
   const t = toneMap[tone];
   return (
-    <div className="bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-2">
-      <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${t.ic}`}>{icon}</div>
+    <div
+      onClick={onClick}
+      className={`bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-2 ${onClick ? "cursor-pointer hover:shadow-md hover:border-slate-300 active:scale-[0.98] transition-all" : ""}`}
+    >
+      <div className="flex items-center justify-between">
+        <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${t.ic}`}>{icon}</div>
+        {onClick && <ExternalLink className="h-3.5 w-3.5 text-slate-300" />}
+      </div>
       <div className={`font-black ${big ? "text-lg" : "text-2xl"} tabular-nums ${t.val}`}>{value}</div>
       <div>
         <div className="text-xs font-semibold text-slate-700">{label}</div>

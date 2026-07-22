@@ -4189,9 +4189,9 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       const fotoMap = new Map<number, string | null>();
       if (funcionarioIds.length > 0) {
         const fotosRows = (await db.execute(sql`
-          SELECT id, foto_url FROM employees
+          SELECT id, "fotoUrl" AS foto_url FROM employees
           WHERE id = ANY(ARRAY[${sql.raw(funcionarioIds.join(","))}]::int[])
-            AND company_id = ${cid}
+            AND "companyId" = ${cid}
         `)).rows as { id: number; foto_url: string | null }[];
         for (const f of fotosRows) fotoMap.set(Number(f.id), f.foto_url ?? null);
       }
