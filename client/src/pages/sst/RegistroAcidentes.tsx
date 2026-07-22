@@ -118,7 +118,10 @@ export default function RegistroAcidentes() {
     { enabled: hasValidCompany },
   );
 
-  const obrasQ = trpc.obras.list.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany });
+  const obrasQ = trpc.obras.list.useQuery(
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany },
+  );
   const employeesQ = trpc.employees.list.useQuery(
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) } as any,
     { enabled: hasValidCompany },
