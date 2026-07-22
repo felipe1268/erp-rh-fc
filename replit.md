@@ -50,38 +50,20 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4513** — **MIGRAÇÃO DE DADOS: EQUIPAMENTOS DA FC ENGENHARIA DE LOCADOS → PRÓPRIOS.** 47 registros de `equipamentos_locados` com fornecedor "FC ENGENHARIA E CONSTRUÇÃO LTDA" migrados atomicamente para `equipamentos_proprios`: em_uso→em_obra (obra preservada), devolvido→disponivel. Patrimônios únicos mantidos como-estão; múltiplas unidades do mesmo código recebem sufixo -01/-02… (ex: 1051-01 a 1051-12 para os 12 andaimes). Locados marcados como devolvido com data_fim_real=hoje + nota de migração. ZERO schema change. Também: campo "Valor de aquisição" sempre visível no modal de Editar Equip. Próprio (saiu do acordeão "Mais detalhes"). Rev. 4512b.
 - **Rev. 4512** — **FEAT: DASH UTILIZAÇÃO DE EQUIPAMENTOS LOCADOS.** Nova página `/equipamentos/locados-utilizacao`: KPIs (em campo, em almox/ocioso, **custo de ociosidade** em vermelho, utilização %), seção "Pagando parado no almox" com custo acumulado e diário por equipamento + badge Crítico/Atenção/Recente, gráfico de barras mensais, rankings "Quem mais retirou" e "Mais movimentados", histórico de ciclos SAIDA_ALMOX→RETORNO_ALMOX. Backend: procedure `locadosUtilizacao` (3 queries: ciclos via CTE+LATERAL, idle items, em-campo count). Botão "Utilização" (amber) no header de Locados. Card âmbar no hub. ZERO schema change.
-- **Rev. 4511** — **FEAT: DASH RETIRADAS DO ALMOXARIFADO (corrigido).** Nova página `/equipamentos/entregas`: KPIs (retiradas, ferramentas distintas, obras, **não devolvidas** em vermelho), gráfico de barras mensais, ranking "Quem mais pegou" e "Obras que mais receberam". Seção expandível "Ferramentas não devolvidas" agrupa por pessoa com badge de dias em aberto (vermelho >30d, âmbar >7d). Lista de retiradas mostra badge "Não devolvida/Devolvida" por item. Backend: query separada `DISTINCT ON (equipamento_id)` pega o status ATUAL (`ep.status='em_obra'`) sem filtro de período. Hub de Equipamentos: card violeta na grade de 3 colunas. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4511** — **FEAT: DASH RETIRADAS DO ALMOXARIFADO (corrigido).** Nova página `/equipamentos/entregas`: KPIs, gráfico mensal, ranking quem/obras, seção "Ferramentas não devolvidas" com badge dias em aberto. ZERO schema change.
 - **Rev. 4510** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO + FOTOS NA PRESENÇA DDS.** Modal redesenhado com 3 abas, donut, area chart, bar chart dias da semana, "quem mais usa". Fotos de colaborador na lista de presença das sessões DDS. ZERO schema change.
 - **Rev. 4509** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO.** Modal Raio-X com KPIs, gráfico de ocupação mensal, timeline. `proprioRaioX` tRPC. ZERO schema change.
 - **Rev. 4508** — **FEAT: CP — APAGAR EM LOTE (cancelEntryBulk).** Botão "Apagar selecionados" + Dialog confirmação + motivo. ZERO schema change.
 - **Rev. 4507** — **FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard).** `listSessoes` ganhou inputs `mes` e `ano` (filtro SQL via `EXTRACT`); frontend usa `PeriodSelectorCard` com `monthStatus`. ZERO schema change.
-- **Rev. 4506** — **FEAT: DDS PDF — GERAÇÃO REAL DE PDF VIA PUPPETEER.** Rotas `/api/dds-ata/:id` e `/api/dds-ata-lote` usam puppeteer para converter HTML em PDF real (A4, `printBackground:true`, margens). ZIP em lote contém `.pdf`. ZERO schema change.
-- **Rev. 4505** — **FIX: DDS PDF — REMOVE BOTÃO "IMPRIMIR/SALVAR PDF" E AUTO-PRINT.** HTML gerado não exibe botão nem dispara `window.print()`. ZERO schema change.
-- **Rev. 4504** — **FEAT: DDS ZIP — PROGRESSO 0→100% NO BOTÃO.** `baixarLote` usa setInterval p/ simular 0→85% enquanto servidor gera; pula p/ 95→100% ao receber resposta; barra `bg-white/20` absoluta cresce via `width: loteProgress%`; texto "Gerando… XX%". Aplica Regra de Ouro de carregamento longo. ZERO schema change.
-- **Rev. 4503** — **FIX: DDS ZIP "LOAD FAILED".** PassThrough + Buffer em memória → `res.send()` só após `finalize()`. Frontend: catch trata "Load failed"/"Failed to fetch". ZERO schema change.
-- **Rev. 4502** — **REDESIGN: DDS SESSÕES — TIMELINE + KPIs + BARRA FLUTUANTE.** Redesign completo do `SessoesList` com cards `rounded-2xl border-l-4`, KPIs, timeline lateral, barra flutuante dark pill. ZERO schema change.
-- **Rev. 4501** — **FEAT: DDS SESSÕES — CARDS RESPONSIVOS + PDF NA LISTA + ZIP EM LOTE.** Tabela → `SessoesList` cards agrupados por semana; botão PDF direto; batch ZIP via `/api/dds-ata-lote`. ZERO schema change.
-- **Rev. 4500** — **FEAT: PDF / ATA DO DDS COM FOTOS E ASSINATURAS.** Botão "Baixar PDF / Ata" na tela de detalhe da sessão DDS. Endpoint `getSessaoPdfData` + HTML self-contained com fotos circulares + assinaturas. ZERO schema change.
-- **Rev. 4499** — **FIX: VALOR DA OC DE LOCAÇÃO ZERADO NA SELEÇÃO DE RECEBIMENTO.** OCs com FD armazenam valor em `fdValor` (total=0); `ocsLocacaoPendentes` não incluía `fdValor` no SELECT → badge "R$ 0,00" e campo "Valor mensal" zerado. Fix: backend inclui `fdValor`; frontend usa `fdValor || total` no badge e em `receberDaOC`. ZERO schema change.
-- **Rev. 4498** — **FEAT: LOCAÇÃO = 100% MATERIAL NO FATURAMENTO DIRETO.** Split MAT/MDO do modal "Definir FD" usava ratio do orçamento para SC de equipamento, limitando o FD ao valor de MAT (R$ 8.152) em vez do total da locação (R$ 14.200). Fix: `tipoOrigem === "equipamento"` → `ratioMat = 1`. ZERO schema change.
-- **Rev. 4497** — **FIX: FORMATO BR NO CAMPO "DEBITAR DO RISCO" (7.358,10).** `type="number"` impedia formatação; "Usar tudo" exibia `7358.10`. Fix: `type="text"`, `toLocaleString("pt-BR")`. ZERO schema change.
-- **Rev. 4496** — **FEAT: BUSCA IRRESTRITA NA EAP DA SC.** Ao digitar, filtro de tipo é suspenso; todos os itens EAP aparecem com badge `MAT`/`MO`/`EQUIP`. ZERO schema change.
-- **Rev. 4495** — **FEAT: LINK CLICÁVEL DA COTAÇÃO NO HISTÓRICO DE DÉBITOS.** Número da cotação navega para `/compras/cotacoes?destaque=<id>`. ZERO schema change.
-- **Rev. 4494** — **FIX: "INCLUIR DA EAP" NA COTAÇÃO — 3 BUGS.** `orcamentoItemId`/`eapCodigo`/`precoMeta` descartados; exclusão não cascateava; picker não sinalizava itens já na cotação. ZERO schema change.
-- **Rev. 4485** — **FIX: PLACEHOLDERS DE PRAZO DE NF NO TEMPLATE ISO DE CONTRATO PJ.** Novos placeholders `[TEXTO_DIA_FECHAMENTO]`, `[PRAZO_NOTA_ADIANTAMENTO]`, `[PRAZO_NOTA_FECHAMENTO]` adicionados aos 4 paths. `[DIA_FECHAMENTO]=31` exibe "último dia do mês". ZERO schema change.
-- **Rev. 4484** — **FEAT: DIA 2ª MEDIÇÃO PJ — OPÇÃO "ÚLTIMO DIA DO MÊS".** Campo "Dia 2ª Medição" no formulário de Contrato PJ substituído por toggle "Dia fixo | Último dia" + input numérico condicional. Convenção `diaFechamento = 31`. ZERO schema change.
-- **Rev. 4483** — **FEAT: FCSIGN — AUTENTICAÇÃO OBRIGATÓRIA PARA SIGNATÁRIOS INTERNOS.** Testemunhas, contratante, empregador e empregado DEVEM estar logados no sistema para assinar via link. `getByToken` devolve `requiresLogin/loggedIn/cpfMatches`; `sign` rejeita UNAUTHORIZED/FORBIDDEN se CPF não bater. Frontend: `LoginGate` + `CpfMismatchBox`. ZERO schema change.
-- **Rev. 4482** — **FEAT: NOVO USUÁRIO OBRIGATORIAMENTE VINCULADO A COLABORADOR (CLT/PJ).** Formulário "Novo Usuário" ganha "Passo 0: Colaborador" obrigatório no topo: busca por nome, filtra apenas CLT/PJ ativos sem userId, auto-preenche nome/e-mail/empresa ao selecionar. ZERO schema change.
-- **Rev. 4480** — **FEAT: GESTORES — VÍNCULO EXPLÍCITO COM USUÁRIO DO SISTEMA.** Badge "Conta no sistema" dos gestores de contratos passava a usar match por e-mail. Solução: 2 novas colunas `gestor_financeiro_user_id` / `gestor_rh_user_id` em companies; endpoint `listUsuariosSistema`; `getGestoresContrato` busca por userId explícito com fallback por e-mail.
-- **Rev. 4478** — **FIX: "SEM ACESSO A ESTA EMPRESA" AO MARCAR/DESMARCAR EQUIPAMENTO NO ALMOXARIFADO.** `vincularItemAlmoxarifado` / `desvincularItemAlmoxarifado` usavam `getUserCompanyLinks` (legado). Fix: `getCompaniesForUser`. ZERO schema change.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4474 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4506 e anteriores.
 
 ## User preferences
 

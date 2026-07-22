@@ -1,4 +1,32 @@
 /**
+ * Rev. 4513 - MIGRAÇÃO DE DADOS: EQUIPAMENTOS DA FC ENGENHARIA DE LOCADOS → PRÓPRIOS
+ *
+ * 47 registros de `equipamentos_locados` que tinham "FC ENGENHARIA E CONSTRUÇÃO LTDA"
+ * como fornecedor foram migrados para `equipamentos_proprios`, pois tratava-se de
+ * equipamentos de propriedade da própria FC Engenharia lançados equivocadamente como
+ * locados de terceiros.
+ *
+ * Regra de negócio aplicada:
+ *   - locado.status = "em_uso"   → proprios.status = "em_obra"   + obra vinculada preservada
+ *   - locado.status = "devolvido"→ proprios.status = "disponivel" (no almoxarifado)
+ *
+ * Patrimônios com código único → código preservado como-está (153, 156, 91, 36, 144, etc.)
+ * Patrimônios com múltiplas unidades → sufixo numérico (-01, -02…):
+ *   1051 × 12 → 1051-01 a 1051-12  (Andaime Tubular 1,00×1,00 m)
+ *   10   × 7  → 10-01 a 10-07      (Sapata Ajustável)
+ *   12   × 6  → 12-01 a 12-06      (Plataforma p/ Andaime 1,00 m)
+ *   9    × 5  → 9-01 a 9-05        (Sapata Ajustável)
+ *   1052 × 2  → 1052-01/02         (Plataforma p/ Andaime 1,00 m)
+ *   1005 × 2  → 1005-01/02         (Diagonal p/ Andaime Torres)
+ *
+ * Os 47 locados foram marcados como "devolvido" com data_fim_real = hoje e
+ * observação de migração — histórico preservado, sumidos da lista ativa de locados.
+ *
+ * Migração executada via script Node.js direto no Neon em transação atômica.
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4512 - FEAT: DASH UTILIZAÇÃO DE EQUIPAMENTOS LOCADOS
  *
  * Nova página `/equipamentos/locados-utilizacao` que mede o custo de ociosidade
