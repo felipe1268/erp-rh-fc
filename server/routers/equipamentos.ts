@@ -1102,6 +1102,8 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       fornecedorNome: z.string().max(255).nullable().optional(),
       // Rev. 4345 — quantidade de unidades físicas.
       quantidade: z.number().int().min(1).nullable().optional(),
+      // Rev. 4514 — permite corrigir a categoria diretamente no painel de detalhes.
+      categoria: z.string().max(100).nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1126,6 +1128,10 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       map("codigoPatrimonioFornecedor", input.codigoPatrimonioFornecedor);
       // Rev. 4345 — quantidade de unidades físicas.
       if (input.quantidade != null) map("quantidade", input.quantidade);
+      // Rev. 4514 — categoria editável pelo painel de detalhes.
+      if (input.categoria !== undefined) {
+        update.categoria = input.categoria && input.categoria.trim() ? input.categoria.trim() : null;
+      }
       // Rev. 2553 — normaliza fornecedor: trim, ou null quando vazio.
       if (input.fornecedorNome !== undefined) {
         update.fornecedorNome = input.fornecedorNome && input.fornecedorNome.trim()

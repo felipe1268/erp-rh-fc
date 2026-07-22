@@ -249,9 +249,19 @@ export default function EquipamentosLocados() {
   // martelete é da Minas Locc mas está marcado como nosso". Diferente do
   // rename em lote, atinge só o item aberto.
   const [editForn, setEditForn] = useState<null | { id: number; val: string }>(null);
+  const [editCategoria, setEditCategoria] = useState<null | { id: number; val: string }>(null); // Rev. 4514
   const atualizarLocadoMut = trpc.equipamentos.locadoAtualizar.useMutation({
     onSuccess: (_data, variables: any) => {
       utils.equipamentos.locadosListar.invalidate();
+      // Rev. 4514 — atualiza categoria no estado do modal aberto
+      if (variables.categoria !== undefined) {
+        const novaCateg = variables.categoria ?? null;
+        setModalEventos((prev: any) =>
+          prev && prev.id === variables.id ? { ...prev, categoria: novaCateg } : prev);
+        setEditCategoria(null);
+        toast.success("Categoria atualizada.");
+        return;
+      }
       const novo = variables.fornecedorNome ?? null;
       setModalEventos((prev: any) =>
         prev && prev.id === variables.id ? { ...prev, fornecedorNome: novo } : prev);
@@ -3788,6 +3798,53 @@ export default function EquipamentosLocados() {
                       <div className="text-sm font-semibold text-slate-800">{l.fornecedorNome || <span className="italic text-slate-500 font-normal">Sem fornecedor cadastrado</span>}</div>
                     )}
                     {l.numeroContrato && <div className="text-xs text-slate-600">Contrato: <span className="font-mono font-medium">{l.numeroContrato}</span></div>}
+                    {/* Rev. 4514 — Edição inline de categoria */}
+                    <hr className="border-slate-100" />
+                    <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center justify-between gap-1.5">
+                      <span className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Categoria</span>
+                      {editCategoria?.id !== l.id && (
+                        <button
+                          onClick={() => setEditCategoria({ id: l.id, val: String(l.categoria || "") })}
+                          className="normal-case inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 hover:text-emerald-700"
+                          title="Editar a categoria deste equipamento">
+                          <Pencil className="h-3 w-3" /> {l.categoria ? "Trocar" : "Definir"}
+                        </button>
+                      )}
+                    </div>
+                    {editCategoria?.id === l.id ? (
+                      <div className="space-y-2">
+                        <input
+                          list="categ-edit-datalist"
+                          value={editCategoria.val}
+                          onChange={e => setEditCategoria(prev => prev ? { ...prev, val: e.target.value } : prev)}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                          placeholder="Ex: Andaime, Elétrico, Ferramenta…"
+                          autoFocus
+                        />
+                        <datalist id="categ-edit-datalist">
+                          {categoriasComItens.filter(c => c.key !== "__null__").map(c => (
+                            <option key={c.key} value={c.nome} />
+                          ))}
+                        </datalist>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => atualizarLocadoMut.mutate({ companyId, id: l.id, categoria: editCategoria.val.trim() || null })}
+                            disabled={atualizarLocadoMut.isPending}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                            {atualizarLocadoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Salvar
+                          </button>
+                          <button
+                            onClick={() => setEditCategoria(null)}
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200">
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm font-semibold text-slate-800">
+                        {l.categoria || <span className="italic text-slate-500 font-normal">Sem categoria</span>}
+                      </div>
+                    )}
                   </div>
                   <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4 space-y-3">
                     <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Período</div>
