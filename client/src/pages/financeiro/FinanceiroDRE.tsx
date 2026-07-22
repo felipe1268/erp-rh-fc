@@ -19,7 +19,7 @@ import {
   CalendarDays, Sparkles, Info, BookOpen, ExternalLink, AlertTriangle,
   Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck,
   ChevronRight as ChevronRightIcon, Layers, ListTree, Calculator, Percent,
-  ArrowLeft, Receipt, CheckCircle2, XCircle, Building2, Scale,
+  ArrowLeft, Receipt, CheckCircle2, XCircle, X, Building2, Scale,
   Target, Zap, Eye, TrendingUp as TrendUp, Banknote, GitMerge, HelpCircle,
 } from "lucide-react";
 
@@ -1493,6 +1493,7 @@ export default function FinanceiroDRE() {
               companyId={companyId}
               periodo={periodo}
               tipoPeriodo={sel.tipo}
+              onClose={() => setDrill(null)}
             />
           )}
         </DialogContent>
@@ -1568,12 +1569,13 @@ export default function FinanceiroDRE() {
 }
 
 function DrillBody({
-  drill, companyId, periodo, tipoPeriodo,
+  drill, companyId, periodo, tipoPeriodo, onClose,
 }: {
   drill: DrillState;
   companyId: number | undefined;
   periodo: string;
   tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual";
+  onClose: () => void;
 }) {
   const isLeaf = drill.kind === "leaf";
   const detalhe = trpc.financial.getDRELinhaDetalhe.useQuery(
@@ -1605,6 +1607,12 @@ function DrillBody({
         </div>
         <div className="px-6 py-8 text-sm text-gray-600 leading-relaxed break-words bg-gray-50/40 flex-1">
           {drill.texto}
+        </div>
+        <div className="shrink-0 border-t border-gray-100 p-4 bg-white">
+          <button type="button" onClick={onClose}
+            className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-semibold text-sm transition-colors">
+            <X className="w-4 h-4" />Fechar
+          </button>
         </div>
       </>
     );
@@ -1650,6 +1658,12 @@ function DrillBody({
             A margem é a divisão de <strong className="text-gray-600">{drill.numLabel}</strong> pela <strong className="text-gray-600">{drill.denLabel}</strong>, expressa em percentual.
           </p>
         </div>
+        <div className="shrink-0 border-t border-gray-100 p-4 bg-white">
+          <button type="button" onClick={onClose}
+            className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-semibold text-sm transition-colors">
+            <X className="w-4 h-4" />Fechar
+          </button>
+        </div>
       </>
     );
   }
@@ -1692,6 +1706,12 @@ function DrillBody({
           <p className="text-xs text-gray-400 leading-relaxed">
             Esta linha é um resultado calculado. Clique nas linhas de receita, custo ou despesa que a compõem para ver os lançamentos individuais.
           </p>
+        </div>
+        <div className="shrink-0 border-t border-gray-100 p-4 bg-white">
+          <button type="button" onClick={onClose}
+            className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-semibold text-sm transition-colors">
+            <X className="w-4 h-4" />Fechar
+          </button>
         </div>
       </>
     );
@@ -1787,6 +1807,16 @@ function DrillBody({
               ))}
             </div>
           )}
+        </div>
+        <div className="shrink-0 border-t border-gray-100 p-4 bg-white flex gap-3">
+          <button type="button" onClick={() => setCatSel(null)}
+            className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl border border-gray-200 hover:bg-gray-50 active:bg-gray-100 text-gray-700 font-semibold text-sm transition-colors">
+            <ArrowLeft className="w-4 h-4" />Voltar
+          </button>
+          <button type="button" onClick={onClose}
+            className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-semibold text-sm transition-colors">
+            <X className="w-4 h-4" />Fechar
+          </button>
         </div>
       </>
     );
@@ -1914,6 +1944,12 @@ function DrillBody({
             )}
           </>
         )}
+      </div>
+      <div className="shrink-0 border-t border-gray-100 p-4 bg-white">
+        <button type="button" onClick={onClose}
+          className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-semibold text-sm transition-colors">
+          <X className="w-4 h-4" />Fechar
+        </button>
       </div>
     </>
   );
