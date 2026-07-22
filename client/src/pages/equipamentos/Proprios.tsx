@@ -8,8 +8,9 @@ import {
   Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp,
   Sparkles, Trash2, Boxes, Wrench, CheckCircle2, Check, Layers, Hash,
   Building2, User as UserIcon, Loader2, ListChecks, Database, DollarSign,
-  ArrowRightLeft, Clock, ChevronRight, MapPin, Eye,
+  ArrowRightLeft, Clock, ChevronRight, MapPin, Eye, Activity,
 } from "lucide-react";
+import { Link } from "wouter";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
@@ -657,6 +658,15 @@ export default function EquipamentosProprios() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Link href="/equipamentos/proprios-utilizacao">
+              <a
+                title="Dashboard de utilização e ociosidade"
+                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white ring-1 ring-white/30 active:scale-[0.98] px-4 py-2.5 rounded-lg font-semibold shadow-md transition"
+              >
+                <Activity className="h-5 w-5" />
+                <span className="hidden sm:inline">Utilização</span>
+              </a>
+            </Link>
             <button
               onClick={handleGerarPrecos}
               disabled={rodandoPrecos}
