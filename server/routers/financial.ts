@@ -4376,6 +4376,30 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  cancelEntryBulk: protectedProcedure.input(z.object({
+    ids: z.array(z.number()).min(1).max(500),
+    companyId: z.number(),
+    motivoCancelamento: z.string().min(5),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `UPDATE financial_entries SET status='cancelado', motivo_cancelamento=$1, updated_at=NOW()
+       WHERE id = ANY($2) AND company_id=$3 AND status NOT IN ('cancelado','pago','recebido')
+       RETURNING id`,
+      [input.motivoCancelamento, input.ids, input.companyId]
+    );
+    const cancelled = ((res as any).rows ?? []).length;
+    await createAuditLog({
+      action: "financial_entry_bulk_cancelled",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `CANCELAMENTO EM LOTE: ${cancelled} de ${input.ids.length} lançamento(s) cancelados por ${ctx.user?.name ?? "?"} — motivo: "${input.motivoCancelamento}"`,
+    });
+    return { ok: true, cancelled };
+  }),
+
   // Rev. 2228 — ESTORNAR pagamento (reverte status='pago' → 'a_pagar').
   // Pedido Lilian: "na aba PAGOS precisa ter botão estornar, pois pode dar
   // baixa errado". Limpa data_pagamento, valor_realizado, forma_pagamento,

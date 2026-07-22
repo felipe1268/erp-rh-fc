@@ -1,4 +1,15 @@
 /**
+ * Rev. 4508 - FEAT: CP — APAGAR EM LOTE (cancelEntryBulk + botão na barra de seleção)
+ *
+ * Contas a Pagar ganhou botão "Apagar selecionados" na barra de ações em lote
+ * (que aparece quando há títulos selecionados com checkbox). Ao clicar, abre
+ * Dialog de confirmação com resumo (qtd + total) e campo obrigatório de motivo
+ * (mín. 5 chars). Backend: nova procedure `cancelEntryBulk` que faz UPDATE em
+ * lote via `id = ANY($ids)`, protege status='pago'/'recebido' e grava audit log.
+ * Lançamentos cancelados desaparecem da lista sem afetar o histórico de pagos.
+ * ZERO schema change.
+ */
+/**
  * Rev. 4507 - FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard)
  *
  * `listSessoes` no servidor ganhou inputs opcionais `mes` e `ano`; filtro SQL

@@ -645,6 +645,17 @@ export default function FinanceiroContasAPagar() {
     },
     onError: (e: any) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
   });
+
+  // Rev. 4508 — Cancelamento em lote de lançamentos selecionados
+  const [showBulkCancel, setShowBulkCancel] = useState(false);
+  const [motivoBulkCancel, setMotivoBulkCancel] = useState("");
+  const bulkCancelMut = (trpc as any).financial.cancelEntryBulk.useMutation({
+    onSuccess: (r: any) => {
+      toast({ title: `${r.cancelled} lançamento(s) cancelados com sucesso!`, description: "Operação registrada no log de auditoria." });
+      setShowBulkCancel(false); setMotivoBulkCancel(""); setSelectedIds(new Set()); refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao cancelar", description: e.message, variant: "destructive" }),
+  });
   const estornoMut = (trpc as any).financial.estornarPagamento.useMutation({
     onSuccess: () => {
       toast({ title: "Pagamento estornado!", description: "Lançamento voltou para 'A Pagar'. Registrado no log de auditoria." });
@@ -1235,6 +1246,12 @@ export default function FinanceiroContasAPagar() {
               <Button size="sm" className="bg-white text-blue-700 hover:bg-blue-50 h-8 text-xs gap-1"
                 onClick={() => setShowBulkPay(true)}>
                 <Zap className="w-3.5 h-3.5" />Pagar selecionados
+              </Button>
+              {/* Rev. 4508 — Cancelar/apagar em lote */}
+              <Button size="sm" variant="ghost"
+                className="bg-red-600 hover:bg-red-700 text-white border-0 h-8 text-xs gap-1"
+                onClick={() => { setMotivoBulkCancel(""); setShowBulkCancel(true); }}>
+                <Trash2 className="w-3.5 h-3.5" />Apagar selecionados
               </Button>
               <button onClick={() => setSelectedIds(new Set())}
                 className="p-1.5 rounded hover:bg-blue-700 text-white" title="Limpar seleção">
@@ -2775,6 +2792,50 @@ export default function FinanceiroContasAPagar() {
                 disabled={deleteMut.isPending || motivoDelete.trim().length < 5}
                 onClick={() => deleteMut.mutate({ id: showDelete.id, companyId, motivo: motivoDelete.trim() })}>
                 {deleteMut.isPending ? "Excluindo..." : "Confirmar exclusão"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 4508 — Modal APAGAR EM LOTE (cancelamento de múltiplos lançamentos) */}
+        <Dialog open={showBulkCancel} onOpenChange={(o) => { if (!o) { setShowBulkCancel(false); setMotivoBulkCancel(""); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-700">
+                <Trash2 className="w-5 h-5" />Apagar Lançamentos Selecionados
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                <p className="text-xs text-red-700 font-semibold uppercase tracking-wide mb-1">
+                  {selectedIds.size} lançamento(s) · {formatBRL(selectedTotal)}
+                </p>
+                <p className="text-sm text-slate-700">
+                  Os lançamentos serão <strong>cancelados</strong> (removidos da lista de pendentes). 
+                  Lançamentos já <em>pagos</em> ou <em>recebidos</em> são protegidos e não serão afetados.
+                </p>
+              </div>
+              <div>
+                <Label className="text-sm">Motivo do cancelamento <span className="text-red-600">*</span></Label>
+                <Textarea
+                  value={motivoBulkCancel}
+                  onChange={(e) => setMotivoBulkCancel(e.target.value)}
+                  placeholder="Ex.: Lançamentos do período pré-módulo, já pagos externamente"
+                  rows={3} className="mt-1"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">Mínimo 5 caracteres. Registrado no log de auditoria com o nome do usuário.</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setShowBulkCancel(false); setMotivoBulkCancel(""); }}>Voltar</Button>
+              <Button className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={bulkCancelMut.isPending || motivoBulkCancel.trim().length < 5}
+                onClick={() => bulkCancelMut.mutate({
+                  ids: Array.from(selectedIds),
+                  companyId,
+                  motivoCancelamento: motivoBulkCancel.trim(),
+                })}>
+                {bulkCancelMut.isPending ? "Cancelando..." : `Confirmar — apagar ${selectedIds.size} lançamento(s)`}
               </Button>
             </DialogFooter>
           </DialogContent>
