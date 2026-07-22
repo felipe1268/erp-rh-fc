@@ -7366,7 +7366,20 @@ Retorne APENAS um JSON válido neste formato:
           const endIdx = jsonStr.lastIndexOf("}");
           if (startIdx >= 0 && endIdx > startIdx) jsonStr = jsonStr.substring(startIdx, endIdx + 1);
 
-          const parsed = JSON.parse(jsonStr);
+          let parsed: any;
+          try {
+            parsed = JSON.parse(jsonStr);
+          } catch (parseErr: any) {
+            // Salvage: LLM às vezes emite números no formato BR (1.234,56) dentro do JSON
+            // → substitui vírgula decimal BR por ponto, remove pontos de milhar
+            console.warn("[extrairCotacaoIA] JSON.parse falhou, tentando salvage BR-number:", parseErr.message?.slice(0, 80));
+            const salvaged = jsonStr
+              // "1.234,56" → "1234.56"  (milhar ponto + decimal vírgula)
+              .replace(/(\d{1,3}(?:\.\d{3})+),(\d{2})\b/g, (_: string, int: string, dec: string) => int.replace(/\./g, "") + "." + dec)
+              // "234,56" (sem milhar) → "234.56"
+              .replace(/\b(\d+),(\d{1,2})\b/g, "$1.$2");
+            parsed = JSON.parse(salvaged); // se ainda falhar, propaga o erro original
+          }
           console.log("[extrairCotacaoIA] Parsed OK. itens:", (parsed.itensExtraidos ?? parsed.itens ?? []).length);
 
           const rawItens = (parsed.itensExtraidos ?? parsed.itens ?? []);
