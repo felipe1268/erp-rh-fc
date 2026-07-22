@@ -157,7 +157,7 @@ export default function LocadosUtilizacao() {
         </div>
 
         {/* Seletor de período */}
-        <PeriodSelectorCard mes={mes} ano={ano} onMes={setMes} onAno={setAno} />
+        <PeriodSelectorCard mes={mes} ano={ano} onMes={setMes} onAno={setAno} onAnoTodo={() => setMes(null)} />
 
         {/* KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
