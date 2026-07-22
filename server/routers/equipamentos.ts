@@ -3869,6 +3869,234 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       };
     }),
 
+  // ── Rev. 4512 — Utilização de Equipamentos Locados ───────────────────────
+  // Rastreia ciclos SAIDA_ALMOX→RETORNO_ALMOX dos equipamentos locados.
+  // Métrica principal: custo de ociosidade = dias_parado × (valor_mensal/30).
+  // Retorna: ciclos no período, lista "em almox agora" com custo acumulado,
+  // stats, rankings de quem pega mais e top equipamentos mais movimentados.
+  // ─────────────────────────────────────────────────────────────────────────
+  locadosUtilizacao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mes: z.number().nullable().optional(),
+      ano: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const cid = input.companyId;
+      const mes = input.mes ?? null;
+      const ano = input.ano;
+
+      // Filtro de período: mes=null → ano todo
+      const periodFilter = mes != null
+        ? sql`AND EXTRACT(MONTH FROM ev.data_evento::date) = ${mes}
+              AND EXTRACT(YEAR  FROM ev.data_evento::date) = ${ano}`
+        : sql`AND EXTRACT(YEAR FROM ev.data_evento::date) = ${ano}`;
+
+      // ── Ciclos: SAIDA_ALMOX emparelhada com próximo RETORNO_ALMOX ─────────
+      const cycleRaw = (await db.execute(sql`
+        WITH saidas AS (
+          SELECT
+            ev.id,
+            ev.equipamento_locado_id,
+            ev.data_evento              AS saiu_em,
+            ev.funcionario_nome         AS quem_saiu,
+            ev.usuario_nome             AS registrado_por,
+            el.descricao,
+            el.categoria,
+            el.valor_mensal::numeric    AS valor_mensal,
+            el.fornecedor_nome,
+            el.foto_url,
+            el.quantidade
+          FROM equipamento_locado_eventos ev
+          JOIN equipamentos_locados el
+            ON el.id            = ev.equipamento_locado_id
+           AND el.company_id    = ${cid}
+          WHERE ev.company_id   = ${cid}
+            AND ev.tipo         = 'SAIDA_ALMOX'
+            ${periodFilter}
+        )
+        SELECT
+          s.*,
+          ret.data_evento       AS devolvido_em,
+          ret.funcionario_nome  AS quem_devolveu,
+          CASE
+            WHEN ret.data_evento IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (ret.data_evento::timestamptz - s.saiu_em::timestamptz))/3600
+            ELSE EXTRACT(EPOCH FROM (NOW() - s.saiu_em::timestamptz))/3600
+          END AS horas_fora
+        FROM saidas s
+        LEFT JOIN LATERAL (
+          SELECT data_evento, funcionario_nome
+          FROM equipamento_locado_eventos
+          WHERE company_id           = ${cid}
+            AND equipamento_locado_id = s.equipamento_locado_id
+            AND tipo                 = 'RETORNO_ALMOX'
+            AND data_evento          > s.saiu_em
+          ORDER BY data_evento ASC
+          LIMIT 1
+        ) ret ON true
+        ORDER BY s.saiu_em DESC
+        LIMIT 500
+      `)).rows as any[];
+
+      // ── Em almox agora: equipamentos ativos cujo último evento relevante
+      //    não é SAIDA_ALMOX (= parado no almox, pagando locação sem usar) ──
+      const idleRaw = (await db.execute(sql`
+        SELECT
+          el.id,
+          el.descricao,
+          el.categoria,
+          el.quantidade,
+          el.valor_mensal::numeric         AS valor_mensal,
+          el.fornecedor_nome,
+          el.foto_url,
+          last_ev.tipo                     AS ultimo_evento,
+          COALESCE(
+            last_ev.data_evento,
+            (el.data_inicio || 'T00:00:00')::timestamp
+          )                                AS parado_desde,
+          EXTRACT(EPOCH FROM (
+            NOW() - COALESCE(
+              last_ev.data_evento::timestamptz,
+              (el.data_inicio || 'T00:00:00')::timestamptz
+            )
+          ))/86400                         AS dias_ociosos
+        FROM equipamentos_locados el
+        LEFT JOIN LATERAL (
+          SELECT tipo, data_evento
+          FROM equipamento_locado_eventos
+          WHERE company_id            = ${cid}
+            AND equipamento_locado_id = el.id
+            AND tipo IN ('SAIDA_ALMOX','RETORNO_ALMOX','RECEBIMENTO')
+          ORDER BY data_evento DESC
+          LIMIT 1
+        ) last_ev ON true
+        WHERE el.company_id = ${cid}
+          AND el.status NOT IN ('devolvido','aguardando_chegada')
+          AND (last_ev.tipo IS NULL OR last_ev.tipo IN ('RETORNO_ALMOX','RECEBIMENTO'))
+        ORDER BY parado_desde ASC
+      `)).rows as any[];
+
+      // ── Em campo agora (SAIDA_ALMOX como último evento) ───────────────────
+      const emCampoRaw = (await db.execute(sql`
+        SELECT COUNT(*)::int AS cnt
+        FROM equipamentos_locados el
+        INNER JOIN LATERAL (
+          SELECT tipo
+          FROM equipamento_locado_eventos
+          WHERE company_id            = ${cid}
+            AND equipamento_locado_id = el.id
+            AND tipo IN ('SAIDA_ALMOX','RETORNO_ALMOX','RECEBIMENTO')
+          ORDER BY data_evento DESC
+          LIMIT 1
+        ) last_ev ON true
+        WHERE el.company_id = ${cid}
+          AND el.status NOT IN ('devolvido','aguardando_chegada')
+          AND last_ev.tipo = 'SAIDA_ALMOX'
+      `)).rows as any[];
+
+      // ── Derivações JS ─────────────────────────────────────────────────────
+      const totalCiclos    = cycleRaw.length;
+      const ciclosCompletos = cycleRaw.filter(r => r.devolvido_em != null).length;
+      const emAlmoxCount   = idleRaw.length;
+      const emCampoCount   = Number(emCampoRaw[0]?.cnt ?? 0);
+
+      const custoOciosidadeTotal = idleRaw.reduce((s, r) => {
+        const vm   = Number(r.valor_mensal) || 0;
+        const dias = Number(r.dias_ociosos) || 0;
+        return s + (vm / 30) * dias;
+      }, 0);
+
+      const horasArr = cycleRaw.map(r => Number(r.horas_fora) || 0);
+      const mediaHoras = horasArr.length > 0
+        ? horasArr.reduce((a, b) => a + b, 0) / horasArr.length : 0;
+
+      const utilizacaoMedia = (emCampoCount + emAlmoxCount) > 0
+        ? (emCampoCount / (emCampoCount + emAlmoxCount)) * 100
+        : null;
+
+      // Ciclos por mês (para o gráfico de barras)
+      const mensalMap = new Map<string, number>();
+      for (const r of cycleRaw) {
+        const key = String(r.saiu_em || "").slice(0, 7);
+        mensalMap.set(key, (mensalMap.get(key) || 0) + 1);
+      }
+      const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+      const mensal = Array.from(mensalMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([ym, count]) => {
+          const [y, m] = ym.split("-");
+          return { ym, label: `${MESES[Number(m)-1]}/${String(y).slice(2)}`, count };
+        });
+
+      // Ranking: quem mais retirou
+      const quemMap = new Map<string, number>();
+      for (const r of cycleRaw) {
+        const n = r.quem_saiu || "Não informado";
+        quemMap.set(n, (quemMap.get(n) || 0) + 1);
+      }
+      const topQuemPegou = Array.from(quemMap.entries())
+        .sort((a, b) => b[1] - a[1]).slice(0, 10)
+        .map(([nome, count]) => ({ nome, count }));
+
+      // Ranking: equipamentos mais movimentados
+      const equipMap = new Map<string, number>();
+      for (const r of cycleRaw) {
+        const n = r.descricao || "—";
+        equipMap.set(n, (equipMap.get(n) || 0) + 1);
+      }
+      const topEquipamentos = Array.from(equipMap.entries())
+        .sort((a, b) => b[1] - a[1]).slice(0, 10)
+        .map(([descricao, count]) => ({ descricao, count }));
+
+      return {
+        ciclos: cycleRaw.map(r => ({
+          id:             Number(r.id),
+          equipamentoId:  Number(r.equipamento_locado_id),
+          descricao:      r.descricao   as string,
+          categoria:      r.categoria   as string | null,
+          valorMensal:    Number(r.valor_mensal) || 0,
+          fornecedorNome: r.fornecedor_nome as string | null,
+          fotoUrl:        r.foto_url    as string | null,
+          quantidade:     Number(r.quantidade) || 1,
+          quemSaiu:       r.quem_saiu   as string | null,
+          registradoPor:  r.registrado_por as string | null,
+          saiuEm:         r.saiu_em     as string,
+          devolvidoEm:    r.devolvido_em as string | null ?? null,
+          quemDevolveu:   r.quem_devolveu as string | null ?? null,
+          horasFora:      Number(r.horas_fora) || 0,
+        })),
+        emAlmox: idleRaw.map(r => ({
+          id:              Number(r.id),
+          descricao:       r.descricao    as string,
+          categoria:       r.categoria    as string | null,
+          quantidade:      Number(r.quantidade) || 1,
+          valorMensal:     Number(r.valor_mensal) || 0,
+          fornecedorNome:  r.fornecedor_nome as string | null,
+          fotoUrl:         r.foto_url     as string | null,
+          ultimoEvento:    r.ultimo_evento as string | null ?? null,
+          paradoDesde:     r.parado_desde as string,
+          diasOciosos:     Number(r.dias_ociosos) || 0,
+          custoDiario:     (Number(r.valor_mensal) || 0) / 30,
+          custoOciosidade: ((Number(r.valor_mensal) || 0) / 30) * (Number(r.dias_ociosos) || 0),
+        })),
+        stats: {
+          totalCiclos,
+          ciclosCompletos,
+          emAlmoxCount,
+          emCampoCount,
+          custoOciosidadeTotal,
+          mediaHorasPorCiclo: Math.round(mediaHoras * 10) / 10,
+          utilizacaoMedia,
+        },
+        topQuemPegou,
+        topEquipamentos,
+        mensal,
+      };
+    }),
+
   // ── Rev. 4509 — Raio-X do Equipamento Próprio ────────────────────────────
   // Retorna histórico completo de transferências, KPIs de utilização e
   // dados mensais para o gráfico de ocupação.

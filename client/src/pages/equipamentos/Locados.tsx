@@ -1779,6 +1779,12 @@ export default function EquipamentosLocados() {
                   <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800">{fmtN(stats.ativos)}</span>
                 </button>
               )}
+              {/* Rev. 4512 — Atalho para o dashboard de utilização de locados. */}
+              <a href="/equipamentos/locados-utilizacao"
+                className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 hover:bg-amber-100 px-5 py-2.5 rounded-xl shadow-md font-semibold text-sm transition ring-1 ring-amber-200"
+                title="Dashboard de utilização — quanto tempo cada equipamento fica parado no almox gerando custo de locação">
+                <Activity className="h-4 w-4" /> Utilização
+              </a>
               {/* Rev. 2315 — Removido botão "Receber locação"; fluxo principal é Importar PDF (IA). */}
               <button onClick={abrirImportar}
                 className="inline-flex items-center gap-2 bg-white text-indigo-700 hover:bg-indigo-50 px-5 py-2.5 rounded-xl shadow-md font-semibold text-sm transition"

@@ -50,11 +50,12 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4512** — **FEAT: DASH UTILIZAÇÃO DE EQUIPAMENTOS LOCADOS.** Nova página `/equipamentos/locados-utilizacao`: KPIs (em campo, em almox/ocioso, **custo de ociosidade** em vermelho, utilização %), seção "Pagando parado no almox" com custo acumulado e diário por equipamento + badge Crítico/Atenção/Recente, gráfico de barras mensais, rankings "Quem mais retirou" e "Mais movimentados", histórico de ciclos SAIDA_ALMOX→RETORNO_ALMOX. Backend: procedure `locadosUtilizacao` (3 queries: ciclos via CTE+LATERAL, idle items, em-campo count). Botão "Utilização" (amber) no header de Locados. Card âmbar no hub. ZERO schema change.
 - **Rev. 4511** — **FEAT: DASH RETIRADAS DO ALMOXARIFADO (corrigido).** Nova página `/equipamentos/entregas`: KPIs (retiradas, ferramentas distintas, obras, **não devolvidas** em vermelho), gráfico de barras mensais, ranking "Quem mais pegou" e "Obras que mais receberam". Seção expandível "Ferramentas não devolvidas" agrupa por pessoa com badge de dias em aberto (vermelho >30d, âmbar >7d). Lista de retiradas mostra badge "Não devolvida/Devolvida" por item. Backend: query separada `DISTINCT ON (equipamento_id)` pega o status ATUAL (`ep.status='em_obra'`) sem filtro de período. Hub de Equipamentos: card violeta na grade de 3 colunas. ZERO schema change.
-- **Rev. 4510** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO + FOTOS NA PRESENÇA DDS.** Modal redesenhado com 3 abas, donut, area chart, bar chart dias da semana, "quem mais usa". Fotos de colaborador na lista de presença das sessões DDS. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4510** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO + FOTOS NA PRESENÇA DDS.** Modal redesenhado com 3 abas, donut, area chart, bar chart dias da semana, "quem mais usa". Fotos de colaborador na lista de presença das sessões DDS. ZERO schema change.
 - **Rev. 4509** — **FEAT: RAIO-X DO EQUIPAMENTO PRÓPRIO.** Modal Raio-X com KPIs, gráfico de ocupação mensal, timeline. `proprioRaioX` tRPC. ZERO schema change.
 - **Rev. 4508** — **FEAT: CP — APAGAR EM LOTE (cancelEntryBulk).** Botão "Apagar selecionados" + Dialog confirmação + motivo. ZERO schema change.
 - **Rev. 4507** — **FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard).** `listSessoes` ganhou inputs `mes` e `ano` (filtro SQL via `EXTRACT`); frontend usa `PeriodSelectorCard` com `monthStatus`. ZERO schema change.

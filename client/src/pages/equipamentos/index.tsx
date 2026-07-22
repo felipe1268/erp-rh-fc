@@ -5,7 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import {
   HardHat, Package, Truck, AlertTriangle, ChevronRight,
   Clock, TrendingDown, Building2, CalendarClock, Layers,
-  CircleDollarSign, ArrowUpRight, Boxes,
+  CircleDollarSign, ArrowUpRight, Boxes, Activity,
 } from "lucide-react";
 import { fmtDate, fmtMoney } from "./_shared";
 import { useMemo, useState } from "react";
@@ -166,6 +166,20 @@ export default function EquipamentosHub() {
                   Monitore cada ferramenta que saiu do estoque: quem entregou, para qual obra e quando foi confirmado o recebimento.
                 </p>
                 <div className="flex items-center justify-end mt-3 text-violet-700 text-xs font-medium">Abrir <ChevronRight className="h-3 w-3" /></div>
+              </div>
+            </a>
+          </Link>
+          <Link href="/equipamentos/locados-utilizacao">
+            <a className="block bg-white border rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition overflow-hidden">
+              <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white p-4 flex items-center gap-3">
+                <Activity className="h-6 w-6" />
+                <div className="font-semibold text-sm">Utilização de Locados</div>
+              </div>
+              <div className="p-4">
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Custo de ociosidade dos equipamentos locados: dias parados no almox × valor diário de locação.
+                </p>
+                <div className="flex items-center justify-end mt-3 text-amber-700 text-xs font-medium">Abrir <ChevronRight className="h-3 w-3" /></div>
               </div>
             </a>
           </Link>

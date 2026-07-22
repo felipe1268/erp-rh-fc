@@ -399,6 +399,7 @@ const EquipamentosHub = lazyWithRetry(() => import("./pages/equipamentos/index")
 const EquipamentosProprios = lazyWithRetry(() => import("./pages/equipamentos/Proprios"));
 const EquipamentosLocados   = lazyWithRetry(() => import("./pages/equipamentos/Locados"));
 const EntregasAlmox         = lazyWithRetry(() => import("./pages/equipamentos/EntregasAlmox"));
+const LocadosUtilizacao     = lazyWithRetry(() => import("./pages/equipamentos/LocadosUtilizacao"));
 const SolicitacaoMDO = lazyWithRetry(() => import("./pages/SolicitacaoMDO"));
 const Solicitacoes = lazyWithRetry(() => import("./pages/compras/Solicitacoes"));
 const Cotacoes = lazyWithRetry(() => import("./pages/compras/Cotacoes"));
@@ -723,6 +724,7 @@ function Router() {
         <Route path="/equipamentos/proprios"         component={() => <RouteGuard component={EquipamentosProprios} route="/almoxarifado" />} />
         <Route path="/equipamentos/locados"          component={() => <RouteGuard component={EquipamentosLocados}  route="/almoxarifado" />} />
         <Route path="/equipamentos/entregas"         component={() => <RouteGuard component={EntregasAlmox}        route="/almoxarifado" />} />
+        <Route path="/equipamentos/locados-utilizacao" component={() => <RouteGuard component={LocadosUtilizacao}  route="/almoxarifado" />} />
         <Route path="/compras/painel"            component={() => <RouteGuard component={PainelCompras} route="/compras/painel" />} />
         <Route path="/compras/fornecedores/:id"   component={() => <RouteGuard component={FornecedorFicha} route="/compras/fornecedores" />} />
         <Route path="/compras/fornecedores"      component={() => <RouteGuard component={Fornecedores} route="/compras/fornecedores" />} />

@@ -1,4 +1,39 @@
 /**
+ * Rev. 4512 - FEAT: DASH UTILIZAÇÃO DE EQUIPAMENTOS LOCADOS
+ *
+ * Nova página `/equipamentos/locados-utilizacao` que mede o custo de ociosidade
+ * dos equipamentos locados: cada dia que o equipamento fica parado no almox
+ * é dinheiro gasto sem retorno (a empresa continua pagando o aluguel).
+ *
+ * Métrica principal: custoOciosidade = (valor_mensal / 30) × dias_parado.
+ *
+ * KPIs: "Em campo agora" (SAIDA_ALMOX como último evento), "Em almox / ocioso"
+ * (último evento = RETORNO_ALMOX ou RECEBIMENTO, ou nunca saiu), custo de
+ * ociosidade total acumulado (destaque em vermelho), utilização % (em campo /
+ * total ativo).
+ *
+ * Seção "Pagando parado no almox": lista cada equipamento ocioso com foto,
+ * fornecedor, tempo parado, custo acumulado e custo/dia. Badge de urgência:
+ * Crítico (>30d), Atenção (>7d), Recente.
+ *
+ * Gráfico de barras mensais (saídas por mês). Rankings "Quem mais retirou"
+ * e "Mais movimentados".
+ *
+ * Histórico de ciclos SAIDA_ALMOX→RETORNO_ALMOX: foto, descrição, fornecedor,
+ * quem retirou, data saída, data retorno, tempo fora, badge Em campo/Devolvido.
+ * Busca livre por nome/pessoa/fornecedor.
+ *
+ * Backend: procedure `locadosUtilizacao` (3 queries Postgres):
+ * (1) ciclos via CTE saidas + LATERAL RETORNO_ALMOX; filtro mes/ano via
+ *     EXTRACT; (2) idle items via LATERAL last-event-not-SAIDA; (3) count
+ *     em campo. Custo de ociosidade derivado em JS. ZERO schema change.
+ *
+ * Navegação: rota `/equipamentos/locados-utilizacao`; botão "Utilização"
+ * (amber) adicionado ao header da página de Locados; card verde no hub.
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4511 - FEAT: CONTROLE DE SAÍDAS DO ALMOXARIFADO (ciclos saída↔devolução)
  *
  * Nova página `/equipamentos/entregas` que monitora toda ferramenta própria
