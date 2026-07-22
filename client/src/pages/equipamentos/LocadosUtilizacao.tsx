@@ -813,38 +813,33 @@ function DrillModal({ titulo, subtitulo, onClose, children }: {
 }) {
   const [q, setQ] = useState("");
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      {/* Sheet */}
-      <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b">
-          <div>
-            <h2 className="font-bold text-slate-900 text-base">{titulo}</h2>
-            {subtitulo && <p className="text-xs text-slate-500 mt-0.5">{subtitulo}</p>}
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition shrink-0">
-            <X className="h-4 w-4 text-slate-500" />
-          </button>
+    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b bg-white shadow-sm">
+        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition shrink-0">
+          <X className="h-5 w-5 text-slate-500" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-bold text-slate-900 text-base leading-tight truncate">{titulo}</h2>
+          {subtitulo && <p className="text-xs text-slate-500 truncate">{subtitulo}</p>}
         </div>
-        {/* Busca */}
-        <div className="px-5 py-3 border-b bg-slate-50">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-            <input
-              value={q} onChange={e => setQ(e.target.value)}
-              placeholder="Filtrar por nome…"
-              className="w-full pl-8 pr-3 py-1.5 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            />
-          </div>
+      </div>
+      {/* Busca */}
+      <div className="px-4 py-3 border-b bg-slate-50">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            value={q} onChange={e => setQ(e.target.value)}
+            placeholder="Filtrar por nome…"
+            className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          />
         </div>
-        {/* Lista */}
-        <div className="overflow-y-auto flex-1">
-          <DrillFilterContext.Provider value={q.toLowerCase()}>
-            {children}
-          </DrillFilterContext.Provider>
-        </div>
+      </div>
+      {/* Lista */}
+      <div className="overflow-y-auto flex-1">
+        <DrillFilterContext.Provider value={q.toLowerCase()}>
+          {children}
+        </DrillFilterContext.Provider>
       </div>
     </div>
   );
