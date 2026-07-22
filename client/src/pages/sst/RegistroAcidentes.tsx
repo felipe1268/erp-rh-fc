@@ -107,6 +107,7 @@ export default function RegistroAcidentes() {
   const [form, setForm] = useState<any>(emptyForm());
   const [editId, setEditId] = useState<number | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [obraSearch, setObraSearch] = useState("");
 
   const list = trpc.acidentes.list.useQuery(
     {
@@ -176,6 +177,20 @@ export default function RegistroAcidentes() {
     return (employeesQ.data ?? []).find((e: any) => String(e.id) === String(form.employeeId)) || null;
   }, [form.employeeId, employeesQ.data]);
 
+  // Obra selecionada (para mostrar o nome no campo)
+  const obraSelected = useMemo(() => {
+    if (!form.obraId) return null;
+    return (obrasQ.data ?? []).find((o: any) => String(o.id) === String(form.obraId)) || null;
+  }, [form.obraId, obrasQ.data]);
+
+  // Lista de obras filtrada pela busca do form
+  const obrasFiltered = useMemo(() => {
+    const all = (obrasQ.data ?? []).filter((o: any) => !o.deletedAt);
+    if (!obraSearch.trim()) return all.slice(0, 80);
+    const q = obraSearch.toLowerCase();
+    return all.filter((o: any) => (o.nome || "").toLowerCase().includes(q)).slice(0, 80);
+  }, [obrasQ.data, obraSearch]);
+
   // Lista de funcionários filtrada pela busca do form
   const employeesFiltered = useMemo(() => {
     const all = employeesQ.data ?? [];
@@ -215,7 +230,7 @@ export default function RegistroAcidentes() {
   }, [form.gravidade]);
 
   function openNovo() {
-    setForm(emptyForm()); setEditId(null); setEmployeeSearch(""); setOpen(true);
+    setForm(emptyForm()); setEditId(null); setEmployeeSearch(""); setObraSearch(""); setOpen(true);
   }
   function openEdit(r: any) {
     setEditId(r.id);
@@ -238,6 +253,7 @@ export default function RegistroAcidentes() {
       atestadoId: r.atestadoId ?? null,
     });
     setEmployeeSearch("");
+    setObraSearch("");
     setOpen(true);
   }
 
@@ -563,13 +579,49 @@ export default function RegistroAcidentes() {
 
                     <div>
                       <Label className="text-xs">Obra</Label>
-                      <Select value={form.obraId ? String(form.obraId) : "__none__"} onValueChange={(v) => setForm({ ...form, obraId: v === "__none__" ? "" : v })}>
-                        <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">— sem obra —</SelectItem>
-                          {(obrasQ.data ?? []).map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      {obraSelected ? (
+                        <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-2.5 flex items-center gap-2 mt-1">
+                          <div className="h-6 w-6 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold shrink-0">
+                            O
+                          </div>
+                          <div className="flex-1 min-w-0 font-semibold text-gray-900 text-sm truncate">{obraSelected.nome}</div>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setForm({ ...form, obraId: "" }); setObraSearch(""); }}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="relative mt-1">
+                          <Search className="h-4 w-4 absolute left-2.5 top-3 text-gray-400" />
+                          <Input
+                            placeholder="Buscar obra pelo nome..."
+                            value={obraSearch}
+                            onChange={(e) => setObraSearch(e.target.value)}
+                            className="pl-8"
+                          />
+                          {(obraSearch || true) && (
+                            <div className="mt-1 max-h-48 overflow-y-auto border rounded-lg divide-y bg-white shadow-sm">
+                              <button
+                                type="button"
+                                onClick={() => { setForm({ ...form, obraId: "" }); setObraSearch(""); }}
+                                className="w-full text-left p-2.5 text-sm text-gray-400 hover:bg-gray-50 italic"
+                              >
+                                — sem obra —
+                              </button>
+                              {obrasFiltered.length === 0 && <div className="p-3 text-sm text-gray-500 text-center">Nenhuma obra encontrada</div>}
+                              {obrasFiltered.map((o: any) => (
+                                <button
+                                  key={o.id}
+                                  type="button"
+                                  onClick={() => { setForm({ ...form, obraId: String(o.id) }); setObraSearch(""); }}
+                                  className="w-full text-left p-2.5 hover:bg-blue-50 text-sm"
+                                >
+                                  {o.nome}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </section>
