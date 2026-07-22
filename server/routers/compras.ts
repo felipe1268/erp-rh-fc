@@ -7370,15 +7370,34 @@ Retorne APENAS um JSON válido neste formato:
           try {
             parsed = JSON.parse(jsonStr);
           } catch (parseErr: any) {
-            // Salvage: LLM às vezes emite números no formato BR (1.234,56) dentro do JSON
-            // → substitui vírgula decimal BR por ponto, remove pontos de milhar
-            console.warn("[extrairCotacaoIA] JSON.parse falhou, tentando salvage BR-number:", parseErr.message?.slice(0, 80));
-            const salvaged = jsonStr
-              // "1.234,56" → "1234.56"  (milhar ponto + decimal vírgula)
+            console.warn("[extrairCotacaoIA] JSON.parse falhou, tentando salvage multi-pass:", parseErr.message?.slice(0, 120));
+            // Salvage multi-pass — ordem importa:
+            let salvaged = jsonStr
+              // 1) Números BR com milhar: "1.234,56" → "1234.56"
               .replace(/(\d{1,3}(?:\.\d{3})+),(\d{2})\b/g, (_: string, int: string, dec: string) => int.replace(/\./g, "") + "." + dec)
-              // "234,56" (sem milhar) → "234.56"
-              .replace(/\b(\d+),(\d{1,2})\b/g, "$1.$2");
-            parsed = JSON.parse(salvaged); // se ainda falhar, propaga o erro original
+              // 2) Números BR sem milhar: "234,56" → "234.56"  (apenas dígitos→vírgula→1-2 dígitos)
+              .replace(/\b(\d+),(\d{1,2})\b/g, "$1.$2")
+              // 3) NaN / Infinity (não são JSON válido) → null
+              .replace(/:\s*NaN\b/g, ": null")
+              .replace(/:\s*-?Infinity\b/g, ": null")
+              // 4) Trailing commas antes de } ou ] (JavaScript-style)
+              .replace(/,(\s*[}\]])/g, "$1")
+              // 5) Quebras de linha não-escapadas dentro de strings JSON
+              //    Percorre char a char: se dentro de string e encontra \n/\r → substitui por \\n
+              .replace(/"(?:[^"\\]|\\.)*"/g, (m) =>
+                m.replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t")
+              );
+            // 6) JSON truncado: tenta fechar colchetes/chaves abertos
+            try {
+              parsed = JSON.parse(salvaged);
+            } catch {
+              const opens = (salvaged.match(/\{/g) || []).length - (salvaged.match(/\}/g) || []).length;
+              const openArr = (salvaged.match(/\[/g) || []).length - (salvaged.match(/\]/g) || []).length;
+              // Remove trailing comma antes de fechar
+              salvaged = salvaged.trimEnd().replace(/,\s*$/, "");
+              salvaged += "]".repeat(Math.max(0, openArr)) + "}".repeat(Math.max(0, opens));
+              parsed = JSON.parse(salvaged); // se ainda falhar, propaga
+            }
           }
           console.log("[extrairCotacaoIA] Parsed OK. itens:", (parsed.itensExtraidos ?? parsed.itens ?? []).length);
 
