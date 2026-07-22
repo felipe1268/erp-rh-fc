@@ -4480,6 +4480,8 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           codigoPatrimonio: r.codigo_patrimonio as string | null,
           fotoUrl:          r.foto_url         as string | null,
           quemSaiu:         r.quem_saiu        as string | null,
+          funcionarioId:    r.funcionario_id   != null ? Number(r.funcionario_id) : null,
+          fotoFuncionario:  r.funcionario_id   != null ? (fotoMap.get(Number(r.funcionario_id)) ?? null) : null,
           registradoPor:    r.registrado_por   as string | null,
           saiuEm:           r.saiu_em          as string,
           devolvidoEm:      r.devolvido_em     as string | null ?? null,

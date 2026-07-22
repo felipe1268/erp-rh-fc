@@ -471,7 +471,7 @@ export default function PropriosUtilizacao() {
                       <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5 flex-wrap">
                         {c.codigoPatrimonio && <span className="font-mono text-[10px] bg-slate-100 px-1.5 rounded">{c.codigoPatrimonio}</span>}
                         <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" /> saiu {fmtDt(c.saiuEm)}</span>
-                        {c.quemSaiu && <span className="flex items-center gap-1"><Avatar nome={c.quemSaiu} size="sm" />{c.quemSaiu}</span>}
+                        {c.quemSaiu && <span className="flex items-center gap-1"><FotoFuncionario fotoUrl={c.fotoFuncionario} nome={c.quemSaiu} />{c.quemSaiu}</span>}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -776,7 +776,7 @@ export default function PropriosUtilizacao() {
                           )}
                           {c.quemSaiu && (
                             <span className="flex items-center gap-1">
-                              <Avatar nome={c.quemSaiu} size="sm" />
+                              <FotoFuncionario fotoUrl={c.fotoFuncionario} nome={c.quemSaiu} />
                               {c.quemSaiu}
                             </span>
                           )}
