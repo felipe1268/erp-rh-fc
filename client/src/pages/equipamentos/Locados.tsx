@@ -1361,9 +1361,12 @@ export default function EquipamentosLocados() {
   // da empresa atual. Agrupa por NOME normalizado (uppercase trimmed) pra
   // colapsar variações "Jalves" / "JALVES" / "jalves locações" → 1 entrada.
   // Mantém o nome com a capitalização mais comum pra exibição.
+  // fornecedoresComItens — fonte para CHIPS de filtro; usa dataPorStatus para
+  // que o count/valorMes reflita o status ativo (ex: "Em uso"). Assim "Sem locadora"
+  // com só devolvidos não aparece quando o filtro "Em uso" está ativo.
   const fornecedoresComItens = useMemo(() => {
     const acc = new Map<string, { key: string; nome: string; count: number; valorMes: number }>();
-    for (const l of dataAll as any[]) {
+    for (const l of dataPorStatus as any[]) {
       const raw = String(l.fornecedorNome || "").trim();
       const k = raw ? raw.toUpperCase() : "__null__";
       const nome = raw || "— Sem locadora —";
@@ -1377,7 +1380,20 @@ export default function EquipamentosLocados() {
       if (b.key === "__null__" && a.key !== "__null__") return -1;
       return b.count - a.count;
     });
-  }, [dataPorCat]);
+  }, [dataPorStatus]);
+  // fornecedoresTodos — fonte para selects de AÇÃO EM LOTE e edição inline.
+  // Usa dataAll excluindo devolvidos para mostrar todas as locadoras ativas
+  // independente de filtros de status/obra/categoria.
+  const fornecedoresTodos = useMemo(() => {
+    const acc = new Map<string, { key: string; nome: string }>();
+    for (const l of (dataAll as any[]).filter((x: any) => x.status !== "devolvido")) {
+      const raw = String(l.fornecedorNome || "").trim();
+      if (!raw) continue;
+      const k = raw.toUpperCase();
+      if (!acc.has(k)) acc.set(k, { key: k, nome: raw });
+    }
+    return Array.from(acc.values()).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [dataAll]);
   const fornecedorSelecionado = useMemo(() => fornecedoresComItens.find(f => f.key === filtroFornecedor) || null, [fornecedoresComItens, filtroFornecedor]);
   const totalSemCategoria = useMemo(() => (dataAll as any[]).filter(l => !l.categoria || String(l.categoria).trim() === "").length, [dataAll]);
   // Rev. 2340 — quantos itens NÃO têm foto (nem recebimento, nem IA)
@@ -2326,7 +2342,7 @@ export default function EquipamentosLocados() {
                         <div className="mt-1 flex items-center gap-1" onClick={e => e.stopPropagation()}>
                           <Building2 className="h-3 w-3 text-slate-400 shrink-0" />
                           <datalist id="forn-card-datalist">
-                            {fornecedoresComItens.filter(f => f.key !== "__null__").map(f => (
+                            {fornecedoresTodos.map(f => (
                               <option key={f.key} value={f.nome} />
                             ))}
                           </datalist>
@@ -2805,7 +2821,7 @@ export default function EquipamentosLocados() {
                 onChange={e => setLoteFornecedor(e.target.value)}
                 className="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none max-w-[190px]">
                 <option value="">— locadora —</option>
-                {fornecedoresComItens.filter(f => f.key !== "__null__").map(f => (
+                {fornecedoresTodos.map(f => (
                   <option key={f.key} value={f.nome}>{f.nome}</option>
                 ))}
               </select>
@@ -2814,8 +2830,8 @@ export default function EquipamentosLocados() {
                 <button
                   title="Renomear esta locadora em todos os equipamentos"
                   onClick={() => {
-                    const f = fornecedoresComItens.find(x => x.nome === loteFornecedor);
-                    setRenomearForn({ nomeAtual: loteFornecedor, nomeNovo: loteFornecedor, count: f?.count ?? 0, valorMes: f?.valorMes ?? 0 });
+                    const meta = fornecedoresComItens.find(x => x.nome === loteFornecedor);
+                    setRenomearForn({ nomeAtual: loteFornecedor, nomeNovo: loteFornecedor, count: meta?.count ?? 0, valorMes: meta?.valorMes ?? 0 });
                   }}
                   className="p-1.5 border border-slate-300 rounded-md text-slate-500 hover:text-violet-700 hover:border-violet-400 shrink-0">
                   <Pencil className="h-3.5 w-3.5" />
@@ -3988,7 +4004,7 @@ export default function EquipamentosLocados() {
                           autoFocus
                         />
                         <datalist id="forn-edit-datalist">
-                          {fornecedoresComItens.filter(f => f.key !== "__null__").map(f => (
+                          {fornecedoresTodos.map(f => (
                             <option key={f.key} value={f.nome} />
                           ))}
                         </datalist>
