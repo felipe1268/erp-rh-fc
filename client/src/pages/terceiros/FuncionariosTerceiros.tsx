@@ -327,6 +327,7 @@ export default function FuncionariosTerceiros() {
   const [search, setSearch] = useState("");
   const [filterEmpresa, setFilterEmpresa] = useState<string>("all");
   const [filterAptidao, setFilterAptidao] = useState<string>("all");
+  const [filterObra, setFilterObra] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [viewFunc, setViewFunc] = useState<any>(null);
@@ -463,6 +464,7 @@ export default function FuncionariosTerceiros() {
   const filtered = useMemo(() => {
     let list = funcionarios;
     if (filterAptidao !== "all") list = list.filter((f: any) => f.statusAptidao === filterAptidao);
+    if (filterObra !== "all") list = list.filter((f: any) => String(f.obraId ?? "") === filterObra || f.obraNome === filterObra);
     if (search) {
       const s = search.toLowerCase();
       list = list.filter((f: any) =>
@@ -477,7 +479,7 @@ export default function FuncionariosTerceiros() {
     return [...list].sort((a: any, b: any) =>
       (a.nome || "").trim().localeCompare((b.nome || "").trim(), "pt-BR", { sensitivity: "base" })
     );
-  }, [funcionarios, search, filterAptidao]);
+  }, [funcionarios, search, filterAptidao, filterObra]);
 
   // Rev. 2300 — múltipla seleção + bulk update.
   const filteredIds = filtered.map((f: any) => f.id);
@@ -679,6 +681,15 @@ export default function FuncionariosTerceiros() {
             <SelectContent>
               <SelectItem value="all">Todas as Empresas</SelectItem>
               {empresas.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeFantasia || e.razaoSocial}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterObra} onValueChange={setFilterObra}>
+            <SelectTrigger className="w-52"><SelectValue placeholder="Obra" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as Obras</SelectItem>
+              {(obras as any[]).map((o: any) => (
+                <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={filterAptidao} onValueChange={setFilterAptidao}>
