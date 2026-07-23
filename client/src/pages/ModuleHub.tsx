@@ -639,9 +639,11 @@ export default function ModuleHub() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal px-2 py-1.5">Navegação Rápida</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => navigate("/painel")} className="cursor-pointer">
-                    <LayoutGrid className="mr-2 h-4 w-4" /> Ir ao Painel
-                  </DropdownMenuItem>
+                  {(isAdminMaster || user?.role === 'admin' || groupCanAccessRoute("/painel")) && (
+                    <DropdownMenuItem onClick={() => navigate("/painel")} className="cursor-pointer">
+                      <LayoutGrid className="mr-2 h-4 w-4" /> Ir ao Painel
+                    </DropdownMenuItem>
+                  )}
                   {user?.role === 'admin_master' && (
                     <>
                       <DropdownMenuSeparator />
