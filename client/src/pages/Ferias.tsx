@@ -26,8 +26,11 @@ import {
   Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square, Undo2,
   ChevronDown, Trash2,
 } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { Calendar } from "@/components/ui/calendar";
+import { DayButton, getDefaultClassNames } from "react-day-picker";
+import { cn } from "@/lib/utils";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -54,6 +57,49 @@ const TABELA_FALTAS_ART130 = [
   { faixa: "24 a 32", dias: 12 },
   { faixa: "Mais de 32", dias: 0 },
 ];
+
+// Rev. 4531 — Botão customizado para o DayPicker de férias:
+//   • Dias desabilitados ficam acinzentados e não clicáveis (via prop disabled do DayPicker)
+//   • Dias que são feriados exibem tag laranja "feriado" abaixo do número
+function FeriasDayButton({ className, day, modifiers, children, ...props }: React.ComponentProps<typeof DayButton> & { children?: React.ReactNode }) {
+  const isFeriado = !!modifiers["feriado"];
+  const isDisabled = !!modifiers.disabled;
+  const isSelected = !!modifiers.selected;
+  const isToday = !!modifiers.today;
+
+  return (
+    <button
+      data-day={day.date.toLocaleDateString()}
+      className={cn(
+        "flex flex-col items-center justify-center w-full rounded-md text-sm transition-colors select-none",
+        "min-w-8 aspect-square",
+        isSelected
+          ? "bg-primary text-primary-foreground"
+          : isDisabled
+            ? "text-muted-foreground opacity-40 cursor-not-allowed"
+            : "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+        isToday && !isSelected && "bg-accent text-accent-foreground",
+        isFeriado && !isDisabled && !isSelected && "text-orange-600 font-medium",
+        className
+      )}
+      {...props}
+    >
+      <span className="leading-none">{children}</span>
+      {isFeriado && (
+        <span className={cn(
+          "text-[6px] font-bold uppercase leading-none px-0.5 py-px rounded-sm mt-0.5",
+          isDisabled
+            ? "text-orange-300/70 bg-orange-50/60"
+            : isSelected
+              ? "text-orange-200 bg-orange-500/30"
+              : "text-orange-700 bg-orange-100"
+        )}>
+          feriado
+        </span>
+      )}
+    </button>
+  );
+}
 
 // Rev. 4530 — CLT Art. 135, §3° (Lei 13.467/2017):
 // "O início das férias não poderá ocorrer no período de dois dias
@@ -109,7 +155,7 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
     periodoAquisitivoFim: definirItem.periodoAquisitivoFim,
   }, { enabled: !!definirItem.employeeId });
 
-  // Rev. 4530 — busca feriados para o período relevante (±2 anos a partir de hoje)
+  // Rev. 4531 — busca feriados para o período relevante (±2 anos a partir de hoje)
   const anoAtual = new Date().getFullYear();
   const feriadosQuery = trpc.feriados.listarPeriodo.useQuery({
     companyId,
@@ -118,9 +164,43 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
   }, { enabled: !!companyId });
   const feriadosList: string[] = feriadosQuery.data ?? [];
 
-  // Rev. 4530 — validação CLT Art. 135, §3°
-  const validacaoDataInicio = verificarDataInicioFerias(definirForm.dataInicio || "", feriadosList);
-  const dataInicioInvalida = !!definirForm.dataInicio && !validacaoDataInicio.valido;
+  // Rev. 4531 — estado do popover do calendário
+  const [calOpen, setCalOpen] = useState(false);
+
+  // Converte lista de strings ISO → Date[] para os modifiers do DayPicker
+  const feriadosDates = useMemo(
+    () => feriadosList.map(f => { const [y,m,d] = f.split('-').map(Number); return new Date(y, m-1, d); }),
+    [feriadosList]
+  );
+
+  // Data selecionada como Date (para o DayPicker)
+  const selectedDate = useMemo(() => {
+    if (!definirForm.dataInicio) return undefined;
+    const [y,m,d] = definirForm.dataInicio.split('-').map(Number);
+    return new Date(y, m-1, d);
+  }, [definirForm.dataInicio]);
+
+  // Função de desabilitação para o DayPicker
+  const isDateDisabled = useCallback((date: Date): boolean => {
+    const iso = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    return !verificarDataInicioFerias(iso, feriadosList).valido;
+  }, [feriadosList]);
+
+  // Handler de seleção do DayPicker
+  const handleDateSelect = useCallback((date: Date | undefined) => {
+    if (!date) { setDefinirForm({ ...definirForm, dataInicio: '', dataFim: '' }); setCalOpen(false); return; }
+    const iso = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    const dias = (typeof definirForm.diasGozo === "number" && definirForm.diasGozo > 0)
+      ? Math.min(definirForm.diasGozo, (faltasQuery.data?.diasDireito ?? 30) - (definirForm.abonoPecuniario === 1 ? Math.floor((faltasQuery.data?.diasDireito ?? 30) / 3) : 0))
+      : (faltasQuery.data?.diasDireito ?? 30) - (definirForm.abonoPecuniario === 1 ? Math.floor((faltasQuery.data?.diasDireito ?? 30) / 3) : 0);
+    const fim = new Date(iso + "T00:00:00");
+    fim.setDate(fim.getDate() + dias - 1);
+    setDefinirForm({ ...definirForm, dataInicio: iso, dataFim: fim.toISOString().slice(0, 10) });
+    setCalOpen(false);
+  }, [definirForm, faltasQuery.data, setDefinirForm]);
+
+  // Safety: ainda valida para bloquear submit se alguém burlar (ex: data pré-preenchida inválida)
+  const dataInicioInvalida = !!definirForm.dataInicio && !verificarDataInicioFerias(definirForm.dataInicio, feriadosList).valido;
 
   const faltas = faltasQuery.data;
   const diasDireito = faltas?.diasDireito ?? 30;
@@ -260,35 +340,39 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 sm:col-span-1">
-              <label className="text-sm font-medium">Data Início *</label>
-              <Input
-                type="date"
-                value={definirForm.dataInicio || ""}
-                className={dataInicioInvalida ? "border-red-400 focus-visible:ring-red-400" : ""}
-                onChange={e => {
-                  const inicio = e.target.value;
-                  const dias = diasGozo; // Rev. 1695 — usa o valor atual (editável) em vez do máximo
-                  let fim = "";
-                  if (inicio) {
-                    const d = new Date(inicio + "T00:00:00");
-                    d.setDate(d.getDate() + dias - 1);
-                    fim = d.toISOString().slice(0, 10);
-                  }
-                  setDefinirForm({ ...definirForm, dataInicio: inicio, dataFim: fim });
-                }}
-              />
-              {/* Rev. 4530 — alerta CLT quando data inválida */}
-              {dataInicioInvalida && (
-                <div className="mt-1.5 bg-red-50 border border-red-300 rounded-md px-3 py-2 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-semibold text-red-700">Data bloqueada — CLT Art. 135, §3°</p>
-                    <p className="text-xs text-red-600 mt-0.5">{validacaoDataInicio.motivo}</p>
-                    <p className="text-[10px] text-red-500 mt-1 italic">"O início das férias não poderá ocorrer no período de dois dias que anteceder feriado ou dia de repouso semanal remunerado."</p>
+            {/* Rev. 4531 — Calendário com dias bloqueados + tag de feriado */}
+            <div className="col-span-2">
+              <label className="text-sm font-medium block mb-1.5">Data Início *</label>
+              <Popover open={calOpen} onOpenChange={setCalOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !definirForm.dataInicio && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarDays className="mr-2 h-4 w-4 shrink-0" />
+                    {definirForm.dataInicio ? formatDate(definirForm.dataInicio) : "Selecionar data de início..."}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={handleDateSelect}
+                    disabled={isDateDisabled}
+                    modifiers={{ feriado: feriadosDates }}
+                    components={{ DayButton: FeriasDayButton as any }}
+                    weekStartsOn={0}
+                    defaultMonth={selectedDate ?? new Date()}
+                  />
+                  <div className="border-t px-3 py-2 flex items-center gap-3 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-muted-foreground/30" /> bloqueado</span>
+                    <span className="flex items-center gap-1"><span className="inline-block px-0.5 rounded-sm bg-orange-100 text-orange-700 font-bold text-[6px] uppercase">feriado</span> feriado</span>
                   </div>
-                </div>
-              )}
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <label className="text-sm font-medium">Dias de Gozo</label>
