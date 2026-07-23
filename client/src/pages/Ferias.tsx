@@ -58,27 +58,40 @@ const TABELA_FALTAS_ART130 = [
 // Rev. 4530 — CLT Art. 135, §3° (Lei 13.467/2017):
 // "O início das férias não poderá ocorrer no período de dois dias
 //  que anteceder feriado ou dia de repouso semanal remunerado."
-// Retorna { valido: false, motivo: "..." } para sexta/sábado ou ≤2 dias antes de feriado.
+// Retorna { valido: false, motivo: "..." } para:
+//   • domingo (RSR) ou sexta/sábado (2 ou 1 dias antes do RSR)
+//   • o próprio feriado (diff=0) ou os 2 dias que o antecedem (diff=1,2)
 function verificarDataInicioFerias(iso: string, feriadosList: string[]): { valido: boolean; motivo: string } {
   if (!iso) return { valido: true, motivo: "" };
   const d = new Date(iso + "T12:00:00Z");
   const dow = d.getUTCDay(); // 0=dom,1=seg,...,5=sex,6=sab
   const DIAS_PT = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+
+  // Repouso Semanal Remunerado (RSR = domingo) e seus 2 dias anteriores
+  if (dow === 0) {
+    return { valido: false, motivo: "Domingo é dia de Repouso Semanal Remunerado (RSR)." };
+  }
   if (dow === 5) {
-    return { valido: false, motivo: "Sexta-feira: são apenas 2 dias antes do domingo (Repouso Semanal Remunerado)." };
+    return { valido: false, motivo: "Sexta-feira: são 2 dias antes do domingo (Repouso Semanal Remunerado)." };
   }
   if (dow === 6) {
     return { valido: false, motivo: "Sábado: é 1 dia antes do domingo (Repouso Semanal Remunerado)." };
   }
+
+  // Feriados: bloqueia o próprio feriado (diff=0) e os 2 dias anteriores (diff=1,2)
   for (const feriado of feriadosList) {
     const fd = new Date(feriado + "T12:00:00Z");
     const diff = Math.round((fd.getTime() - d.getTime()) / 86400000);
+    if (diff === 0) {
+      const dataFmt = feriado.split("-").reverse().join("/");
+      return { valido: false, motivo: `Esta data é um feriado (${dataFmt}).` };
+    }
     if (diff === 1 || diff === 2) {
       const dataFmt = feriado.split("-").reverse().join("/");
       const fdDow = fd.getUTCDay();
       return {
         valido: false,
-        motivo: `${diff === 1 ? "Véspera" : "2 dias antes"} de feriado em ${dataFmt} (${DIAS_PT[fdDow]}).`,
+        motivo: `${diff === 1 ? "Véspera" : "2 dias antes"} do feriado em ${dataFmt} (${DIAS_PT[fdDow]}).`,
       };
     }
   }
@@ -238,11 +251,11 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
             </p>
           </div>
 
-          {/* Rev. 4530 — info permanente sobre a regra CLT Art. 135, §3° */}
+          {/* Rev. 4531 — info permanente sobre a regra CLT Art. 135, §3° */}
           <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 flex items-start gap-2">
             <Info className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
             <p className="text-xs text-sky-700">
-              <span className="font-semibold">CLT Art. 135, §3°:</span> Férias não podem iniciar na sexta-feira, no sábado ou nos 2 dias anteriores a um feriado.
+              <span className="font-semibold">CLT Art. 135, §3°:</span> Férias não podem iniciar em feriado, domingo, sábado, sexta-feira ou nos 2 dias anteriores a um feriado.
             </p>
           </div>
 
