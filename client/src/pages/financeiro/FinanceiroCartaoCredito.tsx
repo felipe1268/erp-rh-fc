@@ -187,7 +187,7 @@ export default function FinanceiroCartaoCredito() {
   const cartoes = (cartoesQ.data ?? []) as any[];
   const cartoesAtivos = useMemo(() => cartoes.filter((c) => c.ativo === 1 || c.ativo === true), [cartoes]);
 
-  const [fStatusCartao, setFStatusCartao] = useState<"todos" | "ativo" | "bloqueado" | "renegociado" | "cancelado" | "inativo">("todos");
+  const [fStatusCartao, setFStatusCartao] = useState<"todos" | "ativo" | "bloqueado" | "renegociado" | "cancelado" | "inativo">("ativo");
   const cartoesFiltrados = useMemo(() => {
     const base = cartoesAtivos;
     if (fStatusCartao === "todos") return base;
