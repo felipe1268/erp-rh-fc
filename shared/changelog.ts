@@ -1,4 +1,28 @@
 /**
+ * Rev. 4524 - FIX: CHEQUES RECEBIDOS — LISTA VAZIA (fe.referencia INEXISTENTE)
+ *
+ * MOTIVAÇÃO:
+ *   Página "Controle de Cheques Recebidos" exibia "Nenhum cheque recebido encontrado"
+ *   para qualquer mês/ano selecionado, mesmo com KPIs mostrando 132 disponíveis / R$ 421.796,87.
+ *   O ponto azul do mês de julho aparecia (via resumoPorMes), mas a lista ficava vazia.
+ *
+ * CAUSA-RAIZ:
+ *   A procedure `chequesRecebidos.listar` fazia LEFT JOIN com `financial_entries` e
+ *   selecionava `fe.referencia AS entry_referencia` — coluna que NÃO existe na tabela
+ *   `financial_entries`. PostgreSQL rejeita a query inteira em tempo de planejamento
+ *   (não de execução), mesmo com LEFT JOIN. O tRPC retornava erro silencioso → frontend
+ *   recebia `listQuery.data = undefined` → `cheques = []` → estado vazio.
+ *
+ * FIX:
+ *   - Removido `fe.referencia AS entry_referencia` do SELECT da procedure `listar`
+ *     em `server/routers/chequesRecebidos.ts` (linha 224).
+ *   - `entry_referencia` não era consumido em nenhum ponto do frontend
+ *     (`FinanceiroChequesRecebidos.tsx`); remoção é segura e sem impacto visual.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4523 - FEAT: ALMOXARIFADO — ITENS ZERADOS SEPARADOS + FILTRO DE ESTOQUE ATIVO
  *
  * MOTIVAÇÃO:

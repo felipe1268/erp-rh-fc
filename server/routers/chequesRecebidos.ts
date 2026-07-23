@@ -218,7 +218,7 @@ export const chequesRecebidosRouter = router({
       }
 
       const res = await dbExecute(db, `
-        SELECT cr.*, fe.data_competencia AS entry_data, fe.descricao AS entry_descricao, fe.referencia AS entry_referencia, fe.valor AS entry_valor
+        SELECT cr.*, fe.data_competencia AS entry_data, fe.descricao AS entry_descricao, fe.valor AS entry_valor
         FROM (SELECT * FROM financial_cheques_recebidos WHERE ${where}) cr
         LEFT JOIN financial_entries fe ON fe.id = cr.entry_id
         ORDER BY COALESCE(cr.data_bom_para, cr.data_emissao) DESC, cr.id DESC
