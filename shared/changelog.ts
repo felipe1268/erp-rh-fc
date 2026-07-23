@@ -1,4 +1,27 @@
 /**
+ * Rev. 4527 - FEAT: CARTÃO DE CRÉDITO — FILTRO POR STATUS NA ABA CARTÕES
+ *
+ * MOTIVAÇÃO:
+ *   Com múltiplos cartões em estados distintos (Ativo, Renegociado, Bloqueado,
+ *   Cancelado, Inativo), o usuário precisava de uma forma rápida de ver só os
+ *   cartões de determinada categoria sem rolar por todos os cards.
+ *
+ * MUDANÇAS — FRONTEND (client/src/pages/financeiro/FinanceiroCartaoCredito.tsx):
+ *   - Estado `fStatusCartao` ("todos" | "ativo" | "bloqueado" | "renegociado" |
+ *     "cancelado" | "inativo"), default "todos".
+ *   - useMemo `cartoesFiltrados`: filtra `cartoesAtivos` pelo status selecionado.
+ *   - Pills de filtro no CardHeader da aba Cartões: Todos / Ativos /
+ *     Renegociados / Bloqueados / Cancelados / Inativos — cada pill mostra
+ *     o contador do status; pills com count=0 são ocultadas automaticamente.
+ *   - Pill ativa recebe cor primary; inativas ficam em muted.
+ *   - Título atualiza para "N de M" quando filtro ativo.
+ *   - Grid usa `cartoesFiltrados` em vez de `cartoes`.
+ *   - Mensagem vazia específica quando nenhum cartão bate o filtro.
+ *
+ * ZERO schema change. ZERO mudança de backend.
+ */
+
+/**
  * Rev. 4526 - FEAT: CHEQUES EMITIDOS — OBRAS ATIVAS + AUTO-NÚMERO DO TALÃO
  *
  * MOTIVAÇÃO:

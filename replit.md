@@ -50,11 +50,12 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4526** — **FEAT: CHEQUES EMITIDOS — OBRAS ATIVAS + AUTO-NÚMERO DO TALÃO.** `criarManual` estendido com `obraId`/`obraNome` ($21/$22 no INSERT). Duas novas queries: `obrasAtivas` (lista obras isActive=1) e `nextNumeroCheque` (próximo nº disponível no talão ativo). Frontend: bloco "Obra" no form de lançamento (SearchableSelect); campo Nº com botão Wand2 que preenche automaticamente; filtro "Todas as obras" na barra (aparece quando há cheques vinculados); chip de filtro ativo na tabela. ZERO schema change.
-- **Rev. 4525** — **FIX: INVENTÁRIO SEMANAL → ESTOQUE NÃO ATUALIZAVA.** `finishInventorySession` agora percorre todos os itens da sessão e aplica `quantidadeAtual = quantidadeFisica` em `almoxarifado_itens` antes de marcar a sessão como concluída. ZERO schema change.
+- **Rev. 4527** — **FEAT: CARTÃO DE CRÉDITO — FILTRO POR STATUS NA ABA CARTÕES.** Pills de filtro (Todos / Ativos / Renegociados / Bloqueados / Cancelados / Inativos) no header da aba Cartões. Estado `fStatusCartao` + useMemo `cartoesFiltrados`. Pills com count=0 ocultadas; título mostra "N de M" quando filtrado. Grid usa lista filtrada. ZERO schema change.
+- **Rev. 4526** — **FEAT: CHEQUES EMITIDOS — OBRAS ATIVAS + AUTO-NÚMERO DO TALÃO.** `criarManual` estendido com `obraId`/`obraNome` ($21/$22 no INSERT). Duas novas queries: `obrasAtivas` e `nextNumeroCheque`. Frontend: bloco "Obra" + botão Wand2 + filtro por obra + chip ativo. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4525** — **FIX: INVENTÁRIO SEMANAL → ESTOQUE NÃO ATUALIZAVA.** `finishInventorySession` percorre itens e aplica `quantidadeAtual = quantidadeFisica`. ZERO schema change.
 - **Rev. 4524** — **FIX: CHEQUES RECEBIDOS — LISTA VAZIA.** `fe.referencia` removido do SELECT de `listar`. ZERO schema change.
 - **Rev. 4523** — **FEAT: ALMOXARIFADO — ITENS ZERADOS SEPARADOS.** `somenteZerados` no `listarItens` backend. `lista` useMemo exclui qty=0. Botão "Itens Zerados" com badge contador. Tabela lazy de itens zerados. ZERO schema change.
 - **Rev. 4522** — **FEAT: DOTS DE MÊS NO SELETOR (LOCADOS UTILIZAÇÃO).** Segunda query `mes=null` + `monthStatus` useMemo. PeriodSelectorCard com `showLegend`. ZERO schema change.

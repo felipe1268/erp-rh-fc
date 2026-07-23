@@ -187,6 +187,13 @@ export default function FinanceiroCartaoCredito() {
   const cartoes = (cartoesQ.data ?? []) as any[];
   const cartoesAtivos = useMemo(() => cartoes.filter((c) => c.ativo === 1 || c.ativo === true), [cartoes]);
 
+  const [fStatusCartao, setFStatusCartao] = useState<"todos" | "ativo" | "bloqueado" | "renegociado" | "cancelado" | "inativo">("todos");
+  const cartoesFiltrados = useMemo(() => {
+    const base = cartoesAtivos;
+    if (fStatusCartao === "todos") return base;
+    return base.filter((c) => (c.status ?? "ativo") === fStatusCartao);
+  }, [cartoesAtivos, fStatusCartao]);
+
   const [cartaoModal, setCartaoModal] = useState(false);
   const [cartaoEdit, setCartaoEdit] = useState<any | null>(null);
   const [cartaoForm, setCartaoForm] = useState({ ...CARTAO_FORM_INICIAL });
@@ -816,18 +823,53 @@ export default function FinanceiroCartaoCredito() {
         {/* ───────────── ABA CARTÕES ───────────── */}
         {aba === "cartoes" && (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Cartões cadastrados ({cartoesAtivos.length})</CardTitle>
-              <Button size="sm" onClick={abrirNovoCartao}><PlusCircle className="w-4 h-4 mr-1" /> Novo cartão</Button>
+            <CardHeader className="gap-3">
+              <div className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">
+                  Cartões cadastrados ({fStatusCartao === "todos" ? cartoesAtivos.length : `${cartoesFiltrados.length} de ${cartoesAtivos.length}`})
+                </CardTitle>
+                <Button size="sm" onClick={abrirNovoCartao}><PlusCircle className="w-4 h-4 mr-1" /> Novo cartão</Button>
+              </div>
+              {/* Pills de filtro por status */}
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { v: "todos", label: "Todos" },
+                  { v: "ativo", label: "Ativos" },
+                  { v: "renegociado", label: "Renegociados" },
+                  { v: "bloqueado", label: "Bloqueados" },
+                  { v: "cancelado", label: "Cancelados" },
+                  { v: "inativo", label: "Inativos" },
+                ] as { v: typeof fStatusCartao; label: string }[]).map(({ v, label }) => {
+                  const count = v === "todos" ? cartoesAtivos.length : cartoesAtivos.filter((c) => (c.status ?? "ativo") === v).length;
+                  if (v !== "todos" && count === 0) return null;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setFStatusCartao(v)}
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                        fStatusCartao === v
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-muted-foreground border-transparent hover:border-border hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                      <span className={`tabular-nums ${fStatusCartao === v ? "opacity-75" : "opacity-50"}`}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </CardHeader>
             <CardContent>
               {cartoesQ.isLoading ? (
                 <div className="py-10 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin inline" /> Carregando…</div>
               ) : cartoes.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">Nenhum cartão cadastrado. Clique em "Novo cartão".</div>
+              ) : cartoesFiltrados.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground">Nenhum cartão com status "{fStatusCartao}".</div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {cartoes.map((c) => {
+                  {cartoesFiltrados.map((c) => {
                     const ativo = c.ativo === 1 || c.ativo === true;
                     return (
                       <div
