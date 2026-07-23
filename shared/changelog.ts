@@ -1,4 +1,39 @@
 /**
+ * Rev. 4529 - FEAT: CONTAS A PAGAR — CHEQUE PRÓPRIO + CONTROLE DE CHEQUES / CHEQUE TERCEIRO COM RASTREABILIDADE
+ *
+ * MOTIVAÇÃO:
+ *   Ao registrar pagamento via cheque, o usuário precisava:
+ *   1. Indicar em quantas vezes o cheque foi emitido e ter os cheques
+ *      cadastrados automaticamente no Controle de Cheques Emitidos.
+ *   2. Para cheques de terceiros, ter a mesma lógica de seleção do
+ *      Novo Lançamento e rastrear para qual título o cheque foi.
+ *
+ * MUDANÇAS — FRONTEND (client/src/pages/financeiro/FinanceiroContasAPagar.tsx):
+ *   CHEQUE PRÓPRIO (pill ✏️ Cheque):
+ *   - Removido select "Tipo de Cheque" (próprio/terceiros).
+ *   - Novos states: chequeQtd ("1"), chequeNumIni (""), chequePrimVenc (""),
+ *     chequeStatusIni ("pendente") — reset no useEffect de showPay.
+ *   - useMemo chequePreviewBaixa: calcula array de N cheques com valor
+ *     distribuído (base + resto na última), numeração sequencial e
+ *     vencimentos mensais a partir do 1º vencimento informado.
+ *   - UI: grid 3 colunas (Em quantas vezes / Nº 1º cheque / 1º vencimento)
+ *     + Banco/Agência/Conta + Situação inicial + tabela de preview dos
+ *     cheques gerados (scrollable, máx. 36px).
+ *   - payMut.onSuccess: chama criarManualLote com as parcelas calculadas,
+ *     fornecedor do título e conta bancária selecionada.
+ *   CHEQUE DE TERCEIRO (pill 🔄 Cheq. Terc.):
+ *   - UI redesenhada: header com emoji + badge de total selecionado
+ *     (verde/âmbar/vermelho) indicando se o selecionado bate o total.
+ *   - Rastreabilidade já estava implementada via entryId → alocarLote
+ *     grava entry_id em financial_cheques_recebidos (pré-existente).
+ *   UTILITÁRIO:
+ *   - addMonthsISO(dateISO, n): helper local para calcular vencimentos.
+ *   - criarChequesLoteMut: nova mutation que chama cheques.criarManualLote.
+ *
+ * ZERO schema change. ZERO mudança de backend.
+ */
+
+/**
  * Rev. 4528 - FEAT: CONTAS A PAGAR — REDESIGN DO DIALOG 'REGISTRAR PAGAMENTO'
  *
  * MOTIVAÇÃO:

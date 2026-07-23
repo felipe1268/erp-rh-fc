@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4528** — **FEAT: CONTAS A PAGAR — REDESIGN DO DIALOG 'REGISTRAR PAGAMENTO'.** Hero card gradiente dark com nome + valor previsto em âmbar. Forma de pagamento virou grid 4×2 de pills com emoji (PIX ⚡ / TED 🏦 / Boleto 📄 / Cheque ✏️ / …). Composição em card slate com Total em gradiente verde 2xl. Labels uppercase com hierarquia. ZERO schema/lógica change.
-- **Rev. 4527** — **FEAT: CARTÃO DE CRÉDITO — FILTRO POR STATUS NA ABA CARTÕES.** Pills de filtro (Todos / Ativos / Renegociados / Bloqueados / Cancelados / Inativos) no header. Estado `fStatusCartao` + useMemo `cartoesFiltrados`. Pills count=0 ocultadas. ZERO schema change.
+- **Rev. 4529** — **FEAT: CHEQUE PRÓPRIO NA BAIXA → CONTROLE DE CHEQUES + CHEQUE TERCEIRO COM RASTREABILIDADE.** Pill ✏️ Cheque: campos "Em quantas vezes" / "Nº 1º cheque" / "1º vencimento" + Banco/Agência/Conta + Situação inicial + preview de N cheques gerados. `payMut.onSuccess` chama `criarManualLote`. Pill 🔄 Cheq. Terc.: UI redesenhada com badge de diferença verde/âmbar/vermelho; `entry_id` já gravado via `alocarLote`. ZERO schema change.
+- **Rev. 4528** — **FEAT: CONTAS A PAGAR — REDESIGN DO DIALOG 'REGISTRAR PAGAMENTO'.** Hero card gradiente dark + pills de forma de pagamento com emoji + Total em gradiente verde 2xl. ZERO schema/lógica change.
 
 ### 5 one-liners
 

@@ -57,6 +57,14 @@ function fmtDateBR(dateStr: string | null | undefined): string {
   return s;
 }
 
+// helper: adiciona N meses a uma data ISO (YYYY-MM-DD)
+function addMonthsISO(dateISO: string, n: number): string {
+  if (!dateISO) return "";
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const nd = new Date(y, m - 1 + n, d);
+  return `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}-${String(nd.getDate()).padStart(2, "0")}`;
+}
+
 // Rev. 1619 — Extrai nº OC/OS/MED/Folha de origem ou descrição
 function extractOcNumero(c: any): string {
   const candidates = [c.origemDescricao, c.descricao, c.contaNome].filter(Boolean) as string[];
@@ -293,6 +301,11 @@ export default function FinanceiroContasAPagar() {
   const [chequeTitular, setChequeTitular] = useState("");
   const [chequeDataEmissao, setChequeDataEmissao] = useState("");
   const [chequeDataBomPara, setChequeDataBomPara] = useState("");
+  // Rev. 4529 — Cheque próprio na baixa: em quantas vezes + auto-registro no Controle de Cheques
+  const [chequeQtd, setChequeQtd] = useState("1");
+  const [chequeNumIni, setChequeNumIni] = useState("");
+  const [chequePrimVenc, setChequePrimVenc] = useState("");
+  const [chequeStatusIni, setChequeStatusIni] = useState("pendente");
   // Rev. 4096 — Cheque de Terceiro (Cheques Recebidos): seleção multi-cheque na baixa avulsa
   const [chequesTerceiroSelAvulso, setChequesTerceiroSelAvulso] = useState<number[]>([]);
   // Rev. 1620 — seleção em lote (Onda 2)
@@ -355,6 +368,20 @@ export default function FinanceiroContasAPagar() {
     }),
   });
 
+  // Rev. 4529 — ao registrar baixa com cheque próprio, cria os N cheques no Controle de Cheques
+  const criarChequesLoteMut = (trpc as any).cheques.criarManualLote.useMutation({
+    onSuccess: (r: any) => {
+      if (r?.criados > 0) {
+        toast({ title: `${r.criados} cheque${r.criados !== 1 ? "s" : ""} cadastrado${r.criados !== 1 ? "s" : ""} no Controle de Cheques` });
+      }
+    },
+    onError: (e: any) => toast({
+      title: "Baixa registrada, mas falha ao criar cheques",
+      description: `Os cheques NÃO foram cadastrados no Controle: ${e.message}`,
+      variant: "destructive",
+    }),
+  });
+
   // Rev. 3743 — baixa via histórico (financial_entry_baixas): parcial ou total.
   const payMut = (trpc as any).financial.registrarBaixa.useMutation({
     onSuccess: (r: any) => {
@@ -367,6 +394,34 @@ export default function FinanceiroContasAPagar() {
           entryId: showPay?.id ?? null,
         });
         setChequesTerceiroSelAvulso([]);
+      }
+      // Rev. 4529 — se forma=cheque próprio, criar N cheques no Controle de Cheques Emitidos
+      if (formaPagamento === "cheque" && companyId) {
+        const qtd = Math.min(120, Math.max(1, parseInt(chequeQtd || "1", 10) || 1));
+        const total = parseFloat(valorPagar || "0") + parseFloat(jurosPay || "0") - parseFloat(descontosPay || "0") + parseFloat(outrosPay || "0");
+        if (total > 0 && qtd > 0) {
+          const centsTotal = Math.round(total * 100);
+          const base = Math.floor(centsTotal / qtd);
+          const resto = centsTotal - base * qtd;
+          const numIniNum = /^\d+$/.test(chequeNumIni.trim()) ? parseInt(chequeNumIni.trim(), 10) : null;
+          const baseVenc = chequePrimVenc || dataPagamento || "";
+          const parcelas = Array.from({ length: qtd }, (_, i) => ({
+            valor: (base + (i === qtd - 1 ? resto : 0)) / 100,
+            numeroCheque: numIniNum != null ? String(numIniNum + i) : (qtd === 1 ? chequeNumIni.trim() || undefined : undefined),
+            parcela: `${i + 1}/${qtd}`,
+            dataVencimento: addMonthsISO(baseVenc, i) || undefined,
+          }));
+          criarChequesLoteMut.mutate({
+            companyId,
+            fornecedorNome: showPay?.fornecedorNome ?? showPay?.descricao ?? undefined,
+            contaBancariaId: contaBancariaId ?? undefined,
+            bancoNome: chequeBanco || undefined,
+            agencia: chequeAgencia || undefined,
+            contaCorrenteRaw: chequeConta || undefined,
+            status: (chequeStatusIni as any) || "pendente",
+            parcelas,
+          });
+        }
       }
       toast({ title: r?.quitado ? "Título quitado!" : "Baixa parcial registrada!", description: r?.quitado ? undefined : `Saldo em aberto: ${formatBRL(Number(r?.saldo ?? 0))}` });
       setShowPay(null);
@@ -564,6 +619,10 @@ export default function FinanceiroContasAPagar() {
     setChequeTitular("");
     setChequeDataEmissao("");
     setChequeDataBomPara("");
+    setChequeQtd("1");
+    setChequeNumIni("");
+    setChequePrimVenc("");
+    setChequeStatusIni("pendente");
   }, [showPay]);
 
   // Rev. 2655 — total da baixa = valor + juros − descontos + outros (±)
@@ -571,6 +630,26 @@ export default function FinanceiroContasAPagar() {
     const n = (s: string) => { const x = parseFloat(String(s).replace(",", ".")); return Number.isFinite(x) ? x : 0; };
     return n(valorPagar) + n(jurosPay) - n(descontosPay) + n(outrosPay);
   }, [valorPagar, jurosPay, descontosPay, outrosPay]);
+
+  // Rev. 4529 — preview dos cheques gerados (cheque próprio)
+  const chequePreviewBaixa = useMemo(() => {
+    if (formaPagamento !== "cheque") return [];
+    const qtd = Math.min(120, Math.max(1, parseInt(chequeQtd || "1", 10) || 1));
+    const total = parseFloat(valorPagar || "0") + parseFloat(jurosPay || "0") - parseFloat(descontosPay || "0") + parseFloat(outrosPay || "0");
+    if (total <= 0 || qtd <= 0) return [];
+    const centsTotal = Math.round(total * 100);
+    const base = Math.floor(centsTotal / qtd);
+    const resto = centsTotal - base * qtd;
+    const numIniNum = /^\d+$/.test(chequeNumIni.trim()) ? parseInt(chequeNumIni.trim(), 10) : null;
+    const baseVenc = chequePrimVenc || dataPagamento || "";
+    return Array.from({ length: qtd }, (_, i) => ({
+      idx: i + 1,
+      valor: (base + (i === qtd - 1 ? resto : 0)) / 100,
+      numeroCheque: numIniNum != null ? String(numIniNum + i).padStart(6, "0") : (qtd === 1 ? chequeNumIni.trim() : `—`),
+      dataVencimento: addMonthsISO(baseVenc, i),
+      parcela: `${i + 1}/${qtd}`,
+    }));
+  }, [formaPagamento, chequeQtd, valorPagar, jurosPay, descontosPay, outrosPay, chequeNumIni, chequePrimVenc, dataPagamento]);
 
   // Rev. 3743 — payload da baixa (registrarBaixa). `valor` = principal aplicado ao título
   // (juros/descontos/outros vão separados, p/ registro). quitarTotal é injetado no caller.
@@ -3005,86 +3084,103 @@ export default function FinanceiroContasAPagar() {
                   </div>
                 </div>
 
-                {/* Rev. 2655 — Cheque: próprio/terceiros + dados do cheque */}
+                {/* Rev. 4529 — Cheque próprio: em quantas vezes + auto-registro Controle de Cheques */}
                 {formaPagamento === "cheque" && (
-                  <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-3 space-y-3">
-                    <div>
-                      <Label>Tipo de Cheque</Label>
-                      <Select value={chequeTipo || "none"} onValueChange={v => setChequeTipo(v === "none" ? "" : v)}>
-                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">✏️</span>
+                      <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">Cheque próprio — cadastro automático no Controle de Cheques</p>
+                    </div>
+                    {/* Linha 1: quantas vezes + Nº do 1º cheque + 1º vencimento */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <Label className="text-xs text-slate-500">Em quantas vezes</Label>
+                        <Input type="number" min="1" max="120" value={chequeQtd}
+                          onChange={e => setChequeQtd(e.target.value)} className="mt-1 font-mono" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-500">Nº do 1º cheque</Label>
+                        <Input value={chequeNumIni} onChange={e => setChequeNumIni(e.target.value)}
+                          placeholder="Ex.: 000429" className="mt-1 font-mono" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-500">1º vencimento</Label>
+                        <Input type="date" value={chequePrimVenc}
+                          onChange={e => setChequePrimVenc(e.target.value)} className="mt-1" />
+                      </div>
+                    </div>
+                    {/* Linha 2: Banco + Agência + Conta corrente */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <Label className="text-xs text-slate-500">Banco</Label>
+                        <Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)}
+                          placeholder="Ex.: Caixa" className="mt-1" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-500">Agência</Label>
+                        <Input value={chequeAgencia} onChange={e => setChequeAgencia(e.target.value)}
+                          placeholder="Ex.: 1234" className="mt-1" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-500">Conta corrente</Label>
+                        <Input value={chequeConta} onChange={e => setChequeConta(e.target.value)}
+                          placeholder="Ex.: 00012345-6" className="mt-1" />
+                      </div>
+                    </div>
+                    {/* Linha 3: Situação inicial */}
+                    <div className="max-w-[200px]">
+                      <Label className="text-xs text-slate-500">Situação inicial dos cheques</Label>
+                      <Select value={chequeStatusIni} onValueChange={setChequeStatusIni}>
+                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">— Selecione —</SelectItem>
-                          <SelectItem value="proprio">Próprio</SelectItem>
-                          <SelectItem value="terceiros">De terceiros</SelectItem>
+                          <SelectItem value="pendente">Pendente</SelectItem>
+                          <SelectItem value="compensado">Compensado</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    {chequeTipo === "proprio" && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <Label>Nº do Cheque</Label>
-                          <Input value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="Ex.: 000123" />
+                    {/* Preview dos cheques gerados */}
+                    {chequePreviewBaixa.length > 0 && (
+                      <div className="rounded-lg border border-blue-200 bg-white overflow-hidden">
+                        <div className="px-3 py-2 bg-blue-100/60 flex items-center justify-between">
+                          <p className="text-[11px] font-semibold text-blue-700">{chequePreviewBaixa.length} cheque{chequePreviewBaixa.length !== 1 ? "s" : ""} serão gerados no Controle de Cheques</p>
                         </div>
-                        <div>
-                          <Label>Bom para</Label>
-                          <Input type="date" value={chequeDataBomPara} onChange={e => setChequeDataBomPara(e.target.value)} />
+                        <div className="divide-y divide-blue-100 max-h-36 overflow-y-auto">
+                          {chequePreviewBaixa.map((p) => (
+                            <div key={p.idx} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono text-blue-800 font-semibold">{p.numeroCheque}</span>
+                                <span className="text-slate-400">{p.parcela}</span>
+                                {p.dataVencimento && <span className="text-slate-500">venc. {fmtDateBR(p.dataVencimento)}</span>}
+                              </div>
+                              <span className="font-semibold tabular-nums text-slate-700">{formatBRL(p.valor)}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
-                    {chequeTipo === "terceiros" && (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <Label>Nº do Cheque</Label>
-                            <Input value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="Ex.: 000123" />
-                          </div>
-                          <div>
-                            <Label>Titular</Label>
-                            <Input value={chequeTitular} onChange={e => setChequeTitular(e.target.value)} placeholder="Nome do emitente" />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          <div>
-                            <Label>Banco</Label>
-                            <Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)} />
-                          </div>
-                          <div>
-                            <Label>Agência</Label>
-                            <Input value={chequeAgencia} onChange={e => setChequeAgencia(e.target.value)} />
-                          </div>
-                          <div>
-                            <Label>Conta</Label>
-                            <Input value={chequeConta} onChange={e => setChequeConta(e.target.value)} />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <Label>Emissão</Label>
-                            <Input type="date" value={chequeDataEmissao} onChange={e => setChequeDataEmissao(e.target.value)} />
-                          </div>
-                          <div>
-                            <Label>Bom para</Label>
-                            <Input type="date" value={chequeDataBomPara} onChange={e => setChequeDataBomPara(e.target.value)} />
-                          </div>
-                        </div>
-                      </div>
+                    {chequePreviewBaixa.length === 0 && (
+                      <p className="text-[11px] text-blue-600 italic">Informe o valor da baixa acima para visualizar os cheques.</p>
                     )}
                   </div>
                 )}
 
-                {/* Rev. 4096 — Cheque de Terceiro: seletor de cheques recebidos disponíveis */}
+                {/* Rev. 4529 — Cheque de Terceiro: seletor de cheques recebidos (com rastreabilidade) */}
                 {formaPagamento === "cheque_terceiro" && (
-                  <div className="border border-violet-200 bg-violet-50/50 rounded-lg p-3 space-y-2">
+                  <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🔄</span>
+                      <p className="text-xs font-bold text-violet-700 uppercase tracking-wide">Cheques recebidos disponíveis em carteira</p>
+                    </div>
                     <div className="flex items-center justify-between">
-                      <Label className="text-sm text-violet-800 font-medium">Cheques recebidos disponíveis</Label>
+                      <p className="text-xs text-violet-600">Selecione um ou mais cheques que somem o valor da baixa.</p>
                       {chequesTerceiroSelAvulso.length > 0 && (
-                        <span className={`text-xs font-semibold tabular-nums ${
-                          Math.abs(diffAvulso) <= 0.05 ? "text-green-700" :
-                          diffAvulso > 0 ? "text-amber-700" : "text-red-700"
+                        <span className={`text-xs font-semibold tabular-nums px-2 py-0.5 rounded-full ${
+                          Math.abs(diffAvulso) <= 0.05 ? "bg-green-100 text-green-700" :
+                          diffAvulso > 0 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
                         }`}>
-                          Selecionado: {formatBRL(totalSelecionadoAvulso)}
-                          {Math.abs(diffAvulso) > 0.05 && (diffAvulso > 0 ? ` (excede ${formatBRL(diffAvulso)})` : ` (falta ${formatBRL(-diffAvulso)})`)}
-                          {Math.abs(diffAvulso) <= 0.05 && " ✓"}
+                          {Math.abs(diffAvulso) <= 0.05 ? "✓ " : ""}
+                          {formatBRL(totalSelecionadoAvulso)}
+                          {Math.abs(diffAvulso) > 0.05 && (diffAvulso > 0 ? ` (+${formatBRL(diffAvulso)})` : ` (−${formatBRL(-diffAvulso)})`)}
                         </span>
                       )}
                     </div>
