@@ -347,6 +347,8 @@ export default function AlmoxarifadoPage() {
   // pros campos de equipamento próprio ou locado". Chave do Map = nome
   // normalizado (consolidado não tem id único, agrega N almoxarifados).
   const [modoClassificarEquip, setModoClassificarEquip] = useState(false);
+  // Rev. 4522 — Tela "Itens Zerados": mostra itens com qty=0 escondidos da view principal.
+  const [tabZerados, setTabZerados] = useState(false);
   const [selecClassif, setSelecClassif] = useState<Map<string, { nome: string; fotoUrl: string; categoria: string }>>(new Map());
   // Rev. 2442 — guarda o último índice clicado pra dar suporte a Shift+click
   // (range select estilo Finder/Explorer). Reset quando entra/sai do modo.
@@ -476,6 +478,12 @@ export default function AlmoxarifadoPage() {
   const { data: consolidado, isLoading: loadingConsolidado } = trpc.compras.listarItensConsolidado.useQuery(
     { companyId, busca: busca || undefined },
     { enabled: !!companyId && (obraContexto === "todos" || obraContexto === "porObra") }
+  );
+  // Rev. 4522 — Query dedicada para "Itens Zerados" (qty=0, inclui ativo=false de obras).
+  // Ativa apenas quando a aba estiver aberta (lazy) e na view de almox único (não consolidado).
+  const { data: itensZeradosRaw = [], isLoading: loadingZerados } = trpc.compras.listarItens.useQuery(
+    { companyId, obraId: typeof obraContexto === "number" ? obraContexto : obraContexto === null ? null : undefined, somenteZerados: true },
+    { enabled: !!companyId && tabZerados && obraContexto !== "todos" && obraContexto !== "porObra" }
   );
   // Rev. 2451 — Hoist da lista consolidada filtrada pra escopo do componente.
   // Antes (Rev. 2406+) ela vivia DENTRO do IIFE da visão consolidada (L1727),
@@ -1028,6 +1036,8 @@ export default function AlmoxarifadoPage() {
   useEffect(() => { selecionadosRef.current = selecionados; }, [selecionados]);
   const lista = useMemo(() => {
     let r = itens;
+    // Rev. 4522 — itens zerados somem da view principal e vão para a aba "Itens Zerados".
+    r = r.filter(i => n(i.quantidadeAtual) > 0);
     if (busca) {
       const b = busca.toLowerCase();
       r = r.filter(i => i.nome.toLowerCase().includes(b) || i.codigoInterno?.toLowerCase().includes(b) || i.categoria?.toLowerCase().includes(b));
@@ -1084,6 +1094,13 @@ export default function AlmoxarifadoPage() {
 
   const totalCriticos = useMemo(() =>
     itens.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima)).length,
+    [itens]
+  );
+  // Rev. 4522 — Contagem de itens zerados visíveis no almox atual (para badge no botão).
+  // Usa `itens` (ativo=true, sem filtro qty) pra derivar os centrais zerados.
+  // Itens de obra zerados (ativo=false) só aparecem quando a aba zerados é aberta.
+  const qtdZeradosMain = useMemo(() =>
+    itens.filter(i => n(i.quantidadeAtual) <= 0).length,
     [itens]
   );
 
@@ -2777,21 +2794,112 @@ export default function AlmoxarifadoPage() {
               {modoSelecao ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
               <span className="hidden sm:inline">{modoSelecao ? "Sair da seleção" : "Selecionar"}</span>
             </button>
+            {/* Rev. 4522 — Botão "Itens Zerados": toggle pra ver itens com qty=0 */}
+            {(qtdZeradosMain > 0 || tabZerados) && (
+              <button
+                onClick={() => setTabZerados(t => !t)}
+                className={`h-9 px-3 flex items-center gap-2 text-sm font-medium rounded-lg transition shadow-sm ${tabZerados ? "bg-slate-700 text-white" : "bg-white text-slate-600 border border-slate-200 hover:border-slate-400"}`}
+                title="Ver itens com quantidade zerada (fora do estoque ativo)"
+              >
+                <Package className="w-4 h-4" />
+                <span>Itens zerados</span>
+                {qtdZeradosMain > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tabZerados ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
+                    {qtdZeradosMain}+
+                  </span>
+                )}
+              </button>
+            )}
             <span className="text-xs text-gray-400">
-              {lista.length} resultado{lista.length !== 1 ? "s" : ""}
+              {tabZerados ? `${itensZeradosRaw.length} zerado${itensZeradosRaw.length !== 1 ? "s" : ""}` : `${lista.length} resultado${lista.length !== 1 ? "s" : ""}`}
             </span>
           </div>
 
-          {/* Content */}
-          {isLoading ? (
+          {/* ── Aba Itens Zerados (Rev. 4522) ── */}
+          {tabZerados && (
+            <div className="space-y-3">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Package className="h-4 w-4 text-slate-500" />
+                  <h3 className="text-sm font-semibold text-slate-700">Itens com estoque zerado</h3>
+                  <span className="text-xs text-slate-400 ml-auto">Estes itens estão fora da contagem e valor total do estoque</span>
+                </div>
+                {loadingZerados ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
+                ) : itensZeradosRaw.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 text-sm">Nenhum item zerado neste almoxarifado</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left border-b border-slate-200">
+                          <th className="pb-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wide">Item</th>
+                          <th className="pb-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Categoria</th>
+                          <th className="pb-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wide">Qtd</th>
+                          <th className="pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {(itensZeradosRaw as any[]).map((item: any) => (
+                          <tr key={item.id} className="hover:bg-white transition-colors">
+                            <td className="py-2.5 pr-4">
+                              <div className="flex items-center gap-2">
+                                {item.fotoUrl
+                                  ? <img src={item.fotoUrl} alt={item.nome} className="h-8 w-8 rounded-lg object-cover flex-shrink-0 border border-slate-200" />
+                                  : <div className="h-8 w-8 rounded-lg bg-slate-200 flex items-center justify-center flex-shrink-0"><Package className="h-4 w-4 text-slate-400" /></div>
+                                }
+                                <div>
+                                  <p className="font-medium text-slate-800 leading-tight">{item.nome}</p>
+                                  <p className="text-xs text-slate-400">{item.codigoInterno}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-2.5 pr-4 text-slate-500 hidden sm:table-cell">{item.categoria || <span className="text-slate-300">—</span>}</td>
+                            <td className="py-2.5 pr-4">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-xs font-semibold">
+                                0 {item.unidade}
+                              </span>
+                            </td>
+                            <td className="py-2.5 text-right">
+                              <button
+                                onClick={() => {
+                                  setModalMov({ ...EMPTY_MOV, tipo: "entrada" });
+                                  setItemSelecionado(item);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition mr-1"
+                                title="Dar entrada neste item para restaurar ao estoque"
+                              >
+                                <ArrowDownCircle className="h-3.5 w-3.5" />
+                                Entrada
+                              </button>
+                              <button
+                                onClick={() => abrirEditar(item)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+                                title="Editar este item"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Content (itens com estoque) */}
+          {!tabZerados && isLoading ? (
             <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-emerald-500" /></div>
-          ) : lista.length === 0 ? (
+          ) : !tabZerados && lista.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed border-gray-200 p-16 text-center">
               <Boxes className="h-12 w-12 text-gray-200 mx-auto mb-3" />
               <p className="text-gray-500 font-medium">Nenhum item no almoxarifado</p>
               <p className="text-sm text-gray-400 mt-1">Clique em "Novo Item" para cadastrar</p>
             </div>
-          ) : viewMode === "cards" ? (
+          ) : !tabZerados && viewMode === "cards" ? (
             /* ── CARD VIEW ── */
             /* Rev. 2393 — wrapper relativo pra abrigar o retângulo de seleção (lasso).
                touchAction=none só durante modoSelecao pra capturar o pan do dedo
@@ -3035,7 +3143,7 @@ export default function AlmoxarifadoPage() {
                 );
               })}
             </div>
-          ) : (
+          ) : !tabZerados ? (
             /* ── TABLE VIEW ── */
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
               <table className="w-full text-sm">
@@ -3128,7 +3236,7 @@ export default function AlmoxarifadoPage() {
                 </tbody>
               </table>
             </div>
-          )}
+          ) : null}
         </div>
         );
         })()}

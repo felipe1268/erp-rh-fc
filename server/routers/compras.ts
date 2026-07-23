@@ -2230,13 +2230,21 @@ export const comprasRouter = router({
       // Se `apenasAplicacaoDireta = true`, retorna SOMENTE esses itens.
       incluirAplicacaoDireta:   z.boolean().optional(),
       apenasAplicacaoDireta:    z.boolean().optional(),
+      // Rev. 4522 — Tela "Itens Zerados": quando true, retorna itens com
+      // quantidadeAtual <= 0 (inclusive os com ativo=false de obras).
+      // Quando false/undefined, o filtro padrão exclui itens zerados.
+      somenteZerados:           z.boolean().optional(),
     }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
 
       const conditions: any[] = [
         eq(almoxarifadoItens.companyId, input.companyId),
-        eq(almoxarifadoItens.ativo, true),
+        // Rev. 4522 — "Itens Zerados": inclui ativo=false (obras), filtra qty<=0.
+        // Modo padrão: só ativo=true.
+        ...(input.somenteZerados
+          ? [sql`${almoxarifadoItens.quantidadeAtual}::numeric <= 0`]
+          : [eq(almoxarifadoItens.ativo, true)]),
       ];
 
       if (input.obraId === null) {

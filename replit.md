@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4521** — **FEAT: DASHBOARD UTILIZAÇÃO — EQUIPAMENTOS PRÓPRIOS.** `propriosUtilizacao` tRPC + `PropriosUtilizacao.tsx` (tema azul). KPIs: Em obra | Disponível | Custo depreciação | Em manutenção. DrillModals tela-cheia. Rota + menu. ZERO schema change.
-- **Rev. 4520** — **FEAT: KPIs CLICÁVEIS + MODAL DRILL-DOWN + RESPONSIVO.** 3 KPIs abrem DrillModal tela-cheia. Grid insights: 1→2→3 colunas. FIX: employees."fotoUrl"/"companyId" aspas duplas. ZERO schema change.
+- **Rev. 4523** — **FEAT: ALMOXARIFADO — ITENS ZERADOS SEPARADOS.** `somenteZerados` no `listarItens` backend. `lista` useMemo exclui qty=0. Botão "Itens Zerados" com badge contador. Tabela lazy de itens zerados (foto, nome, Entrada/Editar). Valor total do estoque exclui automaticamente zeros. ZERO schema change.
+- **Rev. 4522** — **FEAT: DOTS DE MÊS NO SELETOR (LOCADOS UTILIZAÇÃO).** Segunda query `mes=null` + `monthStatus` useMemo. PeriodSelectorCard com `showLegend`. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4521** — **FEAT: DASHBOARD UTILIZAÇÃO — EQUIPAMENTOS PRÓPRIOS.** `propriosUtilizacao` tRPC + `PropriosUtilizacao.tsx` (tema azul). KPIs + DrillModals. ZERO schema change.
+- **Rev. 4520** — **FEAT: KPIs CLICÁVEIS + MODAL DRILL-DOWN + RESPONSIVO.** 3 KPIs abrem DrillModal tela-cheia. FIX: employees aspas duplas. ZERO schema change.
 - **Rev. 4517** — **FIX: FONTE DE DADOS DE UTILIZAÇÃO — warehouse_loans.** cycleRaw/idleRaw/emCampoRaw reescritos. ZERO schema change.
 - **Rev. 4516** — **FEAT: CONVERSÃO DE TIPO (PRÓPRIO ↔ LOCADO).** Badge + botões em lote. 2 mutations tRPC. ZERO schema change.
 - **Rev. 4515** — **REVERSÃO Rev. 4513:** 47 proprios deletados; 41 locados restaurados. Transação atômica no Neon.
-- **Rev. 4514b** — **FIX: EDIÇÃO INLINE DE CATEGORIA (LOCADOS DETALHES).** `locadoAtualizar`+schema; datalist no modalEventos. ZERO schema change.
-- **Rev. 4514** — **FEAT: RAIO-X DE EQUIPAMENTO LOCADO.** `locadoRaioX` tRPC + `EquipamentoLocadoRaioXModal.tsx` (3 abas). ZERO schema change.
 - **Rev. 4513** — REVERTIDA (Rev. 4515). Migração Locados→Próprios desfeita.
 
 ### Histórico completo

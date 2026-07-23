@@ -1,4 +1,58 @@
 /**
+ * Rev. 4523 - FEAT: ALMOXARIFADO — ITENS ZERADOS SEPARADOS + FILTRO DE ESTOQUE ATIVO
+ *
+ * MOTIVAÇÃO:
+ *   Erro conceitual: itens com quantidade zero continuavam visíveis nos cards principais,
+ *   inflando o contador "N itens considerados" e dificultando a localização de itens ativos.
+ *   Itens tipo "serviço contínuo" (ex: caçamba de entulho) chegavam, iam embora e ficavam
+ *   zerados na view principal sem utilidade. Usuário pediu separação clara entre estoque ativo
+ *   e itens zerados.
+ *
+ * MUDANÇAS:
+ *
+ *   Backend (server/routers/compras.ts — procedure listarItens):
+ *     - Novo input `somenteZerados: boolean` (opcional).
+ *     - Quando true: remove filtro ativo=true, adiciona quantidadeAtual::numeric <= 0.
+ *       Isso retorna TAMBÉM itens de obra com ativo=false (zerados via transferência).
+ *     - Modo padrão não alterado (ativo=true, sem filtro de qty).
+ *
+ *   Frontend (client/src/pages/almoxarifado/index.tsx):
+ *     - `lista` useMemo: filtro `n(quantidadeAtual) > 0` — remove zeros da view principal.
+ *     - `qtdZeradosMain`: contagem dos itens centrais zerados (ativo=true, qty=0).
+ *     - `tabZerados` state: controla alternância entre view principal e view zerados.
+ *     - Query `itensZeradosRaw`: lazy (enabled só quando tab zerados ativa), usa somenteZerados=true.
+ *     - Botão "Itens Zerados" (com badge contador) na barra de filtros — aparece quando
+ *       há itens zerados OU a aba já está ativa.
+ *     - Seção "Itens com estoque zerado": tabela compacta com foto, nome, categoria, qtd (0),
+ *       botões "Entrada" (reabre modal mov) e "Editar".
+ *     - Card/table view principal completamente escondido enquanto tab zerados ativa.
+ *     - Contador de resultados muda para "N zerados" quando tab ativa.
+ *
+ *   ZERO schema change.
+ *
+ * CONCEITO (caçamba e similares):
+ *   Itens de serviço contínuo (caçamba, banheiro químico) devem ser cadastrados com
+ *   tipoControle = 'aplicacao_direta'. Ao serem devolvidos/trocados, a qtd vai a 0 e
+ *   o item sai automaticamente da view principal → tab "Itens Zerados".
+ *   Para restaurar: botão "Entrada" na tabela de zerados.
+ */
+
+/**
+ * Rev. 4522 - FEAT: DOTS DE MÊS (COM LANÇAMENTO / SEM DADOS) NO SELETOR — LOCADOS UTILIZAÇÃO
+ *
+ * MOTIVAÇÃO:
+ *   PeriodSelectorCard já suporta monthStatus/showLegend mas LocadosUtilizacao não passava
+ *   esses props, deixando os pills de mês sem feedback visual de quais têm dados.
+ *
+ * MUDANÇAS:
+ *   - LocadosUtilizacao.tsx: segunda query locadosUtilizacao com mes=null (ano completo),
+ *     só para derivar monthStatus via useMemo.
+ *   - monthStatus: "data" (azul) se entry.count > 0, "none" (cinza) caso contrário.
+ *   - PeriodSelectorCard recebe monthStatus + showLegend → dots + legenda automática.
+ *   - ZERO schema change.
+ */
+
+/**
  * Rev. 4521 - FEAT: DASHBOARD DE UTILIZAÇÃO — EQUIPAMENTOS PRÓPRIOS
  *
  * MOTIVAÇÃO:
