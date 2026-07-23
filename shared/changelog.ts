@@ -1,4 +1,41 @@
 /**
+ * Rev. 4530 - FEAT: FUNCIONÁRIOS TERCEIROS — HISTÓRICO COMPLETO DE VÍNCULOS
+ *
+ * MOTIVAÇÃO:
+ *   A tela de Funcionários Terceiros não tinha fluxo para desligar/reativar
+ *   um trabalhador. Ao encerrar um contrato de terceiros, o usuário não
+ *   tinha como registrar a saída sem excluir o cadastro (perdendo histórico).
+ *
+ * SCHEMA (server/_core/index.ts — SyncSchema Rev.4529):
+ *   - `funcionarios_terceiros`: + status VARCHAR(20) DEFAULT 'ativo',
+ *     + data_saida DATE, + motivo_saida TEXT.
+ *   - NOVA tabela `terceiro_obra_vinculos`: id, company_id, funcionario_id,
+ *     empresa_terceira_id, obra_id, obra_nome, data_entrada DATE, data_saida DATE,
+ *     motivo_saida TEXT, criado_em TIMESTAMP. Índices em funcionario_id e company_id.
+ *
+ * BACKEND (server/routers/terceiros.ts — funcionarios sub-router):
+ *   - `create` mutation: auto-insere vínculo inicial em terceiro_obra_vinculos.
+ *   - `encerrarVinculo` mutation: fecha vínculo aberto (UPDATE data_saida/motivo)
+ *     ou cria registro de encerramento; seta status=desligado no funcionário.
+ *   - `reativar` mutation: seta status=ativo, atualiza obra, insere novo vínculo.
+ *   - `listarVinculos` query: retorna histórico cronológico de vínculos por funcionário.
+ *
+ * FRONTEND (client/src/pages/terceiros/FuncionariosTerceiros.tsx):
+ *   - NOVO componente `VinculosHistoricoSection`: sub-seção no Raio-X com timeline
+ *     de todos os vínculos (obra, data entrada/saída, motivo, badge Ativo).
+ *   - Toggle de status Ativos / Desligados / Todos (pills, default=Ativos) acima
+ *     dos filtros de busca; useMemo `filtered` respeita filterStatus.
+ *   - Cards de Ativos mostram botão "✕ Encerrar" (âmbar); cards de Desligados
+ *     mostram botão "↺ Reativar" (verde) com badge "Desligado" + data/motivo.
+ *   - Dialog "Encerrar Vínculo": campos data_saida + select de motivo (6 opções).
+ *   - Dialog "Reativar": campos data_entrada + select de obra.
+ *   - `RaioXTerceiroDialog` recebe `companyId` e renderiza VinculosHistoricoSection.
+ *   - Mutations `encerrarMut` e `reativarMut` com toast + refetch.
+ *
+ * ZERO breaking change nos dados existentes (ADD COLUMN IF NOT EXISTS + DEFAULT).
+ */
+
+/**
  * Rev. 4529 - FEAT: CONTAS A PAGAR — CHEQUE PRÓPRIO + CONTROLE DE CHEQUES / CHEQUE TERCEIRO COM RASTREABILIDADE
  *
  * MOTIVAÇÃO:

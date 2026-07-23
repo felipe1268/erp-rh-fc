@@ -811,6 +811,17 @@ export const terceirosRouter = router({
         const values: any = { ...rest, numeroInterno };
         if (fotoUrl) values.fotoUrl = fotoUrl;
         const [result] = await db.insert(funcionariosTerceiros).values(values).returning({ id: funcionariosTerceiros.id });
+        // Rev. 4529 — Auto-criar vínculo inicial no histórico
+        if (result?.id) {
+          await db.execute(sql`
+            INSERT INTO terceiro_obra_vinculos
+              (company_id, funcionario_id, empresa_terceira_id, obra_id, obra_nome, data_entrada)
+            VALUES
+              (${input.companyId}, ${result.id}, ${input.empresaTerceiraId},
+               ${input.obraId ?? null}, ${input.obraNome ?? null}, NOW()::date)
+            ON CONFLICT DO NOTHING
+          `);
+        }
         return { id: result.id, numeroInterno };
       }),
 
@@ -979,6 +990,91 @@ export const terceirosRouter = router({
         const inaptos = all.filter((f: any) => f.statusAptidaoTerceiro === "inapto").length;
         const pendentes = all.filter((f: any) => f.statusAptidaoTerceiro === "pendente").length;
         return { total: all.length, aptos, inaptos, pendentes };
+      }),
+
+    // Rev. 4529 — Encerrar vínculo (desligar da obra, preservar histórico)
+    encerrarVinculo: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        companyId: z.number(),
+        dataSaida: z.string(),
+        motivoSaida: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const rows = await db.execute(sql`SELECT * FROM funcionarios_terceiros WHERE id = ${input.id} LIMIT 1`);
+        const func = ((rows as any).rows ?? rows)[0];
+        if (!func) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado." });
+        await _assertCompanyAccess(ctx.user, { companyId: func.companyId ?? func["companyId"] });
+        // Close existing open vínculo if any, otherwise insert a closing record
+        const upd = await db.execute(sql`
+          UPDATE terceiro_obra_vinculos
+          SET data_saida = ${input.dataSaida}::date, motivo_saida = ${input.motivoSaida}
+          WHERE funcionario_id = ${input.id} AND data_saida IS NULL
+          RETURNING id
+        `);
+        if (((upd as any).rows ?? upd).length === 0) {
+          await db.execute(sql`
+            INSERT INTO terceiro_obra_vinculos
+              (company_id, funcionario_id, empresa_terceira_id, obra_id, obra_nome, data_entrada, data_saida, motivo_saida)
+            VALUES
+              (${input.companyId}, ${input.id}, ${func.empresaTerceiraId ?? func["empresaTerceiraId"]},
+               ${func.obraId ?? func["obraId"] ?? null}, ${func.obraNome ?? func["obraNome"] ?? null},
+               NOW()::date, ${input.dataSaida}::date, ${input.motivoSaida})
+          `);
+        }
+        await db.execute(sql`
+          UPDATE funcionarios_terceiros
+          SET status = 'desligado', data_saida = ${input.dataSaida}::date, motivo_saida = ${input.motivoSaida}
+          WHERE id = ${input.id}
+        `);
+        return { success: true };
+      }),
+
+    // Rev. 4529 — Reativar funcionário terceiro (novo vínculo com obra)
+    reativar: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        companyId: z.number(),
+        obraId: z.number().optional().nullable(),
+        obraNome: z.string().optional().nullable(),
+        dataEntrada: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const rows = await db.execute(sql`SELECT * FROM funcionarios_terceiros WHERE id = ${input.id} LIMIT 1`);
+        const func = ((rows as any).rows ?? rows)[0];
+        if (!func) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado." });
+        await _assertCompanyAccess(ctx.user, { companyId: func.companyId ?? func["companyId"] });
+        await db.execute(sql`
+          UPDATE funcionarios_terceiros
+          SET status = 'ativo', data_saida = NULL, motivo_saida = NULL,
+              "obraId" = ${input.obraId ?? null}, "obraNome" = ${input.obraNome ?? null}
+          WHERE id = ${input.id}
+        `);
+        await db.execute(sql`
+          INSERT INTO terceiro_obra_vinculos
+            (company_id, funcionario_id, empresa_terceira_id, obra_id, obra_nome, data_entrada)
+          VALUES
+            (${input.companyId}, ${input.id}, ${func.empresaTerceiraId ?? func["empresaTerceiraId"]},
+             ${input.obraId ?? null}, ${input.obraNome ?? null}, ${input.dataEntrada}::date)
+        `);
+        return { success: true };
+      }),
+
+    // Rev. 4529 — Histórico de vínculos de um funcionário terceiro
+    listarVinculos: protectedProcedure
+      .input(z.object({ funcionarioId: z.number(), companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        await _assertCompanyAccess(ctx.user, { companyId: input.companyId });
+        const db = (await getDb())!;
+        const rows = await db.execute(sql`
+          SELECT v.id, v.obra_id, v.obra_nome, v.data_entrada, v.data_saida, v.motivo_saida, v.criado_em
+          FROM terceiro_obra_vinculos v
+          WHERE v.funcionario_id = ${input.funcionarioId} AND v.company_id = ${input.companyId}
+          ORDER BY v.data_entrada DESC, v.criado_em DESC
+        `);
+        return (rows as any).rows ?? rows;
       }),
   }),
 

@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone, Briefcase, Loader2, Eye } from "lucide-react";
+import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone, Briefcase, Loader2, Eye, LogOut, RefreshCw, History } from "lucide-react";
 import { PersonPhoto } from "@/components/PersonPhoto";
 import { FuncaoCombobox } from "@/components/FuncaoCombobox";
 
@@ -95,11 +95,64 @@ function getSecoesTerceiro(): SecaoTerceiro[] {
   ];
 }
 
+// Rev. 4529 — Histórico de vínculos de um funcionário terceiro (sub-componente do Raio-X).
+function VinculosHistoricoSection({ funcId, companyId }: { funcId: number; companyId: number }) {
+  const { data: vinculos, isLoading } = (trpc as any).terceiros.funcionarios.listarVinculos.useQuery(
+    { funcionarioId: funcId, companyId },
+    { enabled: !!funcId && !!companyId }
+  );
+  if (isLoading) return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-slate-50 px-4 py-2.5 flex items-center gap-2 border-b">
+        <History className="h-4 w-4 text-slate-500" />
+        <h4 className="font-bold text-sm text-slate-700">Histórico de Vínculos</h4>
+      </div>
+      <div className="p-4 text-xs text-muted-foreground text-center">Carregando...</div>
+    </div>
+  );
+  const rows: any[] = vinculos ?? [];
+  return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-slate-50 px-4 py-2.5 flex items-center gap-2 border-b">
+        <History className="h-4 w-4 text-slate-500" />
+        <h4 className="font-bold text-sm text-slate-700">Histórico de Vínculos</h4>
+        <span className="ml-auto text-[11px] text-muted-foreground">{rows.length} registro{rows.length !== 1 ? "s" : ""}</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="p-4 text-xs text-muted-foreground text-center">Nenhum vínculo registrado ainda.</div>
+      ) : (
+        <div className="divide-y bg-white">
+          {rows.map((v: any) => {
+            const entrada = v.data_entrada ? String(v.data_entrada).slice(0, 10).split("-").reverse().join("/") : "–";
+            const saida = v.data_saida ? String(v.data_saida).slice(0, 10).split("-").reverse().join("/") : null;
+            const ativo = !saida;
+            return (
+              <div key={v.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${ativo ? "bg-emerald-500" : "bg-slate-400"}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium">{v.obra_nome || "Sem obra"}</span>
+                    {ativo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">Ativo</span>}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Entrada: {entrada}{saida ? ` · Saída: ${saida}` : " · Em andamento"}
+                    {v.motivo_saida && <span> · {v.motivo_saida}</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Rev. 2680 — Raio-X READ-ONLY do funcionário terceiro. Abre num clique no card
 // (sem passar pelo "Editar") e mostra TODA a documentação consolidada: painel de
 // integração (% conformidade, vencidos, a vencer) + seções com links "Ver
 // documento" e validades. Não permite upload/edição (pra isso há o botão Editar).
-function RaioXTerceiroDialog({ func, empresaNome, onClose, onEdit }: { func: any; empresaNome: string; onClose: () => void; onEdit: () => void }) {
+function RaioXTerceiroDialog({ func, empresaNome, companyId, onClose, onEdit }: { func: any; empresaNome: string; companyId?: number; onClose: () => void; onEdit: () => void }) {
   const secoes = getSecoesTerceiro();
   const allExtras: any[] = Array.isArray(func.documentosExtras) ? func.documentosExtras : [];
   const extrasByCategoria = (k: string) => allExtras.filter((d: any) => d.categoria === k);
@@ -216,6 +269,11 @@ function RaioXTerceiroDialog({ func, empresaNome, onClose, onEdit }: { func: any
           </div>
         </div>
 
+        {/* Rev. 4529 — Histórico de Vínculos */}
+        {companyId && (
+          <VinculosHistoricoSection funcId={func.id} companyId={companyId} />
+        )}
+
         {/* Seções de Documentos (somente leitura) */}
         {secoes.map((secao) => {
           const extrasDaSecao = extrasByCategoria(secao.key);
@@ -328,6 +386,16 @@ export default function FuncionariosTerceiros() {
   const [filterEmpresa, setFilterEmpresa] = useState<string>("all");
   const [filterAptidao, setFilterAptidao] = useState<string>("all");
   const [filterObra, setFilterObra] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<"ativo" | "desligado" | "all">("ativo");
+  // Rev. 4529 — Encerrar vínculo
+  const [encerrarId, setEncerrarId] = useState<number | null>(null);
+  const [encerrarData, setEncerrarData] = useState("");
+  const [encerrarMotivo, setEncerrarMotivo] = useState("");
+  // Rev. 4529 — Reativar
+  const [reativarFunc, setReativarFunc] = useState<any | null>(null);
+  const [reativarObraId, setReativarObraId] = useState<number | null>(null);
+  const [reativarObraNome, setReativarObraNome] = useState<string | null>(null);
+  const [reativarData, setReativarData] = useState(new Date().toISOString().slice(0, 10));
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [viewFunc, setViewFunc] = useState<any>(null);
@@ -419,6 +487,16 @@ export default function FuncionariosTerceiros() {
   const updateDocExtraValidadeMut = trpc.terceiros.funcionarios.updateDocExtraValidade.useMutation({
     onSuccess: () => { refetch(); },
   });
+  // Rev. 4529 — mutations de vínculo
+  const encerrarMut = (trpc as any).terceiros.funcionarios.encerrarVinculo.useMutation({
+    onSuccess: () => { refetch(); setEncerrarId(null); setEncerrarData(""); setEncerrarMotivo(""); toast.success("Vínculo encerrado. Histórico preservado."); },
+    onError: (e: any) => toast.error("Erro ao encerrar: " + e.message),
+  });
+  const reativarMut = (trpc as any).terceiros.funcionarios.reativar.useMutation({
+    onSuccess: () => { refetch(); setReativarFunc(null); toast.success("Funcionário reativado!"); },
+    onError: (e: any) => toast.error("Erro ao reativar: " + e.message),
+  });
+
   const [extraModal, setExtraModal] = useState<{ categoria: string; categoriaLabel: string } | null>(null);
   const [extraLabel, setExtraLabel] = useState("");
   const [extraValidade, setExtraValidade] = useState("");
@@ -463,6 +541,7 @@ export default function FuncionariosTerceiros() {
 
   const filtered = useMemo(() => {
     let list = funcionarios;
+    if (filterStatus !== "all") list = list.filter((f: any) => (f.status || "ativo") === filterStatus);
     if (filterAptidao !== "all") list = list.filter((f: any) => f.statusAptidao === filterAptidao);
     if (filterObra !== "all") list = list.filter((f: any) => String(f.obraId ?? "") === filterObra || f.obraNome === filterObra);
     if (search) {
@@ -479,7 +558,7 @@ export default function FuncionariosTerceiros() {
     return [...list].sort((a: any, b: any) =>
       (a.nome || "").trim().localeCompare((b.nome || "").trim(), "pt-BR", { sensitivity: "base" })
     );
-  }, [funcionarios, search, filterAptidao, filterObra]);
+  }, [funcionarios, search, filterAptidao, filterObra, filterStatus]);
 
   // Rev. 2300 — múltipla seleção + bulk update.
   const filteredIds = filtered.map((f: any) => f.id);
@@ -670,6 +749,22 @@ export default function FuncionariosTerceiros() {
           ]} />
         </div>
 
+        {/* Rev. 4529 — Status toggle: Ativos / Desligados / Todos */}
+        <div className="flex gap-1 rounded-lg border border-gray-200 p-1 bg-gray-50 self-start">
+          {([
+            { v: "ativo",     label: "Ativos",     color: "bg-emerald-600 text-white", cnt: funcionarios.filter((f: any) => (f.status || "ativo") === "ativo").length },
+            { v: "desligado", label: "Desligados",  color: "bg-red-600 text-white",     cnt: funcionarios.filter((f: any) => f.status === "desligado").length },
+            { v: "all",       label: "Todos",       color: "bg-slate-700 text-white",   cnt: funcionarios.length },
+          ] as { v: "ativo" | "desligado" | "all"; label: string; color: string; cnt: number }[]).map(({ v, label, color, cnt }) => (
+            <button key={v} type="button"
+              onClick={() => setFilterStatus(v)}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors flex items-center gap-1.5 ${filterStatus === v ? color : "text-gray-500 hover:text-gray-700"}`}>
+              {label}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${filterStatus === v ? "bg-white/20" : "bg-gray-200 text-gray-600"}`}>{cnt}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
@@ -800,6 +895,11 @@ export default function FuncionariosTerceiros() {
                           </span>
                         )}
                         {aptidaoBadge(func.statusAptidao)}
+                        {(func.status || "ativo") === "desligado" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200">
+                            <LogOut className="h-2.5 w-2.5" /> Desligado
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
                         {func.cpf && <span>CPF: {func.cpf}</span>}
@@ -807,15 +907,32 @@ export default function FuncionariosTerceiros() {
                         <span className="flex items-center gap-0.5"><Building2 className="h-3 w-3" />{getEmpresaNome(func.empresaTerceiraId)}</span>
                         {func.obraNome && <span className="flex items-center gap-0.5"><HardHat className="h-3 w-3" />{func.obraNome}</span>}
                       </div>
+                      {(func.status || "ativo") === "desligado" && func.data_saida && (
+                        <div className="flex flex-wrap gap-2 mt-1 text-[11px] text-red-600">
+                          <span>Saída: {func.data_saida?.slice?.(0,10)?.split?.("-")?.reverse?.()?.join?.("/") || func.data_saida}</span>
+                          {func.motivo_saida && <span>· {func.motivo_saida}</span>}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap justify-end">
                     <Button size="sm" variant="outline" className="text-blue-700 border-blue-300 hover:bg-blue-50" onClick={() => setViewFunc(func)}>
                       <Eye className="h-3.5 w-3.5 mr-1" /> Raio-X
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => openEdit(func)}>
-                      <Edit className="h-3.5 w-3.5 mr-1" /> Editar
-                    </Button>
+                    {(func.status || "ativo") === "ativo" ? (<>
+                      <Button size="sm" variant="outline" onClick={() => openEdit(func)}>
+                        <Edit className="h-3.5 w-3.5 mr-1" /> Editar
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-amber-600 border-amber-300 hover:bg-amber-50"
+                        onClick={() => { setEncerrarId(func.id); setEncerrarData(new Date().toISOString().slice(0, 10)); setEncerrarMotivo(""); }}>
+                        <LogOut className="h-3.5 w-3.5 mr-1" /> Encerrar
+                      </Button>
+                    </>) : (
+                      <Button size="sm" variant="outline" className="text-emerald-600 border-emerald-300 hover:bg-emerald-50"
+                        onClick={() => { setReativarFunc(func); setReativarObraId(func.obraId ?? null); setReativarObraNome(func.obraNome ?? null); setReativarData(new Date().toISOString().slice(0, 10)); }}>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" /> Reativar
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => {
                       if (confirm("Excluir este funcionário?")) deleteMut.mutate({ id: func.id });
                     }}>
@@ -828,6 +945,83 @@ export default function FuncionariosTerceiros() {
           )}
         </div>
       </div>
+
+      {/* Rev. 4529 — Dialog Encerrar Vínculo */}
+      {encerrarId !== null && (
+        <Dialog open onOpenChange={() => setEncerrarId(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-700"><LogOut className="h-4 w-4" /> Encerrar Vínculo</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">O funcionário será marcado como <strong>Desligado</strong> e removido do quadro ativo. O histórico de documentos e vínculos ficará preservado.</p>
+              <div>
+                <Label>Data de saída <span className="text-red-500">*</span></Label>
+                <Input type="date" value={encerrarData} onChange={e => setEncerrarData(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label>Motivo <span className="text-red-500">*</span></Label>
+                <Select value={encerrarMotivo} onValueChange={setEncerrarMotivo}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Contrato encerrado">Contrato encerrado</SelectItem>
+                    <SelectItem value="Obra concluída">Obra concluída</SelectItem>
+                    <SelectItem value="Demissão">Demissão</SelectItem>
+                    <SelectItem value="Transferência">Transferência para outra obra</SelectItem>
+                    <SelectItem value="Desistência">Desistência do trabalhador</SelectItem>
+                    <SelectItem value="Outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEncerrarId(null)}>Cancelar</Button>
+              <Button className="bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={!encerrarData || !encerrarMotivo || encerrarMut.isPending}
+                onClick={() => { if (!companyId) return; encerrarMut.mutate({ id: encerrarId!, companyId, dataSaida: encerrarData, motivoSaida: encerrarMotivo }); }}>
+                {encerrarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <LogOut className="h-4 w-4 mr-1" />} Encerrar Vínculo
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Rev. 4529 — Dialog Reativar */}
+      {reativarFunc && (
+        <Dialog open onOpenChange={() => setReativarFunc(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-emerald-700"><RefreshCw className="h-4 w-4" /> Reativar Funcionário</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground"><strong>{reativarFunc.nome}</strong> voltará ao quadro ativo. Um novo registro de vínculo será criado no histórico.</p>
+              <div>
+                <Label>Data de entrada <span className="text-red-500">*</span></Label>
+                <Input type="date" value={reativarData} onChange={e => setReativarData(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label>Obra (opcional)</Label>
+                <Select value={reativarObraId ? String(reativarObraId) : "none"}
+                  onValueChange={v => { if (v === "none") { setReativarObraId(null); setReativarObraNome(null); return; } const o = (obras as any[]).find((x: any) => String(x.id) === v); setReativarObraId(o?.id ?? null); setReativarObraNome(o?.nome ?? null); }}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Sem obra vinculada —</SelectItem>
+                    {(obras as any[]).map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setReativarFunc(null)}>Cancelar</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!reativarData || reativarMut.isPending}
+                onClick={() => { if (!companyId) return; reativarMut.mutate({ id: reativarFunc.id, companyId, obraId: reativarObraId, obraNome: reativarObraNome, dataEntrada: reativarData }); }}>
+                {reativarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />} Reativar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Form Dialog */}
       {showForm && (
@@ -1281,6 +1475,7 @@ export default function FuncionariosTerceiros() {
         <RaioXTerceiroDialog
           func={viewFunc}
           empresaNome={getEmpresaNome(viewFunc.empresaTerceiraId)}
+          companyId={companyId}
           onClose={() => setViewFunc(null)}
           onEdit={() => { const f = viewFunc; setViewFunc(null); openEdit(f); }}
         />

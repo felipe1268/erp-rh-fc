@@ -5557,6 +5557,30 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4479: gestor_rh_id/nome em companies + tabela gestor_substituicao_solicitacoes garantidos.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4479 gestores:", e?.message || e); }
 
+        // Rev. 4529 — status/data_saida/motivo_saida em funcionarios_terceiros + tabela terceiro_obra_vinculos
+        try {
+          await db.execute(sql.raw(`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ativo'`));
+          await db.execute(sql.raw(`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS data_saida DATE`));
+          await db.execute(sql.raw(`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS motivo_saida TEXT`));
+          await db.execute(sql.raw(`
+            CREATE TABLE IF NOT EXISTS terceiro_obra_vinculos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              funcionario_id INTEGER NOT NULL,
+              empresa_terceira_id INTEGER NOT NULL,
+              obra_id INTEGER,
+              obra_nome TEXT,
+              data_entrada DATE NOT NULL,
+              data_saida DATE,
+              motivo_saida TEXT,
+              criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `));
+          await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tov_funcionario ON terceiro_obra_vinculos(funcionario_id)`));
+          await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tov_company ON terceiro_obra_vinculos(company_id)`));
+          console.log("[SyncSchema+] Rev. 4529: status/data_saida em funcionarios_terceiros + terceiro_obra_vinculos garantidos.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4529 terceiro_obra_vinculos:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
