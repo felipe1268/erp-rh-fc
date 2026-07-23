@@ -88,6 +88,23 @@ export default function LocadosUtilizacao() {
     { enabled: !!companyId },
   );
 
+  // Query de ano completo (mes=null) só para derivar quais meses têm dados
+  // — usada apenas para os dots coloridos do PeriodSelectorCard.
+  const { data: dataAno } = trpc.equipamentos.locadosUtilizacao.useQuery(
+    { companyId, mes: null, ano },
+    { enabled: !!companyId },
+  );
+  const monthStatus = useMemo(() => {
+    const m: Record<number, "data" | "none"> = {};
+    for (let i = 1; i <= 12; i++) m[i] = "none";
+    const anoStr = String(ano);
+    for (const entry of (dataAno?.mensal ?? [])) {
+      const [y, mo] = String(entry.ym).split("-");
+      if (y === anoStr && Number(entry.count) > 0) m[Number(mo)] = "data";
+    }
+    return m;
+  }, [dataAno, ano]);
+
   const ciclos    = data?.ciclos     ?? [];
   const emAlmox   = data?.emAlmox    ?? [];
   const stats     = data?.stats;
@@ -181,7 +198,7 @@ export default function LocadosUtilizacao() {
         </div>
 
         {/* ── Seletor de período ── */}
-        <PeriodSelectorCard mes={mes} ano={ano} onMes={setMes} onAno={setAno} onAnoTodo={() => setMes(null)} />
+        <PeriodSelectorCard mes={mes} ano={ano} onMes={setMes} onAno={setAno} onAnoTodo={() => setMes(null)} monthStatus={monthStatus} showLegend />
 
         {/* ── KPIs ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
