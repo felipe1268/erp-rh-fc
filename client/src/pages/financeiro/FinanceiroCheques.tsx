@@ -17,7 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, FileText, Sparkles, Loader2, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2, X, Landmark, User, CalendarDays, Hash, FileSignature, ExternalLink, Keyboard, CheckCheck } from "lucide-react";
+import { Upload, FileSpreadsheet, FileText, Sparkles, Loader2, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2, X, Landmark, User, CalendarDays, Hash, FileSignature, ExternalLink, Keyboard, CheckCheck, Building2, Wand2 } from "lucide-react";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/SearchableSelect";
 
 function formatBRL(v: number) {
@@ -238,6 +238,8 @@ export default function FinanceiroCheques() {
   const [fVencDe, setFVencDe] = useState<string>("");
   const [fVencAte, setFVencAte] = useState<string>("");
   const [fFornecedor, setFFornecedor] = useState<string>("");
+  // Rev. 4526 — filtro por obra
+  const [fObra, setFObra] = useState<string>("");
 
   // ── Importação ──
   // Dois modos: "xlsx" (planilha mensal) e "pdf" (vários PDFs/imagens de cheque
@@ -293,12 +295,13 @@ export default function FinanceiroCheques() {
   }
   useEffect(() => () => pararTimersProgresso(), []);
 
-  // ── Lançamento manual (Rev. 3329) ──
+  // ── Lançamento manual (Rev. 3329 / Rev. 4526 + obra) ──
   const manualVazio = {
     numeroCheque: "", valor: "", fornecedorNome: "", fornecedorId: null as number | null,
     bancoNome: "", bancoCodigo: "", agencia: "", contaCorrenteRaw: "",
     contaBancariaId: null as number | null, dataVencimento: "", dataCompensacao: "",
     status: "pendente", parcela: "", nf: "", observacao: "",
+    obraId: null as number | null, obraNome: "",
   };
   const [manualOpen, setManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState<typeof manualVazio>({ ...manualVazio });
@@ -441,6 +444,40 @@ export default function FinanceiroCheques() {
     });
   }, [bankAccounts]);
 
+  // Rev. 4526 — obras ativas (vinculação no formulário de cheque)
+  const { data: obrasAtivasList } = (trpc as any).cheques.obrasAtivas.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const obraOpts: SearchableSelectOption[] = useMemo(() => {
+    const list: any[] = Array.isArray(obrasAtivasList) ? obrasAtivasList : [];
+    return list.map((o: any) => ({
+      value: String(o.id),
+      label: o.nome,
+      subtitle: o.codigo || undefined,
+      searchExtra: o.codigo || "",
+    }));
+  }, [obrasAtivasList]);
+
+  // Lista de obras presentes nos cheques carregados (p/ filtro da listagem)
+  const obraFiltroOpts: SearchableSelectOption[] = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const c of cheques as any[]) {
+      const n = String(c.obraNome || "").trim();
+      const id = String(c.obraId || "");
+      if (n && id && !seen.has(id)) seen.set(id, n);
+    }
+    return Array.from(seen.entries())
+      .map(([id, nome]) => ({ value: id, label: nome }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [cheques]);
+
+  // Rev. 4526 — próximo número do talão para a conta selecionada no formulário
+  const { data: nextNumeroData } = (trpc as any).cheques.nextNumeroCheque.useQuery(
+    { companyId, contaBancariaId: manualForm.contaBancariaId! },
+    { enabled: !!companyId && manualForm.contaBancariaId != null }
+  );
+
   async function conferirComExtrato() {
     try {
       const r = await conferirMut.mutateAsync({ companyId, ano, mes: mesSel ?? undefined });
@@ -538,14 +575,18 @@ export default function FinanceiroCheques() {
     if (fFornecedor) {
       arr = arr.filter((c) => (c.fornecedorNome || "") === fFornecedor);
     }
+    // Rev. 4526 — filtro por obra
+    if (fObra) {
+      arr = arr.filter((c) => String(c.obraId || "") === fObra);
+    }
     return arr;
-  }, [cheques, fStatus, fVencDe, fVencAte, fFornecedor]);
+  }, [cheques, fStatus, fVencDe, fVencAte, fFornecedor, fObra]);
 
   // Rev. 4257 — quando qualquer filtro client-side está ativo (fornecedor, data,
   // status "outros"/extrato), os cards derivam do chequesFiltrados em vez do resumo
   // backend — "o que a tabela mostra é o que os cards mostram".
   // IIFE (sem useMemo) para evitar qualquer problema de stale-closure com deps.
-  const anyFiltroAtivo = !!(fFornecedor || fVencDe || fVencAte || fStatus !== "todos");
+  const anyFiltroAtivo = !!(fFornecedor || fVencDe || fVencAte || fObra || fStatus !== "todos");
   // valor é NUMERIC(15,2) — Drizzle retorna como string EN "3558.75"
   // Também suporta string BR "3.558,75" caso venha de importação legada
   const parseValor = (v: unknown): number => {
@@ -615,7 +656,7 @@ export default function FinanceiroCheques() {
 
   // Ao trocar filtro/mês/ano/busca a lista muda — limpa a seleção p/ não agir
   // sobre cheques que saíram da tela.
-  useEffect(() => { setSelectedIds(new Set()); setBulkStatus(""); }, [fStatus, mesSel, ano, fBusca, fVencDe, fVencAte, fFornecedor]);
+  useEffect(() => { setSelectedIds(new Set()); setBulkStatus(""); }, [fStatus, mesSel, ano, fBusca, fVencDe, fVencAte, fFornecedor, fObra]);
 
   async function aplicarBulkStatus() {
     const ids = Array.from(selectedIds);
@@ -760,6 +801,8 @@ export default function FinanceiroCheques() {
         parcela: manualForm.parcela.trim() || null,
         nf: manualForm.nf.trim() || null,
         observacao: manualForm.observacao.trim() || null,
+        obraId: manualForm.obraId ?? null,
+        obraNome: manualForm.obraNome.trim() || null,
       });
       setManualOpen(false);
       // Reposiciona a régua/filtro no mês/ano do cheque recém-lançado p/ ele aparecer.
@@ -1094,7 +1137,7 @@ export default function FinanceiroCheques() {
                 </SelectContent>
               </Select>
               {/* Filtro por fornecedor com busca — Rev. 4256 */}
-              <div className="min-w-[220px] flex-1">
+              <div className="min-w-[200px] flex-1">
                 <SearchableSelect
                   options={[
                     { value: "", label: "Todos os fornecedores" },
@@ -1108,6 +1151,23 @@ export default function FinanceiroCheques() {
                   className="w-full"
                 />
               </div>
+              {/* Filtro por obra — Rev. 4526 */}
+              {obraFiltroOpts.length > 0 && (
+                <div className="min-w-[200px] flex-1">
+                  <SearchableSelect
+                    options={[
+                      { value: "", label: "Todas as obras" },
+                      ...obraFiltroOpts,
+                    ]}
+                    value={fObra}
+                    onValueChange={(v) => setFObra(v)}
+                    placeholder="Todas as obras"
+                    searchPlaceholder="Filtrar por obra…"
+                    emptyMessage="Nenhuma obra."
+                    className="w-full"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Linha 2: filtro por data de vencimento — Rev. 4256 */}
@@ -1191,7 +1251,7 @@ export default function FinanceiroCheques() {
         <Card>
           <CardHeader className="space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="text-base flex items-center gap-2 flex-wrap">
                 Cheques ({chequesFiltrados.length})
                 {fStatus !== "todos" && (
                   <button
@@ -1200,6 +1260,16 @@ export default function FinanceiroCheques() {
                     className="text-[11px] font-normal text-blue-600 hover:underline"
                   >
                     filtrando por “{({ conferido: "Conferidos no extrato", confere: "Confere — falta marcar", divergente: "Divergências", outros: "Outros" } as Record<string, string>)[fStatus] || fStatus}” · limpar
+                  </button>
+                )}
+                {fObra && (
+                  <button
+                    type="button"
+                    onClick={() => setFObra("")}
+                    className="inline-flex items-center gap-1 text-[11px] font-normal text-emerald-700 hover:underline"
+                  >
+                    <Building2 className="h-3 w-3" />
+                    {obraFiltroOpts.find((o) => o.value === fObra)?.label ?? "Obra"} · limpar
                   </button>
                 )}
               </CardTitle>
@@ -1840,7 +1910,25 @@ export default function FinanceiroCheques() {
               </div>
               <div>
                 <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><Hash className="h-3.5 w-3.5 text-[#1B2A4A]" />Nº do cheque</Label>
-                <Input className="mt-1 h-11" value={manualForm.numeroCheque} onChange={(e) => setManualForm((f) => ({ ...f, numeroCheque: e.target.value }))} placeholder="Ex.: 000123" />
+                <div className="mt-1 flex gap-1.5">
+                  <Input className="h-11 flex-1 tabular-nums" value={manualForm.numeroCheque} onChange={(e) => setManualForm((f) => ({ ...f, numeroCheque: e.target.value }))} placeholder="Ex.: 000123" />
+                  {manualForm.contaBancariaId != null && nextNumeroData?.nextNumero && (
+                    <button
+                      type="button"
+                      title={`Próximo disponível no talão: ${nextNumeroData.nextNumero}`}
+                      onClick={() => setManualForm((f) => ({ ...f, numeroCheque: nextNumeroData.nextNumero! }))}
+                      className="h-11 px-2.5 rounded-md border border-[#1B2A4A]/30 bg-[#1B2A4A]/5 text-[#1B2A4A] hover:bg-[#1B2A4A]/15 flex items-center gap-1 text-[11px] font-medium whitespace-nowrap"
+                    >
+                      <Wand2 className="h-3.5 w-3.5" />{nextNumeroData.nextNumero}
+                    </button>
+                  )}
+                  {manualForm.contaBancariaId != null && nextNumeroData?.esgotado && (
+                    <span className="h-11 px-2 flex items-center text-[10px] text-amber-600 font-medium">Talão esgotado</span>
+                  )}
+                </div>
+                {manualForm.contaBancariaId != null && nextNumeroData?.nextNumero && !manualForm.numeroCheque && (
+                  <p className="mt-1 text-[10px] text-muted-foreground flex items-center gap-1"><Wand2 className="h-3 w-3" />Clique no número para preencher automaticamente do talão.</p>
+                )}
               </div>
             </div>
 
@@ -1877,6 +1965,34 @@ export default function FinanceiroCheques() {
                   className="mt-2 text-[11px] text-gray-500 hover:text-[#1B2A4A] flex items-center gap-1">
                   <ExternalLink className="h-3 w-3" />Cadastrar novo fornecedor
                 </button>
+              )}
+            </div>
+
+            {/* Bloco 2b — Obra (vinculação Rev. 4526) */}
+            <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+              <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5 mb-2">
+                <Building2 className="h-3.5 w-3.5 text-[#1B2A4A]" />Obra <span className="font-normal text-gray-400">(opcional)</span>
+              </Label>
+              {obraOpts.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">Nenhuma obra ativa cadastrada.</p>
+              ) : (
+                <SearchableSelect
+                  options={[{ value: "", label: "Nenhuma obra" }, ...obraOpts]}
+                  value={manualForm.obraId != null ? String(manualForm.obraId) : ""}
+                  onValueChange={(v) => {
+                    if (!v) { setManualForm((f) => ({ ...f, obraId: null, obraNome: "" })); return; }
+                    const opt = obraOpts.find((o) => o.value === v);
+                    setManualForm((f) => ({ ...f, obraId: Number(v), obraNome: opt?.label || "" }));
+                  }}
+                  placeholder="Selecionar obra…"
+                  searchPlaceholder="Buscar obra…"
+                  emptyMessage="Nenhuma obra encontrada."
+                />
+              )}
+              {manualForm.obraId != null && (
+                <p className="mt-1.5 text-[11px] text-green-700 flex items-center gap-1">
+                  <CheckCheck className="h-3 w-3" />Cheque vinculado à obra.
+                </p>
               )}
             </div>
 

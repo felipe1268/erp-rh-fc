@@ -1,4 +1,42 @@
 /**
+ * Rev. 4526 - FEAT: CHEQUES EMITIDOS — OBRAS ATIVAS + AUTO-NÚMERO DO TALÃO
+ *
+ * MOTIVAÇÃO:
+ *   Usuários financeiros precisavam vincular cheques emitidos a obras ativas,
+ *   ter um seletor de obra ativo no formulário de lançamento manual, filtrar
+ *   a listagem por obra e ter o próximo número de cheque sugerido
+ *   automaticamente a partir do talão ativo da conta bancária selecionada.
+ *
+ * MUDANÇAS — BACKEND (server/routers/cheques.ts):
+ *   1. `criarManual`: input estendido com `obraId` / `obraNome`; INSERT agora
+ *      persiste `obra_id` / `obra_nome` em `financial_cheques` ($21/$22).
+ *   2. `obrasAtivas` (query nova): lista obras com isActive=1 da empresa
+ *      (SELECT id, nome, codigo FROM obras WHERE companyId=$1 AND isActive=1).
+ *   3. `nextNumeroCheque` (query nova): dado `contaBancariaId`, consulta o
+ *      talão ativo (financial_cheque_taloes status='ativo'), cruza com cheques
+ *      já emitidos e excluídos do JSON de folhas especiais, e retorna o
+ *      primeiro número disponível (padStart 6 dígitos) ou esgotado/semTalao.
+ *
+ * MUDANÇAS — FRONTEND (client/src/pages/financeiro/FinanceiroCheques.tsx):
+ *   - `manualVazio` + `manualForm`: adicionados `obraId` / `obraNome`.
+ *   - Query `obrasAtivas` + `obraOpts` useMemo (seletor no formulário).
+ *   - Query `nextNumeroCheque` (ativada quando contaBancariaId é selecionado).
+ *   - Campo "Nº do cheque": botão inline mostra próximo número disponível;
+ *     clicar preenche automaticamente (Wand2 icon).
+ *   - Bloco "Obra" no formulário de lançamento manual: SearchableSelect das
+ *     obras ativas com opção "Nenhuma obra".
+ *   - `salvarManual`: passa `obraId` / `obraNome` ao `criarManual`.
+ *   - Filtro "Todas as obras" na barra de filtros (aparece quando há cheques
+ *     com obra vinculada); `chequesFiltrados` filtra por `fObra`.
+ *   - `anyFiltroAtivo` atualizado para incluir `fObra`.
+ *   - Chip de filtro ativo de obra na CardTitle da tabela (cor verde).
+ *   - `useEffect` de reset de seleção atualizado com dep `fObra`.
+ *   - Imports: `Building2`, `Wand2` adicionados ao lucide-react.
+ *
+ * ZERO schema change (obra_id / obra_nome já existiam em financial_cheques).
+ */
+
+/**
  * Rev. 4525 - FIX: INVENTÁRIO SEMANAL — ESTOQUE NÃO ATUALIZAVA AO CONCLUIR
  *
  * MOTIVAÇÃO:

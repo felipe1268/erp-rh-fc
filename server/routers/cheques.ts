@@ -1380,6 +1380,8 @@ export const chequesRouter = router({
     parcela: z.string().max(20).nullable().optional(),
     nf: z.string().max(60).nullable().optional(),
     observacao: z.string().max(500).nullable().optional(),
+    obraId: z.number().nullable().optional(),
+    obraNome: z.string().max(255).nullable().optional(),
   })).mutation(async ({ input, ctx }) => {
     await assertCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
@@ -1428,19 +1430,19 @@ export const chequesRouter = router({
       contaBancariaId = matchConta(row.contaCorrenteRaw, contasDaEmpresa);
     }
     const loteId = randomUUID();
-    // dbExecute liga params por ORDEM DE APARIÇÃO — placeholders $1..$20 e array em sequência.
+    // dbExecute liga params por ORDEM DE APARIÇÃO — placeholders $1..$22 e array em sequência.
     const res = await dbExecute(db,
       `INSERT INTO financial_cheques
          (company_id, conta_bancaria_id, conta_corrente_raw, banco_codigo, banco_nome,
           agencia, numero_cheque, fornecedor_nome, fornecedor_id, parcela, nf, valor,
           data_vencimento, data_compensacao, status, observacao, mes_ref, ano_ref,
-          origem_arquivo, lote_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+          origem_arquivo, lote_id, obra_id, obra_nome)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        RETURNING id`,
       [input.companyId, contaBancariaId, row.contaCorrenteRaw, row.bancoCodigo, row.bancoNome,
        row.agencia, row.numeroCheque, row.fornecedorNome, fornecedorId, row.parcela, row.nf, row.valor,
        row.dataVencimento, row.dataCompensacao, row.status, row.observacao, row.mes, row.ano,
-       "manual", loteId]);
+       "manual", loteId, input.obraId ?? null, input.obraNome ?? null]);
     return { ok: true, id: res.rows[0]?.id, mes: row.mes, ano: row.ano };
   }),
 
@@ -1737,4 +1739,55 @@ export const chequesRouter = router({
       delParams);
     return { ok: true, removidos: res.rows.length };
   }),
+
+  // Lista obras ativas da empresa (p/ vincular cheque a uma obra no formulário manual).
+  obrasAtivas: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const res = await dbExecute(db,
+        `SELECT id, nome, codigo FROM obras
+          WHERE "companyId"=$1 AND "isActive"=1
+          ORDER BY nome`,
+        [input.companyId]);
+      return res.rows as { id: number; nome: string; codigo: string | null }[];
+    }),
+
+  // Retorna o próximo número de cheque disponível no talão ativo de uma conta bancária.
+  // Útil para o formulário de lançamento manual sugerir o próximo número.
+  nextNumeroCheque: protectedProcedure
+    .input(z.object({ companyId: z.number(), contaBancariaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const talaoRes = await dbExecute(db,
+        `SELECT id, numero_inicial, numero_final, folhas_status_json
+           FROM financial_cheque_taloes
+          WHERE company_id=$1 AND conta_bancaria_id=$2 AND status='ativo' AND excluido_em IS NULL
+          ORDER BY numero_final DESC
+          LIMIT 1`,
+        [input.companyId, input.contaBancariaId]);
+      const talao = talaoRes.rows[0] as any;
+      if (!talao) return { nextNumero: null, esgotado: false, semTalao: true };
+      const usedRes = await dbExecute(db,
+        `SELECT numero_cheque FROM financial_cheques
+          WHERE company_id=$1 AND conta_bancaria_id=$2 AND excluido_em IS NULL AND numero_cheque IS NOT NULL`,
+        [input.companyId, input.contaBancariaId]);
+      const used = new Set(
+        (usedRes.rows as any[]).map((r) => numCheque(r.numero_cheque)).filter((n) => n != null)
+      );
+      let exc: Record<string, string> = {};
+      try { exc = talao.folhas_status_json ? JSON.parse(talao.folhas_status_json) : {}; } catch { /* ignore */ }
+      const ini = Number(talao.numero_inicial);
+      const fim = Number(talao.numero_final);
+      for (let n = ini; n <= fim; n++) {
+        if (!used.has(n) && !exc[String(n)]) {
+          return { nextNumero: String(n).padStart(6, "0"), esgotado: false, semTalao: false };
+        }
+      }
+      return { nextNumero: null, esgotado: true, semTalao: false };
+    }),
 });

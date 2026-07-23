@@ -50,18 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4526** — **FEAT: CHEQUES EMITIDOS — OBRAS ATIVAS + AUTO-NÚMERO DO TALÃO.** `criarManual` estendido com `obraId`/`obraNome` ($21/$22 no INSERT). Duas novas queries: `obrasAtivas` (lista obras isActive=1) e `nextNumeroCheque` (próximo nº disponível no talão ativo). Frontend: bloco "Obra" no form de lançamento (SearchableSelect); campo Nº com botão Wand2 que preenche automaticamente; filtro "Todas as obras" na barra (aparece quando há cheques vinculados); chip de filtro ativo na tabela. ZERO schema change.
 - **Rev. 4525** — **FIX: INVENTÁRIO SEMANAL → ESTOQUE NÃO ATUALIZAVA.** `finishInventorySession` agora percorre todos os itens da sessão e aplica `quantidadeAtual = quantidadeFisica` em `almoxarifado_itens` antes de marcar a sessão como concluída. ZERO schema change.
-- **Rev. 4524** — **FIX: CHEQUES RECEBIDOS — LISTA VAZIA.** `fe.referencia` inexistente no SELECT do `listar` derrubava a query silenciosamente (PostgreSQL rejeita em plan-time mesmo com LEFT JOIN). Removido `fe.referencia AS entry_referencia` (não usado no front). Lista passa a retornar os 132 cheques disponíveis corretamente. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4524** — **FIX: CHEQUES RECEBIDOS — LISTA VAZIA.** `fe.referencia` removido do SELECT de `listar`. ZERO schema change.
 - **Rev. 4523** — **FEAT: ALMOXARIFADO — ITENS ZERADOS SEPARADOS.** `somenteZerados` no `listarItens` backend. `lista` useMemo exclui qty=0. Botão "Itens Zerados" com badge contador. Tabela lazy de itens zerados. ZERO schema change.
 - **Rev. 4522** — **FEAT: DOTS DE MÊS NO SELETOR (LOCADOS UTILIZAÇÃO).** Segunda query `mes=null` + `monthStatus` useMemo. PeriodSelectorCard com `showLegend`. ZERO schema change.
 - **Rev. 4521** — **FEAT: DASHBOARD UTILIZAÇÃO — EQUIPAMENTOS PRÓPRIOS.** `propriosUtilizacao` tRPC + `PropriosUtilizacao.tsx` (tema azul). KPIs + DrillModals. ZERO schema change.
 - **Rev. 4520** — **FEAT: KPIs CLICÁVEIS + MODAL DRILL-DOWN + RESPONSIVO.** 3 KPIs abrem DrillModal tela-cheia. FIX: employees aspas duplas. ZERO schema change.
-- **Rev. 4517** — **FIX: FONTE DE DADOS DE UTILIZAÇÃO — warehouse_loans.** cycleRaw/idleRaw/emCampoRaw reescritos. ZERO schema change.
-- **Rev. 4516** — **FEAT: CONVERSÃO DE TIPO (PRÓPRIO ↔ LOCADO).** Badge + botões em lote. 2 mutations tRPC. ZERO schema change.
-- **Rev. 4513** — REVERTIDA (Rev. 4515). Migração Locados→Próprios desfeita.
 
 ### Histórico completo
 
