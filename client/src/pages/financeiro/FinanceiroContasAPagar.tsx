@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   CheckCircle, AlertTriangle, Search, Calendar, ShoppingCart, FileText,
-  ChevronLeft, ChevronRight, CreditCard, Banknote, Clock, Hash, Tag,
+  ChevronLeft, ChevronRight, CreditCard, Banknote, ArrowLeftRight, Clock, Hash, Tag,
   Users, Truck, Briefcase, Scale, Package, Receipt, Wallet,
   Download, Copy, TrendingDown, TrendingUp, Zap, Activity, X,
   Eye, ExternalLink, History, Building2, Paperclip, Hash as HashIcon, Info,
@@ -306,6 +306,7 @@ export default function FinanceiroContasAPagar() {
   const [chequeNumIni, setChequeNumIni] = useState("");
   const [chequePrimVenc, setChequePrimVenc] = useState("");
   const [chequeStatusIni, setChequeStatusIni] = useState("pendente");
+  const [chequeSubtipo, setChequeSubtipo] = useState<"empresa" | "terceiros">("empresa");
   // Rev. 4096 — Cheque de Terceiro (Cheques Recebidos): seleção multi-cheque na baixa avulsa
   const [chequesTerceiroSelAvulso, setChequesTerceiroSelAvulso] = useState<number[]>([]);
   // Rev. 1620 — seleção em lote (Onda 2)
@@ -386,7 +387,7 @@ export default function FinanceiroContasAPagar() {
   const payMut = (trpc as any).financial.registrarBaixa.useMutation({
     onSuccess: (r: any) => {
       // Rev. 4096 — se forma=cheque_terceiro, alocar os cheques recebidos selecionados
-      if (formaPagamento === "cheque_terceiro" && chequesTerceiroSelAvulso.length && alocarLoteMutAvulso) {
+      if (formaPagamento === "cheque" && chequeSubtipo === "terceiros" && chequesTerceiroSelAvulso.length && alocarLoteMutAvulso) {
         alocarLoteMutAvulso.mutate({
           companyId,
           ids: chequesTerceiroSelAvulso,
@@ -396,7 +397,7 @@ export default function FinanceiroContasAPagar() {
         setChequesTerceiroSelAvulso([]);
       }
       // Rev. 4529 — se forma=cheque próprio, criar N cheques no Controle de Cheques Emitidos
-      if (formaPagamento === "cheque" && companyId) {
+      if (formaPagamento === "cheque" && chequeSubtipo === "empresa" && companyId) {
         const qtd = Math.min(120, Math.max(1, parseInt(chequeQtd || "1", 10) || 1));
         const total = parseFloat(valorPagar || "0") + parseFloat(jurosPay || "0") - parseFloat(descontosPay || "0") + parseFloat(outrosPay || "0");
         if (total > 0 && qtd > 0) {
@@ -440,7 +441,7 @@ export default function FinanceiroContasAPagar() {
   const totalPagarNum = parseFloat(valorPagar || "0") + parseFloat(jurosPay || "0") - parseFloat(descontosPay || "0") + parseFloat(outrosPay || "0");
   const chequesDisponiveisAvulsoQ = (trpc as any).chequesRecebidos?.sugerirPorValor?.useQuery(
     { companyId, valorAlvo: totalPagarNum > 0 ? totalPagarNum : (showPay?.valorSaldo ?? showPay?.valor ?? 0) },
-    { enabled: !!companyId && formaPagamento === "cheque_terceiro" }
+    { enabled: !!companyId && formaPagamento === "cheque" && chequeSubtipo === "terceiros" }
   );
   const chequesDisponiveisAvulso: any[] = chequesDisponiveisAvulsoQ?.data?.cheques ?? [];
   const totalSelecionadoAvulso = chequesDisponiveisAvulso
@@ -623,6 +624,7 @@ export default function FinanceiroContasAPagar() {
     setChequeNumIni("");
     setChequePrimVenc("");
     setChequeStatusIni("pendente");
+    setChequeSubtipo("empresa");
   }, [showPay]);
 
   // Rev. 2655 — total da baixa = valor + juros − descontos + outros (±)
@@ -633,7 +635,7 @@ export default function FinanceiroContasAPagar() {
 
   // Rev. 4529 — preview dos cheques gerados (cheque próprio)
   const chequePreviewBaixa = useMemo(() => {
-    if (formaPagamento !== "cheque") return [];
+    if (formaPagamento !== "cheque" || chequeSubtipo !== "empresa") return [];
     const qtd = Math.min(120, Math.max(1, parseInt(chequeQtd || "1", 10) || 1));
     const total = parseFloat(valorPagar || "0") + parseFloat(jurosPay || "0") - parseFloat(descontosPay || "0") + parseFloat(outrosPay || "0");
     if (total <= 0 || qtd <= 0) return [];
@@ -649,7 +651,7 @@ export default function FinanceiroContasAPagar() {
       dataVencimento: addMonthsISO(baseVenc, i),
       parcela: `${i + 1}/${qtd}`,
     }));
-  }, [formaPagamento, chequeQtd, valorPagar, jurosPay, descontosPay, outrosPay, chequeNumIni, chequePrimVenc, dataPagamento]);
+  }, [formaPagamento, chequeSubtipo, chequeQtd, valorPagar, jurosPay, descontosPay, outrosPay, chequeNumIni, chequePrimVenc, dataPagamento]);
 
   // Rev. 3743 — payload da baixa (registrarBaixa). `valor` = principal aplicado ao título
   // (juros/descontos/outros vão separados, p/ registro). quitarTotal é injetado no caller.
@@ -3002,7 +3004,6 @@ export default function FinanceiroContasAPagar() {
                       { v: "ted",              label: "TED",          emoji: "🏦" },
                       { v: "boleto",           label: "Boleto",       emoji: "📄" },
                       { v: "cheque",           label: "Cheque",       emoji: "✏️" },
-                      { v: "cheque_terceiro",  label: "Cheq. Terc.", emoji: "🔄" },
                       { v: "dinheiro",         label: "Dinheiro",     emoji: "💵" },
                       { v: "cartao_credito",   label: "Cartão Cred.", emoji: "💳" },
                       { v: "debito_automatico",label: "Déb. Auto.",   emoji: "🔁" },
@@ -3084,106 +3085,127 @@ export default function FinanceiroContasAPagar() {
                   </div>
                 </div>
 
-                {/* Rev. 4529 — Cheque próprio: em quantas vezes + auto-registro Controle de Cheques */}
+                {/* Rev. 4529 — Cheque: sub-abas Cheque Empresa / Cheque de Terceiro (igual Novo Lançamento) */}
                 {formaPagamento === "cheque" && (
-                  <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">✏️</span>
-                      <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">Cheque próprio — cadastro automático no Controle de Cheques</p>
+                  <div className="space-y-3">
+                    {/* Sub-abas */}
+                    <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[12px] font-medium">
+                      <button
+                        type="button"
+                        onClick={() => { setChequeSubtipo("empresa"); setChequesTerceiroSelAvulso([]); }}
+                        className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-colors ${
+                          chequeSubtipo === "empresa"
+                            ? "bg-blue-600 text-white"
+                            : "bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        <Banknote className="w-3.5 h-3.5" /> Cheque Empresa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChequeSubtipo("terceiros")}
+                        className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-colors border-l border-gray-200 ${
+                          chequeSubtipo === "terceiros"
+                            ? "bg-emerald-600 text-white"
+                            : "bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        <ArrowLeftRight className="w-3.5 h-3.5" /> Cheque de Terceiro
+                      </button>
                     </div>
-                    {/* Linha 1: quantas vezes + Nº do 1º cheque + 1º vencimento */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <Label className="text-xs text-slate-500">Em quantas vezes</Label>
-                        <Input type="number" min="1" max="120" value={chequeQtd}
-                          onChange={e => setChequeQtd(e.target.value)} className="mt-1 font-mono" />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-slate-500">Nº do 1º cheque</Label>
-                        <Input value={chequeNumIni} onChange={e => setChequeNumIni(e.target.value)}
-                          placeholder="Ex.: 000429" className="mt-1 font-mono" />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-slate-500">1º vencimento</Label>
-                        <Input type="date" value={chequePrimVenc}
-                          onChange={e => setChequePrimVenc(e.target.value)} className="mt-1" />
-                      </div>
-                    </div>
-                    {/* Linha 2: Banco + Agência + Conta corrente */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <Label className="text-xs text-slate-500">Banco</Label>
-                        <Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)}
-                          placeholder="Ex.: Caixa" className="mt-1" />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-slate-500">Agência</Label>
-                        <Input value={chequeAgencia} onChange={e => setChequeAgencia(e.target.value)}
-                          placeholder="Ex.: 1234" className="mt-1" />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-slate-500">Conta corrente</Label>
-                        <Input value={chequeConta} onChange={e => setChequeConta(e.target.value)}
-                          placeholder="Ex.: 00012345-6" className="mt-1" />
-                      </div>
-                    </div>
-                    {/* Linha 3: Situação inicial */}
-                    <div className="max-w-[200px]">
-                      <Label className="text-xs text-slate-500">Situação inicial dos cheques</Label>
-                      <Select value={chequeStatusIni} onValueChange={setChequeStatusIni}>
-                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pendente">Pendente</SelectItem>
-                          <SelectItem value="compensado">Compensado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {/* Preview dos cheques gerados */}
-                    {chequePreviewBaixa.length > 0 && (
-                      <div className="rounded-lg border border-blue-200 bg-white overflow-hidden">
-                        <div className="px-3 py-2 bg-blue-100/60 flex items-center justify-between">
-                          <p className="text-[11px] font-semibold text-blue-700">{chequePreviewBaixa.length} cheque{chequePreviewBaixa.length !== 1 ? "s" : ""} serão gerados no Controle de Cheques</p>
-                        </div>
-                        <div className="divide-y divide-blue-100 max-h-36 overflow-y-auto">
-                          {chequePreviewBaixa.map((p) => (
-                            <div key={p.idx} className="flex items-center justify-between px-3 py-1.5 text-xs">
-                              <div className="flex items-center gap-3">
-                                <span className="font-mono text-blue-800 font-semibold">{p.numeroCheque}</span>
-                                <span className="text-slate-400">{p.parcela}</span>
-                                {p.dataVencimento && <span className="text-slate-500">venc. {fmtDateBR(p.dataVencimento)}</span>}
-                              </div>
-                              <span className="font-semibold tabular-nums text-slate-700">{formatBRL(p.valor)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {chequePreviewBaixa.length === 0 && (
-                      <p className="text-[11px] text-blue-600 italic">Informe o valor da baixa acima para visualizar os cheques.</p>
-                    )}
-                  </div>
-                )}
 
-                {/* Rev. 4529 — Cheque de Terceiro: seletor de cheques recebidos (com rastreabilidade) */}
-                {formaPagamento === "cheque_terceiro" && (
-                  <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🔄</span>
-                      <p className="text-xs font-bold text-violet-700 uppercase tracking-wide">Cheques recebidos disponíveis em carteira</p>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-violet-600">Selecione um ou mais cheques que somem o valor da baixa.</p>
-                      {chequesTerceiroSelAvulso.length > 0 && (
-                        <span className={`text-xs font-semibold tabular-nums px-2 py-0.5 rounded-full ${
-                          Math.abs(diffAvulso) <= 0.05 ? "bg-green-100 text-green-700" :
-                          diffAvulso > 0 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
-                        }`}>
-                          {Math.abs(diffAvulso) <= 0.05 ? "✓ " : ""}
-                          {formatBRL(totalSelecionadoAvulso)}
-                          {Math.abs(diffAvulso) > 0.05 && (diffAvulso > 0 ? ` (+${formatBRL(diffAvulso)})` : ` (−${formatBRL(-diffAvulso)})`)}
-                        </span>
-                      )}
-                    </div>
+                    {/* ── CHEQUE EMPRESA ────────────────────────────────────── */}
+                    {chequeSubtipo === "empresa" && (
+                      <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-3">
+                        <p className="text-[11px] font-semibold text-blue-700 flex items-center gap-1">
+                          <Banknote className="w-3.5 h-3.5" /> Cheque próprio — cadastro automático no Controle de Cheques
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          <div>
+                            <p className="text-[11px] text-gray-400 mb-1">Em quantas vezes</p>
+                            <Input type="number" min={1} max={120} value={chequeQtd}
+                              onChange={e => setChequeQtd(e.target.value)} placeholder="1" className="h-9" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-gray-400 mb-1">Nº do 1º cheque</p>
+                            <Input value={chequeNumIni} onChange={e => setChequeNumIni(e.target.value)}
+                              placeholder="Ex: 000429" className="h-9" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-gray-400 mb-1">1º vencimento</p>
+                            <Input type="date" value={chequePrimVenc}
+                              onChange={e => setChequePrimVenc(e.target.value)} className="h-9" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-gray-400 mb-1">Banco</p>
+                            <Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)}
+                              placeholder="Ex: Caixa" className="h-9" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-gray-400 mb-1">Agência</p>
+                            <Input value={chequeAgencia} onChange={e => setChequeAgencia(e.target.value)}
+                              placeholder="Ex: 1234" className="h-9" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-gray-400 mb-1">Conta corrente</p>
+                            <Input value={chequeConta} onChange={e => setChequeConta(e.target.value)}
+                              placeholder="Ex: 00012345-6" className="h-9" />
+                          </div>
+                        </div>
+                        <div className="max-w-[200px]">
+                          <p className="text-[11px] text-gray-400 mb-1">Situação inicial dos cheques</p>
+                          <Select value={chequeStatusIni} onValueChange={setChequeStatusIni}>
+                            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pendente">Pendente</SelectItem>
+                              <SelectItem value="compensado">Compensado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {chequePreviewBaixa.length > 0 ? (
+                          <div className="rounded-lg border border-blue-200 bg-white overflow-hidden">
+                            <div className="px-3 py-2 bg-blue-100/60">
+                              <p className="text-[11px] font-semibold text-blue-700">
+                                {chequePreviewBaixa.length} cheque{chequePreviewBaixa.length !== 1 ? "s" : ""} serão gerados no Controle de Cheques
+                              </p>
+                            </div>
+                            <div className="divide-y divide-blue-100 max-h-36 overflow-y-auto">
+                              {chequePreviewBaixa.map((p) => (
+                                <div key={p.idx} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-mono text-blue-800 font-semibold">{p.numeroCheque}</span>
+                                    <span className="text-slate-400">{p.parcela}</span>
+                                    {p.dataVencimento && <span className="text-slate-500">venc. {fmtDateBR(p.dataVencimento)}</span>}
+                                  </div>
+                                  <span className="font-semibold tabular-nums text-slate-700">{formatBRL(p.valor)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-blue-600 italic">Informe o valor da baixa acima para visualizar os cheques.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── CHEQUE DE TERCEIRO ──────────────────────────────────── */}
+                    {chequeSubtipo === "terceiros" && (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
+                            <ArrowLeftRight className="w-3.5 h-3.5" /> Cheques recebidos disponíveis em carteira
+                          </p>
+                          {chequesTerceiroSelAvulso.length > 0 && (
+                            <span className={`text-[11px] font-semibold tabular-nums px-2 py-0.5 rounded-full ${
+                              Math.abs(diffAvulso) <= 0.05 ? "bg-green-100 text-green-700" :
+                              diffAvulso > 0 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                            }`}>
+                              {Math.abs(diffAvulso) <= 0.05 ? "✓ " : ""}
+                              {formatBRL(totalSelecionadoAvulso)}
+                              {Math.abs(diffAvulso) > 0.05 && (diffAvulso > 0 ? ` (+${formatBRL(diffAvulso)})` : ` (−${formatBRL(-diffAvulso)})`)}
+                            </span>
+                          )}
+                        </div>
                     {chequesDisponiveisAvulsoQ?.isLoading ? (
                       <div className="text-xs text-muted-foreground py-2">Buscando cheques disponíveis…</div>
                     ) : chequesDisponiveisAvulso.length === 0 ? (
@@ -3212,9 +3234,11 @@ export default function FinanceiroContasAPagar() {
                       </div>
                     )}
                     {chequesTerceiroSelAvulso.length > 0
-                      ? <p className="text-[10px] text-violet-700">{chequesTerceiroSelAvulso.length} cheque(s) selecionado(s) · serão marcados como "Alocado" ao confirmar.</p>
-                      : <p className="text-[10px] text-violet-600">Selecione um ou mais cheques que somem o valor da baixa.</p>
+                      ? <p className="text-[10px] text-emerald-700">{chequesTerceiroSelAvulso.length} cheque(s) selecionado(s) · serão marcados como "Alocado" ao confirmar.</p>
+                      : <p className="text-[10px] text-emerald-600">Selecione um ou mais cheques que somem o valor da baixa.</p>
                     }
+                      </div>
+                    )}
                   </div>
                 )}
 
