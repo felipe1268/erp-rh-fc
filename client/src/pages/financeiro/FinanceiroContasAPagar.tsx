@@ -2885,69 +2885,103 @@ export default function FinanceiroContasAPagar() {
           <DialogContent className="max-w-2xl">
             <DialogHeader><DialogTitle>Registrar Pagamento</DialogTitle></DialogHeader>
             {showPay && (
-              <div className="space-y-3">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-sm font-medium text-gray-800">{showPay.descricao ?? showPay.contaNome ?? "—"}</p>
-                  {showPay.obraNome && <p className="text-xs text-gray-500">{showPay.obraNome}</p>}
-                  <p className="text-lg font-bold text-orange-700 mt-1">{formatBRL(Number(showPay.valorPrevisto))}</p>
+              <div className="space-y-4">
+
+                {/* ── Hero: identidade do pagamento ── */}
+                <div className="rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 text-white p-4 shadow-md">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-white/50 text-[10px] uppercase tracking-widest font-semibold">Registrando pagamento</p>
+                      <p className="text-sm font-semibold mt-1 break-words leading-snug">{showPay.descricao ?? showPay.contaNome ?? "—"}</p>
+                      {showPay.obraNome && <p className="text-white/50 text-xs mt-0.5">{showPay.obraNome}</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-white/50 text-[10px] uppercase tracking-wide">Previsto</p>
+                      <p className="text-2xl font-bold text-amber-400 tabular-nums mt-0.5">{formatBRL(Number(showPay.valorPrevisto))}</p>
+                    </div>
+                  </div>
                   {Number(showPay.valorRealizado ?? 0) > 0 && (
-                    <div className="flex items-center gap-3 mt-1.5 text-xs">
-                      <span className="text-green-700 font-medium">Já pago: {formatBRL(Number(showPay.valorRealizado ?? 0))}</span>
-                      <span className="text-orange-700 font-semibold">Saldo em aberto: {formatBRL(Math.max(0, Math.round((Number(showPay.valorPrevisto ?? 0) - Number(showPay.valorRealizado ?? 0)) * 100) / 100))}</span>
+                    <div className="mt-3 pt-3 border-t border-white/10 flex flex-wrap items-center gap-4 text-xs">
+                      <span className="text-emerald-400 font-semibold">✓ Já pago: {formatBRL(Number(showPay.valorRealizado ?? 0))}</span>
+                      <span className="text-amber-400 font-semibold">Saldo: {formatBRL(Math.max(0, Math.round((Number(showPay.valorPrevisto ?? 0) - Number(showPay.valorRealizado ?? 0)) * 100) / 100))}</span>
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <Label>Data do Pagamento</Label>
-                    <Input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>Forma de Pagamento</Label>
-                    <Select value={formaPagamento} onValueChange={setFormaPagamento}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {["pix","ted","boleto","cheque","cheque_terceiro","dinheiro","cartao_credito","debito_automatico"].map(v => (
-                          <SelectItem key={v} value={v}>{v === "cheque_terceiro" ? "Cheque de Terceiro" : v.replace(/_/g," ").toUpperCase()}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+
+                {/* ── Data do pagamento ── */}
+                <div>
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Data do Pagamento</Label>
+                  <Input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)} className="mt-1 max-w-[200px]" />
+                </div>
+
+                {/* ── Forma de Pagamento — pills visuais ── */}
+                <div>
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Forma de Pagamento</Label>
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {([
+                      { v: "pix",              label: "PIX",          emoji: "⚡" },
+                      { v: "ted",              label: "TED",          emoji: "🏦" },
+                      { v: "boleto",           label: "Boleto",       emoji: "📄" },
+                      { v: "cheque",           label: "Cheque",       emoji: "✏️" },
+                      { v: "cheque_terceiro",  label: "Cheq. Terc.", emoji: "🔄" },
+                      { v: "dinheiro",         label: "Dinheiro",     emoji: "💵" },
+                      { v: "cartao_credito",   label: "Cartão Cred.", emoji: "💳" },
+                      { v: "debito_automatico",label: "Déb. Auto.",   emoji: "🔁" },
+                    ] as { v: string; label: string; emoji: string }[]).map(({ v, label, emoji }) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setFormaPagamento(v)}
+                        className={`flex flex-col items-center gap-1 px-1 py-2.5 rounded-xl border-2 text-[11px] font-semibold transition-all select-none ${
+                          formaPagamento === v
+                            ? "border-primary bg-primary text-primary-foreground shadow-md scale-[1.04]"
+                            : "border-border bg-muted/30 text-muted-foreground hover:border-primary/40 hover:bg-muted"
+                        }`}
+                      >
+                        <span className="text-lg leading-none">{emoji}</span>
+                        <span className="text-center leading-tight">{label}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Rev. 2655 — Valor + Juros − Descontos + Outros → Total */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <Label>Valor</Label>
-                    <Input type="number" step="0.01" value={valorPagar} onChange={e => setValorPagar(e.target.value)} />
+                {/* ── Composição do valor ── */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Composição do pagamento</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <Label className="text-xs text-slate-500">Valor</Label>
+                      <Input type="number" step="0.01" value={valorPagar} onChange={e => setValorPagar(e.target.value)} className="mt-1 font-mono" />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-500">Juros (+)</Label>
+                      <Input type="number" step="0.01" placeholder="0,00" value={jurosPay} onChange={e => setJurosPay(e.target.value)} className="mt-1 font-mono" />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-500">Descontos (−)</Label>
+                      <Input type="number" step="0.01" placeholder="0,00" value={descontosPay} onChange={e => setDescontosPay(e.target.value)} className="mt-1 font-mono" />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-500">Outros (±)</Label>
+                      <Input type="number" step="0.01" placeholder="0,00" value={outrosPay} onChange={e => setOutrosPay(e.target.value)} className="mt-1 font-mono" />
+                    </div>
                   </div>
-                  <div>
-                    <Label>Juros</Label>
-                    <Input type="number" step="0.01" placeholder="0,00" value={jurosPay} onChange={e => setJurosPay(e.target.value)} />
+                  {/* Total destaque */}
+                  <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-3 shadow-sm">
+                    <span className="text-white font-semibold text-sm">Total a pagar</span>
+                    <span className="text-white text-2xl font-bold tabular-nums">{formatBRL(totalPagar)}</span>
                   </div>
-                  <div>
-                    <Label>Descontos</Label>
-                    <Input type="number" step="0.01" placeholder="0,00" value={descontosPay} onChange={e => setDescontosPay(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>Outros (±)</Label>
-                    <Input type="number" step="0.01" placeholder="0,00" value={outrosPay} onChange={e => setOutrosPay(e.target.value)} />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                  <span className="text-sm font-medium text-green-800">Total a pagar</span>
-                  <span className="text-lg font-bold text-green-700">{formatBRL(totalPagar)}</span>
                 </div>
 
-                {/* Rev. 2660 — Conta Bancária + Comprovante lado a lado (reduz altura → sem rolagem) */}
+                {/* ── Conta Bancária + Comprovante ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label>Conta Bancária</Label>
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Conta Bancária</Label>
                     <Select
                       value={contaBancariaId != null ? String(contaBancariaId) : "none"}
                       onValueChange={v => setContaBancariaId(v === "none" ? null : Number(v))}
                     >
-                      <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">— Não informar —</SelectItem>
                         {(bankAccounts ?? []).filter((a: any) => a.ativo).map((a: any) => (
@@ -2958,16 +2992,14 @@ export default function FinanceiroContasAPagar() {
                       </SelectContent>
                     </Select>
                   </div>
-
-                  {/* Rev. 2655 — Comprovante (PDF/Word/imagem) */}
                   <div>
-                    <Label>Comprovante / Documento</Label>
-                    <Input type="file" accept=".pdf,.doc,.docx,image/*"
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Comprovante / Documento</Label>
+                    <Input type="file" accept=".pdf,.doc,.docx,image/*" className="mt-1"
                       onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadComprovante(f); }} disabled={uploadingComp} />
-                    {uploadingComp && <p className="text-xs text-gray-500 mt-1">Enviando…</p>}
+                    {uploadingComp && <p className="text-xs text-muted-foreground mt-1">Enviando…</p>}
                     {comprovanteUrl && !uploadingComp && (
-                      <p className="text-xs text-green-700 mt-1">
-                        Anexado: <a href={comprovanteUrl} target="_blank" rel="noreferrer" className="underline">{comprovanteNome || "ver arquivo"}</a>
+                      <p className="text-xs text-emerald-700 mt-1">
+                        ✓ <a href={comprovanteUrl} target="_blank" rel="noreferrer" className="underline">{comprovanteNome || "ver arquivo"}</a>
                       </p>
                     )}
                   </div>

@@ -1,4 +1,22 @@
 /**
+ * Rev. 4528 - FEAT: CONTAS A PAGAR — REDESIGN DO DIALOG 'REGISTRAR PAGAMENTO'
+ *
+ * MOTIVAÇÃO:
+ *   Layout anterior era genérico (labels + inputs empilhados sem hierarquia visual).
+ *   Objetivo: mais moderno, lúdico e com fácil entendimento do que está sendo pago.
+ *
+ * MUDANÇAS — FRONTEND (client/src/pages/financeiro/FinanceiroContasAPagar.tsx):
+ *   - Hero card (gradiente dark) com nome do lançamento + valor previsto em destaque
+ *     (âmbar) + faixa de saldo em aberto quando houver parcial já pago.
+ *   - Forma de pagamento: substituído Select por grid 4×2 de pills visuais com emoji
+ *     + label; pill ativa recebe cor primary com leve scale-up.
+ *   - Composição do pagamento: agrupada em card com fundo slate; label de seção;
+ *     Total a pagar com gradiente verde e valor 2xl em branco.
+ *   - Labels das seções em uppercase/tracking-wide para hierarquia clara.
+ *   - Nenhuma alteração de lógica, estado ou backend. ZERO schema change.
+ */
+
+/**
  * Rev. 4527 - FEAT: CARTÃO DE CRÉDITO — FILTRO POR STATUS NA ABA CARTÕES
  *
  * MOTIVAÇÃO:

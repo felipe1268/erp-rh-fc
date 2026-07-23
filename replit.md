@@ -50,8 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4527** — **FEAT: CARTÃO DE CRÉDITO — FILTRO POR STATUS NA ABA CARTÕES.** Pills de filtro (Todos / Ativos / Renegociados / Bloqueados / Cancelados / Inativos) no header da aba Cartões. Estado `fStatusCartao` + useMemo `cartoesFiltrados`. Pills com count=0 ocultadas; título mostra "N de M" quando filtrado. Grid usa lista filtrada. ZERO schema change.
-- **Rev. 4526** — **FEAT: CHEQUES EMITIDOS — OBRAS ATIVAS + AUTO-NÚMERO DO TALÃO.** `criarManual` estendido com `obraId`/`obraNome` ($21/$22 no INSERT). Duas novas queries: `obrasAtivas` e `nextNumeroCheque`. Frontend: bloco "Obra" + botão Wand2 + filtro por obra + chip ativo. ZERO schema change.
+- **Rev. 4528** — **FEAT: CONTAS A PAGAR — REDESIGN DO DIALOG 'REGISTRAR PAGAMENTO'.** Hero card gradiente dark com nome + valor previsto em âmbar. Forma de pagamento virou grid 4×2 de pills com emoji (PIX ⚡ / TED 🏦 / Boleto 📄 / Cheque ✏️ / …). Composição em card slate com Total em gradiente verde 2xl. Labels uppercase com hierarquia. ZERO schema/lógica change.
+- **Rev. 4527** — **FEAT: CARTÃO DE CRÉDITO — FILTRO POR STATUS NA ABA CARTÕES.** Pills de filtro (Todos / Ativos / Renegociados / Bloqueados / Cancelados / Inativos) no header. Estado `fStatusCartao` + useMemo `cartoesFiltrados`. Pills count=0 ocultadas. ZERO schema change.
 
 ### 5 one-liners
 
