@@ -1346,6 +1346,26 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // ── Aplicar correções de estoque ──────────────────────────────────────
+      // Todos os itens contados (conferido + divergente) têm quantidadeFisica
+      // definida. Atualiza almoxarifado_itens com a contagem física real.
+      const sessionItems = await db
+        .select()
+        .from(warehouseInventorySessionItems)
+        .where(eq(warehouseInventorySessionItems.sessionId, input.sessionId));
+
+      for (const item of sessionItems) {
+        if (item.quantidadeFisica != null && item.itemId) {
+          await db
+            .update(almoxarifadoItens)
+            .set({
+              quantidadeAtual: String(item.quantidadeFisica),
+              atualizadoEm: new Date(),
+            } as any)
+            .where(eq(almoxarifadoItens.id, item.itemId));
+        }
+      }
+
       await db
         .update(warehouseInventorySessions)
         .set({ status: "concluido", concluidoEm: new Date().toISOString() } as any)

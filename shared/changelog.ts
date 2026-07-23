@@ -1,4 +1,32 @@
 /**
+ * Rev. 4525 - FIX: INVENTÁRIO SEMANAL — ESTOQUE NÃO ATUALIZAVA AO CONCLUIR
+ *
+ * MOTIVAÇÃO:
+ *   Usuário realizava o inventário semanal (conferindo todos os itens,
+ *   corrigindo divergências) e ao abrir o almoxarifado as quantidades
+ *   permaneciam iguais. O inventário registrava as contagens mas nunca
+ *   aplicava as correções no estoque real.
+ *
+ * CAUSA-RAIZ:
+ *   `finishInventorySession` (`warehouse.ts`) apenas marcava a sessão como
+ *   "concluido" — nunca percorria os itens contados para atualizar
+ *   `almoxarifado_itens.quantidade_atual`. O `confirmInventoryItem` também não
+ *   fazia a atualização: apenas persistia `quantidade_fisica` e `diferenca`
+ *   na tabela de sessão, sem propagar para o almoxarifado.
+ *
+ * FIX (server/routers/warehouse.ts — finishInventorySession):
+ *   Antes de marcar a sessão como concluída, o procedimento agora:
+ *   1. Lê todos os itens da sessão (`warehouse_inventory_session_items`).
+ *   2. Para cada item com `quantidadeFisica != null`, executa UPDATE em
+ *      `almoxarifado_itens` definindo `quantidade_atual = quantidadeFisica`.
+ *   3. Só então marca a sessão como "concluido".
+ *   Aplicar na finalização (e não item a item) evita inconsistências
+ *   caso o usuário re-conte um item ou haja saídas durante a sessão.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4524 - FIX: CHEQUES RECEBIDOS — LISTA VAZIA (fe.referencia INEXISTENTE)
  *
  * MOTIVAÇÃO:

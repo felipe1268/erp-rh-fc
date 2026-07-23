@@ -50,11 +50,12 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4525** — **FIX: INVENTÁRIO SEMANAL → ESTOQUE NÃO ATUALIZAVA.** `finishInventorySession` agora percorre todos os itens da sessão e aplica `quantidadeAtual = quantidadeFisica` em `almoxarifado_itens` antes de marcar a sessão como concluída. ZERO schema change.
 - **Rev. 4524** — **FIX: CHEQUES RECEBIDOS — LISTA VAZIA.** `fe.referencia` inexistente no SELECT do `listar` derrubava a query silenciosamente (PostgreSQL rejeita em plan-time mesmo com LEFT JOIN). Removido `fe.referencia AS entry_referencia` (não usado no front). Lista passa a retornar os 132 cheques disponíveis corretamente. ZERO schema change.
-- **Rev. 4523** — **FEAT: ALMOXARIFADO — ITENS ZERADOS SEPARADOS.** `somenteZerados` no `listarItens` backend. `lista` useMemo exclui qty=0. Botão "Itens Zerados" com badge contador. Tabela lazy de itens zerados (foto, nome, Entrada/Editar). Valor total do estoque exclui automaticamente zeros. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4523** — **FEAT: ALMOXARIFADO — ITENS ZERADOS SEPARADOS.** `somenteZerados` no `listarItens` backend. `lista` useMemo exclui qty=0. Botão "Itens Zerados" com badge contador. Tabela lazy de itens zerados. ZERO schema change.
 - **Rev. 4522** — **FEAT: DOTS DE MÊS NO SELETOR (LOCADOS UTILIZAÇÃO).** Segunda query `mes=null` + `monthStatus` useMemo. PeriodSelectorCard com `showLegend`. ZERO schema change.
 - **Rev. 4521** — **FEAT: DASHBOARD UTILIZAÇÃO — EQUIPAMENTOS PRÓPRIOS.** `propriosUtilizacao` tRPC + `PropriosUtilizacao.tsx` (tema azul). KPIs + DrillModals. ZERO schema change.
 - **Rev. 4520** — **FEAT: KPIs CLICÁVEIS + MODAL DRILL-DOWN + RESPONSIVO.** 3 KPIs abrem DrillModal tela-cheia. FIX: employees aspas duplas. ZERO schema change.
