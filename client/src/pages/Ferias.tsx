@@ -20,7 +20,7 @@ import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
 import { dataLimiteInicioGozoFerias } from "@/lib/dateUtils";
 import {
-  Palmtree, Plus, Search, Calendar, DollarSign, AlertTriangle,
+  Palmtree, Plus, Search, Calendar as CalendarIcon, DollarSign, AlertTriangle,
   Users, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, Ban, CalendarDays, TrendingUp,
   Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square, Undo2,
@@ -2127,7 +2127,7 @@ export default function Ferias() {
                     return (
                       <div className="mt-6">
                         <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                          <Calendar className="h-4 w-4" /> Gantt — Timeline de Férias {anoCalendario}
+                          <CalendarIcon className="h-4 w-4" /> Gantt — Timeline de Férias {anoCalendario}
                         </h4>
                         <div className="overflow-x-auto">
                           <div className="min-w-[700px]">
@@ -2364,7 +2364,7 @@ export default function Ferias() {
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
-                    <Calendar className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                    <CalendarIcon className="h-10 w-10 mx-auto mb-2 opacity-30" />
                     <p>Nenhum funcionário com férias previstas neste mês.</p>
                   </div>
                 )}
