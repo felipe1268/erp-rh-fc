@@ -1,4 +1,28 @@
 /**
+ * Rev. 4531 - FEAT: FÉRIAS — BLOQUEIO CLT ART. 135, §3° NA DATA DE INÍCIO
+ *
+ * MOTIVAÇÃO:
+ *   CLT Art. 135, §3° (Lei 13.467/2017): "O início das férias não poderá
+ *   ocorrer no período de dois dias que anteceder feriado ou dia de repouso
+ *   semanal remunerado." O sistema não validava essa regra, permitindo que
+ *   o RH agendasse início de férias em sexta-feira, sábado, ou nos 2 dias
+ *   antes de qualquer feriado (nacional, estadual ou municipal).
+ *
+ * IMPLEMENTAÇÃO (client/src/pages/Ferias.tsx):
+ *   - NOVA função pura `verificarDataInicioFerias(iso, feriadosList)`:
+ *     retorna { valido, motivo } para sexta (dow=5), sábado (dow=6) e
+ *     qualquer data com diff=1 ou diff=2 dias antes de feriado.
+ *   - Componente `DefinirFeriasForm`: query `trpc.feriados.listarPeriodo`
+ *     para o período anoAtual-1 a anoAtual+2 (cobre nacionais+móveis+empresa).
+ *   - Input "Data Início" recebe className border-red-400 quando inválida.
+ *   - Banner azul permanente com o resumo da regra CLT Art. 135, §3°.
+ *   - Alerta vermelho expandido com texto do artigo quando data bloqueada.
+ *   - Botão "Confirmar Data" desabilitado (disabled) enquanto data inválida.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4530 - FEAT: FUNCIONÁRIOS TERCEIROS — HISTÓRICO COMPLETO DE VÍNCULOS
  *
  * MOTIVAÇÃO:

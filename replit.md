@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4531** — **FEAT: FÉRIAS — BLOQUEIO CLT ART. 135, §3° NA DATA DE INÍCIO.** Função pura `verificarDataInicioFerias` bloqueia sexta/sábado e os 2 dias antes de qualquer feriado. Banner azul informativo permanente + alerta vermelho com citação do artigo quando data inválida. Botão "Confirmar Data" desabilitado. Query `listarPeriodo` para feriados nacionais+empresa. ZERO schema change.
 - **Rev. 4530** — **FEAT: FUNCIONÁRIOS TERCEIROS — HISTÓRICO COMPLETO DE VÍNCULOS.** Nova tabela `terceiro_obra_vinculos` (entry, saída, motivo). `create` auto-insere vínculo inicial. Mutations `encerrarVinculo` (status=desligado + fecha vínculo) e `reativar` (status=ativo + novo vínculo). Toggle pills Ativos/Desligados/Todos (default Ativos). Cards com botões "Encerrar" / "Reativar" conforme status. Badge "Desligado" + data/motivo nos cards. Dialogs para encerrar (data + motivo) e reativar (data + obra). `VinculosHistoricoSection` no Raio-X com timeline cronológica.
-- **Rev. 4529** — **FEAT: CHEQUE PRÓPRIO NA BAIXA → CONTROLE DE CHEQUES + CHEQUE TERCEIRO COM RASTREABILIDADE.** Pill ✏️ Cheque: campos "Em quantas vezes" / "Nº 1º cheque" / "1º vencimento" + Banco/Agência/Conta + Situação inicial + preview de N cheques gerados. `payMut.onSuccess` chama `criarManualLote`. Pill 🔄 Cheq. Terc.: UI redesenhada com badge de diferença verde/âmbar/vermelho; `entry_id` já gravado via `alocarLote`. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4529** — **FEAT: CHEQUE PRÓPRIO NA BAIXA → CONTROLE DE CHEQUES + CHEQUE TERCEIRO COM RASTREABILIDADE.** Pill ✏️ Cheque: campos "Em quantas vezes" / "Nº 1º cheque" / "1º vencimento" + Banco/Agência/Conta + Situação inicial + preview de N cheques gerados. `payMut.onSuccess` chama `criarManualLote`. Pill 🔄 Cheq. Terc.: UI redesenhada com badge de diferença verde/âmbar/vermelho; `entry_id` já gravado via `alocarLote`. ZERO schema change.
 - **Rev. 4528** — **FEAT: CONTAS A PAGAR — REDESIGN DO DIALOG 'REGISTRAR PAGAMENTO'.** Hero card gradiente dark + pills de forma de pagamento com emoji + Total em gradiente verde 2xl. ZERO schema/lógica change.
 - **Rev. 4525** — **FIX: INVENTÁRIO SEMANAL → ESTOQUE NÃO ATUALIZAVA.** `finishInventorySession` percorre itens e aplica `quantidadeAtual = quantidadeFisica`. ZERO schema change.
 - **Rev. 4524** — **FIX: CHEQUES RECEBIDOS — LISTA VAZIA.** `fe.referencia` removido do SELECT de `listar`. ZERO schema change.
 - **Rev. 4523** — **FEAT: ALMOXARIFADO — ITENS ZERADOS SEPARADOS.** `somenteZerados` no `listarItens` backend. `lista` useMemo exclui qty=0. Botão "Itens Zerados" com badge contador. Tabela lazy de itens zerados. ZERO schema change.
-- **Rev. 4522** — **FEAT: DOTS DE MÊS NO SELETOR (LOCADOS UTILIZAÇÃO).** Segunda query `mes=null` + `monthStatus` useMemo. PeriodSelectorCard com `showLegend`. ZERO schema change.
 
 ### Histórico completo
 

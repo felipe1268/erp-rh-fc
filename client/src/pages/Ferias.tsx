@@ -55,6 +55,36 @@ const TABELA_FALTAS_ART130 = [
   { faixa: "Mais de 32", dias: 0 },
 ];
 
+// Rev. 4530 — CLT Art. 135, §3° (Lei 13.467/2017):
+// "O início das férias não poderá ocorrer no período de dois dias
+//  que anteceder feriado ou dia de repouso semanal remunerado."
+// Retorna { valido: false, motivo: "..." } para sexta/sábado ou ≤2 dias antes de feriado.
+function verificarDataInicioFerias(iso: string, feriadosList: string[]): { valido: boolean; motivo: string } {
+  if (!iso) return { valido: true, motivo: "" };
+  const d = new Date(iso + "T12:00:00Z");
+  const dow = d.getUTCDay(); // 0=dom,1=seg,...,5=sex,6=sab
+  const DIAS_PT = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+  if (dow === 5) {
+    return { valido: false, motivo: "Sexta-feira: são apenas 2 dias antes do domingo (Repouso Semanal Remunerado)." };
+  }
+  if (dow === 6) {
+    return { valido: false, motivo: "Sábado: é 1 dia antes do domingo (Repouso Semanal Remunerado)." };
+  }
+  for (const feriado of feriadosList) {
+    const fd = new Date(feriado + "T12:00:00Z");
+    const diff = Math.round((fd.getTime() - d.getTime()) / 86400000);
+    if (diff === 1 || diff === 2) {
+      const dataFmt = feriado.split("-").reverse().join("/");
+      const fdDow = fd.getUTCDay();
+      return {
+        valido: false,
+        motivo: `${diff === 1 ? "Véspera" : "2 dias antes"} de feriado em ${dataFmt} (${DIAS_PT[fdDow]}).`,
+      };
+    }
+  }
+  return { valido: true, motivo: "" };
+}
+
 function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId, onSubmit, isPending, onCancel }: {
   definirItem: any; definirForm: any; setDefinirForm: (v: any) => void;
   companyId: number; onSubmit: () => void; isPending: boolean; onCancel: () => void;
@@ -65,6 +95,19 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
     periodoAquisitivoInicio: definirItem.periodoAquisitivoInicio,
     periodoAquisitivoFim: definirItem.periodoAquisitivoFim,
   }, { enabled: !!definirItem.employeeId });
+
+  // Rev. 4530 — busca feriados para o período relevante (±2 anos a partir de hoje)
+  const anoAtual = new Date().getFullYear();
+  const feriadosQuery = trpc.feriados.listarPeriodo.useQuery({
+    companyId,
+    dataInicio: `${anoAtual - 1}-01-01`,
+    dataFim: `${anoAtual + 2}-12-31`,
+  }, { enabled: !!companyId });
+  const feriadosList: string[] = feriadosQuery.data ?? [];
+
+  // Rev. 4530 — validação CLT Art. 135, §3°
+  const validacaoDataInicio = verificarDataInicioFerias(definirForm.dataInicio || "", feriadosList);
+  const dataInicioInvalida = !!definirForm.dataInicio && !validacaoDataInicio.valido;
 
   const faltas = faltasQuery.data;
   const diasDireito = faltas?.diasDireito ?? 30;
@@ -195,20 +238,44 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
             </p>
           </div>
 
+          {/* Rev. 4530 — info permanente sobre a regra CLT Art. 135, §3° */}
+          <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 flex items-start gap-2">
+            <Info className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-sky-700">
+              <span className="font-semibold">CLT Art. 135, §3°:</span> Férias não podem iniciar na sexta-feira, no sábado ou nos 2 dias anteriores a um feriado.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <label className="text-sm font-medium">Data Início *</label>
-              <Input type="date" value={definirForm.dataInicio || ""} onChange={e => {
-                const inicio = e.target.value;
-                const dias = diasGozo; // Rev. 1695 — usa o valor atual (editável) em vez do máximo
-                let fim = "";
-                if (inicio) {
-                  const d = new Date(inicio + "T00:00:00");
-                  d.setDate(d.getDate() + dias - 1);
-                  fim = d.toISOString().slice(0, 10);
-                }
-                setDefinirForm({ ...definirForm, dataInicio: inicio, dataFim: fim });
-              }} />
+              <Input
+                type="date"
+                value={definirForm.dataInicio || ""}
+                className={dataInicioInvalida ? "border-red-400 focus-visible:ring-red-400" : ""}
+                onChange={e => {
+                  const inicio = e.target.value;
+                  const dias = diasGozo; // Rev. 1695 — usa o valor atual (editável) em vez do máximo
+                  let fim = "";
+                  if (inicio) {
+                    const d = new Date(inicio + "T00:00:00");
+                    d.setDate(d.getDate() + dias - 1);
+                    fim = d.toISOString().slice(0, 10);
+                  }
+                  setDefinirForm({ ...definirForm, dataInicio: inicio, dataFim: fim });
+                }}
+              />
+              {/* Rev. 4530 — alerta CLT quando data inválida */}
+              {dataInicioInvalida && (
+                <div className="mt-1.5 bg-red-50 border border-red-300 rounded-md px-3 py-2 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-red-700">Data bloqueada — CLT Art. 135, §3°</p>
+                    <p className="text-xs text-red-600 mt-0.5">{validacaoDataInicio.motivo}</p>
+                    <p className="text-[10px] text-red-500 mt-1 italic">"O início das férias não poderá ocorrer no período de dois dias que anteceder feriado ou dia de repouso semanal remunerado."</p>
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium">Dias de Gozo</label>
@@ -265,7 +332,11 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
 
           <DialogFooter>
             <Button variant="outline" onClick={onCancel}>Cancelar</Button>
-            <Button onClick={onSubmit} disabled={isPending}>
+            <Button
+              onClick={onSubmit}
+              disabled={isPending || dataInicioInvalida}
+              title={dataInicioInvalida ? "Selecione uma data válida conforme CLT Art. 135, §3°" : undefined}
+            >
               {isPending ? "Salvando..." : "Confirmar Data"}
             </Button>
           </DialogFooter>
