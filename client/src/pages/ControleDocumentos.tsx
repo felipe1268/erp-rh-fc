@@ -626,6 +626,287 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
   );
 }
 
+// ============ PAINEL DOSSIÊ (Componente) ============
+function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: number; companyIds?: number[]; onClickEmployee: (id: number) => void }) {
+  const { data, isLoading } = trpc.docs.painelDossie.useQuery(
+    { companyId, companyIds },
+    { enabled: !!companyId }
+  );
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [dlProgress, setDlProgress] = useState(0);
+
+  const filtered = useMemo(() => {
+    if (!data?.funcionarios) return [];
+    if (!search.trim()) return data.funcionarios;
+    const s = removeAccents(search.toLowerCase());
+    return data.funcionarios.filter(f =>
+      removeAccents((f.nomeCompleto || "").toLowerCase()).includes(s) ||
+      removeAccents((f.funcao || "").toLowerCase()).includes(s) ||
+      (f.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, ""))
+    );
+  }, [data, search]);
+
+  function toggleSelect(id: number) {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleAll() {
+    setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map(f => f.id)));
+  }
+  function toggleExpand(id: number) {
+    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  async function downloadZip() {
+    const ids = Array.from(selected);
+    if (!ids.length || isDownloading) return;
+    setIsDownloading(true);
+    setDlProgress(5);
+    const timer = setInterval(() => setDlProgress(p => p < 80 ? p + 4 : p), 400);
+    try {
+      const url = `/api/download/dossie-zip?companyId=${companyId}&employeeIds=${encodeURIComponent(JSON.stringify(ids))}`;
+      const res = await fetch(url);
+      clearInterval(timer);
+      setDlProgress(90);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Erro ao gerar ZIP" }));
+        toast.error(err.error || "Erro ao gerar ZIP");
+        setIsDownloading(false); setDlProgress(0); return;
+      }
+      const blob = await res.blob();
+      setDlProgress(100);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `Dossie_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      setTimeout(() => { setIsDownloading(false); setDlProgress(0); }, 800);
+    } catch {
+      clearInterval(timer);
+      toast.error("Erro de rede ao baixar dossiê");
+      setIsDownloading(false); setDlProgress(0);
+    }
+  }
+
+  function AsoChip({ aso }: { aso: any }) {
+    if (!aso) return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-400 font-medium">— Sem ASO</span>;
+    const s = aso.status as string;
+    if (s === "VENCIDO") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 font-medium">❌ VENCIDO</span>;
+    if (s?.includes("DIAS")) {
+      const cor = aso.diasRestantes <= 30 ? "bg-yellow-100 text-yellow-800" : "bg-orange-100 text-orange-700";
+      return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cor}`}>⚠ {aso.diasRestantes}d</span>;
+    }
+    return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 font-medium">✓ VÁLIDO</span>;
+  }
+
+  function TreinChip({ pior, total }: { pior: string; total: number }) {
+    if (total === 0) return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-400 font-medium">— 0</span>;
+    const configs: Record<string, string> = {
+      SEM: "bg-gray-100 text-gray-400",
+      VENCIDO: "bg-red-100 text-red-700",
+      VENCER30: "bg-yellow-100 text-yellow-800",
+      VENCER60: "bg-orange-100 text-orange-700",
+      VALIDO: "bg-green-100 text-green-700",
+    };
+    const cls = configs[pior] || "bg-gray-100 text-gray-500";
+    const icon = pior === "VENCIDO" ? "❌" : pior === "VENCER30" || pior === "VENCER60" ? "⚠" : "✓";
+    return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{icon} {total}</span>;
+  }
+
+  if (isLoading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="animate-spin mr-2 h-5 w-5" /> Carregando dossiê...</div>;
+  if (!data?.funcionarios?.length) return <div className="flex flex-col items-center justify-center h-48 gap-2 text-muted-foreground"><Users className="h-8 w-8" /><p>Nenhum funcionário ativo encontrado.</p></div>;
+
+  const allSelected = filtered.length > 0 && selected.size === filtered.length;
+
+  return (
+    <div className="space-y-3 pb-20">
+      <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between">
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <input
+            className="pl-8 h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            placeholder="Buscar funcionário ou função..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {search && <button onClick={() => setSearch("")} className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>}
+        </div>
+        <p className="text-sm text-muted-foreground">{filtered.length} funcionário{filtered.length !== 1 ? "s" : ""}</p>
+      </div>
+
+      <div className="rounded-lg border overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/40">
+              <th className="p-2 w-8">
+                <button onClick={toggleAll} className="flex items-center justify-center">
+                  {allSelected ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-muted-foreground" />}
+                </button>
+              </th>
+              <th className="p-2 w-6" />
+              <th className="p-2 text-left font-medium text-muted-foreground">Funcionário</th>
+              <th className="p-2 text-left font-medium text-muted-foreground hidden md:table-cell">Função</th>
+              <th className="p-2 text-center font-medium text-muted-foreground">ASO</th>
+              <th className="p-2 text-center font-medium text-muted-foreground">Treinamentos</th>
+              <th className="p-2 text-center font-medium text-muted-foreground">Atestados</th>
+              <th className="p-2 text-center font-medium text-muted-foreground">Advertências</th>
+              <th className="p-2 w-8" />
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(f => {
+              const isExpanded = expanded.has(f.id);
+              const isSel = selected.has(f.id);
+              return (
+                <Fragment key={f.id}>
+                  <tr className={`border-b transition-colors ${isSel ? "bg-primary/5" : "hover:bg-muted/30"}`}>
+                    <td className="p-2 text-center">
+                      <button onClick={() => toggleSelect(f.id)} className="flex items-center justify-center">
+                        {isSel ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-muted-foreground" />}
+                      </button>
+                    </td>
+                    <td className="p-2">
+                      <button onClick={() => toggleExpand(f.id)} className="text-muted-foreground hover:text-foreground">
+                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </button>
+                    </td>
+                    <td className="p-2">
+                      <button onClick={() => onClickEmployee(f.id)} className="text-left hover:text-primary hover:underline font-medium break-all">
+                        {f.nomeCompleto}
+                      </button>
+                      <div className="text-xs text-muted-foreground">{formatCPF(f.cpf || "")}</div>
+                    </td>
+                    <td className="p-2 text-muted-foreground text-xs hidden md:table-cell">{f.funcao || "—"}</td>
+                    <td className="p-2 text-center"><AsoChip aso={f.aso} /></td>
+                    <td className="p-2 text-center"><TreinChip pior={f.piorStatusTrein} total={f.totais.treinamentos} /></td>
+                    <td className="p-2 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${f.totais.atestados > 0 ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-400"}`}>
+                        {f.totais.atestados > 0 ? f.totais.atestados : "—"}
+                      </span>
+                    </td>
+                    <td className="p-2 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${f.totais.advertencias > 0 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-400"}`}>
+                        {f.totais.advertencias > 0 ? f.totais.advertencias : "—"}
+                      </span>
+                    </td>
+                    <td className="p-2">
+                      <button
+                        onClick={() => { setSelected(new Set([f.id])); }}
+                        title="Selecionar para baixar dossiê"
+                        className="text-muted-foreground hover:text-primary"
+                      >
+                        <FileDown className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr className="border-b bg-muted/20">
+                      <td colSpan={9} className="px-4 py-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1"><Stethoscope className="h-3.5 w-3.5" /> ASO ({f.totais.asos})</p>
+                            {f.aso ? (
+                              <div className="text-xs space-y-0.5">
+                                <p className="font-medium">{f.aso.tipo}</p>
+                                <p className="text-muted-foreground">Exame: {formatDate((f.aso as any).dataExame)}</p>
+                                <p className="text-muted-foreground">Validade: {formatDate((f.aso as any).dataValidade)}</p>
+                                {(f.aso as any).documentoUrl && (
+                                  <a href={(f.aso as any).documentoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline mt-1 break-all">
+                                    <ExternalLink className="h-3 w-3 shrink-0" /> Ver arquivo
+                                  </a>
+                                )}
+                              </div>
+                            ) : <p className="text-xs text-muted-foreground italic">Nenhum ASO cadastrado</p>}
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1"><GraduationCap className="h-3.5 w-3.5" /> Treinamentos ({f.totais.treinamentos})</p>
+                            {f.treinamentos.length === 0 ? (
+                              <p className="text-xs text-muted-foreground italic">Nenhum treinamento</p>
+                            ) : (
+                              <div className="space-y-1 max-h-28 overflow-y-auto">
+                                {(f.treinamentos as any[]).slice(0, 5).map((t: any) => (
+                                  <div key={t.id} className="text-xs">
+                                    <span className="font-medium">{t.norma || t.nome}</span>
+                                    {t.certificadoUrl && <a href={t.certificadoUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-primary hover:underline"><ExternalLink className="h-3 w-3 inline" /></a>}
+                                    <span className="text-muted-foreground ml-1">· {formatDate(t.dataValidade)}</span>
+                                  </div>
+                                ))}
+                                {f.treinamentos.length > 5 && <p className="text-xs text-muted-foreground">+{f.treinamentos.length - 5} mais</p>}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> Atestados ({f.totais.atestados})</p>
+                            {f.atestados.length === 0 ? (
+                              <p className="text-xs text-muted-foreground italic">Nenhum atestado</p>
+                            ) : (
+                              <div className="space-y-1 max-h-28 overflow-y-auto">
+                                {(f.atestados as any[]).slice(0, 5).map((a: any) => (
+                                  <div key={a.id} className="text-xs">
+                                    <span className="font-medium">{a.tipo}</span>
+                                    {a.documentoUrl && <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-primary hover:underline"><ExternalLink className="h-3 w-3 inline" /></a>}
+                                    <span className="text-muted-foreground ml-1">· {formatDate(a.dataEmissao)}</span>
+                                  </div>
+                                ))}
+                                {f.atestados.length > 5 && <p className="text-xs text-muted-foreground">+{f.atestados.length - 5} mais</p>}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1"><ShieldAlert className="h-3.5 w-3.5" /> Advertências ({f.totais.advertencias})</p>
+                            {f.advertencias.length === 0 ? (
+                              <p className="text-xs text-muted-foreground italic">Nenhuma advertência</p>
+                            ) : (
+                              <div className="space-y-1 max-h-28 overflow-y-auto">
+                                {(f.advertencias as any[]).slice(0, 5).map((a: any) => (
+                                  <div key={a.id} className="text-xs">
+                                    <span className="font-medium">{a.tipoAdvertencia}</span>
+                                    {a.documentoUrl && <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-primary hover:underline"><ExternalLink className="h-3 w-3 inline" /></a>}
+                                    <span className="text-muted-foreground ml-1">· {formatDate(a.dataOcorrencia)}</span>
+                                  </div>
+                                ))}
+                                {f.advertencias.length > 5 && <p className="text-xs text-muted-foreground">+{f.advertencias.length - 5} mais</p>}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {selected.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/10 min-w-[280px]">
+          <span className="text-sm font-medium">{selected.size} selecionado{selected.size !== 1 ? "s" : ""}</span>
+          <button onClick={() => setSelected(new Set())} className="text-white/60 hover:text-white"><X className="h-4 w-4" /></button>
+          <Button
+            size="sm"
+            onClick={downloadZip}
+            disabled={isDownloading}
+            className="relative bg-primary hover:bg-primary/90 text-white min-w-[160px] overflow-hidden ml-2"
+          >
+            {isDownloading && (
+              <span className="absolute inset-0 bg-white/15 origin-left" style={{ width: `${dlProgress}%` }} />
+            )}
+            <span className="relative flex items-center gap-1.5">
+              {isDownloading
+                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Baixando... {dlProgress}%</>
+                : <><Download className="h-3.5 w-3.5" /> Baixar Dossiê ZIP</>}
+            </span>
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============ PAINEL DE VALIDADE (Componente) ============
 function ValidadePanel({ companyId, companyIds, onClickEmployee, forceTipo, forceStatus }: { companyId: number; companyIds?: number[]; onClickEmployee: (id: number) => void; forceTipo?: string; forceStatus?: string }) {
   const { data, isLoading } = trpc.docs.painelValidade.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
@@ -3027,7 +3308,7 @@ export default function ControleDocumentos() {
               (md/lg = inclui iPad Pro 12.9" portrait 1024px) → 9 só em xl
               (≥1280px). Em qualquer iPad as 9 tabs ficam em 5×2 sem
               sobreposição; desktop wide volta pra linha única. */}
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-10 h-auto xl:h-12 gap-1 bg-transparent p-0">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 xl:grid-cols-11 h-auto xl:h-12 gap-1 bg-transparent p-0">
             <TabsTrigger value="validade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "validade" ? "border-red-500 bg-red-50 text-red-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-red-50/50 hover:text-red-600"}`}>
               <AlertTriangle className="h-4 w-4" /> Validade
             </TabsTrigger>
@@ -3057,6 +3338,9 @@ export default function ControleDocumentos() {
             </TabsTrigger>
             <TabsTrigger value="termos-responsabilidade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "termos-responsabilidade" ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-blue-50/50 hover:text-blue-600"}`}>
               <FileText className="h-4 w-4" /> Termo de Recebimento
+            </TabsTrigger>
+            <TabsTrigger value="dossie" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "dossie" ? "border-cyan-600 bg-cyan-50 text-cyan-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-cyan-50/50 hover:text-cyan-600"}`}>
+              <FileDown className="h-4 w-4" /> Dossiê
             </TabsTrigger>
           </TabsList>
 
@@ -3652,6 +3936,11 @@ export default function ControleDocumentos() {
           {/* ===================== ABA TERMO DE RECEBIMENTO (Rev. 2146) ===================== */}
           <TabsContent value="termos-responsabilidade" className="mt-4">
             <TermosResponsabilidadePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} />
+          </TabsContent>
+
+          {/* ===================== ABA DOSSIÊ ===================== */}
+          <TabsContent value="dossie" className="mt-4">
+            <DossiePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} />
           </TabsContent>
 
         </Tabs>

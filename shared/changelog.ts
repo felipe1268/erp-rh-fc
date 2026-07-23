@@ -1,4 +1,58 @@
 /**
+ * Rev. 4532 - FEAT: CONTROLE DE DOCUMENTOS — PAINEL DOSSIÊ COM MULTI-SELECT E DOWNLOAD ZIP
+ *
+ * MOTIVAÇÃO:
+ *   RH precisava de uma visão consolidada do status documental de cada
+ *   funcionário (ASO, Treinamentos, Atestados, Advertências) num único
+ *   painel, com capacidade de selecionar múltiplos funcionários e baixar
+ *   todos os arquivos anexados em um ZIP organizado por pasta.
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * Backend — server/routers/controleDocumentos.ts:
+ *   - NOVO endpoint `docs.painelDossie`:
+ *     · Busca todos os funcionários ativos (empNaoDesligado).
+ *     · Queries paralelas: asos, trainings, atestados, warnings via inArray.
+ *     · Retorna por funcionário: aso (mais recente + status calculado),
+ *       treinamentos[] (cada um com status calcularStatusASO),
+ *       piorStatusTrein (VENCIDO/VENCER30/VENCER60/VALIDO/SEM),
+ *       atestados[], advertencias[], totais{}.
+ *     · ZERO schema change.
+ *
+ * Backend — server/routers/downloadDossie.ts (NOVO):
+ *   - Rota Express GET /api/download/dossie-zip?companyId=&employeeIds=[...]
+ *   - Autenticação via sdk.authenticateRequest (cookie automático).
+ *   - Guard multi-tenant: admin_master/admin livres; demais verificam
+ *     user_companies. Verifica employees.companyId antes de zipar.
+ *   - Busca docs em paralelo (Promise.all: asos, trainings, atestados, warnings).
+ *   - Estrutura ZIP: NomeFuncionario/ASO/tipo_data.ext
+ *                   NomeFuncionario/Treinamentos/norma_data.ext
+ *                   NomeFuncionario/Atestados/tipo_data.ext
+ *                   NomeFuncionario/Advertencias/tipo_data.ext
+ *   - Recupera arquivos via dbRetrieve (DB-first) → fetch HTTP fallback.
+ *   - Dedup de paths dentro do ZIP (sufixo _N quando colisão).
+ *
+ * Backend — server/_core/index.ts:
+ *   - Import + registerDownloadDossieRoute(app) após registerDownloadSSTRoute.
+ *
+ * Frontend — client/src/pages/ControleDocumentos.tsx:
+ *   - NOVA função DossiePanel:
+ *     · Tabela com checkbox multi-select + Select All.
+ *     · Coluna expansível (ChevronRight/Down) com detalhe dos 4 tipos de doc.
+ *     · AsoChip: ✓ VÁLIDO / ⚠ Xd / ❌ VENCIDO / — Sem ASO.
+ *     · TreinChip: cor do pior status + total.
+ *     · Badges coloridos atestados (roxo) e advertências (laranja).
+ *     · Links ExternalLink por documento na linha expandida.
+ *     · Barra fixa inferior quando há seleção: conta + botão "Baixar Dossiê ZIP".
+ *     · Botão com progresso 0→100% (regra de ouro): intervalo simulado 5→80,
+ *       real 90→100 após blob, limpeza com setTimeout 800ms.
+ *     · Ícone FileDown na linha → seleciona funcionário individual.
+ *   - NOVA aba "Dossiê" com TabsTrigger (cyan) no TabsList.
+ *   - TabsContent value="dossie" montado após "termos-responsabilidade".
+ *   - grid-cols-10 → grid-cols-11 (xl) e md:grid-cols-5 → md:grid-cols-6.
+ */
+
+/**
  * Rev. 4531 - FEAT: FÉRIAS — BLOQUEIO CLT ART. 135, §3° NA DATA DE INÍCIO
  *
  * MOTIVAÇÃO:

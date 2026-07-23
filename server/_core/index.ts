@@ -10,6 +10,7 @@ import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerDownloadSSTRoute } from "../routers/downloadSST";
+import { registerDownloadDossieRoute } from "../routers/downloadDossie";
 import { registerDownloadOCRoute } from "../routers/downloadOC";
 import { registerPacoteContadorRoute } from "../routers/downloadPacoteContador";
 import { registerContabilidadeXlsxRoute } from "../routers/downloadContabilidadeXlsx";
@@ -315,6 +316,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Download de arquivos SST em ZIP
   registerDownloadSSTRoute(app);
+  registerDownloadDossieRoute(app);
   registerDownloadOCRoute(app);
   registerPacoteContadorRoute(app);
   registerContabilidadeXlsxRoute(app);

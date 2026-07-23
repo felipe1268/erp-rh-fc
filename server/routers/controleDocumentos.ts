@@ -3256,6 +3256,121 @@ export const controleDocumentosRouter = router({
     }),
 
   // ===================== EXAMES CUSTOMIZADOS =====================
+  painelDossie: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // Funcionários ativos
+      const empRows = await db
+        .select({
+          id: employees.id,
+          nomeCompleto: employees.nomeCompleto,
+          cpf: employees.cpf,
+          funcao: employees.funcao,
+          status: employees.status,
+        })
+        .from(employees)
+        .where(and(companyFilter(employees.companyId, input), isNull(employees.deletedAt), empNaoDesligado()))
+        .orderBy(employees.nomeCompleto);
+
+      if (empRows.length === 0) return { funcionarios: [] };
+
+      const empIds = empRows.map(e => e.id);
+
+      // Todos os documentos em paralelo
+      const [asoRows, treinRows, atesRows, advRows] = await Promise.all([
+        db.select({
+          id: asos.id, employeeId: asos.employeeId,
+          tipo: asos.tipo, dataExame: asos.dataExame,
+          dataValidade: asos.dataValidade, resultado: asos.resultado,
+          documentoUrl: asos.documentoUrl,
+        }).from(asos).where(and(inArray(asos.employeeId, empIds), isNull(asos.deletedAt))).orderBy(desc(asos.dataExame)),
+
+        db.select({
+          id: trainings.id, employeeId: trainings.employeeId,
+          nome: trainings.nome, norma: trainings.norma,
+          dataRealizacao: trainings.dataRealizacao, dataValidade: trainings.dataValidade,
+          certificadoUrl: trainings.certificadoUrl,
+        }).from(trainings).where(and(inArray(trainings.employeeId, empIds), isNull(trainings.deletedAt))).orderBy(desc(trainings.dataRealizacao)),
+
+        db.select({
+          id: atestados.id, employeeId: atestados.employeeId,
+          tipo: atestados.tipo, dataEmissao: atestados.dataEmissao,
+          diasAfastamento: atestados.diasAfastamento, documentoUrl: atestados.documentoUrl,
+        }).from(atestados).where(and(inArray(atestados.employeeId, empIds), isNull(atestados.deletedAt))).orderBy(desc(atestados.dataEmissao)),
+
+        db.select({
+          id: warnings.id, employeeId: warnings.employeeId,
+          tipoAdvertencia: warnings.tipoAdvertencia, dataOcorrencia: warnings.dataOcorrencia,
+          documentoUrl: warnings.documentoUrl,
+          assinaturaFuncionarioUrl: warnings.assinaturaFuncionarioUrl,
+          assinaturaAplicadorUrl: warnings.assinaturaAplicadorUrl,
+        }).from(warnings).where(and(inArray(warnings.employeeId, empIds), isNull(warnings.deletedAt))).orderBy(desc(warnings.dataOcorrencia)),
+      ]);
+
+      // Agrupamento por funcionário
+      const asoByEmp = new Map<number, typeof asoRows>();
+      const treinByEmp = new Map<number, typeof treinRows>();
+      const atesByEmp = new Map<number, typeof atesRows>();
+      const advByEmp = new Map<number, typeof advRows>();
+      for (const r of asoRows) { if (!asoByEmp.has(r.employeeId)) asoByEmp.set(r.employeeId, []); asoByEmp.get(r.employeeId)!.push(r); }
+      for (const r of treinRows) { if (!treinByEmp.has(r.employeeId)) treinByEmp.set(r.employeeId, []); treinByEmp.get(r.employeeId)!.push(r); }
+      for (const r of atesRows) { if (!atesByEmp.has(r.employeeId)) atesByEmp.set(r.employeeId, []); atesByEmp.get(r.employeeId)!.push(r); }
+      for (const r of advRows) { if (!advByEmp.has(r.employeeId)) advByEmp.set(r.employeeId, []); advByEmp.get(r.employeeId)!.push(r); }
+
+      return {
+        funcionarios: empRows.map(emp => {
+          const empAsos = asoByEmp.get(emp.id) || [];
+          // ASO mais recente por tipo (dedup por tipo, pega o 1º = mais recente)
+          const asosPorTipo = new Map<string, typeof empAsos[0]>();
+          for (const a of empAsos) {
+            if (!asosPorTipo.has(a.tipo)) asosPorTipo.set(a.tipo, a);
+          }
+          const latestAso = empAsos[0] || null;
+          const asoCalc = latestAso ? calcularStatusASO(latestAso.dataValidade || "") : null;
+
+          const empTreins = (treinByEmp.get(emp.id) || []).map(t => ({
+            ...t,
+            ...calcularStatusASO(t.dataValidade || ""),
+          }));
+
+          // Pior status de treinamentos
+          const piorTrein = empTreins.reduce((pior, t) => {
+            if (t.status === "VENCIDO") return "VENCIDO";
+            if (pior === "VENCIDO") return pior;
+            if (t.diasRestantes >= 0 && t.diasRestantes <= 30) return "VENCER30";
+            if (pior === "VENCER30") return pior;
+            if (t.diasRestantes >= 0 && t.diasRestantes <= 60) return "VENCER60";
+            if (pior === "VENCER60") return pior;
+            return "VALIDO";
+          }, empTreins.length === 0 ? "SEM" : "VALIDO");
+
+          const empAtes = atesByEmp.get(emp.id) || [];
+          const empAdvs = advByEmp.get(emp.id) || [];
+
+          return {
+            id: emp.id,
+            nomeCompleto: emp.nomeCompleto,
+            cpf: emp.cpf,
+            funcao: emp.funcao,
+            status: emp.status,
+            aso: latestAso ? { ...latestAso, ...(asoCalc || {}) } : null,
+            treinamentos: empTreins,
+            piorStatusTrein: piorTrein,
+            atestados: empAtes,
+            advertencias: empAdvs,
+            totais: {
+              asos: empAsos.length,
+              treinamentos: empTreins.length,
+              atestados: empAtes.length,
+              advertencias: empAdvs.length,
+            },
+          };
+        }),
+      };
+    }),
+
   customExams: router({
     list: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
