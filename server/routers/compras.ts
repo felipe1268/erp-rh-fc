@@ -8936,7 +8936,7 @@ Formato de resposta:
       const db = await getDb();
       const [admin] = await db.select({
         id: users.id, name: users.name, role: users.role, password: users.password,
-      }).from(users).where(eq(users.email, input.adminEmail)).limit(1);
+      }).from(users).where(sql`lower(${users.email}) = ${input.adminEmail.trim().toLowerCase()}`).limit(1);
       if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário admin não encontrado com este e-mail" });
       if (admin.role !== "admin" && admin.role !== "admin_master")
         throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem autorizar compras sem verba" });
@@ -14497,7 +14497,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         name: users.name,
         role: users.role,
         password: users.password,
-      }).from(users).where(eq(users.email, input.adminEmail)).limit(1);
+      }).from(users).where(sql`lower(${users.email}) = ${input.adminEmail.trim().toLowerCase()}`).limit(1);
 
       if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário admin não encontrado" });
       if (admin.role !== "admin" && admin.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem aprovar compras extra-orçamento" });
@@ -15424,7 +15424,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const db = await getDb();
 
       const [admin] = await db.select({ id: users.id, name: users.name, role: users.role, password: users.password })
-        .from(users).where(eq(users.email, input.adminEmail)).limit(1);
+        .from(users).where(sql`lower(${users.email}) = ${input.adminEmail.trim().toLowerCase()}`).limit(1);
       if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Admin não encontrado" });
       if (admin.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Somente Admin Master pode ajustar o FD" });
 
@@ -15484,7 +15484,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const db = await getDb();
 
       const [admin] = await db.select({ id: users.id, name: users.name, role: users.role, password: users.password })
-        .from(users).where(eq(users.email, input.adminEmail)).limit(1);
+        .from(users).where(sql`lower(${users.email}) = ${input.adminEmail.trim().toLowerCase()}`).limit(1);
       if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Admin não encontrado" });
       if (admin.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Somente Admin Master pode adicionar itens FD" });
 
@@ -15537,7 +15537,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const db = await getDb();
 
       const [admin] = await db.select({ id: users.id, name: users.name, role: users.role, password: users.password })
-        .from(users).where(eq(users.email, input.adminEmail)).limit(1);
+        .from(users).where(sql`lower(${users.email}) = ${input.adminEmail.trim().toLowerCase()}`).limit(1);
       if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Admin não encontrado" });
       if (admin.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Somente Admin Master pode remover itens FD" });
 

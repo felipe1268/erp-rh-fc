@@ -1,4 +1,27 @@
 /**
+ * Rev. 4544 - FIX: AUTORIZAÇÃO ADMIN (COMPRAS) — E-MAIL EM MAIÚSCULAS NÃO ENCONTRAVA O USUÁRIO
+ *
+ * SINTOMA:
+ *   Admin Master tentava autorizar "Compra sem Verba" (Mapa de Cotação) e recebia
+ *   "Usuário admin não encontrado com este e-mail". O iPad capitaliza o campo
+ *   automaticamente (FELIPE@FCENGENHARIACIVIL.COM.BR), mas o e-mail está salvo em
+ *   minúsculas no banco.
+ *
+ * CAUSA-RAIZ:
+ *   Os 5 pontos de "autorização por e-mail+senha de admin" em compras.ts usavam
+ *   eq(users.email, input.adminEmail) — comparação CASE-SENSITIVE e sem trim.
+ *
+ * FIX:
+ *   Todos os 5 lookups trocados para
+ *   sql`lower(users.email) = ${input.adminEmail.trim().toLowerCase()}`:
+ *   - autorizarCompraSemVerba (Itens sem Verba → Autorização Admin)
+ *   - aprovação de compra extra-orçamento (~14503)
+ *   - ajustarValorFd / adicionarItemFd / removerItemFd (FD, admin_master)
+ *   (controleDocumentos.ts eq(users.email, emp.email) é interno DB×DB — intacto.)
+ *
+ * ARQUIVOS: server/routers/compras.ts. ZERO schema change.
+ */
+/**
  * Rev. 4543 - FIX: IMPORT DIXI — CÓDIGOS "jfcNNN" COLIDIAM E FUNDIAM BATIDAS DE 2 FUNCIONÁRIOS
  *
  * SINTOMA (relatado pelo usuário):
