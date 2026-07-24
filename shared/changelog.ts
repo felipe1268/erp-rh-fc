@@ -1,4 +1,26 @@
 /**
+ * Rev. 4540 - UX: COMUNICADOS INTERNOS — SEM "PREZADO(A) COLABORADOR(A)" AUTOMÁTICO
+ *
+ * MOTIVAÇÃO:
+ *   O template vigente (comunicado_interno / FC-RH-003) prefixava todo
+ *   comunicado com "Prezado(a) Colaborador(a) ," e sufixava "Permanecemos à
+ *   disposição para quaisquer esclarecimentos." automaticamente. O usuário
+ *   pediu para exibir SÓ o que foi digitado no campo de conteúdo.
+ *
+ * IMPLEMENTAÇÃO:
+ *   - shared/documentTemplates.ts (SEED_COMUNICADO_INTERNO): removidas a
+ *     saudação e a frase de encerramento; mantidos apenas {{corpoMsg}} e a
+ *     declaração de ciência ("Declaro que recebi, li e estou ciente…"), que
+ *     faz parte do fluxo de assinatura.
+ *   - Banco (Neon): UPDATE cirúrgico no template vigente (e na versão) de
+ *     tipo='comunicado_interno' que ainda continha o texto-seed original —
+ *     templates personalizados pelo usuário NÃO seriam tocados (guard LIKE
+ *     '%Prezado(a) Colaborador(a)%'). Status 'vigente' preservado (sem
+ *     rebaixar pra rascunho).
+ *   ZERO schema change.
+ */
+
+/**
  * Rev. 4539 - FEAT: ALMOXARIFADO — VISIBILIDADE GLOBAL ("ver tudo, mexer só no seu")
  *
  * MOTIVAÇÃO:

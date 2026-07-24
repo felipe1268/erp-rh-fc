@@ -50,20 +50,20 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4540** — **UX: COMUNICADOS INTERNOS — SEM "PREZADO(A) COLABORADOR(A)" AUTOMÁTICO.** O template vigente (comunicado_interno/FC-RH-003) prefixava saudação e sufixava "Permanecemos à disposição…" automaticamente; agora o comunicado exibe só o que foi digitado + a declaração de ciência (parte do fluxo de assinatura). Seed atualizado em `shared/documentTemplates.ts` + UPDATE cirúrgico no Neon (só templates ainda com o texto-seed original; personalizados intactos; status 'vigente' preservado). ZERO schema change.
 - **Rev. 4539** — **FEAT: ALMOXARIFADO — VISIBILIDADE GLOBAL ("ver tudo, mexer só no seu").** Todo usuário com acesso ao módulo agora VÊ almoxarifados/insumos/equipamentos (próprios+locados) e o giro de TODAS as obras da empresa; operar continua restrito às obras permitidas. Backend: filtros de leitura por obra removidos em `compras.listarItens/Consolidado`, `warehouse.listTimeline/listMovements/listOpenLoans/baiaListar`, `equipamentos.locadosListar`; `obras.listForAlmoxarifado` retorna todas as obras ativas com flag `podeEditar` (regra dos guards de escrita). Recebimento de OCs e TODAS as mutations seguem com guards intactos. Hardening pós-review: guard de empresa (`_assertCompanyAccess`/`getCompaniesForUser`) adicionado a TODOS os 7 endpoints de leitura abertos (anti cross-tenant) + novo `_assertObraWriteAlmox` em `criarItem/atualizarItem/excluirItem` (escrita por obra no backend, não só na UI); front ganhou `podeEditarItemObra` (gate em `abrirEditar`, Itens Zerados e consolidado). Frontend (`almoxarifado/index.tsx`): sufixo "👁 Somente leitura" no seletor, banner âmbar sugerindo transferência, botões de ação ocultos em obra somente-leitura. ZERO schema change.
-- **Rev. 4538** — **UX: NOTAS FISCAIS (RECEBIDAS) — BANNER LIMPO NO MODO DIÁRIO.** Quando `sync_modo='diario'`, o banner de countdown ("Próxima sync em 1h46…" + anel + Prorrogar +2h/+4h/+8h/+24h) é substituído por card indigo: ícone-relógio HH:MM, "Sincronização automática diária — consulta a SEFAZ 1x por dia às HH:MM, próxima: hoje/amanhã", última sync e APENAS Pausar/Retomar. Rodapé da tabela mostra o horário dinâmico. Modo 'intervalo' intacto. Arquivo: `FinanceiroNotasFiscais.tsx`. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4538** — **UX: NOTAS FISCAIS (RECEBIDAS) — BANNER LIMPO NO MODO DIÁRIO.** Quando `sync_modo='diario'`, o banner de countdown ("Próxima sync em 1h46…" + anel + Prorrogar +2h/+4h/+8h/+24h) é substituído por card indigo: ícone-relógio HH:MM, "Sincronização automática diária — consulta a SEFAZ 1x por dia às HH:MM, próxima: hoje/amanhã", última sync e APENAS Pausar/Retomar. Rodapé da tabela mostra o horário dinâmico. Modo 'intervalo' intacto. Arquivo: `FinanceiroNotasFiscais.tsx`. ZERO schema change.
 - **Rev. 4537** — **FEAT: SEFAZ — MODO DE AGENDAMENTO DIÁRIO (1x ÀS HH:MM, A CADA N DIAS).** `sync_modo` ('intervalo'|'diario') + `sync_intervalo_dias` em `company_nfe_config`; cron dispara por hora BRT + date-diff; manual livre. Arquivos: `sefaz.ts`, `_core/index.ts`, `FinanceiroConfigSection.tsx`.
 - **Rev. 4536** — **UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "REMOVER TODOS".** `ModalConfirmacaoAuditoria` com prop `progresso`: barra `bg-white/15` + "Removendo… XX%" com progresso real por unidade. ZERO schema change.
 - **Rev. 4535** — **UX: ALMOXARIFADO CENTRAL — SELEÇÃO NATURAL (CHECKBOX SEMPRE VISÍVEL NOS CARDS).** Removido modo "Selecionar": checkbox sempre visível nos cards, "Selecionar todos" no header, sticky bar quando há seleção; drag-lasso só mouse (iPad scrolla normal). ZERO schema change.
 - **Rev. 4534** — **FIX: PLANEJAMENTO — PREVISTO (SEMANA) 100% EM TODAS AS SEMANAS FUTURAS (BASELINE DEFASADA).** Guard no fallback de `regenerarPrevistoSemanasCaminhoB` (baseline defasada → datas atuais como proxy) + rollup da raiz 2 casas com clamp <100 até o fim real. 🔒 Lógica CONGELADA — ver User preferences. ZERO schema change.
-- **Rev. 4533** — **FIX: PLANEJAMENTO — REALIZADO ACUMULADO RETROATIVO AO ENVIAR NOVO XML (REFIS/CURVA S).** 3 caminhos de leitura (`avancoAtual`, `realizadoAcum`, `realizadoComInd`) agora consultam o mapa `realizadoSemanas` antes de cair no EVM ponderado; Curva S backend injeta pontos históricos do mapa. ZERO schema change.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4531 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4533 e anteriores.
 
 ## User preferences
 

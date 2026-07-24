@@ -609,9 +609,7 @@ const SEED_TERMO_RESPONSABILIDADE = `
 `;
 
 const SEED_COMUNICADO_INTERNO = `
-<p style="margin-bottom:10px">Prezado(a) Colaborador(a) <strong>{{empNome}}</strong>,</p>
 <div style="margin:8px 0">{{corpoMsg}}</div>
-<p style="margin-top:14px">Permanecemos à disposição para quaisquer esclarecimentos.</p>
 <p style="margin-top:18px;font-size:10pt;color:#475569;font-style:italic">Declaro que recebi, li e estou ciente do conteúdo do comunicado acima identificado.</p>
 `;
 
