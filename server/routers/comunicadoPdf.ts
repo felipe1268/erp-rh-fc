@@ -9,6 +9,25 @@ import { sdk } from "../_core/sdk";
 import { companies, userCompanies, comunicadosInternos, systemDocumentTemplates } from "../../drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { renderTemplate } from "../../shared/documentTemplates";
+import createDOMPurify from "dompurify";
+import { JSDOM } from "jsdom";
+
+// Sanitização SERVER-SIDE do HTML do comunicado antes de renderizar no Puppeteer
+// (mesma allowlist do RichTextEditor do cliente) — impede script/conteúdo ativo
+// rodando em contexto privilegiado do servidor.
+const _window = new JSDOM("").window;
+const DOMPurify = createDOMPurify(_window as any);
+function sanitizeServerHtml(s: string): string {
+  return DOMPurify.sanitize(s, {
+    ALLOWED_TAGS: [
+      "p", "br", "strong", "em", "u", "s", "b", "i", "span", "div",
+      "ul", "ol", "li", "blockquote", "pre", "code",
+      "h1", "h2", "h3", "h4", "h5", "h6", "hr",
+      "a", "img", "table", "thead", "tbody", "tr", "td", "th",
+    ],
+    ALLOWED_ATTR: ["href", "target", "rel", "src", "alt", "title", "style", "class", "colspan", "rowspan"],
+  });
+}
 
 function esc(s: string | null | undefined): string {
   if (!s) return "";
@@ -127,14 +146,14 @@ export function registerComunicadoPdfRoute(app: Express) {
       let corpoHtml = "";
       if (c.conteudo) {
         const corpoMsg = isHtmlContent(c.conteudo)
-          ? c.conteudo
+          ? sanitizeServerHtml(c.conteudo)
           : `<p>${esc(c.conteudo).replace(/\n/g, "<br/>")}</p>`;
         if (tpl?.conteudoHtml) {
-          corpoHtml = renderTemplate(tpl.conteudoHtml, {
+          corpoHtml = sanitizeServerHtml(renderTemplate(tpl.conteudoHtml, {
             empNome: "", corpoMsg, assunto: esc(c.titulo || ""),
             empresaRazaoSocial: esc(nomeEmpresa), empresaCnpj: esc(company?.cnpj || ""),
             docNumero: esc(String(c.numero || "")), docData: esc(fmtDate(c.dataEmissao)),
-          });
+          }));
         } else {
           corpoHtml = corpoMsg;
         }
@@ -220,6 +239,14 @@ export function registerComunicadoPdfRoute(app: Express) {
       let pdfBuf: Buffer;
       try {
         const page = await browser.newPage();
+        // Defesa em profundidade: sem JS e sem requests externos (só data: URLs embutidas)
+        await page.setJavaScriptEnabled(false);
+        await page.setRequestInterception(true);
+        page.on("request", (r) => {
+          const u = r.url();
+          if (u.startsWith("data:") || u === "about:blank") r.continue();
+          else r.abort();
+        });
         await page.setContent(html, { waitUntil: "networkidle0" });
         const raw = await page.pdf({
           format: "A4",
