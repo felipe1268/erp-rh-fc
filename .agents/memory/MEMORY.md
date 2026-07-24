@@ -142,3 +142,4 @@
 - [Medição × Área: casar por atividadeId](medicao-cronograma-atividade-id-match.md) — ver acima; eap_codigo vem vazio; use PK atividade_id (1:1).
 - [Fetch server-side de URL do cliente = SSRF](comprovante-fetch-ssrf.md) — baixar anexo a partir de coluna *_url gravável pelo cliente NÃO pode usar fetch genérico; só resolver /uploads/<key> interno.
 - [VARCHAR BR decimal cast](varchar-br-decimal-cast.md) — colunas numéricas VARCHAR guardam "680,75" (vírgula BR); `::numeric` direto falha → Promise.all rejeita → UI mostra "Sem dados" silenciosamente. Use `REPLACE(col,',','.')::numeric`.
+- [Lógica % Previsto CONGELADA](planejamento-previsto-logic-frozen.md) — usuário exige: NÃO alterar motor/literal/precedência do Previsto (Planejamento) sem alertar e confirmar; toda 'melhoria' nessa área já quebrou o sistema.

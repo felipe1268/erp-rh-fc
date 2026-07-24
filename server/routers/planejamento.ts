@@ -116,6 +116,15 @@ async function limparSnapshotMspDoProjeto(db: any, projetoId: number) {
  *
  * Janela: cutoff (default Quinta) de min(BL_Start) até max(BL_Finish), inclusivo.
  * Atividades sem baseline são puladas (snapshot vazio pra elas — UI mostra "—").
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║ 🔒 LÓGICA CONGELADA (Rev. 4534 — 24/07/2026, exigência do usuário)        ║
+ * ║ Esta função + captura do literal + precedência literal>raiz>snapshot no   ║
+ * ║ frontend foram VALIDADAS contra XMLs reais do MS Project (Texto10).       ║
+ * ║ NÃO altere NADA aqui como efeito colateral de outra melhoria.             ║
+ * ║ Se uma task exigir mudança: ALERTE o usuário, obtenha confirmação e       ║
+ * ║ revalide contra o MSP real depois. Ver replit.md → User preferences.      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 async function regenerarPrevistoSemanasCaminhoB(
   db: any,
