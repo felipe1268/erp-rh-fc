@@ -3574,6 +3574,37 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4542: leitura_token/tipo/user_agent + tabela comunicado_leituras garantidos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4542 comunicados leitura/ciência:`, e?.message || e); }
 
+        // Rev. 4547 — Almoxarifado: ledger permanente de divergências de inventário
+        // + marca de baixa aplicada na sessão (repara sessões travadas em "concluido"
+        // sem estoque atualizado — bug do auto-conclude no confirmInventoryItem).
+        try {
+          await db.execute(sql`ALTER TABLE warehouse_inventory_sessions ADD COLUMN IF NOT EXISTS estoque_aplicado_em TIMESTAMP`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS warehouse_inventory_ajustes (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            obra_id INTEGER,
+            session_id INTEGER NOT NULL,
+            session_item_id INTEGER NOT NULL,
+            semana_ref VARCHAR(10),
+            item_id INTEGER NOT NULL,
+            item_nome VARCHAR(255),
+            unidade VARCHAR(20),
+            quantidade_sistema NUMERIC(14,3) NOT NULL,
+            quantidade_fisica NUMERIC(14,3) NOT NULL,
+            diferenca NUMERIC(14,3) NOT NULL,
+            valor_unitario NUMERIC(14,2),
+            valor_diferenca NUMERIC(14,2),
+            observacoes TEXT,
+            registrado_por_id INTEGER,
+            registrado_por_nome VARCHAR(255),
+            criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_winv_ajuste_session_item ON warehouse_inventory_ajustes (session_item_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_winv_ajuste_company ON warehouse_inventory_ajustes (company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_winv_ajuste_item ON warehouse_inventory_ajustes (item_id)`);
+          console.log(`[SyncSchema+] Rev. 4547: estoque_aplicado_em + tabela warehouse_inventory_ajustes garantidos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4547 inventário ajustes:`, e?.message || e); }
+
         // Rev. 2082 — link Categoria (financial_accounts) → Centro de Custo (financial_cost_centers).
         // Coluna opcional; permite que ao cadastrar a categoria inline no modal "Novo Lançamento" o
         // usuário já associe a um centro de custo existente.

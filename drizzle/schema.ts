@@ -7256,6 +7256,9 @@ export const warehouseInventorySessions = pgTable("warehouse_inventory_sessions"
   almoxarifeNome:   varchar("almoxarife_nome", { length: 255 }),
   iniciadoEm:       timestamp("iniciado_em", { mode: "string" }),
   concluidoEm:      timestamp("concluido_em", { mode: "string" }),
+  // Rev. 4547 — marca quando a baixa de estoque foi efetivamente aplicada
+  // (permite reparar sessões antigas "concluídas" sem baixa aplicada).
+  estoqueAplicadoEm: timestamp("estoque_aplicado_em", { mode: "string" }),
   createdAt:        timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
@@ -7270,6 +7273,31 @@ export const warehouseInventorySessionItems = pgTable("warehouse_inventory_sessi
   status:           varchar({ length: 20 }).notNull().default("pendente"),
   observacoes:      text(),
   conferidoEm:      timestamp("conferido_em", { mode: "string" }),
+});
+
+// Rev. 4547 — LEDGER PERMANENTE DE DIVERGÊNCIAS DE INVENTÁRIO.
+// Cada divergência aplicada ao estoque no "Concluir Inventário" gera 1 linha
+// aqui (sobrevive a cancelamentos de sessão e serve de base p/ medir erro de
+// processo do almoxarifado ao longo do tempo, inclusive em R$).
+export const warehouseInventoryAjustes = pgTable("warehouse_inventory_ajustes", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  obraId:           integer("obra_id"),
+  sessionId:        integer("session_id").notNull(),
+  sessionItemId:    integer("session_item_id").notNull(),
+  semanaRef:        varchar("semana_ref", { length: 10 }),
+  itemId:           integer("item_id").notNull(),
+  itemNome:         varchar("item_nome", { length: 255 }),
+  unidade:          varchar({ length: 20 }),
+  quantidadeSistema: numeric("quantidade_sistema", { precision: 14, scale: 3 }).notNull(),
+  quantidadeFisica:  numeric("quantidade_fisica", { precision: 14, scale: 3 }).notNull(),
+  diferenca:         numeric({ precision: 14, scale: 3 }).notNull(),
+  valorUnitario:     numeric("valor_unitario", { precision: 14, scale: 2 }),
+  valorDiferenca:    numeric("valor_diferenca", { precision: 14, scale: 2 }),
+  observacoes:       text(),
+  registradoPorId:   integer("registrado_por_id"),
+  registradoPorNome: varchar("registrado_por_nome", { length: 255 }),
+  criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 });
 
 // ============================================================

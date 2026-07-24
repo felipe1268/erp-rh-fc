@@ -252,10 +252,18 @@ export default function AlmoxarifadoInventario() {
   });
 
   const finishSession = trpc.warehouse.finishInventorySession.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       utils.warehouse.getInventorySession.invalidate();
-      toast.success("Inventário concluído!");
+      utils.warehouse.getInventorySessionItems.invalidate();
+      // Rev. 4547 — a baixa altera o estoque: invalida as listas de itens.
+      utils.warehouse.invalidate();
+      toast.success(
+        data.divergenciasRegistradas > 0
+          ? `Inventário concluído! Estoque atualizado (${data.divergenciasRegistradas} divergência${data.divergenciasRegistradas > 1 ? "s" : ""} registrada${data.divergenciasRegistradas > 1 ? "s" : ""} no histórico).`
+          : "Inventário concluído! Estoque atualizado."
+      );
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const cancelSession = trpc.warehouse.cancelInventorySession.useMutation({
@@ -457,19 +465,26 @@ export default function AlmoxarifadoInventario() {
               </div>
             </div>
 
-            {/* Botão concluir */}
-            {session.status === "em_andamento" && conferidos === total && total > 0 && (
+            {/* Botão concluir — Rev. 4547: também aparece p/ sessões antigas
+                travadas em "concluido" SEM baixa aplicada (bug do auto-conclude),
+                permitindo aplicar a baixa retroativamente. */}
+            {conferidos === total && total > 0 &&
+              (session.status === "em_andamento" ||
+                (session.status === "concluido" && !(session as any).estoqueAplicadoEm)) && (
               <button
-                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-xl text-lg flex items-center justify-center gap-2 active:scale-95 transition"
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-xl text-lg flex items-center justify-center gap-2 active:scale-95 transition disabled:opacity-60"
+                disabled={finishSession.isPending}
                 onClick={() => finishSession.mutate({ sessionId: session.id })}
               >
-                <CheckCircle2 className="w-5 h-5" />
-                Concluir Inventário
+                {finishSession.isPending
+                  ? <Loader2 className="w-5 h-5 animate-spin" />
+                  : <CheckCircle2 className="w-5 h-5" />}
+                Concluir Inventário e Dar Baixa no Estoque
               </button>
             )}
 
             {/* Inventário concluído */}
-            {session.status === "concluido" && (
+            {session.status === "concluido" && !!(session as any).estoqueAplicadoEm && (
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 text-center">
                 <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-2" />
                 <p className="text-lg font-bold text-emerald-800">Inventário Concluído!</p>

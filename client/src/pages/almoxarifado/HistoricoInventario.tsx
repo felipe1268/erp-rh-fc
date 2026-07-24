@@ -193,6 +193,105 @@ function SemanalTab({ companyId, obraId }: { companyId: number; obraId: number |
   );
 }
 
+// ── Aba: Divergências (ledger permanente — Rev. 4547) ──
+// Base para medir o erro de processo do almoxarifado ao longo do tempo:
+// toda divergência aplicada ao estoque no "Concluir Inventário" fica
+// registrada aqui em definitivo (quantidade e R$).
+function DivergenciasTab({ companyId, obraId }: { companyId: number; obraId: number | null }) {
+  const { data: ajustes = [], isLoading } = trpc.warehouse.listarDivergenciasInventario.useQuery(
+    { companyId, obraId },
+    { enabled: !!companyId },
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+      </div>
+    );
+  }
+
+  if (ajustes.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border-2 border-dashed border-gray-300 p-10 text-center">
+        <AlertTriangle className="w-14 h-14 text-gray-300 mx-auto mb-3" />
+        <p className="text-base font-semibold text-gray-600">Nenhuma divergência registrada</p>
+        <p className="text-sm text-gray-400 mt-1">
+          Divergências aplicadas ao estoque no "Concluir Inventário" ficam registradas aqui em definitivo.
+        </p>
+      </div>
+    );
+  }
+
+  const totalFaltas = ajustes.filter((a: any) => n(a.diferenca) < 0).length;
+  const totalSobras = ajustes.filter((a: any) => n(a.diferenca) > 0).length;
+  const valorPerdas = ajustes.reduce((acc: number, a: any) => {
+    const v = a.valorDiferenca != null ? n(a.valorDiferenca) : 0;
+    return v < 0 ? acc + Math.abs(v) : acc;
+  }, 0);
+
+  const fmtMoeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  return (
+    <div className="space-y-3">
+      {/* KPIs */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-center">
+          <p className="text-xl font-bold text-red-700">{totalFaltas}</p>
+          <p className="text-xs text-red-600">Faltas</p>
+        </div>
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
+          <p className="text-xl font-bold text-blue-700">{totalSobras}</p>
+          <p className="text-xs text-blue-600">Sobras</p>
+        </div>
+        <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 text-center">
+          <p className="text-lg font-bold text-orange-700 break-words">{fmtMoeda(valorPerdas)}</p>
+          <p className="text-xs text-orange-600">Perda estimada</p>
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        {ajustes.map((a: any) => {
+          const dif = n(a.diferenca);
+          const corDif = dif > 0 ? "text-blue-600" : "text-red-600";
+          const vd = a.valorDiferenca != null ? n(a.valorDiferenca) : null;
+          return (
+            <div key={a.id} className="p-3 flex items-start gap-3">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${dif > 0 ? "bg-blue-50" : "bg-red-50"}`}>
+                {dif > 0
+                  ? <ArrowUp className="w-4 h-4 text-blue-500" />
+                  : <ArrowDown className="w-4 h-4 text-red-500" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate" title={a.itemNome ?? ""}>{a.itemNome}</p>
+                <p className="text-xs text-gray-500">
+                  Sistema {fmt(a.quantidadeSistema)} → Físico {fmt(a.quantidadeFisica)} {a.unidade ?? ""}
+                </p>
+                <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                  <span>{semanaLabel(a.semanaRef)}</span>
+                  <span>· {a.obraNome}</span>
+                  <span>· {fmtData(a.criadoEm)}</span>
+                  {a.registradoPorNome && <span>· {a.registradoPorNome}</span>}
+                </p>
+                {a.observacoes && <p className="text-xs text-gray-500 mt-0.5 italic">"{a.observacoes}"</p>}
+              </div>
+              <div className="text-right shrink-0">
+                <p className={`text-sm font-bold ${corDif}`}>{dif >= 0 ? "+" : ""}{fmt(a.diferenca)}</p>
+                {vd != null && (
+                  <p className={`text-xs font-semibold ${vd < 0 ? "text-red-500" : "text-blue-500"}`}>
+                    {vd < 0 ? "−" : "+"}{fmtMoeda(Math.abs(vd)).replace("R$", "R$ ").trim()}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Detalhe das leituras de uma baia (lazy) ──
 function BaiaLeiturasDetail({ companyId, baiaId, unidade }: { companyId: number; baiaId: number; unidade: string }) {
   const { data: leituras = [], isLoading } = trpc.warehouse.baiaLeiturasListar.useQuery(
@@ -366,7 +465,7 @@ export default function AlmoxarifadoHistoricoInventario() {
   const companyId = selectedCompany?.id ?? 0;
 
   const [obraContexto, setObraContexto] = useState<number | null>(null);
-  const [aba, setAba] = useState<"semanal" | "baias">("semanal");
+  const [aba, setAba] = useState<"semanal" | "divergencias" | "baias">("semanal");
 
   const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery(
     { companyId, companyIds: [companyId] }, { enabled: !!companyId },
@@ -432,6 +531,14 @@ export default function AlmoxarifadoHistoricoInventario() {
           </button>
           <button
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition ${
+              aba === "divergencias" ? "bg-white text-emerald-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setAba("divergencias")}
+          >
+            <AlertTriangle className="w-4 h-4" /> Divergências
+          </button>
+          <button
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition ${
               aba === "baias" ? "bg-white text-emerald-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
             }`}
             onClick={() => setAba("baias")}
@@ -442,6 +549,8 @@ export default function AlmoxarifadoHistoricoInventario() {
 
         {aba === "semanal"
           ? <SemanalTab companyId={companyId} obraId={obraContexto} />
+          : aba === "divergencias"
+          ? <DivergenciasTab companyId={companyId} obraId={obraContexto} />
           : <BaiasTab companyId={companyId} obraId={obraContexto} />}
       </div>
     </DashboardLayout>

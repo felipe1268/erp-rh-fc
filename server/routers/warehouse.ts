@@ -20,6 +20,7 @@ import {
   warehouseLoans,
   warehouseInventorySessions,
   warehouseInventorySessionItems,
+  warehouseInventoryAjustes,
   comprasOrdens,
   comprasOrdensItens,
   employees,
@@ -37,6 +38,29 @@ function getSemanaRef() {
     ((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7
   );
   return `${now.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+// Rev. 4547 — guard de tenant/obra p/ mutations do inventário semanal (antes
+// inexistente: IDOR por sessionId/sessionItemId). Resolve a sessão e valida
+// acesso à empresa + obra do usuário. Retorna a sessão resolvida.
+async function assertInventorySessionAccess(db: any, ctx: any, sessionId: number) {
+  const [sess] = await db
+    .select()
+    .from(warehouseInventorySessions)
+    .where(eq(warehouseInventorySessions.id, sessionId))
+    .limit(1);
+  if (!sess) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão de inventário não encontrada." });
+  const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+  if (!allowedCompanies.map((c: any) => c.id).includes(sess.companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+  if (sess.obraId != null) {
+    const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+    if (allowed !== null && !allowed.includes(sess.obraId)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+    }
+  }
+  return sess;
 }
 
 export const warehouseRouter = router({
@@ -1373,7 +1397,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         observacoes: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -1382,6 +1406,9 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         .from(warehouseInventorySessionItems)
         .where(eq(warehouseInventorySessionItems.id, input.sessionItemId));
       if (!sessionItem) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Rev. 4547 — tenant guard (antes inexistente: IDOR por sessionItemId).
+      await assertInventorySessionAccess(db, ctx, sessionItem.sessionId);
 
       const sistemaQtd = parseFloat(String(sessionItem.quantidadeSistema) || "0");
       const diferenca = input.quantidadeFisica - sistemaQtd;
@@ -1406,15 +1433,18 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
 
       const conferidos = sessionItems.filter((i) => i.status !== "pendente").length;
       const divergentes = sessionItems.filter((i) => i.status === "divergente").length;
-      const allDone = conferidos === sessionItems.length;
 
+      // Rev. 4547 — BUG FIX: NÃO marcar a sessão como "concluido" aqui.
+      // O auto-conclude fazia o botão "Concluir Inventário" (que é quem chama
+      // finishInventorySession e APLICA a baixa no estoque) nunca aparecer no
+      // frontend (condição status === "em_andamento") → estoque nunca era
+      // atualizado. A conclusão + baixa acontecem SOMENTE no finishInventorySession.
       await db
         .update(warehouseInventorySessions)
         .set({
           itensConferidos: conferidos,
           itensDivergentes: divergentes,
-          status: allDone ? "concluido" : "em_andamento",
-          concluidoEm: allDone ? new Date().toISOString() : null,
+          status: "em_andamento",
         } as any)
         .where(eq(warehouseInventorySessions.id, sessionItem.sessionId));
 
@@ -1423,9 +1453,12 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
 
   finishInventorySession: protectedProcedure
     .input(z.object({ sessionId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Rev. 4547 — tenant guard (antes inexistente: IDOR por sessionId).
+      const sess = await assertInventorySessionAccess(db, ctx, input.sessionId);
 
       // ── Aplicar correções de estoque ──────────────────────────────────────
       // Todos os itens contados (conferido + divergente) têm quantidadeFisica
@@ -1435,8 +1468,19 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         .from(warehouseInventorySessionItems)
         .where(eq(warehouseInventorySessionItems.sessionId, input.sessionId));
 
+      let divergenciasRegistradas = 0;
       for (const item of sessionItems) {
         if (item.quantidadeFisica != null && item.itemId) {
+          // Item do catálogo (p/ valor unitário e unidade do ledger).
+          const [cat] = await db
+            .select({
+              unidade: almoxarifadoItens.unidade,
+              valorUnitario: almoxarifadoItens.valorUnitario,
+            })
+            .from(almoxarifadoItens)
+            .where(eq(almoxarifadoItens.id, item.itemId))
+            .limit(1);
+
           await db
             .update(almoxarifadoItens)
             .set({
@@ -1444,22 +1488,59 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
               atualizadoEm: new Date(),
             } as any)
             .where(eq(almoxarifadoItens.id, item.itemId));
+
+          // Rev. 4547 — LEDGER PERMANENTE: toda divergência aplicada vira uma
+          // linha em warehouse_inventory_ajustes (sobrevive a cancelamentos e
+          // permite medir o erro de processo do almoxarifado ao longo do tempo).
+          const dif = parseFloat(String(item.diferenca ?? "0")) || 0;
+          if (Math.abs(dif) >= 0.001) {
+            const vu = cat?.valorUnitario != null ? parseFloat(String(cat.valorUnitario)) : null;
+            await db
+              .insert(warehouseInventoryAjustes)
+              .values({
+                companyId: sess.companyId,
+                obraId: sess.obraId ?? null,
+                sessionId: input.sessionId,
+                sessionItemId: item.id,
+                semanaRef: sess.semanaRef ?? null,
+                itemId: item.itemId,
+                itemNome: item.itemNome ?? null,
+                unidade: cat?.unidade ?? null,
+                quantidadeSistema: String(item.quantidadeSistema ?? "0"),
+                quantidadeFisica: String(item.quantidadeFisica),
+                diferenca: String(dif),
+                valorUnitario: vu != null && !isNaN(vu) ? String(vu) : null,
+                valorDiferenca: vu != null && !isNaN(vu) ? (dif * vu).toFixed(2) : null,
+                observacoes: item.observacoes ?? null,
+                registradoPorId: ctx.user.id,
+                registradoPorNome: ctx.user.name || "",
+              } as any)
+              .onConflictDoNothing();
+            divergenciasRegistradas++;
+          }
         }
       }
 
       await db
         .update(warehouseInventorySessions)
-        .set({ status: "concluido", concluidoEm: new Date().toISOString() } as any)
+        .set({
+          status: "concluido",
+          concluidoEm: new Date().toISOString(),
+          estoqueAplicadoEm: new Date().toISOString(),
+        } as any)
         .where(eq(warehouseInventorySessions.id, input.sessionId));
 
-      return { success: true };
+      return { success: true, divergenciasRegistradas };
     }),
 
   cancelInventorySession: protectedProcedure
     .input(z.object({ sessionId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Rev. 4547 — tenant guard (antes inexistente: IDOR por sessionId).
+      await assertInventorySessionAccess(db, ctx, input.sessionId);
 
       await db
         .delete(warehouseInventorySessionItems)
@@ -1470,6 +1551,64 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         .where(eq(warehouseInventorySessions.id, input.sessionId));
 
       return { success: true };
+    }),
+
+  // Rev. 4547 — LISTA DO LEDGER DE DIVERGÊNCIAS (read-only). Base para medir
+  // o erro de processo do almoxarifado ao longo do tempo (qtd e R$).
+  listarDivergenciasInventario: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().nullable().optional(),
+      limit: z.number().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
+      const conds: any[] = [eq(warehouseInventoryAjustes.companyId, input.companyId)];
+      if (input.obraId === null) {
+        conds.push(sql`${warehouseInventoryAjustes.obraId} IS NULL`);
+      } else if (input.obraId !== undefined) {
+        conds.push(eq(warehouseInventoryAjustes.obraId, input.obraId));
+      }
+
+      const rows = await db
+        .select()
+        .from(warehouseInventoryAjustes)
+        .where(and(...conds))
+        .orderBy(desc(warehouseInventoryAjustes.criadoEm), desc(warehouseInventoryAjustes.id))
+        .limit(input.limit ?? 500);
+
+      // Obra guard: usuários restritos só veem divergências de obras permitidas.
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const filtered = allowed === null
+        ? rows
+        : rows.filter((r: any) => r.obraId == null || allowed.includes(r.obraId));
+
+      // Resolve nome da obra (1 query).
+      const obraIdsUnicos = Array.from(
+        new Set(filtered.map((r: any) => r.obraId).filter((x: any) => x != null))
+      ) as number[];
+      const mapObras = new Map<number, string>();
+      if (obraIdsUnicos.length > 0) {
+        const obrasRows = await db
+          .select({ id: obras.id, nome: obras.nome, codigo: obras.codigo })
+          .from(obras)
+          .where(inArray(obras.id, obraIdsUnicos));
+        for (const o of obrasRows) {
+          mapObras.set(o.id, o.codigo ? `${o.codigo} – ${o.nome}` : o.nome);
+        }
+      }
+
+      return filtered.map((r: any) => ({
+        ...r,
+        obraNome: r.obraId == null ? "Almoxarifado Central" : (mapObras.get(r.obraId) ?? "Obra"),
+      }));
     }),
 
   // ── DESCONTO EM FOLHA — ITEM PERDIDO ─────────────────────────────
