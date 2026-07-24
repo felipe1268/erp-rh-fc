@@ -143,6 +143,19 @@ function getExpectedMinsFromJornada(jornadaTrabalho: string | null | undefined, 
   } catch { return null; }
 }
 
+// Chave de AGRUPAMENTO por pessoa: preserva dígitos!
+// O relógio pode ser configurado com códigos internos (ex: "jfc063", "jfc066").
+// A normalização de nome (que remove dígitos) fazia "jfc063" e "jfc066" colidirem
+// na MESMA chave "JFC", fundindo as batidas de funcionários diferentes num só.
+function normalizeGroupKey(name: string): string {
+  return name
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function normalizeNameForMatch(name: string): string {
   return name
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -383,7 +396,10 @@ function matchEmployee(
 
   // 0. Match by memory mapping (vinculações anteriores salvas)
   if (memoryMappings && memoryMappings.length > 0) {
-    const normalizedMemory = memoryMappings.find(m => normalizeNameForMatch(m.dixiName) === normalized);
+    // Comparação com dígitos preservados: mapeamentos como "jfc063" não podem
+    // colidir com "jfc066" (a normalização de nome removeria os números).
+    const groupKey = normalizeGroupKey(dixiName);
+    const normalizedMemory = memoryMappings.find(m => normalizeGroupKey(m.dixiName) === groupKey);
     if (normalizedMemory) {
       const emp = employeeList.find(e => e.id === normalizedMemory.employeeId);
       if (emp) return emp;
@@ -470,7 +486,7 @@ function processRecords(
   const nameToEmployee: Record<string, { id: number; nomeCompleto: string; jornadaTrabalho?: any } | null> = {};
 
   for (const r of records) {
-    const key = normalizeNameForMatch(r.nome);
+    const key = normalizeGroupKey(r.nome);
     if (!grouped[key]) {
       grouped[key] = {};
       nameToEmployee[key] = matchEmployee(r.nome, employeeList, r.dixiId, memoryMappings);
@@ -487,8 +503,8 @@ function processRecords(
   for (const [normName, days] of Object.entries(grouped)) {
     const emp = nameToEmployee[normName];
     if (!emp) {
-      const originalName = records.find(r => normalizeNameForMatch(r.nome) === normName)?.nome || normName;
-      const dixiId = records.find(r => normalizeNameForMatch(r.nome) === normName)?.dixiId || null;
+      const originalName = records.find(r => normalizeGroupKey(r.nome) === normName)?.nome || normName;
+      const dixiId = records.find(r => normalizeGroupKey(r.nome) === normName)?.dixiId || null;
       unmatchedNames.push(originalName);
       
       // Salvar registros não identificados para vinculação posterior

@@ -1,4 +1,43 @@
 /**
+ * Rev. 4543 - FIX: IMPORT DIXI — CÓDIGOS "jfcNNN" COLIDIAM E FUNDIAM BATIDAS DE 2 FUNCIONÁRIOS
+ *
+ * SINTOMA (relatado pelo usuário):
+ *   Antonio Wagner (código interno JFC063) aparecia no arquivo .xls do relógio
+ *   DIXI (obra Igreja São Geraldo - Poita), mas o ponto dele não subia — espelho
+ *   em branco (20 faltas), só o dia 15/06 (lançamento manual). Ao mesmo tempo,
+ *   Marco Antonio (JFC066) ficou com 16 dias e batidas "estranhas" (pares
+ *   duplicados tipo 06:52/06:54/06:57 e horas trabalhadas quebradas: 0:10, 0:16).
+ *
+ * CAUSA-RAIZ:
+ *   O relógio da obra foi configurado com o CÓDIGO INTERNO no campo Nome
+ *   ("jfc063", "jfc066"...). Em processRecords (fechamentoPonto.ts), a chave de
+ *   agrupamento por pessoa usava normalizeNameForMatch, que REMOVE TODOS OS
+ *   DÍGITOS ([^A-Z\s] → ""). Assim "jfc063" e "jfc066" viravam a MESMA chave
+ *   "JFC": todas as batidas dos dois funcionários caíam num grupo só, matchEmployee
+ *   era chamado 1x com o primeiro nome visto (jfc066 → Marco) e TUDO era
+ *   atribuído ao Marco. Antonio ficava zerado; Marco herdava batidas fundidas
+ *   (por isso as inconsistências e horários sem sentido). O previewDixi agrupa
+ *   pelo nome BRUTO (rec.nome), por isso o preview mostrava os dois corretamente.
+ *
+ * FIX:
+ *   - Nova normalizeGroupKey: normaliza acento/caixa/espaços mas PRESERVA
+ *     DÍGITOS ([^A-Z0-9\s]). Usada: (1) na chave de agrupamento de
+ *     processRecords, (2) no lookup do originalName/dixiId de não-identificados,
+ *     (3) na comparação de memoryMappings em matchEmployee (mapeamento "jfc063"
+ *     não pode casar com "jfc066").
+ *   - normalizeNameForMatch continua igual para matching de NOMES reais
+ *     (etapas 2-4), pois nomes de pessoas não têm dígitos; o match por código
+ *     interno (etapa 1.5) já usa o nome bruto uppercase.
+ *
+ * DADOS:
+ *   Nenhuma correção direta no banco — basta REIMPORTAR o mesmo arquivo .xls
+ *   (modo padrão replace_all apaga fonte='dixi' do mês/obra e regrava certo;
+ *   lançamentos manuais e ciclos travados continuam preservados).
+ *
+ * ARQUIVOS: server/routers/fechamentoPonto.ts (normalizeGroupKey + 3 usos).
+ *   ZERO schema change.
+ */
+/**
  * Rev. 4542 - FEAT: COMUNICADOS INTERNOS — PDF P/ WHATSAPP + LINK PÚBLICO DE CIÊNCIA
  *
  * MOTIVAÇÃO:
