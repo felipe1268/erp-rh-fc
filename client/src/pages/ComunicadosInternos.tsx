@@ -231,7 +231,7 @@ export default function ComunicadosInternos() {
     onError: (e) => toast.error(e.message),
   });
   const concluirMut = trpc.comunicadosInternos.concluir.useMutation({
-    onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado concluído com sucesso"); },
+    onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado emitido — edição e exclusão bloqueadas"); },
     onError: (e) => toast.error(e.message),
   });
   const reverterMut = trpc.comunicadosInternos.reverter.useMutation({
@@ -677,12 +677,12 @@ export default function ComunicadosInternos() {
             </span>
             {!isConcluido && (
               <Button size="sm"
-                className={_signPending ? "bg-slate-200 text-slate-500 cursor-not-allowed hover:bg-slate-200" : "bg-green-600 hover:bg-green-700"}
-                disabled={concluirMut.isPending || _signPending}
-                title={_signPending ? `Aguardando assinaturas: ${_totalAssView} de ${_totalDestView} assinaram` : ""}
-                onClick={() => { if (confirm("Concluir este comunicado? Após concluído, ele não poderá ser editado ou excluído.")) concluirMut.mutate({ id: c.id, companyId }); }}>
+                className="bg-green-600 hover:bg-green-700"
+                disabled={concluirMut.isPending}
+                title={_signPending ? `Assinaturas seguem sendo coletadas após a emissão (${_totalAssView} de ${_totalDestView} assinaram)` : ""}
+                onClick={() => { if (confirm("Emitir este comunicado? Após emitido, ele NÃO poderá mais ser editado ou excluído. As assinaturas continuam sendo coletadas normalmente.")) concluirMut.mutate({ id: c.id, companyId }); }}>
                 {concluirMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-                {_signPending ? "Aguardando Assinaturas" : "Concluir"}
+                Emitir Comunicado
               </Button>
             )}
             <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50"

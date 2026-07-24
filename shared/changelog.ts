@@ -1,4 +1,38 @@
 /**
+ * Rev. 4545 - FIX: COMUNICADOS INTERNOS — "EMITIR" TRAVA EDIÇÃO IMEDIATAMENTE (SEM EXIGIR 100% DAS ASSINATURAS)
+ *
+ * SINTOMA:
+ *   Comunicados 008/2026 e 006/2026 ("Pendente por Assinatura", 0% assinado)
+ *   continuavam com botões Editar/Excluir na lista, enquanto os antigos
+ *   (001-004) estavam travados. Usuário: "por que os comunicados publicados
+ *   estão passíveis de edição?"
+ *
+ * CAUSA-RAIZ:
+ *   Edição/exclusão só é bloqueada quando status="concluido". O fluxo antigo
+ *   permitia CONCLUIR/EMITIR com assinaturas pendentes (por isso 001-004 estão
+ *   "concluido" + badge "Assinaturas Pendentes" e travados). Uma mudança
+ *   posterior passou a EXIGIR 100% das assinaturas para concluir (guard no
+ *   server + botão desabilitado "Aguardando Assinaturas" no client) — resultado:
+ *   comunicado com destinatários nunca chegava a "concluido" e ficava editável
+ *   indefinidamente, mesmo já circulando para assinatura.
+ *
+ * DECISÃO DO USUÁRIO:
+ *   Rascunho é editável enquanto está em revisão; ao clicar EMITIR, trava
+ *   imediatamente para edição/exclusão, mesmo sem nenhuma assinatura. As
+ *   assinaturas continuam sendo coletadas depois (badge "Assinaturas
+ *   Pendentes"). Escape hatch continua sendo "Reverter" (admin_master).
+ *
+ * FIX:
+ *   - server/routers/comunicadosInternos.ts (concluir): removido o guard
+ *     "Todos devem assinar antes de concluir".
+ *   - client/src/pages/ComunicadosInternos.tsx: botão renomeado para
+ *     "Emitir Comunicado", sempre habilitado quando não-concluído; confirm
+ *     deixa claro que após emitir não há mais edição/exclusão.
+ *
+ * ARQUIVOS: server/routers/comunicadosInternos.ts, client/src/pages/ComunicadosInternos.tsx.
+ * ZERO schema change.
+ */
+/**
  * Rev. 4544 - FIX: AUTORIZAÇÃO ADMIN (COMPRAS) — E-MAIL EM MAIÚSCULAS NÃO ENCONTRAVA O USUÁRIO
  *
  * SINTOMA:

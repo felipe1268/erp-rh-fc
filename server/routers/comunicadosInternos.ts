@@ -299,50 +299,9 @@ export const comunicadosInternosRouter = router({
       if (row.status === "concluido") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Comunicado já está concluído" });
       }
-      // Determina a lista de funcionários que devem assinar
-      let activeIds: number[] = [];
-      let temListaEspecifica = false;
-      if (row.destinatariosJson) {
-        try {
-          const destArr = JSON.parse(row.destinatariosJson as string);
-          if (Array.isArray(destArr) && destArr.length > 0) {
-            const rawIds = destArr
-              .map((x: any) => Number(typeof x === "object" ? (x.id ?? x) : x))
-              .filter((n: number) => !isNaN(n) && n > 0);
-            if (rawIds.length > 0) {
-              const activeDestinatarios = await db
-                .select({ id: employees.id })
-                .from(employees)
-                .where(and(inArray(employees.id, rawIds), eq(employees.status, "Ativo")));
-              activeIds = activeDestinatarios.map(e => e.id);
-              temListaEspecifica = true;
-            }
-          }
-        } catch {}
-      }
-      if (!temListaEspecifica) {
-        // Sem lista específica → todos os funcionários ativos da empresa devem assinar
-        const ativos = await db
-          .select({ id: employees.id })
-          .from(employees)
-          .where(and(eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")));
-        activeIds = ativos.map(e => e.id);
-      }
-      if (activeIds.length > 0) {
-        const [{ assinados }] = await db
-          .select({ assinados: count(comunicadoAssinaturas.id) })
-          .from(comunicadoAssinaturas)
-          .where(and(
-            eq(comunicadoAssinaturas.comunicadoId, input.id),
-            inArray(comunicadoAssinaturas.employeeId, activeIds),
-          ));
-        if (Number(assinados) < activeIds.length) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `Aguardando assinaturas: ${Number(assinados)} de ${activeIds.length} colaborador(es) ativo(s) assinaram. Todos devem assinar antes de concluir.`,
-          });
-        }
-      }
+      // Rev. 4545 — EMITIR não exige mais 100% das assinaturas: ao emitir, o comunicado
+      // trava para edição/exclusão imediatamente (status "concluido"); as assinaturas
+      // continuam sendo coletadas depois (badge "Assinaturas Pendentes" na lista).
       await db.update(comunicadosInternos).set({
         status: "concluido",
         concluidoPor: ctx.user.name ?? "Sistema",
