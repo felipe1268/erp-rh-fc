@@ -2942,13 +2942,20 @@ export const comprasRouter = router({
         rows = rows.filter(i => i.obraId != null && allowedObras.has(i.obraId));
       }
       const hoje = new Date();
+      // Rev. 4554 — nome da obra p/ o alerta global (abre no login, fora do Almoxarifado).
+      const obraIds = Array.from(new Set(rows.map(r => r.obraId).filter((v): v is number => v != null)));
+      const obraNomeMap = new Map<number, string>();
+      if (obraIds.length > 0) {
+        const obrasRows = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIds));
+        for (const o of obrasRows) obraNomeMap.set(o.id, o.nome);
+      }
       return rows
         .filter(i => i.dataVencimentoLocacao)
         .map(i => {
           const venc = new Date(i.dataVencimentoLocacao!);
           const diffDias = Math.ceil((venc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
           const alertaDias = (i as any).diasAlertaLocacao ?? 7;
-          return { ...i, diasParaVencimento: diffDias, alertaDias };
+          return { ...i, diasParaVencimento: diffDias, alertaDias, obraNome: i.obraId != null ? (obraNomeMap.get(i.obraId) ?? null) : null };
         })
         .filter(i => i.diasParaVencimento <= i.alertaDias)
         .sort((a, b) => a.diasParaVencimento - b.diasParaVencimento);

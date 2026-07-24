@@ -1,4 +1,30 @@
 /**
+ * Rev. 4554 - UX: ALERTA DE LOCAÇÕES A VENCER AGORA ABRE NO LOGIN (GLOBAL)
+ *
+ * PEDIDO DO USUÁRIO: "não precisa ser abrindo o almoxarifado.. pensei em fazer
+ * o login do sistema mesmo.. fica mais facil para não esquecer de renovar".
+ *
+ * MUDANÇAS (evolução direta da Rev. 4553):
+ *   1. NOVO COMPONENTE GLOBAL `client/src/components/AlertaLocacoesVencendo.tsx`:
+ *      modal de locações a vencer montado no DashboardLayout (junto de
+ *      AuditoriaAlmoxPendingAlert) — abre automaticamente em QUALQUER tela logo
+ *      após o login, 1x por sessão por empresa (sessionStorage
+ *      `fcAlertaLocacaoShown:<companyId>`). Mostra item, obra, fornecedor,
+ *      vencimento, valor mensal e badge de dias; CTA "Ver Equipamentos Locados"
+ *      → /equipamentos/locados (Renovar/Devolver ficam lá).
+ *   2. AUTO-OPEN REMOVIDO do almoxarifado/index.tsx (Rev. 4553) — o chip manual
+ *      "N locações a vencer" + modal da tela continuam intactos.
+ *   3. SERVER (compras.ts — getItensLocadosVencendo): resposta ganhou `obraNome`
+ *      (batch lookup em `obras`) pro alerta global contextualizar fora do
+ *      Almoxarifado.
+ *   4. Regras preservadas: toggle `almox_alerta_locacao_auto` (só decide após a
+ *      query de critérios resolver — sem race) + filtro por obras permitidas
+ *      (getAlmoxAllowedObraIdSet) no server.
+ *
+ * Arquivos: `AlertaLocacoesVencendo.tsx` (novo), `DashboardLayout.tsx`,
+ * `almoxarifado/index.tsx`, `server/routers/compras.ts`. ZERO schema change.
+ */
+/**
  * Rev. 4553 - FEAT: ALMOXARIFADO — ALERTA AUTOMÁTICO DE LOCAÇÕES A VENCER (POR OBRA + TOGGLE)
  *
  * PEDIDO DO USUÁRIO: "quero um alerta mais incisivo para vencimento de locação..

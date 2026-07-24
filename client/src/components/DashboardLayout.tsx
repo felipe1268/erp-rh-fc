@@ -49,6 +49,7 @@ import { ReservasAlertModal } from './compras/ReservasAlertModal';
 import FeriasGozoPrompt from './FeriasGozoPrompt';
 import { FCSignPendingAlertGlobal } from './FCSignPendingAlertGlobal';
 import { AuditoriaAlmoxPendingAlert } from './AuditoriaAlmoxPendingAlert';
+import { AlertaLocacoesVencendo } from './AlertaLocacoesVencendo';
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -991,6 +992,8 @@ export default function DashboardLayout({
       <FeriasGozoPromptGlobal />
       <FCSignPendingAlertGlobal />
       <AuditoriaAlmoxPendingAlert />
+      {/* Rev. 4554 — alerta global de locações a vencer (abre 1x por sessão após o login) */}
+      <AlertaLocacoesVencendo />
     </SidebarProvider>
   );
 }
