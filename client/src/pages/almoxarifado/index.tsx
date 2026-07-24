@@ -211,6 +211,8 @@ export default function AlmoxarifadoPage() {
     textoBotao: string;
     executar: (p: { senha?: string; justificativa: string }) => void;
     carregando?: boolean;
+    /** Rev. 4536 — progresso 0-100 do lote (mostrado no botão do modal) */
+    progresso?: number | null;
     erro?: string | null;
   }>(null);
   // Rev. 2388 — Auditoria: log + tela de validação por admin.
@@ -741,6 +743,13 @@ export default function AlmoxarifadoPage() {
         let firstError: any = null;
         let okCount = 0;
         const idsRemovidos = new Set<number>();
+        // Rev. 4536 — progresso real por unidade processada (0→100% no botão)
+        const totalUnidades = itensSel.reduce((acc, it) => {
+          const subs = (it as any)._subItems as any[] | undefined;
+          return acc + (subs && subs.length > 1 ? subs.length : 1);
+        }, 0);
+        let processadas = 0;
+        setModalAuditoria((p) => p ? { ...p, progresso: 0 } : p);
         for (const it of itensSel) {
           const subs = (it as any)._subItems as any[] | undefined;
           const ids = subs && subs.length > 1 ? subs.map((s: any) => s.id) : [it.id];
@@ -753,6 +762,10 @@ export default function AlmoxarifadoPage() {
               cardOk = false;
               if (!firstError) firstError = e;
               if (e?.data?.code === "UNAUTHORIZED" || e?.data?.code === "BAD_REQUEST") break;
+            } finally {
+              processadas++;
+              const pct = Math.round((processadas / totalUnidades) * 100);
+              setModalAuditoria((p) => p ? { ...p, progresso: pct } : p);
             }
           }
           if (cardOk) idsRemovidos.add(it.id);
@@ -772,9 +785,11 @@ export default function AlmoxarifadoPage() {
             });
           }
           const prefix = okCount > 0 ? `${okCount} já removido(s). ` : "";
-          setModalAuditoria((p) => p ? { ...p, carregando: false, erro: prefix + (firstError.message || "Falha ao remover.") } : p);
+          setModalAuditoria((p) => p ? { ...p, carregando: false, progresso: null, erro: prefix + (firstError.message || "Falha ao remover.") } : p);
           return;
         }
+        // Rev. 4536 — segura o 100% visível por um instante antes de fechar (regra de ouro)
+        await new Promise((r) => setTimeout(r, 800));
         setModalAuditoria(null);
         sairModoSelecao();
         if (firstError) {
@@ -5938,6 +5953,7 @@ export default function AlmoxarifadoPage() {
         requerSenha={requerSenha}
         requerJustificativa={requerJustificativa}
         carregando={!!modalAuditoria?.carregando}
+        progresso={modalAuditoria?.progresso ?? null}
         erroExterno={modalAuditoria?.erro ?? null}
         onCancelar={() => setModalAuditoria(null)}
         onConfirmar={(p) => { setModalAuditoria(prev => prev ? { ...prev, erro: null } : prev); modalAuditoria?.executar(p); }}

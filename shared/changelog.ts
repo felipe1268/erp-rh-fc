@@ -1,4 +1,26 @@
 /**
+ * Rev. 4536 - UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "REMOVER TODOS" (EXCLUSÃO EM LOTE)
+ *
+ * MOTIVAÇÃO:
+ *   Ao remover N itens selecionados (ex.: 187), o botão "Remover todos" do
+ *   ModalConfirmacaoAuditoria mostrava apenas um spinner sem indicação de
+ *   andamento. Regra de ouro do usuário: toda operação assíncrona longa deve
+ *   mostrar percentual 0→100% no próprio botão.
+ *
+ * IMPLEMENTAÇÃO:
+ *   - client/src/components/almoxarifado/ModalConfirmacaoAuditoria.tsx: nova prop
+ *     `progresso?: number | null`. Quando carregando + progresso numérico, o botão
+ *     confirmar ganha barra de fundo `bg-white/15` (width = pct%) e o texto vira
+ *     "Removendo… XX%". Sem progresso, comportamento antigo (spinner + label).
+ *   - client/src/pages/almoxarifado/index.tsx: estado modalAuditoria ganhou campo
+ *     `progresso`. No loop de exclusão em lote (handleExcluirSelecionados), o total
+ *     de UNIDADES (cards + _subItems) é pré-calculado e cada mutateAsync incrementa
+ *     `processadas` num finally → progresso REAL ((i+1)/total)*100. No retry após
+ *     erro de senha, progresso reseta pra null.
+ *
+ *   ZERO schema change.
+ */
+/**
  * Rev. 4535 - UX: ALMOXARIFADO CENTRAL — SELEÇÃO NATURAL (CHECKBOX SEMPRE VISÍVEL NOS CARDS)
  *
  * MOTIVAÇÃO:

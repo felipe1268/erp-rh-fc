@@ -12,6 +12,8 @@ interface Props {
    *  Default true preserva o comportamento da Rev. 2388. */
   requerJustificativa?: boolean;
   carregando?: boolean;
+  /** Rev. 4536 — Progresso 0-100 da operação em lote; mostrado no próprio botão. */
+  progresso?: number | null;
   /** Erro vindo da última tentativa (ex: "Senha incorreta") — mantém modal aberto pra retry. */
   erroExterno?: string | null;
   onCancelar: () => void;
@@ -21,7 +23,7 @@ interface Props {
 export function ModalConfirmacaoAuditoria(props: Props) {
   const {
     aberto, titulo, subtitulo, descricao, textoBotaoConfirmar,
-    requerSenha, requerJustificativa = true, carregando, erroExterno, onCancelar, onConfirmar,
+    requerSenha, requerJustificativa = true, carregando, progresso, erroExterno, onCancelar, onConfirmar,
   } = props;
   const [senha, setSenha] = useState("");
   const [justificativa, setJustificativa] = useState("");
@@ -124,10 +126,21 @@ export function ModalConfirmacaoAuditoria(props: Props) {
           <button
             onClick={submeter}
             disabled={carregando}
-            className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
+            className="relative overflow-hidden flex-1 px-4 py-3 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            {textoBotaoConfirmar}
+            {/* Rev. 4536 — barra de progresso 0→100% no próprio botão (regra de ouro) */}
+            {carregando && typeof progresso === "number" && (
+              <span
+                className="absolute inset-y-0 left-0 bg-white/15 transition-all duration-200"
+                style={{ width: `${Math.min(100, Math.max(0, progresso))}%` }}
+              />
+            )}
+            <span className="relative flex items-center justify-center gap-2">
+              {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              {carregando && typeof progresso === "number"
+                ? `Removendo… ${Math.min(100, Math.max(0, Math.round(progresso)))}%`
+                : textoBotaoConfirmar}
+            </span>
           </button>
         </div>
       </div>
