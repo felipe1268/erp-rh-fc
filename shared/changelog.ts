@@ -1,4 +1,26 @@
 /**
+ * Rev. 4538 - UX: NOTAS FISCAIS (RECEBIDAS) — BANNER LIMPO NO MODO DIÁRIO
+ *
+ * MOTIVAÇÃO:
+ *   Com o novo modo de agendamento diário (Rev. 4537), o banner "Próxima sync em
+ *   1h 46min…" com anel de countdown e botões "Prorrogar +2h/+4h/+8h/+24h" perdeu
+ *   sentido — o usuário pediu para reformar o layout: sem contador de horas,
+ *   mostrar o critério configurado automaticamente e manter apenas o Pausar.
+ *
+ * IMPLEMENTAÇÃO (client/src/pages/financeiro/FinanceiroNotasFiscais.tsx):
+ *   - Quando sefazCfg.sync_modo === 'diario', o banner antigo é substituído por um
+ *     card indigo/sky: ícone-relógio com o horário (HH:MM), título "Sincronização
+ *     automática diária", texto "Consulta a SEFAZ 1x por dia às HH:MM — próxima:
+ *     hoje/amanhã às HH:MM" (+ NSU), última sync à direita e APENAS o botão
+ *     Pausar/Retomar. Sem countdown, sem Prorrogar.
+ *   - Pausado: card cinza "Sincronização pausada" + botão Retomar.
+ *   - Bloqueio SEFAZ (≥2 rate-limits): aviso âmbar informativo (o modo diário já
+ *     reduz chamadas; bloqueio expira sozinho).
+ *   - Rodapé da tabela: "atualizado automaticamente todo dia às HH:MM" dinâmico
+ *     (antes fixo "às 06:00").
+ *   - Modo 'intervalo' mantém o layout anterior intacto. ZERO schema change.
+ */
+/**
  * Rev. 4537 - FEAT: SEFAZ — MODO DE AGENDAMENTO DIÁRIO (1x ÀS HH:MM, A CADA N DIAS)
  *
  * MOTIVAÇÃO:

@@ -1403,6 +1403,80 @@ export default function FinanceiroNotasFiscais() {
                 const _consec = _rlResult?.rateLimitedAt ? Math.max(1, _rlResult?.rateLimitConsecutive ?? 1) : 0;
                 const _rlMult = _consec >= 4 ? 4 : _consec >= 2 ? 2 : 1;
                 const gateTotal = (intervaloH * 60 + 3) * 60 * _rlMult;
+                // ── Rev. 4538 — Modo DIÁRIO: layout limpo, sem countdown de horas nem "Prorrogar" ──
+                const isDiario = String(sefazCfg.sync_modo || "intervalo") === "diario";
+                if (isDiario) {
+                  const hh = String(Number(sefazCfg.sync_hora ?? 6)).padStart(2, "0");
+                  const mm = String(Number(sefazCfg.sync_minuto ?? 0)).padStart(2, "0");
+                  const nDias = Math.max(1, Number(sefazCfg.sync_intervalo_dias ?? 1));
+                  // Próxima execução: hoje se ainda não passou do horário E não sincronizou hoje; senão amanhã (ou +N dias)
+                  const agora = new Date();
+                  const horarioHoje = new Date(agora); horarioHoje.setHours(Number(sefazCfg.sync_hora ?? 6), Number(sefazCfg.sync_minuto ?? 0), 0, 0);
+                  const lastSync = sefazCfg.last_sync_at ? parseAsUTC(sefazCfg.last_sync_at) : null;
+                  const syncouHoje = lastSync ? lastSync.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) === agora.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : false;
+                  const proximaHoje = agora < horarioHoje && !syncouHoje;
+                  const proximaLabel = proximaHoje ? `hoje às ${hh}:${mm}` : nDias === 1 ? `amanhã às ${hh}:${mm}` : `em ${nDias} dia(s), às ${hh}:${mm}`;
+                  return (
+                    <div className={`rounded-xl border px-4 py-3.5 ${syncOn ? "border-indigo-200 bg-gradient-to-r from-indigo-50 to-sky-50" : "border-slate-200 bg-slate-50"}`}>
+                      <div className="flex items-center gap-3.5 flex-wrap">
+                        {/* Ícone relógio */}
+                        <div className={`shrink-0 w-14 h-14 rounded-2xl flex flex-col items-center justify-center ${syncOn ? "bg-indigo-600 text-white" : "bg-slate-300 text-slate-600"}`}>
+                          <span className="text-lg leading-none">{syncOn ? "🕚" : "⏸"}</span>
+                          <span className="text-[10px] font-bold mt-0.5 tabular-nums">{hh}:{mm}</span>
+                        </div>
+                        {/* Texto */}
+                        <div className="flex-1 min-w-[200px]">
+                          <p className={`text-sm font-bold ${syncOn ? "text-indigo-900" : "text-slate-600"}`}>
+                            {syncOn ? "Sincronização automática diária" : "Sincronização pausada"}
+                          </p>
+                          <p className={`text-xs mt-0.5 leading-relaxed ${syncOn ? "text-indigo-700" : "text-slate-500"}`}>
+                            {syncOn
+                              ? <>Consulta a SEFAZ <strong>{nDias === 1 ? "1x por dia" : `a cada ${nDias} dias`} às {hh}:{mm}</strong> (Brasília) — próxima: <strong>{proximaLabel}</strong>. O CNPJ fica em descanso o resto do tempo.</>
+                              : <>Nenhuma chamada será feita à SEFAZ. Retome quando quiser voltar a buscar notas.</>}
+                            {nsuNum > 0 && <> · NSU: <strong>{nsuNum.toLocaleString("pt-BR")}</strong></>}
+                          </p>
+                          {syncOn && _consec >= 2 && (
+                            <p className="text-xs mt-1 text-amber-800">
+                              ⚠️ <strong>SEFAZ bloqueou {_consec}× seguidas.</strong> O modo diário já reduz as chamadas — o bloqueio expira sozinho em 24–48h.
+                            </p>
+                          )}
+                        </div>
+                        {/* Última sync + Pausar/Retomar */}
+                        <div className="flex items-center gap-3 shrink-0 ml-auto">
+                          {sefazCfg.last_sync_at && (
+                            <div className="text-right text-xs text-slate-400 hidden sm:block">
+                              <div>Última sync</div>
+                              <div className="font-medium text-slate-500">
+                                {parseAsUTC(sefazCfg.last_sync_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+                              </div>
+                            </div>
+                          )}
+                          {syncOn ? (
+                            <button
+                              onClick={() => sefazToggleMut.mutate({ companyId: companyId!, enabled: false })}
+                              disabled={sefazToggleMut.isPending}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-60 transition-colors"
+                            >
+                              {sefazToggleMut.isPending
+                                ? <><span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> Pausando…</>
+                                : <>⏸ Pausar</>}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => sefazToggleMut.mutate({ companyId: companyId!, enabled: true })}
+                              disabled={sefazToggleMut.isPending}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+                            >
+                              {sefazToggleMut.isPending
+                                ? <><span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> Ligando…</>
+                                : <>▶ Retomar</>}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                   <div className={`rounded-xl border px-4 py-3 ${
                     !syncOn
@@ -1963,7 +2037,9 @@ export default function FinanceiroNotasFiscais() {
                 </div>
                 {nfeRec.length > 0 && (
                   <div className="px-4 py-2.5 border-t text-xs text-slate-400 bg-slate-50/60 flex items-center justify-between gap-3 flex-wrap">
-                    <span>{nfeRec.length} NF-e{nfeRec.length !== 1 ? "s" : ""} recebida{nfeRec.length !== 1 ? "s" : ""} via SEFAZ — atualizado automaticamente todo dia às 06:00.</span>
+                    <span>{nfeRec.length} NF-e{nfeRec.length !== 1 ? "s" : ""} recebida{nfeRec.length !== 1 ? "s" : ""} via SEFAZ — {String(sefazCfg?.sync_modo || "") === "diario"
+                      ? `atualizado automaticamente todo dia às ${String(Number(sefazCfg?.sync_hora ?? 6)).padStart(2, "0")}:${String(Number(sefazCfg?.sync_minuto ?? 0)).padStart(2, "0")}.`
+                      : "atualizado automaticamente pela sincronização."}</span>
                     {nfeSemXml > 0 && (
                       <button
                         type="button"
