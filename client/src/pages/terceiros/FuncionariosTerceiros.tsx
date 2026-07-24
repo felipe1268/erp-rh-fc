@@ -543,7 +543,21 @@ export default function FuncionariosTerceiros() {
     let list = funcionarios;
     if (filterStatus !== "all") list = list.filter((f: any) => (f.status || "ativo") === filterStatus);
     if (filterAptidao !== "all") list = list.filter((f: any) => f.statusAptidao === filterAptidao);
-    if (filterObra !== "all") list = list.filter((f: any) => String(f.obraId ?? "") === filterObra || f.obraNome === filterObra);
+    // Rev. 4549 — o filtro de obra casava SÓ pelo id, mas obras existem
+    // duplicadas entre empresas do grupo (mesmo nome, ids diferentes) e o
+    // funcionário terceiro guarda o id da obra da empresa onde foi cadastrado
+    // (ex.: HOTEL DO PAPA = 90004 no cadastro × 270003 no dropdown) → 0
+    // resultados. Agora casa por id OU pelo NOME da obra selecionada
+    // (normalizado: trim + case/acento-insensitive).
+    if (filterObra !== "all") {
+      const norm = (s: any) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const obraSel = (obras as any[]).find((o: any) => String(o.id) === filterObra);
+      const nomeSel = norm(obraSel?.nome);
+      list = list.filter((f: any) =>
+        String(f.obraId ?? "") === filterObra ||
+        (nomeSel !== "" && norm(f.obraNome) === nomeSel)
+      );
+    }
     if (search) {
       const s = search.toLowerCase();
       list = list.filter((f: any) =>
@@ -558,7 +572,7 @@ export default function FuncionariosTerceiros() {
     return [...list].sort((a: any, b: any) =>
       (a.nome || "").trim().localeCompare((b.nome || "").trim(), "pt-BR", { sensitivity: "base" })
     );
-  }, [funcionarios, search, filterAptidao, filterObra, filterStatus]);
+  }, [funcionarios, search, filterAptidao, filterObra, filterStatus, obras]);
 
   // Rev. 2300 — múltipla seleção + bulk update.
   const filteredIds = filtered.map((f: any) => f.id);

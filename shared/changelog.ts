@@ -1,4 +1,39 @@
 /**
+ * Rev. 4549 - FIX: TERCEIROS — FILTRO DE OBRA EM FUNCIONÁRIOS TERCEIROS NÃO RETORNAVA NADA (+ TOLERÂNCIA NO DETECTOR DE BASELINE)
+ *
+ * PEDIDO DO USUÁRIO:
+ *   (1) "Quando colocamos para filtrar os funcionários de terceiros, o filtro
+ *   não está funcionando" — selecionar uma obra (ex.: HOTEL DO PAPA) em
+ *   Funcionários Terceiros retornava "Nenhum funcionário terceiro encontrado"
+ *   mesmo havendo 20 funcionários naquela obra. (2) Falso positivo do detector
+ *   de baseline (Rev. 4548) na obra POITA: "esta obra não teve revisão, foi
+ *   apenas atualização semanal e o ERP está dizendo que houve alteração".
+ *
+ * CAUSA-RAIZ (1) — FILTRO DE OBRA:
+ *   Obras existem DUPLICADAS entre empresas do grupo (mesmo nome, ids
+ *   diferentes — ex.: "HOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV" = id 90004 numa
+ *   empresa e 270003 em outra). O funcionário terceiro guarda o obraId da
+ *   empresa onde foi cadastrado; o dropdown lista as obras da empresa ATIVA.
+ *   O filtro casava só por id (o fallback comparava obraNome === id-string,
+ *   nunca verdadeiro) → interseção vazia → lista sempre 0.
+ *   FIX (FuncionariosTerceiros.tsx): filtro casa por id OU pelo NOME da obra
+ *   selecionada, normalizado (trim + case-insensitive + acento-insensitive).
+ *   `obras` adicionado às deps do useMemo.
+ *
+ * CAUSA-RAIZ (2) — FALSO POSITIVO POITA (projeto 52):
+ *   Apenas 2 tarefas de 1085 no XML semanal tinham Baseline até 07/12
+ *   (re-baselinadas isoladamente; no ERP e nas datas atuais terminam 04/12).
+ *   O detector comparava min/max do envelope com IGUALDADE ESTRITA → 2 tarefas
+ *   com 3 dias de diferença alarmavam o projeto inteiro. A diferença de
+ *   contagem (1085×1055) era só filtro (20 indiretas + marcos, <5%, não era o
+ *   gatilho). FIX (planejamento.ts): envelope só diverge com deslocamento >7
+ *   dias (replanejamento real, como QIU 2 R03, mexe semanas/meses); alerta
+ *   falso gravado no POITA limpo direto no Neon (calendario_json).
+ *
+ * ARQUIVOS: client/src/pages/terceiros/FuncionariosTerceiros.tsx,
+ *   server/routers/planejamento.ts. ZERO schema change.
+ */
+/**
  * Rev. 4548 - FEAT+FIX: PLANEJAMENTO — PACOTE DE ROBUSTEZ DO % PREVISTO (caso QIU 2 FASE 4 / R03)
  *
  * PEDIDO DO USUÁRIO:
