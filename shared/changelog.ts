@@ -1,4 +1,23 @@
 /**
+ * Rev. 4550 - REMOVE: ALMOXARIFADO — VISÃO "📍 SALDO POR OBRA" RETIRADA DO SELETOR
+ *
+ * PEDIDO DO USUÁRIO: "tire isso, não precisa ter" — após explicação da função
+ *   da visão "Saldo por Obra (insumos em cada obra)" (criada na Rev. 2772),
+ *   o usuário decidiu que ela não é necessária.
+ *
+ * O QUE FOI REMOVIDO (client/src/pages/almoxarifado/index.tsx, SÓ CLIENT):
+ *   - Opção "📍 Saldo por Obra" do seletor de contexto de almoxarifado;
+ *   - Bloco de render da visão invertida obra→insumos (seções colapsáveis,
+ *     filtro com/sem saldo, tabela por obra) — ~150 linhas;
+ *   - Estados órfãos `porObraSaldo` e `porObraColapsadas`;
+ *   - Valor sentinela "porObra" do tipo de `obraContexto` e de todos os
+ *     guards/enabled das queries (simplificados de volta a number|null|"todos").
+ *
+ * As visões Consolidado, Almoxarifado Central e por obra específica seguem
+ * intactas. Reversível: o código está no histórico (Rev. 2772). ZERO schema
+ * change, ZERO server change.
+ */
+/**
  * Rev. 4549 - FIX: TERCEIROS — FILTRO DE OBRA EM FUNCIONÁRIOS TERCEIROS NÃO RETORNAVA NADA (+ TOLERÂNCIA NO DETECTOR DE BASELINE)
  *
  * PEDIDO DO USUÁRIO:
