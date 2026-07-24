@@ -27,9 +27,15 @@
  *   - Caso contrário (cópia de revisão sem reimport, cenário original da Rev. 4179),
  *     o comportamento permanece idêntico: usa a revisão baseline.
  *
+ *   - COMPLEMENTO (mesma revisão): rollup da RAIZ agora tem 2 casas decimais e
+ *     NUNCA mostra 100% antes do fim real do cronograma — com Math.round inteiro,
+ *     99,805% na penúltima semana virava 100% uma semana antes do término.
+ *     Clamp: frac >= 1 → 100; senão min(99.99, round 2 casas). O arredondamento
+ *     POR ATIVIDADE (réplica do Texto10 do MSP) permanece inteiro (paridade MSP).
+ *
  * VALIDAÇÃO (projeto 54, curva regenerada):
- *   - Semana 16/07: motor novo = 80% (MSP literal = 79%; antes = 95%).
- *   - Semanas futuras: 83 → 89 → 96 → 100% em 13/08 (antes: 100% em todas).
+ *   - Semana 16/07: motor novo = 79,6% (MSP literal = 79%; antes = 95%).
+ *   - Semanas futuras: 83,02 → 88,84 → 95,84 → 99,76 → 100% em 20/08 (antes: 100% em todas).
  *   - Literais de semanas enviadas continuam prevalecendo sobre o motor (inalterado).
  *
  * ZERO schema change.

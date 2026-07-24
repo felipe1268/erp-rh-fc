@@ -363,9 +363,14 @@ async function regenerarPrevistoSemanasCaminhoB(
   }
 
   for (let j = 0; j < semanas.length; j++) {
-    raiz[j] = raizTotal > 0
-      ? Math.max(0, Math.min(100, Math.round((raizElapsed[j] / raizTotal) * 100)))
-      : 0;
+    if (raizTotal <= 0) { raiz[j] = 0; continue; }
+    // Rev. 4534 — raiz com 2 casas decimais e NUNCA 100% antes do fim real do
+    // cronograma: com Math.round inteiro, 99,805% na penúltima semana virava
+    // 100% uma semana antes do término (bug reportado no HOTEL DO PAPA).
+    // Só mostra 100 quando TODO o tempo útil da baseline foi coberto.
+    const frac = raizElapsed[j] / raizTotal;
+    if (frac >= 1) { raiz[j] = 100; continue; }
+    raiz[j] = Math.max(0, Math.min(99.99, +((frac * 100).toFixed(2))));
   }
 
   const snap = {
