@@ -94,6 +94,80 @@ async function limparSnapshotMspDoProjeto(db: any, projetoId: number) {
   }).where(eq(planejamentoProjetos.id, projetoId));
 }
 
+// Rev. 4548 — Tenant guard compartilhado das mutations de limpeza: espelha o
+// padrão de `salvarMetadadosMSProject` (admin/admin_master = global; usuário
+// comum só na própria empresa). Antes, `limparAvancos`/`limparAvancosSemana`
+// não checavam NADA (IDOR — qualquer logado limpava avanços de outra empresa).
+async function assertProjetoAcesso(db: any, ctx: any, projetoId: number): Promise<void> {
+  const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+    .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, projetoId)).limit(1);
+  if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+  const isAdm = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+  if (!isAdm && String(proj.companyId) !== String(ctx.user.companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+  }
+}
+
+// Rev. 4548 — LIMPEZA CIRÚRGICA por semana (ver comentário na mutation
+// `limparAvancosSemana`). `semanaIni` = Monday da semana (formato do campo
+// `planejamento_avancos.semana`); a janela coberta é [semanaIni, semanaIni+6d]
+// — as fotos (`realizadoSemanas`, literal do previsto) são chaveadas pelo
+// StatusDate/cutoff, que sempre cai dentro da própria semana.
+async function limparFotosDaSemana(db: any, projetoId: number, semanaIni: string): Promise<void> {
+  const ini = String(semanaIni).slice(0, 10);
+  const d = new Date(`${ini}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 6);
+  const fim = d.toISOString().slice(0, 10);
+  const dentro = (k: string) => k >= ini && k <= fim;
+  const [proj] = await db.select({
+    calendarioJson: planejamentoProjetos.calendarioJson,
+    lit: planejamentoProjetos.previstoLiteralJson,
+    dataCorteAtual: planejamentoProjetos.dataCorteAtual,
+  }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, projetoId)).limit(1);
+  if (!proj) return;
+  const patch: any = { atualizadoEm: new Date() };
+  // 1) calendarioJson: foto da semana em realizadoSemanas + snapshot único se for desta semana.
+  if (proj.calendarioJson) {
+    try {
+      const cal = JSON.parse(proj.calendarioJson as any);
+      if (cal.realizadoSemanas && typeof cal.realizadoSemanas === "object") {
+        for (const k of Object.keys(cal.realizadoSemanas)) {
+          if (dentro(String(k).slice(0, 10))) delete cal.realizadoSemanas[k];
+        }
+        if (Object.keys(cal.realizadoSemanas).length === 0) delete cal.realizadoSemanas;
+      }
+      const sd = cal.statusDateSnapshot ? String(cal.statusDateSnapshot).slice(0, 10) : null;
+      if (sd && dentro(sd)) {
+        // O snapshot único da raiz pertence à semana limpa → sai junto. O
+        // `previstoMspSnapshot` do CADASTRO é preservado (não é foto semanal).
+        delete cal.realizadoMspSnapshot;
+        delete cal.statusDateSnapshot;
+      }
+      patch.calendarioJson = JSON.stringify(cal);
+    } catch { /* JSON inesperado → não mexe */ }
+  }
+  // 2) previsto_literal_json: remove SÓ o nº oficial capturado nesta semana.
+  if (proj.lit) {
+    try {
+      const store = JSON.parse(proj.lit as any);
+      if (store?.valores && typeof store.valores === "object") {
+        let mudou = false;
+        for (const k of Object.keys(store.valores)) {
+          if (dentro(String(k).slice(0, 10))) { delete store.valores[k]; mudou = true; }
+        }
+        if (mudou) patch.previstoLiteralJson = JSON.stringify(store);
+      }
+    } catch { /* não mexe */ }
+  }
+  // 3) dataCorteAtual: se o cutoff oficial atual cai na semana limpa, recua-o
+  //    (fica null; o próximo upload/fechamento regrava).
+  const dc = proj.dataCorteAtual ? String(proj.dataCorteAtual).slice(0, 10) : null;
+  if (dc && dentro(dc)) { patch.dataCorteAtual = null; patch.dataCorteIso = null; }
+  await db.update(planejamentoProjetos).set(patch)
+    .where(eq(planejamentoProjetos.id, projetoId));
+  console.log(`[limparFotosDaSemana] projeto=${projetoId} janela=${ini}..${fim} (limpeza cirúrgica Rev. 4548).`);
+}
+
 /**
  * Rev. 2603 — Caminho B: expande o PREVISTO semana-a-semana REPLICANDO a fórmula
  * NATIVA do MS Project em TEMPO ÚTIL (não mais dias corridos), usando o MESMO
@@ -3257,6 +3331,18 @@ export const planejamentoRouter = router({
       // no previsto (não regenera a curva e preserva o snapshot/calendário do
       // cadastro). Default "cadastro" p/ backward compat de chamadas antigas.
       origem:         z.enum(["cadastro", "avanco"]).default("cadastro"),
+      // Rev. 4548 — DETECTOR DE BASELINE DIVERGENTE (caso QIU 2 R03): resumo da
+      // Linha de Base 0 do XML SEMANAL, calculado no client (parseMSProjectFull).
+      // Servidor compara com a baseline da REVISÃO ATIVA no ERP; se divergirem
+      // (replanejamento no MSP sem criar revisão no ERP), grava aviso persistente
+      // em calendarioJson.baselineDivergencia + retorna flag p/ toast imediato.
+      // Só informa/alerta — NUNCA bloqueia o upload nem toca a curva (motor
+      // congelado, Rev. 4534).
+      baselineFingerprint: z.object({
+        nComBaseline: z.number(),
+        minStart:     z.string().nullish(),
+        maxFinish:    z.string().nullish(),
+      }).nullish(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -3280,6 +3366,93 @@ export const planejamentoRouter = router({
       }
       if (input.statusDateIso) {
         patch.dataCorteIso = input.statusDateIso;
+      }
+      // ── Rev. 4548 — DETECTOR DE BASELINE DIVERGENTE (upload semanal) ────────
+      // Compara a Baseline 0 do XML enviado com a baseline da revisão ativa do
+      // ERP. Divergência = o cronograma foi REPLANEJADO no MSP (ex.: R03) sem
+      // criar a revisão correspondente no ERP → a curva do motor está calibrada
+      // numa baseline defasada. Informativo: nunca bloqueia, nunca toca a curva.
+      let baselineDivergencia: any = null;
+      let baselineChecada = false;
+      if (input.origem === "avanco" && input.baselineFingerprint) {
+        try {
+          const revs = await db.select({ id: planejamentoRevisoes.id, status: planejamentoRevisoes.status, descricao: planejamentoRevisoes.descricao })
+            .from(planejamentoRevisoes)
+            .where(eq(planejamentoRevisoes.projetoId, input.projetoId))
+            .orderBy(asc(planejamentoRevisoes.numero));
+          const aprovadas = (revs as any[]).filter(r => r.status === "aprovada");
+          const alvoRev = aprovadas[aprovadas.length - 1] ?? (revs as any[])[0];
+          if (alvoRev?.id) {
+            const ativs = await db.select({
+              bs: planejamentoAtividades.baselineStart,
+              bf: planejamentoAtividades.baselineFinish,
+              di: planejamentoAtividades.dataInicio,
+              df: planejamentoAtividades.dataFim,
+            }).from(planejamentoAtividades)
+              .where(and(
+                eq(planejamentoAtividades.revisaoId, alvoRev.id),
+                eq(planejamentoAtividades.isGrupo, false),
+                eq(planejamentoAtividades.isIndireta, false),
+                // Espelha o filtro do fingerprint do CLIENT (folhas não-marco,
+                // ativas) — filtros diferentes = contagem sempre diverge (falso positivo).
+                eq(planejamentoAtividades.isMarco, false),
+                eq(planejamentoAtividades.disabled, false),
+              ));
+            const toIso = (v: any): string | null => v == null ? null
+              : (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
+            let nErp = 0; let minErp: string | null = null; let maxErp: string | null = null;
+            for (const a of ativs as any[]) {
+              const bs = toIso(a.bs); const bf = toIso(a.bf);
+              if (!bs || !bf) continue;
+              nErp++;
+              if (minErp == null || bs < minErp) minErp = bs;
+              if (maxErp == null || bf > maxErp) maxErp = bf;
+            }
+            // Baseline IMPLÍCITA (Rev. 2533): revisões importadas sem a tag
+            // <Baseline> não gravam baseline_start/finish — o motor calibra no
+            // plano corrente (inicio/fim). Caso real: QIU 2 rev R03 (0 baselines
+            // explícitas). Comparar contra inicio/fim é comparar contra a
+            // calibração REAL do motor.
+            let baselineImplicita = false;
+            if (nErp === 0) {
+              for (const a of ativs as any[]) {
+                const di = toIso(a.di); const df = toIso(a.df);
+                if (!di || !df) continue;
+                nErp++;
+                if (minErp == null || di < minErp) minErp = di;
+                if (maxErp == null || df > maxErp) maxErp = df;
+              }
+              baselineImplicita = nErp > 0;
+            }
+            const fp = input.baselineFingerprint;
+            const minXml = fp.minStart ? String(fp.minStart).slice(0, 10) : null;
+            const maxXml = fp.maxFinish ? String(fp.maxFinish).slice(0, 10) : null;
+            baselineChecada = nErp > 0 && fp.nComBaseline > 0;
+            if (baselineChecada) {
+              // Datas do envelope divergem = replanejamento claro. Contagem só
+              // dispara com diferença >5% (parse XML vs ERP tem folga natural de
+              // poucas folhas — ex.: rev 66 real: 1506/1512 com baseline).
+              const countDiff = Math.abs(fp.nComBaseline - nErp) / Math.max(fp.nComBaseline, nErp);
+              const diverge = (minXml != null && minErp != null && minXml !== minErp)
+                || (maxXml != null && maxErp != null && maxXml !== maxErp)
+                || countDiff > 0.05;
+              if (diverge) {
+                baselineDivergencia = {
+                  detectadaEm: new Date().toISOString(),
+                  statusDate: input.statusDate ?? null,
+                  revisaoId: alvoRev.id,
+                  revisaoNome: alvoRev.descricao ?? null,
+                  xml: { nComBaseline: fp.nComBaseline, minStart: minXml, maxFinish: maxXml },
+                  erp: { nComBaseline: nErp, minStart: minErp, maxFinish: maxErp, baselineImplicita },
+                };
+                console.warn(`[baselineDivergente] projeto=${input.projetoId} rev=${alvoRev.id} XML(n=${fp.nComBaseline} ${minXml}→${maxXml}) ≠ ERP(n=${nErp} ${minErp}→${maxErp})`);
+              }
+            }
+          }
+        } catch (e: any) {
+          console.error(`[baselineDivergente] projeto ${input.projetoId}: falha na checagem (não bloqueia o save):`, e?.message || e);
+          baselineChecada = false;
+        }
       }
       // Rev. 2767 — literal "% Previsto" (Texto10) DESTE upload semanal, capturado
       // do calendarioJson FRESCO (antes do merge sobrescrever pelo valor do cadastro).
@@ -3319,6 +3492,15 @@ export const planejamentoRouter = router({
             histReal[String(sdKey).slice(0, 10)] = Number(newCal.realizadoMspSnapshot);
           }
           if (Object.keys(histReal).length > 0) newCal.realizadoSemanas = histReal;
+          // Rev. 4548 — persiste (ou limpa) o aviso de baseline divergente no
+          // calendarioJson: a UI mostra banner até um novo upload SEM divergência
+          // (ex.: após criar a revisão no ERP com o cronograma replanejado).
+          if (input.origem === "avanco" && baselineChecada) {
+            if (baselineDivergencia) newCal.baselineDivergencia = baselineDivergencia;
+            else delete newCal.baselineDivergencia;
+          } else if (oldCal.baselineDivergencia && input.origem === "avanco") {
+            newCal.baselineDivergencia = oldCal.baselineDivergencia; // sem checagem neste upload → preserva aviso anterior
+          }
           patch.calendarioJson = JSON.stringify(newCal);
         } catch {
           // JSON inesperado → mantém o que chegou (não derruba o save).
@@ -3395,7 +3577,13 @@ export const planejamentoRouter = router({
         }
       }
 
-      return { success: true, gravou: { statusDate: input.statusDate, statusDateIso: input.statusDateIso, calendar: !!input.calendarioJson, projetoStart: input.projetoStart, projetoFinish: input.projetoFinish } };
+      return {
+        success: true,
+        gravou: { statusDate: input.statusDate, statusDateIso: input.statusDateIso, calendar: !!input.calendarioJson, projetoStart: input.projetoStart, projetoFinish: input.projetoFinish },
+        // Rev. 4548 — resultado do detector de baseline divergente (null = sem
+        // checagem neste upload; false = baseline confere; objeto = divergência).
+        baselineDivergente: baselineChecada ? (baselineDivergencia ?? false) : null,
+      };
     }),
 
   consolidarRefis: protectedProcedure
@@ -3440,24 +3628,36 @@ export const planejamentoRouter = router({
 
   limparAvancos: protectedProcedure
     .input(z.object({ projetoId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      // Rev. 4548 — tenant guard (antes qualquer usuário logado limpava qualquer projeto).
+      await assertProjetoAcesso(db, ctx, input.projetoId);
       await db.delete(planejamentoAvancos)
         .where(eq(planejamentoAvancos.projetoId, input.projetoId));
       await limparSnapshotMspDoProjeto(db, input.projetoId);
       return { success: true };
     }),
 
+  // Rev. 4548 — LIMPEZA CIRÚRGICA (caso QIU 2): "Limpar semana X" apagava o
+  // snapshot MSP do PROJETO INTEIRO (limparSnapshotMspDoProjeto), destruindo a
+  // foto oficial da raiz UID=0 e derrubando os cards para a curva do motor
+  // (47,24% vs 51% oficial). Agora apaga SÓ o que pertence à semana:
+  //   • avanços por atividade da semana (como antes);
+  //   • a foto daquela semana em `realizadoSemanas` (histórico por semana);
+  //   • o nº oficial daquela semana em `previsto_literal_json`;
+  //   • o snapshot único da raiz SÓ se o StatusDate dele cai dentro da semana.
+  // "Limpar TODAS as semanas" mantém o comportamento antigo (reset completo).
   limparAvancosSemana: protectedProcedure
     .input(z.object({ projetoId: z.number(), semana: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      await assertProjetoAcesso(db, ctx, input.projetoId);
       await db.delete(planejamentoAvancos)
         .where(and(
           eq(planejamentoAvancos.projetoId, input.projetoId),
           eq(planejamentoAvancos.semana, input.semana),
         ));
-      await limparSnapshotMspDoProjeto(db, input.projetoId);
+      await limparFotosDaSemana(db, input.projetoId, input.semana);
       return { success: true };
     }),
 

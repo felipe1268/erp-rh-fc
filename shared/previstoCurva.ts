@@ -18,6 +18,14 @@ export interface PrevistoCurva {
   revisaoId: number | null;
   /** "% Previsto" acumulado na data-alvo (cutoff/Quinta). null = sem dado. */
   raizAt: (alvo: string) => number | null;
+  /**
+   * Rev. 4548 — mesmo valor de `raizAt`, mas com a FONTE do número:
+   *   "literal"    → nº oficial do MSP (Texto10) capturado no upload da semana;
+   *   "motor"      → projeção da curva Caminho B (estimativa interna do ERP);
+   *   "motor_piso" → projeção do motor ELEVADA ao piso (nunca recua abaixo do
+   *                  último nº oficial conhecido — ver comentário no raizAt).
+   */
+  raizComFonteAt: (alvo: string) => { valor: number; fonte: "literal" | "motor" | "motor_piso" } | null;
   /** "% Previsto" por atividade-folha na data-alvo. null = sem dado. */
   ativAt: (id: number | string, alvo: string) => number | null;
 }
@@ -82,22 +90,47 @@ export function parsePrevistoCurva(
     literalMap = null;
   }
 
-  const raizAt = (alvo: string): number | null => {
+  // Rev. 4548 — PISO DO MOTOR (aprovado explicitamente pelo usuário, 24/07/2026;
+  // caso QIU 2 R03: MSP oficial 51% na semana 26, motor projetava 50,78% na 27 —
+  // regressão impossível num % previsto acumulado). Para semanas APÓS a última
+  // semana com nº oficial (literal), a projeção do motor NUNCA mostra menos que
+  // o último literal. É só LEITURA — a geração da curva (motor congelado,
+  // Rev. 4534) permanece intocada; a precedência literal > raiz também.
+  let ultimoLiteralKey: string | null = null;
+  let ultimoLiteralVal: number | null = null;
+  if (literalMap) {
+    for (const k of Object.keys(literalMap)) {
+      const v = literalMap[k];
+      if (typeof v === "number" && Number.isFinite(v)) {
+        if (ultimoLiteralKey == null || k > ultimoLiteralKey) { ultimoLiteralKey = k; ultimoLiteralVal = v; }
+      }
+    }
+  }
+
+  const raizComFonteAt = (alvo: string): { valor: number; fonte: "literal" | "motor" | "motor_piso" } | null => {
     if (literalMap) {
       const i = idxAt(alvo);
       if (i >= 0) {
         const litv = literalMap[semanas[i]];
-        if (typeof litv === "number" && Number.isFinite(litv)) return litv;
+        if (typeof litv === "number" && Number.isFinite(litv)) return { valor: litv, fonte: "literal" };
       }
     }
-    return valAt(raiz, alvo);
+    const v = valAt(raiz, alvo);
+    if (v == null) return null;
+    if (ultimoLiteralKey != null && ultimoLiteralVal != null && alvo > ultimoLiteralKey && v < ultimoLiteralVal) {
+      return { valor: ultimoLiteralVal, fonte: "motor_piso" };
+    }
+    return { valor: v, fonte: "motor" };
   };
+
+  const raizAt = (alvo: string): number | null => raizComFonteAt(alvo)?.valor ?? null;
 
   return {
     semanas,
     raiz,
     revisaoId: revId,
     raizAt,
+    raizComFonteAt,
     ativAt: (id: number | string, alvo: string) => valAt(porAtividadeId[String(id)], alvo),
   };
 }

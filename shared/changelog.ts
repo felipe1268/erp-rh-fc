@@ -1,4 +1,74 @@
 /**
+ * Rev. 4548 - FEAT+FIX: PLANEJAMENTO — PACOTE DE ROBUSTEZ DO % PREVISTO (caso QIU 2 FASE 4 / R03)
+ *
+ * PEDIDO DO USUÁRIO:
+ *   Após o diagnóstico da divergência no projeto QIU 2 FASE 4 (projeto 47: MSP
+ *   oficial 51% na semana de 23/07, ERP mostrando 47,24% em semanas seguintes),
+ *   o usuário APROVOU o pacote completo de robustez: (1) detector de baseline
+ *   divergente, (2) alertas de "número não oficial" nos cards, (3) garantia de
+ *   foto por semana, (4) limpeza cirúrgica por semana, (5) piso do motor.
+ *   REGRA DE OURO (Rev. 4534) respeitada: usuário alertado e confirmou ANTES;
+ *   o MOTOR (geração da curva) não foi tocado — tudo é camada de LEITURA.
+ *
+ * CAUSA-RAIZ DO CASO QIU 2:
+ *   (a) O cronograma foi replanejado no MSP (R03) sem criar a revisão
+ *   correspondente no ERP → curva do motor calibrada em baseline defasada;
+ *   (b) "Limpar semana" apagava o snapshot MSP do PROJETO INTEIRO
+ *   (limparSnapshotMspDoProjeto), destruindo a foto oficial (51%) e derrubando
+ *   os cards para a estimativa do motor (47,24%);
+ *   (c) o motor podia REGREDIR abaixo do último nº oficial (50,78% < 51%) —
+ *   impossível num % previsto acumulado.
+ *
+ * IMPLEMENTAÇÃO:
+ *   1) DETECTOR DE BASELINE DIVERGENTE (server planejamento.ts +
+ *      client PlanejamentoDetalhe.tsx): o upload semanal (origem "avanco")
+ *      envia `baselineFingerprint` (nº de folhas com baseline + envelope
+ *      min/max da Baseline 0 do XML, mesmas folhas do cadastro: não-grupo,
+ *      não-marco, com datas). Servidor compara com a revisão ativa
+ *      (aprovada mais recente); se a revisão não tem baseline explícita
+ *      (caso R03: 0 baselines), compara com inicio/fim (baseline IMPLÍCITA,
+ *      Rev. 2533 — a calibração real do motor). Datas do envelope diferentes
+ *      = divergente; contagem só dispara com diff >5% (folga natural de
+ *      parse). Divergência → grava calendarioJson.baselineDivergencia
+ *      (persistente) + retorna flag → toast imediato + banner âmbar na aba
+ *      Avanço Semanal com ação recomendada ("crie a revisão na aba
+ *      Cronograma"). Some sozinho no upload seguinte sem divergência.
+ *      NUNCA bloqueia o save nem toca a curva.
+ *   2) FONTE DO Nº NO CARD "PREVISTO (SEMANA)": shared/previstoCurva.ts ganhou
+ *      `raizComFonteAt` → {valor, fonte: literal|motor|motor_piso}; mspReadOnly
+ *      expõe `previstoFonte` (incl. "snapshot" no fallback UID=0). Card mostra:
+ *      verde "✓ Nº oficial do MS Project" (literal) ou âmbar "⚠️ Estimativa
+ *      interna do ERP" (motor/motor_piso), com instrução de importar o XML.
+ *   3) PISO DO MOTOR (shared/previstoCurva.ts): para alvos APÓS a última
+ *      semana com literal, se o motor projetar MENOS que o último nº oficial,
+ *      o valor exibido é elevado ao piso (fonte "motor_piso"). Só leitura —
+ *      curva persistida intocada. Validado no Neon (projeto 47, rev 76):
+ *      23/07=51 literal; 30/07=51 motor_piso (antes recuava); 06/08=54,31 motor.
+ *   4) LIMPEZA CIRÚRGICA (limparAvancosSemana): apaga SÓ o que pertence à
+ *      semana — avanços por atividade (como antes) + foto da semana em
+ *      realizadoSemanas + literal da semana em previsto_literal_json + snapshot
+ *      único da raiz APENAS se o StatusDate dele cai na janela [segunda,
+ *      segunda+6d] (idem dataCorteAtual). previstoMspSnapshot do CADASTRO é
+ *      preservado. "Limpar TODAS as semanas" (limparAvancos) mantém o reset
+ *      completo antigo.
+ *   5) UNIFICAÇÃO: o hook previstoCurva do PlanejamentoDetalhe agora chama o
+ *      helper compartilhado parsePrevistoCurva (mesma função que o Portal
+ *      Externo, Rev. 3288) — paridade módulo × Portal estrutural. O Portal
+ *      herda o piso automaticamente.
+ *   6) SEGURANÇA: tenant guards novos em limparAvancos/limparAvancosSemana
+ *      (antes qualquer usuário logado limpava avanços de qualquer empresa —
+ *      IDOR), via helper assertProjetoAcesso (padrão salvarMetadadosMSProject).
+ *
+ * VALIDAÇÃO (regra de ouro Rev. 4534):
+ *   Rodado contra o Neon real (projeto 47, revisão ativa 76): literal 23/07=51
+ *   preservado; piso na semana seguinte; motor volta a mandar quando supera o
+ *   piso; typecheck limpo nos arquivos tocados. Nenhuma mudança de schema.
+ *
+ * ARQUIVOS: server/routers/planejamento.ts, shared/previstoCurva.ts,
+ *   client/src/pages/planejamento/PlanejamentoDetalhe.tsx, shared/version.ts,
+ *   shared/changelog.ts, replit.md. ZERO schema change.
+ */
+/**
  * Rev. 4547 - FIX+FEAT: INVENTÁRIO SEMANAL — BAIXA DE ESTOQUE DEFINITIVA + LEDGER PERMANENTE DE DIVERGÊNCIAS
  *
  * PEDIDO DO USUÁRIO:

@@ -46,6 +46,7 @@ import {
   Star, Smile, Meh, Frown, ListTree, Target, Trophy,
 } from "lucide-react";
 import { getNrDescricao } from "@shared/trainingRules";
+import { parsePrevistoCurva } from "@shared/previstoCurva";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -463,72 +464,20 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   // Antes a tela nunca lia esta coluna e usava o snapshot ÚNICO da raiz UID=0
   // (congelado na StatusDate), travando o card "PREVISTO (SEMANA)" em ~1%.
   // Definida cedo (antes dos useMemos de previsto) para evitar TDZ.
+  // Rev. 4548 — o corpo deste hook (idxAt/valAt/guarda de revisão/override
+  // literal, Rev. 2599/2767) foi MOVIDO SEM MUDANÇA DE COMPORTAMENTO para o
+  // helper compartilhado `shared/previstoCurva.ts` (parsePrevistoCurva), que o
+  // Portal Externo (Rev. 3288) JÁ replicava à mão. Agora módulo e Portal leem
+  // literalmente a MESMA função — paridade estrutural, não por disciplina.
+  // Novidade da Rev. 4548 dentro do helper: `raizComFonteAt` (fonte do número:
+  // literal/motor/motor_piso) + PISO DO MOTOR (nunca recuar abaixo do último
+  // nº oficial) — aprovados explicitamente pelo usuário em 24/07/2026.
   const previstoCurva = useMemo(() => {
-    const raw = (proj as any)?.previstoSemanasJson;
-    if (!raw) return null;
-    let snap: any;
-    try { snap = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { return null; }
-    const semanas: string[] = Array.isArray(snap?.semanas) ? snap.semanas : [];
-    const raiz: number[] = Array.isArray(snap?.raiz) ? snap.raiz : [];
-    if (semanas.length === 0 || raiz.length === 0) return null;
-    // Rev. 2599 — Guarda de revisão: a curva é específica de UMA revisão (suas
-    // folhas/baseline próprias). Quando a coluna guarda a curva de uma revisão
-    // diferente da exibida (`revisaoAtiva`), descartamos AQUI — assim TODOS os
-    // consumidores (cards agregados + grade por atividade) caem no fallback de
-    // forma uniforme, evitando misturar "agregado da curva" com "linhas do
-    // snapshot legado". Snapshots desta função sempre carregam `revisaoId`.
-    const revId = snap?.revisaoId ?? null;
-    if (revId != null && revisaoAtiva?.id != null && revId !== revisaoAtiva.id) return null;
-    const porAtividadeId: Record<string, number[]> = snap?.porAtividadeId ?? {};
-    // Índice do degrau acumulado: maior cutoff <= alvo. Antes do 1º cutoff = -1.
-    const idxAt = (alvo: string): number => {
-      if (!alvo || alvo < semanas[0]) return -1;
-      let idx = -1;
-      for (let i = 0; i < semanas.length; i++) {
-        if (semanas[i] <= alvo) idx = i; else break;
-      }
-      return idx;
-    };
-    const valAt = (arr: number[] | undefined, alvo: string): number | null => {
-      if (!arr) return null;
-      const i = idxAt(alvo);
-      if (i < 0) return alvo && alvo < semanas[0] ? 0 : null; // antes do início → 0%
-      return arr[i] ?? null;
-    };
-    // Rev. 2767 — Override "% Previsto" LITERAL por semana (Texto10 capturado em
-    // CADA upload da aba Avanço). Para as semanas JÁ enviadas, o número que o MSP
-    // já calculou VENCE o motor (paridade 100%); as semanas FUTURAS seguem o
-    // motor (raiz[]). Só afeta a RAIZ (cards agregados) — `ativAt` (por folha,
-    // usado em REFIS/Curva S) continua no motor. Chave = cutoff (= `semanas[i]`).
-    let literalMap: Record<string, number> | null = null;
-    try {
-      const rawLit = (proj as any)?.previstoLiteralJson;
-      if (rawLit) {
-        const lit = typeof rawLit === "string" ? JSON.parse(rawLit) : rawLit;
-        const litRev = lit?.revisaoId ?? null;
-        // Guarda endurecida (Rev. 2767+): com revisão ativa conhecida, exige match
-        // EXATO (litRev null = legado → ignora, cai no motor); só aceita sem checar
-        // quando a revisão ativa ainda não carregou (não há como comparar).
-        const revOk = revisaoAtiva?.id == null ? true : litRev === revisaoAtiva.id;
-        if (revOk && lit?.valores && typeof lit.valores === "object") literalMap = lit.valores;
-      }
-    } catch { literalMap = null; }
-    const raizAt = (alvo: string): number | null => {
-      if (literalMap) {
-        const i = idxAt(alvo);
-        if (i >= 0) {
-          const lit = literalMap[semanas[i]];
-          if (typeof lit === "number" && Number.isFinite(lit)) return lit;
-        }
-      }
-      return valAt(raiz, alvo);
-    };
-    return {
-      semanas, raiz, porAtividadeId,
-      revisaoId: snap?.revisaoId ?? null,
-      raizAt,
-      ativAt: (id: number | string, alvo: string) => valAt(porAtividadeId[String(id)], alvo),
-    };
+    return parsePrevistoCurva(
+      (proj as any)?.previstoSemanasJson,
+      (proj as any)?.previstoLiteralJson,
+      revisaoAtiva?.id ?? null,
+    );
   }, [proj, revisaoAtiva]);
 
   const { data: atividades = [], isLoading: loadingAtiv } = trpc.planejamento.listarAtividades.useQuery(
@@ -6972,10 +6921,11 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     if (!cal) {
       // Rev. 2599 — Sem calendarioJson o REALIZADO some, mas o PREVISTO ainda
       // pode vir da curva Caminho B (previsto_semanas_json).
-      const curvaPrevSC = previstoCurva ? previstoCurva.raizAt(semanaFim) : null;
-      return { previsto: curvaPrevSC != null ? Math.min(100, Math.max(0, curvaPrevSC)) : null,
+      const cf = previstoCurva ? previstoCurva.raizComFonteAt(semanaFim) : null;
+      return { previsto: cf != null ? Math.min(100, Math.max(0, cf.valor)) : null,
+        previstoFonte: (cf?.fonte ?? null) as "literal" | "motor" | "motor_piso" | "snapshot" | null,
         realizado: null as number | null, staleFromDate: null, prevStaleFromDate: null,
-        previstoMissing: curvaPrevSC == null ? "Curva PREVISTO (Caminho B) ainda não gerada. Recadastre/importe o cronograma na aba Cronograma." : null,
+        previstoMissing: cf == null ? "Curva PREVISTO (Caminho B) ainda não gerada. Recadastre/importe o cronograma na aba Cronograma." : null,
         missingReason: "XML do MS Project ainda não foi importado neste projeto. Importe o cronograma na aba Cronograma → Importar Cronograma." };
     }
     // Rev. 2425 — REVERTE Rev. 2271. User (25/05/2026, Hotel do Papa):
@@ -7001,9 +6951,17 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // (previsto_semanas_json), gerada no cadastro pela fórmula nativa do MSP
     // sobre a baseline. Varia por semana (degrau acumulado no cutoff). O ERP
     // só LÊ — sem cálculo. O snapshot único da raiz UID=0 vira só fallback.
-    const curvaPrev = previstoCurva ? previstoCurva.raizAt(semanaFim) : null;
+    const curvaCF = previstoCurva ? previstoCurva.raizComFonteAt(semanaFim) : null;
+    const curvaPrev = curvaCF?.valor ?? null;
+    // Rev. 4548 — fonte do PREVISTO exibido: "literal" = nº oficial do MSP
+    // (Texto10 da semana); "motor"/"motor_piso" = estimativa interna do ERP
+    // (curva Caminho B, com piso do último oficial); "snapshot" = fallback do
+    // snapshot único da raiz UID=0. Cards usam isso p/ alertar quando o número
+    // NÃO é o oficial do MS Project (aprovado pelo usuário, 24/07/2026).
+    let prevFonte: "literal" | "motor" | "motor_piso" | "snapshot" | null = null;
     if (curvaPrev != null) {
       prev = curvaPrev;
+      prevFonte = curvaCF!.fonte;
     } else if (!snapshotOk) {
       prevMissing = "Previsto MSP indisponível — reimporte o XML do MS Project para popular o snapshot.";
     } else if (!envOk) {
@@ -7014,6 +6972,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       prevMissing = `A semana visualizada (fim ${fmtBR(semanaFim)}) é anterior ao StatusDate do XML mais recente (${fmtBR(cal.statusDateSnapshot)}). O XML do MSP guarda apenas a última foto — não há snapshot histórico para o Previsto em semanas passadas.`;
     } else {
       prev = Number(cal.previstoMspSnapshot);
+      prevFonte = "snapshot";
     }
     // Rev. 2271 — Realizado só vive quando snapshotOk + envelope bate.
     // Sem snapshot (ex.: após "Limpar Avanços"), Realizado = null (card "—").
@@ -7063,6 +7022,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     }
     return {
       previsto: prev != null ? Math.min(100, Math.max(0, prev)) : null,
+      previstoFonte: prevFonte,
       realizado: real != null ? Math.min(100, Math.max(0, real)) : null,
       staleFromDate,
       prevStaleFromDate,
@@ -7070,6 +7030,9 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       missingReason: realMissing,
     };
   }, [proj, semanaFim, previstoCurva]);
+  // Rev. 4548 — fonte do nº exibido no card PREVISTO (SEMANA); usada pelo chip
+  // "estimativa interna" quando o número NÃO é o oficial do MSP (motor/piso).
+  const mspPrevFonte = (mspReadOnly as any).previstoFonte as "literal" | "motor" | "motor_piso" | "snapshot" | null;
   const mspPrev = mspReadOnly.previsto;
   const mspReal = mspReadOnly.realizado;
   const mspDelta = (mspPrev != null && mspReal != null) ? +(mspReal - mspPrev).toFixed(2) : null;
@@ -7298,10 +7261,30 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       // previstoMspSnapshot/calendário do cadastro). A aba Avanço Semanal cuida
       // apenas do % Concluída; o "% Previsto" é congelado na aba Cronograma.
       let snapshotRegravado = false;
+      let baselineDivergenteResp: any = null;
       if (xmlTextSnapshot) {
         try {
           const full = parseMSProjectFull(xmlTextSnapshot);
-          await salvarMetaMspMut.mutateAsync({
+          // Rev. 4548 — fingerprint da Baseline 0 do XML SEMANAL: mesmas folhas
+          // que o cadastro persiste no ERP (não-grupo, não-marco, com datas).
+          // O servidor compara com a revisão ativa e avisa se o cronograma foi
+          // REPLANEJADO no MSP sem criar a revisão correspondente no ERP.
+          let baselineFingerprint: { nComBaseline: number; minStart: string | null; maxFinish: string | null } | undefined;
+          try {
+            const folhasBl = full.tarefas.filter(t =>
+              !t.isGrupo && !t.isMarco && t.inicio && t.fim && t.baselineStart && t.baselineFinish);
+            if (folhasBl.length > 0) {
+              let mn: string | null = null; let mx: string | null = null;
+              for (const t of folhasBl) {
+                const bs = String(t.baselineStart).slice(0, 10);
+                const bf = String(t.baselineFinish).slice(0, 10);
+                if (mn == null || bs < mn) mn = bs;
+                if (mx == null || bf > mx) mx = bf;
+              }
+              baselineFingerprint = { nComBaseline: folhasBl.length, minStart: mn, maxFinish: mx };
+            }
+          } catch { /* fingerprint é opcional — nunca trava o upload */ }
+          const resp = await salvarMetaMspMut.mutateAsync({
             projetoId,
             statusDate:     full.statusDate     ?? undefined,
             statusDateIso:  full.statusDateIso  ?? undefined,
@@ -7309,12 +7292,23 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
             projetoStart:   full.projetoStart   ?? undefined,
             projetoFinish:  full.projetoFinish  ?? undefined,
             origem:         "avanco",
+            baselineFingerprint,
           });
+          baselineDivergenteResp = (resp as any)?.baselineDivergente ?? null;
           snapshotRegravado = true;
           utils.planejamento.getProjetoById.invalidate({ id: projetoId });
         } catch (e) {
           console.error("[importarDoMSProject] falha ao regravar calendarioJson:", e);
         }
+      }
+      // Rev. 4548 — toast imediato de baseline divergente (o banner persistente
+      // vem do calendarioJson.baselineDivergencia gravado pelo servidor).
+      if (baselineDivergenteResp && typeof baselineDivergenteResp === "object") {
+        const bd = baselineDivergenteResp;
+        toast.warning(
+          `⚠️ Linha de base do XML difere da revisão ativa do ERP (XML: ${bd.xml?.nComBaseline} atividades, ${fmtBR(bd.xml?.minStart)}→${fmtBR(bd.xml?.maxFinish)} · ERP: ${bd.erp?.nComBaseline}, ${fmtBR(bd.erp?.minStart)}→${fmtBR(bd.erp?.maxFinish)}). O cronograma foi replanejado no MS Project? Crie a revisão correspondente na aba Cronograma para recalibrar o % Previsto.`,
+          { duration: 12000 },
+        );
       }
 
       const breakdown = ext === "xml"
@@ -7705,6 +7699,22 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
           <span><b>Realizado: foto MSP de {fmtBR(mspStaleFromDate)}</b> — a semana selecionada ({fmtBR(semanaAtual)} a {fmtBR(semanaFim)}) é posterior ao último StatusDate do XML. O <b>Previsto</b> varia normalmente (calculado pela mesma fórmula MSP, dias úteis até {fmtBR(semanaFim)}), mas o <b>Realizado</b> é dado empírico e fica congelado na última medição. Para atualizar, exporte novo XML com StatusDate em {fmtBR(semanaFim)} e reimporte via "Importar MS Project".</span>
         </div>
       )}
+      {/* Rev. 4548 — Banner persistente de BASELINE DIVERGENTE: gravado pelo
+          servidor no upload semanal quando a Linha de Base 0 do XML difere da
+          revisão ativa do ERP (replanejamento no MSP sem revisão no ERP).
+          Some sozinho no próximo upload cuja baseline confira. */}
+      {(() => {
+        const bd = (parseCalendarioJson((proj as any)?.calendarioJson) as any)?.baselineDivergencia;
+        if (!bd) return null;
+        return (
+          <div className="flex items-start gap-2 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-300 text-[11px] text-amber-900">
+            <span>⚠️</span>
+            <span>
+              <b>Linha de base do XML semanal difere da revisão ativa do ERP</b>{bd.statusDate ? <> (detectado no upload com StatusDate {fmtBR(bd.statusDate)})</> : null} — XML: {bd.xml?.nComBaseline} atividades com baseline, {fmtBR(bd.xml?.minStart)} → {fmtBR(bd.xml?.maxFinish)} · ERP: {bd.erp?.nComBaseline}, {fmtBR(bd.erp?.minStart)} → {fmtBR(bd.erp?.maxFinish)}. O cronograma provavelmente foi <b>replanejado no MS Project</b> (nova revisão/linha de base) sem criar a revisão correspondente aqui. Enquanto isso, a estimativa interna do % Previsto (motor) segue calibrada na baseline antiga — o nº oficial (Texto10) de cada semana enviada continua correto. <b>Ação:</b> crie a revisão na aba Cronograma importando o cronograma replanejado.
+            </span>
+          </div>
+        );
+      })()}
       <div className="grid grid-cols-3 gap-3">
         {/* Previsto */}
         <div
@@ -7727,7 +7737,23 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
           <div className="w-full bg-slate-100 rounded-full h-2 mt-1 overflow-hidden">
             <div className="h-full rounded-full bg-orange-400" style={{ width: `${Math.min(100, mspPrev ?? 0)}%` }} />
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">{mspPrev != null ? "Lido do snapshot MS Project (UID=0)" : "Reimporte o XML do MS Project"}</p>
+          {/* Rev. 4548 — transparência da fonte: quando o nº NÃO é o oficial do
+              MSP (Texto10 da semana), o card avisa que é estimativa interna. */}
+          {mspPrev != null && mspPrevFonte === "literal" && (
+            <p className="text-[10px] text-emerald-600 mt-0.5">✓ Nº oficial do MS Project (Texto10 desta semana)</p>
+          )}
+          {mspPrev != null && mspPrevFonte === "motor" && (
+            <p className="text-[10px] font-medium text-amber-600 mt-0.5">⚠️ Estimativa interna do ERP (motor) — semana ainda sem nº oficial do MSP. Importe o XML da semana para o valor oficial.</p>
+          )}
+          {mspPrev != null && mspPrevFonte === "motor_piso" && (
+            <p className="text-[10px] font-medium text-amber-600 mt-0.5">⚠️ Estimativa interna limitada ao último nº oficial do MSP (piso — o % previsto acumulado nunca recua). Importe o XML da semana para o valor oficial.</p>
+          )}
+          {mspPrev != null && mspPrevFonte === "snapshot" && (
+            <p className="text-[10px] text-slate-400 mt-0.5">Lido do snapshot MS Project (UID=0)</p>
+          )}
+          {mspPrev == null && (
+            <p className="text-[10px] text-slate-400 mt-0.5">Reimporte o XML do MS Project</p>
+          )}
         </div>
 
         {/* Realizado */}
