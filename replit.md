@@ -50,20 +50,20 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4537** — **FEAT: SEFAZ — MODO DE AGENDAMENTO DIÁRIO (1x ÀS HH:MM, A CADA N DIAS).** Novo `sync_modo` ('intervalo' | 'diario') + `sync_intervalo_dias` em `company_nfe_config` (bloco [SyncSchema+] Rev. 4537 isolado). Cron: modo diário dispara quando hora BRT >= sync_hora:sync_minuto E date-diff BRT >= N dias (UTC→BRT explícito; não repete no mesmo dia). `executarSyncNFe` no modo diário mantém só o gate SEFAZ 2h/CNPJ (Sincronizar Agora manual funciona a qualquer hora). UI: pills "Por intervalo"/"Diária (horário fixo)" + campo "a cada N dias" (1-30). Arquivos: `server/routers/sefaz.ts`, `server/_core/index.ts`, `FinanceiroConfigSection.tsx`.
 - **Rev. 4536** — **UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "REMOVER TODOS" (EXCLUSÃO EM LOTE).** `ModalConfirmacaoAuditoria` ganhou prop `progresso`: durante o lote, o botão confirmar mostra barra `bg-white/15` crescendo + "Removendo… XX%". Progresso REAL por unidade processada (cards + `_subItems`, incrementado em `finally` no loop de `handleExcluirSelecionados`); reseta pra null no retry pós-erro de senha. Arquivos: `ModalConfirmacaoAuditoria.tsx`, `almoxarifado/index.tsx`. ZERO schema change.
-- **Rev. 4535** — **UX: ALMOXARIFADO CENTRAL — SELEÇÃO NATURAL (CHECKBOX SEMPRE VISÍVEL NOS CARDS).** Removido o modo "Selecionar" (Rev. 2382): cada card agora tem checkbox sempre visível no canto superior esquerdo da foto; botão do header virou "Selecionar todos"/"Desmarcar todos" com badge de contagem; a sticky bar de ações em lote aparece quando `selecionados.size > 0`. Drag-lasso mantido só para mouse (touchAction livre → iPad scrolla normal). Seleções de locação (âmbar) e do view consolidado não foram tocadas. Arquivo: `client/src/pages/almoxarifado/index.tsx`. ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4535** — **UX: ALMOXARIFADO CENTRAL — SELEÇÃO NATURAL (CHECKBOX SEMPRE VISÍVEL NOS CARDS).** Removido modo "Selecionar": checkbox sempre visível nos cards, "Selecionar todos" no header, sticky bar quando há seleção; drag-lasso só mouse (iPad scrolla normal). ZERO schema change.
 - **Rev. 4534** — **FIX: PLANEJAMENTO — PREVISTO (SEMANA) 100% EM TODAS AS SEMANAS FUTURAS (BASELINE DEFASADA).** Guard no fallback de `regenerarPrevistoSemanasCaminhoB` (baseline defasada → datas atuais como proxy) + rollup da raiz 2 casas com clamp <100 até o fim real. 🔒 Lógica CONGELADA — ver User preferences. ZERO schema change.
 - **Rev. 4533** — **FIX: PLANEJAMENTO — REALIZADO ACUMULADO RETROATIVO AO ENVIAR NOVO XML (REFIS/CURVA S).** 3 caminhos de leitura (`avancoAtual`, `realizadoAcum`, `realizadoComInd`) agora consultam o mapa `realizadoSemanas` antes de cair no EVM ponderado; Curva S backend injeta pontos históricos do mapa. ZERO schema change.
 - **Rev. 4532** — **FEAT: CONTROLE DE DOCUMENTOS — PAINEL DOSSIÊ COM MULTI-SELECT E DOWNLOAD ZIP.** Nova aba "Dossiê": tabela multi-select de funcionários ativos, linhas expansíveis (ASO/Treinamentos/Atestados/Advertências), `docs.painelDossie` tRPC + rota `GET /api/download/dossie-zip` (archiver, guard multi-tenant). ZERO schema change.
 - **Rev. 4531** — **FEAT: FÉRIAS — BLOQUEIO CLT ART. 135, §3° NA DATA DE INÍCIO.** Função pura `verificarDataInicioFerias` bloqueia sexta/sábado e os 2 dias antes de qualquer feriado. Banner azul informativo permanente + alerta vermelho com citação do artigo quando data inválida. Botão "Confirmar Data" desabilitado. Query `listarPeriodo` para feriados nacionais+empresa. ZERO schema change.
-- **Rev. 4530** — **FEAT: FUNCIONÁRIOS TERCEIROS — HISTÓRICO COMPLETO DE VÍNCULOS.** Nova tabela `terceiro_obra_vinculos`. Mutations `encerrarVinculo`/`reativar`. Toggle pills Ativos/Desligados/Todos. `VinculosHistoricoSection` no Raio-X. ZERO schema change.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4506 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4530 e anteriores.
 
 ## User preferences
 

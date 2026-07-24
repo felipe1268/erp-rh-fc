@@ -1,4 +1,32 @@
 /**
+ * Rev. 4537 - FEAT: SEFAZ — MODO DE AGENDAMENTO DIÁRIO (1x ÀS HH:MM, A CADA N DIAS)
+ *
+ * MOTIVAÇÃO:
+ *   O usuário quer que a consulta à SEFAZ rode 1x por dia num horário fixo (ex.: 23h),
+ *   com opção de espaçar em N dias — em vez de apenas "a cada X horas".
+ *
+ * IMPLEMENTAÇÃO:
+ *   - Novas colunas em company_nfe_config (bloco [SyncSchema+] Rev. 4537 isolado):
+ *     sync_modo VARCHAR(12) DEFAULT 'intervalo' ('intervalo' | 'diario') e
+ *     sync_intervalo_dias SMALLINT DEFAULT 1.
+ *   - Cron (startSefazCron/runHour): elegibilidade dividida por modo. 'diario' dispara
+ *     quando hora atual (BRT) >= sync_hora:sync_minuto E date-diff BRT desde last_sync_at
+ *     >= sync_intervalo_dias (conversão UTC→BRT explícita; date-diff 0 impede repetição
+ *     no mesmo dia com o cron de 15 min). Modo 'intervalo' inalterado.
+ *   - executarSyncNFe: no modo 'diario' o gate atômico protege APENAS o limite SEFAZ
+ *     (2h/CNPJ, cooldown 123 min) — o agendamento de dia/horário é responsabilidade do
+ *     cron; assim o "Sincronizar Agora" manual funciona a qualquer hora sem esperar o
+ *     próximo dia agendado. Aviso de cooldown adaptado por modo.
+ *   - getConfig/saveConfig: expõem/persistem sync_modo + sync_intervalo_dias
+ *     (zod: enum + int 1-30).
+ *   - UI (FinanceiroConfigSection): pills "⏱ Por intervalo" / "🕐 Diária (horário fixo)";
+ *     no modo diário aparece "Verificar a cada quantos dias?" (1-30) + horário HH:MM;
+ *     textos descritivos adaptados.
+ *
+ *   Schema change: 2 colunas aditivas com DEFAULT (retrocompatível; configs existentes
+ *   continuam no modo 'intervalo' sem mudança de comportamento).
+ */
+/**
  * Rev. 4536 - UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "REMOVER TODOS" (EXCLUSÃO EM LOTE)
  *
  * MOTIVAÇÃO:

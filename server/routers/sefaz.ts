@@ -746,7 +746,8 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
 
   // Buscar config
   const cfgRows = (await db.execute(sql`
-    SELECT cnpj, cert_pfx_base64, cert_password, ultimo_nsu, ambiente, uf, sync_intervalo_horas, last_sync_at, last_sync_result
+    SELECT cnpj, cert_pfx_base64, cert_password, ultimo_nsu, ambiente, uf, sync_intervalo_horas,
+           COALESCE(sync_modo, 'intervalo') AS sync_modo, last_sync_at, last_sync_result
     FROM company_nfe_config WHERE company_id = ${companyId} AND ativo = 1
   `)) as any;
   const cfg = (cfgRows?.rows ?? cfgRows)?.[0];
@@ -796,7 +797,11 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
   //   4+ consecutivos  → 4× cooldown (4h máx)
   // Evita que tentativas horárias mantenham o CNPJ bloqueado no SEFAZ.
   // SEFAZ exige mínimo 2h entre chamadas por CNPJ; valores abaixo causam cStat=656 sistemático.
-  const intervaloHoras = Math.max(2, Number(cfg.sync_intervalo_horas ?? 2));
+  // Rev. 4537 — modo 'diario': o AGENDAMENTO (dia + horário) é responsabilidade do cron;
+  // aqui o gate protege apenas o limite da SEFAZ (2h/CNPJ), permitindo o "Sincronizar Agora"
+  // manual a qualquer hora sem esperar até o próximo dia agendado.
+  const syncModo = String(cfg.sync_modo || "intervalo");
+  const intervaloHoras = syncModo === "diario" ? 2 : Math.max(2, Number(cfg.sync_intervalo_horas ?? 2));
   // MARGEM DE SEGURANÇA ACIMA do limite SEFAZ (1 chamada/2h por CNPJ). A janela precisa ficar
   // ACIMA do intervalo, NUNCA abaixo. A folga negativa antiga (-2) + arredondamento do cron (15 min)
   // permitia uma chamada cair em ~1h58–2h00 (< 2h) → a SEFAZ devolvia cStat=656 (Consumo Indevido),
@@ -845,7 +850,9 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
           const rlDesc = consecutiveRlCount >= 2 ? ` (${consecutiveRlCount}× consecutivos → backoff ${rlMultiplier}×)` : "";
           aviso = prevResult?.rateLimitedAt
             ? `Limite SEFAZ ativo — aguarde mais ${restantMin} min (cStat=656${rlDesc}). O sistema sincronizará automaticamente.`
-            : `Intervalo configurado: ${intervaloHoras}h — próxima sync disponível em ${restantMin} min.`;
+            : syncModo === "diario"
+              ? `Limite SEFAZ (1 chamada a cada 2h por CNPJ) — próxima sync disponível em ${restantMin} min.`
+              : `Intervalo configurado: ${intervaloHoras}h — próxima sync disponível em ${restantMin} min.`;
           console.log(`[SefazSync] company=${companyId} CNPJ_GATE=${restantMin}min (backoff ${rlMultiplier}× / consec=${consecutiveRlCount}) — em cooldown`);
           return { importadas: 0, ignoradas: 0, aviso };
         }
@@ -1141,6 +1148,8 @@ export function startSefazCron() {
       // Diagnóstico: loga o estado de TODAS as configs (elegíveis ou não) para visibilidade total.
       const allRows = (await db.execute(sql`
         SELECT company_id, ativo, sync_enabled, ultimo_nsu, sync_intervalo_horas,
+               COALESCE(sync_modo, 'intervalo') AS sync_modo,
+               COALESCE(sync_intervalo_dias, 1) AS sync_intervalo_dias,
                last_sync_at,
                TO_CHAR(last_sync_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI:SS') AS last_sync_hms,
                EXTRACT(EPOCH FROM (NOW() - last_sync_at))/60 AS elapsed_min,
@@ -1153,7 +1162,8 @@ export function startSefazCron() {
         const elapsed = r.elapsed_min !== null ? Math.round(Number(r.elapsed_min)) : null;
         const cooldown = Number(r.cooldown_min);
         const inCooldown = elapsed !== null && elapsed < cooldown;
-        const reason = r.ativo != 1 ? "ativo=0" : r.sync_enabled != 1 ? "sync_enabled=0" : inCooldown ? `cooldown (${elapsed}/${cooldown}min)` : "ELEGÍVEL";
+        const modoLog = String(r.sync_modo || "intervalo") === "diario" ? ` modo=diario/${r.sync_intervalo_dias}d` : "";
+        const reason = (r.ativo != 1 ? "ativo=0" : r.sync_enabled != 1 ? "sync_enabled=0" : inCooldown ? `cooldown (${elapsed}/${cooldown}min)` : "ELEGÍVEL") + modoLog;
         let lastResult = "";
         try { const lr = JSON.parse(r.last_sync_result || "{}"); lastResult = lr.rateLimitedAt ? " rateLimit" : lr.cStat ? ` cStat=${lr.cStat}` : lr.importadas !== undefined ? ` imp=${lr.importadas}` : ""; } catch {}
         // sync_at em BRT vindo do SQL (NÃO `new Date(last_sync_at)`: a coluna é timestamp-without-tz
@@ -1170,13 +1180,31 @@ export function startSefazCron() {
         FROM company_nfe_config
         WHERE ativo = 1 AND sync_enabled = 1
           AND (
-            (last_sync_at IS NULL AND
+            -- ── Modo 'intervalo' (padrão): a cada X horas após o 1º sync ──
+            (COALESCE(sync_modo, 'intervalo') <> 'diario' AND (
+              (last_sync_at IS NULL AND
+               EXTRACT(HOUR   FROM NOW() AT TIME ZONE 'America/Sao_Paulo') * 60
+               + EXTRACT(MINUTE FROM NOW() AT TIME ZONE 'America/Sao_Paulo')
+               >= COALESCE(sync_hora, 6) * 60 + COALESCE(sync_minuto, 0))
+              OR
+              (last_sync_at IS NOT NULL AND
+               last_sync_at < NOW() - (INTERVAL '1 minute' * (COALESCE(sync_intervalo_horas, 1) * 60 + 3)))
+            ))
+            OR
+            -- ── Rev. 4537 — Modo 'diario': 1x às HH:MM (BRT), a cada N dias ──
+            -- Elegível quando: hora atual (BRT) >= horário configurado E a última sync
+            -- (convertida p/ data BRT) foi há >= N dias. Após rodar às 23:00, o date-diff
+            -- fica 0 → não repete no mesmo dia, mesmo com o cron a cada 15 min.
+            (COALESCE(sync_modo, 'intervalo') = 'diario' AND
              EXTRACT(HOUR   FROM NOW() AT TIME ZONE 'America/Sao_Paulo') * 60
              + EXTRACT(MINUTE FROM NOW() AT TIME ZONE 'America/Sao_Paulo')
-             >= COALESCE(sync_hora, 6) * 60 + COALESCE(sync_minuto, 0))
-            OR
-            (last_sync_at IS NOT NULL AND
-             last_sync_at < NOW() - (INTERVAL '1 minute' * (COALESCE(sync_intervalo_horas, 1) * 60 + 3)))
+             >= COALESCE(sync_hora, 6) * 60 + COALESCE(sync_minuto, 0)
+             AND (
+               last_sync_at IS NULL
+               OR (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                  - (last_sync_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date
+                  >= GREATEST(1, COALESCE(sync_intervalo_dias, 1))
+             ))
           )
       `)) as any;
       const list = (rows?.rows ?? rows) as any[];
@@ -1275,6 +1303,8 @@ export const sefazRouter = router({
                COALESCE(sync_hora, 6) AS sync_hora,
                COALESCE(sync_minuto, 0) AS sync_minuto,
                COALESCE(sync_intervalo_horas, 1) AS sync_intervalo_horas,
+               COALESCE(sync_modo, 'intervalo') AS sync_modo,
+               COALESCE(sync_intervalo_dias, 1) AS sync_intervalo_dias,
                ultimo_nsu, last_sync_at, last_sync_result,
                CASE WHEN cert_pfx_base64 IS NOT NULL AND cert_pfx_base64 <> '' THEN true ELSE false END AS tem_certificado
         FROM company_nfe_config WHERE company_id = ${input.companyId}
@@ -1293,6 +1323,8 @@ export const sefazRouter = router({
       syncHora: z.number().min(0).max(23).default(6),
       syncMinuto: z.number().min(0).max(59).default(0),
       syncIntervaloHoras: z.number().min(2).max(24).default(2),
+      syncModo: z.enum(["intervalo", "diario"]).default("intervalo"),
+      syncIntervaloDias: z.number().int().min(1).max(30).default(1),
       certPfxBase64: z.string().optional(),
       certPassword: z.string().optional(),
     }))
@@ -1316,6 +1348,8 @@ export const sefazRouter = router({
             sync_hora = ${input.syncHora},
             sync_minuto = ${input.syncMinuto},
             sync_intervalo_horas = ${input.syncIntervaloHoras},
+            sync_modo = ${input.syncModo},
+            sync_intervalo_dias = ${input.syncIntervaloDias},
             ativo = 1,
             ${input.certPfxBase64 ? sql`cert_pfx_base64 = ${input.certPfxBase64},` : sql``}
             ${input.certPassword ? sql`cert_password = ${input.certPassword},` : sql``}
@@ -1325,11 +1359,11 @@ export const sefazRouter = router({
       } else {
         await db.execute(sql`
           INSERT INTO company_nfe_config
-            (company_id, cnpj, uf, ambiente, sync_enabled, sync_hora, sync_minuto, sync_intervalo_horas, ativo,
+            (company_id, cnpj, uf, ambiente, sync_enabled, sync_hora, sync_minuto, sync_intervalo_horas, sync_modo, sync_intervalo_dias, ativo,
              cert_pfx_base64, cert_password, ultimo_nsu, created_at, updated_at)
           VALUES
             (${input.companyId}, ${input.cnpj}, ${input.uf}, ${input.ambiente},
-             ${input.syncEnabled ? 1 : 0}, ${input.syncHora}, ${input.syncMinuto}, ${input.syncIntervaloHoras}, 1,
+             ${input.syncEnabled ? 1 : 0}, ${input.syncHora}, ${input.syncMinuto}, ${input.syncIntervaloHoras}, ${input.syncModo}, ${input.syncIntervaloDias}, 1,
              ${input.certPfxBase64 || null}, ${input.certPassword || null},
              '000000000000000', NOW(), NOW())
         `);

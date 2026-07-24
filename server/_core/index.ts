@@ -4629,6 +4629,13 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 3690: coluna sync_minuto garantida em company_nfe_config (padrão=0).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3690 sync_minuto:`, e?.message || e); }
 
+        // Rev. 4537 — SEFAZ: modo de agendamento ('intervalo' = a cada X horas | 'diario' = 1x às HH:MM a cada N dias).
+        try {
+          await db.execute(sql`ALTER TABLE company_nfe_config ADD COLUMN IF NOT EXISTS sync_modo VARCHAR(12) NOT NULL DEFAULT 'intervalo'`);
+          await db.execute(sql`ALTER TABLE company_nfe_config ADD COLUMN IF NOT EXISTS sync_intervalo_dias SMALLINT NOT NULL DEFAULT 1`);
+          console.log(`[SyncSchema+] Rev. 4537: colunas sync_modo + sync_intervalo_dias garantidas em company_nfe_config.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4537 sync_modo/sync_intervalo_dias:`, e?.message || e); }
+
         // Rev. 3624 — Log de auditoria das sincronizações SEFAZ (nfe_sync_log).
         // Registra cada execução com timestamps BRT, NSU inicial/final, importadas, ignoradas, cStat.
         try {

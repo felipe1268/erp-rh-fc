@@ -106,7 +106,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   const UF_LIST = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
   // ── SEFAZ state ──
-  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true, syncHora: 6, syncMinuto: 0, syncIntervaloHoras: 2 });
+  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true, syncHora: 6, syncMinuto: 0, syncIntervaloHoras: 2, syncModo: "intervalo" as "intervalo" | "diario", syncIntervaloDias: 1 });
   const [intervaloInput, setIntervaloInput] = useState("1");
   const [sefazPassword, setSefazPassword] = useState("");
   const [sefazCertName, setSefazCertName] = useState<string | null>(null);
@@ -126,6 +126,8 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
         syncHora: Number(sefazCfg.sync_hora ?? 6),
         syncMinuto: Number(sefazCfg.sync_minuto ?? 0),
         syncIntervaloHoras: Math.max(2, Number(sefazCfg.sync_intervalo_horas ?? 2)),
+        syncModo: (sefazCfg.sync_modo === "diario" ? "diario" : "intervalo") as "intervalo" | "diario",
+        syncIntervaloDias: Math.max(1, Number(sefazCfg.sync_intervalo_dias ?? 1)),
       });
       setIntervaloInput(String(Math.max(2, Number(sefazCfg.sync_intervalo_horas ?? 2))));
     }
@@ -228,6 +230,8 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
       syncHora: sefazForm.syncHora,
       syncMinuto: sefazForm.syncMinuto,
       syncIntervaloHoras: sefazForm.syncIntervaloHoras,
+      syncModo: sefazForm.syncModo,
+      syncIntervaloDias: sefazForm.syncIntervaloDias,
       ...(sefazCertB64 ? { certPfxBase64: sefazCertB64 } : {}),
       ...(sefazPassword ? { certPassword: sefazPassword } : {}),
     });
@@ -577,8 +581,10 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
               <div className="flex-1 min-w-0">
                 <span className="text-sm font-medium text-gray-800">Sincronização automática</span>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Busca NF-e automaticamente a cada <strong>{fmtIntervalHoras(sefazForm.syncIntervaloHoras)}</strong> (limite SEFAZ: 1 chamada a cada 2h por CNPJ — <strong className="text-amber-600">mínimo 2h</strong>).
-                  O histórico completo é trazido aos poucos — até 50 NF-e por chamada, sem ação manual.
+                  {sefazForm.syncModo === "diario"
+                    ? <>Busca NF-e <strong>{sefazForm.syncIntervaloDias === 1 ? "todo dia" : `a cada ${sefazForm.syncIntervaloDias} dias`} às {String(sefazForm.syncHora).padStart(2, "0")}:{String(sefazForm.syncMinuto).padStart(2, "0")}</strong> (BRT).</>
+                    : <>Busca NF-e automaticamente a cada <strong>{fmtIntervalHoras(sefazForm.syncIntervaloHoras)}</strong> (limite SEFAZ: 1 chamada a cada 2h por CNPJ — <strong className="text-amber-600">mínimo 2h</strong>).</>}
+                  {" "}O histórico completo é trazido aos poucos — até 50 NF-e por chamada, sem ação manual.
                 </p>
               </div>
               <div className="flex flex-col items-end gap-0.5">
@@ -594,8 +600,32 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
 
             {/* Frequência + Horário de sincronização */}
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 space-y-3">
-              {/* Frequência */}
-              <div className="flex items-center gap-3">
+              {/* Rev. 4537 — Modo de agendamento: intervalo de horas OU diário às HH:MM */}
+              <div>
+                <span className="text-sm font-medium text-gray-800">Modo de agendamento</span>
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSefazForm(f => ({ ...f, syncModo: "intervalo" }))}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${sefazForm.syncModo === "intervalo" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-gray-600 hover:bg-slate-100"}`}
+                  >
+                    ⏱ Por intervalo
+                    <span className="block font-normal text-[11px] mt-0.5">A cada X horas</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSefazForm(f => ({ ...f, syncModo: "diario" }))}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${sefazForm.syncModo === "diario" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-gray-600 hover:bg-slate-100"}`}
+                  >
+                    🕐 Diária (horário fixo)
+                    <span className="block font-normal text-[11px] mt-0.5">1x às HH:MM, a cada N dias</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Frequência em horas — só no modo intervalo */}
+              {sefazForm.syncModo === "intervalo" && (
+              <div className="flex items-center gap-3 pt-1 border-t border-slate-200">
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-medium text-gray-800">Frequência de consulta à SEFAZ</span>
                   <p className="text-xs text-gray-500 mt-0.5">
@@ -631,15 +661,43 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                   </span>
                 </div>
               </div>
+              )}
+
+              {/* Frequência em dias — só no modo diário */}
+              {sefazForm.syncModo === "diario" && (
+              <div className="flex items-center gap-3 pt-1 border-t border-slate-200">
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-gray-800">Verificar a cada quantos dias?</span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    <strong>1</strong> = todo dia no horário abaixo. <strong>2</strong> = dia sim, dia não. Etc.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <input
+                    type="number"
+                    min={1} max={30}
+                    className="w-16 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={sefazForm.syncIntervaloDias}
+                    onChange={e => setSefazForm(f => ({ ...f, syncIntervaloDias: Math.min(30, Math.max(1, Number(e.target.value) || 1)) }))}
+                  />
+                  <span className="text-sm text-gray-600">dia(s)</span>
+                </div>
+              </div>
+              )}
+
               {/* Horário (hora:minuto) */}
               <div className="flex items-center gap-3 pt-1 border-t border-slate-200">
                 <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium text-gray-800">Horário da primeira sincronização</span>
+                  <span className="text-sm font-medium text-gray-800">
+                    {sefazForm.syncModo === "diario" ? "Horário da sincronização" : "Horário da primeira sincronização"}
+                  </span>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Define o horário de início. O cron verifica a cada 15 min — precisão de ±7 min.
-                    {sefazForm.syncIntervaloHoras >= 24
-                      ? ` Sync diário às ${String(sefazForm.syncHora).padStart(2,"0")}:${String(sefazForm.syncMinuto).padStart(2,"0")}.`
-                      : ` Após o primeiro sync às ${String(sefazForm.syncHora).padStart(2,"0")}:${String(sefazForm.syncMinuto).padStart(2,"0")}, repete a cada ${fmtIntervalHoras(sefazForm.syncIntervaloHoras)}.`}
+                    {sefazForm.syncModo === "diario"
+                      ? `Sync ${sefazForm.syncIntervaloDias === 1 ? "diária" : `a cada ${sefazForm.syncIntervaloDias} dias`} às ${String(sefazForm.syncHora).padStart(2,"0")}:${String(sefazForm.syncMinuto).padStart(2,"0")} (BRT). O cron verifica a cada 15 min — precisão de ±7 min.`
+                      : <>Define o horário de início. O cron verifica a cada 15 min — precisão de ±7 min.
+                        {sefazForm.syncIntervaloHoras >= 24
+                          ? ` Sync diário às ${String(sefazForm.syncHora).padStart(2,"0")}:${String(sefazForm.syncMinuto).padStart(2,"0")}.`
+                          : ` Após o primeiro sync às ${String(sefazForm.syncHora).padStart(2,"0")}:${String(sefazForm.syncMinuto).padStart(2,"0")}, repete a cada ${fmtIntervalHoras(sefazForm.syncIntervaloHoras)}.`}</>}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
