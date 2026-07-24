@@ -170,6 +170,11 @@ async function regenerarPrevistoSemanasCaminhoB(
     // Rev. 2617 — baseline COM HORA (paridade minuto-a-minuto).
     baselineStartTs: planejamentoAtividades.baselineStartTs,
     baselineFinishTs: planejamentoAtividades.baselineFinishTs,
+    // Rev. 4534 — datas ATUAIS da revisão ativa (proxy de baseline quando a
+    // revisão foi importada sem campos de baseline e a baseline inicial ficou
+    // defasada por replanejamento/re-baseline no MSP).
+    dataInicio: planejamentoAtividades.dataInicio,
+    dataFim: planejamentoAtividades.dataFim,
   }).from(planejamentoAtividades)
     .where(eq(planejamentoAtividades.revisaoId, revisaoId));
 
@@ -208,8 +213,44 @@ async function regenerarPrevistoSemanasCaminhoB(
           (a: any) => !a.isGrupo && !a.disabled && a.baselineStart && a.baselineFinish,
         );
         if (temBaseBl) {
-          ativsParaUsar = blAtivs as any[];
-          console.log(`[regenerarPrevistoSemanasCaminhoB] projeto=${projetoId} rev=${revisaoId} sem baseline → usando rev baseline ${blRev.id}`);
+          // Rev. 4534 — GUARD: se o cronograma ATIVO se estende materialmente
+          // além do envelope da baseline inicial (> 7 dias), houve
+          // replanejamento/re-baseline no MSP e a baseline antiga está
+          // DEFASADA — usá-la infla o Previsto (curva chega a 100% cedo
+          // demais, semanas futuras todas 100%). Nesse caso, preferimos as
+          // datas ATUAIS da revisão ativa como proxy da nova baseline
+          // (recém re-baselined → atual ≈ baseline do MSP).
+          const dMax = (rows: any[], pick: (a: any) => any): number => {
+            let mx = Number.NEGATIVE_INFINITY;
+            for (const a of rows) {
+              if (a.isGrupo || a.disabled) continue;
+              const v = toUtc(pick(a), true);
+              if (Number.isFinite(v) && v > mx) mx = v;
+            }
+            return mx;
+          };
+          const maxFimAtivo = dMax(ativs as any[], (a) => a.dataFim);
+          const maxBlFim = dMax(blAtivs as any[], (a) => a.baselineFinish);
+          const DAY7 = 7 * 86400000;
+          const baselineDefasada = Number.isFinite(maxFimAtivo)
+            && Number.isFinite(maxBlFim)
+            && maxFimAtivo > maxBlFim + DAY7;
+          const temDatasAtuais = (ativs as any[]).some(
+            (a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim,
+          );
+          if (baselineDefasada && temDatasAtuais) {
+            ativsParaUsar = (ativs as any[]).map((a: any) => ({
+              ...a,
+              baselineStart: a.dataInicio,
+              baselineFinish: a.dataFim,
+              baselineStartTs: null,
+              baselineFinishTs: null,
+            }));
+            console.log(`[regenerarPrevistoSemanasCaminhoB] projeto=${projetoId} rev=${revisaoId} sem baseline; baseline inicial DEFASADA (ativo termina ${new Date(maxFimAtivo).toISOString().slice(0, 10)} > bl ${new Date(maxBlFim).toISOString().slice(0, 10)}+7d) → usando datas ATUAIS da rev ativa como baseline-proxy`);
+          } else {
+            ativsParaUsar = blAtivs as any[];
+            console.log(`[regenerarPrevistoSemanasCaminhoB] projeto=${projetoId} rev=${revisaoId} sem baseline → usando rev baseline ${blRev.id}`);
+          }
         }
       }
     } catch (e: any) {

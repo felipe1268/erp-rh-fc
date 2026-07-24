@@ -1,4 +1,41 @@
 /**
+ * Rev. 4534 - FIX: PLANEJAMENTO — PREVISTO (SEMANA) 100% EM TODAS AS SEMANAS FUTURAS (BASELINE DEFASADA)
+ *
+ * MOTIVAÇÃO:
+ *   No projeto "HOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV", a partir da semana 24 o card
+ *   "PREVISTO (SEMANA)" mostrava 100% para TODAS as semanas ("bugou tudo"), enquanto
+ *   a semana 23 (16/07) mostrava corretamente 79% (vindo do literal do XML).
+ *
+ *   Causa raiz (cadeia):
+ *   1. A revisão ativa (Rev. 01, 650 atividades, cronograma até 14/08/2026) foi
+ *      importada SEM campos de baseline (baseline_start/finish = NULL em todas).
+ *   2. O fallback da Rev. 4179 em `regenerarPrevistoSemanasCaminhoB` caía na revisão
+ *      baseline inicial (435 atividades, baseline_finish máx = 23/07/2026).
+ *   3. Só que o MSP foi RE-BASELINED na Rev. 01 (Texto10 = 79% em 16/07, vs 95% da
+ *      baseline antiga). A curva do motor, gerada contra a baseline ORIGINAL, chegava
+ *      a 100% em 23/07 → toda semana >= 23/07 clampava em 100% no frontend (`raizAt`).
+ *   4. As semanas COM upload eram corrigidas pelo `previsto_literal_json`; as semanas
+ *      FUTURAS (sem upload ainda) caíam na curva motor inflada → 100% em tudo.
+ *
+ * IMPLEMENTAÇÃO (server/routers/planejamento.ts, `regenerarPrevistoSemanasCaminhoB`):
+ *   - O SELECT das atividades da revisão ativa agora traz também data_inicio/data_fim.
+ *   - GUARD no fallback Rev. 4179: antes de usar a revisão baseline, compara o fim do
+ *     cronograma ATIVO (max data_fim) com o envelope da baseline (max baseline_finish).
+ *     Se o ativo se estende > 7 dias além da baseline → houve replanejamento/re-baseline
+ *     no MSP e a baseline antiga está DEFASADA. Nesse caso usa as datas ATUAIS da
+ *     revisão ativa como baseline-proxy (recém re-baselined → atual ≈ baseline do MSP).
+ *   - Caso contrário (cópia de revisão sem reimport, cenário original da Rev. 4179),
+ *     o comportamento permanece idêntico: usa a revisão baseline.
+ *
+ * VALIDAÇÃO (projeto 54, curva regenerada):
+ *   - Semana 16/07: motor novo = 80% (MSP literal = 79%; antes = 95%).
+ *   - Semanas futuras: 83 → 89 → 96 → 100% em 13/08 (antes: 100% em todas).
+ *   - Literais de semanas enviadas continuam prevalecendo sobre o motor (inalterado).
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4533 - FIX: PLANEJAMENTO — REALIZADO ACUMULADO RETROATIVO AO ENVIAR NOVO XML (REFIS/CURVA S)
  *
  * MOTIVAÇÃO:
