@@ -1,4 +1,25 @@
 /**
+ * Rev. 4552 - FEAT: ALMOXARIFADO — FOTO DO FUNCIONÁRIO NOS EMPRÉSTIMOS (CLIQUE = AMPLIAR)
+ *
+ * PEDIDO DO USUÁRIO: "coloca a foto do funcionario para facilitar a localização..
+ * quero poder clicar a foto maior".
+ *
+ * MUDANÇAS:
+ *   - SERVER (`server/routers/warehouse.ts` — listOpenLoans): leftJoin com
+ *     `employees` via `warehouseLoans.funcionarioId` e novo campo
+ *     `funcionarioFotoUrl` (employees.fotoUrl) no retorno. ZERO schema change.
+ *   - CLIENT (`client/src/pages/almoxarifado/index.tsx`):
+ *     1. Modal "Fechar Dia — Pendências de Devolução": avatar redondo 48px à
+ *        esquerda de cada card (fallback = ícone User em círculo cinza).
+ *     2. Aba "Emprestados" (agrupada por funcionário): avatar 36px no cabeçalho
+ *        azul de cada grupo (fallback = ícone User como antes).
+ *     - Clique na foto → lightbox `fotoExpandida` já existente (z-[9999],
+ *       fecha no X ou clicando fora), com o nome do funcionário na legenda.
+ *
+ * NOTA: empréstimos antigos sem `funcionario_id` gravado (só código/nome)
+ * mostram o fallback de ícone — sem foto pra ligar.
+ */
+/**
  * Rev. 4551 - UX: ALMOXARIFADO — VISÃO PADRÃO AGORA É "TODOS OS ALMOXARIFADOS (CONSOLIDADO)"
  *
  * PEDIDO DO USUÁRIO: "deixa padrão abrir a consolidação de todos almoxarifados".

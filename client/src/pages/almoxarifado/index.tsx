@@ -4419,6 +4419,19 @@ export default function AlmoxarifadoPage() {
                   return (
                     <div key={loan.id} className="bg-white border-2 rounded-xl p-4 space-y-2" style={{ borderColor: atrasado ? "#f97316" : "#fca5a5" }}>
                       <div className="flex items-start justify-between gap-2">
+                        {/* Rev. 4552 — foto do funcionário (clique = ampliar) p/ facilitar a localização */}
+                        {(loan as any).funcionarioFotoUrl ? (
+                          <img
+                            src={(loan as any).funcionarioFotoUrl}
+                            alt={loan.funcionarioNome || "Funcionário"}
+                            className="w-12 h-12 rounded-full object-cover border-2 border-gray-200 flex-shrink-0 cursor-pointer hover:opacity-80 transition"
+                            onClick={() => setFotoExpandida({ url: (loan as any).funcionarioFotoUrl, nome: loan.funcionarioNome || "Funcionário" })}
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-gray-100 border-2 border-gray-200 flex items-center justify-center flex-shrink-0">
+                            <User className="w-6 h-6 text-gray-400" />
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-gray-900 text-base">{loan.itemNome}</p>
                           <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5">
@@ -4774,10 +4787,10 @@ export default function AlmoxarifadoPage() {
                 // (sem filtro de status); aqui só interessam os PENDENTES pra decidir
                 // se ainda cabe "Devolver Todas" — senão o botão ficava aparecendo
                 // mesmo com tudo já devolvido.
-                const grupos = new Map<string, { nome: string; codigo: string; itens: any[]; totalDia: number }>();
+                const grupos = new Map<string, { nome: string; codigo: string; fotoUrl: string | null; itens: any[]; totalDia: number }>();
                 for (const l of loansAbertos as any[]) {
                   const key = String(l.funcionarioCodigo || l.funcionarioNome || "—");
-                  if (!grupos.has(key)) grupos.set(key, { nome: l.funcionarioNome || "—", codigo: l.funcionarioCodigo || "", itens: [], totalDia: 0 });
+                  if (!grupos.has(key)) grupos.set(key, { nome: l.funcionarioNome || "—", codigo: l.funcionarioCodigo || "", fotoUrl: l.funcionarioFotoUrl || null, itens: [], totalDia: 0 });
                   const g = grupos.get(key)!;
                   g.totalDia++;
                   if (l.status === "emprestado") g.itens.push(l);
@@ -4793,7 +4806,17 @@ export default function AlmoxarifadoPage() {
                       <div key={g.codigo + g.nome} className="border-2 border-blue-200 rounded-xl overflow-hidden">
                         <div className="bg-blue-100 px-4 py-2 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0">
-                            <User className="w-4 h-4 text-blue-700 shrink-0" />
+                            {/* Rev. 4552 — foto do funcionário (clique = ampliar) */}
+                            {g.fotoUrl ? (
+                              <img
+                                src={g.fotoUrl}
+                                alt={g.nome}
+                                className="w-9 h-9 rounded-full object-cover border-2 border-blue-300 shrink-0 cursor-pointer hover:opacity-80 transition"
+                                onClick={() => setFotoExpandida({ url: g.fotoUrl!, nome: g.nome })}
+                              />
+                            ) : (
+                              <User className="w-4 h-4 text-blue-700 shrink-0" />
+                            )}
                             <p className="font-bold text-blue-900 text-sm truncate">
                               {g.nome}{g.codigo ? <span className="text-blue-700 font-normal"> ({g.codigo})</span> : null}
                             </p>

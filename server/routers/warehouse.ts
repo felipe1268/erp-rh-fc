@@ -780,6 +780,8 @@ export const warehouseRouter = router({
           funcionarioId:        warehouseLoans.funcionarioId,
           funcionarioCodigo:    warehouseLoans.funcionarioCodigo,
           funcionarioNome:      warehouseLoans.funcionarioNome,
+          // Rev. 4552 — foto do funcionário p/ facilitar a localização visual.
+          funcionarioFotoUrl:   employees.fotoUrl,
           dataEmprestimo:       warehouseLoans.dataEmprestimo,
           horaEmprestimo:       warehouseLoans.horaEmprestimo,
           dataDevolucao:        warehouseLoans.dataDevolucao,
@@ -796,6 +798,7 @@ export const warehouseRouter = router({
         })
         .from(warehouseLoans)
         .leftJoin(obras, eq(obras.id, warehouseLoans.obraId))
+        .leftJoin(employees, eq(employees.id, warehouseLoans.funcionarioId))
         .where(and(...conditions))
         .orderBy(desc(warehouseLoans.createdAt));
       return rows;
