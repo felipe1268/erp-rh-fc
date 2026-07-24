@@ -7125,6 +7125,27 @@ export async function computeCurvaSData(input: { projetoId: number; revisaoId: n
           }
         }
       }
+      // Rev. 4533 — Injetar/corrigir pontos HISTÓRICOS a partir do mapa
+      // realizadoSemanas (cada entrada = snapshot da semana daquele upload).
+      // Garante que a Curva S realizada mostre o valor correto para semanas
+      // passadas mesmo após novos uploads (sem depender só do statusDateSnapshot).
+      const histMapCurva = calMspRoot?.realizadoSemanas as Record<string, number> | undefined;
+      if (histMapCurva) {
+        for (const [sdHist, valHist] of Object.entries(histMapCurva)) {
+          if (!sdHist || !Number.isFinite(valHist)) continue;
+          // Pula a semana já processada acima (statusDateMsp) para evitar dupla escrita.
+          if (sdHist === statusDateMsp) continue;
+          const semHist = toMondayStr(new Date(sdHist + "T12:00:00Z"));
+          const idxHist = curvaRealizada.findIndex(p => p.semana === semHist);
+          const vHist = +Math.min(100, Math.max(0, valHist)).toFixed(2);
+          if (idxHist >= 0) {
+            curvaRealizada[idxHist] = { semana: semHist, acumulado: vHist };
+          } else {
+            curvaRealizada.push({ semana: semHist, acumulado: vHist });
+          }
+        }
+        curvaRealizada.sort((a, b) => a.semana.localeCompare(b.semana));
+      }
       if (curvaRealizada.length > 0) {
         if (curvaRealizada[0].acumulado !== 0) {
           const primeiraSemReal = curvaRealizada[0].semana;

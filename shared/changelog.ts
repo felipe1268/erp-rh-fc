@@ -1,4 +1,40 @@
 /**
+ * Rev. 4533 - FIX: PLANEJAMENTO — REALIZADO ACUMULADO RETROATIVO AO ENVIAR NOVO XML (REFIS/CURVA S)
+ *
+ * MOTIVAÇÃO:
+ *   Após enviar um novo XML semanal do MS Project (ex.: semana 8, StatusDate 23/07),
+ *   o REFIS da semana 7 (10/07-16/07) passava a exibir "Realizado Acumulado: 20,36%"
+ *   em vez dos 25,00% que foram impressos quando o REFIS foi emitido em 16/07.
+ *
+ *   Causa raiz: `realizadoMspSnapshot` e `statusDateSnapshot` em `calendarioJson` guardam
+ *   SOMENTE a foto do ÚLTIMO upload. A condição de uso do snapshot no frontend é
+ *   `semanaFim === statusDateSnapshot`: ao avançar para a semana 8, `statusDateSnapshot`
+ *   vira "2026-07-23" e a verificação falha para a semana 7 → cai no EVM ponderado com
+ *   os pesos ATUAIS das atividades × os avanços históricos → resultado diferente do MSP.
+ *
+ *   O mapa `realizadoSemanas` (gravado no backend desde Rev. 2781) preserva cada snapshot
+ *   por semana, mas nunca era lido nos caminhos de exibição (frontend + Curva S backend).
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * Frontend — client/src/pages/planejamento/PlanejamentoDetalhe.tsx:
+ *   - `avancoAtual` (barra topo): quando `okSemana` é false (semana histórica antes do
+ *     último upload), tenta `realizadoSemanas[semFimVis] ?? realizadoSemanas[semanaVisualizacao]`
+ *     antes de cair no EVM.
+ *   - `realizadoAcum` (card REFIS "Realizado Acum."): mesma lógica — lookup duplo por
+ *     `semanaFim` e `semanaAtual` (Monday fallback). Dependency array atualizado (+semanaAtual).
+ *   - `realizadoComInd` (REFIS c/ indiretas): idem, com guard `!temIndiretas`.
+ *
+ * Backend — server/routers/planejamento.ts:
+ *   - Curva S (`getCurvaS`): após injetar o ponto do `statusDateSnapshot` (semana atual),
+ *     itera sobre `realizadoSemanas` e injeta/corrige pontos para TODAS as semanas históricas.
+ *     Isso garante que a linha verde da Curva S reflita os snapshots corretos de cada semana
+ *     enviada anteriormente. ZERO schema change.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4532 - FEAT: CONTROLE DE DOCUMENTOS — PAINEL DOSSIÊ COM MULTI-SELECT E DOWNLOAD ZIP
  *
  * MOTIVAÇÃO:

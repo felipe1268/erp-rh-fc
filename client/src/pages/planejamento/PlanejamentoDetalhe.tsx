@@ -760,6 +760,16 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       const okSemana = !semanaVisualizacao
         || (semFimVis! >= sd); // cobre OU é posterior ao snapshot
       if (okSemana) return Math.min(100, Math.max(0, Number(_calMSP_R.realizadoMspSnapshot)));
+      // Rev. 4533 — HISTÓRICO: semana ANTES do último upload → statusDateSnapshot
+      // avançou e o check acima falha. Consulta realizadoSemanas (mapa gravado
+      // desde Rev. 2781), indexado pelo StatusDate de CADA upload semanal.
+      // Lookup por semFimVis (cutoff = StatusDate usual) ou semanaVisualizacao
+      // (Monday, fallback para XMLs cujo StatusDate era segunda-feira).
+      const _histMapTop = _calMSP_R.realizadoSemanas as Record<string, number> | undefined;
+      if (_histMapTop && semanaVisualizacao) {
+        const v = _histMapTop[semFimVis!] ?? _histMapTop[semanaVisualizacao] ?? null;
+        if (v != null) return Math.min(100, Math.max(0, Number(v)));
+      }
     }
     if (!atividades.length) return 0;
     const folhas    = atividades.filter((a: any) => !a.isGrupo && !a.disabled && (refisComIndiretasGlobal || !a.isIndireta));
@@ -6809,6 +6819,19 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     ) {
       return Number(_calMSPR.realizadoMspSnapshot);
     }
+    // Rev. 4533 — HISTÓRICO: quando semanaFim ≠ statusDateSnapshot (novo upload
+    // avançou a data), o check acima falha para semanas passadas e cai no EVM
+    // ponderado com pesos atuais → oscilação retroativa do "Realizado Acumulado".
+    // Consulta o mapa realizadoSemanas (indexado pelo StatusDate de CADA upload)
+    // para recuperar o snapshot exato daquela semana. Lookup duplo: semanaFim
+    // (cutoff = StatusDate usual do MSP) e semanaAtual (Monday, fallback).
+    if (_envOkR && Object.keys(avancoLocal).length === 0 && _calMSPR) {
+      const _histMapR = _calMSPR.realizadoSemanas as Record<string, number> | undefined;
+      if (_histMapR) {
+        const v = _histMapR[semanaFim] ?? _histMapR[semanaAtual] ?? null;
+        if (v != null) return Number(v);
+      }
+    }
     const pesoBruto = usarPesoPorDuracao
       ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
       : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
@@ -6826,7 +6849,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // casa, ex.: 1.385 → 1.4 → display "1.40"). Causa divergência com a
     // barra superior "Avanço Físico" que usa precisão cheia (1.38).
     return soma;
-  }, [folhas, avancoExistente, avancoMaisRecente, avancoLocal, usarPesoPorDuracao, proj, semanaFim]);
+  }, [folhas, avancoExistente, avancoMaisRecente, avancoLocal, usarPesoPorDuracao, proj, semanaFim, semanaAtual]);
 
   const delta = +(realizadoAcum - previsto).toFixed(2);
 
@@ -6892,6 +6915,15 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     ) {
       return Number(calMSP.realizadoMspSnapshot);
     }
+    // Rev. 4533 — HISTÓRICO: mesma lógica de realizadoAcum — consulta
+    // realizadoSemanas para semanas antes do último upload (sem indiretas).
+    if (envOk && !temIndiretas && Object.keys(avancoLocal).length === 0 && calMSP) {
+      const _histMapCI = calMSP.realizadoSemanas as Record<string, number> | undefined;
+      if (_histMapCI) {
+        const v = _histMapCI[semanaFim] ?? _histMapCI[semanaAtual] ?? null;
+        if (v != null) return Number(v);
+      }
+    }
     const pesoBruto = usarPesoPorDuracao
       ? folhasComInd.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
       : folhasComInd.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
@@ -6918,7 +6950,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     });
     // Rev. 1538 — sem arredondamento intermediário (consistência com a barra superior).
     return soma;
-  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim, usarPesoPorDuracao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);
+  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim, semanaAtual, usarPesoPorDuracao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);
 
   const distorcaoPrev = +(previstoComInd - previsto).toFixed(2);
   const distorcaoReal = +(realizadoComInd - realizadoAcum).toFixed(2);
