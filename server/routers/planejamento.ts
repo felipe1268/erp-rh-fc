@@ -3429,12 +3429,19 @@ export const planejamentoRouter = router({
             const maxXml = fp.maxFinish ? String(fp.maxFinish).slice(0, 10) : null;
             baselineChecada = nErp > 0 && fp.nComBaseline > 0;
             if (baselineChecada) {
-              // Datas do envelope divergem = replanejamento claro. Contagem só
-              // dispara com diferença >5% (parse XML vs ERP tem folga natural de
-              // poucas folhas — ex.: rev 66 real: 1506/1512 com baseline).
+              // Datas do envelope divergem = replanejamento claro — mas com
+              // TOLERÂNCIA de 7 dias: 1-2 tarefas re-baselinadas isoladamente
+              // (caso real POITA: 2 de 1085 folhas com baseline 3 dias além)
+              // não podem alarmar o projeto inteiro. Replanejamento de verdade
+              // (caso QIU 2 R03) desloca o envelope por semanas/meses.
+              // Contagem só dispara com diferença >5% (parse XML vs ERP tem
+              // folga natural: indiretas/disabled só existem no ERP).
+              const diasDiff = (a: string | null, b: string | null): number =>
+                (a == null || b == null) ? 0
+                  : Math.abs(new Date(a + "T00:00:00Z").getTime() - new Date(b + "T00:00:00Z").getTime()) / 86400000;
               const countDiff = Math.abs(fp.nComBaseline - nErp) / Math.max(fp.nComBaseline, nErp);
-              const diverge = (minXml != null && minErp != null && minXml !== minErp)
-                || (maxXml != null && maxErp != null && maxXml !== maxErp)
+              const diverge = diasDiff(minXml, minErp) > 7
+                || diasDiff(maxXml, maxErp) > 7
                 || countDiff > 0.05;
               if (diverge) {
                 baselineDivergencia = {
