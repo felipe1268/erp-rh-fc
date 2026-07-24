@@ -290,9 +290,8 @@ export default function AlmoxarifadoPage() {
   // todos | proprio | locado | vinculado (qualquer) | nenhum (sem vínculo)
   const [filtroEquip, setFiltroEquip] = useState<"todos" | "proprio" | "locado" | "vinculado" | "nenhum">("todos");
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
-  const [obraContexto, setObraContexto] = useState<number | null | "todos">(null);
+  const [obraContexto, setObraContexto] = useState<number | null | "todos">("todos");
   const [fotoExpandida, setFotoExpandida] = useState<{ url: string; nome: string } | null>(null);
-  // Rev. 2772 — visão "Saldo por Obra": filtro de saldo + seções colapsáveis por obra.
 
   // Rev. 4340 — Transferências de equipamentos próprios aguardando aceite nesta obra.
   const equipTransfPendentesQ = trpc.equipamentos.listTransferenciasPendentesParaObra.useQuery(
@@ -464,10 +463,10 @@ export default function AlmoxarifadoPage() {
   // só pode operar em UMA obra (comportamento antigo preservado).
   const obrasEditaveis = (obrasAtivas as any[]).filter(o => o.podeEditar !== false);
   useEffect(() => {
-    if (obrasEditaveis.length === 1 && obrasEditaveis.length !== obrasAtivas.length && obraContexto === null) {
+    // Rev. 4551 — default agora é "todos" (Consolidado); o auto-select de
+    // usuário restrito a UMA obra continua valendo a partir do estado inicial.
+    if (obrasEditaveis.length === 1 && obrasEditaveis.length !== obrasAtivas.length && obraContexto === "todos") {
       setObraContexto(obrasEditaveis[0].id);
-    } else if (obrasAtivas.length === 1 && obraContexto === null) {
-      setObraContexto((obrasAtivas[0] as any).id);
     }
   }, [obrasAtivas]);
 

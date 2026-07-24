@@ -1,4 +1,19 @@
 /**
+ * Rev. 4551 - UX: ALMOXARIFADO — VISÃO PADRÃO AGORA É "TODOS OS ALMOXARIFADOS (CONSOLIDADO)"
+ *
+ * PEDIDO DO USUÁRIO: "deixa padrão abrir a consolidação de todos almoxarifados".
+ *
+ * MUDANÇA (client/src/pages/almoxarifado/index.tsx, SÓ CLIENT):
+ *   - Estado inicial de `obraContexto` mudou de `null` (Almoxarifado Central)
+ *     para `"todos"` (Consolidado) — a tela abre direto na visão consolidada.
+ *   - O auto-select de usuário restrito a UMA obra editável (Rev. 4539) foi
+ *     preservado: a condição agora dispara a partir do estado inicial "todos"
+ *     (antes era `null`). O ramo antigo "empresa com 1 obra ativa → seleciona a
+ *     obra" foi removido — com 1 obra, o Consolidado mostra o mesmo conteúdo.
+ *
+ * ZERO schema change, ZERO server change.
+ */
+/**
  * Rev. 4550 - REMOVE: ALMOXARIFADO — VISÃO "📍 SALDO POR OBRA" RETIRADA DO SELETOR
  *
  * PEDIDO DO USUÁRIO: "tire isso, não precisa ter" — após explicação da função
