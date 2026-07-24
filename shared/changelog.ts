@@ -1,4 +1,54 @@
 /**
+ * Rev. 4547 - FIX+FEAT: INVENTÁRIO SEMANAL — BAIXA DE ESTOQUE DEFINITIVA + LEDGER PERMANENTE DE DIVERGÊNCIAS
+ *
+ * PEDIDO DO USUÁRIO:
+ *   (1) Bug persistente: ao fazer o inventário semanal e "dar baixa" (contou 8
+ *   sacos de cimento onde o sistema tinha 10), o estoque continuava mostrando 10.
+ *   A Rev. 4525 supostamente corrigiu, mas o problema continuava. (2) Registrar
+ *   as diferenças de inventário em definitivo, criando uma base de dados para
+ *   medir o erro de processo do almoxarifado ao longo do tempo (divergência =
+ *   material retirado sem baixa).
+ *
+ * CAUSA-RAIZ (por que a Rev. 4525 não resolveu):
+ *   O fluxo tem 2 etapas: contagem (confirmInventoryItem, grava só na ficha da
+ *   sessão) e conclusão (finishInventorySession, aplica quantidadeFisica no
+ *   estoque — este caminho a Rev. 4525 consertou). PORÉM confirmInventoryItem
+ *   tinha um AUTO-CONCLUDE: ao contar o último item, marcava a sessão como
+ *   "concluido" imediatamente. O botão "Concluir Inventário" no frontend só
+ *   renderiza quando status === "em_andamento" → o botão NUNCA aparecia →
+ *   finishInventorySession NUNCA era chamado → estoque nunca atualizava.
+ *   Ou seja: a Rev. 4525 consertou uma função inalcançável.
+ *
+ * IMPLEMENTAÇÃO:
+ *   - confirmInventoryItem: removido o auto-conclude (só atualiza contadores;
+ *     status permanece "em_andamento"). Conclusão + baixa acontecem SOMENTE no
+ *     finishInventorySession.
+ *   - warehouse_inventory_sessions: nova coluna estoque_aplicado_em (marca
+ *     quando a baixa foi de fato aplicada). Frontend: botão "Concluir
+ *     Inventário e Dar Baixa no Estoque" aparece também para sessões antigas
+ *     travadas em "concluido" SEM estoque_aplicado_em (reparo retroativo).
+ *     Painel "Inventário Concluído" só com baixa aplicada.
+ *   - NOVA TABELA warehouse_inventory_ajustes (ledger permanente): 1 linha por
+ *     divergência aplicada — company/obra/sessão/semana, item, qtd sistema ×
+ *     física, diferença, valor unitário e valor da diferença em R$ (do catálogo
+ *     no momento da baixa), observações, quem registrou. UNIQUE(session_item_id)
+ *     + onConflictDoNothing → re-concluir não duplica. Sobrevive a cancelamentos.
+ *   - Novo endpoint warehouse.listarDivergenciasInventario (tenant + obra
+ *     guards, espelha historicoInventarioSemanal) + nova aba "Divergências" no
+ *     Histórico de Inventário: KPIs (faltas, sobras, perda estimada em R$) +
+ *     lista detalhada.
+ *   - SEGURANÇA: confirmInventoryItem / finishInventorySession /
+ *     cancelInventorySession não tinham NENHUM guard de tenant (IDOR por
+ *     sessionId/sessionItemId). Novo helper assertInventorySessionAccess
+ *     (empresa via getCompaniesForUser + obra via getEffectiveAllowedObraIds)
+ *     aplicado nas 3 mutations.
+ *
+ * ARQUIVOS: server/routers/warehouse.ts, server/_core/index.ts ([SyncSchema+]
+ *   Rev. 4547), drizzle/schema.ts, client/src/pages/almoxarifado/Inventario.tsx,
+ *   client/src/pages/almoxarifado/HistoricoInventario.tsx.
+ */
+
+/**
  * Rev. 4546 - FEAT: COMUNICADOS INTERNOS — LISTA PRINCIPAL RESPEITA DATA DE ADMISSÃO + LISTA COMPLEMENTAR
  *
  * PEDIDO DO USUÁRIO:

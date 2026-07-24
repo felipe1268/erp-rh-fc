@@ -55,9 +55,11 @@ async function assertInventorySessionAccess(db: any, ctx: any, sessionId: number
     throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
   }
   if (sess.obraId != null) {
-    const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
-    if (allowed !== null && !allowed.includes(sess.obraId)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+    // Mesma régua de ESCRITA do almoxarifado ("ver tudo, mexer só no seu",
+    // Rev. 4539/4541): inventário só opera nas obras habilitadas p/ o user.
+    const allowed = await getAlmoxAllowedObraIdSet(ctx.user.id, ctx.user.role, ctx.user.email);
+    if (allowed !== null && !allowed.has(sess.obraId)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para operar o inventário desta obra." });
     }
   }
   return sess;
@@ -1460,6 +1462,12 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       // Rev. 4547 — tenant guard (antes inexistente: IDOR por sessionId).
       const sess = await assertInventorySessionAccess(db, ctx, input.sessionId);
 
+      // Idempotência: se a baixa já foi aplicada, não reaplicar (evita
+      // sobrescrever movimentações posteriores do estoque com a contagem antiga).
+      if ((sess as any).estoqueAplicadoEm) {
+        return { success: true, divergenciasRegistradas: 0, jaAplicado: true };
+      }
+
       // ── Aplicar correções de estoque ──────────────────────────────────────
       // Todos os itens contados (conferido + divergente) têm quantidadeFisica
       // definida. Atualiza almoxarifado_itens com a contagem física real.
@@ -1495,7 +1503,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
           const dif = parseFloat(String(item.diferenca ?? "0")) || 0;
           if (Math.abs(dif) >= 0.001) {
             const vu = cat?.valorUnitario != null ? parseFloat(String(cat.valorUnitario)) : null;
-            await db
+            const inserted = await db
               .insert(warehouseInventoryAjustes)
               .values({
                 companyId: sess.companyId,
@@ -1515,8 +1523,10 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
                 registradoPorId: ctx.user.id,
                 registradoPorNome: ctx.user.name || "",
               } as any)
-              .onConflictDoNothing();
-            divergenciasRegistradas++;
+              .onConflictDoNothing()
+              .returning({ id: warehouseInventoryAjustes.id });
+            // Conta só o que foi realmente inserido (conflito = já registrado antes).
+            if (inserted.length > 0) divergenciasRegistradas++;
           }
         }
       }
