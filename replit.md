@@ -50,18 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4555** — **UX: TOGGLE DO ALERTA DE LOCAÇÕES NO PAINEL "ALMOXARIFADO" DAS CONFIGURAÇÕES.** Bloco "Alerta automático de locações a vencer" com Switch adicionado em `AlmoxarifadoConfigSection.tsx` (abaixo do Controle de auditoria) — lê/grava o MESMO critério `almox_alerta_locacao_auto` dos Critérios do Sistema (fonte única, os 2 lugares sincronizam); se não seedado, chama `criteria.initDefaults` antes do `updateBatch`. ZERO schema/server change.
 - **Rev. 4554** — **UX: ALERTA DE LOCAÇÕES A VENCER AGORA ABRE NO LOGIN (GLOBAL).** Novo componente `AlertaLocacoesVencendo.tsx` montado no DashboardLayout — o modal abre automaticamente em QUALQUER tela após o login (1x por sessão/empresa), não mais só ao entrar no Almoxarifado; CTA → `/equipamentos/locados`; `getItensLocadosVencendo` ganhou `obraNome`; toggle `almox_alerta_locacao_auto` e filtro por obra (Rev. 4553) preservados. Arquivos: `AlertaLocacoesVencendo.tsx` (novo), `DashboardLayout.tsx`, `almoxarifado/index.tsx`, `compras.ts`. ZERO schema change.
-- **Rev. 4553** — **FEAT: ALMOXARIFADO — ALERTA AUTOMÁTICO DE LOCAÇÕES A VENCER (POR OBRA + TOGGLE).** Modal "Locações a Vencer" abre AUTOMATICAMENTE ao entrar no Almoxarifado quando há itens vencendo (1x por sessão/empresa via sessionStorage); `getItensLocadosVencendo` agora filtra pelas obras do usuário (`getAlmoxAllowedObraIdSet` — restrito não vê Central; admin vê tudo); novo critério bool `almox_alerta_locacao_auto` (padrão ligado) na nova categoria "Almoxarifado / Locações" dos Critérios do Sistema. Arquivos: `compras.ts`, `routers.ts`, `almoxarifado/index.tsx`, `Configuracoes.tsx`. ZERO schema change.
 ### 5 one-liners
 
+- **Rev. 4553** — **FEAT: ALMOXARIFADO — ALERTA AUTOMÁTICO DE LOCAÇÕES A VENCER (POR OBRA + TOGGLE).** Modal abre automaticamente ao entrar no Almoxarifado; `getItensLocadosVencendo` filtra pelas obras do usuário; novo critério bool `almox_alerta_locacao_auto` (padrão ligado). Arquivos: `compras.ts`, `routers.ts`, `almoxarifado/index.tsx`, `Configuracoes.tsx`. ZERO schema change.
 - **Rev. 4552** — **FEAT: ALMOXARIFADO — FOTO DO FUNCIONÁRIO NOS EMPRÉSTIMOS (CLIQUE = AMPLIAR).** `listOpenLoans` com leftJoin em `employees` retorna `funcionarioFotoUrl`; avatar no modal "Fechar Dia" e na aba "Emprestados", clique amplia no lightbox. Arquivos: `warehouse.ts`, `almoxarifado/index.tsx`. ZERO schema change.
 - **Rev. 4551** — **UX: ALMOXARIFADO — VISÃO PADRÃO AGORA É "TODOS OS ALMOXARIFADOS (CONSOLIDADO)".** Estado inicial de `obraContexto` mudou de `null` (Central) para `"todos"` — a tela abre direto no Consolidado; auto-select de usuário restrito a UMA obra preservado. Arquivo: `almoxarifado/index.tsx`. ZERO schema/server change.
 - **Rev. 4550** — **REMOVE: ALMOXARIFADO — VISÃO "📍 SALDO POR OBRA" RETIRADA DO SELETOR.** A pedido do usuário, removida a visão obra→insumos da Rev. 2772: opção do seletor, bloco de render (~150 linhas), estados órfãos e sentinela "porObra". Consolidado, Central e obra específica intactos. Arquivo: `almoxarifado/index.tsx`. ZERO schema/server change.
 - **Rev. 4549** — **FIX: TERCEIROS — FILTRO DE OBRA EM FUNCIONÁRIOS TERCEIROS + TOLERÂNCIA NO DETECTOR DE BASELINE.** Obras duplicadas entre empresas do grupo (mesmo nome, ids diferentes) → filtro por id nunca casava; fix: casa por id OU nome normalizado da obra selecionada. Detector de baseline: envelope só diverge com deslocamento >7 dias (falso positivo POITA limpo no Neon). Arquivos: `FuncionariosTerceiros.tsx`, `planejamento.ts`. ZERO schema change.
-- **Rev. 4548** — **FEAT+FIX: PLANEJAMENTO — PACOTE DE ROBUSTEZ DO % PREVISTO (caso QIU 2 FASE 4 / R03).** Motor congelado intocado, tudo camada de leitura: detector de baseline divergente no upload semanal (banner âmbar persistente), chip de fonte no card PREVISTO, piso do motor (nunca recua abaixo do último literal), limpeza cirúrgica em `limparAvancosSemana`, tenant guards (IDOR). Arquivos: `planejamento.ts`, `previstoCurva.ts`, `PlanejamentoDetalhe.tsx`. ZERO schema change.
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4547 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4548 e anteriores.
 
 ## User preferences
 

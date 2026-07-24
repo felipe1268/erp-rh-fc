@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Warehouse, Tag, ExternalLink, ChevronRight, AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
+import { Warehouse, Tag, ExternalLink, ChevronRight, AlertTriangle, Loader2, ShieldAlert, BellRing } from "lucide-react";
 import { toast } from "sonner";
 
 export function AlmoxarifadoConfigSection() {
@@ -34,6 +35,40 @@ export function AlmoxarifadoConfigSection() {
   const exigeAprovacao = auditCfgQ.data
     ? (auditCfgQ.data as any).exigeAprovacao !== false
     : true;
+
+  // Rev. 4555 — toggle do alerta automático de locações a vencer (abre no login).
+  // Lê/grava o critério `almox_alerta_locacao_auto` (Critérios do Sistema).
+  const alertaCritQ = trpc.criteria.getByCategory.useQuery(
+    { companyId, categoria: "almoxarifado" }, { enabled: !!companyId }
+  );
+  const alertaCrit = (alertaCritQ.data as any[] | undefined)?.find(
+    (c) => c.chave === "almox_alerta_locacao_auto"
+  );
+  const alertaLocacaoAtivo = alertaCritQ.isSuccess
+    ? (alertaCrit ? alertaCrit.valor === "1" : true) // sem seed = ligado por padrão
+    : true;
+  const initCritMut = trpc.criteria.initDefaults.useMutation();
+  const updateCritMut = trpc.criteria.updateBatch.useMutation({
+    onSuccess: () => {
+      alertaCritQ.refetch();
+      utils.criteria.getByCategory.invalidate({ companyId, categoria: "almoxarifado" });
+      toast.success("Alerta de locações atualizado.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const [salvandoAlerta, setSalvandoAlerta] = useState(false);
+  async function toggleAlertaLocacao(v: boolean) {
+    if (!companyId) return;
+    setSalvandoAlerta(true);
+    try {
+      if (!alertaCrit) await initCritMut.mutateAsync({ companyId });
+      await updateCritMut.mutateAsync({
+        companyId,
+        criterios: [{ chave: "almox_alerta_locacao_auto", valor: v ? "1" : "0" }],
+      });
+    } catch { /* onError já mostra o toast */ }
+    finally { setSalvandoAlerta(false); }
+  }
 
   const limparMut = trpc.compras.limparCategoriasOrfas.useMutation({
     onSuccess: (r: any) => {
@@ -153,6 +188,28 @@ export function AlmoxarifadoConfigSection() {
                 ⚠ Senha e justificativa desligadas: qualquer usuário pode confirmar a ação sem barreira no momento — mas o gestor ainda precisa aprovar depois.
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Rev. 4555 — Toggle do alerta automático de locações a vencer (abre no login). */}
+      <div className="border-t border-emerald-100 bg-white px-4 py-3">
+        <div className="flex items-start gap-3">
+          <BellRing className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <label className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-gray-800 text-sm">Alerta automático de locações a vencer</div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Quando ligado, ao <b>entrar no sistema</b> abre automaticamente o aviso de equipamentos locados vencendo ou vencidos (1x por sessão), mostrando somente os itens das obras que o usuário tem acesso — para validar a renovação ou devolução.
+                </p>
+              </div>
+              <Switch
+                checked={alertaLocacaoAtivo}
+                disabled={!companyId || alertaCritQ.isLoading || salvandoAlerta}
+                onCheckedChange={(v) => toggleAlertaLocacao(!!v)}
+              />
+            </label>
           </div>
         </div>
       </div>

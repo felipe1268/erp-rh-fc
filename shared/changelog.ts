@@ -1,4 +1,23 @@
 /**
+ * Rev. 4555 - UX: TOGGLE DO ALERTA DE LOCAÇÕES NO PAINEL "ALMOXARIFADO" DAS CONFIGURAÇÕES
+ *
+ * PEDIDO DO USUÁRIO: "coloque o criterio aqui para ligar.. e desligar a função"
+ * (screenshot do painel verde ALMOXARIFADO — Categorias + Controle de auditoria).
+ *
+ * MUDANÇAS:
+ *   - `AlmoxarifadoConfigSection.tsx` ganhou o bloco "Alerta automático de
+ *     locações a vencer" com Switch (ícone BellRing), abaixo do Controle de
+ *     auditoria. Lê/grava o MESMO critério `almox_alerta_locacao_auto` dos
+ *     Critérios do Sistema (fonte única — os dois lugares ficam em sincronia).
+ *   - Se o critério ainda não foi seedado na empresa, o toggle chama
+ *     `criteria.initDefaults` antes do `updateBatch` (senão o update não acha
+ *     a linha e silenciosamente não grava nada).
+ *   - Sem seed = exibido como LIGADO (mesma semântica do alerta global).
+ *
+ * Arquivo: `client/src/pages/configuracoes/AlmoxarifadoConfigSection.tsx`.
+ * ZERO schema/server change.
+ */
+/**
  * Rev. 4554 - UX: ALERTA DE LOCAÇÕES A VENCER AGORA ABRE NO LOGIN (GLOBAL)
  *
  * PEDIDO DO USUÁRIO: "não precisa ser abrindo o almoxarifado.. pensei em fazer
