@@ -125,6 +125,22 @@ export const warehouseRouter = router({
         .where(eq(almoxarifadoItens.id, input.itemId));
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
 
+      // Rev. 4539 — guards de escrita: empresa do CHAMADOR + item da MESMA
+      // empresa + permissão na obra do item ("ver tudo, mexer só no seu").
+      const allowedCompaniesEn = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompaniesEn.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      if (item.companyId !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Item não pertence a esta empresa." });
+      }
+      if (item.obraId != null) {
+        const allowedObras = await getAlmoxAllowedObraIdSet(ctx.user.id, ctx.user.role, ctx.user.email);
+        if (allowedObras !== null && !allowedObras.has(Number(item.obraId))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para operar o almoxarifado desta obra (somente leitura)." });
+        }
+      }
+
       const antes = parseFloat(String(item.quantidadeAtual) || "0");
       const depois = antes + input.quantidade;
 
@@ -171,6 +187,22 @@ export const warehouseRouter = router({
         .where(eq(almoxarifadoItens.id, input.itemId));
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
 
+      // Rev. 4539 — guards de escrita: empresa do CHAMADOR + item da MESMA
+      // empresa + permissão na obra do item ("ver tudo, mexer só no seu").
+      const allowedCompaniesEx = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompaniesEx.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      if (item.companyId !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Item não pertence a esta empresa." });
+      }
+      if (item.obraId != null) {
+        const allowedObras = await getAlmoxAllowedObraIdSet(ctx.user.id, ctx.user.role, ctx.user.email);
+        if (allowedObras !== null && !allowedObras.has(Number(item.obraId))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para operar o almoxarifado desta obra (somente leitura)." });
+        }
+      }
+
       const antes = parseFloat(String(item.quantidadeAtual) || "0");
       if (antes < input.quantidade)
         throw new TRPCError({ code: "BAD_REQUEST", message: "Estoque insuficiente" });
@@ -215,6 +247,12 @@ export const warehouseRouter = router({
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Rev. 4539 — guard de empresa (visibilidade global é POR EMPRESA, nunca cross-tenant).
+      const allowedCompaniesTl = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompaniesTl.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
 
       const cid = input.companyId;
       const dFrom = input.dateFrom ?? null;
@@ -330,13 +368,10 @@ export const warehouseRouter = router({
 
       const list = ((rows as any)?.rows ?? rows ?? []) as any[];
 
-      // Filtro de obras permitidas (mesma regra do listMovements).
-      // Registros sem obra (obra_id IS NULL) só aparecem pra admin/master.
-      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
-      if (allowed === null) return list;
-      if (allowed.length === 0) return list.filter((r) => r.obra_id == null);
-      const allowSet = new Set(allowed);
-      return list.filter((r) => r.obra_id == null || allowSet.has(r.obra_id));
+      // Rev. 4539 — VISIBILIDADE GLOBAL (leitura): timeline sem filtro por
+      // obras permitidas — quem tem acesso ao módulo vê o giro de todas as
+      // obras da empresa. Escrita continua restrita nas mutations.
+      return list;
     }),
 
   listMovements: protectedProcedure
@@ -353,6 +388,12 @@ export const warehouseRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // Rev. 4539 — guard de empresa (visibilidade global é POR EMPRESA, nunca cross-tenant).
+      const allowedCompaniesMv = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompaniesMv.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
       const conditions: any[] = [
         eq(almoxarifadoMovimentacoes.companyId, input.companyId),
       ];
@@ -360,11 +401,9 @@ export const warehouseRouter = router({
       if (input.tipo) conditions.push(eq(almoxarifadoMovimentacoes.tipo, input.tipo));
       if (input.data) conditions.push(sql`DATE(${almoxarifadoMovimentacoes.criadoEm}) = ${input.data}::date`);
 
-      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
-      if (allowed !== null) {
-        if (allowed.length === 0) return [];
-        conditions.push(inArray(almoxarifadoMovimentacoes.obraId, allowed));
-      }
+      // Rev. 4539 — VISIBILIDADE GLOBAL (leitura): movimentações de todas as
+      // obras visíveis pra quem tem acesso ao módulo. Filtro antigo por
+      // getEffectiveAllowedObraIds removido de propósito.
 
       const movs = await db
         .select({
@@ -654,6 +693,12 @@ export const warehouseRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // Rev. 4539 — guard de empresa (visibilidade global é POR EMPRESA, nunca cross-tenant).
+      const allowedCompaniesLn = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompaniesLn.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
       const conditions: any[] = [eq(warehouseLoans.companyId, input.companyId)];
       if (input.data) {
         // filtrar por dia: mostra todos (emprestado + devolvido) do dia
@@ -662,12 +707,9 @@ export const warehouseRouter = router({
         // sem filtro de data: mostra só os abertos
         conditions.push(eq(warehouseLoans.status, "emprestado"));
       }
-      // Filtro centralizado por obras permitidas. Empréstimos sem obra só para admin.
-      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
-      if (allowed !== null) {
-        if (allowed.length === 0) return [];
-        conditions.push(inArray(warehouseLoans.obraId, allowed));
-      }
+      // Rev. 4539 — VISIBILIDADE GLOBAL (leitura): empréstimos em aberto de
+      // todas as obras visíveis pra quem tem acesso ao módulo. Devolução
+      // (write) continua com guard próprio.
 
       const rows = await db
         .select({
@@ -2775,14 +2817,12 @@ REGRAS:
       if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
-      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      // Rev. 4539 — VISIBILIDADE GLOBAL (leitura): baias de todas as obras
+      // visíveis pra quem tem acesso ao módulo (leituras/edições seguem com
+      // guards de escrita próprios).
       const conds: any[] = [eq(almoxarifadoBaias.companyId, input.companyId)];
       if (!input.incluirInativas) conds.push(eq(almoxarifadoBaias.ativo, true));
       if (input.obraId !== undefined) conds.push(eq(almoxarifadoBaias.obraId, input.obraId));
-      if (allowed !== null) {
-        if (allowed.length === 0) return [];
-        conds.push(inArray(almoxarifadoBaias.obraId, allowed));
-      }
       const baias = await db.select().from(almoxarifadoBaias).where(and(...conds)).orderBy(desc(almoxarifadoBaias.criadoEm));
       if (baias.length === 0) return [];
 

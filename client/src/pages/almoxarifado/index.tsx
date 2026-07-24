@@ -461,11 +461,24 @@ export default function AlmoxarifadoPage() {
     { companyId, forTransfer: true }, { enabled: !!companyId }
   );
 
+  // Rev. 4539 — VISIBILIDADE GLOBAL: obrasAtivas agora traz TODAS as obras da
+  // empresa com o flag `podeEditar` por obra. Auto-seleciona quando o usuário
+  // só pode operar em UMA obra (comportamento antigo preservado).
+  const obrasEditaveis = (obrasAtivas as any[]).filter(o => o.podeEditar !== false);
   useEffect(() => {
-    if (obrasAtivas.length === 1 && obraContexto === null) {
+    if (obrasEditaveis.length === 1 && obrasEditaveis.length !== obrasAtivas.length && obraContexto === null) {
+      setObraContexto(obrasEditaveis[0].id);
+    } else if (obrasAtivas.length === 1 && obraContexto === null) {
       setObraContexto((obrasAtivas[0] as any).id);
     }
   }, [obrasAtivas]);
+
+  // Rev. 4539 — modo somente-leitura: obra selecionada onde o usuário NÃO pode
+  // operar (vê tudo, mexe só no seu). Backend continua com os guards de escrita.
+  const obraContextoInfo = typeof obraContexto === "number"
+    ? (obrasAtivas as any[]).find(o => o.id === obraContexto)
+    : null;
+  const somenteLeitura = !!obraContextoInfo && obraContextoInfo.podeEditar === false;
 
   const { data: itens = [], refetch, isLoading } = trpc.compras.listarItens.useQuery(
     { companyId, obraId: typeof obraContexto === "number" ? obraContexto : obraContexto === null ? null : undefined },
@@ -1163,8 +1176,20 @@ export default function AlmoxarifadoPage() {
     return i._subItems && i._subItems.length > 1 ? i._subItems[0] : i;
   }
 
+  // Rev. 4539 — "ver tudo, mexer só no seu": item de obra sem permissão de
+  // escrita é somente leitura (o backend também bloqueia; aqui é UX).
+  function podeEditarItemObra(i: any): boolean {
+    const real = resolveRealItem(i);
+    if (real?.obraId == null) return true; // Central segue regra da empresa
+    return obrasEditaveis.some((o: any) => o.id === real.obraId);
+  }
+
   function abrirEditar(i: any) {
     const real = resolveRealItem(i);
+    if (!podeEditarItemObra(i)) {
+      toast.info("👁 Somente leitura — este item pertence a uma obra em que você não pode operar. Solicite uma transferência ao responsável.");
+      return;
+    }
     const subs = i._subItems && i._subItems.length > 1 ? i._subItems : null;
     setEditandoSubItems(subs);
     setFormItem({
@@ -1792,12 +1817,15 @@ export default function AlmoxarifadoPage() {
                   )}
                 </button>
               )}
+              {/* Rev. 4539 — obra somente-leitura: esconde ações de escrita */}
+              {!somenteLeitura && (<>
               <button onClick={() => { setImportIAOpen(true); setImportIAStep("upload"); setImportIAItens([]); setImportIASelected(new Set()); }} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition">
                 <Sparkles className="h-4 w-4" /> Importar (IA)
               </button>
               <button onClick={abrirNovo} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition">
                 <Plus className="h-4 w-4" /> Novo Item
               </button>
+              </>)}
             </div>
           </div>
         </div>
@@ -1823,17 +1851,29 @@ export default function AlmoxarifadoPage() {
                 <optgroup label="── Por Obra ──">
                   {obrasAtivas.map((obra: any) => (
                     <option key={obra.id} value={obra.id}>
-                      🏗️ {obra.codigo ? `${obra.codigo} – ${obra.nome}` : obra.nome}
+                      🏗️ {obra.codigo ? `${obra.codigo} – ${obra.nome}` : obra.nome}{obra.podeEditar === false ? " — 👁 Somente leitura" : ""}
                     </option>
                   ))}
                 </optgroup>
               )}
             </select>
           </div>
+          {/* Rev. 4539 — banner de somente-leitura */}
+          {somenteLeitura && (
+            <div className="max-w-7xl mx-auto mt-2 flex items-start gap-2 bg-amber-50 border border-amber-300 text-amber-900 text-sm rounded-lg px-3 py-2">
+              <span className="shrink-0">👁</span>
+              <span>
+                <b>Somente leitura</b> — você pode consultar o estoque e o giro desta obra, mas não pode operar aqui.
+                Precisa de material? Peça uma <b>transferência</b> ao gestor do almoxarifado desta obra.
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ── AÇÕES RÁPIDAS MOBILE ──────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 py-4">
+          {/* Rev. 4539 — obra somente-leitura: esconde os botões de operação */}
+          {!somenteLeitura && (
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             {/* ENTRADA */}
             {/* Rev. 2376 — badge piscante com quantidade de OCs de material pendentes de recebimento */}
@@ -1976,6 +2016,7 @@ export default function AlmoxarifadoPage() {
               DEVOLVER<br />LOCAÇÃO
             </button>
           </div>
+          )}
 
           {/* ── VER REGISTROS (linha secundária) ────────────────── */}
           <div className="grid grid-cols-4 gap-2 mt-2">
@@ -2878,24 +2919,28 @@ export default function AlmoxarifadoPage() {
                               </span>
                             </td>
                             <td className="py-2.5 text-right">
-                              <button
-                                onClick={() => {
-                                  setModalMov({ ...EMPTY_MOV, tipo: "entrada" });
-                                  setItemSelecionado(item);
-                                }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition mr-1"
-                                title="Dar entrada neste item para restaurar ao estoque"
-                              >
-                                <ArrowDownCircle className="h-3.5 w-3.5" />
-                                Entrada
-                              </button>
-                              <button
-                                onClick={() => abrirEditar(item)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
-                                title="Editar este item"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
+                              {podeEditarItemObra(item) ? (<>
+                                <button
+                                  onClick={() => {
+                                    setModalMov({ ...EMPTY_MOV, tipo: "entrada" });
+                                    setItemSelecionado(item);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition mr-1"
+                                  title="Dar entrada neste item para restaurar ao estoque"
+                                >
+                                  <ArrowDownCircle className="h-3.5 w-3.5" />
+                                  Entrada
+                                </button>
+                                <button
+                                  onClick={() => abrirEditar(item)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+                                  title="Editar este item"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                              </>) : (
+                                <span className="text-xs text-slate-400" title="Obra somente leitura">👁</span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -3101,7 +3146,8 @@ export default function AlmoxarifadoPage() {
                           Equipamento {(item as any).equipamentoVinculadoTipo === "proprio" ? "Próprio" : "Locado"} #{(item as any).equipamentoVinculadoId}
                         </div>
                       )}
-                      {/* Actions */}
+                      {/* Actions — Rev. 4539: escondidas em obra somente-leitura */}
+                      {!somenteLeitura && podeEditarItemObra(item) && (
                       <div className="flex gap-1 pt-1 border-t border-gray-50">
                         <button onClick={() => abrirMovimento(item, "entrada")} title="Entrada" className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] text-emerald-700 hover:bg-emerald-50 rounded transition">
                           <ArrowDownCircle className="h-3.5 w-3.5" />In
@@ -3157,6 +3203,7 @@ export default function AlmoxarifadoPage() {
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -3230,22 +3277,27 @@ export default function AlmoxarifadoPage() {
                           <StatusBadge atual={atual} minimo={minimo} />
                         </td>
                         <td className="px-4 py-3">
+                            {/* Rev. 4539 — obra somente-leitura: só Histórico */}
                             <div className="flex items-center justify-center gap-1">
+                              {!somenteLeitura && podeEditarItemObra(item) && (<>
                               <button onClick={() => abrirMovimento(item, "entrada")} className="flex items-center gap-1 h-7 px-2 text-xs text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-50 transition">
                                 <ArrowDownCircle className="h-3.5 w-3.5" />Entrada
                               </button>
                               <button onClick={() => abrirMovimento(item, "saida")} className="flex items-center gap-1 h-7 px-2 text-xs text-orange-700 border border-orange-200 rounded hover:bg-orange-50 transition">
                                 <ArrowUpCircle className="h-3.5 w-3.5" />Saída
                               </button>
+                              </>)}
                               <button onClick={() => { setHistItem(resolveRealItem(item)); setModalHist(true); }} className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="Histórico">
                                 <History className="h-3.5 w-3.5" />
                               </button>
+                              {!somenteLeitura && podeEditarItemObra(item) && (<>
                               <button onClick={() => abrirEditar(item)} className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="Editar">
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
                               <button onClick={() => handleExcluirItem(item)} className="h-7 w-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition" title="Remover">
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
+                              </>)}
                             </div>
                         </td>
                       </tr>

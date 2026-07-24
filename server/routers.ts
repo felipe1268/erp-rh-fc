@@ -38,7 +38,7 @@ import {
   listUserGroups, getUserGroupById, createUserGroup, updateUserGroup, deleteUserGroup,
   getGroupPermissions, setGroupPermissions, getGroupMembers, getUserGroupMemberships,
   addUserToGroup, removeUserFromGroup, setUserGroups, getUserEffectiveGroupPermissions,
-  getEffectiveAllowedObraIds, userCanSeeAvisoStatus,
+  getEffectiveAllowedObraIds, getAlmoxAllowedObraIdSet, userCanSeeAvisoStatus,
   listTrashEntries, getTrashEntry, markTrashEntryRestored, deleteTrashEntry, reinsertSnapshot,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS, EMPLOYEE_STATUS_DESLIGADOS } from "../shared/modules";
@@ -2173,61 +2173,28 @@ export const appRouter = router({
     }),
     listForAlmoxarifado: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), forTransfer: z.boolean().optional() })).query(async ({ input, ctx }) => {
       const isAdmin = ctx.user.role === 'admin' || ctx.user.role === 'admin_master';
-      if (isAdmin) return getObrasByCompanyActive(input.companyId, input.companyIds);
+      if (isAdmin) {
+        const rows = await getObrasByCompanyActive(input.companyId, input.companyIds);
+        return (rows as any[]).map(o => ({ ...o, podeEditar: true }));
+      }
 
-      const db = await getDb();
-
+      // Rev. 4539 — VISIBILIDADE GLOBAL DO ALMOXARIFADO: todo usuário com acesso
+      // ao módulo enxerga TODAS as obras da empresa (leitura). A operação
+      // (entrada/saída/transferência/etc.) continua restrita — o flag
+      // `podeEditar` marca em quais obras o usuário pode operar (mesma regra
+      // dos guards de escrita: getAlmoxAllowedObraIdSet).
       const userCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
       const allowedCompanyIds = userCompanies.map((c: any) => c.id);
       if (allowedCompanyIds.length > 0 && !allowedCompanyIds.includes(input.companyId)) {
         return [];
       }
-
-      // forTransfer=true: destino de transferência → mostrar TODAS as obras ativas da empresa.
-      // O operador de almoxarifado precisa poder enviar material a qualquer canteiro,
-      // mesmo que seu acesso de visualização seja restrito a obras específicas.
-      if (input.forTransfer) {
-        return getObrasByCompanyActive(input.companyId);
-      }
-
-      const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
-      const userRows: any[] = userResult?.rows ?? userResult ?? [];
-      const rawObras = userRows[0]?.allowed_obra_ids;
-      let parsedObras: number[] = [];
-      try { if (rawObras) parsedObras = JSON.parse(rawObras); } catch {}
-      if (parsedObras.length > 0) {
-        const obraIds = parsedObras.filter(id => typeof id === 'number' && id > 0);
-        if (obraIds.length > 0) {
-          const obrasResult = await db.execute(sql`
-            SELECT DISTINCT o.id, o.nome, o.codigo, o."companyId"
-            FROM obras o
-            WHERE o.id IN (${sql.raw(obraIds.join(","))}) AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1 AND o.status = 'Em_Andamento'
-            ORDER BY o.nome
-          `);
-          const rows = (obrasResult?.rows ?? obrasResult ?? []) as any[];
-          if (rows.length > 0) return rows;
-        }
-      }
-
-      const userEmail = ctx.user.email ?? '';
-      if (userEmail) {
-        const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
-        const empRows = empResult?.rows ?? empResult ?? [];
-        if (empRows.length > 0) {
-          const employeeId = (empRows[0] as any).id;
-          const obrasResult = await db.execute(sql`
-            SELECT DISTINCT o.id, o.nome, o.codigo, o."companyId"
-            FROM obras o
-            INNER JOIN obra_funcionarios of2 ON of2."obraId" = o.id AND of2."employeeId" = ${employeeId} AND of2."isActive" = 1
-            WHERE o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1 AND o.status = 'Em_Andamento'
-            ORDER BY o.nome
-          `);
-          const rows = (obrasResult?.rows ?? obrasResult ?? []) as any[];
-          if (rows.length > 0) return rows;
-        }
-      }
-
-      return getObrasByCompanyActive(input.companyId);
+      const todas = await getObrasByCompanyActive(input.companyId, input.companyIds);
+      if (input.forTransfer) return (todas as any[]).map(o => ({ ...o, podeEditar: true }));
+      const editSet = await getAlmoxAllowedObraIdSet(ctx.user.id, ctx.user.role, ctx.user.email);
+      return (todas as any[]).map(o => ({
+        ...o,
+        podeEditar: editSet === null ? true : editSet.has(Number(o.id)),
+      }));
     }),
     getById: protectedProcedure.input(z.object({ id: z.number() })).query(({ input }) => getObraById(input.id)),
     create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1),

@@ -820,6 +820,11 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Rev. 4539 — guard de empresa (visibilidade global é POR EMPRESA, nunca cross-tenant).
+      const allowedCompaniesLoc = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (input.companyId != null && !allowedCompaniesLoc.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
       const conds: any[] = [companyFilter(equipamentosLocados.companyId, input)];
       if (input.status) conds.push(eq(equipamentosLocados.status, input.status));
       if (input.fornecedorId) conds.push(eq(equipamentosLocados.fornecedorId, input.fornecedorId));
@@ -845,13 +850,12 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       // ficam ocultos pra restritos (segurança > conveniência: admin tem
       // visão pra vincular). Quando vier `obraId` explícito, valida a
       // permissão antes (IDOR-safe: pedir obra B sendo de obra A => []).
-      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      // Rev. 4539 — VISIBILIDADE GLOBAL (leitura): equipamentos locados de
+      // todas as obras visíveis pra quem tem acesso ao módulo (o filtro Rev.
+      // 2420 por obras permitidas foi removido de propósito). Devolução e
+      // demais escritas continuam com guards próprios.
       if (input.obraId != null) {
-        if (allowed !== null && !allowed.includes(input.obraId)) return [];
         conds.push(eq(equipamentosLocados.obraId, input.obraId));
-      } else if (allowed !== null) {
-        if (allowed.length === 0) return [];
-        conds.push(inArray(equipamentosLocados.obraId, allowed));
       }
       return await db.select().from(equipamentosLocados).where(and(...conds)).orderBy(desc(equipamentosLocados.id));
     }),

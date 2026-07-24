@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
-import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds, getUserCompanyLinks, createAuditLog } from "../db";
+import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds, getUserCompanyLinks, createAuditLog, getAlmoxAllowedObraIdSet } from "../db";
 import { assertAiModuleEnabled, isAiModuleEnabled } from "../_core/aiConfig";
 import { triggerFinancialSync } from "../services/financialEventTrigger";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
@@ -977,6 +977,19 @@ async function _assertCompanyAccess(ctxUser: any, companyId: number) {
   if (allowedIds.length === 0) return;
   if (!allowedIds.includes(companyId)) {
     throw new TRPCError({ code: "FORBIDDEN", message: `Sem acesso a esta empresa. (user=${ctxUser.id} role=${ctxUser.role} req=${companyId})` });
+  }
+}
+
+// Rev. 4539 — Guard de ESCRITA por obra no Almoxarifado ("ver tudo, mexer só
+// no seu"): leitura ficou global (por empresa), mas criar/editar/excluir item
+// exige permissão na obra do item. Central (obraId null) segue liberado pra
+// quem tem acesso à empresa (comportamento inalterado).
+async function _assertObraWriteAlmox(ctxUser: any, obraId: number | null | undefined) {
+  if (obraId == null) return;
+  const set = await getAlmoxAllowedObraIdSet(ctxUser.id, ctxUser.role, ctxUser.email);
+  if (set === null) return; // admin/admin_master
+  if (!set.has(Number(obraId))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para operar o almoxarifado desta obra (somente leitura)." });
   }
 }
 
@@ -2237,6 +2250,8 @@ export const comprasRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
+      // Rev. 4539 — guard de empresa (visibilidade global é POR EMPRESA, nunca cross-tenant).
+      await _assertCompanyAccess(ctx.user, input.companyId);
 
       const conditions: any[] = [
         eq(almoxarifadoItens.companyId, input.companyId),
@@ -2253,18 +2268,11 @@ export const comprasRouter = router({
         conditions.push(eq(almoxarifadoItens.obraId, input.obraId));
       }
 
-      // Filtro centralizado por obras permitidas. null => sem restrição.
-      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
-      console.log(`[listarItens] user=${ctx.user.id}/${ctx.user.role} company=${input.companyId} obra=${input.obraId === undefined ? 'undef' : input.obraId} allowed=${allowed === null ? 'null(admin)' : '[' + allowed.length + ']' + JSON.stringify(allowed.slice(0, 5))}`);
-      if (allowed !== null) {
-        if (allowed.length === 0) {
-          console.log(`[listarItens] RETORNANDO VAZIO — user sem obras permitidas`);
-          return [];
-        }
-        // Inclui itens do estoque central (obraId IS NULL) e dos obras permitidas.
-        // Usar só inArray() excluiria os itens centrais porque NULL nunca satisfaz IN(...).
-        conditions.push(or(isNull(almoxarifadoItens.obraId), inArray(almoxarifadoItens.obraId, allowed)));
-      }
+      // Rev. 4539 — VISIBILIDADE GLOBAL (leitura): todo usuário com acesso ao
+      // módulo Almoxarifado vê os itens de TODAS as obras da empresa. A
+      // restrição por obra continua valendo apenas nos guards de ESCRITA
+      // (userCanAccessObraAlmox nas mutations). Filtro antigo por
+      // getEffectiveAllowedObraIds removido daqui de propósito.
 
       // Rev. 1607 — Filtro do tipo de controle (estoque vs aplicação direta).
       // Default: oculta aplicação direta. Se apenasAplicacaoDireta=true, mostra só esses.
@@ -2324,6 +2332,7 @@ export const comprasRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
+      await _assertObraWriteAlmox(ctx.user, input.obraId ?? null);
       const db = await getDb();
 
       // Rev. 1607 — Classificação automática por IA do tipo de controle.
@@ -2510,8 +2519,11 @@ export const comprasRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const { id, auditoria, ...data } = input;
-      const [itemAcc] = await db.select({ companyId: almoxarifadoItens.companyId }).from(almoxarifadoItens).where(eq(almoxarifadoItens.id, id));
-      if (itemAcc) await _assertCompanyAccess(ctx.user, itemAcc.companyId);
+      const [itemAcc] = await db.select({ companyId: almoxarifadoItens.companyId, obraId: almoxarifadoItens.obraId }).from(almoxarifadoItens).where(eq(almoxarifadoItens.id, id));
+      if (itemAcc) {
+        await _assertCompanyAccess(ctx.user, itemAcc.companyId);
+        await _assertObraWriteAlmox(ctx.user, itemAcc.obraId ?? null);
+      }
       // Rev. 2388 — Detectar alteração manual de quantidade.
       let qtdAnterior: number | null = null;
       let qtdNova: number | null = null;
@@ -2971,6 +2983,7 @@ export const comprasRouter = router({
       const [item] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, input.id));
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado." });
       await _assertCompanyAccess(ctx.user, item.companyId);
+      await _assertObraWriteAlmox(ctx.user, item.obraId ?? null);
       const cfg = await getAlmoxAuditoriaConfig(item.companyId);
       const justUsada = justificativaFinal(input.justificativa, cfg.exigeJustificativa);
       await verificarSenhaSeLocal(ctx, input.senha, cfg.exigeSenha);
@@ -3014,6 +3027,8 @@ export const comprasRouter = router({
     .input(z.object({ companyId: z.number(), busca: z.string().optional() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
+      // Rev. 4539 — guard de empresa (visibilidade global é POR EMPRESA, nunca cross-tenant).
+      await _assertCompanyAccess(ctx.user, input.companyId);
       // Rev. 1609 — Consistência com listarItens: aplicar filtro de obras permitidas.
       // Antes, um usuário restrito podia ver o consolidado completo da empresa ao trocar
       // o seletor para "todos", contornando a restrição da view por obra.
@@ -3021,19 +3036,12 @@ export const comprasRouter = router({
         eq(almoxarifadoItens.companyId, input.companyId),
         eq(almoxarifadoItens.ativo, true),
       ];
-      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
-      if (allowed !== null) {
-        if (allowed.length === 0) {
-          console.log(`[listarItensConsolidado] user=${ctx.user.id}/${ctx.user.role} company=${input.companyId} → SEM obras permitidas, retornando vazio`);
-          return { itens: [], totalGeral: 0 };
-        }
-        // Inclui itens centrais (obraId IS NULL) + obras permitidas.
-        conds.push(or(isNull(almoxarifadoItens.obraId), inArray(almoxarifadoItens.obraId, allowed)));
-      }
+      // Rev. 4539 — VISIBILIDADE GLOBAL (leitura): consolidado sem filtro de
+      // obras permitidas — quem tem acesso ao módulo vê tudo da empresa.
       const rows = await db.select().from(almoxarifadoItens)
         .where(and(...conds))
         .orderBy(asc(almoxarifadoItens.nome));
-      console.log(`[listarItensConsolidado] user=${ctx.user.id}/${ctx.user.role} company=${input.companyId} allowed=${allowed === null ? 'null(admin)' : '['+allowed.length+']'} → ${rows.length} itens`);
+      console.log(`[listarItensConsolidado] user=${ctx.user.id}/${ctx.user.role} company=${input.companyId} → ${rows.length} itens`);
 
       const busca = input.busca?.toLowerCase();
       const filtered = busca

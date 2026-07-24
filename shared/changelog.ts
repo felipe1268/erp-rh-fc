@@ -1,4 +1,64 @@
 /**
+ * Rev. 4539 - FEAT: ALMOXARIFADO — VISIBILIDADE GLOBAL ("ver tudo, mexer só no seu")
+ *
+ * MOTIVAÇÃO:
+ *   O usuário pediu que todos com acesso ao módulo Almoxarifado ENXERGUEM os
+ *   almoxarifados, insumos e equipamentos (próprios e locados) de TODAS as
+ *   obras da empresa — incluindo movimentações/giro (aprovado explicitamente)
+ *   — mas que a OPERAÇÃO (entrada, saída, transferência, fechar dia, editar,
+ *   excluir) continue restrita às obras permitidas de cada um.
+ *
+ * IMPLEMENTAÇÃO:
+ *   Backend — filtros de LEITURA por obras permitidas removidos (mantido só o
+ *   isolamento por empresa):
+ *   - compras.listarItens / listarItensConsolidado (almoxarifado_itens);
+ *   - warehouse.listTimeline / listMovements (giro/movimentações),
+ *     listOpenLoans (ferramentas em aberto), baiaListar (baias);
+ *   - equipamentos.locadosListar (filtro Rev. 2420 removido de propósito).
+ *   Fluxos de RECEBIMENTO (listPendingOCs, ocsLocacaoPendentes) e TODAS as
+ *   mutations seguem com os guards (userCanAccessObraAlmox /
+ *   getAlmoxAllowedObraIdSet) intactos.
+ *   - obras.listForAlmoxarifado: agora retorna TODAS as obras ativas da
+ *     empresa com flag `podeEditar` por obra (regra = mesma dos guards de
+ *     escrita). Admin/forTransfer → podeEditar=true em tudo. O fallback legado
+ *     (allowed_obra_ids/alocação do funcionário) foi substituído.
+ *
+ *   Frontend (client/src/pages/almoxarifado/index.tsx):
+ *   - Seletor de obra: obras sem permissão aparecem com sufixo "👁 Somente
+ *     leitura"; banner âmbar explica o modo e sugere pedir TRANSFERÊNCIA ao
+ *     gestor do almoxarifado da obra.
+ *   - Em obra somente-leitura: grid de ações (ENTRADA/SAÍDA/FERRAMENTAS/
+ *     TRANSFERIR/FECHAR DIA/RECEBER-DEVOLVER LOCAÇÃO), Novo Item, Importar
+ *     (IA) e ações por item (In/Out/Editar/Excluir; Histórico continua) ficam
+ *     ocultos. "Ver Registros" (leitura) permanece.
+ *   - Auto-seleção: se o usuário só pode operar em 1 obra, ela continua sendo
+ *     pré-selecionada ao abrir a tela.
+ *
+ *   SEGURANÇA: defesa em profundidade preservada — o frontend só esconde
+ *   botões; quem bloqueia mesmo são os guards de escrita no servidor.
+ *
+ *   HARDENING PÓS-REVIEW (mesma revisão):
+ *   - Guard de EMPRESA (anti cross-tenant) adicionado a todos os endpoints de
+ *     leitura abertos: compras.listarItens/Consolidado (_assertCompanyAccess),
+ *     warehouse.listTimeline/listMovements/listOpenLoans e
+ *     equipamentos.locadosListar (getCompaniesForUser + FORBIDDEN). Antes,
+ *     esses reads confiavam só no filtro SQL por companyId de input.
+ *   - Novo _assertObraWriteAlmox (compras.ts): criarItem/atualizarItem/
+ *     excluirItem agora exigem permissão na OBRA do item no backend (Central
+ *     obraId=null segue liberado; admin/admin_master liberados).
+ *   - warehouse.registerEntry/registerExit: guards completos adicionados
+ *     (empresa do chamador via getCompaniesForUser + item.companyId ===
+ *     input.companyId + permissão na obra do item via
+ *     getAlmoxAllowedObraIdSet). Antes NÃO tinham nenhum guard — buraco
+ *     pré-existente que a visibilidade global tornaria explorável.
+ *   - Frontend: podeEditarItemObra() gate em abrirEditar (toast "somente
+ *     leitura"), nos botões Entrada/Editar da aba Itens Zerados, no clique
+ *     da linha do consolidado e nos botões In/Out/Editar/Excluir por item
+ *     (cards e tabela).
+ *   ZERO schema change.
+ */
+
+/**
  * Rev. 4538 - UX: NOTAS FISCAIS (RECEBIDAS) — BANNER LIMPO NO MODO DIÁRIO
  *
  * MOTIVAÇÃO:
