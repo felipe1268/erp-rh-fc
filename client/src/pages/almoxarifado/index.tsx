@@ -1276,6 +1276,26 @@ export default function AlmoxarifadoPage() {
     { companyId }, { enabled: !!companyId }
   );
 
+  // Rev. 4553 — alerta INCISIVO de locação a vencer: abre automaticamente ao
+  // entrar no Almoxarifado (1x por sessão/empresa) quando o critério
+  // `almox_alerta_locacao_auto` está ligado. O endpoint já filtra os itens
+  // pelas obras que o usuário tem permissão de acesso.
+  const criteriosAlmoxQuery = trpc.criteria.getByCategory.useQuery(
+    { companyId, categoria: "almoxarifado" }, { enabled: !!companyId }
+  );
+  const alertaLocacaoAutoAtivo = useMemo(() => {
+    if (!criteriosAlmoxQuery.isSuccess) return false; // aguarda query resolver — nunca decide "ligado" durante loading
+    const c = ((criteriosAlmoxQuery.data ?? []) as any[]).find((x) => x.chave === "almox_alerta_locacao_auto");
+    return c ? c.valor === "1" : true; // resolvido e sem seed = ligado por padrão
+  }, [criteriosAlmoxQuery.isSuccess, criteriosAlmoxQuery.data]);
+  useEffect(() => {
+    if (!companyId || !alertaLocacaoAutoAtivo || itensLocadosVencendo.length === 0) return;
+    const flagKey = `almoxAlertaLocacaoShown:${companyId}`;
+    if (sessionStorage.getItem(flagKey)) return;
+    sessionStorage.setItem(flagKey, "1");
+    setModalLocacoesVencendo(true);
+  }, [companyId, alertaLocacaoAutoAtivo, itensLocadosVencendo.length]);
+
   const [modalDevolverLocacao, setModalDevolverLocacao] = useState(false);
   const [itemDevolverLocacao, setItemDevolverLocacao] = useState<any>(null);
   const [obsDevolucaoLocacao, setObsDevolucaoLocacao] = useState("");

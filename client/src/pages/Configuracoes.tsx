@@ -92,6 +92,7 @@ const CATEGORIAS = [
   { key: "recontratacao", label: "Recontratação", icon: UserCheck, color: "text-lime-600", bgColor: "bg-lime-50", borderColor: "border-lime-200" },
   { key: "competencias", label: "Gestão de Competências", icon: CalendarCheck, color: "text-amber-600", bgColor: "bg-amber-50", borderColor: "border-amber-200" },
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
+  { key: "almoxarifado", label: "Almoxarifado / Locações", icon: Warehouse, color: "text-yellow-700", bgColor: "bg-yellow-50", borderColor: "border-yellow-200" },
 ];
 
 type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios" | "smtp_config";
@@ -233,7 +234,9 @@ export default function Configuracoes() {
       // nova apareça p/ empresas que já tinham critérios seedados).
       const hasEpi = criteriaQuery.data.some((c: any) => c.categoria === 'epi');
       const hasMultaToggle = criteriaQuery.data.some((c: any) => c.chave === 'rescisao_aplicar_multa_fgts');
-      if (criteriaQuery.data.length === 0 || !hasEpi || !hasMultaToggle) {
+      // Rev. 4553 — garante seed do toggle do alerta de locação p/ empresas antigas.
+      const hasAlmoxAlerta = criteriaQuery.data.some((c: any) => c.chave === 'almox_alerta_locacao_auto');
+      if (criteriaQuery.data.length === 0 || !hasEpi || !hasMultaToggle || !hasAlmoxAlerta) {
         initDefaultsMutation.mutate({ companyId });
       }
     }

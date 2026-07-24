@@ -2928,12 +2928,19 @@ export const comprasRouter = router({
     .query(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
-      const rows = await db.select().from(almoxarifadoItens)
+      let rows = await db.select().from(almoxarifadoItens)
         .where(and(
           eq(almoxarifadoItens.companyId, input.companyId),
           eq(almoxarifadoItens.ativo, true),
           eq(almoxarifadoItens.origem, "alugado"),
         ));
+      // Rev. 4553 — o alerta de locação a vencer mostra SOMENTE itens das obras
+      // que o usuário tem permissão (getAlmoxAllowedObraIdSet; null = admin vê tudo).
+      // Usuário restrito não vê itens do Central (obraId null) — o alerta é por obra.
+      const allowedObras = await getAlmoxAllowedObraIdSet(ctx.user.id, ctx.user.role, ctx.user.email);
+      if (allowedObras !== null) {
+        rows = rows.filter(i => i.obraId != null && allowedObras.has(i.obraId));
+      }
       const hoje = new Date();
       return rows
         .filter(i => i.dataVencimentoLocacao)

@@ -3872,6 +3872,8 @@ export const appRouter = router({
         // CONVENÇÃO COLETIVA
         { categoria: "convencao", chave: "convencao_alerta_vencimento_dias", valor: "60", descricao: "Dias antes do vencimento da convenção para alertar", valorPadraoClt: "60", unidade: "dias" },
         { categoria: "convencao", chave: "convencao_aplicar_local_sobre_matriz", valor: "1", descricao: "Aplicar convenção local quando mais vantajosa que a matriz (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        // ALMOXARIFADO — Rev. 4553
+        { categoria: "almoxarifado", chave: "almox_alerta_locacao_auto", valor: "1", descricao: "Abrir automaticamente o alerta de Locações a Vencer ao entrar no Almoxarifado, para validar renovação/devolução (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
       ];
 
       const toInsert = defaults.filter(d => !existingChaves.has(d.chave));

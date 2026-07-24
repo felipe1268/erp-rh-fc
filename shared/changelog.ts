@@ -1,4 +1,31 @@
 /**
+ * Rev. 4553 - FEAT: ALMOXARIFADO — ALERTA AUTOMÁTICO DE LOCAÇÕES A VENCER (POR OBRA + TOGGLE)
+ *
+ * PEDIDO DO USUÁRIO: "quero um alerta mais incisivo para vencimento de locação..
+ * precisa abrir na tela imediatamente quando o gestor do projeto entrar na obra,
+ * para validar ou não a renovação da locação.. quero que apareça para todos que
+ * estão liberados para sua obra.. somente os itens pertinentes a cada obra que o
+ * usuário tem permissão.. quero botão no Critério para habilitar ou não".
+ *
+ * MUDANÇAS:
+ *   1. AUTO-ABERTURA (client almoxarifado/index.tsx): o modal "Locações a Vencer"
+ *      (Rev. 2567) agora abre AUTOMATICAMENTE ao entrar no Almoxarifado quando há
+ *      itens vencendo/vencidos — 1x por sessão por empresa (sessionStorage
+ *      `almoxAlertaLocacaoShown:<companyId>`), pra não virar spam a cada navegação.
+ *   2. FILTRO POR OBRA (server compras.ts — getItensLocadosVencendo): aplica
+ *      `getAlmoxAllowedObraIdSet` — usuário restrito vê SOMENTE itens das obras
+ *      habilitadas (itens do Central/obra null ficam fora pra restrito; admin vê
+ *      tudo). Vale também pro chip "N locações a vencer" que usa a mesma query.
+ *   3. TOGGLE EM CRITÉRIOS DO SISTEMA: nova categoria "Almoxarifado / Locações"
+ *      com o critério bool `almox_alerta_locacao_auto` (padrão = 1/ligado).
+ *      Seed via initDefaults (check `hasAlmoxAlerta` no client garante empresas
+ *      antigas). Sem seed ainda = tratado como ligado.
+ *
+ * Arquivos: `server/routers/compras.ts`, `server/routers.ts` (initDefaults),
+ * `client/src/pages/almoxarifado/index.tsx`, `client/src/pages/Configuracoes.tsx`.
+ * ZERO schema change (usa `system_criteria` existente).
+ */
+/**
  * Rev. 4552 - FEAT: ALMOXARIFADO — FOTO DO FUNCIONÁRIO NOS EMPRÉSTIMOS (CLIQUE = AMPLIAR)
  *
  * PEDIDO DO USUÁRIO: "coloca a foto do funcionario para facilitar a localização..
