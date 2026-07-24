@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { comunicadosInternos, comunicadoAssinaturas, employees, obraFuncionarios, obras, integrasignEnvelopes, integrasignSignatarios, jobFunctions } from "../../drizzle/schema";
+import { comunicadosInternos, comunicadoAssinaturas, comunicadoLeituras, employees, obraFuncionarios, obras, integrasignEnvelopes, integrasignSignatarios, jobFunctions } from "../../drizzle/schema";
 import { eq, and, sql, desc, isNull, asc, inArray, count } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
@@ -425,6 +425,22 @@ export const comunicadosInternosRouter = router({
       return { envelopeId: envelope.id };
     }),
 
+  // Rev. 4542 — Gera (ou devolve) o link público de leitura/ciência do comunicado.
+  gerarLinkLeitura: protectedProcedure
+    .input(z.object({ id: z.number().int().positive(), companyId: z.number().int().positive() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const row = await ensureOwnership(db, input.id, input.companyId);
+      const [full] = await db.select({ leituraToken: comunicadosInternos.leituraToken })
+        .from(comunicadosInternos).where(eq(comunicadosInternos.id, row.id));
+      if (full?.leituraToken) return { token: full.leituraToken };
+      const token = crypto.randomBytes(32).toString("hex");
+      await db.update(comunicadosInternos)
+        .set({ leituraToken: token, leituraTokenCriadoEm: sql`NOW()`, updatedAt: sql`NOW()` } as any)
+        .where(eq(comunicadosInternos.id, row.id));
+      return { token };
+    }),
+
   reverter: protectedProcedure
     .input(z.object({
       id: z.number().int().positive(),
@@ -576,6 +592,7 @@ export const comunicadosInternosRouter = router({
         assinaturaBase64: comunicadoAssinaturas.assinaturaBase64,
         assinadoEm: comunicadoAssinaturas.assinadoEm,
         registradoPor: comunicadoAssinaturas.registradoPor,
+        tipo: comunicadoAssinaturas.tipo,
       })
         .from(comunicadoAssinaturas)
         .where(and(
@@ -608,6 +625,18 @@ export const comunicadosInternosRouter = router({
       for (const a of alocacoes) {
         if (!mapObra.has(a.employeeId)) mapObra.set(a.employeeId, { obraId: a.obraId, obraNome: a.obraNome });
       }
+      // Rev. 4542 — visualizações registradas pelo link público de leitura/ciência.
+      const leituras = await db.select({
+        employeeId: comunicadoLeituras.employeeId,
+        visualizadoEm: comunicadoLeituras.visualizadoEm,
+      })
+        .from(comunicadoLeituras)
+        .where(and(
+          eq(comunicadoLeituras.comunicadoId, input.comunicadoId),
+          eq(comunicadoLeituras.companyId, input.companyId),
+        ));
+      const mapLeitura = new Map<number, string>(leituras.map(l => [l.employeeId, l.visualizadoEm]));
+
       const mapAssin = new Map<number, any>(assinaturas.map(a => [a.employeeId, a]));
       const ativoIds = new Set(ativos.map(a => a.id));
       const totalAssinadosAtivos = assinaturas.filter(a => ativoIds.has(a.employeeId)).length;
@@ -616,6 +645,7 @@ export const comunicadosInternosRouter = router({
         funcionarios: ativos.map(f => ({
           ...f,
           assinatura: mapAssin.get(f.id) || null,
+          visualizadoEm: mapLeitura.get(f.id) || null,
           obraId: mapObra.get(f.id)?.obraId ?? null,
           obraNome: mapObra.get(f.id)?.obraNome ?? null,
         })),

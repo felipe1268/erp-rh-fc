@@ -9477,6 +9477,9 @@ export const comunicadosInternos = pgTable("comunicados_internos", {
   emissorCargo: varchar("emissor_cargo", { length: 255 }),
   destinatariosJson: text("destinatarios_json"),
   fcsignEnvelopeId: integer("fcsign_envelope_id"),
+  // Rev. 4542 — link público de leitura/ciência (WhatsApp): token único por comunicado
+  leituraToken: varchar("leitura_token", { length: 96 }),
+  leituraTokenCriadoEm: timestamp("leitura_token_criado_em", { mode: "string" }),
 }, (t) => [
   index("idx_comunicados_company").on(t.companyId),
   index("idx_comunicados_ano").on(t.companyId, t.ano),
@@ -9495,10 +9498,30 @@ export const comunicadoAssinaturas = pgTable("comunicado_assinaturas", {
   ip: varchar({ length: 64 }),
   registradoPor: varchar("registrado_por", { length: 255 }),
   registradoPorUserId: integer("registrado_por_user_id"),
+  // Rev. 4542 — tipo da assinatura: 'desenho' (SignaturePad) | 'ciencia_online' (1 clique
+  // autenticado no link público — assinatura eletrônica simples, Lei 14.063/2020).
+  tipo: varchar({ length: 20 }).default("desenho").notNull(),
+  userAgent: varchar("user_agent", { length: 300 }),
 }, (t) => [
   index("idx_com_assin_comunicado").on(t.comunicadoId),
   index("idx_com_assin_company").on(t.companyId),
   uniqueIndex("uq_com_assin_comunicado_emp").on(t.comunicadoId, t.employeeId),
+]);
+
+// Rev. 4542 — Registro de VISUALIZAÇÃO do comunicado pelo link público de leitura.
+// 1 linha por (comunicadoId, employeeId); guarda o PRIMEIRO acesso identificado (auditoria).
+export const comunicadoLeituras = pgTable("comunicado_leituras", {
+  id: serial().primaryKey(),
+  comunicadoId: integer("comunicado_id").notNull(),
+  companyId: integer("company_id").notNull(),
+  employeeId: integer("employee_id").notNull(),
+  visualizadoEm: timestamp("visualizado_em", { mode: "string" }).defaultNow().notNull(),
+  ip: varchar({ length: 64 }),
+  userAgent: varchar("user_agent", { length: 300 }),
+}, (t) => [
+  index("idx_com_leit_comunicado").on(t.comunicadoId),
+  index("idx_com_leit_company").on(t.companyId),
+  uniqueIndex("uq_com_leit_comunicado_emp").on(t.comunicadoId, t.employeeId),
 ]);
 
 export const curriculoFuncoes = pgTable("curriculo_funcoes", {

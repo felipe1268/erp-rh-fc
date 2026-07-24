@@ -208,6 +208,7 @@ const Ferias = lazyWithRetry(() => import("./pages/Ferias"));
 const SeguroVida = lazyWithRetry(() => import("./pages/SeguroVida"));
 const CipaCompleta = lazyWithRetry(() => import("./pages/CipaCompleta"));
 const CipaVotacao = lazyWithRetry(() => import("./pages/CipaVotacao"));
+const ComunicadoCiencia = lazyWithRetry(() => import("./pages/ComunicadoCiencia"));
 const ModuloPJ = lazyWithRetry(() => import("./pages/ModuloPJ"));
 const ContratoPJView = lazyWithRetry(() => import("./pages/ContratoPJView"));
 const AditivoPJView = lazyWithRetry(() => import("./pages/AditivoPJView"));
@@ -497,6 +498,7 @@ function Router() {
         <Route path={"/assinar/:token"} component={AssinarDocumento} />
         {/* CIPA — cédula PÚBLICA de votação por link/token */}
         <Route path={"/cipa/votar/:token"} component={CipaVotacao} />
+        <Route path={"/ciencia/:token"} component={ComunicadoCiencia} />
         {/* Hub de Módulos - Tela Inicial */}
         <Route path={"/"} component={ModuleHub} />
         {/* Painéis por Módulo (possuem checagem interna de permissão por widget) */}

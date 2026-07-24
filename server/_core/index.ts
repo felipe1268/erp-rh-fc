@@ -21,6 +21,7 @@ import { registerEfdContribuicoesRoute } from "../routers/downloadEfdContribuico
 import { registerSpedEcfRoute } from "../routers/downloadSpedEcf";
 import { registerSpedEcdRoute } from "../routers/downloadSpedEcd";
 import { registerDdsAtaRoute } from "../routers/downloadDdsAta";
+import { registerComunicadoPdfRoute } from "../routers/comunicadoPdf";
 import { registerDdsAtaLoteRoute } from "../routers/downloadDdsAtaLote";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -327,6 +328,7 @@ async function startServer() {
   registerSpedEcfRoute(app);
   registerSpedEcdRoute(app);
   registerDdsAtaRoute(app);
+  registerComunicadoPdfRoute(app);
   registerDdsAtaLoteRoute(app);
 
   // Upload multipart para documentos SST grandes (PGR/PCMSO/LTCAT — até 150MB)
@@ -3548,6 +3550,29 @@ REGRAS DE EXTRAÇÃO:
           await db.execute(sql`ALTER TABLE comunicados_internos ADD COLUMN IF NOT EXISTS fcsign_envelope_id INTEGER`);
           console.log(`[SyncSchema+] Rev. 4264: colunas setor/emissor_nome/emissor_cargo/destinatarios_json/fcsign_envelope_id garantidas em comunicados_internos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4264 comunicados_internos colunas:`, e?.message || e); }
+
+        // Rev. 4542 — Comunicados Internos: link público de leitura/ciência (WhatsApp).
+        // Token no comunicado + tipo/user_agent na assinatura + tabela de visualizações.
+        try {
+          await db.execute(sql`ALTER TABLE comunicados_internos ADD COLUMN IF NOT EXISTS leitura_token VARCHAR(96)`);
+          await db.execute(sql`ALTER TABLE comunicados_internos ADD COLUMN IF NOT EXISTS leitura_token_criado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE comunicado_assinaturas ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'desenho'`);
+          await db.execute(sql`ALTER TABLE comunicado_assinaturas ADD COLUMN IF NOT EXISTS user_agent VARCHAR(300)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS comunicado_leituras (
+            id SERIAL PRIMARY KEY,
+            comunicado_id INTEGER NOT NULL,
+            company_id INTEGER NOT NULL,
+            employee_id INTEGER NOT NULL,
+            visualizado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+            ip VARCHAR(64),
+            user_agent VARCHAR(300)
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_com_leit_comunicado ON comunicado_leituras (comunicado_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_com_leit_company ON comunicado_leituras (company_id)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_com_leit_comunicado_emp ON comunicado_leituras (comunicado_id, employee_id)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_comunicados_leitura_token ON comunicados_internos (leitura_token) WHERE leitura_token IS NOT NULL`);
+          console.log(`[SyncSchema+] Rev. 4542: leitura_token/tipo/user_agent + tabela comunicado_leituras garantidos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4542 comunicados leitura/ciência:`, e?.message || e); }
 
         // Rev. 2082 — link Categoria (financial_accounts) → Centro de Custo (financial_cost_centers).
         // Coluna opcional; permite que ao cadastrar a categoria inline no modal "Novo Lançamento" o

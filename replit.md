@@ -50,20 +50,20 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4542** — **FEAT: COMUNICADOS INTERNOS — PDF P/ WHATSAPP + LINK PÚBLICO DE CIÊNCIA.** (A) Botão "Baixar PDF" no detalhe (rota `GET /api/comunicado-pdf/:id` com Puppeteer, padrão da ata de DDS, progresso 0→100% no botão). (B) Botão "Link de Ciência" gera link público `/ciencia/:token`: funcionário se identifica (CPF + data de nascimento), sistema registra a VISUALIZAÇÃO (`comunicado_leituras`, pill "visualizou dd/mm" na lista p/ cobrança), lê o comunicado renderizado e clica "Li e estou ciente" → assinatura eletrônica simples (Lei 14.063) tipo `ciencia_online` com IP/User-Agent; badge "Ciência online ✓" na lista; nunca sobrescreve assinatura desenhada. Schema: +`leitura_token`(+criado_em), +`tipo`/`user_agent` em assinaturas, tabela `comunicado_leituras` ([SyncSchema+] Rev. 4542, verificado no Neon). Arquivos: `comunicadosCiencia.ts`, `comunicadoPdf.ts`, `ComunicadoCiencia.tsx`, `ComunicadosInternos.tsx`, `main.tsx` (publicPaths ×2).
 - **Rev. 4541** — **FIX: ALMOXARIFADO — EMPRÉSTIMO/DEVOLUÇÃO SÓ NAS OBRAS HABILITADAS.** Correção de escopo da Rev. 4539: visibilidade global vale só pro ESTOQUE; empréstimo/devolução ("Fechar Dia", Registros › Emprestados) mostra e opera SOMENTE obras habilitadas ("se emprestei na obra A, só devolvo na obra A"). Backend (`warehouse.ts`): `listOpenLoans` filtra via `getAlmoxAllowedObraIdSet` (Central obraId null segue visível); `registerLoan` (não tinha guard NENHUM) ganhou guard de empresa + item.companyId + permissão na obra do ITEM e na obra DESTINO; `returnLoanById` trocou `userCanAccessObra` por empresa + `userCanAccessObraAlmox`. Front: dropdown "Filtrar por obra" do Fechar Dia lista só `obrasEditaveis`. ZERO schema change.
-- **Rev. 4540** — **UX: COMUNICADOS INTERNOS — SEM "PREZADO(A) COLABORADOR(A)" AUTOMÁTICO.** O template vigente (comunicado_interno/FC-RH-003) prefixava saudação e sufixava "Permanecemos à disposição…" automaticamente; agora o comunicado exibe só o que foi digitado + a declaração de ciência (parte do fluxo de assinatura). Seed atualizado em `shared/documentTemplates.ts` + UPDATE cirúrgico no Neon (só templates ainda com o texto-seed original; personalizados intactos; status 'vigente' preservado). ZERO schema change.
 
 ### 5 one-liners
 
+- **Rev. 4540** — **UX: COMUNICADOS INTERNOS — SEM "PREZADO(A) COLABORADOR(A)" AUTOMÁTICO.** Template vigente (FC-RH-003) prefixava saudação/sufixo automáticos; agora exibe só o que foi digitado + declaração de ciência. Seed em `shared/documentTemplates.ts` + UPDATE cirúrgico no Neon (personalizados intactos). ZERO schema change.
 - **Rev. 4539** — **FEAT: ALMOXARIFADO — VISIBILIDADE GLOBAL ("ver tudo, mexer só no seu").** Leitura global de itens/giro/equipamentos em todas as obras da empresa; operação segue restrita (guards `_assertCompanyAccess` + `_assertObraWriteAlmox`); `listForAlmoxarifado` com flag `podeEditar`; UI "👁 Somente leitura". Escopo de empréstimo/devolução corrigido na Rev. 4541. ZERO schema change.
 - **Rev. 4538** — **UX: NOTAS FISCAIS (RECEBIDAS) — BANNER LIMPO NO MODO DIÁRIO.** Quando `sync_modo='diario'`, o banner de countdown ("Próxima sync em 1h46…" + anel + Prorrogar +2h/+4h/+8h/+24h) é substituído por card indigo: ícone-relógio HH:MM, "Sincronização automática diária — consulta a SEFAZ 1x por dia às HH:MM, próxima: hoje/amanhã", última sync e APENAS Pausar/Retomar. Rodapé da tabela mostra o horário dinâmico. Modo 'intervalo' intacto. Arquivo: `FinanceiroNotasFiscais.tsx`. ZERO schema change.
 - **Rev. 4537** — **FEAT: SEFAZ — MODO DE AGENDAMENTO DIÁRIO (1x ÀS HH:MM, A CADA N DIAS).** `sync_modo` ('intervalo'|'diario') + `sync_intervalo_dias` em `company_nfe_config`; cron dispara por hora BRT + date-diff; manual livre. Arquivos: `sefaz.ts`, `_core/index.ts`, `FinanceiroConfigSection.tsx`.
 - **Rev. 4536** — **UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "REMOVER TODOS".** `ModalConfirmacaoAuditoria` com prop `progresso`: barra `bg-white/15` + "Removendo… XX%" com progresso real por unidade. ZERO schema change.
-- **Rev. 4535** — **UX: ALMOXARIFADO CENTRAL — SELEÇÃO NATURAL (CHECKBOX SEMPRE VISÍVEL NOS CARDS).** Removido modo "Selecionar": checkbox sempre visível nos cards, "Selecionar todos" no header, sticky bar quando há seleção; drag-lasso só mouse (iPad scrolla normal). ZERO schema change.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4534 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4535 e anteriores.
 
 ## User preferences
 

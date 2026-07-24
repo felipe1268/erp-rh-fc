@@ -1,4 +1,50 @@
 /**
+ * Rev. 4542 - FEAT: COMUNICADOS INTERNOS — PDF P/ WHATSAPP + LINK PÚBLICO DE CIÊNCIA
+ *
+ * MOTIVAÇÃO:
+ *   O RH precisava (A) baixar o comunicado em PDF para encaminhar nos grupos de
+ *   WhatsApp das obras e (B) coletar a ciência dos funcionários à distância, sem
+ *   depender de assinatura presencial no tablet. Modelo aprovado pelo usuário:
+ *   link público → funcionário se identifica (CPF + data de nascimento) → sistema
+ *   registra a VISUALIZAÇÃO → botão "Li e estou ciente" registra assinatura
+ *   eletrônica simples (Lei 14.063/2020) com trilha de auditoria (IP + User-Agent).
+ *
+ * SCHEMA (bloco [SyncSchema+] Rev. 4542 isolado — verificado no Neon):
+ *   - comunicados_internos: +leitura_token (64-hex, índice único parcial
+ *     uq_comunicados_leitura_token), +leitura_token_criado_em.
+ *   - comunicado_assinaturas: +tipo (default 'desenho'; 'ciencia_online' p/ o
+ *     1-clique), +user_agent.
+ *   - NOVA tabela comunicado_leituras (visualizado_em, ip, user_agent; única
+ *     por comunicado+employee — uq_com_leit_comunicado_emp).
+ *
+ * BACKEND:
+ *   - server/routers/comunicadosCiencia.ts (NOVO, publicProcedure):
+ *     obterPorToken (só metadados — título/nº/empresa), identificar (CPF
+ *     normalizado dos DOIS lados + dataNascimento + status Ativo + filtro de
+ *     destinatariosJson; upsert de leitura onConflictDoNothing; retorna conteúdo
+ *     + template vigente), confirmarCiencia (insere assinatura tipo
+ *     'ciencia_online' com marcador em assinaturaBase64; onConflictDoNothing —
+ *     NUNCA sobrescreve assinatura desenhada).
+ *   - comunicadosInternos.gerarLinkLeitura (protected): reusa/cria token.
+ *   - listarFuncionariosParaAssinatura: retorna visualizadoEm + assinatura.tipo.
+ *   - server/routers/comunicadoPdf.ts (NOVO): GET /api/comunicado-pdf/:id
+ *     ?companyId= — sdk.authenticateRequest + tenancy userCompanies (padrão da
+ *     ata de DDS), HTML self-contained (logo base64, banner COMUNICADO INTERNO,
+ *     template vigente via renderTemplate, blocos de assinatura do emissor com
+ *     lógica ehDirecao, declaração de ciência), Puppeteer A4.
+ *
+ * FRONTEND:
+ *   - client/src/pages/ComunicadoCiencia.tsx (NOVO, rota pública /ciencia/:token
+ *     em App.tsx + prefixo "/ciencia/" nos DOIS publicPaths de main.tsx):
+ *     identificação → leitura renderizada igual à tela interna (renderTemplate/
+ *     sanitizeHtml) + anexo → botão verde "Li e estou ciente" → confirmação.
+ *   - ComunicadosInternos.tsx: botão "Baixar PDF" (progresso 0→100% no botão,
+ *     regra de ouro) + botão "Link de Ciência" (copia URL p/ clipboard);
+ *     lista de assinaturas mostra badge "Ciência online ✓" (em vez de <img>
+ *     do marcador) e pill "visualizou dd/mm" nos pendentes (p/ cobrança).
+ */
+
+/**
  * Rev. 4541 - FIX: ALMOXARIFADO — EMPRÉSTIMO/DEVOLUÇÃO SÓ NAS OBRAS HABILITADAS
  *
  * MOTIVAÇÃO:

@@ -150,7 +150,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   // Rev. 1601 — Inclui rotas do Portal do Cliente/Terceiros/Parceiros
   // como públicas: o portal externo tem auth próprio (JWT em localStorage,
   // não cookie de sessão) e nunca deve cair no /login do ERP.
-  const publicPaths = ["/login", "/portal/", "/a/", "/assinar/", "/pesquisa-publica/", "/verificar/", "/integrasign/assinar/", "/integracao/", "/cipa/votar/", "/planos", "/contratar"];
+  const publicPaths = ["/login", "/portal/", "/a/", "/assinar/", "/pesquisa-publica/", "/verificar/", "/integrasign/assinar/", "/integracao/", "/cipa/votar/", "/ciencia/", "/planos", "/contratar"];
   if (publicPaths.some(p => path.startsWith(p) || path === p)) return;
   window.location.href = "/login";
 };
@@ -159,7 +159,7 @@ const isAuthErrorOnLoginPage = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return false;
   if (typeof window === "undefined") return false;
   const path = window.location.pathname;
-  const publicPaths = ["/login", "/portal/", "/a/", "/assinar/", "/pesquisa-publica/", "/verificar/", "/integrasign/assinar/", "/integracao/", "/cipa/votar/", "/planos", "/contratar"];
+  const publicPaths = ["/login", "/portal/", "/a/", "/assinar/", "/pesquisa-publica/", "/verificar/", "/integrasign/assinar/", "/integracao/", "/cipa/votar/", "/ciencia/", "/planos", "/contratar"];
   return error.message === UNAUTHED_ERR_MSG && publicPaths.some(p => path.startsWith(p) || path === p);
 };
 

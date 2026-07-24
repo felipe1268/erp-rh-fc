@@ -89,6 +89,7 @@ import { cartaoRouter } from "./routers/cartao";
 import { pontoDescontosRouter } from "./routers/pontoDescontos";
 import { feriadosRouter } from "./routers/feriados";
 import { comunicadosInternosRouter } from "./routers/comunicadosInternos";
+import { comunicadosCienciaRouter } from "./routers/comunicadosCiencia";
 import { curriculosRouter } from "./routers/curriculos";
 import { employeeDocumentsRouter } from "./routers/employeeDocuments";
 import { pjMedicoesRouter } from "./routers/pjMedicoes";
@@ -3982,6 +3983,7 @@ export const appRouter = router({
   pj: pjContractsRouter,
   feriados: feriadosRouter,
   comunicadosInternos: comunicadosInternosRouter,
+  comunicadosCiencia: comunicadosCienciaRouter,
   curriculos: curriculosRouter,
   employeeDocuments: employeeDocumentsRouter,
   pjMedicoes: pjMedicoesRouter,

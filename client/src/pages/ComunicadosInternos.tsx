@@ -12,6 +12,7 @@ import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, 
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { formatCPF } from "@/lib/formatters";
+import { formatDate, formatDateTime } from "@/lib/dateUtils";
 
 function formatDateBR(dateStr: string): string {
   if (!dateStr) return "-";
@@ -237,6 +238,51 @@ export default function ComunicadosInternos() {
     onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado revertido para rascunho"); },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 4542 — Link público de leitura/ciência (WhatsApp) + download em PDF
+  const gerarLinkMut = trpc.comunicadosInternos.gerarLinkLeitura.useMutation({
+    onError: (e) => toast.error(e.message),
+  });
+  const [pdfProgress, setPdfProgress] = useState(0);
+  const [pdfBaixando, setPdfBaixando] = useState(false);
+  const baixarPdf = async (id: number, numero: string, titulo: string) => {
+    if (pdfBaixando) return;
+    setPdfBaixando(true);
+    setPdfProgress(5);
+    // Fase Puppeteer (não-determinística): progresso simulado até ~85%
+    const timer = setInterval(() => setPdfProgress(p => (p < 85 ? p + 4 : p)), 350);
+    try {
+      const resp = await fetch(`/api/comunicado-pdf/${id}?companyId=${companyId}`, { credentials: "include" });
+      if (!resp.ok) throw new Error(await resp.text().catch(() => "Erro ao gerar o PDF"));
+      const blob = await resp.blob();
+      setPdfProgress(100);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `CI_${String(numero).replace(/\//g, "-")}_${titulo.replace(/[^a-zA-Z0-9À-ÿ ]/g, "-").replace(/\s+/g, "_").slice(0, 60)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast.success("PDF gerado — pronto para encaminhar no WhatsApp");
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao gerar o PDF");
+    } finally {
+      clearInterval(timer);
+      setTimeout(() => { setPdfBaixando(false); setPdfProgress(0); }, 800);
+    }
+  };
+  const copiarLinkCiencia = async (id: number) => {
+    try {
+      const { token } = await gerarLinkMut.mutateAsync({ id, companyId });
+      const url = `${window.location.origin}/ciencia/${token}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link de ciência copiado! Cole no grupo do WhatsApp.");
+      } catch {
+        window.prompt("Copie o link de ciência:", url);
+      }
+    } catch { /* onError já exibiu o toast */ }
+  };
   const excluirMut = trpc.comunicadosInternos.excluir.useMutation({
     onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado excluído"); },
     onError: (e) => toast.error(e.message),
@@ -509,7 +555,13 @@ export default function ComunicadosInternos() {
                           ) : assinou ? (
                             <div className="flex items-center gap-2">
                               <div className="border border-slate-200 rounded bg-white p-1 flex-1 min-h-[44px] flex items-center justify-center overflow-hidden">
-                                <img src={f.assinatura.assinaturaBase64} alt={`Assinatura ${f.nomeCompleto}`} className="max-h-10 max-w-full object-contain" />
+                                {f.assinatura.tipo === "ciencia_online" || f.assinatura.assinaturaBase64 === "ciencia_online" ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <CheckCircle2 className="h-3 w-3" /> Ciência online ✓
+                                  </span>
+                                ) : (
+                                  <img src={f.assinatura.assinaturaBase64} alt={`Assinatura ${f.nomeCompleto}`} className="max-h-10 max-w-full object-contain" />
+                                )}
                               </div>
                               <div className="flex flex-col gap-1 no-print">
                                 <button title="Re-assinar" className="text-blue-600 hover:bg-blue-50 rounded p-1"
@@ -523,10 +575,18 @@ export default function ComunicadosInternos() {
                               </div>
                             </div>
                           ) : (
-                            <Button size="sm" variant="outline" className="h-8 text-[10px] border-indigo-300 text-indigo-700 hover:bg-indigo-50 no-print"
-                              onClick={() => setSigningFuncionario({ id: f.id, nome: f.nomeCompleto, initial: null })}>
-                              <Signature className="h-3 w-3 mr-1" /> Assinar
-                            </Button>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Button size="sm" variant="outline" className="h-8 text-[10px] border-indigo-300 text-indigo-700 hover:bg-indigo-50 no-print"
+                                onClick={() => setSigningFuncionario({ id: f.id, nome: f.nomeCompleto, initial: null })}>
+                                <Signature className="h-3 w-3 mr-1" /> Assinar
+                              </Button>
+                              {f.visualizadoEm && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 no-print"
+                                  title={`Visualizou o comunicado pelo link em ${formatDateTime(f.visualizadoEm)}`}>
+                                  <Eye className="h-2.5 w-2.5" /> visualizou {formatDate(f.visualizadoEm).slice(0, 5)}
+                                </span>
+                              )}
+                            </div>
                           )}
                           {assinaturaMode === "digital" && !assinou && (
                             <div className="hidden print:block border-b-2 border-slate-400 h-10" />
@@ -646,6 +706,24 @@ export default function ComunicadosInternos() {
               setTimeout(() => { document.title = oldTitle; }, 500);
             }}>
               <Printer className="h-4 w-4 mr-1" /> Imprimir
+            </Button>
+            <Button variant="outline" size="sm" disabled={pdfBaixando}
+              className="relative overflow-hidden border-slate-300"
+              onClick={() => baixarPdf(c.id, c.numero, c.titulo)}>
+              {pdfBaixando && (
+                <span className="absolute inset-0 bg-slate-900/10 transition-all duration-300" style={{ width: `${pdfProgress}%` }} />
+              )}
+              <span className="relative flex items-center">
+                {pdfBaixando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileText className="h-4 w-4 mr-1" />}
+                {pdfBaixando ? `Gerando PDF... ${pdfProgress}%` : "Baixar PDF"}
+              </span>
+            </Button>
+            <Button variant="outline" size="sm" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              disabled={gerarLinkMut.isPending}
+              title="Gera um link público: o funcionário se identifica com CPF + data de nascimento, lê o comunicado e confirma ciência com 1 clique"
+              onClick={() => copiarLinkCiencia(c.id)}>
+              {gerarLinkMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+              Link de Ciência
             </Button>
             <Button variant="outline" size="sm" className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
               onClick={() => { setListaAssinaturaId(c.id); setAssinaturaMode("digital"); }}>
