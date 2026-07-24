@@ -1,4 +1,31 @@
 /**
+ * Rev. 4535 - UX: ALMOXARIFADO CENTRAL — SELEÇÃO NATURAL (CHECKBOX SEMPRE VISÍVEL NOS CARDS)
+ *
+ * MOTIVAÇÃO:
+ *   O fluxo antigo exigia entrar num "modo seleção" (botão "Selecionar", Rev. 2382)
+ *   antes de poder marcar itens — e o botão ainda auto-selecionava TODOS os itens
+ *   ao entrar no modo. O usuário pediu seleção natural: cada card com um checkbox
+ *   sempre visível no canto superior esquerdo, mais um botão "Selecionar todos".
+ *
+ * IMPLEMENTAÇÃO (client/src/pages/almoxarifado/index.tsx):
+ *   - Estado `modoSelecao` REMOVIDO. `selecionados` (Set<number>) continua sendo a
+ *     fonte única; a sticky bar de ações em lote agora aparece quando
+ *     `selecionados.size > 0` (antes: quando modoSelecao).
+ *   - Cada card ganhou um <button> checkbox 7x7 SEMPRE visível no topo-esquerda da
+ *     foto (indigo quando marcado, branco com borda quando não; stopPropagation pra
+ *     não abrir foto/edição). Clique no corpo do card volta ao comportamento normal
+ *     (expandir foto / editar) — seleção é SÓ pelo checkbox.
+ *   - Botão do header virou "Selecionar todos"/"Desmarcar todos" (toggle) com badge
+ *     de contagem; fica indigo sólido quando há seleção.
+ *   - Drag-lasso (Rev. 2393) mantido mas restrito a pointerType === "mouse":
+ *     touchAction não é mais travado (antes: "none" no modo seleção), então no
+ *     iPad/touch o dedo sempre scrolla normalmente.
+ *   - Seleção de LOCAÇÃO (âmbar, devolução em lote) e seleção do view consolidado
+ *     (modoClassificarEquip) são fluxos SEPARADOS e não foram tocados.
+ *
+ *   ZERO schema change.
+ */
+/**
  * Rev. 4534 - FIX: PLANEJAMENTO — PREVISTO (SEMANA) 100% EM TODAS AS SEMANAS FUTURAS (BASELINE DEFASADA)
  *
  * MOTIVAÇÃO:

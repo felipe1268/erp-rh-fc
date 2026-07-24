@@ -1,3 +1,4 @@
+- **Rev. 4528** — **FEAT: CONTAS A PAGAR — REDESIGN DO DIALOG 'REGISTRAR PAGAMENTO'.** Hero card gradiente dark + pills de forma de pagamento com emoji + Total em gradiente verde 2xl. ZERO schema/lógica change.
 - **Rev. 4525** — **FIX: INVENTÁRIO SEMANAL → ESTOQUE NÃO ATUALIZAVA.** `finishInventorySession` percorre itens e aplica `quantidadeAtual = quantidadeFisica`. ZERO schema change.
 - **Rev. 4507** — **FEAT: DDS SESSÕES — FILTRO DE MÊS/ANO (PeriodSelectorCard).** `listSessoes` ganhou inputs `mes` e `ano` (filtro SQL via `EXTRACT`); frontend usa `PeriodSelectorCard` com `monthStatus`. ZERO schema change.
 - **Rev. 4506** — **FEAT: DDS PDF — GERAÇÃO REAL DE PDF VIA PUPPETEER.** Rotas `/api/dds-ata/:id` e `/api/dds-ata-lote` usam puppeteer para converter HTML em PDF real (A4, `printBackground:true`, margens). ZIP em lote contém `.pdf`. ZERO schema change.

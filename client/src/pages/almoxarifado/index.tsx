@@ -253,10 +253,10 @@ export default function AlmoxarifadoPage() {
   // Rev. 2381 — Modal de rebusca de foto com termo customizado (user ajuda a IA)
   const [rebuscarFoto, setRebuscarFoto] = useState<null | { nome: string; termo: string; previewUrl: string | null; buscando: boolean; aplicando: boolean; erro: string | null }>(null);
   // Rev. 2382 — Multi-seleção de itens (alterar categoria em lote / unificar duplicatas)
-  const [modoSelecao, setModoSelecao] = useState(false);
+  // Rev. 4535 — seleção múltipla sempre ativa (checkbox nos cards); sem modo dedicado.
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   // Rev. 2393 — Drag-to-select (lasso/rubber-band) na grade de cards. Ativa só em
-  // modoSelecao. Origem = snapshot das seleções no início pro drag ser ADITIVO.
+  // Rev. 4535: só com MOUSE (desktop). Origem = snapshot das seleções no início pro drag ser ADITIVO.
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [dragSel, setDragSel] = useState<null | {
     startX: number; startY: number; curX: number; curY: number; origin: Set<number>;
@@ -707,7 +707,7 @@ export default function AlmoxarifadoPage() {
       setModalAltCategConsol(s => s ? { ...s, aplicando: false } : s);
     }
   }
-  function sairModoSelecao() { setModoSelecao(false); setSelecionados(new Set()); setDragSel(null); }
+  function sairModoSelecao() { setSelecionados(new Set()); setDragSel(null); }
   // Rev. 2393 — Excluir em lote os itens selecionados. Reusa o ModalConfirmacaoAuditoria
   // (senha + justificativa) e itera a mutation `compras.excluirItem` (mesma do single).
   // Soft-delete preserva histórico de movimentações. Para no 1º erro de senha/autorização.
@@ -2777,22 +2777,24 @@ export default function AlmoxarifadoPage() {
               <input type="checkbox" checked={apenasAbaixo} onChange={e => setApenasAbaixo(e.target.checked)} className="rounded border-gray-300" />
               Apenas abaixo do mínimo
             </label>
-            {/* Rev. 2382 — Toggle modo seleção múltipla */}
+            {/* Rev. 4535 — Seleção sempre ativa via checkbox nos cards; botão vira "Selecionar todos" */}
             <button
               onClick={() => {
-                if (modoSelecao) {
+                const todos = new Set((lista as any[]).map((i: any) => i.id));
+                if (selecionados.size === todos.size && todos.size > 0) {
                   sairModoSelecao();
                 } else {
-                  setModoSelecao(true);
-                  // Seleciona todos os itens visíveis automaticamente
-                  setSelecionados(new Set((lista as any[]).map((i: any) => i.id)));
+                  setSelecionados(todos);
                 }
               }}
-              className={`h-9 px-3 flex items-center gap-2 text-sm font-medium rounded-lg transition shadow-sm ${modoSelecao ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200"}`}
-              title="Selecionar todos os itens visíveis para transferência em lote"
+              className={`h-9 px-3 flex items-center gap-2 text-sm font-medium rounded-lg transition shadow-sm ${selecionados.size > 0 ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200"}`}
+              title="Selecionar/desmarcar todos os itens visíveis"
             >
-              {modoSelecao ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
-              <span className="hidden sm:inline">{modoSelecao ? "Sair da seleção" : "Selecionar"}</span>
+              {selecionados.size === lista.length && lista.length > 0 ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+              <span className="hidden sm:inline">{selecionados.size === lista.length && lista.length > 0 ? "Desmarcar todos" : "Selecionar todos"}</span>
+              {selecionados.size > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/20">{selecionados.size}</span>
+              )}
             </button>
             {/* Rev. 4522 — Botão "Itens Zerados": toggle pra ver itens com qty=0 */}
             {(qtdZeradosMain > 0 || tabZerados) && (
@@ -2902,14 +2904,15 @@ export default function AlmoxarifadoPage() {
           ) : !tabZerados && viewMode === "cards" ? (
             /* ── CARD VIEW ── */
             /* Rev. 2393 — wrapper relativo pra abrigar o retângulo de seleção (lasso).
-               touchAction=none só durante modoSelecao pra capturar o pan do dedo
-               como drag-select em vez de scroll. User sai da seleção pra scrollar. */
+               Rev. 4535: lasso só com mouse; no touch o dedo sempre scrolla e a
+               seleção é feita pelos checkboxes sempre visíveis nos cards. */
             <div
               ref={gridRef}
               className="relative grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
-              style={{ touchAction: modoSelecao ? "none" : "auto", userSelect: dragSel ? "none" : "auto" }}
+              style={{ userSelect: dragSel ? "none" : "auto" }}
               onPointerDown={(e) => {
-                if (!modoSelecao) return;
+                // Rev. 4535 — lasso só com mouse (desktop); no touch o scroll manda.
+                if (e.pointerType !== "mouse") return;
                 const el = e.target as HTMLElement;
                 // Inicia drag SÓ no espaço vazio entre cards (tap em card mantém toggle).
                 if (el.closest("[data-card-id]") || el.closest("button") || el.closest("a") || el.closest("input")) return;
@@ -2965,20 +2968,18 @@ export default function AlmoxarifadoPage() {
                 const atual = n(item.quantidadeAtual);
                 const minimo = n(item.quantidadeMinima);
                 const abaixo = minimo > 0 && atual < minimo;
-                const isSel = modoSelecao && selecionados.has(item.id);
+                const isSel = selecionados.has(item.id);
                 return (
                   <div
                     key={item.id}
                     data-card-id={item.id}
-                    className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${selecionadosLocacao.has(item.id) ? "border-amber-500 ring-2 ring-amber-300" : isSel ? "border-indigo-500 ring-2 ring-indigo-300" : abaixo ? "border-red-200" : "border-gray-100"} ${modoSelecao ? "cursor-pointer" : ""}`}
-                    onClick={modoSelecao ? () => toggleSelecionado(item.id) : undefined}
+                    className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${selecionadosLocacao.has(item.id) ? "border-amber-500 ring-2 ring-amber-300" : isSel ? "border-indigo-500 ring-2 ring-indigo-300" : abaixo ? "border-red-200" : "border-gray-100"}`}
                   >
                     {/* Foto */}
                     <div
                       className="relative bg-gray-50 flex items-center justify-center cursor-pointer group"
                       style={{ height: 140 }}
                       onClick={(e) => {
-                        if (modoSelecao) { e.stopPropagation(); toggleSelecionado(item.id); return; }
                         if ((item as any).fotoUrl) {
                           setFotoExpandida({ url: (item as any).fotoUrl, nome: item.nome });
                         } else {
@@ -2986,12 +2987,14 @@ export default function AlmoxarifadoPage() {
                         }
                       }}
                     >
-                      {/* Rev. 2382 — Checkbox de seleção múltipla */}
-                      {modoSelecao && (
-                        <div className={`absolute top-1.5 left-1.5 z-10 w-7 h-7 rounded-md flex items-center justify-center shadow-md transition ${isSel ? "bg-indigo-600" : "bg-white/95 border-2 border-gray-300"}`}>
-                          {isSel && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
-                        </div>
-                      )}
+                      {/* Rev. 4535 — Checkbox SEMPRE visível no canto sup. esquerdo (seleção natural) */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleSelecionado(item.id); }}
+                        className={`absolute top-1.5 left-1.5 z-10 w-7 h-7 rounded-md flex items-center justify-center shadow-md transition ${isSel ? "bg-indigo-600" : "bg-white/95 border-2 border-gray-300 hover:border-indigo-400"}`}
+                        title={isSel ? "Desmarcar" : "Selecionar"}
+                      >
+                        {isSel && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                      </button>
                       {(item as any).fotoUrl ? (
                         <>
                           <img src={(item as any).fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
@@ -3031,8 +3034,9 @@ export default function AlmoxarifadoPage() {
                       {abaixo && (
                         <div className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">!</div>
                       )}
+                      {/* Rev. 4535 — badge deslocado p/ direita do checkbox (top-left é do checkbox) */}
                       {(item as any).origem === "alugado" && (
-                        <div className="absolute top-1.5 left-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">LOCADO</div>
+                        <div className="absolute top-1.5 left-10 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">LOCADO</div>
                       )}
                     </div>
 
@@ -5310,7 +5314,7 @@ export default function AlmoxarifadoPage() {
         </div>
       )}
       {/* Rev. 2382 — Sticky bar de ações da multi-seleção */}
-      {modoSelecao && (
+      {selecionados.size > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-white shadow-2xl rounded-2xl border border-indigo-200 px-4 py-3 flex items-center gap-3 max-w-[95vw]">
           <div className="flex items-center gap-2 pr-3 border-r border-gray-200">
             <button
