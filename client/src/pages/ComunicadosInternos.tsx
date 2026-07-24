@@ -154,9 +154,11 @@ export default function ComunicadosInternos() {
   // Filtros da Lista para Assinatura: por obra + por status de assinatura.
   const [filtroObra, setFiltroObra] = useState<string>("");
   const [filtroAssinatura, setFiltroAssinatura] = useState<"todos" | "assinados" | "pendentes">("todos");
+  // Rev. 4546 — lista principal (admitidos até a emissão) x complementar (admitidos depois, sem assinatura)
+  const [listaTipo, setListaTipo] = useState<"principal" | "complementar">("principal");
 
   const listaAssinaturaQuery = trpc.comunicadosInternos.listarFuncionariosParaAssinatura.useQuery(
-    { comunicadoId: listaAssinaturaId || 0, companyId },
+    { comunicadoId: listaAssinaturaId || 0, companyId, lista: listaTipo },
     { enabled: !!listaAssinaturaId && companyId > 0 },
   );
   const assinarMut = trpc.comunicadosInternos.assinar.useMutation({
@@ -380,16 +382,27 @@ export default function ComunicadosInternos() {
         <div className="max-w-6xl mx-auto">
           {/* Toolbar topo (não imprime) */}
           <div className="flex items-center gap-3 mb-4 flex-wrap no-print">
-            <Button variant="ghost" size="sm" onClick={() => { setListaAssinaturaId(null); setSearchFunc(""); setFiltroObra(""); setFiltroAssinatura("todos"); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setListaAssinaturaId(null); setSearchFunc(""); setFiltroObra(""); setFiltroAssinatura("todos"); setListaTipo("principal"); }}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Voltar ao Comunicado
             </Button>
             <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center shadow">
               <ClipboardSignature className="h-5 w-5 text-white" />
             </div>
             <div className="flex-1 min-w-[200px]">
-              <h2 className="text-lg font-bold text-slate-800 leading-tight">Lista para Assinatura</h2>
+              <h2 className="text-lg font-bold text-slate-800 leading-tight">
+                {listaTipo === "complementar" ? "Lista Complementar de Assinatura" : "Lista para Assinatura"}
+              </h2>
               <p className="text-xs text-slate-500">Comunicado {comAtual?.numero} — {comAtual?.titulo}</p>
             </div>
+            <Button
+              variant={listaTipo === "complementar" ? "default" : "outline"}
+              size="sm"
+              className={listaTipo === "complementar" ? "bg-amber-600 hover:bg-amber-700 text-white" : "border-amber-300 text-amber-700 hover:bg-amber-50"}
+              onClick={() => { setListaTipo(listaTipo === "complementar" ? "principal" : "complementar"); setSearchFunc(""); setFiltroObra(""); setFiltroAssinatura("todos"); }}
+            >
+              <Users className="h-4 w-4 mr-1" />
+              {listaTipo === "complementar" ? "Voltar à Lista Principal" : "Lista Complementar"}
+            </Button>
             <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
               <button onClick={() => setAssinaturaMode("digital")}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition ${assinaturaMode === "digital" ? "bg-indigo-600 text-white shadow" : "text-slate-600 hover:bg-slate-100"}`}>
@@ -402,7 +415,7 @@ export default function ComunicadosInternos() {
             </div>
             <Button variant="outline" size="sm" onClick={() => {
               const oldTitle = document.title;
-              document.title = `Lista Assinatura - Comunicado ${comAtual?.numero}`;
+              document.title = `${listaTipo === "complementar" ? "Lista Complementar" : "Lista Assinatura"} - Comunicado ${comAtual?.numero}`;
               window.print();
               setTimeout(() => { document.title = oldTitle; }, 500);
             }}>
@@ -414,7 +427,7 @@ export default function ComunicadosInternos() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 no-print">
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-slate-500 mb-1">
-                <Users className="h-3.5 w-3.5" /> Funcionários Ativos
+                <Users className="h-3.5 w-3.5" /> {listaTipo === "complementar" ? "Pendentes (Lista Complementar)" : "Funcionários Ativos"}
               </div>
               <div className="text-2xl font-bold text-slate-800">{totalAtivos}</div>
             </div>
@@ -500,11 +513,18 @@ export default function ComunicadosInternos() {
                 </div>
               </div>
               <div className="bg-[#1B2A4A] text-white py-2 px-3 text-center rounded-sm">
-                <span className="text-xs font-bold tracking-wider">LISTA DE CIÊNCIA — COMUNICADO INTERNO Nº {comAtual?.numero}</span>
+                <span className="text-xs font-bold tracking-wider">
+                  {listaTipo === "complementar" ? "LISTA COMPLEMENTAR DE CIÊNCIA" : "LISTA DE CIÊNCIA"} — COMUNICADO INTERNO Nº {comAtual?.numero}
+                </span>
               </div>
               <div className="mt-2 text-xs text-slate-700">
                 <p><span className="font-semibold">Assunto:</span> {comAtual?.titulo}</p>
                 <p><span className="font-semibold">Data de Emissão:</span> {formatDateBR(comAtual?.dataEmissao || "")}</p>
+                {listaTipo === "complementar" && (
+                  <p className="mt-1 text-[10px] font-semibold text-amber-700">
+                    Lista complementar: colaboradores admitidos APÓS a data de emissão do comunicado e que ainda não colheram assinatura.
+                  </p>
+                )}
                 <p className="mt-1 text-[10px] text-slate-500 italic">
                   Declaro que recebi, li e estou ciente do conteúdo do comunicado acima identificado.
                 </p>
@@ -516,7 +536,7 @@ export default function ComunicadosInternos() {
             ) : filtradosFunc.length === 0 ? (
               <div className="p-12 text-center">
                 <Users className="h-12 w-12 mx-auto text-slate-300 mb-3" />
-                <p className="text-slate-500">{temFiltro ? "Nenhum funcionário corresponde aos filtros" : "Nenhum funcionário ativo nesta empresa"}</p>
+                <p className="text-slate-500">{temFiltro ? "Nenhum funcionário corresponde aos filtros" : listaTipo === "complementar" ? "Nenhum colaborador admitido após a emissão com assinatura pendente" : "Nenhum funcionário ativo nesta empresa"}</p>
               </div>
             ) : (
               <table className="w-full text-[11px] border-collapse">

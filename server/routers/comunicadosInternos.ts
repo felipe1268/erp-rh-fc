@@ -84,24 +84,33 @@ export const comunicadosInternosRouter = router({
           } catch {}
         }
       }
-      // Quais desses IDs ainda são funcionários ATIVOS?
+      // Rev. 4546 — todos os ativos da empresa com dataAdmissao: admitidos APÓS a
+      // data de emissão do comunicado ficam FORA da lista principal (denominador).
+      const ativosEmpresa = await db
+        .select({ id: employees.id, dataAdmissao: employees.dataAdmissao })
+        .from(employees)
+        .where(and(eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")));
+      const normDate = (v: any): string | null => {
+        if (!v) return null;
+        if (v instanceof Date) return v.toISOString().slice(0, 10);
+        const s = String(v).slice(0, 10);
+        return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+      };
+      const admissaoMap = new Map<number, string | null>(ativosEmpresa.map(e => [e.id, normDate(e.dataAdmissao)]));
+
+      // Quais IDs dos JSONs ainda são funcionários ATIVOS? (podem ser de outra empresa em teoria — mantém query própria)
       const activeDestSet = new Set<number>();
       if (allDestIds.size > 0) {
         const activeRows = await db
-          .select({ id: employees.id })
+          .select({ id: employees.id, dataAdmissao: employees.dataAdmissao })
           .from(employees)
           .where(and(
             inArray(employees.id, Array.from(allDestIds)),
             eq(employees.status, "Ativo"),
+            eq(employees.companyId, input.companyId),
           ));
-        activeRows.forEach(e => activeDestSet.add(e.id));
+        activeRows.forEach(e => { activeDestSet.add(e.id); if (!admissaoMap.has(e.id)) admissaoMap.set(e.id, normDate(e.dataAdmissao)); });
       }
-
-      // Total de funcionários ATIVOS da empresa — denominador para comunicados sem lista específica
-      const [{ totalAtivosEmpresa }] = await db
-        .select({ totalAtivosEmpresa: count(employees.id) })
-        .from(employees)
-        .where(and(eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")));
 
       // Conta assinaturas por comunicado APENAS de funcionários ainda ativos
       const assinCounts = await db
@@ -147,16 +156,23 @@ export const comunicadosInternosRouter = router({
             }
           } catch {}
         }
-        // Apenas destinatários que ainda são ativos
-        const activeDestIds = destIds.filter(id => activeDestSet.has(id));
+        // Rev. 4546 — elegível p/ lista principal = admitido ATÉ a data de emissão
+        // (dataAdmissao nula = incluído; admitidos depois entram só na lista complementar)
+        const emissao = normDate(r.dataEmissao);
+        const elegivel = (id: number) => {
+          if (!emissao) return true;
+          const adm = admissaoMap.get(id) ?? null;
+          return !adm || adm <= emissao;
+        };
+        // Apenas destinatários que ainda são ativos E admitidos até a emissão
+        const activeDestIds = destIds.filter(id => activeDestSet.has(id) && elegivel(id));
         const assinSet = assinActivePorCom.get(r.id);
         const temDest = comTemDestJs.has(r.id);
-        // totalDestinatarios: se tem lista específica → ativos do JSON; senão → todos os ativos da empresa
-        const totalDestinatarios = temDest ? activeDestIds.length : Number(totalAtivosEmpresa ?? 0);
-        // totalAssinados: se tem lista específica → ativos do JSON que assinaram; senão → qualquer funcionário
-        const totalAssinados = temDest
-          ? activeDestIds.filter(id => assinSet?.has(id)).length
-          : (assinSet?.size ?? 0);
+        // totalDestinatarios: se tem lista específica → ativos elegíveis do JSON; senão → ativos elegíveis da empresa
+        const idsPrincipais = temDest ? activeDestIds : ativosEmpresa.filter(e => elegivel(e.id)).map(e => e.id);
+        const totalDestinatarios = idsPrincipais.length;
+        // totalAssinados: apenas assinaturas de quem está na lista principal
+        const totalAssinados = idsPrincipais.filter(id => assinSet?.has(id)).length;
         return { ...r, totalDestinatarios, totalAssinados };
       });
     }),
@@ -501,16 +517,26 @@ export const comunicadosInternosRouter = router({
     .input(z.object({
       comunicadoId: z.number().int().positive(),
       companyId: z.number().int().positive(),
+      // Rev. 4546 — "principal" = admitidos até a emissão; "complementar" = admitidos
+      // APÓS a emissão e que ainda não assinaram (para colher assinatura à parte).
+      lista: z.enum(["principal", "complementar"]).optional().default("principal"),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       await ensureOwnership(db, input.comunicadoId, input.companyId);
 
-      // Busca destinatariosJson do comunicado para filtrar quando configurado
-      const [comRow] = await db.select({ destinatariosJson: comunicadosInternos.destinatariosJson })
+      // Busca destinatariosJson e data de emissão do comunicado
+      const [comRow] = await db.select({
+        destinatariosJson: comunicadosInternos.destinatariosJson,
+        dataEmissao: comunicadosInternos.dataEmissao,
+      })
         .from(comunicadosInternos)
         .where(eq(comunicadosInternos.id, input.comunicadoId));
       const destinatariosJson = comRow?.destinatariosJson ?? null;
+      const dataEmissaoRaw: any = comRow?.dataEmissao ?? null;
+      const dataEmissao = dataEmissaoRaw
+        ? (dataEmissaoRaw instanceof Date ? dataEmissaoRaw.toISOString().slice(0, 10) : String(dataEmissaoRaw).slice(0, 10))
+        : null;
       let destinatariosIds: number[] | null = null;
       if (destinatariosJson) {
         try {
@@ -527,8 +553,23 @@ export const comunicadosInternosRouter = router({
         eq(employees.companyId, input.companyId),
         eq(employees.status, "Ativo"),
       ];
-      if (destinatariosIds && destinatariosIds.length > 0) {
-        baseConds.push(inArray(employees.id, destinatariosIds));
+      if (input.lista === "complementar") {
+        // Rev. 4546 — lista complementar: apenas admitidos APÓS a data de emissão
+        // (ignora destinatariosJson — novos contratados nunca estão no JSON) e
+        // exclui PJ/Sócio (comunicados internos são para colaboradores CLT).
+        if (!dataEmissao) {
+          return { funcionarios: [], totalAtivos: 0, totalAssinados: 0, filtradoPorDestinatarios: false, lista: "complementar" as const };
+        }
+        baseConds.push(sql`${employees.dataAdmissao} IS NOT NULL AND ${employees.dataAdmissao}::date > ${dataEmissao}::date`);
+        baseConds.push(sql`lower(coalesce(${employees.tipoContrato}, 'clt')) NOT IN ('pj', 'socio')`);
+      } else {
+        if (destinatariosIds && destinatariosIds.length > 0) {
+          baseConds.push(inArray(employees.id, destinatariosIds));
+        }
+        // Rev. 4546 — lista principal: só quem já estava admitido na data de emissão
+        if (dataEmissao) {
+          baseConds.push(sql`(${employees.dataAdmissao} IS NULL OR ${employees.dataAdmissao}::date <= ${dataEmissao}::date)`);
+        }
       }
 
       const ativos = await db.select({
@@ -597,20 +638,26 @@ export const comunicadosInternosRouter = router({
       const mapLeitura = new Map<number, string>(leituras.map(l => [l.employeeId, l.visualizadoEm]));
 
       const mapAssin = new Map<number, any>(assinaturas.map(a => [a.employeeId, a]));
-      const ativoIds = new Set(ativos.map(a => a.id));
-      const totalAssinadosAtivos = assinaturas.filter(a => ativoIds.has(a.employeeId)).length;
+      // Rev. 4546 — lista complementar exibe SOMENTE quem ainda não assinou
+      const base = input.lista === "complementar"
+        ? ativos.filter(f => !mapAssin.has(f.id))
+        : ativos;
+
+      const baseIds = new Set(base.map(a => a.id));
+      const totalAssinadosAtivos = assinaturas.filter(a => baseIds.has(a.employeeId)).length;
 
       return {
-        funcionarios: ativos.map(f => ({
+        funcionarios: base.map(f => ({
           ...f,
           assinatura: mapAssin.get(f.id) || null,
           visualizadoEm: mapLeitura.get(f.id) || null,
           obraId: mapObra.get(f.id)?.obraId ?? null,
           obraNome: mapObra.get(f.id)?.obraNome ?? null,
         })),
-        totalAtivos: ativos.length,
+        totalAtivos: base.length,
         totalAssinados: totalAssinadosAtivos,
         filtradoPorDestinatarios: !!(destinatariosIds && destinatariosIds.length > 0),
+        lista: input.lista,
       };
     }),
 

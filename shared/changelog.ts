@@ -1,4 +1,41 @@
 /**
+ * Rev. 4546 - FEAT: COMUNICADOS INTERNOS — LISTA PRINCIPAL RESPEITA DATA DE ADMISSÃO + LISTA COMPLEMENTAR
+ *
+ * PEDIDO DO USUÁRIO:
+ *   Funcionários admitidos APÓS a emissão de um comunicado não devem aparecer
+ *   na lista principal de assinaturas (ex.: admitido em 05/06 não pode estar
+ *   nos comunicados 001/002, emitidos em 04/05). Mas deve haver um botão para
+ *   gerar uma LISTA COMPLEMENTAR, com SOMENTE os admitidos após a emissão que
+ *   ainda não colheram assinatura.
+ *
+ * IMPLEMENTAÇÃO:
+ *   - server listar: novo filtro de elegibilidade — destinatário conta no
+ *     denominador (totalDestinatarios) apenas se dataAdmissao <= dataEmissao
+ *     (admissão nula = incluído). Vale tanto para comunicados com
+ *     destinatariosJson quanto para os sem lista (todos os ativos). O
+ *     totalAssinados também passa a contar SÓ assinaturas de quem está na
+ *     lista principal (consistência numerador/denominador).
+ *   - server listarFuncionariosParaAssinatura: novo input
+ *     lista: "principal" | "complementar" (default principal).
+ *     principal = ativos (respeitando destinatariosJson) com
+ *     dataAdmissao <= dataEmissao; complementar = ativos com
+ *     dataAdmissao > dataEmissao, excluindo PJ/Sócio, e APENAS quem ainda
+ *     não assinou (ignora destinatariosJson — recém-admitidos nunca estão
+ *     no JSON). Datas normalizadas p/ YYYY-MM-DD (evita bug String(Date)).
+ *   - client ComunicadosInternos.tsx (tela Lista para Assinatura): botão
+ *     "Lista Complementar" (âmbar) alterna entre as duas listas; cabeçalho,
+ *     banner de impressão ("LISTA COMPLEMENTAR DE CIÊNCIA"), título do PDF
+ *     impresso e empty-state adaptados; nota explicativa impressa na
+ *     complementar; voltar ao comunicado reseta para principal.
+ *
+ * VALIDAÇÃO (Neon, empresa 60002):
+ *   Comunicados 001/002 (04/05): 88 → 78 elegíveis na principal; complementar = 4.
+ *   Comunicado 003 (25/06): 88 → 85 elegíveis; complementar = 3.
+ *
+ * ARQUIVOS: server/routers/comunicadosInternos.ts, client/src/pages/ComunicadosInternos.tsx.
+ * ZERO schema change.
+ */
+/**
  * Rev. 4545 - FIX: COMUNICADOS INTERNOS — "EMITIR" TRAVA EDIÇÃO IMEDIATAMENTE (SEM EXIGIR 100% DAS ASSINATURAS)
  *
  * SINTOMA:
