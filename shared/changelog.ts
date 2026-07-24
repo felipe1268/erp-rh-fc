@@ -1,4 +1,35 @@
 /**
+ * Rev. 4541 - FIX: ALMOXARIFADO — EMPRÉSTIMO/DEVOLUÇÃO SÓ NAS OBRAS HABILITADAS
+ *
+ * MOTIVAÇÃO:
+ *   Correção de escopo da Rev. 4539 ("ver tudo, mexer só no seu"): o usuário
+ *   esclareceu que a visibilidade global vale só para o ESTOQUE (itens e
+ *   quantidades). As telas OPERACIONAIS de empréstimo/devolução ("Fechar Dia —
+ *   Pendências de Devolução", Registros › Emprestados) devem mostrar e permitir
+ *   operar SOMENTE as obras que o usuário está habilitado a operar
+ *   ("se emprestei na obra A, só devolvo na obra A").
+ *
+ * IMPLEMENTAÇÃO (server/routers/warehouse.ts):
+ *   - listOpenLoans: re-adicionado filtro de obra via getAlmoxAllowedObraIdSet
+ *     (admin = tudo; senão obraId IN permitidas OR obraId IS NULL — Central
+ *     continua visível; set vazio ⇒ só Central).
+ *   - registerLoan: NÃO tinha guard algum — adicionados guard de empresa
+ *     (getCompaniesForUser), item.companyId === input.companyId e permissão
+ *     tanto na obra do ITEM (origem do estoque) quanto na obra DESTINO
+ *     (input.obraId) via getAlmoxAllowedObraIdSet (null/Central permitido).
+ *   - returnLoanById: guard fraco userCanAccessObra trocado por guard de
+ *     empresa + userCanAccessObraAlmox na obra do empréstimo.
+ *   - markLoanLost segue admin-only (inalterado).
+ *
+ * FRONTEND (client/src/pages/almoxarifado/index.tsx):
+ *   - Dropdown "Filtrar por obra" do Fechar Dia agora lista só obrasEditaveis
+ *     (podeEditar !== false), coerente com a lista já filtrada no server.
+ *
+ *   Estoque (listarItens/Consolidado), giro/timeline e equipamentos locados
+ *   PERMANECEM com visibilidade global (Rev. 4539). ZERO schema change.
+ */
+
+/**
  * Rev. 4540 - UX: COMUNICADOS INTERNOS — SEM "PREZADO(A) COLABORADOR(A)" AUTOMÁTICO
  *
  * MOTIVAÇÃO:

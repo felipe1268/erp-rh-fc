@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb, getEffectiveAllowedObraIds, userCanAccessObra, userCanAccessObraAlmox, getAlmoxAllowedObraIdSet, getCompaniesForUser } from "../db";
-import { eq, and, desc, sql, inArray, ne } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, ne, or, isNull } from "drizzle-orm";
 import crypto from "crypto";
 import { buscarFotoParaItem } from "../_core/autoFoto";
 import { storagePut } from "../storage";
@@ -615,6 +615,27 @@ export const warehouseRouter = router({
         .where(eq(almoxarifadoItens.id, input.itemId));
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
 
+      // Rev. 4541 — guards de escrita (empréstimo = operação): empresa do
+      // chamador + item da mesma empresa + permissão na obra do ITEM.
+      const allowedCompaniesLoan = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompaniesLoan.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      if (item.companyId !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Item não pertence a esta empresa." });
+      }
+      const allowedObrasLoan = await getAlmoxAllowedObraIdSet(ctx.user.id, ctx.user.role, ctx.user.email);
+      if (allowedObrasLoan !== null) {
+        // obra do ITEM (origem do estoque) e obra DESTINO do empréstimo
+        // (input.obraId) precisam ambas estar habilitadas. Central (null) ok.
+        if (item.obraId != null && !allowedObrasLoan.has(Number(item.obraId))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para operar o almoxarifado desta obra (somente leitura)." });
+        }
+        if (input.obraId != null && !allowedObrasLoan.has(Number(input.obraId))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para registrar empréstimo nesta obra (somente leitura)." });
+        }
+      }
+
       const atual = parseFloat(String(item.quantidadeAtual) || "0");
       if (atual < input.quantidade)
         throw new TRPCError({ code: "BAD_REQUEST", message: "Estoque insuficiente para empréstimo" });
@@ -707,9 +728,19 @@ export const warehouseRouter = router({
         // sem filtro de data: mostra só os abertos
         conditions.push(eq(warehouseLoans.status, "emprestado"));
       }
-      // Rev. 4539 — VISIBILIDADE GLOBAL (leitura): empréstimos em aberto de
-      // todas as obras visíveis pra quem tem acesso ao módulo. Devolução
-      // (write) continua com guard próprio.
+      // Rev. 4541 — REVERTE a visibilidade global aqui: empréstimo/devolução é
+      // tela OPERACIONAL. Só aparecem empréstimos das obras que o usuário pode
+      // OPERAR (getAlmoxAllowedObraIdSet). Visibilidade global fica só no
+      // ESTOQUE (itens/consolidado). Central (obraId null) segue visível.
+      const allowedLoanObras = await getAlmoxAllowedObraIdSet(ctx.user.id, ctx.user.role, ctx.user.email);
+      if (allowedLoanObras !== null) {
+        const ids = [...allowedLoanObras];
+        conditions.push(
+          ids.length > 0
+            ? or(isNull(warehouseLoans.obraId), inArray(warehouseLoans.obraId, ids))!
+            : isNull(warehouseLoans.obraId)
+        );
+      }
 
       const rows = await db
         .select({
@@ -760,10 +791,18 @@ export const warehouseRouter = router({
         .select()
         .from(warehouseLoans)
         .where(eq(warehouseLoans.id, input.loanId));
-      if (loan && !(await userCanAccessObra(ctx.user.id, ctx.user.role, loan.obraId))) {
+      if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Empréstimo não encontrado" });
+
+      // Rev. 4541 — devolução só nas obras que o usuário pode OPERAR
+      // (getAlmoxAllowedObraIdSet, mesma régua das demais escritas do
+      // almoxarifado). Central (obraId null) segue liberada pela empresa.
+      const allowedCompaniesRet = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompaniesRet.map((c: any) => c.id).includes(loan.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este empréstimo" });
       }
-      if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Empréstimo não encontrado" });
+      if (loan.obraId != null && !(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, loan.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para operar o almoxarifado desta obra (somente leitura)." });
+      }
 
       const hoje = new Date().toISOString().split("T")[0];
       const hora = new Date().toTimeString().slice(0, 5);

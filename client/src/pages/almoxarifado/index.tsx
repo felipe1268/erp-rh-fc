@@ -4551,7 +4551,8 @@ export default function AlmoxarifadoPage() {
               onChange={(e) => setFecharDiaObraFiltro(e.target.value === "todas" ? "todas" : Number(e.target.value))}
             >
               <option value="todas">Todas as obras</option>
-              {(obrasAtivas as any[]).map((o: any) => (
+              {/* Rev. 4541 — só obras que o usuário pode OPERAR (devolução = escrita) */}
+              {obrasEditaveis.map((o: any) => (
                 <option key={o.id} value={o.id}>{o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>
               ))}
             </select>
