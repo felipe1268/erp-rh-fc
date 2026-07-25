@@ -10136,6 +10136,108 @@ export const financialRouter = router({
     return rows(res);
   }),
 
+  // Rev. 4579 — Fluxo de Caixa × realidade do banco. Duas leituras do EXTRATO
+  // importado (bank_statement_lines) que a matriz de títulos não enxerga:
+  //   1. "Outras movimentações": linhas do extrato NÃO ligadas a título de
+  //      receita/despesa (resgates de aplicação, aportes de sócio, depósitos em
+  //      dinheiro, transferências). Internas entre contas importadas se anulam no
+  //      líquido; o que sobra é dinheiro real entrando/saindo fora do operacional.
+  //   2. "Saldo real no banco": último saldo_apos de cada conta em cada mês,
+  //      com carry-forward (conta sem linha no mês mantém o último saldo
+  //      conhecido). Meses após o fim do extrato retornam null (front mostra "—").
+  // Leitura pura (zero write). Auditoria 25/07/2026: tela projetava −R$ 5,09 mi
+  // enquanto o banco real somava −R$ 46 mil — a diferença é exatamente isso.
+  getMovimentacoesBancariasByYear: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    ano: z.number(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    for (const cid of ids) await _assertFinanceiroCompanyAccess(ctx.user, cid);
+
+    // 1) Outras movimentações (sem título receita/despesa) por mês.
+    const mov = await dbExecute(db,
+      `SELECT EXTRACT(month FROM l.data)::int AS m, l.tipo,
+              SUM(ABS(l.valor))::float8 AS total, COUNT(*)::int AS qtd
+       FROM bank_statement_lines l
+       LEFT JOIN financial_entries e ON e.id = l.entry_id
+       WHERE l.company_id IN (${inlineIds(ids)})
+         AND l.excluido_em IS NULL AND l.desconsiderado_em IS NULL
+         AND EXTRACT(year FROM l.data) = $1
+         AND (l.entry_id IS NULL OR e.tipo NOT IN ('receita','despesa'))
+       GROUP BY 1, 2`,
+      [input.ano]
+    );
+    const outrasEntradas = Array(12).fill(0);
+    const outrasSaidas   = Array(12).fill(0);
+    for (const r of rows(mov)) {
+      const i = Number(r.m) - 1;
+      if (i < 0 || i > 11) continue;
+      if (String(r.tipo) === "credito") outrasEntradas[i] += Number(r.total) || 0;
+      else outrasSaidas[i] += Number(r.total) || 0;
+    }
+
+    // 2) Saldo real por conta: último saldo_apos conhecido em cada mês do ano
+    //    + saldo de partida (última linha ANTES do ano, para o carry de janeiro).
+    const salAno = await dbExecute(db,
+      `SELECT DISTINCT ON (l.conta_bancaria_id, EXTRACT(month FROM l.data))
+              l.conta_bancaria_id AS conta, EXTRACT(month FROM l.data)::int AS m,
+              l.saldo_apos::float8 AS saldo
+       FROM bank_statement_lines l
+       WHERE l.company_id IN (${inlineIds(ids)})
+         AND l.excluido_em IS NULL AND l.saldo_apos IS NOT NULL
+         AND EXTRACT(year FROM l.data) = $1
+       ORDER BY l.conta_bancaria_id, EXTRACT(month FROM l.data), l.data DESC, l.id DESC`,
+      [input.ano]
+    );
+    const salAntes = await dbExecute(db,
+      `SELECT DISTINCT ON (l.conta_bancaria_id)
+              l.conta_bancaria_id AS conta, l.saldo_apos::float8 AS saldo
+       FROM bank_statement_lines l
+       WHERE l.company_id IN (${inlineIds(ids)})
+         AND l.excluido_em IS NULL AND l.saldo_apos IS NOT NULL
+         AND l.data < ($1 || '-01-01')::date
+       ORDER BY l.conta_bancaria_id, l.data DESC, l.id DESC`,
+      [String(input.ano)]
+    );
+    // Último mês do ano com QUALQUER linha de extrato (independe de saldo_apos):
+    const lastRes = await dbExecute(db,
+      `SELECT COALESCE(MAX(EXTRACT(month FROM l.data))::int, 0) AS last_m
+       FROM bank_statement_lines l
+       WHERE l.company_id IN (${inlineIds(ids)})
+         AND l.excluido_em IS NULL AND EXTRACT(year FROM l.data) = $1`,
+      [input.ano]
+    );
+    const lastM = Number(rows(lastRes)[0]?.last_m ?? 0);
+
+    const porContaMes = new Map<number, Map<number, number>>();
+    for (const r of rows(salAno)) {
+      const conta = Number(r.conta);
+      if (!porContaMes.has(conta)) porContaMes.set(conta, new Map());
+      porContaMes.get(conta)!.set(Number(r.m), Number(r.saldo) || 0);
+    }
+    const carry = new Map<number, number>();
+    for (const r of rows(salAntes)) carry.set(Number(r.conta), Number(r.saldo) || 0);
+    for (const conta of porContaMes.keys()) if (!carry.has(conta)) carry.set(conta, NaN);
+
+    const saldoExtratoFimMes: (number | null)[] = Array(12).fill(null);
+    for (let m = 1; m <= 12; m++) {
+      for (const [conta, meses] of porContaMes) {
+        if (meses.has(m)) carry.set(conta, meses.get(m)!);
+      }
+      if (m > lastM) continue; // extrato ainda não chegou nesse mês
+      let soma = 0, temDado = false;
+      for (const v of carry.values()) {
+        if (Number.isFinite(v)) { soma += v; temDado = true; }
+      }
+      saldoExtratoFimMes[m - 1] = temDado ? soma : null;
+    }
+
+    return { outrasEntradas, outrasSaidas, saldoExtratoFimMes, ultimoMesComExtrato: lastM };
+  }),
+
   // Cria título manual a receber. Com `parcelas` > 1 gera N linhas ligadas por
   // parcela_grupo_id, vencimentos mensais, valor distribuído (resto na última).
   criarTituloReceber: protectedProcedure.input(z.object({

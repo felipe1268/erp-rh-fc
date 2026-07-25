@@ -123,6 +123,27 @@ export default function FinanceiroFluxoCaixa() {
   );
   const temCheques = chequesTotalAno > 0 || chequesFloat.foraDoAno > 0;
 
+  // Rev. 4579 — realidade do banco (extrato importado): outras movimentações
+  // (resgates, aportes, depósitos — dinheiro real que NÃO vira Contas a
+  // Receber/Pagar) + saldo real de fim de mês. Informativo: NÃO soma na matriz.
+  const movQ = (trpc as any).financial.getMovimentacoesBancariasByYear.useQuery(
+    { companyId, ano }, { enabled: !!companyId }
+  );
+  const movBanco = useMemo(() => {
+    const d = movQ.data;
+    const ent = (d?.outrasEntradas as number[]) ?? Array(12).fill(0);
+    const sai = (d?.outrasSaidas as number[]) ?? Array(12).fill(0);
+    return {
+      net: ent.map((v, i) => v - sai[i]),
+      saldoReal: (d?.saldoExtratoFimMes as (number | null)[]) ?? Array(12).fill(null),
+      ultimoMes: Number(d?.ultimoMesComExtrato ?? 0),
+    };
+  }, [movQ.data]);
+  const movNetTotal = useMemo(() => movBanco.net.reduce((s, v) => s + v, 0), [movBanco]);
+  const temMovBanco = movBanco.ultimoMes > 0 && movBanco.net.some(v => Math.abs(v) > 0.005);
+  const temSaldoReal = movBanco.ultimoMes > 0 && movBanco.saldoReal.some(v => v != null);
+  const saldoRealUltimo = temSaldoReal ? movBanco.saldoReal[movBanco.ultimoMes - 1] : null;
+
   const saldoInicialTotal = useMemo(() => {
     const contas: any[] = contasQ.data ?? [];
     return contas.reduce((s, c) => s + (Number(c.saldoInicial) || 0), 0);
@@ -131,9 +152,9 @@ export default function FinanceiroFluxoCaixa() {
   const isLoading  = receberQ.isLoading || pagarQ.isLoading;
   // Rev. 4577 — cheques entram no isFetching/refetch mas NÃO no isError/isLoading:
   // falha na linha informativa não pode derrubar o Fluxo de Caixa inteiro.
-  const isFetching = receberQ.isFetching || pagarQ.isFetching || chequesQ.isFetching;
+  const isFetching = receberQ.isFetching || pagarQ.isFetching || chequesQ.isFetching || movQ.isFetching;
   const isError    = receberQ.isError || pagarQ.isError;
-  const refetch = () => { receberQ.refetch(); pagarQ.refetch(); chequesQ.refetch(); };
+  const refetch = () => { receberQ.refetch(); pagarQ.refetch(); chequesQ.refetch(); movQ.refetch(); };
 
   const meses12 = useMemo(
     () => Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, "0")}`),
@@ -298,6 +319,19 @@ export default function FinanceiroFluxoCaixa() {
       }
     }
 
+    // 4.5) Rev. 4579 — saldo projetado × banco real (a "confusão" clássica)
+    if (temSaldoReal && saldoRealUltimo != null) {
+      const iUlt = movBanco.ultimoMes - 1;
+      const projNoMes = saldoFimMes[iUlt] ?? 0;
+      const gap = saldoRealUltimo - projNoMes;
+      if (Math.abs(gap) > Math.max(50000, Math.abs(saldoRealUltimo) * 0.25)) {
+        list.push({
+          tipo: "info", titulo: "O banco real conta outra história",
+          texto: `No fim de ${MESES_FULL[iUlt]} o extrato mostra ${BRL0(saldoRealUltimo)} no banco, mas a projeção acima diz ${BRL0(projNoMes)}. A diferença vem de dinheiro que não vira título (resgates, aportes, depósitos — linha azul), títulos em aberto e cheques não compensados. Use a linha "Saldo real no banco" como a verdade do extrato.`,
+        });
+      }
+    }
+
     // 5) Float de cheques
     if (temCheques) {
       list.push({
@@ -324,6 +358,7 @@ export default function FinanceiroFluxoCaixa() {
     return list;
   }, [meses12, recVals, despVals, resVals, saldoFimMes, saldoFinalAno, saldoInicialTotal,
       totalRes, totalDesp, totalFixas, temCheques, chequesTotalAno, chequesFloat,
+      temSaldoReal, saldoRealUltimo, movBanco,
       natureza, recEfet, recReal, ano, mesAtual, hoje]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -899,6 +934,56 @@ export default function FinanceiroFluxoCaixa() {
                 </tr>
               )}
 
+              {/* ══ Rev. 4579 — OUTRAS MOVIMENTAÇÕES BANCÁRIAS (informativo) ══ */}
+              {temMovBanco && (
+                <tr className="h-10 bg-sky-50/70 border-b border-sky-200">
+                  <td style={{ width: LABEL_W, minWidth: LABEL_W }}
+                    className="sticky left-0 z-10 px-4 text-xs font-semibold text-sky-800 border-r border-sky-200 whitespace-nowrap bg-sky-50"
+                    title="Dinheiro real que entrou/saiu do banco mas não vira Contas a Receber nem Contas a Pagar: resgates de aplicação, aportes de sócio, depósitos em dinheiro e transferências. É por isso que o saldo real do banco não bate com o Saldo Final projetado acima.">
+                    (±) Outras movimentações bancárias
+                    <span className="block text-[10px] font-normal text-sky-600">resgates, aportes, depósitos · líquido do extrato · informativo</span>
+                  </td>
+                  {movBanco.net.map((v, i) => (
+                    <td key={i} style={{ width: COL_W, minWidth: COL_W }}
+                      className={`text-right tabular-nums text-xs px-3 border-l border-sky-100 whitespace-nowrap
+                        ${Math.abs(v) > 0.005 ? (v > 0 ? "text-sky-800 font-semibold" : "text-rose-600 font-semibold") : "text-sky-300"}
+                        ${isAtual(i) ? "ring-1 ring-inset ring-blue-400" : ""}`}>
+                      {Math.abs(v) > 0.005 ? (v > 0 ? "+" : "") + BRL0(v) : "—"}
+                    </td>
+                  ))}
+                  <td style={{ width: TOT_W, minWidth: TOT_W }}
+                    className="text-right tabular-nums text-xs px-3 font-bold text-sky-900 border-l-2 border-sky-300 whitespace-nowrap bg-sky-100">
+                    {(movNetTotal > 0 ? "+" : "") + BRL0(movNetTotal)}
+                  </td>
+                </tr>
+              )}
+
+              {/* ══ Rev. 4579 — SALDO REAL NO BANCO (extrato, informativo) ══ */}
+              {temSaldoReal && (
+                <tr className="h-10 bg-indigo-50/70 border-b border-indigo-200">
+                  <td style={{ width: LABEL_W, minWidth: LABEL_W }}
+                    className="sticky left-0 z-10 px-4 text-xs font-semibold text-indigo-800 border-r border-indigo-200 whitespace-nowrap bg-indigo-50"
+                    title="Saldo somado das contas bancárias no fim de cada mês, direto do extrato importado. Compare com o 'Saldo Final do Mês' acima: a diferença são as outras movimentações, títulos em aberto e cheques ainda não compensados.">
+                    🏦 Saldo real no banco (extrato)
+                    <span className="block text-[10px] font-normal text-indigo-600">fim de cada mês · direto do extrato importado</span>
+                  </td>
+                  {movBanco.saldoReal.map((v, i) => (
+                    <td key={i} style={{ width: COL_W, minWidth: COL_W }}
+                      className={`text-right tabular-nums text-xs px-3 border-l border-indigo-100 whitespace-nowrap font-semibold
+                        ${v == null ? "text-indigo-200" : v >= 0 ? "text-indigo-800" : "text-rose-600"}
+                        ${isAtual(i) ? "ring-1 ring-inset ring-blue-400" : ""}`}>
+                      {v == null ? "—" : BRL0(v)}
+                    </td>
+                  ))}
+                  <td style={{ width: TOT_W, minWidth: TOT_W }}
+                    className={`text-right tabular-nums text-xs px-3 font-bold border-l-2 border-indigo-300 whitespace-nowrap bg-indigo-100
+                      ${saldoRealUltimo == null ? "text-indigo-300" : saldoRealUltimo >= 0 ? "text-indigo-900" : "text-rose-700"}`}
+                    title="Último saldo conhecido no extrato">
+                    {saldoRealUltimo == null ? "—" : BRL0(saldoRealUltimo)}
+                  </td>
+                </tr>
+              )}
+
             </tbody>
           </table>
         </div>
@@ -915,6 +1000,22 @@ export default function FinanceiroFluxoCaixa() {
               {chequesFloat.foraDoAno > 0 && (
                 <> Além disso, {BRL0(chequesFloat.foraDoAno)} ({chequesFloat.qtdForaDoAno} cheque(s)) têm vencimento fora de {ano} ou sem data.</>
               )}
+            </span>
+          </div>
+        )}
+
+        {/* Rev. 4579 — nota explicando a diferença projetado × banco real */}
+        {temSaldoReal && saldoRealUltimo != null && (
+          <div className="flex items-start gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-xs text-indigo-900">
+            <Landmark className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
+            <span className="break-words">
+              <strong>Por que o Saldo Final projetado não bate com o banco?</strong> A matriz acima soma apenas os
+              títulos de Contas a Receber e Contas a Pagar (pelo vencimento). Mas o banco também recebe dinheiro que
+              não vira título — resgates de aplicação, aportes de sócio, depósitos em dinheiro e transferências — e
+              há títulos em aberto e cheques que ainda não compensaram. A linha azul "Outras movimentações bancárias"
+              mostra esse dinheiro extra ({BRL0(movNetTotal)} líquido no ano até agora), e a linha "🏦 Saldo real no
+              banco" mostra o saldo verdadeiro do extrato no fim de cada mês
+              ({BRL0(saldoRealUltimo)} no último mês com extrato importado).
             </span>
           </div>
         )}

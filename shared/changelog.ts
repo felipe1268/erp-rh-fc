@@ -1,4 +1,50 @@
 /**
+ * Rev. 4579 - FEAT: FLUXO DE CAIXA — "OUTRAS MOVIMENTAÇÕES BANCÁRIAS" + SALDO REAL DO EXTRATO
+ *
+ * PEDIDO DO USUÁRIO: "ainda estou achando que tem alguma coisa errada. Não
+ * tem esse déficit todo... hoje eu não tenho um débito de R$ 4 milhões
+ * negativos. Preciso entender de onde é a confusão."
+ *
+ * AUDITORIA (Neon, empresa 60002, jan–jul/2026) — A PONTE ENTRE A TELA E O BANCO:
+ * - Tela: Entradas 13,82 mi − Saídas 19,21 mi = geração −5,39 mi; saldo
+ *   projetado ~−5,09 mi. Banco REAL: começou 2026 com ~R$ 175 mil e está em
+ *   ~−R$ 46 mil → variação real de só −R$ 125.794 em 7 meses.
+ * - A diferença (~5,26 mi) é EXPLICADA, não é dívida: (a) +6,56 mi líquidos
+ *   entraram no banco SEM virar título — resgates de aplicação CONTAMAX
+ *   3,18 mi, depósitos em dinheiro 1,70 mi, PIX avulsos 5,04 mi (incl.
+ *   aporte de sócio 200 mil), transferências (líquido); (b) 3,10 mi de
+ *   receitas recebidas no CAIXA INTERNO (fora do extrato); (c) 937 mil em
+ *   cheques emitidos ainda não compensados; (d) títulos em aberto (receber
+ *   841 mil / pagar 387 mil); (e) 1,56 mi de despesas pagas via caixa
+ *   interno; (f) ~167 mil em 13 possíveis despesas duplicadas (>5k, ex.
+ *   BANCO SANTANDER 29.994 2× ids 892355/892356) — REPORTADAS, não tocadas.
+ *
+ * O QUE MUDOU:
+ * - server/routers/financial.ts: novo `getMovimentacoesBancariasByYear`
+ *   (leitura pura; resolveCompanyIds + _assertFinanceiroCompanyAccess):
+ *   (1) outrasEntradas/outrasSaidas por mês = linhas do extrato
+ *   (bank_statement_lines, sem excluídas/desconsideradas) NÃO ligadas a
+ *   título receita/despesa (entry NULL ou tipo transferencia) — internas
+ *   entre contas importadas se anulam no líquido; (2) saldoExtratoFimMes =
+ *   último saldo_apos de cada conta por mês com carry-forward (mês sem
+ *   linha herda o saldo anterior; meses após o fim do extrato = null);
+ *   (3) ultimoMesComExtrato.
+ * - FinanceiroFluxoCaixa.tsx: 2 linhas informativas novas (padrão Rev. 4577
+ *   — falha na query NÃO derruba a tela, não somam na matriz): linha azul
+ *   "(±) Outras movimentações bancárias" (líquido/mês) e linha índigo
+ *   "🏦 Saldo real no banco (extrato)" (fim de mês; "—" sem extrato);
+ *   insight determinístico "O banco real conta outra história" quando
+ *   |real − projetado| > max(50 mil, 25% do real); card de rodapé
+ *   explicando por que projetado ≠ banco.
+ *
+ * POKA-YOKE (nível 1 — tela read-only): impedir a LEITURA errada do
+ * "déficit de 5 mi": o saldo verdadeiro do extrato fica lado a lado com a
+ * projeção, com a explicação da diferença na própria tela.
+ *
+ * ZERO schema change; server só ganhou query de leitura.
+ */
+
+/**
  * Rev. 4578 - UX: FLUXO DE CAIXA — REDESIGN DIDÁTICO NA ESTRUTURA DA LITERATURA
  *
  * PEDIDO DO USUÁRIO: "redesenhe totalmente o fluxo de caixa, de acordo com
