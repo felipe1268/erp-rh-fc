@@ -1778,7 +1778,7 @@ export default function AlmoxarifadoPage() {
                       : `Almoxarifado — ${obrasAtivas.find(o => o.id === obraContexto)?.nome ?? "Obra"}`}
                   </span>
                 </h1>
-                <p className="text-sm text-gray-500 mt-0.5">{itens.length} ite{itens.length !== 1 ? "ns" : "m"} cadastrado{itens.length !== 1 ? "s" : ""}</p>
+                <p className="text-sm text-gray-500 mt-0.5">{itens.length.toLocaleString("pt-BR")} ite{itens.length !== 1 ? "ns" : "m"} cadastrado{itens.length !== 1 ? "s" : ""}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex border border-gray-200 rounded-lg overflow-hidden">
@@ -2125,7 +2125,7 @@ export default function AlmoxarifadoPage() {
                   </div>
                   <div>
                     <p className="text-[11px] text-gray-400 uppercase tracking-wide">{k.label}</p>
-                    <p className={`text-2xl font-bold ${k.color}`}>{k.v}</p>
+                    <p className={`text-2xl font-bold ${k.color}`}>{k.v.toLocaleString("pt-BR")}</p>
                   </div>
                 </div>
               ))}
@@ -2140,7 +2140,7 @@ export default function AlmoxarifadoPage() {
                   </p>
                   <p className="text-3xl font-black mt-1">R$ {fmtBRL(valorTotal)}</p>
                   <p className="text-xs opacity-70 mt-1">
-                    {itensParaTotal.length} ite{itensParaTotal.length !== 1 ? "ns" : "m"} considerado{itensParaTotal.length !== 1 ? "s" : ""} · {itensParaTotal.filter((i: any) => i.valorUnitario).length} com preço cadastrado
+                    {itensParaTotal.length.toLocaleString("pt-BR")} ite{itensParaTotal.length !== 1 ? "ns" : "m"} considerado{itensParaTotal.length !== 1 ? "s" : ""} · {itensParaTotal.filter((i: any) => i.valorUnitario).length.toLocaleString("pt-BR")} com preço cadastrado
                     {qtdLocadosExcluidos > 0 && <> · <span className="font-semibold">{qtdLocadosExcluidos} locado{qtdLocadosExcluidos !== 1 ? "s" : ""} excluído{qtdLocadosExcluidos !== 1 ? "s" : ""}</span></>}
                   </p>
                 </div>
@@ -2209,7 +2209,7 @@ export default function AlmoxarifadoPage() {
                           ) : (
                             <p className="text-base font-bold text-emerald-700">R$ {fmtBRL(e.valor)}</p>
                           )}
-                          <p className="text-[11px] text-gray-400">{pct.toFixed(1)}% · {e.itens} ite{e.itens !== 1 ? "ns" : "m"}</p>
+                          <p className="text-[11px] text-gray-400">{pct.toFixed(1)}% · {Number(e.itens).toLocaleString("pt-BR")} ite{e.itens !== 1 ? "ns" : "m"}</p>
                         </div>
                       </div>
                     );
@@ -2579,7 +2579,7 @@ export default function AlmoxarifadoPage() {
                 </div>
                 <div>
                   <p className="text-[11px] text-gray-400 uppercase tracking-wide">{k.label}</p>
-                  <p className={`text-2xl font-bold ${k.color}`}>{k.v}</p>
+                  <p className={`text-2xl font-bold ${k.color}`}>{k.v.toLocaleString("pt-BR")}</p>
                 </div>
               </div>
             ))}
@@ -2594,7 +2594,7 @@ export default function AlmoxarifadoPage() {
               </p>
               <p className="text-3xl font-black mt-1">R$ {fmtBRLi(valorTotalObra)}</p>
               <p className="text-xs opacity-70 mt-1">
-                {itensParaTotalObra.length} ite{itensParaTotalObra.length !== 1 ? "ns" : "m"} considerado{itensParaTotalObra.length !== 1 ? "s" : ""} · {itensParaTotalObra.filter((i: any) => parseValorI(i.valorUnitario) > 0).length} com preço cadastrado
+                {itensParaTotalObra.length.toLocaleString("pt-BR")} ite{itensParaTotalObra.length !== 1 ? "ns" : "m"} considerado{itensParaTotalObra.length !== 1 ? "s" : ""} · {itensParaTotalObra.filter((i: any) => parseValorI(i.valorUnitario) > 0).length.toLocaleString("pt-BR")} com preço cadastrado
                 {qtdLocadosExcluidosObra > 0 && <> · <span className="font-semibold">{qtdLocadosExcluidosObra} locado{qtdLocadosExcluidosObra !== 1 ? "s" : ""} excluído{qtdLocadosExcluidosObra !== 1 ? "s" : ""}</span></>}
               </p>
             </div>
