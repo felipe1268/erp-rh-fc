@@ -4540,6 +4540,22 @@ async function getDashParceiros(
   const parceiroMap = new Map<number, any>();
   for (const p of parceirosRows) parceiroMap.set(p.id, p);
 
+  // Rev. 4570 — mapa employeeId → fotoUrl (avatar nas listas de colaboradores)
+  const empFotoMap = new Map<number, string | null>();
+  {
+    const empIds = [...new Set(lancamentosRows.map(l => Number(l.employeeId)).filter(Boolean))];
+    if (empIds.length > 0) {
+      const fotoRows = await db
+        .select({ id: employees.id, fotoUrl: employees.fotoUrl })
+        .from(employees)
+        .where(and(
+          companyWhere(employees, companyId, companyIds),
+          inArray(employees.id, empIds),
+        ));
+      for (const r of fotoRows) empFotoMap.set(r.id, r.fotoUrl ?? null);
+    }
+  }
+
   // Aplica filtro de tipoConvenio nos lançamentos / pagamentos
   const matchTipo = (pid: number) => {
     if (!tipoConvenio || tipoConvenio === "todos") return true;
@@ -4657,10 +4673,10 @@ async function getDashParceiros(
   const rankingParceiros = [...byParceiro.values()].sort((a, b) => b.valor - a.valor).slice(0, 10);
 
   // ----- Ranking colaboradores -----
-  const byColab = new Map<number, { employeeId: number; nome: string; lancamentos: number; valor: number }>();
+  const byColab = new Map<number, { employeeId: number; nome: string; fotoUrl: string | null; lancamentos: number; valor: number }>();
   for (const l of lancMes) {
     let r = byColab.get(l.employeeId);
-    if (!r) { r = { employeeId: l.employeeId, nome: l.employeeNome ?? `Colab #${l.employeeId}`, lancamentos: 0, valor: 0 }; byColab.set(l.employeeId, r); }
+    if (!r) { r = { employeeId: l.employeeId, nome: l.employeeNome ?? `Colab #${l.employeeId}`, fotoUrl: empFotoMap.get(Number(l.employeeId)) ?? null, lancamentos: 0, valor: 0 }; byColab.set(l.employeeId, r); }
     r.lancamentos += 1;
     r.valor += valor(l.valor);
   }
@@ -4700,6 +4716,7 @@ async function getDashParceiros(
         tipoConvenio: p?.tipoConvenio || '—',
         employeeId: l.employeeId,
         employeeNome: l.employeeNome,
+        employeeFotoUrl: empFotoMap.get(Number(l.employeeId)) ?? null,
         valor: valor(l.valor),
         status: l.status,
         competenciaDesconto: l.competenciaDesconto,

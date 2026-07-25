@@ -34,6 +34,35 @@ const fmtDateBR = (s: string | null | undefined) => {
   return d.split("-").reverse().join("/");
 };
 
+/* Rev. 4570 — avatar do colaborador (foto do cadastro RH ou iniciais) */
+function ColabAvatar({ fotoUrl, nome, size = 8 }: { fotoUrl?: string | null; nome?: string | null; size?: 7 | 8 }) {
+  const iniciais = String(nome || "?")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(p => p[0])
+    .join("")
+    .toUpperCase();
+  const cls = size === 7 ? "w-7 h-7 text-[10px]" : "w-8 h-8 text-xs";
+  if (fotoUrl) {
+    return (
+      <img
+        src={fotoUrl}
+        alt=""
+        loading="lazy"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        className={`${cls} rounded-full object-cover border border-purple-100 flex-shrink-0 bg-white`}
+      />
+    );
+  }
+  return (
+    <span className={`${cls} rounded-full bg-purple-100 text-purple-700 font-semibold flex items-center justify-center flex-shrink-0`}>
+      {iniciais || "?"}
+    </span>
+  );
+}
+
 const MESES_LBL = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -544,6 +573,7 @@ export default function DashParceiros() {
                       <div className="flex items-center gap-2 min-w-0">
                         <span className={`text-xs font-bold w-5 text-right ${i < 3 ? "text-purple-600" : "text-muted-foreground"}`}>{i + 1}</span>
                         <Eye className="h-3.5 w-3.5 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ColabAvatar fotoUrl={c.fotoUrl} nome={c.nome} />
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate group-hover:text-purple-700">{c.nome}</p>
                           <p className="text-xs text-muted-foreground">{c.lancamentos} lanç.</p>
@@ -632,7 +662,12 @@ export default function DashParceiros() {
                           <td className="py-1.5 px-2 whitespace-nowrap">{fmtDateBR(d.dataCompra)}</td>
                           <td className="py-1.5 px-2 truncate max-w-[200px]" title={d.parceiroNome}>{d.parceiroNome}</td>
                           <td className="py-1.5 px-2 text-xs text-muted-foreground">{TIPO_LBL[d.tipoConvenio] || d.tipoConvenio}</td>
-                          <td className="py-1.5 px-2 truncate max-w-[200px]" title={d.employeeNome}>{d.employeeNome}</td>
+                          <td className="py-1.5 px-2 max-w-[220px]" title={d.employeeNome}>
+                            <span className="flex items-center gap-2 min-w-0">
+                              <ColabAvatar fotoUrl={d.employeeFotoUrl} nome={d.employeeNome} size={7} />
+                              <span className="truncate">{d.employeeNome}</span>
+                            </span>
+                          </td>
                           <td className="text-right py-1.5 px-2 font-medium">{fmtBRL(d.valor)}</td>
                           <td className="text-center py-1.5 px-2">
                             <Badge variant="outline" className={`text-[10px] ${st.className}`}>{st.label}</Badge>

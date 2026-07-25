@@ -1,4 +1,27 @@
 /**
+ * Rev. 4570 - UX: DASHBOARD PARCEIROS — FOTO DOS COLABORADORES NAS LISTAS
+ *
+ * PEDIDO DO USUÁRIO: mostrar a foto dos funcionários no Dashboard Parceiros
+ * — na tabela "Lançamentos Recentes" (coluna Colaborador) e no ranking
+ * "Top Colaboradores por Valor" (Poka-Yoke visual: identificação imediata
+ * de quem fez o lançamento, mesmo com nomes parecidos).
+ *
+ * O QUE MUDOU:
+ * 1) server/routers/dashboards.ts (getDashParceiros): novo empFotoMap
+ *    (employeeId → employees.fotoUrl) via 1 query inArray com os ids
+ *    distintos dos lançamentos do ano; rankingColaboradores ganhou
+ *    `fotoUrl`; detalhes ganhou `employeeFotoUrl`.
+ * 2) client/src/pages/dashboards/DashParceiros.tsx: novo <ColabAvatar>
+ *    (foto redonda 28/32px, lazy, onError esconde; sem foto = círculo
+ *    roxo com iniciais do nome). Aplicado no ranking (32px) e na tabela
+ *    de lançamentos recentes (28px, nome com truncate ao lado).
+ *
+ * RACIONAL: fotos vêm do cadastro RH (employees.fotoUrl) — 1 query extra
+ * leve por dashboard; fallback de iniciais mantém o layout alinhado pra
+ * quem não tem foto. ZERO schema change.
+ */
+
+/**
  * Rev. 4569 - UX: DASHBOARD PARCEIROS — BOTÃO "ANO TODO" NO SELETOR DE PERÍODO
  *
  * PEDIDO DO USUÁRIO: no Dashboard Parceiros faltava o botão "Ano todo" ao
