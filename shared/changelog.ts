@@ -1,4 +1,53 @@
 /**
+ * Rev. 4574 - FEAT: ORÁCULO CONSULTOR-CEO — FINANCEIRO + COMPRAS + ALMOX + PLANEJAMENTO + DIAGNÓSTICO EXECUTIVO
+ *
+ * PEDIDO DO USUÁRIO: "quero um oráculo consultor... conversa fluida...
+ * 100% monitorando o ERP... pontos fortes e fracos... um CEO full time
+ * conectado a todos os bancos de dados."
+ *
+ * O QUE MUDOU (server/routers/oraculo.ts):
+ * 1) 6 NOVAS QUERIES no buildContext (índices 21-26):
+ *    - financeiro_contas_pagar: agregado por urgência (vencidas /
+ *      vencem em 7d / 8-30d / pago no mês) sobre financial_entries
+ *      tipo='despesa', status IN ('a_pagar','pendente').
+ *    - financeiro_contas_vencidas_top: top 30 vencidas por valor
+ *      (descrição, fornecedor, obra, vencimento).
+ *    - financeiro_contas_receber: financial_revenue agregado
+ *      (a_faturar / a_receber / recebido no mês) usando
+ *      COALESCE(valor_liquido_receber, valor_medicao).
+ *    - compras_resumo: OCs abertas (pendente/aprovada/parcial),
+ *      aguardando aprovação, entregas atrasadas, comprado no mês.
+ *    - almoxarifado_resumo: itens ativos, abaixo do mínimo, valor
+ *      total de estoque (ativo = true — coluna é BOOLEAN, não int).
+ *    - planejamento_projetos: até 100 projetos com valor de contrato
+ *      e datas contratuais.
+ * 2) DIAGNÓSTICO EXECUTIVO determinístico (calculado em JS, não pelo
+ *    LLM): ctx.diagnostico_executivo com pontos_de_atencao e
+ *    pontos_fortes — contas vencidas (R$), vencimentos 7d, medições a
+ *    faturar paradas, OCs atrasadas/pendentes de aprovação, estoque
+ *    abaixo do mínimo, obras paralisadas, processos trabalhistas de
+ *    risco ALTO, alertas de EPI, absenteísmo (≥15 atestados/30d),
+ *    terceirizados ativos sem aptidão, recebimentos vs. folha.
+ * 3) SYSTEM PROMPT: nova seção "PAPEL: CONSULTOR-CEO FULL TIME" —
+ *    proatividade (apontar riscos relacionados ao assunto), visão de
+ *    negócio cruzando módulos, usar diagnostico_executivo como espinha
+ *    dorsal de panoramas, objetividade de CEO, 1 recomendação prática.
+ * 4) dropOrder do cap de bytes ganhou planejamento_projetos e
+ *    financeiro_contas_vencidas_top como primeiros descartes.
+ *
+ * VALIDAÇÃO: buildContext rodado direto no Neon (3 empresas): 0
+ * query_errors, ~418 KB, diagnóstico real detectou R$ 5,85 mi em 4.579
+ * contas vencidas, 205 medições a faturar (R$ 450 mil), 54 OCs com
+ * entrega atrasada, 32 itens de estoque abaixo do mínimo, 2 obras
+ * paralisadas. ZERO schema change.
+ *
+ * POKA-YOKE: agregados financeiros calculados no SQL (fonte única,
+ * sem depender do LLM somar); diagnóstico determinístico evita
+ * alucinação de números; queries novas cobertas pelo mecanismo
+ * _query_errors existente.
+ */
+
+/**
  * Rev. 4573 - FIX: ORÁCULO — SNAPSHOT DE DADOS 100% QUEBRADO (21 QUERIES FALHANDO)
  *
  * PEDIDO DO USUÁRIO: "o Oráculo diz que está com erro de conexão e não

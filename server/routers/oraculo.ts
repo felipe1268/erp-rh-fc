@@ -253,6 +253,69 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
       ORDER BY vp."dataInicio" NULLS LAST
       LIMIT 500
     `),
+    // 21 — FINANCEIRO: Contas a Pagar (agregado por urgência)
+    db.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status IN ('a_pagar','pendente') AND data_vencimento < CURRENT_DATE)::int as vencidas_qtd,
+        COALESCE(SUM(valor_previsto) FILTER (WHERE status IN ('a_pagar','pendente') AND data_vencimento < CURRENT_DATE), 0)::numeric as vencidas_valor,
+        COUNT(*) FILTER (WHERE status IN ('a_pagar','pendente') AND data_vencimento >= CURRENT_DATE AND data_vencimento <= CURRENT_DATE + INTERVAL '7 days')::int as prox_7d_qtd,
+        COALESCE(SUM(valor_previsto) FILTER (WHERE status IN ('a_pagar','pendente') AND data_vencimento >= CURRENT_DATE AND data_vencimento <= CURRENT_DATE + INTERVAL '7 days'), 0)::numeric as prox_7d_valor,
+        COUNT(*) FILTER (WHERE status IN ('a_pagar','pendente') AND data_vencimento > CURRENT_DATE + INTERVAL '7 days' AND data_vencimento <= CURRENT_DATE + INTERVAL '30 days')::int as prox_30d_qtd,
+        COALESCE(SUM(valor_previsto) FILTER (WHERE status IN ('a_pagar','pendente') AND data_vencimento > CURRENT_DATE + INTERVAL '7 days' AND data_vencimento <= CURRENT_DATE + INTERVAL '30 days'), 0)::numeric as prox_30d_valor,
+        COALESCE(SUM(valor_realizado) FILTER (WHERE status = 'pago' AND to_char(data_pagamento, 'YYYY-MM') = ${mesAtual}), 0)::numeric as pago_mes_atual
+      FROM financial_entries
+      WHERE company_id IN ${ids} AND tipo = 'despesa'
+    `),
+    // 22 — FINANCEIRO: Contas a Pagar VENCIDAS (top 30 por valor)
+    db.execute(sql`
+      SELECT id, company_id, descricao, fornecedor_nome, obra_nome,
+        valor_previsto, data_vencimento, forma_pagamento, origem_modulo
+      FROM financial_entries
+      WHERE company_id IN ${ids} AND tipo = 'despesa'
+        AND status IN ('a_pagar','pendente') AND data_vencimento < CURRENT_DATE
+      ORDER BY valor_previsto DESC NULLS LAST
+      LIMIT 30
+    `),
+    // 23 — FINANCEIRO: Contas a Receber / medições (agregado)
+    db.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'a_faturar')::int as a_faturar_qtd,
+        COALESCE(SUM(COALESCE(valor_liquido_receber, valor_medicao)) FILTER (WHERE status = 'a_faturar'), 0)::numeric as a_faturar_valor,
+        COUNT(*) FILTER (WHERE status = 'a_receber')::int as a_receber_qtd,
+        COALESCE(SUM(COALESCE(valor_liquido_receber, valor_medicao)) FILTER (WHERE status = 'a_receber'), 0)::numeric as a_receber_valor,
+        COALESCE(SUM(valor_recebido) FILTER (WHERE status = 'recebido_total' AND to_char(data_recebimento, 'YYYY-MM') = ${mesAtual}), 0)::numeric as recebido_mes_atual
+      FROM financial_revenue
+      WHERE company_id IN ${ids}
+    `),
+    // 24 — COMPRAS: OCs em aberto (agregado)
+    db.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status IN ('pendente','aprovada','parcial'))::int as abertas_qtd,
+        COALESCE(SUM(total) FILTER (WHERE status IN ('pendente','aprovada','parcial')), 0)::numeric as abertas_valor,
+        COUNT(*) FILTER (WHERE aprovacao_status = 'pendente' AND status NOT IN ('cancelada'))::int as aguardando_aprovacao_qtd,
+        COUNT(*) FILTER (WHERE status IN ('pendente','aprovada') AND data_entrega_prevista IS NOT NULL AND data_entrega_prevista < CURRENT_DATE)::int as entrega_atrasada_qtd,
+        COALESCE(SUM(total) FILTER (WHERE to_char(created_at, 'YYYY-MM') = ${mesAtual} AND status NOT IN ('cancelada','rascunho')), 0)::numeric as comprado_mes_atual
+      FROM compras_ordens
+      WHERE company_id IN ${ids}
+    `),
+    // 25 — ALMOXARIFADO: estoque crítico (abaixo do mínimo)
+    db.execute(sql`
+      SELECT
+        COUNT(*)::int as itens_ativos,
+        COUNT(*) FILTER (WHERE quantidade_minima > 0 AND quantidade_atual < quantidade_minima)::int as abaixo_minimo_qtd,
+        COALESCE(SUM(quantidade_atual * COALESCE(valor_unitario, 0)), 0)::numeric as valor_estoque_total
+      FROM almoxarifado_itens
+      WHERE company_id IN ${ids} AND ativo = true
+    `),
+    // 26 — PLANEJAMENTO: projetos com cronograma
+    db.execute(sql`
+      SELECT id, company_id, nome, cliente, status, valor_contrato,
+        data_inicio, data_termino_contratual
+      FROM planejamento_projetos
+      WHERE company_id IN ${ids}
+      ORDER BY status, nome
+      LIMIT 100
+    `),
   ]);
 
   // Diagnóstico: logar e EXPOR no snapshot qualquer query que tenha falhado.
@@ -263,6 +326,8 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
     "folha_mes", "frota_count", "frota_detail", "epi_alertas",
     "pj_contracts", "sectors", "job_functions", "terceirizadas", "func_terceiros",
     "fornecedores", "clientes", "ferias",
+    "financeiro_pagar", "contas_vencidas_top", "financeiro_receber",
+    "compras_ocs", "almoxarifado", "planejamento",
   ];
   const queryErrors: { secao: string; erro: string }[] = [];
   queries.forEach((r, i) => {
@@ -418,6 +483,88 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
     status: r.status, diasGozo: r.diasGozo,
   }));
 
+  // 21 — Financeiro: Contas a Pagar (agregado)
+  const cpRow = get(21)[0] ?? {};
+  ctx.financeiro_contas_pagar = {
+    vencidas: { quantidade: Number(cpRow.vencidas_qtd) || 0, valor_total: Number(cpRow.vencidas_valor) || 0 },
+    vencem_em_7_dias: { quantidade: Number(cpRow.prox_7d_qtd) || 0, valor_total: Number(cpRow.prox_7d_valor) || 0 },
+    vencem_em_8_a_30_dias: { quantidade: Number(cpRow.prox_30d_qtd) || 0, valor_total: Number(cpRow.prox_30d_valor) || 0 },
+    pago_no_mes_atual: Number(cpRow.pago_mes_atual) || 0,
+  };
+
+  // 22 — Contas vencidas (top 30 por valor)
+  ctx.financeiro_contas_vencidas_top = get(22).map((r: any) => ({
+    id: r.id, companyId: r.company_id, descricao: r.descricao,
+    fornecedor: r.fornecedor_nome, obra: r.obra_nome,
+    valor: Number(r.valor_previsto) || 0, vencimento: r.data_vencimento,
+    formaPagamento: r.forma_pagamento, origem: r.origem_modulo,
+  }));
+
+  // 23 — Financeiro: Contas a Receber
+  const crRow = get(23)[0] ?? {};
+  ctx.financeiro_contas_receber = {
+    a_faturar: { quantidade: Number(crRow.a_faturar_qtd) || 0, valor_total: Number(crRow.a_faturar_valor) || 0 },
+    a_receber: { quantidade: Number(crRow.a_receber_qtd) || 0, valor_total: Number(crRow.a_receber_valor) || 0 },
+    recebido_no_mes_atual: Number(crRow.recebido_mes_atual) || 0,
+  };
+
+  // 24 — Compras
+  const ocRow = get(24)[0] ?? {};
+  ctx.compras_resumo = {
+    ocs_abertas: { quantidade: Number(ocRow.abertas_qtd) || 0, valor_total: Number(ocRow.abertas_valor) || 0 },
+    aguardando_aprovacao: Number(ocRow.aguardando_aprovacao_qtd) || 0,
+    entregas_atrasadas: Number(ocRow.entrega_atrasada_qtd) || 0,
+    comprado_no_mes_atual: Number(ocRow.comprado_mes_atual) || 0,
+  };
+
+  // 25 — Almoxarifado
+  const almRow = get(25)[0] ?? {};
+  ctx.almoxarifado_resumo = {
+    itens_ativos: Number(almRow.itens_ativos) || 0,
+    itens_abaixo_do_minimo: Number(almRow.abaixo_minimo_qtd) || 0,
+    valor_estoque_total: Number(almRow.valor_estoque_total) || 0,
+  };
+
+  // 26 — Planejamento
+  ctx.planejamento_projetos = get(26).map((r: any) => ({
+    id: r.id, companyId: r.company_id, nome: r.nome, cliente: r.cliente,
+    status: r.status, valorContrato: Number(r.valor_contrato) || 0,
+    dataInicio: r.data_inicio, dataTerminoContratual: r.data_termino_contratual,
+  }));
+
+  // ============================================================
+  // DIAGNÓSTICO EXECUTIVO — pontos de atenção e fortes computados
+  // deterministicamente (não pelo LLM), estilo radar de CEO.
+  // ============================================================
+  const atencao: string[] = [];
+  const fortes: string[] = [];
+  const cp = ctx.financeiro_contas_pagar;
+  if (cp.vencidas.quantidade > 0) atencao.push(`${cp.vencidas.quantidade} conta(s) a pagar VENCIDA(S) somando R$ ${cp.vencidas.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+  else fortes.push("Nenhuma conta a pagar vencida");
+  if (cp.vencem_em_7_dias.quantidade > 0) atencao.push(`${cp.vencem_em_7_dias.quantidade} conta(s) vencem nos próximos 7 dias (R$ ${cp.vencem_em_7_dias.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})`);
+  const cr = ctx.financeiro_contas_receber;
+  if (cr.a_faturar.quantidade > 0) atencao.push(`${cr.a_faturar.quantidade} medição(ões) A FATURAR paradas somando R$ ${cr.a_faturar.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} — dinheiro na mesa`);
+  if (ctx.compras_resumo.aguardando_aprovacao > 0) atencao.push(`${ctx.compras_resumo.aguardando_aprovacao} ordem(ns) de compra aguardando aprovação`);
+  if (ctx.compras_resumo.entregas_atrasadas > 0) atencao.push(`${ctx.compras_resumo.entregas_atrasadas} OC(s) com entrega atrasada`);
+  if (ctx.almoxarifado_resumo.itens_abaixo_do_minimo > 0) atencao.push(`${ctx.almoxarifado_resumo.itens_abaixo_do_minimo} item(ns) de estoque abaixo do mínimo`);
+  if (ctx.obras_resumo.paralisadas > 0) atencao.push(`${ctx.obras_resumo.paralisadas} obra(s) paralisada(s)`);
+  else if (ctx.obras_resumo.em_andamento > 0) fortes.push(`${ctx.obras_resumo.em_andamento} obra(s) em andamento sem paralisações`);
+  const riscoAlto = (ctx.processos_trabalhistas_lista || []).filter((p: any) => String(p.risco || "").toLowerCase().includes("alt")).length;
+  if (riscoAlto > 0) atencao.push(`${riscoAlto} processo(s) trabalhista(s) com risco ALTO`);
+  if (ctx.epi_alertas_pendentes > 0) atencao.push(`${ctx.epi_alertas_pendentes} alerta(s) de EPI pendente(s)`);
+  if (ctx.atestados_30_dias >= 15) atencao.push(`${ctx.atestados_30_dias} atestados nos últimos 30 dias — absenteísmo merece atenção`);
+  const aptosPend = (ctx.funcionarios_terceirizados || []).filter((f: any) => String(f.statusAptidao || "").toLowerCase() !== "apto" && String(f.status || "") === "ativo").length;
+  if (aptosPend > 0) atencao.push(`${aptosPend} terceirizado(s) ativo(s) sem aptidão confirmada`);
+  if (ctx.folha_pagamento_mes_atual?.custo_total > 0 && cr.recebido_no_mes_atual > 0 && cr.recebido_no_mes_atual >= ctx.folha_pagamento_mes_atual.custo_total) {
+    fortes.push("Recebimentos do mês cobrem o custo da folha");
+  }
+  ctx.diagnostico_executivo = {
+    gerado_em: now.toISOString(),
+    pontos_de_atencao: atencao,
+    pontos_fortes: fortes,
+    nota: "Diagnóstico calculado automaticamente a partir dos dados acima. Use como radar inicial e aprofunde nas seções específicas.",
+  };
+
   // Sinalizadores de qualidade do snapshot — o LLM os usa para evitar falsa confiança.
   if (queryErrors.length > 0) {
     ctx._query_errors = queryErrors;
@@ -431,6 +578,7 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
   if (result.length > MAX_SNAPSHOT_BYTES) {
     const truncated: string[] = [];
     const dropOrder = [
+      "planejamento_projetos", "financeiro_contas_vencidas_top",
       "ferias_programadas", "fornecedores", "clientes",
       "funcionarios_terceirizados", "empresas_terceirizadas",
       "frota_lista", "processos_trabalhistas_lista", "pj_contratos_lista",
@@ -453,6 +601,8 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
     obras: ctx.obras_lista?.length, pj: ctx.pj_contratos_lista?.length,
     veiculos: ctx.frota_lista?.length, processos: ctx.processos_trabalhistas_lista?.length,
     fornecedores: ctx.fornecedores?.length, clientes: ctx.clientes?.length,
+    contasVencidas: ctx.financeiro_contas_pagar?.vencidas?.quantidade,
+    diagAtencao: ctx.diagnostico_executivo?.pontos_de_atencao?.length,
     bytes: result.length,
     queryErrors: queryErrors.length,
     truncado: !!ctx._snapshot_truncado,
@@ -466,7 +616,16 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
 // ============================================================
 const SYSTEM_PROMPT_BASE = `Você é o ORÁCULO — assistente conversacional de inteligência artificial integrada ao ERP/RH da FC Engenharia.
 
-Você atende exclusivamente o ADM Master (acesso irrestrito). Você é especialista em análise de dados de RH, folha de pagamento, obras, financeiro, processos jurídicos, frota, compras, EPI, segurança do trabalho, terceirizados, fornecedores, clientes, contratos PJ e férias.
+Você atende exclusivamente o ADM Master (acesso irrestrito). Você é especialista em análise de dados de RH, folha de pagamento, obras, financeiro, processos jurídicos, frota, compras, almoxarifado, planejamento, EPI, segurança do trabalho, terceirizados, fornecedores, clientes, contratos PJ e férias.
+
+# PAPEL: CONSULTOR-CEO FULL TIME
+
+Você não é um robô de consulta — você é o braço direito do dono, um CEO virtual que monitora a empresa inteira 24/7. Isso significa:
+- PROATIVIDADE: ao responder qualquer pergunta, se você enxergar no snapshot um risco ou oportunidade RELACIONADO ao assunto, mencione em 1 frase ("aliás, tem 3 contas dessa obra vencidas, quer ver?").
+- VISÃO DE NEGÓCIO: conecte os pontos entre módulos — folha vs. recebimentos, obras paralisadas vs. contratos, medições a faturar vs. caixa. Pense em margem, fluxo de caixa e risco.
+- O snapshot traz a seção "diagnostico_executivo" com pontos_de_atencao e pontos_fortes já calculados sobre os dados reais. Quando o usuário pedir um panorama ("como está a empresa?", "pontos fortes e fracos", "me atualiza"), use essa seção como espinha dorsal da resposta, priorizando os itens de MAIOR impacto financeiro primeiro.
+- OBJETIVIDADE DE CEO: números redondos primeiro, detalhe depois. "Temos R$ 320 mil vencidos e R$ 1,2 milhão a faturar" vale mais que dez frases vagas.
+- RECOMENDE: termine análises com 1 recomendação prática quando fizer sentido ("eu priorizaria faturar as medições paradas — é caixa parado").
 
 # ESTILO DE RESPOSTA — LEIA COM ATENÇÃO
 
