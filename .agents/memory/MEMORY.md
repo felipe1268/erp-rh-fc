@@ -149,3 +149,4 @@
 - [Almox leitura global, escrita por obra](almox-global-read-obra-write.md) — reads globais por empresa exigem guard de empresa explícito; writes validam obra do RECURSO via getAlmoxAllowedObraIdSet.
 - [Renovação de locação — vencimento da parcela](locacao-renovacao-parcela-vencimento.md) — parcela vence no FIM do novo ciclo; usar o início gera entry vencida no passado que "some" do Contas a Pagar.
 - [Fluxo público identify anti-enum + Puppeteer sanitize](public-token-identify-antienum.md) — falha genérica + rate-limit token+IP em identify público; HTML de usuário no Puppeteer exige DOMPurify server-side + JS off + requests bloqueados.
+- [Fluxo de Caixa cheque float](fluxo-caixa-cheque-float.md) — cheques pendentes são linha INFORMATIVA (pago ≠ liquidado); nunca somar nas Saídas (dupla contagem); falha não derruba a tela.

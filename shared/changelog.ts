@@ -1,4 +1,35 @@
 /**
+ * Rev. 4577 - FEAT: FLUXO DE CAIXA — LINHA "CHEQUES A COMPENSAR" (FLOAT)
+ *
+ * PEDIDO DO USUÁRIO: dúvida conceitual — conta paga em cheque é baixada
+ * como paga no Contas a Pagar, mas o dinheiro só sai do banco quando o
+ * cheque compensa. "Onde eu enxergo que esse valor está comprometido?"
+ *
+ * RESPOSTA DA LITERATURA (aplicada): pago ≠ liquidado. A baixa no Contas
+ * a Pagar está correta (obrigação com o fornecedor quitada na entrega do
+ * cheque). O comprometimento de caixa pertence ao FLUXO DE CAIXA — é o
+ * "float" (cheques emitidos e não compensados), contabilmente a conta
+ * "Cheques a Compensar" que reduz o saldo bancário disponível.
+ *
+ * O QUE MUDOU:
+ * - server/routers/cheques.ts: nova query `pendentesPorVencimento`
+ *   (companyId, ano) — cheques status='pendente' agrupados pelo mês do
+ *   VENCIMENTO ("bom para"); devolve porMes[12], qtdPorMes[12] e
+ *   foraDoAno (vencimento em outro ano ou sem data). valor via
+ *   REPLACE(valor::text,',','.')::numeric (padrão VARCHAR BR). Params
+ *   na ordem de aparição ($1=ano no CASE, $2=company) — regra dbExecute.
+ * - client FinanceiroFluxoCaixa.tsx: linha âmbar "⚠ Cheques a compensar
+ *   (já contado · informativo)" após as Saídas — NÃO soma nas despesas
+ *   (a conta já está contada como paga; somar seria dupla contagem),
+ *   apenas mostra QUANDO o dinheiro sai de fato do extrato. Tooltip com
+ *   qtd de cheques por mês; legenda + card explicativo com total do ano
+ *   + fora do ano. Validado no Neon (60002): ~R$ 1,55 mi em 2026 +
+ *   R$ 2,76 mi de anos anteriores/sem data.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4576 - UX: CONTAS A PAGAR — CARDS DE KPI VIRAM FILTROS CLICÁVEIS
  *
  * PEDIDO DO USUÁRIO: print dos 5 cards (Total/Em Aberto Acum./A Pagar/

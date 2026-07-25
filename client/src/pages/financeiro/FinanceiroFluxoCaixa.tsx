@@ -114,18 +114,43 @@ export default function FinanceiroFluxoCaixa() {
   const contasQ = (trpc as any).folha.listarContasBancarias.useQuery(
     { companyId }, { enabled: !!companyId }
   );
+  // Rev. 4577 — "Cheques a compensar" (float): cheques EMITIDOS e ainda pendentes.
+  // A despesa JÁ está contada como paga no Contas a Pagar (a obrigação com o
+  // fornecedor foi quitada na entrega do cheque); esta linha é INFORMATIVA e
+  // mostra QUANDO o dinheiro sai de fato do banco — não soma nas Saídas (senão
+  // contaria 2x). Agrupado pelo vencimento ("bom para") de cada cheque.
+  const chequesQ = (trpc as any).cheques.pendentesPorVencimento.useQuery(
+    { companyId, ano }, { enabled: !!companyId }
+  );
+  const chequesFloat = useMemo(() => {
+    const d = chequesQ.data;
+    return {
+      porMes: (d?.porMes as number[]) ?? Array(12).fill(0),
+      qtdPorMes: (d?.qtdPorMes as number[]) ?? Array(12).fill(0),
+      foraDoAno: Number(d?.foraDoAno ?? 0),
+      qtdForaDoAno: Number(d?.qtdForaDoAno ?? 0),
+    };
+  }, [chequesQ.data]);
+  const chequesTotalAno = useMemo(
+    () => chequesFloat.porMes.reduce((s, v) => s + v, 0),
+    [chequesFloat]
+  );
+  const temCheques = chequesTotalAno > 0 || chequesFloat.foraDoAno > 0;
   const saldoInicialTotal = useMemo(() => {
     const contas: any[] = contasQ.data ?? [];
     return contas.reduce((s, c) => s + (Number(c.saldoInicial) || 0), 0);
   }, [contasQ.data]);
 
   const isLoading  = receberQ.isLoading || pagarQ.isLoading;
-  const isFetching = receberQ.isFetching || pagarQ.isFetching;
+  // Rev. 4577 — cheques entram no isFetching/refetch mas NÃO no isError/isLoading:
+  // falha na linha informativa não pode derrubar o Fluxo de Caixa inteiro
+  // (aviso inline próprio abaixo da legenda).
+  const isFetching = receberQ.isFetching || pagarQ.isFetching || chequesQ.isFetching;
   // Rev. 2944 — basta UM lado falhar p/ entrar em erro: renderizar só metade dos
   // dados (o outro lado zerado) quebraria a promessa de paridade 1:1 e induziria
   // a leitura financeira errada.
   const isError    = receberQ.isError || pagarQ.isError;
-  const refetch = () => { receberQ.refetch(); pagarQ.refetch(); };
+  const refetch = () => { receberQ.refetch(); pagarQ.refetch(); chequesQ.refetch(); };
 
   const meses12 = useMemo(
     () => Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, "0")}`),
@@ -568,7 +593,23 @@ export default function FinanceiroFluxoCaixa() {
           <span>Receitas = lançamentos de Contas a Receber</span>
           <span>Despesas = lançamentos de Contas a Pagar</span>
           <span><strong>Efetivo</strong> = real · <strong>Projeção</strong> = forecast (cronograma/folha)</span>
+          {temCheques && (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300" />
+              <strong>Cheques a compensar</strong> = caixa comprometido (informativo, já contado nas Saídas)
+            </span>
+          )}
         </div>
+
+        {/* Rev. 4577 — falha na consulta de cheques NÃO derruba a tela; avisa inline. */}
+        {chequesQ.isError && (
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+            <span>Não foi possível carregar os cheques a compensar — a linha informativa está oculta.
+              <button onClick={() => chequesQ.refetch()} className="underline font-medium ml-1">Tentar novamente</button>
+            </span>
+          </div>
+        )}
 
         {/* ── Matriz ── */}
         <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
@@ -637,6 +678,32 @@ export default function FinanceiroFluxoCaixa() {
                 </>
               )}
 
+              {/* ══ Rev. 4577 — CHEQUES A COMPENSAR (float, informativo) ══
+                  Caixa já COMPROMETIDO: a conta foi baixada como paga (obrigação
+                  quitada), mas o débito só bate no extrato quando o cheque compensa.
+                  NÃO soma nas Saídas (a despesa já está contada lá). */}
+              {temCheques && (
+                <tr className="h-9 bg-amber-50/70 border-b border-amber-200">
+                  <td style={{ width: LABEL_W, minWidth: LABEL_W }}
+                    className="sticky left-0 z-10 px-4 text-xs font-semibold text-amber-800 border-r border-amber-200 whitespace-nowrap bg-amber-50"
+                    title="Cheques emitidos ainda não compensados (float). A despesa já está contada nas Saídas — esta linha mostra quando o dinheiro sai de fato do banco.">
+                    ⚠ Cheques a compensar <span className="font-normal text-amber-600">(já contado · informativo)</span>
+                  </td>
+                  {chequesFloat.porMes.map((v, i) => (
+                    <td key={i} style={{ width: COL_W, minWidth: COL_W }}
+                      className={`text-right tabular-nums text-xs px-3 border-l border-amber-100 whitespace-nowrap
+                        ${v ? "text-amber-800 font-semibold" : "text-amber-300"} ${isAtual(i) ? "ring-1 ring-inset ring-blue-400" : ""}`}
+                      title={v ? `${chequesFloat.qtdPorMes[i]} cheque(s) pendente(s)` : undefined}>
+                      {BRL(v)}
+                    </td>
+                  ))}
+                  <td style={{ width: TOT_W, minWidth: TOT_W }}
+                    className="text-right tabular-nums text-xs px-3 font-bold text-amber-900 border-l-2 border-amber-300 whitespace-nowrap bg-amber-100">
+                    {BRL(chequesTotalAno)}
+                  </td>
+                </tr>
+              )}
+
               <Separator />
 
               {/* ══ RESULTADO / SALDO / MARGEM ══ */}
@@ -650,6 +717,21 @@ export default function FinanceiroFluxoCaixa() {
             </tbody>
           </table>
         </div>
+
+        {temCheques && (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
+            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <span>
+              <strong>Cheques a compensar (float):</strong> {BRL(chequesTotalAno + chequesFloat.foraDoAno)} em cheques emitidos ainda
+              pendentes de compensação. As contas correspondentes já foram baixadas como pagas (a obrigação com o fornecedor foi
+              quitada na entrega do cheque) e já estão contadas nas Saídas — a linha em âmbar mostra apenas <em>quando</em> o
+              dinheiro sai de fato do extrato bancário. Até lá, o saldo do banco está "inflado" por esse valor.
+              {chequesFloat.foraDoAno > 0 && (
+                <> Além disso, {BRL(chequesFloat.foraDoAno)} ({chequesFloat.qtdForaDoAno} cheque(s)) têm vencimento fora de {ano} ou sem data.</>
+              )}
+            </span>
+          </div>
+        )}
 
         {saldoInicialTotal !== 0 && (
           <p className="text-xs text-muted-foreground mt-2">

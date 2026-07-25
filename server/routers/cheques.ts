@@ -1123,6 +1123,42 @@ export const chequesRouter = router({
     return res.rows.map((r: any) => ({ mes: r.mes, qtd: r.qtd, compensados: r.compensados }));
   }),
 
+  // ───────────── Rev. 4577 — Cheques a compensar p/ o Fluxo de Caixa ─────────────
+  // "Float" da literatura: cheques EMITIDOS e ainda não compensados = caixa já
+  // comprometido que ainda vai sair do extrato. Agrupa por mês do VENCIMENTO
+  // (bom para) no ano pedido; devolve também o que está fora do ano (vencimento
+  // em outro ano ou sem data) p/ o total fechar com o Controle de Cheques.
+  pendentesPorVencimento: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int(),
+  })).query(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // dbExecute liga params por ORDEM DE APARIÇÃO no texto — $1 (ano) aparece
+    // primeiro no CASE, $2 (company) depois no WHERE; array segue essa ordem.
+    const res = await dbExecute(db,
+      `SELECT CASE WHEN data_vencimento IS NOT NULL AND EXTRACT(YEAR FROM data_vencimento)::int = $1
+                   THEN EXTRACT(MONTH FROM data_vencimento)::int ELSE 0 END AS mes,
+              COUNT(*)::int AS qtd,
+              COALESCE(SUM(valor), 0)::float8 AS total
+         FROM financial_cheques
+        WHERE company_id = $2 AND excluido_em IS NULL AND status = 'pendente'
+        GROUP BY 1`,
+      [input.ano, input.companyId]);
+    const porMes = Array(12).fill(0) as number[];
+    const qtdPorMes = Array(12).fill(0) as number[];
+    let foraDoAno = 0, qtdForaDoAno = 0;
+    for (const r of res.rows as any[]) {
+      const m = Number(r.mes) || 0;
+      const v = Number(r.total) || 0;
+      const q = Number(r.qtd) || 0;
+      if (m >= 1 && m <= 12) { porMes[m - 1] += v; qtdPorMes[m - 1] += q; }
+      else { foraDoAno += v; qtdForaDoAno += q; }
+    }
+    return { porMes, qtdPorMes, foraDoAno, qtdForaDoAno };
+  }),
+
   // ───────────── Dupla checagem extrato ↔ cheque (Rev. 3234) ─────────────
   // RESUMO da conferência do controle contra o EXTRATO BANCÁRIO importado. READ-ONLY:
   // conta confirmados (banco compensou + controle já "compensado"), divergências (banco

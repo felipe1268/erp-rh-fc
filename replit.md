@@ -50,19 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4577** — **FEAT: FLUXO DE CAIXA — LINHA "CHEQUES A COMPENSAR" (FLOAT).** Resposta à dúvida do usuário (pago ≠ liquidado): a baixa no Contas a Pagar quita a obrigação com o fornecedor, mas o caixa comprometido por cheques emitidos e não compensados pertence ao Fluxo de Caixa. Nova query `cheques.pendentesPorVencimento` (pendentes agrupados pelo mês do "bom para", + `foraDoAno` p/ outros anos/sem data; valor via REPLACE BR + params na ordem de aparição do dbExecute) + linha âmbar INFORMATIVA "⚠ Cheques a compensar (já contado · informativo)" na matriz — NÃO soma nas Saídas (evita dupla contagem), só mostra quando o dinheiro sai do extrato; legenda + card explicativo. Arquivos: `server/routers/cheques.ts`, `FinanceiroFluxoCaixa.tsx`. Validado no Neon. ZERO schema change.
 - **Rev. 4576** — **UX: CONTAS A PAGAR — CARDS DE KPI VIRAM FILTROS CLICÁVEIS.** Os 5 cards (Total/Em Aberto Acum./A Pagar/Vencidas/Pago) viram botões-toggle (padrão Rev. 4565 do Almoxarifado): novo estado `filtroKpi` com precedência sobre as pills de status no `filtered`; "Em Aberto (Acum.)" troca a base pro ano inteiro (`allContas` não-pagos), "Vencidas" = pendente com vencimento < hoje. Ativo ganha ring na cor do card + "Filtrando · toque p/ limpar"; demais ficam opacity-70; card "Total" limpa o filtro. Busca/origem/FD/Efetivo-Projeção seguem compondo por cima. Arquivo: `FinanceiroContasAPagar.tsx`. ZERO schema/server change.
-- **Rev. 4575** — **FIX: CONTAS A PAGAR — PAGAMENTO/CANCELAMENTO EM LOTE QUEBRAVA COM LINHAS CONSOLIDADAS.** Com "Consolidado: ON", as linhas agrupadas por ciclo de fechamento do fornecedor têm id STRING (`grp:fech|forn|janela`) e os títulos reais em `itensIds`; a seleção em lote mandava esse id de grupo pro servidor (`z.array(z.number())`) → zod rejeitava o LOTE INTEIRO ("expected number, received string"). Fix (`client/src/pages/financeiro/FinanceiroContasAPagar.tsx`): helper `expandToNumericIds` expande grupos nos ids numéricos reais (dedup + descarta não-numéricos), aplicado no "Pagar selecionados" e no "Apagar selecionados" (que também ganhou guard de seleção vazia). Poka-Yoke nível 2: payload sempre numérico por construção. ZERO schema/server change.
 ### 5 one-liners
 
+- **Rev. 4575** — **FIX: CONTAS A PAGAR — LOTE × LINHAS CONSOLIDADAS.** Ids de grupo (string `grp:…`) quebravam pagamento/cancelamento em lote (zod esperava number); helper `expandToNumericIds` expande grupos nos títulos reais nos 2 fluxos. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4574** — **FEAT: ORÁCULO CONSULTOR-CEO.** 6 novas queries no `buildContext` (financeiro/compras/almox/planejamento) + `diagnostico_executivo` determinístico em JS + seção "CONSULTOR-CEO" no prompt; validado no Neon (0 query_errors, ~418 KB). Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4573** — **FIX: ORÁCULO — SNAPSHOT DE DADOS 100% QUEBRADO (21 QUERIES FALHANDO).** `= ANY(${ids}::int[])` → `IN ${ids}` nas 21 queries do `buildContext` + 6 fixes de coluna; validado no Neon (0 query_errors, ~405 KB). Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4572** — **UX: ORÁCULO — BARRA LATERAL DO SISTEMA + BOTÃO "VOLTAR".** Tela renderiza dentro do `<DashboardLayout noPadding>`; altura `h-[calc(100svh-3.5rem)]`; pill "← Voltar". Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4571** — **FEAT: ORÁCULO — VOZ HUMANIZADA VIA OPENAI (REPLIT AI INTEGRATIONS).** gpt-audio (voz "Nova", MP3) via blueprint `javascript_openai_ai_integrations` (cobrança via créditos); fallback Google Chirp3-HD → Neural2 → navegador. Detalhe em `shared/changelog.ts`. ZERO schema change.
-- **Rev. 4570** — **UX: DASHBOARD PARCEIROS — FOTO DOS COLABORADORES NAS LISTAS.** `employees.fotoUrl` no ranking e nos lançamentos recentes via `empFotoMap` tenant-scoped + `<ColabAvatar>` (iniciais como fallback). Detalhe em `shared/changelog.ts`. ZERO schema change.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4569 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4570 e anteriores.
 
 ## User preferences
 
