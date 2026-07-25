@@ -2949,13 +2949,56 @@ export const comprasRouter = router({
         const obrasRows = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIds));
         for (const o of obrasRows) obraNomeMap.set(o.id, o.nome);
       }
+      // Rev. 4558 — enriquece com o registro de locação vinculado
+      // (equipamento_vinculado_id → equipamentos_locados): foto real do
+      // recebimento (fallback foto ilustrativa), contagem de renovações
+      // (badge "Nª renovação") e o id do locado pro botão "Renovar" do alerta.
+      const locadoIds = Array.from(new Set(rows
+        .filter(r => (r as any).equipamentoVinculadoTipo === "locado" && (r as any).equipamentoVinculadoId != null)
+        .map(r => (r as any).equipamentoVinculadoId as number)));
+      const locadoInfoMap = new Map<number, { foto: string | null; renovacoes: number; valorMensal: string | null; dataFimPrevista: string | null }>();
+      if (locadoIds.length > 0) {
+        const locRows: any = await db.execute(sql`
+          SELECT el.id,
+                 COALESCE(
+                   (SELECT f->>'url' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(el.fotos_recebimento_json) = 'array' THEN el.fotos_recebimento_json ELSE '[]'::jsonb END) AS f LIMIT 1),
+                   el.foto_url
+                 ) AS foto,
+                 el.valor_mensal AS "valorMensal",
+                 el.data_fim_prevista AS "dataFimPrevista",
+                 (SELECT COUNT(*)::int FROM equipamento_locado_eventos ev
+                   WHERE ev.equipamento_locado_id = el.id AND ev.tipo = 'RENOVACAO') AS renovacoes
+            FROM equipamentos_locados el
+           WHERE el.id IN (${sql.join(locadoIds.map(id => sql`${id}`), sql`, `)})
+             AND el.company_id = ${input.companyId}
+        `);
+        for (const r of ((locRows as any).rows ?? locRows)) {
+          locadoInfoMap.set(Number(r.id), {
+            foto: r.foto ?? null,
+            renovacoes: Number(r.renovacoes ?? 0) || 0,
+            valorMensal: r.valorMensal ?? null,
+            dataFimPrevista: r.dataFimPrevista ?? null,
+          });
+        }
+      }
       return rows
         .filter(i => i.dataVencimentoLocacao)
         .map(i => {
           const venc = new Date(i.dataVencimentoLocacao!);
           const diffDias = Math.ceil((venc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
           const alertaDias = (i as any).diasAlertaLocacao ?? 7;
-          return { ...i, diasParaVencimento: diffDias, alertaDias, obraNome: i.obraId != null ? (obraNomeMap.get(i.obraId) ?? null) : null };
+          const locadoId = (i as any).equipamentoVinculadoTipo === "locado" ? ((i as any).equipamentoVinculadoId ?? null) : null;
+          const info = locadoId != null ? locadoInfoMap.get(locadoId) : undefined;
+          return {
+            ...i,
+            diasParaVencimento: diffDias,
+            alertaDias,
+            obraNome: i.obraId != null ? (obraNomeMap.get(i.obraId) ?? null) : null,
+            equipamentoLocadoId: locadoId,
+            fotoLocado: info?.foto ?? (i as any).fotoUrl ?? null,
+            renovacoesCount: info?.renovacoes ?? 0,
+            valorLocacaoMensal: (i as any).valorLocacaoMensal ?? info?.valorMensal ?? null,
+          };
         })
         .filter(i => i.diasParaVencimento <= i.alertaDias)
         .sort((a, b) => a.diasParaVencimento - b.diasParaVencimento);

@@ -1,4 +1,53 @@
 /**
+ * Rev. 4558 - FEAT: EQUIPAMENTOS LOCADOS — RENOVAÇÃO REAL DE LOCAÇÃO (NOVA OC NO COMPRAS) + BADGE DE CICLO + REDESIGN DO ALERTA
+ *
+ * PEDIDO DO USUÁRIO: "Renovar" uma locação precisa ser um fluxo REAL — gerar a
+ * nova Ordem de Compra de locação no Compras (que segue até o Contas a Pagar),
+ * registrar a renovação na linha do tempo do equipamento e indicar o ciclo em
+ * que a locação está ("1ª Locação" / "Nª Renovação") nos cards, no alerta de
+ * vencimento e na timeline.
+ *
+ * MUDANÇAS:
+ *   1. NOVA MUTATION `equipamentos.locadoRenovar` (equipamentos.ts): tenant
+ *      guard (getCompaniesForUser); numeroOc via gerarProximoNumeroOC (import
+ *      dinâmico de ./compras, sem ciclo); db.transaction com
+ *      pg_advisory_xact_lock(478001, id) contra duplo clique; valida locado
+ *      não-devolvido e novaDataFim > dataFimPrevista atual; INSERT em
+ *      compras_ordens (tipo 'locacao', is_locacao=1, status aprovada/aprovado —
+ *      mesmo padrão de auto-aprovação da locação original, locacao_data_inicio =
+ *      dia seguinte ao fim antigo, locacao_oc_anterior_id = OC anterior) + 1
+ *      linha em compras_ordens_itens; UPDATE do locado (data_fim_prevista,
+ *      valor_mensal opcional, status volta a em_uso se atrasado/em_renovacao,
+ *      ordem_compra_id = nova OC, oc_anterior_id = antiga); INSERT de evento
+ *      RENOVACAO (payload com numeroCiclo, OC nova/antiga, datas e valores).
+ *      Pós-transação não-bloqueante: sync do almoxarifado_itens vinculado
+ *      (data_vencimento_locacao) + triggerFinancialSync (a OC segue o fluxo
+ *      normal do Compras → Financeiro).
+ *   2. CONTAGEM DE CICLO: `locadosListar` agora agrega renovacoesCount (1 query
+ *      GROUP BY em equipamento_locado_eventos tipo='RENOVACAO', merge em
+ *      memória, try/catch com fallback 0); `getItensLocadosVencendo`
+ *      (compras.ts) enriquecido com equipamentoLocadoId, fotoLocado (1ª foto do
+ *      recebimento → foto IA → foto do almox), renovacoesCount e
+ *      valorLocacaoMensal (fallback ao valor_mensal do locado).
+ *   3. UI Locados.tsx: badge de ciclo ("1ª Locação" cinza / "Nª Renovação"
+ *      indigo) + badge de urgência de vencimento (Vencido há Xd / Vence hoje /
+ *      Vence em Xd ≤7d) nos cards; botão indigo "Renovar" no card e na tabela
+ *      de unidades do modal de grupo (qualquer status ≠ devolvido); dialog de
+ *      renovação (header gradiente indigo com foto, novo vencimento sugerido
+ *      +30d, valor mensal, valor total da OC, observação, aviso explícito de
+ *      que gera OC no Compras). Timeline já tinha o tipo RENOVACAO mapeado.
+ *   4. REDESIGN `AlertaLocacoesVencendo.tsx`: foto do equipamento, badge de
+ *      ciclo, badge de urgência e botão "Renovar (Nª renovação)" com
+ *      mini-formulário INLINE (novo vencimento + valor da OC) — dá pra renovar
+ *      direto do alerta de login sem navegar; invalida locadosListar +
+ *      getItensLocadosVencendo.
+ *
+ * ZERO SCHEMA CHANGE: as colunas de encadeamento (oc_anterior_id em
+ * equipamentos_locados; locacao_oc_anterior_id/locacao_data_inicio em
+ * compras_ordens) já existiam desde o rastreio de equipamentos — esta Rev.
+ * apenas passa a USÁ-LAS no fluxo de renovação.
+ */
+/**
  * Rev. 4557 - FEAT: FLUXO RH → FINANCEIRO NO AVISO PRÉVIO (ENVIAR AO CONTAS A PAGAR + BAIXA AUTOMÁTICA)
  *
  * PEDIDO DO USUÁRIO: rescisões validadas pelo RH devem ir para o Contas a Pagar;

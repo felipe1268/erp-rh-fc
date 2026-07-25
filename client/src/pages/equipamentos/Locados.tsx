@@ -272,6 +272,34 @@ export default function EquipamentosLocados() {
       toast.error(formatTrpcError(e));
     },
   });
+  // Rev. 4558 — RENOVAÇÃO REAL: gera nova OC de locação no Compras + evento
+  // RENOVACAO na timeline + atualiza vencimento/valor. Dialog próprio.
+  const [modalRenovar, setModalRenovar] = useState<any | null>(null);
+  const [renNovaDataFim, setRenNovaDataFim] = useState("");
+  const [renNovoValorMensal, setRenNovoValorMensal] = useState("");
+  const [renValorOc, setRenValorOc] = useState("");
+  const [renObs, setRenObs] = useState("");
+  const renovarMut = trpc.equipamentos.locadoRenovar.useMutation({
+    onSuccess: (data) => {
+      utils.equipamentos.locadosListar.invalidate();
+      utils.compras.getItensLocadosVencendo.invalidate();
+      setModalRenovar(null);
+      toast.success(`${data.numeroCiclo}ª renovação registrada — OC ${data.numeroOc} gerada no Compras e enviada ao fluxo do Financeiro.`);
+    },
+    onError: (e) => toast.error(formatTrpcError(e)),
+  });
+  function abrirRenovar(l: any) {
+    setModalRenovar(l);
+    // Sugestão: +30 dias a partir do vencimento atual.
+    try {
+      const d = new Date((l.dataFimPrevista || new Date().toISOString().slice(0, 10)) + "T00:00:00");
+      d.setDate(d.getDate() + 30);
+      setRenNovaDataFim(d.toISOString().slice(0, 10));
+    } catch { setRenNovaDataFim(""); }
+    setRenNovoValorMensal(l.valorMensal ? String(l.valorMensal) : "");
+    setRenValorOc(l.valorMensal ? String(l.valorMensal) : "");
+    setRenObs("");
+  }
   const atualizarLocadoMut = trpc.equipamentos.locadoAtualizar.useMutation({
     onSuccess: (_data, variables: any) => {
       utils.equipamentos.locadosListar.invalidate();
@@ -2322,6 +2350,22 @@ export default function EquipamentosLocados() {
                           {STATUS_LABELS[l.status] || l.status}
                         </span>
                       </div>
+                      {/* Rev. 4558 — badges de CICLO (1ª Locação / Nª Renovação) e URGÊNCIA de vencimento */}
+                      <div className="mt-1 flex items-center gap-1 flex-wrap">
+                        <span
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${Number(l.renovacoesCount) > 0 ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-600 border-slate-200"}`}
+                          title={Number(l.renovacoesCount) > 0 ? `Este contrato já foi renovado ${l.renovacoesCount}x` : "Período original da locação (nunca renovado)"}>
+                          <RefreshCw className="h-2.5 w-2.5" />
+                          {Number(l.renovacoesCount) > 0 ? `${l.renovacoesCount}ª Renovação` : "1ª Locação"}
+                        </span>
+                        {l.status !== "devolvido" && l.dataFimPrevista && (() => {
+                          const dias = Math.ceil((new Date(l.dataFimPrevista + "T00:00:00").getTime() - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00").getTime()) / 86400000);
+                          if (dias < 0) return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white">Vencido há {Math.abs(dias)}d</span>;
+                          if (dias === 0) return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white">Vence hoje</span>;
+                          if (dias <= 7) return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white">Vence em {dias}d</span>;
+                          return null;
+                        })()}
+                      </div>
                       <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
                         <Hash className="h-3 w-3" /> {l.codigoPatrimonioFornecedor || "s/ patr."}
                         {l.categoria ? (
@@ -2402,6 +2446,12 @@ export default function EquipamentosLocados() {
                     <button onClick={(e) => { e.stopPropagation(); setModalEventos(l); }} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title="Detalhes completos">
                       <Eye className="h-3.5 w-3.5" /> Detalhes
                     </button>
+                    {l.status !== "devolvido" && (
+                      <button onClick={(e) => { e.stopPropagation(); abrirRenovar(l); }}
+                        className="text-white bg-indigo-600 hover:bg-indigo-700 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-semibold transition shadow-sm" title="Renovar a locação — gera nova OC no Compras">
+                        <RefreshCw className="h-3.5 w-3.5" /> Renovar
+                      </button>
+                    )}
                     {l.status === "em_uso" && (
                       <>
                         <button onClick={(e) => { e.stopPropagation(); setModalCheckin(l); setCheckinObs(""); }} className="text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title="Check-in semanal">
@@ -2421,6 +2471,96 @@ export default function EquipamentosLocados() {
           </div>
         )}
       </div>
+
+      {/* Rev. 4558 — Modal de RENOVAÇÃO: gera nova OC de locação no Compras. */}
+      {modalRenovar && (() => {
+        const l = modalRenovar;
+        const fotos = (l.fotosRecebimentoJson as FotoItem[]) || [];
+        const foto = fotos[0]?.url || (l.fotoUrl as string | null) || null;
+        const proxCiclo = (Number(l.renovacoesCount) || 0) + 1;
+        return (
+          <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !renovarMut.isPending && setModalRenovar(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-5 py-4 flex items-start gap-3 flex-shrink-0">
+                {foto ? (
+                  <img src={foto} className="w-14 h-14 rounded-lg object-cover ring-2 ring-white/40 flex-shrink-0" alt="" />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg bg-white/15 ring-2 ring-white/40 flex items-center justify-center flex-shrink-0">
+                    <Truck className="h-6 w-6" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] uppercase tracking-wider opacity-80 font-bold flex items-center gap-1">
+                    <RefreshCw className="h-3 w-3" /> {proxCiclo}ª Renovação
+                  </div>
+                  <h2 className="text-lg font-bold break-words leading-snug">{l.descricao}</h2>
+                  <div className="text-xs opacity-90 mt-0.5 break-words">
+                    {l.fornecedorNome || "Sem fornecedor"} · vence em {fmtDate(l.dataFimPrevista)}
+                  </div>
+                </div>
+                <button onClick={() => !renovarMut.isPending && setModalRenovar(null)} className="text-white/70 hover:text-white flex-shrink-0"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="p-5 space-y-4 overflow-y-auto">
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-xs text-indigo-900 break-words">
+                  Ao confirmar, será gerada <b>automaticamente uma nova Ordem de Compra de locação no Compras</b> (com o valor do novo ciclo), que segue o fluxo normal até o Contas a Pagar. O vencimento da locação é atualizado e a renovação fica registrada na linha do tempo.
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Novo vencimento *</label>
+                    <input type="date" value={renNovaDataFim} min={l.dataFimPrevista} onChange={e => setRenNovaDataFim(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <p className="text-[10px] text-slate-500 mt-1">Atual: {fmtDate(l.dataFimPrevista)}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Valor mensal (R$)</label>
+                    <input type="number" min="0" step="0.01" value={renNovoValorMensal}
+                      onChange={e => { setRenNovoValorMensal(e.target.value); setRenValorOc(e.target.value); }}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="0,00" />
+                    <p className="text-[10px] text-slate-500 mt-1">Se houve reajuste, informe o novo valor.</p>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Valor total da nova OC (R$) *</label>
+                  <input type="number" min="0.01" step="0.01" value={renValorOc} onChange={e => setRenValorOc(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="0,00" />
+                  <p className="text-[10px] text-slate-500 mt-1">Valor que será lançado no Compras para o novo período (ex.: valor mensal × meses renovados).</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Observação</label>
+                  <textarea value={renObs} onChange={e => setRenObs(e.target.value)} rows={2}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                    placeholder="Ex.: renovado por mais 30 dias conforme negociação com a locadora…" />
+                </div>
+              </div>
+              <div className="flex gap-3 px-5 py-4 border-t border-slate-100 flex-shrink-0">
+                <button onClick={() => setModalRenovar(null)} disabled={renovarMut.isPending}
+                  className="flex-1 h-10 text-sm border border-slate-200 rounded-lg bg-white text-slate-600 hover:bg-slate-50 font-medium transition disabled:opacity-50">Cancelar</button>
+                <button
+                  onClick={() => {
+                    const valorOc = parseFloat(renValorOc);
+                    if (!renNovaDataFim) { toast.error("Informe o novo vencimento."); return; }
+                    if (!valorOc || valorOc <= 0) { toast.error("Informe o valor total da nova OC."); return; }
+                    const novoValor = parseFloat(renNovoValorMensal);
+                    renovarMut.mutate({
+                      companyId,
+                      id: l.id,
+                      novaDataFim: renNovaDataFim,
+                      valorOc,
+                      ...(novoValor > 0 ? { novoValorMensal: novoValor } : {}),
+                      ...(renObs.trim() ? { observacao: renObs.trim() } : {}),
+                    });
+                  }}
+                  disabled={renovarMut.isPending}
+                  className="flex-1 h-10 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition disabled:opacity-60 inline-flex items-center justify-center gap-2">
+                  {renovarMut.isPending ? (<><Loader2 className="h-4 w-4 animate-spin" /> Renovando…</>) : (<><RefreshCw className="h-4 w-4" /> Confirmar Renovação</>)}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Rev. 2344 — Modal drill-down do GRUPO (descrição+obra). Lista as
           unidades individuais com ações idênticas ao card individual. */}
@@ -2566,6 +2706,11 @@ export default function EquipamentosLocados() {
                           <button onClick={() => { setModalGrupo(null); setModalEventos(u); }} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-[11px] inline-flex items-center gap-1 font-medium transition" title="Detalhes completos">
                             <Eye className="h-3 w-3" /> Detalhes
                           </button>
+                          {u.status !== "devolvido" && (
+                            <button onClick={() => { setModalGrupo(null); abrirRenovar(u); }} className="text-white bg-indigo-600 hover:bg-indigo-700 px-2 py-1 rounded-md text-[11px] inline-flex items-center gap-1 font-semibold transition" title="Renovar a locação — gera nova OC no Compras">
+                              <RefreshCw className="h-3 w-3" />
+                            </button>
+                          )}
                           {u.status === "em_uso" && (
                             <>
                               <button onClick={() => { setModalGrupo(null); setModalCheckin(u); setCheckinObs(""); }} className="text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md text-[11px] inline-flex items-center gap-1 font-medium transition" title="Check-in semanal">

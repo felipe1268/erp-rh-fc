@@ -857,7 +857,27 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       if (input.obraId != null) {
         conds.push(eq(equipamentosLocados.obraId, input.obraId));
       }
-      return await db.select().from(equipamentosLocados).where(and(...conds)).orderBy(desc(equipamentosLocados.id));
+      const rows = await db.select().from(equipamentosLocados).where(and(...conds)).orderBy(desc(equipamentosLocados.id));
+      // Rev. 4558 — contagem de renovações por locado (badge "1ª Locação /
+      // Nª Renovação" nos cards). Uma query agregada só, merge em memória.
+      if (rows.length > 0) {
+        try {
+          const cntRes: any = await db.execute(sql`
+            SELECT equipamento_locado_id AS id, COUNT(*)::int AS c
+              FROM equipamento_locado_eventos
+             WHERE tipo = 'RENOVACAO'
+               AND equipamento_locado_id IN (${sql.join(rows.map((r: any) => sql`${r.id}`), sql`, `)})
+             GROUP BY equipamento_locado_id
+          `);
+          const cntMap = new Map<number, number>();
+          for (const r of ((cntRes as any).rows ?? cntRes)) cntMap.set(Number(r.id), Number(r.c) || 0);
+          return rows.map((r: any) => ({ ...r, renovacoesCount: cntMap.get(r.id) ?? 0 }));
+        } catch (e: any) {
+          console.error("[locadosListar] contagem de renovações falhou:", e?.message || e);
+          return rows.map((r: any) => ({ ...r, renovacoesCount: 0 }));
+        }
+      }
+      return rows as any[];
     }),
 
   locadoById: protectedProcedure
@@ -1198,6 +1218,180 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
         }
       }
       return { id: r[0].id };
+    }),
+
+  // ==========================================================================
+  // Rev. 4558 — RENOVAÇÃO REAL DE LOCAÇÃO (gera nova OC no Compras).
+  // ==========================================================================
+  // Antes, "renovar" era só editar dataFimPrevista na mão — nada chegava ao
+  // Compras/Financeiro. Agora a renovação: (1) gera uma NOVA OC de locação
+  // (numeração oficial, isLocacao, status aprovada — mesmo padrão das OCs
+  // nascidas de SC, que são auto-aprovadas) que segue o fluxo normal até o
+  // Contas a Pagar via triggerFinancialSync; (2) atualiza o vencimento/valor
+  // da locação e a re-vincula à nova OC (a anterior fica em ocAnteriorId);
+  // (3) grava evento RENOVACAO na timeline; (4) sincroniza o item espelho do
+  // almoxarifado (vencimento/valor). Advisory lock por locado evita clique
+  // duplo gerar 2 OCs.
+  locadoRenovar: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      id: z.number(),
+      novaDataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      novoValorMensal: z.number().positive().optional(),
+      valorOc: z.number().positive(),           // valor TOTAL do novo ciclo (vira o total da OC)
+      observacao: z.string().max(2000).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      // Numeração oficial FORA da transação principal (gerarProximoNumeroOC tem
+      // transação/lock próprios com contador persistido — padrão do fluxo de cotação).
+      const { gerarProximoNumeroOC } = await import("./compras");
+      const numeroOc = await gerarProximoNumeroOC(input.companyId, "compra");
+
+      const result = await db.transaction(async (tx: any) => {
+        // Lock por locado: clique duplo/refetch não renova 2x.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(478001::int, ${input.id}::int)`);
+        const [loc] = await tx.select().from(equipamentosLocados)
+          .where(and(eq(equipamentosLocados.id, input.id), eq(equipamentosLocados.companyId, input.companyId)))
+          .limit(1);
+        if (!loc) throw new TRPCError({ code: "NOT_FOUND", message: "Locação não encontrada." });
+        if (loc.status === "devolvido") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Equipamento já devolvido — não é possível renovar." });
+        }
+        if (input.novaDataFim <= loc.dataFimPrevista) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `A nova data de fim (${input.novaDataFim}) deve ser posterior ao vencimento atual (${loc.dataFimPrevista}).` });
+        }
+
+        // Novo ciclo começa no dia seguinte ao fim do ciclo anterior.
+        const inicioNovoCiclo = new Date(loc.dataFimPrevista + "T00:00:00Z");
+        inicioNovoCiclo.setUTCDate(inicioNovoCiclo.getUTCDate() + 1);
+        const inicioISO = inicioNovoCiclo.toISOString().slice(0, 10);
+        const duracaoDias = Math.max(1, Math.round(
+          (new Date(input.novaDataFim + "T00:00:00Z").getTime() - inicioNovoCiclo.getTime()) / 86400000,
+        ) + 1);
+
+        // Quantas renovações já houve (pra numerar o ciclo no histórico).
+        const cntRes: any = await tx.execute(sql`
+          SELECT COUNT(*)::int AS c FROM equipamento_locado_eventos
+          WHERE equipamento_locado_id = ${input.id} AND tipo = 'RENOVACAO'
+        `);
+        const renovacoesAnteriores = Number(((cntRes as any).rows ?? cntRes)?.[0]?.c ?? 0) || 0;
+        const numeroCiclo = renovacoesAnteriores + 1; // esta será a Nª renovação
+
+        const valorTotal = String(input.valorOc.toFixed(2));
+        const [oc] = await tx.insert(comprasOrdens).values({
+          companyId: input.companyId,
+          numeroOc,
+          obraId: loc.obraId ?? null,
+          fornecedorId: loc.fornecedorId ?? null,
+          fornecedorNome: loc.fornecedorNome ?? null,
+          tipo: "locacao",
+          isLocacao: true,
+          locacaoDataInicio: inicioISO,
+          locacaoDataFim: input.novaDataFim,
+          locacaoDuracaoDias: duracaoDias,
+          locacaoRenovavel: true,
+          locacaoOcAnteriorId: loc.ordemCompraId ?? null,
+          status: "aprovada",
+          aprovacaoStatus: "aprovado",
+          aprovadoEm: new Date().toISOString(),
+          subtotal: valorTotal,
+          total: valorTotal,
+          dataEntregaPrevista: inicioISO,
+          observacoes: `Renovação de locação (${numeroCiclo}ª renovação) — ${loc.descricao}${loc.numeroContratoFornecedor ? ` | Contrato ${loc.numeroContratoFornecedor}` : ""}. Período: ${inicioISO} a ${input.novaDataFim}.${input.observacao ? ` Obs: ${input.observacao}` : ""}`,
+          criadoPorId: ctx.user.id,
+          criadoPorNome: (ctx.user as any).name ?? null,
+        } as any).returning();
+
+        await tx.insert(comprasOrdensItens).values({
+          ordemId: oc.id,
+          descricao: `LOCAÇÃO (RENOVAÇÃO ${numeroCiclo}ª) — ${loc.descricao}`.slice(0, 300),
+          unidade: "período",
+          quantidade: "1",
+          precoUnitario: valorTotal,
+          total: valorTotal,
+        } as any);
+
+        await tx.update(equipamentosLocados).set({
+          dataFimPrevista: input.novaDataFim,
+          ...(input.novoValorMensal != null ? { valorMensal: String(input.novoValorMensal.toFixed(2)) } : {}),
+          status: "em_uso",
+          ordemCompraId: oc.id,
+          ocAnteriorId: loc.ordemCompraId ?? loc.ocAnteriorId ?? null,
+          updatedAt: sql`now()`,
+        } as any).where(and(eq(equipamentosLocados.id, input.id), eq(equipamentosLocados.companyId, input.companyId)));
+
+        await tx.insert(equipamentoLocadoEventos).values({
+          companyId: input.companyId,
+          equipamentoLocadoId: input.id,
+          tipo: "RENOVACAO",
+          obraId: loc.obraId ?? null,
+          usuarioId: ctx.user.id,
+          usuarioNome: (ctx.user as any).name ?? null,
+          observacao: `${numeroCiclo}ª renovação — vencimento ${loc.dataFimPrevista} → ${input.novaDataFim}. Nova OC ${numeroOc} (R$ ${input.valorOc.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}).${input.novoValorMensal != null ? ` Valor mensal atualizado: R$ ${input.novoValorMensal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.` : ""}${input.observacao ? ` Obs: ${input.observacao}` : ""}`,
+        } as any);
+
+        return { ocId: oc.id, numeroOc, numeroCiclo, obraId: loc.obraId ?? null, fornecedorId: loc.fornecedorId ?? null, fornecedorNome: loc.fornecedorNome ?? null, inicioISO };
+      });
+
+      // Gera as parcelas no Contas a Pagar — MESMO contrato das demais OCs
+      // aprovadas (purchaseFinancialBridge é o ÚNICO caminho compra→financeiro;
+      // o bulk import está desativado). Não-bloqueante: a renovação já foi
+      // gravada; se falhar, o log aponta e a OC pode ser reprocessada.
+      try {
+        const { criarParcelasFinanceiras } = await import("../services/purchaseFinancialBridge");
+        const { entryIds } = await criarParcelasFinanceiras({
+          ocId: result.ocId,
+          companyId: input.companyId,
+          obraId: result.obraId ?? undefined,
+          supplierId: result.fornecedorId,
+          supplierNome: result.fornecedorNome,
+          valorTotal: input.valorOc,
+          tipo: "locacao",
+          tipoPagamento: null,
+          condicaoPagamento: null,
+          formaPagamento: null,
+          numeroParcelas: 1,
+          dataBase: result.inicioISO,
+          numero: result.numeroOc,
+        } as any, ctx.user.id, (ctx.user as any).name ?? "Sistema");
+        if (entryIds?.length > 0) {
+          await db.update(comprasOrdens).set({ financialEntryId: entryIds[0] } as any)
+            .where(eq(comprasOrdens.id, result.ocId));
+        }
+      } catch (e: any) {
+        console.error("[locadoRenovar] criarParcelasFinanceiras falhou:", e?.message || e);
+      }
+
+      // Sincroniza o item espelho do Almoxarifado (não-bloqueante).
+      try {
+        await db.execute(sql`
+          UPDATE almoxarifado_itens
+             SET data_vencimento_locacao = ${input.novaDataFim},
+                 ${input.novoValorMensal != null ? sql`valor_locacao_mensal = ${String(input.novoValorMensal.toFixed(2))},` : sql``}
+                 atualizado_em = NOW()
+           WHERE company_id = ${input.companyId}
+             AND equipamento_vinculado_tipo = 'locado'
+             AND equipamento_vinculado_id = ${input.id}
+        `);
+      } catch (e: any) {
+        console.error("[locadoRenovar] sync almox falhou:", e?.message || e);
+      }
+
+      // OC aprovada gera a despesa no Contas a Pagar (fluxo normal do Compras).
+      try {
+        const { triggerFinancialSync } = await import("../services/financialEventTrigger");
+        triggerFinancialSync(input.companyId);
+      } catch (e: any) {
+        console.error("[locadoRenovar] triggerFinancialSync falhou:", e?.message || e);
+      }
+
+      return result;
     }),
 
   // Rev. 2323 — Vincular obra em lote + Excluir em lote (multi-seleção na UI).
