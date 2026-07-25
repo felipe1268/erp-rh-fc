@@ -1953,7 +1953,7 @@ export default function AlmoxarifadoPage() {
               <ArrowUpCircle className="w-8 h-8 relative z-[1]" />
               <span className="relative z-[1] text-center leading-tight">
                 ENTRADA
-                <span className="block text-[11px] font-semibold opacity-90">de material</span>
+                <span className="block text-[11px] font-semibold opacity-90">DE MATERIAL</span>
                 {qtdMaterialPendente > 0 && (
                   <span className="block text-[10px] font-semibold mt-0.5 bg-white/25 rounded px-1 py-0.5">
                     {qtdMaterialPendente} pra receber
@@ -1969,7 +1969,7 @@ export default function AlmoxarifadoPage() {
               <ArrowDownCircle className="w-8 h-8" />
               <span className="text-center leading-tight">
                 SAÍDA
-                <span className="block text-[11px] font-semibold opacity-90">de material</span>
+                <span className="block text-[11px] font-semibold opacity-90">DE MATERIAL</span>
               </span>
             </button>
             {/* Rev. 4566 — ENTREGA DE FERRAMENTA (ex-"Ferramentas") */}
@@ -1980,7 +1980,7 @@ export default function AlmoxarifadoPage() {
               <Wrench className="w-8 h-8" />
               <span className="text-center leading-tight">
                 ENTREGA
-                <span className="block text-[11px] font-semibold opacity-90">de ferramenta</span>
+                <span className="block text-[11px] font-semibold opacity-90">DE FERRAMENTA</span>
               </span>
             </button>
             {/* Rev. 4566 — DEVOLUÇÃO DE FERRAMENTA (ex-"Fechar Dia"), ao lado da Entrega */}
@@ -1991,7 +1991,7 @@ export default function AlmoxarifadoPage() {
               <ClipboardCheck className="w-8 h-8" />
               <span className="text-center leading-tight">
                 DEVOLUÇÃO
-                <span className="block text-[11px] font-semibold opacity-90">de ferramenta</span>
+                <span className="block text-[11px] font-semibold opacity-90">DE FERRAMENTA</span>
               </span>
             </button>
             {/* Rev. 4566 — TRANSFERIR (movido pra direita, depois do par de ferramentas) */}
@@ -2009,7 +2009,7 @@ export default function AlmoxarifadoPage() {
               <ArrowLeftRight className="w-8 h-8" />
               <span className="text-center leading-tight">
                 TRANSFERIR
-                <span className="block text-[11px] font-semibold opacity-90">material e equipamento</span>
+                <span className="block text-[11px] font-semibold opacity-90">MATERIAL E EQUIPAMENTO</span>
               </span>
             </button>
             {/* Rev. 2317 — IMPORTAR PDF removido daqui (continua disponível no hero da tela Equipamentos Locados). */}
