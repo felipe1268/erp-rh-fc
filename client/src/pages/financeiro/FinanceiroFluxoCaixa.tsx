@@ -11,6 +11,7 @@ import {
   AlertTriangle, CheckCircle2, Landmark,
 } from "lucide-react";
 import { isProjecaoOrigem, FINANCEIRO_SOMENTE_REAL } from "@shared/financeiroProjecao";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 // ─── Formatadores ─────────────────────────────────────────────────────────────
 
@@ -87,6 +88,18 @@ function bucketDespesa(origem?: string | null, contaNome?: string | null): DespB
   }
   return "outros";
 }
+// Rev. 4584 — rótulos p/ o pop-up de detalhamento (drill-down).
+const BUCKET_LABELS: Record<DespBucket, string> = {
+  folha: "Folha, Encargos, 13º, Férias & PJ",
+  beneficios: "Benefícios (VR / VA / Seguro)",
+  tributos: "Tributos & Guias",
+  recorrente: "Serviços Recorrentes",
+  compras: "Compras / Materiais",
+  frota: "Frota (Abastecimento + Manutenção)",
+  obras: "Obras / Cronograma",
+  terceiros: "Terceiros / Parceiros",
+  outros: "Outros",
+};
 const FIXAS: DespBucket[]     = ["folha", "beneficios", "tributos", "recorrente"];
 const VARIAVEIS: DespBucket[] = ["compras", "frota", "obras", "terceiros", "outros"];
 const ALL_BUCKETS: DespBucket[] = [...FIXAS, ...VARIAVEIS];
@@ -328,6 +341,63 @@ export default function FinanceiroFluxoCaixa() {
     return { efet, proj };
   }, [pagarQ.data, meses12]);
 
+  // ── Rev. 4584 — DRILL-DOWN: pop-up com os lançamentos por trás de cada valor ──
+  // Poka-Yoke (transparência): o total do pop-up é somado dos MESMOS filtros da
+  // célula clicada, então tem que bater com o valor da matriz — se não bater,
+  // o próprio pop-up denuncia. Somente leitura, nada é alterado.
+  type Drill = {
+    tipo: "entrada" | "saida";
+    mes: number | null;            // null = ano inteiro (coluna Total)
+    escopo: Natureza;              // espelho do filtro da linha clicada
+    buckets: DespBucket[] | null;  // null = todas as categorias (só p/ saída)
+    // "previsto" (padrão) soma valor_previsto; "realizado" espelha a linha
+    // "— dos quais já recebido em caixa": só status recebido/pago, soma valor_realizado.
+    metrica?: "previsto" | "realizado";
+    titulo: string;
+  };
+  const STATUS_RECEBIDO = new Set(["recebido", "recebido_total", "recebido_parcial", "pago"]);
+  const valorDrill = (c: any, metrica?: "previsto" | "realizado") =>
+    metrica === "realizado"
+      ? Number(c.valorRealizado ?? c.valorPrevisto ?? 0) || 0
+      : Number(c.valorPrevisto ?? 0) || 0;
+  const [drill, setDrill] = useState<Drill | null>(null);
+  const drillRows = useMemo(() => {
+    if (!drill) return [] as any[];
+    const src: any[] = (drill.tipo === "entrada" ? receberQ.data : pagarQ.data) ?? [];
+    const out: any[] = [];
+    for (const c of src) {
+      if (drill.tipo === "saida" &&
+          (c.origemModulo === "aplicacao_financeira" || c.origemModulo === "transferencia_interna")) continue;
+      const proj = drill.tipo === "saida" ? isProjecaoDespesa(c.origemModulo) : isProjecaoOrigem(c.origemModulo);
+      if (drill.escopo === "efetivo" && proj) continue;
+      if (drill.escopo === "projecao" && !proj) continue;
+      const key = String(c.dataVencimento ?? "").slice(0, 7);
+      const i = meses12.indexOf(key);
+      if (i < 0) continue;
+      if (drill.mes != null && i !== drill.mes) continue;
+      if (drill.tipo === "saida" && drill.buckets &&
+          !drill.buckets.includes(bucketDespesa(c.origemModulo, c.contaNome))) continue;
+      // Métrica "realizado" (linha "já recebido em caixa"): espelha recReal —
+      // só títulos efetivos com status recebido/pago.
+      if (drill.metrica === "realizado" && !STATUS_RECEBIDO.has(String(c.status ?? ""))) continue;
+      out.push({ ...c, _proj: proj, _mesIdx: i });
+    }
+    out.sort((a, b) => valorDrill(b, drill.metrica) - valorDrill(a, drill.metrica));
+    return out;
+  }, [drill, receberQ.data, pagarQ.data, meses12]);
+  const drillTotal = useMemo(
+    () => drillRows.reduce((s, c) => s + valorDrill(c, drill?.metrica), 0),
+    [drillRows, drill?.metrica]
+  );
+  const drillPeriodo = drill
+    ? drill.mes != null ? `${MESES_FULL[drill.mes]}/${ano}` : `Ano inteiro · ${ano}`
+    : "";
+  const abrirDrill = (d: Omit<Drill, "titulo"> & { titulo: string }) => setDrill(d);
+  const fmtData = (s: any) => {
+    const t = String(s ?? "").slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.split("-").reverse().join("/") : "—";
+  };
+
   // ── INSIGHTS AUTOMÁTICOS (Rev. 4578 — determinísticos, sem IA) ──────────────
   // Poka-Yoke nível 1 (aviso): a tela é de leitura, então o "à prova de erro" aqui
   // é impedir a LEITURA errada — alertas claros sobre meses no vermelho, peso de
@@ -477,9 +547,10 @@ export default function FinanceiroFluxoCaixa() {
     );
   }
 
-  function GroupRow({ label, hint, vals, total, variant, open, onToggle }: {
+  function GroupRow({ label, hint, vals, total, variant, open, onToggle, onDrill }: {
     label: string; hint?: string; vals: number[]; total: number;
     variant: "receita" | "despesa"; open: boolean; onToggle: () => void;
+    onDrill?: (mes: number | null) => void;
   }) {
     const isRec = variant === "receita";
     const bg    = isRec ? "bg-emerald-50 text-emerald-900" : "bg-rose-50 text-rose-900";
@@ -500,21 +571,28 @@ export default function FinanceiroFluxoCaixa() {
         </td>
         {vals.map((v, i) => (
           <td key={i} style={{ width: COL_W, minWidth: COL_W }}
+            onClick={onDrill && v ? () => onDrill(i) : undefined}
+            title={onDrill && v ? "Toque para ver os lançamentos deste valor" : undefined}
             className={`text-right tabular-nums text-xs px-3 py-0 border-l ${brd} font-semibold whitespace-nowrap ${bg} ${cellC}
-              ${isAtual(i) ? "ring-1 ring-inset ring-blue-400" : ""}`}>
+              ${isAtual(i) ? "ring-1 ring-inset ring-blue-400" : ""}
+              ${onDrill && v ? "cursor-pointer hover:underline decoration-dotted underline-offset-2" : ""}`}>
             {BRL(v)}
           </td>
         ))}
         <td style={{ width: TOT_W, minWidth: TOT_W }}
-          className={`text-right tabular-nums text-xs px-3 font-bold border-l-2 border-slate-300 whitespace-nowrap ${totBg}`}>
+          onClick={onDrill && total ? () => onDrill(null) : undefined}
+          title={onDrill && total ? "Toque para ver os lançamentos do ano inteiro" : undefined}
+          className={`text-right tabular-nums text-xs px-3 font-bold border-l-2 border-slate-300 whitespace-nowrap ${totBg}
+            ${onDrill && total ? "cursor-pointer hover:underline decoration-dotted underline-offset-2" : ""}`}>
           {BRL(total)}
         </td>
       </tr>
     );
   }
 
-  function SubGroupRow({ label, hint, vals, total, open, onToggle }: {
+  function SubGroupRow({ label, hint, vals, total, open, onToggle, onDrill }: {
     label: string; hint?: string; vals: number[]; total: number; open: boolean; onToggle: () => void;
+    onDrill?: (mes: number | null) => void;
   }) {
     return (
       <tr className="h-10 bg-slate-50 border-b border-slate-200">
@@ -530,21 +608,28 @@ export default function FinanceiroFluxoCaixa() {
         </td>
         {vals.map((v, i) => (
           <td key={i} style={{ width: COL_W, minWidth: COL_W }}
+            onClick={onDrill && v ? () => onDrill(i) : undefined}
+            title={onDrill && v ? "Toque para ver os lançamentos deste valor" : undefined}
             className={`text-right tabular-nums text-xs px-3 font-semibold text-slate-600 border-l border-slate-200 whitespace-nowrap bg-slate-50
-              ${isAtual(i) ? "ring-1 ring-inset ring-blue-400" : ""}`}>
+              ${isAtual(i) ? "ring-1 ring-inset ring-blue-400" : ""}
+              ${onDrill && v ? "cursor-pointer hover:underline decoration-dotted underline-offset-2" : ""}`}>
             {BRL(v)}
           </td>
         ))}
         <td style={{ width: TOT_W, minWidth: TOT_W }}
-          className="text-right tabular-nums text-xs px-3 font-bold text-slate-700 border-l-2 border-slate-300 whitespace-nowrap bg-slate-100">
+          onClick={onDrill && total ? () => onDrill(null) : undefined}
+          title={onDrill && total ? "Toque para ver os lançamentos do ano inteiro" : undefined}
+          className={`text-right tabular-nums text-xs px-3 font-bold text-slate-700 border-l-2 border-slate-300 whitespace-nowrap bg-slate-100
+            ${onDrill && total ? "cursor-pointer hover:underline decoration-dotted underline-offset-2" : ""}`}>
           {BRL(total)}
         </td>
       </tr>
     );
   }
 
-  function DetailRow({ label, vals, total, variant = "sub", muted = false }: {
+  function DetailRow({ label, vals, total, variant = "sub", muted = false, onDrill }: {
     label: string; vals: number[]; total: number; variant?: CellVariant; muted?: boolean;
+    onDrill?: (mes: number | null) => void;
   }) {
     return (
       <tr className="h-9 bg-white border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
@@ -553,13 +638,20 @@ export default function FinanceiroFluxoCaixa() {
           {label}
         </td>
         {vals.map((v, i) => (
-          <td key={i} style={{ width: COL_W, minWidth: COL_W }} className={cellStyle(v, variant, isAtual(i))}>
+          <td key={i} style={{ width: COL_W, minWidth: COL_W }}
+            onClick={onDrill && v ? () => onDrill(i) : undefined}
+            title={onDrill && v ? "Toque para ver os lançamentos deste valor" : undefined}
+            className={`${cellStyle(v, variant, isAtual(i))}
+              ${onDrill && v ? "cursor-pointer hover:underline decoration-dotted underline-offset-2" : ""}`}>
             {BRL(v)}
           </td>
         ))}
         <td style={{ width: TOT_W, minWidth: TOT_W }}
+          onClick={onDrill && total ? () => onDrill(null) : undefined}
+          title={onDrill && total ? "Toque para ver os lançamentos do ano inteiro" : undefined}
           className={`text-right tabular-nums text-xs px-3 border-l-2 border-slate-200 whitespace-nowrap bg-slate-50
-            ${total ? "text-slate-700 font-semibold" : "text-slate-300"}`}>
+            ${total ? "text-slate-700 font-semibold" : "text-slate-300"}
+            ${onDrill && total ? "cursor-pointer hover:underline decoration-dotted underline-offset-2" : ""}`}>
           {BRL(total)}
         </td>
       </tr>
@@ -633,19 +725,19 @@ export default function FinanceiroFluxoCaixa() {
     return <tr className="h-1.5"><td colSpan={14} className="bg-slate-100 p-0" /></tr>;
   }
 
-  const receitaRows: { label: string; vals: number[]; muted?: boolean }[] =
+  const receitaRows: { label: string; vals: number[]; muted?: boolean; escopo?: Natureza; metrica?: "previsto" | "realizado" }[] =
     natureza === "todos"
       ? [
-          { label: "Contas a Receber (Efetivo)", vals: recEfet },
-          { label: "Receita Projetada", vals: recProj },
+          { label: "Contas a Receber (Efetivo)", vals: recEfet, escopo: "efetivo" },
+          { label: "Receita Projetada", vals: recProj, escopo: "projecao" },
         ]
       : natureza === "efetivo"
       ? [
-          { label: "Contas a Receber", vals: recEfet },
-          { label: "— dos quais já recebido em caixa", vals: recReal, muted: true },
+          { label: "Contas a Receber", vals: recEfet, escopo: "efetivo" },
+          { label: "— dos quais já recebido em caixa", vals: recReal, muted: true, escopo: "efetivo", metrica: "realizado" },
         ]
       : [
-          { label: "Receita Projetada", vals: recProj },
+          { label: "Receita Projetada", vals: recProj, escopo: "projecao" },
         ];
 
   const NAT_OPTS: { v: Natureza; label: string }[] = [
@@ -968,10 +1060,12 @@ export default function FinanceiroFluxoCaixa() {
                 vals={recVals} total={totalRec}
                 variant="receita" open={modo === "detalhado" && exReceit}
                 onToggle={() => modo === "detalhado" ? setExReceit(v => !v) : setModo("detalhado")}
+                onDrill={(mes) => abrirDrill({ tipo: "entrada", mes, escopo: natureza, buckets: null, titulo: "Entradas — recebimentos de clientes" })}
               />
               {modo === "detalhado" && exReceit && receitaRows.map((r) => (
                 <DetailRow key={r.label} label={r.label} vals={r.vals}
-                  total={sum(r.vals)} variant="receita" muted={r.muted} />
+                  total={sum(r.vals)} variant="receita" muted={r.muted}
+                  onDrill={r.escopo ? (mes) => abrirDrill({ tipo: "entrada", mes, escopo: r.escopo!, buckets: null, metrica: r.metrica, titulo: r.label }) : undefined} />
               ))}
 
               <Separator />
@@ -983,43 +1077,30 @@ export default function FinanceiroFluxoCaixa() {
                 vals={despVals} total={totalDesp}
                 variant="despesa" open={modo === "detalhado" && exDesp}
                 onToggle={() => modo === "detalhado" ? setExDesp(v => !v) : setModo("detalhado")}
+                onDrill={(mes) => abrirDrill({ tipo: "saida", mes, escopo: natureza, buckets: null, titulo: "Saídas — todos os pagamentos" })}
               />
               {modo === "detalhado" && exDesp && (
                 <>
                   <SubGroupRow label="Despesas Fixas"
                     hint="acontecem todo mês, com ou sem obra"
                     vals={fixasVals} total={sum(fixasVals)}
-                    open={exFixas} onToggle={() => setExFixas(v => !v)} />
-                  {exFixas && (
-                    <>
-                      <DetailRow label="Folha, Encargos, 13º, Férias & PJ"
-                        vals={despBuckets.folha} total={sum(despBuckets.folha)} variant="despesa" />
-                      <DetailRow label="Benefícios (VR / VA / Seguro)"
-                        vals={despBuckets.beneficios} total={sum(despBuckets.beneficios)} variant="despesa" />
-                      <DetailRow label="Tributos & Guias"
-                        vals={despBuckets.tributos} total={sum(despBuckets.tributos)} variant="despesa" />
-                      <DetailRow label="Serviços Recorrentes"
-                        vals={despBuckets.recorrente} total={sum(despBuckets.recorrente)} variant="despesa" />
-                    </>
-                  )}
+                    open={exFixas} onToggle={() => setExFixas(v => !v)}
+                    onDrill={(mes) => abrirDrill({ tipo: "saida", mes, escopo: natureza, buckets: FIXAS, titulo: "Despesas Fixas" })} />
+                  {exFixas && FIXAS.map((b) => (
+                    <DetailRow key={b} label={BUCKET_LABELS[b]}
+                      vals={despBuckets[b]} total={sum(despBuckets[b])} variant="despesa"
+                      onDrill={(mes) => abrirDrill({ tipo: "saida", mes, escopo: natureza, buckets: [b], titulo: BUCKET_LABELS[b] })} />
+                  ))}
                   <SubGroupRow label="Despesas Variáveis"
                     hint="acompanham o ritmo das obras"
                     vals={varVals} total={sum(varVals)}
-                    open={exVar} onToggle={() => setExVar(v => !v)} />
-                  {exVar && (
-                    <>
-                      <DetailRow label="Compras / Materiais"
-                        vals={despBuckets.compras} total={sum(despBuckets.compras)} variant="despesa" />
-                      <DetailRow label="Frota (Abastecimento + Manutenção)"
-                        vals={despBuckets.frota} total={sum(despBuckets.frota)} variant="despesa" />
-                      <DetailRow label="Obras / Cronograma"
-                        vals={despBuckets.obras} total={sum(despBuckets.obras)} variant="despesa" />
-                      <DetailRow label="Terceiros / Parceiros"
-                        vals={despBuckets.terceiros} total={sum(despBuckets.terceiros)} variant="despesa" />
-                      <DetailRow label="Outros"
-                        vals={despBuckets.outros} total={sum(despBuckets.outros)} variant="despesa" />
-                    </>
-                  )}
+                    open={exVar} onToggle={() => setExVar(v => !v)}
+                    onDrill={(mes) => abrirDrill({ tipo: "saida", mes, escopo: natureza, buckets: VARIAVEIS, titulo: "Despesas Variáveis" })} />
+                  {exVar && VARIAVEIS.map((b) => (
+                    <DetailRow key={b} label={BUCKET_LABELS[b]}
+                      vals={despBuckets[b]} total={sum(despBuckets[b])} variant="despesa"
+                      onDrill={(mes) => abrirDrill({ tipo: "saida", mes, escopo: natureza, buckets: [b], titulo: BUCKET_LABELS[b] })} />
+                  ))}
                 </>
               )}
 
@@ -1231,6 +1312,69 @@ export default function FinanceiroFluxoCaixa() {
             </span>
           </p>
         )}
+
+        {/* ── Rev. 4584 — POP-UP DE DETALHAMENTO (drill-down) ── */}
+        <Dialog open={!!drill} onOpenChange={(o) => { if (!o) setDrill(null); }}>
+          <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="break-words pr-6">
+                {drill?.tipo === "entrada" ? "🟢 " : "🔴 "}{drill?.titulo}
+              </DialogTitle>
+              <DialogDescription className="break-words">
+                {drillPeriodo}
+                {drill && !FINANCEIRO_SOMENTE_REAL && drill.escopo !== "todos" && (
+                  <> · escopo <strong>{drill.escopo === "efetivo" ? "Efetivo (real)" : "Projeção (previsão)"}</strong></>
+                )}
+                {" · "}são estes os lançamentos que formam o valor da célula — confira um a um.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs">
+              <span className="text-slate-500">
+                <strong className="text-slate-700">{drillRows.length}</strong> lançamento{drillRows.length === 1 ? "" : "s"}
+              </span>
+              <span className={`font-bold text-sm ${drill?.tipo === "entrada" ? "text-emerald-700" : "text-rose-700"}`}>
+                {BRL0(drillTotal)}
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-1.5">
+              {drillRows.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-6">Nenhum lançamento encontrado para este filtro.</p>
+              )}
+              {drillRows.map((c: any, idx: number) => (
+                <div key={c.id ?? idx} className="border border-slate-200 rounded-lg px-3 py-2 text-xs bg-white">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-800 break-words">
+                        {c.descricao || c.fornecedorNome || c.clienteNome || "(sem descrição)"}
+                      </p>
+                      {(c.fornecedorNome || c.clienteNome) && c.descricao && (
+                        <p className="text-slate-500 break-words">{c.fornecedorNome || c.clienteNome}</p>
+                      )}
+                    </div>
+                    <span className={`font-bold whitespace-nowrap ${drill?.tipo === "entrada" ? "text-emerald-700" : "text-rose-700"}`}>
+                      {BRL0(valorDrill(c, drill?.metrica))}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[10px] text-slate-500">
+                    <span>Venc.: <strong>{fmtData(c.dataVencimento)}</strong></span>
+                    {c.contaNome && <span className="bg-slate-100 rounded px-1.5 py-0.5 break-words">{c.contaNome}</span>}
+                    {c.obraNome && <span className="break-words">Obra: {c.obraNome}</span>}
+                    {c.status && <span className="capitalize">Status: {String(c.status).replace(/_/g, " ")}</span>}
+                    {c._proj && <span className="bg-violet-100 text-violet-700 rounded px-1.5 py-0.5 font-medium">projeção</span>}
+                    {c.origemDescricao && <span className="break-words">Origem: {c.origemDescricao}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[10px] text-slate-400 break-words">
+              Somente leitura: nada é alterado aqui. O total acima usa exatamente os mesmos filtros da célula
+              tocada na matriz — se algum lançamento estiver errado, corrija no Contas a {drill?.tipo === "entrada" ? "Receber" : "Pagar"}.
+            </p>
+          </DialogContent>
+        </Dialog>
 
       </div>
     </DashboardLayout>

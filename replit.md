@@ -50,19 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4584** — **FEAT: FLUXO DE CAIXA — DRILL-DOWN EM TODA A MATRIZ.** Todo valor da matriz (ENTRADAS, linhas de receita — inclusive "já recebido em caixa" com métrica realizado —, SAÍDAS, Fixas/Variáveis, cada balde, coluna Total Anual) virou clicável e abre um Dialog somente-leitura listando os lançamentos que formam o número (contagem + total + descrição/fornecedor-cliente/venc/conta/obra/status/badge projeção, break-words). Filtro do drill espelha EXATA a agregação da matriz (skip aplicação/transferência, escopo efetivo×projeção, mês por vencimento, balde via bucketDespesa) — Poka-Yoke por transparência: total do pop-up = valor da célula, divergência se denuncia sozinha. Arquivo: `FinanceiroFluxoCaixa.tsx`. ZERO schema/server change.
 - **Rev. 4583** — **FIX: FLUXO DE CAIXA — BALDES DE SAÍDA LEEM O PLANO DE CONTAS.** Usuário reportou Folha/Benefícios vazios na matriz (tudo em "Outros" R$ 2,4 mi/mês). Causa-raiz: `bucketDespesa()` só olhava `origem_modulo`, mas R$ 14,5 mi/ano de despesas criadas pela conciliação do extrato têm origem NULL — e já estavam classificadas no PLANO DE CONTAS (`conta_nome`). Fix client-only: 2º critério `CONTA_RULES` (regex ordenadas sobre conta_nome normalizado; específico primeiro: "SEGURO DE VIDA"→benefícios antes de "SEGURO"→recorrente). Validado no Neon: folha 3,49 mi · compras 4,33 mi · terceiros 2,02 mi; "Outros" caiu de 14,5 mi p/ 1,59 mi (só o que é outros de verdade). Arquivo: `FinanceiroFluxoCaixa.tsx`. ZERO schema/server change.
-- **Rev. 4582** — **FIX: FLUXO DE CAIXA — SWEEP CONTAMAX NEUTRALIZADO + TEXTOS CORRIGIDOS.** Usuário explicou que CONTAMAX é aplicação automática de liquidez diária (sweep): banco aplica o saldo à meia-noite e devolve no dia seguinte — não é reserva/aporte. Auditoria Neon: aplicado R$ 3.451.501 × resgatado R$ 3.388.771 (líquido +62,7 mil estacionado; rendimento ~R$ 11). Server `getMovimentacoesBancariasByYear` separa linhas ILIKE '%CONTAMAX%' + APLIC/RESGAT em `sweepAplicado[12]`/`sweepResgatado[12]` (fora da linha azul); client mostra o sweep na nota índigo e corrige textos que falavam em "resgates/reserva" (tooltip da linha azul + insight). Dados (reversível): +37 despesas CONTAMAX da empresa irmã 60004 (R$ 259 mil) marcadas como `aplicacao_financeira` (a Rev. 4580 cobriu só a 60002). Arquivos: `financial.ts`, `FinanceiroFluxoCaixa.tsx`. ZERO schema change.
 ### 5 one-liners
 
+- **Rev. 4582** — **FIX: FLUXO DE CAIXA — SWEEP CONTAMAX NEUTRALIZADO + TEXTOS CORRIGIDOS.** Sweep bancário separado em `sweepAplicado/sweepResgatado` (fora da linha azul) + 37 despesas CONTAMAX da 60004 → `aplicacao_financeira`. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4581** — **FIX+FEAT: FLUXO DE CAIXA — TRANSFERÊNCIAS AO GRUPO FORA DAS SAÍDAS + CONFERÊNCIA DE DUPLICIDADES.** 36 despesas ao próprio grupo → `transferencia_interna`; card rosa de duplicidades com confirmação humana par a par (reversível). Detalhe em `shared/changelog.ts`. ZERO schema change.
 
 - **Rev. 4580** — **FIX+UX: FLUXO DE CAIXA — APLICAÇÕES FINANCEIRAS FORA DAS SAÍDAS + MODO SIMPLES.** 66 lançamentos "APLICACAO CONTAMAX" marcados `aplicacao_financeira` (fora das Saídas) + modo Simples (3 cartões) × Detalhado. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4579** — **FEAT: FLUXO DE CAIXA — "OUTRAS MOVIMENTAÇÕES BANCÁRIAS" + SALDO REAL DO EXTRATO.** Endpoint `getMovimentacoesBancariasByYear` + 2 linhas informativas (azul/índigo) na matriz; nada soma na matriz. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4578** — **UX: FLUXO DE CAIXA — REDESIGN DIDÁTICO NA ESTRUTURA DA LITERATURA.** Matriz na ordem do regime de caixa + 5 KPI cards + guia "Como ler?" + insights determinísticos. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
-- **Rev. 4577** — **FEAT: FLUXO DE CAIXA — LINHA "CHEQUES A COMPENSAR" (FLOAT).** Query `cheques.pendentesPorVencimento` + linha âmbar informativa (não soma nas Saídas). Detalhe em `shared/changelog.ts`. ZERO schema change.
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4576 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4577 e anteriores.
 
 ## User preferences
 

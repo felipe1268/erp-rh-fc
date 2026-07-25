@@ -1,4 +1,36 @@
 /**
+ * Rev. 4584 - FEAT: FLUXO DE CAIXA — DRILL-DOWN (POP-UP DE DETALHAMENTO) EM TODA A MATRIZ
+ *
+ * PEDIDO DO USUÁRIO: poder tocar em qualquer valor da matriz do Fluxo de
+ * Caixa e ver DE ONDE ele vem — quais lançamentos formam aquele número.
+ *
+ * O QUE FOI FEITO (client-only): todas as células de valor da matriz
+ * (linha ENTRADAS, linhas de receita — inclusive "— dos quais já recebido
+ * em caixa", linha SAÍDAS, subgrupos Fixas/Variáveis, cada balde de
+ * despesa e a coluna Total Anual) viraram clicáveis (sublinhado pontilhado
+ * + tooltip). O clique abre um Dialog SOMENTE LEITURA com: contagem +
+ * total no cabeçalho, lista rolável de lançamentos (descrição, fornecedor/
+ * cliente, vencimento, plano de contas, obra, status, badge de projeção,
+ * origem), ordenada por valor desc, break-words em tudo (regra: dialogs
+ * nunca truncam).
+ *
+ * PARIDADE GARANTIDA: o filtro do drill espelha EXATAMENTE a agregação da
+ * matriz — pula aplicacao_financeira/transferencia_interna, respeita o
+ * escopo (efetivo × projeção via isProjecaoDespesa/isProjecaoOrigem), mês
+ * via dataVencimento.slice(0,7) contra meses12, balde via bucketDespesa
+ * (origem_modulo + CONTA_RULES da Rev. 4583). A linha "já recebido em
+ * caixa" tem métrica própria "realizado" (só status recebido/recebido_
+ * total/recebido_parcial/pago, soma valor_realizado) espelhando recReal.
+ *
+ * POKA-YOKE: nível 1→2 por transparência — o total do pop-up usa os
+ * MESMOS filtros da célula tocada, então qualquer divergência entre
+ * matriz e lançamentos se denuncia sozinha na tela.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx (só).
+ * ZERO schema/server change.
+ */
+
+/**
  * Rev. 4583 - FIX: FLUXO DE CAIXA — BALDES DE SAÍDA AGORA LEEM O PLANO DE CONTAS (FOLHA/BENEFÍCIOS DEIXAM DE CAIR EM "OUTROS")
  *
  * PEDIDO DO USUÁRIO: "folha de pagamentos, benefícios, tudo isso não está
