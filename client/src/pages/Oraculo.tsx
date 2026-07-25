@@ -6,6 +6,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import DashboardLayout from "@/components/DashboardLayout";
 import {
   Plus, Trash2, Send, Mic, MicOff, Volume2, VolumeX,
   MessageSquare, ChevronLeft, Loader2, ArrowLeft, Zap, ZapOff,
@@ -405,9 +406,11 @@ export default function Oraculo() {
   // ─── Loading enquanto auth não carrega ────────────────────
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0a0614]">
-        <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
-      </div>
+      <DashboardLayout noPadding>
+        <div className="flex items-center justify-center h-[calc(100svh-3.5rem)] bg-[#0a0614]">
+          <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -415,7 +418,8 @@ export default function Oraculo() {
   const companyDisplay = companyIds.map((id: number) => id === 60002 ? "FC" : id === 60004 ? "HOTEL" : id === 90001 ? "LOC" : `#${id}`);
 
   return (
-    <div className="flex h-screen bg-[#0a0614] text-white overflow-hidden">
+    <DashboardLayout noPadding>
+    <div className="flex h-[calc(100svh-3.5rem)] bg-[#0a0614] text-white overflow-hidden">
 
       {/* ═══ SIDEBAR ══════════════════════════════════════ */}
       <div className={`${sidebarOpen ? "w-60" : "w-0"} shrink-0 transition-all duration-300 overflow-hidden border-r border-violet-900/30 bg-[#0f0820] flex flex-col`}>
@@ -466,8 +470,10 @@ export default function Oraculo() {
           <button onClick={() => setVoiceOn(v => !v)} className="text-violet-600 hover:text-violet-300 transition-colors">
             {voiceOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
-          <button onClick={() => setLocation("/")} className="text-violet-700 hover:text-violet-400 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
+          <button onClick={() => setLocation("/")}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-violet-800/40 bg-violet-900/30 text-violet-400 hover:text-violet-200 hover:bg-violet-800/40 text-[10px] font-semibold transition-all">
+            <ArrowLeft className="w-3 h-3" />
+            <span className="hidden sm:inline">Voltar</span>
           </button>
         </div>
 
@@ -547,5 +553,6 @@ export default function Oraculo() {
         </div>
       </div>
     </div>
+    </DashboardLayout>
   );
 }

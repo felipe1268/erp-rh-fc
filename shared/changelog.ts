@@ -1,4 +1,27 @@
 /**
+ * Rev. 4572 - UX: ORÁCULO — BARRA LATERAL DO SISTEMA + BOTÃO "VOLTAR"
+ *
+ * PEDIDO DO USUÁRIO: "coloque a barra de comando lateral e um botão de
+ * voltar para a tela principal" — a tela do Oráculo era 100% standalone
+ * (h-screen, sem menu), obrigando o usuário a usar o histórico do
+ * navegador pra sair.
+ *
+ * O QUE MUDOU (client/src/pages/Oraculo.tsx):
+ * 1) Página agora renderiza DENTRO do <DashboardLayout noPadding>:
+ *    barra lateral do sistema (menu do módulo Oráculo) + header padrão
+ *    (Voltar/Início/seletor de empresa) presentes como em toda tela.
+ * 2) Altura ajustada de h-screen → h-[calc(100svh-3.5rem)] (desconta o
+ *    header h-14 do layout) pra o chat continuar full-height sem scroll
+ *    duplo; branch de loading (!user) também embrulhada no layout.
+ * 3) Botão de voltar próprio no header interno do Oráculo virou pill
+ *    visível "← Voltar" (antes era só um ícone apagado) → tela principal.
+ *
+ * RACIONAL: consistência de navegação (Poka-Yoke de orientação — o
+ * usuário nunca fica "preso" numa tela sem saída visível). ZERO
+ * schema/server change.
+ */
+
+/**
  * Rev. 4571 - FEAT: ORÁCULO — VOZ HUMANIZADA VIA OPENAI (REPLIT AI INTEGRATIONS)
  *
  * PEDIDO DO USUÁRIO: acabar com a voz robotizada do Oráculo. Causa-raiz
