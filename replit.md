@@ -50,19 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4576** — **UX: CONTAS A PAGAR — CARDS DE KPI VIRAM FILTROS CLICÁVEIS.** Os 5 cards (Total/Em Aberto Acum./A Pagar/Vencidas/Pago) viram botões-toggle (padrão Rev. 4565 do Almoxarifado): novo estado `filtroKpi` com precedência sobre as pills de status no `filtered`; "Em Aberto (Acum.)" troca a base pro ano inteiro (`allContas` não-pagos), "Vencidas" = pendente com vencimento < hoje. Ativo ganha ring na cor do card + "Filtrando · toque p/ limpar"; demais ficam opacity-70; card "Total" limpa o filtro. Busca/origem/FD/Efetivo-Projeção seguem compondo por cima. Arquivo: `FinanceiroContasAPagar.tsx`. ZERO schema/server change.
 - **Rev. 4575** — **FIX: CONTAS A PAGAR — PAGAMENTO/CANCELAMENTO EM LOTE QUEBRAVA COM LINHAS CONSOLIDADAS.** Com "Consolidado: ON", as linhas agrupadas por ciclo de fechamento do fornecedor têm id STRING (`grp:fech|forn|janela`) e os títulos reais em `itensIds`; a seleção em lote mandava esse id de grupo pro servidor (`z.array(z.number())`) → zod rejeitava o LOTE INTEIRO ("expected number, received string"). Fix (`client/src/pages/financeiro/FinanceiroContasAPagar.tsx`): helper `expandToNumericIds` expande grupos nos ids numéricos reais (dedup + descarta não-numéricos), aplicado no "Pagar selecionados" e no "Apagar selecionados" (que também ganhou guard de seleção vazia). Poka-Yoke nível 2: payload sempre numérico por construção. ZERO schema/server change.
-- **Rev. 4574** — **FEAT: ORÁCULO CONSULTOR-CEO — FINANCEIRO + COMPRAS + ALMOX + PLANEJAMENTO + DIAGNÓSTICO EXECUTIVO.** 6 novas queries no `buildContext` (`server/routers/oraculo.ts`, índices 21-26): contas a pagar por urgência (vencidas/7d/8-30d/pago no mês), top 30 vencidas, contas a receber (a_faturar/a_receber/recebido), compras (OCs abertas/aprovação/entregas atrasadas), almoxarifado (abaixo do mínimo, valor de estoque; `ativo = true` — coluna é BOOLEAN) e planejamento (100 projetos). Novo `ctx.diagnostico_executivo` DETERMINÍSTICO (pontos_de_atencao/pontos_fortes calculados em JS — sem alucinação de números) + seção "PAPEL: CONSULTOR-CEO FULL TIME" no system prompt (proatividade, visão de negócio cruzando módulos, recomendação prática). Validado no Neon: 0 query_errors, ~418 KB, detectou R$ 5,85 mi vencidos, 205 medições a faturar, 54 OCs atrasadas. ZERO schema change.
 ### 5 one-liners
 
+- **Rev. 4574** — **FEAT: ORÁCULO CONSULTOR-CEO.** 6 novas queries no `buildContext` (financeiro/compras/almox/planejamento) + `diagnostico_executivo` determinístico em JS + seção "CONSULTOR-CEO" no prompt; validado no Neon (0 query_errors, ~418 KB). Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4573** — **FIX: ORÁCULO — SNAPSHOT DE DADOS 100% QUEBRADO (21 QUERIES FALHANDO).** `= ANY(${ids}::int[])` → `IN ${ids}` nas 21 queries do `buildContext` + 6 fixes de coluna; validado no Neon (0 query_errors, ~405 KB). Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4572** — **UX: ORÁCULO — BARRA LATERAL DO SISTEMA + BOTÃO "VOLTAR".** Tela renderiza dentro do `<DashboardLayout noPadding>`; altura `h-[calc(100svh-3.5rem)]`; pill "← Voltar". Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4571** — **FEAT: ORÁCULO — VOZ HUMANIZADA VIA OPENAI (REPLIT AI INTEGRATIONS).** gpt-audio (voz "Nova", MP3) via blueprint `javascript_openai_ai_integrations` (cobrança via créditos); fallback Google Chirp3-HD → Neural2 → navegador. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4570** — **UX: DASHBOARD PARCEIROS — FOTO DOS COLABORADORES NAS LISTAS.** `employees.fotoUrl` no ranking e nos lançamentos recentes via `empFotoMap` tenant-scoped + `<ColabAvatar>` (iniciais como fallback). Detalhe em `shared/changelog.ts`. ZERO schema change.
-- **Rev. 4569** — **UX: DASHBOARD PARCEIROS — BOTÃO "ANO TODO" NO SELETOR DE PERÍODO.** Pílula "Ano todo" após ‹ 2026 › (`setMes("todos")`, ativo bg-foreground); inline seguindo visual do `<PeriodSelectorCard>`. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4568 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4569 e anteriores.
 
 ## User preferences
 

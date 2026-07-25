@@ -286,6 +286,11 @@ export default function FinanceiroContasAPagar() {
   const [search, setSearch] = useState("");
   const [origemFilter, setOrigemFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("pendentes");
+  // Rev. 4576 — cards de KPI viram filtros clicáveis (toggle). Quando ativo,
+  // tem precedência sobre as pills A Pagar/Pagos/Todos (statusFilter).
+  const [filtroKpi, setFiltroKpi] = useState<null | "aberto_acum" | "a_pagar" | "vencidas" | "pago">(null);
+  const toggleKpi = (k: "aberto_acum" | "a_pagar" | "vencidas" | "pago") =>
+    setFiltroKpi(prev => (prev === k ? null : k));
   // Rev. 4077 — Filtro "FD" (Faturamento Direto): cliente/terceiro/fc x normal.
   const [fdFilter, setFdFilter] = useState<"all" | "fd_fora" | "fd_abate" | "normal">("all");
   // Rev. 1629 — Separação Efetivo × Projeção (APQC PCF 8.7 / PMBOK / Brealey-Myers cap. 30):
@@ -792,9 +797,20 @@ export default function FinanceiroContasAPagar() {
   // mês selecionado (ou o ano inteiro, se "Ano todo" estiver ligado); antes a
   // busca ignorava o mês e trazia o ano inteiro sem o usuário pedir isso.
   const filtered = useMemo(() => {
-    let list = escopoData;
-    if (statusFilter === "pendentes") list = list.filter((c: any) => c.status !== "pago");
-    if (statusFilter === "pagos") list = list.filter((c: any) => c.status === "pago");
+    // Rev. 4576 — filtro por card de KPI (precedência sobre as pills de status).
+    // "Em Aberto (Acum.)" olha TODOS os meses do ano (mesma base do card);
+    // os demais respeitam o escopo do mês/ano selecionado.
+    let list = filtroKpi === "aberto_acum" ? (((allContas as any[]) ?? [])) : escopoData;
+    if (filtroKpi === "aberto_acum" || filtroKpi === "a_pagar") {
+      list = list.filter((c: any) => c.status !== "pago");
+    } else if (filtroKpi === "vencidas") {
+      list = list.filter((c: any) => c.status !== "pago" && c.dataVencimento && c.dataVencimento.slice(0, 10) < hojeStr);
+    } else if (filtroKpi === "pago") {
+      list = list.filter((c: any) => c.status === "pago");
+    } else {
+      if (statusFilter === "pendentes") list = list.filter((c: any) => c.status !== "pago");
+      if (statusFilter === "pagos") list = list.filter((c: any) => c.status === "pago");
+    }
     if (naturezaFilter === "efetivo") list = list.filter((c: any) => !isProjecao(c));
     else if (naturezaFilter === "projecao") list = list.filter((c: any) => isProjecao(c));
     if (origemFilter !== "all") list = list.filter((c: any) => c.origemModulo === origemFilter);
@@ -822,7 +838,7 @@ export default function FinanceiroContasAPagar() {
       if (da !== db) return da.localeCompare(db);
       return Number(b.valorPrevisto ?? 0) - Number(a.valorPrevisto ?? 0);
     });
-  }, [escopoData, statusFilter, naturezaFilter, origemFilter, fdFilter, search, hojeStr]);
+  }, [escopoData, allContas, filtroKpi, statusFilter, naturezaFilter, origemFilter, fdFilter, search, hojeStr]);
 
   // Rev. 1619 — agrupamento por horizonte de vencimento (cabeçalhos sticky)
   const grupos = useMemo(() => {
@@ -1001,6 +1017,13 @@ export default function FinanceiroContasAPagar() {
   // ("grp:fech|...") e carregam os títulos reais em itensIds. Enviar o id do
   // grupo pro servidor quebrava o lote inteiro (zod espera number). Este helper
   // expande grupos nos ids numéricos reais e descarta qualquer id não-numérico.
+  // Rev. 4576 — quando o filtro de KPI "Em Aberto (Acum.)" está ativo, a lista
+  // (e a seleção) abrange o ANO INTEIRO; o lote deve resolver ids na mesma base,
+  // senão títulos de outros meses seriam silenciosamente descartados do pagamento.
+  const bulkPayBase = useMemo<any[]>(
+    () => (filtroKpi === "aberto_acum" ? (((allContas as any[]) ?? [])) : escopoData),
+    [filtroKpi, allContas, escopoData]
+  );
   const expandToNumericIds = (rows: any[], extraFilter?: (c: any) => boolean): number[] => {
     const out = new Set<number>();
     for (const c of rows) {
@@ -1115,9 +1138,12 @@ export default function FinanceiroContasAPagar() {
           </CardContent>
         </Card>
 
-        {/* KPI Cards */}
+        {/* KPI Cards — Rev. 4576: clicáveis (toggle) p/ filtrar a lista de lançamentos */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Card className="border-0 shadow-sm border-l-4 border-l-gray-400">
+          <Card
+            role="button" tabIndex={0}
+            onClick={() => setFiltroKpi(null)}
+            className={`border-0 shadow-sm border-l-4 border-l-gray-400 cursor-pointer transition-shadow hover:shadow-md ${filtroKpi === null ? "" : "opacity-70"}`}>
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Banknote className="w-3 h-3" />Total {verAnoTodo ? ano : MESES[mesSel-1]}</p>
               <p className="text-lg font-bold text-gray-800">{formatBRL(totalMes)}</p>
@@ -1129,40 +1155,59 @@ export default function FinanceiroContasAPagar() {
                 {projecoesOcultas > 0 && (
                   <span className="text-violet-500"> · +{projecoesOcultas} em projeção</span>
                 )}
+                {filtroKpi !== null && <span className="text-blue-500"> · toque p/ limpar filtro</span>}
               </p>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-sm border-l-4 border-l-indigo-500">
+          <Card
+            role="button" tabIndex={0}
+            onClick={() => toggleKpi("aberto_acum")}
+            className={`border-0 shadow-sm border-l-4 border-l-indigo-500 cursor-pointer transition-shadow hover:shadow-md ${filtroKpi === "aberto_acum" ? "ring-2 ring-indigo-500 shadow-md" : filtroKpi ? "opacity-70" : ""}`}>
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Wallet className="w-3 h-3 text-indigo-500" />Em Aberto (Acum.)</p>
               <p className="text-lg font-bold text-indigo-700">{formatBRL(acumuladoAberto.total)}</p>
               <p className="text-xs text-gray-400">
-                {acumuladoAberto.count} título(s) · todos os meses
-                {acumuladoAberto.vencido > 0 && (
-                  <span className="text-red-500"> · {formatBRL(acumuladoAberto.vencido)} vencido</span>
+                {filtroKpi === "aberto_acum" ? (
+                  <span className="text-indigo-600 font-medium">Filtrando · toque p/ limpar</span>
+                ) : (
+                  <>
+                    {acumuladoAberto.count} título(s) · todos os meses
+                    {acumuladoAberto.vencido > 0 && (
+                      <span className="text-red-500"> · {formatBRL(acumuladoAberto.vencido)} vencido</span>
+                    )}
+                  </>
                 )}
               </p>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-sm border-l-4 border-l-orange-500">
+          <Card
+            role="button" tabIndex={0}
+            onClick={() => toggleKpi("a_pagar")}
+            className={`border-0 shadow-sm border-l-4 border-l-orange-500 cursor-pointer transition-shadow hover:shadow-md ${filtroKpi === "a_pagar" ? "ring-2 ring-orange-500 shadow-md" : filtroKpi ? "opacity-70" : ""}`}>
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Clock className="w-3 h-3" />A Pagar</p>
               <p className="text-lg font-bold text-orange-600">{formatBRL(totalPendente)}</p>
-              <p className="text-xs text-gray-400">{pendentes.length} pendente(s)</p>
+              <p className="text-xs text-gray-400">{filtroKpi === "a_pagar" ? <span className="text-orange-600 font-medium">Filtrando · toque p/ limpar</span> : `${pendentes.length} pendente(s)`}</p>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-sm border-l-4 border-l-red-500">
+          <Card
+            role="button" tabIndex={0}
+            onClick={() => toggleKpi("vencidas")}
+            className={`border-0 shadow-sm border-l-4 border-l-red-500 cursor-pointer transition-shadow hover:shadow-md ${filtroKpi === "vencidas" ? "ring-2 ring-red-500 shadow-md" : filtroKpi ? "opacity-70" : ""}`}>
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3 text-red-500" />Vencidas</p>
               <p className="text-lg font-bold text-red-600">{formatBRL(totalVencido)}</p>
-              <p className="text-xs text-gray-400">{vencidos.length} em atraso</p>
+              <p className="text-xs text-gray-400">{filtroKpi === "vencidas" ? <span className="text-red-600 font-medium">Filtrando · toque p/ limpar</span> : `${vencidos.length} em atraso`}</p>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-sm border-l-4 border-l-green-500">
+          <Card
+            role="button" tabIndex={0}
+            onClick={() => toggleKpi("pago")}
+            className={`border-0 shadow-sm border-l-4 border-l-green-500 cursor-pointer transition-shadow hover:shadow-md ${filtroKpi === "pago" ? "ring-2 ring-green-500 shadow-md" : filtroKpi ? "opacity-70" : ""}`}>
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><CheckCircle className="w-3 h-3 text-green-500" />Pago</p>
               <p className="text-lg font-bold text-green-700">{formatBRL(totalPago)}</p>
-              <p className="text-xs text-gray-400">{pagos.length} quitado(s)</p>
+              <p className="text-xs text-gray-400">{filtroKpi === "pago" ? <span className="text-green-600 font-medium">Filtrando · toque p/ limpar</span> : `${pagos.length} quitado(s)`}</p>
             </CardContent>
           </Card>
         </div>
@@ -2713,7 +2758,7 @@ export default function FinanceiroContasAPagar() {
             <div className="space-y-4">
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                 <p className="text-xs text-blue-700 font-medium">Você está prestes a marcar como pagos:</p>
-                <p className="text-2xl font-bold text-blue-900 tabular-nums mt-1">{expandToNumericIds(escopoData as any[], (c: any) => c.status !== "pago").length} <span className="text-sm font-normal">títulos</span></p>
+                <p className="text-2xl font-bold text-blue-900 tabular-nums mt-1">{expandToNumericIds(bulkPayBase, (c: any) => c.status !== "pago").length} <span className="text-sm font-normal">títulos</span></p>
                 <p className="text-base font-semibold text-blue-800 tabular-nums">{formatBRL(selectedTotal)}</p>
               </div>
               <div>
@@ -2741,7 +2786,7 @@ export default function FinanceiroContasAPagar() {
                 onClick={() => {
                   // Garantir que só enviamos IDs ainda visíveis/válidos no escopo corrente (mês ou ano todo).
                   // Rev. 4575 — grupos consolidados (id "grp:...") são expandidos nos títulos reais.
-                  const validIds = expandToNumericIds(escopoData as any[], (c: any) => c.status !== "pago");
+                  const validIds = expandToNumericIds(bulkPayBase, (c: any) => c.status !== "pago");
                   if (validIds.length === 0) {
                     toast({ title: "Nenhum título válido na seleção", variant: "destructive" });
                     return;
@@ -2754,7 +2799,7 @@ export default function FinanceiroContasAPagar() {
                     formaPagamento: bulkFormaPagamento,
                   });
                 }}>
-                {bulkPayMut.isPending ? "Processando..." : `Confirmar ${expandToNumericIds(escopoData as any[], (c: any) => c.status !== "pago").length} pagamento(s)`}
+                {bulkPayMut.isPending ? "Processando..." : `Confirmar ${expandToNumericIds(bulkPayBase, (c: any) => c.status !== "pago").length} pagamento(s)`}
               </Button>
             </DialogFooter>
           </DialogContent>

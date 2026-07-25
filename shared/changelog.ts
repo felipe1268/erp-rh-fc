@@ -1,4 +1,34 @@
 /**
+ * Rev. 4576 - UX: CONTAS A PAGAR — CARDS DE KPI VIRAM FILTROS CLICÁVEIS
+ *
+ * PEDIDO DO USUÁRIO: print dos 5 cards (Total/Em Aberto Acum./A Pagar/
+ * Vencidas/Pago) — "quero esses filtros responsivos, de forma que eu
+ * clique neles e filtre a informação de todos os lançamentos pertinentes".
+ *
+ * O QUE MUDOU (client/src/pages/financeiro/FinanceiroContasAPagar.tsx):
+ * - Novo estado `filtroKpi` ('aberto_acum'|'a_pagar'|'vencidas'|'pago'|null)
+ *   + toggleKpi (mesmo padrão da Rev. 4565 no Almoxarifado).
+ * - `filtered` aplica o filtro do card com PRECEDÊNCIA sobre as pills
+ *   A Pagar/Pagos/Todos: a_pagar = status!=='pago'; vencidas = pendente
+ *   com vencimento < hoje; pago = status==='pago'; aberto_acum troca a
+ *   base do escopo do mês por allContas (todos os meses do ano, mesma
+ *   base do card) filtrando não-pagos.
+ * - Cards viram botões (role=button, cursor-pointer, hover:shadow-md):
+ *   ativo ganha ring-2 na cor do card + hint "Filtrando · toque p/
+ *   limpar"; os demais ficam opacity-70. Card "Total" limpa o filtro
+ *   (hint "toque p/ limpar filtro" quando há filtro ativo).
+ * - Demais filtros (busca, origem, FD, Efetivo/Projeção) seguem
+ *   compondo normalmente por cima do filtro de KPI.
+ * - Poka-Yoke (achado do review): com "Em Aberto (Acum.)" ativo a seleção
+ *   abrange o ano inteiro, então o pagamento em lote passa a resolver os
+ *   ids na MESMA base (`bulkPayBase` = allContas quando aberto_acum,
+ *   escopoData caso contrário) — senão títulos de outros meses seriam
+ *   silenciosamente descartados do lote.
+ *
+ * ZERO schema/server change.
+ */
+
+/**
  * Rev. 4575 - FIX: CONTAS A PAGAR — PAGAMENTO/CANCELAMENTO EM LOTE QUEBRAVA COM LINHAS CONSOLIDADAS
  *
  * PEDIDO DO USUÁRIO: print do iPad — "Pagamento em Lote" com 62 títulos
