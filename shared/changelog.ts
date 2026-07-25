@@ -1,4 +1,46 @@
 /**
+ * Rev. 4559 - FIX/UX: ALMOXARIFADO — RENOVAÇÃO DE LOCAÇÃO USA O FLUXO REAL (COMPRAS → FINANCEIRO) + HEADER 2 LINHAS + NÚMEROS pt-BR + PLURAL
+ *
+ * PEDIDO DO USUÁRIO: (a) "6 locaçãoões a vencer" — typo de plural; (b) melhorar
+ * a distribuição dos cards/botões do cabeçalho do Almoxarifado; (c) números com
+ * separador de milhar; (d) "o fluxo de renovação não funciona e é confuso" —
+ * redesenhar e ligar com Compras e Financeiro.
+ *
+ * CAUSA-RAIZ DA RENOVAÇÃO QUEBRADA: o Almoxarifado ainda usava o modal LEGADO
+ * da Rev. 4345, que só chamava compras.atualizarItem mudando
+ * data_vencimento_locacao — NÃO gerava a nova OC no Compras, NÃO lançava no
+ * Contas a Pagar e NÃO registrava o evento RENOVACAO (por isso o badge ficava
+ * eternamente "1ª Locação" e o toast genérico "Locação renovada!" confundia).
+ * O fluxo REAL (equipamentos.locadoRenovar, Rev. 4558) já existia e era usado
+ * só em Locados.tsx e no alerta global.
+ *
+ * MUDANÇAS (client/src/pages/almoxarifado/index.tsx — ZERO schema change):
+ *   1. RENOVAÇÃO REAL EM TODO LUGAR: os 2 pontos de entrada do Almoxarifado
+ *      (ícone CalendarPlus no catálogo + botão "Renovar" do modal Locações a
+ *      Vencer) agora abrem um modal novo que chama equipamentos.locadoRenovar
+ *      (nova OC de locação auto-aprovada no Compras, encadeada via
+ *      locacao_oc_anterior_id, parcela no Contas a Pagar, evento RENOVACAO,
+ *      vencimento atualizado). Helper resolveLocadoId(): aceita item do
+ *      catálogo (equipamentoVinculadoTipo==='locado' → equipamentoVinculadoId)
+ *      ou item de getItensLocadosVencendo (equipamentoLocadoId).
+ *   2. MODAL EXPLICATIVO: header indigo com ciclo ("Nª renovação"), foto +
+ *      fornecedor + venc. atual, passo-a-passo numerado do que acontece
+ *      (1. OC no Compras → 2. Contas a Pagar → 3. vencimento/ciclo), campos
+ *      novo vencimento (sugerido +30d) e valor da nova OC (pré-preenchido com
+ *      o valor mensal). Item SEM vínculo com Equipamentos Locados: aviso âmbar
+ *      orientando a vincular (não deixa "renovar" só a data silenciosamente).
+ *   3. HEADER 2 LINHAS: linha 1 = título + ações (Cards/Tabela, Auditoria,
+ *      Importar IA, Novo Item); linha 2 = chips de alerta em pill (Alertas,
+ *      locações a vencer, abaixo do mínimo) com flex-wrap responsivo.
+ *   4. PLURAL: "N locações a vencer" / "1 locação a vencer" (antes colava
+ *      "ões" em "locação" → "locaçãoões").
+ *   5. NÚMEROS pt-BR: toLocaleString("pt-BR") nos KPIs (Total de Itens,
+ *      Estoque OK/Baixo/Crítico — consolidado e por obra), "itens cadastrados"
+ *      do header, "itens considerados · com preço" dos banners verdes e
+ *      "% · N itens" da lista por almoxarifado.
+ */
+
+/**
  * Rev. 4558 - FEAT: EQUIPAMENTOS LOCADOS — RENOVAÇÃO REAL DE LOCAÇÃO (NOVA OC NO COMPRAS) + BADGE DE CICLO + REDESIGN DO ALERTA
  *
  * PEDIDO DO USUÁRIO: "Renovar" uma locação precisa ser um fluxo REAL — gerar a

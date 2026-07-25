@@ -1291,9 +1291,36 @@ export default function AlmoxarifadoPage() {
   const [obsDevolucaoLocacaoLote, setObsDevolucaoLocacaoLote] = useState("");
   const [devolverLocacaoLoteProgress, setDevolverLocacaoLoteProgress] = useState(0);
   const [isDevolvendoLote, setIsDevolvendoLote] = useState(false);
-  // Rev. 4345 — renovar locação: extender dataVencimentoLocacao.
+  // Rev. 4559 — renovar locação: fluxo REAL (gera nova OC no Compras → Contas a Pagar).
   const [modalRenovarLocacao, setModalRenovarLocacao] = useState<{ item: any } | null>(null);
   const [novaDataVencLocacao, setNovaDataVencLocacao] = useState("");
+  const [novoValorOcLocacao, setNovoValorOcLocacao] = useState("");
+  // Resolve o id do equipamento locado (tabela equipamentos_locados) a partir
+  // do item do catálogo OU do item vindo de getItensLocadosVencendo.
+  const resolveLocadoId = (item: any): number | null => {
+    if (item?.equipamentoLocadoId != null) return Number(item.equipamentoLocadoId);
+    if (item?.equipamentoVinculadoTipo === "locado" && item?.equipamentoVinculadoId != null) return Number(item.equipamentoVinculadoId);
+    return null;
+  };
+  const abrirRenovarLocacao = (item: any) => {
+    setModalRenovarLocacao({ item });
+    try {
+      const base = item?.dataVencimentoLocacao || new Date().toISOString().slice(0, 10);
+      const d = new Date(base + "T00:00:00");
+      d.setDate(d.getDate() + 30);
+      setNovaDataVencLocacao(d.toISOString().slice(0, 10));
+    } catch { setNovaDataVencLocacao(""); }
+    setNovoValorOcLocacao(item?.valorLocacaoMensal != null && Number(item.valorLocacaoMensal) > 0 ? String(Number(item.valorLocacaoMensal)) : "");
+  };
+  const renovarLocadoMut = trpc.equipamentos.locadoRenovar.useMutation({
+    onSuccess: (data: any) => {
+      refetch();
+      utils.compras.getItensLocadosVencendo.invalidate();
+      setModalRenovarLocacao(null);
+      toast.success(`${data.numeroCiclo}ª renovação registrada — OC ${data.numeroOc} gerada no Compras e enviada ao Contas a Pagar.`);
+    },
+    onError: (e: any) => toast.error(e?.message || "Falha ao renovar a locação."),
+  });
 
   const criarMut = trpc.compras.criarItem.useMutation({
     onSuccess: () => { refetch(); utils.warehouse.getDashboard.invalidate(); setModalItem(false); toast.success("Item criado!"); },
@@ -3044,8 +3071,8 @@ export default function AlmoxarifadoPage() {
                               {selecionadosLocacao.has(item.id) ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
                             </button>
                             <button
-                              onClick={() => { setModalRenovarLocacao({ item }); setNovaDataVencLocacao((item as any).dataVencimentoLocacao ?? ""); }}
-                              title="Renovar locação (nova data de vencimento)"
+                              onClick={() => abrirRenovarLocacao(item)}
+                              title="Renovar locação (gera nova OC no Compras)"
                               className="px-1.5 py-1 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded transition"
                             >
                               <CalendarPlus className="h-3.5 w-3.5" />
@@ -5056,7 +5083,7 @@ export default function AlmoxarifadoPage() {
                         <div className="px-4 pb-4 mt-auto grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            onClick={() => { setModalLocacoesVencendo(false); setModalRenovarLocacao({ item: i }); setNovaDataVencLocacao(i.dataVencimentoLocacao ?? ""); }}
+                            onClick={() => { setModalLocacoesVencendo(false); abrirRenovarLocacao(i); }}
                             className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition shadow-sm"
                           >
                             <CalendarPlus className="h-3.5 w-3.5" /> Renovar
@@ -6253,54 +6280,121 @@ export default function AlmoxarifadoPage() {
         </div>
       )}
 
-      {/* ── Rev. 4345 — Modal Renovar Locação ───────────────────────────── */}
-      {modalRenovarLocacao && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setModalRenovarLocacao(null)} />
-          <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-sm mx-4">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                <CalendarPlus className="h-5 w-5 text-emerald-500" /> Renovar Locação
-              </h2>
-              <button onClick={() => setModalRenovarLocacao(null)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-                <p className="text-sm font-semibold text-emerald-800">{modalRenovarLocacao.item.nome}</p>
-                {modalRenovarLocacao.item.fornecedorLocacao && (
-                  <p className="text-xs text-emerald-600 mt-0.5">Fornecedor: {modalRenovarLocacao.item.fornecedorLocacao}</p>
-                )}
+      {/* ── Rev. 4559 — Modal Renovar Locação (fluxo REAL: nova OC no Compras → Contas a Pagar) ── */}
+      {modalRenovarLocacao && (() => {
+        const it = modalRenovarLocacao.item;
+        const locadoId = resolveLocadoId(it);
+        const renov = Number(it.renovacoesCount) || 0;
+        const fotoUrl = it.fotoLocado || it.fotoUrl || null;
+        return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setModalRenovarLocacao(null)} />
+          <div className="relative bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-hidden max-h-[92vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-indigo-700 to-indigo-500 text-white flex-shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <RefreshCw className="h-5 w-5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold leading-tight">Renovar Locação</h2>
+                  <p className="text-[11px] text-indigo-100">{renov + 1}ª renovação deste equipamento</p>
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-700">Nova data de vencimento da locação</label>
-                <input
-                  type="date"
-                  value={novaDataVencLocacao}
-                  onChange={e => setNovaDataVencLocacao(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
-                />
+              <button onClick={() => setModalRenovarLocacao(null)} className="text-indigo-100 hover:text-white flex-shrink-0"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {/* Item */}
+              <div className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                {fotoUrl ? (
+                  <img src={fotoUrl} className="w-14 h-14 rounded-lg object-cover ring-1 ring-slate-200 flex-shrink-0 pointer-events-none select-none" alt="" draggable={false} />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center flex-shrink-0">
+                    <Camera className="h-5 w-5 text-slate-400" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-900 break-words leading-snug">{it.nome}</p>
+                  {it.fornecedorLocacao && <p className="text-xs text-slate-500 break-words mt-0.5">Fornecedor: {it.fornecedorLocacao}</p>}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${renov > 0 ? "bg-indigo-100 text-indigo-700" : "bg-slate-200 text-slate-600"}`}>
+                      <RefreshCw className="h-2.5 w-2.5" /> {renov > 0 ? `${renov}ª Renovação` : "1ª Locação"}
+                    </span>
+                    {it.dataVencimentoLocacao && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        Venc. atual: {new Date(it.dataVencimentoLocacao + "T00:00:00").toLocaleDateString("pt-BR")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {locadoId != null ? (<>
+              {/* O que a renovação faz (passo a passo) */}
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3 space-y-1.5">
+                <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-wide">O que acontece ao confirmar</p>
+                {[
+                  ["1", "Nova OC de locação é criada no Compras (já aprovada), encadeada à locação atual."],
+                  ["2", "A parcela da OC entra no Contas a Pagar do Financeiro com o valor informado."],
+                  ["3", "O vencimento da locação é atualizado e o ciclo passa a ser a " + (renov + 1) + "ª renovação."],
+                ].map(([n, t]) => (
+                  <div key={n} className="flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{n}</span>
+                    <p className="text-[11px] text-indigo-900 break-words">{t}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-700">Novo vencimento</label>
+                  <input
+                    type="date"
+                    value={novaDataVencLocacao}
+                    onChange={e => setNovaDataVencLocacao(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-indigo-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-700">Valor da nova OC (R$)</label>
+                  <input
+                    type="number" min="0.01" step="0.01"
+                    value={novoValorOcLocacao}
+                    onChange={e => setNovoValorOcLocacao(e.target.value)}
+                    placeholder="0,00"
+                    className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-indigo-400"
+                  />
+                </div>
               </div>
               <div className="flex gap-3 pt-1 border-t border-gray-100">
-                <button onClick={() => setModalRenovarLocacao(null)} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition">Cancelar</button>
+                <button onClick={() => setModalRenovarLocacao(null)} disabled={renovarLocadoMut.isPending} className="flex-1 h-10 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition disabled:opacity-50">Cancelar</button>
                 <button
                   onClick={() => {
+                    const v = parseFloat(novoValorOcLocacao);
                     if (!novaDataVencLocacao) { toast.error("Selecione a nova data de vencimento."); return; }
-                    atualizarMut.mutate(
-                      { id: modalRenovarLocacao.item.id, companyId, dataVencimentoLocacao: novaDataVencLocacao } as any,
-                      { onSuccess: () => { setModalRenovarLocacao(null); toast.success("Locação renovada!"); } }
-                    );
+                    if (!v || v <= 0) { toast.error("Informe o valor da nova OC."); return; }
+                    renovarLocadoMut.mutate({ companyId, id: locadoId, novaDataFim: novaDataVencLocacao, valorOc: v });
                   }}
-                  disabled={atualizarMut.isPending}
-                  className="flex-1 h-9 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2"
+                  disabled={renovarLocadoMut.isPending}
+                  className="flex-1 h-10 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2"
                 >
-                  {atualizarMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Confirmar Renovação
+                  {renovarLocadoMut.isPending ? (<><Loader2 className="h-4 w-4 animate-spin" /> Renovando…</>) : (<><RefreshCw className="h-4 w-4" /> Confirmar Renovação</>)}
                 </button>
               </div>
+              </>) : (
+              /* Item sem vínculo com Equipamentos Locados: não dá pra gerar OC — orienta o usuário */
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3">
+                <p className="text-sm text-amber-900 break-words">
+                  Este item ainda <b>não está vinculado</b> ao módulo Equipamentos Locados, então não é possível gerar a nova OC de locação automaticamente.
+                </p>
+                <p className="text-xs text-amber-800 break-words">
+                  Cadastre-o em <b>Equipamentos → Locados</b> (ou recadastre a locação pelo botão "Receber Locação") para usar o fluxo completo de renovação com Compras e Financeiro.
+                </p>
+                <button onClick={() => setModalRenovarLocacao(null)} className="w-full h-10 text-sm border border-amber-300 rounded-lg bg-white text-amber-800 hover:bg-amber-100 font-semibold transition">Entendi</button>
+              </div>
+              )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Dialog Importar Itens via IA (Rev. 4420) ────────────── */}
       {importIAOpen && (
