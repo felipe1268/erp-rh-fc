@@ -10,7 +10,7 @@ import {
   LayoutGrid, List, Camera, Trash2, ImageOff, Barcode,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft, ChevronDown,
   Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight, Truck,
-  CheckSquare, Square, Globe, Check, Tag, Layers, CalendarPlus,
+  CheckSquare, Square, Globe, Check, Tag, Layers, CalendarPlus, RefreshCw,
 } from "lucide-react";
 import SmartEntry from "./SmartEntry";
 import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
@@ -4953,78 +4953,132 @@ export default function AlmoxarifadoPage() {
         </div>
       )}
 
-      {/* ── Modal Locações a Vencer (Rev. 2567) ────────────────────── */}
+      {/* ── Modal Locações a Vencer (Rev. 2567 → redesign FULL SCREEN Rev. 4559) ── */}
       {modalLocacoesVencendo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setModalLocacoesVencendo(false)} />
-          <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
-                Locações a Vencer ({itensLocadosVencendo.length})
-              </h2>
-              <button onClick={() => setModalLocacoesVencendo(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
-            </div>
-            <div className="p-4 space-y-2 overflow-y-auto">
-              {itensLocadosVencendo.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-6">Nenhuma locação a vencer.</p>
-              ) : itensLocadosVencendo.map((i: any) => {
-                const vencido = i.diasParaVencimento <= 0;
-                return (
-                  <div key={i.id} className={`rounded-lg border p-3 ${vencido ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{i.nome}</p>
-                        {i.fornecedorLocacao && (
-                          <p className="text-xs text-gray-600 mt-0.5">Fornecedor: <span className="font-medium">{i.fornecedorLocacao}</span></p>
-                        )}
-                        {i.dataVencimentoLocacao && (
-                          <p className="text-xs text-gray-600">
-                            Vencimento: <span className="font-medium">{new Date(i.dataVencimentoLocacao + "T00:00:00").toLocaleDateString("pt-BR")}</span>
-                          </p>
-                        )}
-                        {i.valorLocacaoMensal != null && (
-                          <p className="text-xs text-gray-600">
-                            Valor mensal: <span className="font-medium">R$ {Number(i.valorLocacaoMensal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          </p>
-                        )}
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <span className={`inline-block text-xs font-bold px-2 py-1 rounded-full ${vencido ? "bg-red-600 text-white" : "bg-amber-500 text-white"}`}>
-                          {vencido
-                            ? `Vencido${i.diasParaVencimento < 0 ? ` há ${Math.abs(i.diasParaVencimento)}d` : ""}`
-                            : `${i.diasParaVencimento}d`}
-                        </span>
-                      </div>
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm">
+          <div className="absolute inset-0 bg-slate-50 flex flex-col overflow-hidden">
+            {/* Header full-width moderno */}
+            <div className="relative flex-shrink-0 bg-gradient-to-br from-slate-900 via-slate-800 to-amber-900 text-white overflow-hidden">
+              <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-amber-500/20 blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-20 left-1/3 w-72 h-72 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
+              <div className="relative max-w-6xl mx-auto w-full px-4 sm:px-6 pt-5 pb-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded-2xl bg-amber-500/20 ring-1 ring-amber-400/40 flex items-center justify-center flex-shrink-0">
+                      <AlertTriangle className="h-5 w-5 text-amber-300" />
                     </div>
-                    <div className="flex justify-end gap-2 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => { setModalLocacoesVencendo(false); setModalRenovarLocacao({ item: i }); setNovaDataVencLocacao(i.dataVencimentoLocacao ?? ""); }}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-800 bg-white hover:bg-emerald-50 border border-emerald-300 rounded-md px-2.5 py-1 transition"
-                      >
-                        <CalendarPlus className="h-3.5 w-3.5" /> Renovar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setModalLocacoesVencendo(false); abrirDevolverLocacao(i); }}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 bg-white hover:bg-amber-100 border border-amber-300 rounded-md px-2.5 py-1 transition"
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Devolver
-                      </button>
+                    <div className="min-w-0">
+                      <h2 className="text-lg sm:text-xl font-bold tracking-tight break-words">Locações a Vencer</h2>
+                      <p className="text-xs text-slate-300 break-words">Renove ou devolva os equipamentos locados com vencimento próximo.</p>
                     </div>
                   </div>
-                );
-              })}
+                  <button onClick={() => setModalLocacoesVencendo(false)} className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition flex-shrink-0">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                {(() => {
+                  const venc = itensLocadosVencendo.filter((i: any) => i.diasParaVencimento <= 0).length;
+                  return (
+                    <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3 max-w-md">
+                      <div className="rounded-xl bg-white/10 ring-1 ring-white/10 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Total</p>
+                        <p className="text-xl font-bold leading-tight">{itensLocadosVencendo.length}</p>
+                      </div>
+                      <div className="rounded-xl bg-red-500/15 ring-1 ring-red-400/30 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wider text-red-300 font-semibold">Vencidas</p>
+                        <p className="text-xl font-bold leading-tight text-red-200">{venc}</p>
+                      </div>
+                      <div className="rounded-xl bg-amber-500/15 ring-1 ring-amber-400/30 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wider text-amber-300 font-semibold">A vencer</p>
+                        <p className="text-xl font-bold leading-tight text-amber-200">{itensLocadosVencendo.length - venc}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
-            <div className="flex gap-3 px-5 py-4 border-t border-gray-100">
-              <button onClick={() => setModalLocacoesVencendo(false)} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition">Fechar</button>
-              <button
-                onClick={() => { setModalLocacoesVencendo(false); setLocation("/equipamentos/locados"); }}
-                className="flex-1 h-9 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition"
-              >
-                Ver Equipamentos Locados
-              </button>
+
+            {/* Grid de cards */}
+            <div className="flex-1 overflow-y-auto">
+              {itensLocadosVencendo.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-10">Nenhuma locação a vencer.</p>
+              ) : (
+                <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+                  {itensLocadosVencendo.map((i: any) => {
+                    const vencido = i.diasParaVencimento <= 0;
+                    const renov = Number(i.renovacoesCount) || 0;
+                    return (
+                      <div key={i.id} className="rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+                        <div className={`h-1.5 w-full ${vencido ? "bg-red-500" : "bg-amber-400"}`} />
+                        <div className="p-4 flex items-start gap-3">
+                          {i.fotoLocado ? (
+                            <img src={i.fotoLocado} className="w-16 h-16 rounded-xl object-cover ring-1 ring-slate-200 flex-shrink-0 pointer-events-none select-none" alt="" loading="lazy" draggable={false} />
+                          ) : (
+                            <div className="w-16 h-16 rounded-xl bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center flex-shrink-0">
+                              <Camera className="h-5 w-5 text-slate-400" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-slate-900 break-words leading-snug">{i.nome}</p>
+                            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${vencido ? "bg-red-100 text-red-700 ring-1 ring-red-200" : "bg-amber-100 text-amber-800 ring-1 ring-amber-200"}`}>
+                                {vencido
+                                  ? `Vencido${i.diasParaVencimento < 0 ? ` há ${Math.abs(i.diasParaVencimento)}d` : " hoje"}`
+                                  : `Vence em ${i.diasParaVencimento}d`}
+                              </span>
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${renov > 0 ? "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200" : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"}`}>
+                                <RefreshCw className="h-2.5 w-2.5" />
+                                {renov > 0 ? `${renov}ª Renovação` : "1ª Locação"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="px-4 pb-3 space-y-1 text-xs text-slate-600">
+                          {i.obraNome && <p className="break-words"><span className="text-slate-400 font-medium">Obra:</span> {i.obraNome}</p>}
+                          {i.fornecedorLocacao && <p className="break-words"><span className="text-slate-400 font-medium">Fornecedor:</span> {i.fornecedorLocacao}</p>}
+                          <div className="flex items-center justify-between pt-1">
+                            {i.dataVencimentoLocacao ? (
+                              <span>Venc.: <b className="text-slate-800">{new Date(i.dataVencimentoLocacao + "T00:00:00").toLocaleDateString("pt-BR")}</b></span>
+                            ) : <span />}
+                            {i.valorLocacaoMensal != null && (
+                              <span className="font-bold text-slate-900">R$ {Number(i.valorLocacaoMensal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<span className="text-[10px] font-medium text-slate-500">/mês</span></span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="px-4 pb-4 mt-auto grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setModalLocacoesVencendo(false); setModalRenovarLocacao({ item: i }); setNovaDataVencLocacao(i.dataVencimentoLocacao ?? ""); }}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition shadow-sm"
+                          >
+                            <CalendarPlus className="h-3.5 w-3.5" /> Renovar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setModalLocacoesVencendo(false); abrirDevolverLocacao(i); }}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 text-xs font-semibold transition"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Devolver
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer fixo */}
+            <div className="flex-shrink-0 bg-white/90 backdrop-blur border-t border-slate-200">
+              <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-3 flex gap-3">
+                <button onClick={() => setModalLocacoesVencendo(false)} className="flex-1 sm:flex-none sm:px-8 h-11 text-sm border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 font-medium transition">Fechar</button>
+                <button
+                  onClick={() => { setModalLocacoesVencendo(false); setLocation("/equipamentos/locados"); }}
+                  className="flex-1 h-11 text-sm rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-semibold transition shadow-sm"
+                >
+                  Ver Equipamentos Locados
+                </button>
+              </div>
             </div>
           </div>
         </div>

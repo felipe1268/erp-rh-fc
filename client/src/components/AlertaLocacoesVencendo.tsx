@@ -135,7 +135,7 @@ export function AlertaLocacoesVencendo() {
                 <div className={`h-1.5 w-full ${vencido ? "bg-red-500" : "bg-amber-400"}`} />
                 <div className="p-4 flex items-start gap-3">
                   {i.fotoLocado ? (
-                    <img src={i.fotoLocado} className="w-16 h-16 rounded-xl object-cover ring-1 ring-slate-200 flex-shrink-0" alt="" loading="lazy" />
+                    <img src={i.fotoLocado} className="w-16 h-16 rounded-xl object-cover ring-1 ring-slate-200 flex-shrink-0 pointer-events-none select-none" alt="" loading="lazy" draggable={false} />
                   ) : (
                     <div className="w-16 h-16 rounded-xl bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center flex-shrink-0">
                       <Camera className="h-5 w-5 text-slate-400" />
