@@ -941,6 +941,29 @@ export default function FinanceiroCartaoCredito() {
                               Limite: <b className="text-foreground">{c.limite != null ? formatBRL(c.limite) : "—"}</b>
                             </span>
                           </div>
+                          {/* Rev. 4591 — previsão de limite disponível (faturas em aberto + OCs no cartão ainda não faturadas) */}
+                          {c.limite != null && c.limite > 0 && (() => {
+                            const usado = Math.min(Number(c.comprometido ?? 0), Number(c.limite));
+                            const pct = Math.min(100, Math.round((usado / Number(c.limite)) * 100));
+                            const disp = Number(c.limiteDisponivel ?? 0);
+                            const cor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+                            const corTxt = pct >= 90 ? "text-red-600" : pct >= 70 ? "text-amber-600" : "text-emerald-600";
+                            return (
+                              <div className="mt-2 space-y-1">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-muted-foreground">Disponível (previsão)</span>
+                                  <b className={`tabular-nums ${corTxt}`}>{formatBRL(disp)}</b>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                  <div className={`h-full rounded-full ${cor} transition-all`} style={{ width: `${pct}%` }} />
+                                </div>
+                                <p className="text-[10px] text-muted-foreground leading-tight">
+                                  Usado {pct}% · faturas em aberto {formatBRL(Number(c.comprometidoFatura ?? 0))}
+                                  {Number(c.comprometidoOc ?? 0) > 0 && <> · OCs a faturar {formatBRL(Number(c.comprometidoOc ?? 0))}</>}
+                                </p>
+                              </div>
+                            );
+                          })()}
                           <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-muted-foreground">
                             <span>Fecha dia: <b className="text-foreground">{c.diaFechamento ?? "—"}</b></span>
                             <span>Vence dia: <b className="text-foreground">{c.diaVencimento ?? "—"}</b></span>
@@ -1946,6 +1969,33 @@ export default function FinanceiroCartaoCredito() {
                     </div>
                   </div>
                 </div>
+
+                {/* Rev. 4591 — Limite disponível (previsão) — só no editar, calculado do servidor */}
+                {cartaoEdit != null && cartaoEdit.limite != null && cartaoEdit.limite > 0 && (() => {
+                  const usado = Math.min(Number(cartaoEdit.comprometido ?? 0), Number(cartaoEdit.limite));
+                  const pct = Math.min(100, Math.round((usado / Number(cartaoEdit.limite)) * 100));
+                  const disp = Number(cartaoEdit.limiteDisponivel ?? 0);
+                  const alto = pct >= 90;
+                  const medio = pct >= 70 && pct < 90;
+                  return (
+                    <div className={`rounded-lg border p-3.5 space-y-2 ${alto ? "border-red-200 bg-red-50" : medio ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-xs font-semibold uppercase tracking-wide ${alto ? "text-red-700" : medio ? "text-amber-700" : "text-emerald-700"}`}>
+                          Limite disponível (previsão)
+                        </span>
+                        <b className={`text-sm tabular-nums ${alto ? "text-red-700" : medio ? "text-amber-700" : "text-emerald-700"}`}>{formatBRL(disp)}</b>
+                      </div>
+                      <div className="h-2 rounded-full bg-white/70 overflow-hidden">
+                        <div className={`h-full rounded-full ${alto ? "bg-red-500" : medio ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className={`text-[11px] leading-tight ${alto ? "text-red-600/90" : medio ? "text-amber-700/90" : "text-emerald-600/90"}`}>
+                        Usado {pct}% do limite: faturas em aberto {formatBRL(Number(cartaoEdit.comprometidoFatura ?? 0))}
+                        {Number(cartaoEdit.comprometidoOc ?? 0) > 0 && <> + OCs no cartão ainda não faturadas {formatBRL(Number(cartaoEdit.comprometidoOc ?? 0))}</>}.
+                        Conforme as OCs de Compras usam este cartão, o disponível desce automaticamente — e volta quando a fatura é importada e paga.
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 {/* Painel Melhor Data de Compra — calculado ao vivo */}
                 {cartaoForm.diaFechamento && cartaoForm.diaVencimento && (() => {

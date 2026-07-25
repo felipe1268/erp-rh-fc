@@ -390,24 +390,56 @@ export const cartaoRouter = router({
     await assertCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Rev. 4591 — previsão de limite disponível: comprometido = faturas em aberto
+    // (total > pagamentos) + OCs pagas no cartão que AINDA não apareceram em
+    // nenhuma fatura importada (dedup pelo vínculo financial_cartao_itens.compra_oc_id,
+    // preenchido automaticamente na importação da fatura — sem dupla contagem).
     const res = await dbExecute(db,
-      `SELECT id, company_id AS "companyId", banco, bandeira, final4,
-              titular, tipo_pessoa AS "tipoPessoa", COALESCE(escopo, 'fc') AS escopo,
-              COALESCE(finalidade, 'geral') AS finalidade,
-              CASE WHEN status IS NOT NULL THEN status WHEN ativo = 0 THEN 'inativo' ELSE 'ativo' END AS status, dia_fechamento AS "diaFechamento",
-              dia_vencimento AS "diaVencimento", limite, ativo, observacao,
-              created_at AS "createdAt"
-         FROM financial_cartoes
-        WHERE company_id=$1 AND excluido_em IS NULL ${input.incluirInativos ? "" : "AND ativo=1"}
-        ORDER BY banco NULLS LAST, final4 NULLS LAST, id DESC`,
+      `SELECT c.id, c.company_id AS "companyId", c.banco, c.bandeira, c.final4,
+              c.titular, c.tipo_pessoa AS "tipoPessoa", COALESCE(c.escopo, 'fc') AS escopo,
+              COALESCE(c.finalidade, 'geral') AS finalidade,
+              CASE WHEN c.status IS NOT NULL THEN c.status WHEN c.ativo = 0 THEN 'inativo' ELSE 'ativo' END AS status, c.dia_fechamento AS "diaFechamento",
+              c.dia_vencimento AS "diaVencimento", c.limite, c.ativo, c.observacao,
+              c.created_at AS "createdAt",
+              COALESCE((
+                SELECT SUM(f.total - COALESCE(f.pagamentos, 0))
+                  FROM financial_cartao_faturas f
+                 WHERE f.cartao_id = c.id AND f.company_id = c.company_id
+                   AND f.excluido_em IS NULL
+                   AND f.total > COALESCE(f.pagamentos, 0)
+              ), 0) AS "comprometidoFatura",
+              COALESCE((
+                SELECT SUM(COALESCE(o.total, 0))
+                  FROM compras_ordens o
+                 WHERE o.cartao_id = c.id AND o.company_id = c.company_id
+                   AND o.status <> 'cancelada'
+                   AND NOT EXISTS (
+                     SELECT 1 FROM financial_cartao_itens i
+                      WHERE i.compra_oc_id = o.id AND i.company_id = o.company_id
+                        AND i.excluido_em IS NULL
+                   )
+              ), 0) AS "comprometidoOc"
+         FROM financial_cartoes c
+        WHERE c.company_id=$1 AND c.excluido_em IS NULL ${input.incluirInativos ? "" : "AND c.ativo=1"}
+        ORDER BY c.banco NULLS LAST, c.final4 NULLS LAST, c.id DESC`,
       [input.companyId]);
     // Alerta PESSOAL: cartão PF é um cartão pessoal sendo usado pela empresa →
     // sugerir regularização (não pode ter cartão pessoal pagando despesa da FC).
-    return res.rows.map((c: any) => ({
-      ...c,
-      limite: c.limite != null ? parseFloat(c.limite) : null,
-      alertaPessoal: String(c.tipoPessoa || "").toUpperCase() === "PF",
-    }));
+    return res.rows.map((c: any) => {
+      const limite = c.limite != null ? parseFloat(c.limite) : null;
+      const comprometidoFatura = parseFloat(c.comprometidoFatura ?? "0");
+      const comprometidoOc = parseFloat(c.comprometidoOc ?? "0");
+      const comprometido = comprometidoFatura + comprometidoOc;
+      return {
+        ...c,
+        limite,
+        comprometidoFatura,
+        comprometidoOc,
+        comprometido,
+        limiteDisponivel: limite != null ? Math.max(limite - comprometido, 0) : null,
+        alertaPessoal: String(c.tipoPessoa || "").toUpperCase() === "PF",
+      };
+    });
   }),
 
   criarCartao: protectedProcedure.input(z.object({
@@ -530,7 +562,18 @@ export const cartaoRouter = router({
                  WHERE f.cartao_id = c.id AND f.company_id = c.company_id
                    AND f.excluido_em IS NULL
                    AND f.total > COALESCE(f.pagamentos, 0)
-              ), 0) AS comprometido
+              ), 0) AS comprometido,
+              COALESCE((
+                SELECT SUM(COALESCE(o.total, 0))
+                  FROM compras_ordens o
+                 WHERE o.cartao_id = c.id AND o.company_id = c.company_id
+                   AND o.status <> 'cancelada'
+                   AND NOT EXISTS (
+                     SELECT 1 FROM financial_cartao_itens i
+                      WHERE i.compra_oc_id = o.id AND i.company_id = o.company_id
+                        AND i.excluido_em IS NULL
+                   )
+              ), 0) AS "comprometidoOc"
          FROM financial_cartoes c
         WHERE c.company_id=$1 AND c.excluido_em IS NULL AND c.ativo=1
           AND COALESCE(c.escopo, 'fc') = 'fc'
@@ -544,7 +587,8 @@ export const cartaoRouter = router({
 
     const cartoes = res.rows.map((c: any) => {
       const limite = c.limite != null ? parseFloat(c.limite) : null;
-      const comprometido = parseFloat(c.comprometido ?? "0");
+      // Rev. 4591 — comprometido = faturas em aberto + OCs no cartão ainda não faturadas (previsão).
+      const comprometido = parseFloat(c.comprometido ?? "0") + parseFloat(c.comprometidoOc ?? "0");
       const limiteDisponivel = limite != null ? Math.max(limite - comprometido, 0) : null;
       const diasFloat = (c.diaFechamento != null && c.diaVencimento != null)
         ? diasFloatSeComprarHoje(Number(c.diaFechamento), Number(c.diaVencimento), hoje)

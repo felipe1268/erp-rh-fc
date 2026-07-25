@@ -1,4 +1,41 @@
 /**
+ * Rev. 4591 - FEAT: CARTÃO DE CRÉDITO — LIMITE DISPONÍVEL (PREVISÃO) QUE DESCE COM AS OCs
+ *
+ * PEDIDO DO USUÁRIO: "campo de limite disponível — conforme as OCs vão
+ * utilizando, automaticamente o limite vai descendo. Pelo menos uma previsão."
+ *
+ * COMO FUNCIONA (previsão transparente, sem coluna nova):
+ * - Comprometido do cartão = (a) faturas em aberto (total > pagamentos) +
+ *   (b) OCs de Compras pagas no cartão (cartao_id) que AINDA não apareceram
+ *   em nenhuma fatura importada.
+ * - Dedup sem dupla contagem: a importação de fatura já vincula item→OC via
+ *   financial_cartao_itens.compra_oc_id (Rev. 4019); quando a OC aparece na
+ *   fatura, ela sai automaticamente da parcela (b) e passa a contar em (a).
+ * - Limite disponível = limite − comprometido (mín. 0).
+ *
+ * SERVER (cartao.ts):
+ * - listarCartoes: novos campos comprometidoFatura, comprometidoOc,
+ *   comprometido e limiteDisponivel (2 subselects; OCs status<>'cancelada').
+ * - resumoParaCompra: comprometido agora soma também as OCs não faturadas —
+ *   a sugestão de cartão nas Cotações/OCs fica mais realista (Poka-Yoke:
+ *   evita recomendar cartão já estourado por compras recentes).
+ *
+ * UI (FinanceiroCartaoCredito.tsx):
+ * - Card da listagem: linha "Disponível (previsão)" + barra de uso com cor
+ *   por faixa (verde <70%, âmbar 70–89%, vermelho ≥90%) + detalhamento
+ *   (faturas em aberto · OCs a faturar).
+ * - Modal Editar (Datas & Limite): painel colorido com disponível, barra e
+ *   explicação de que o valor desce conforme as OCs usam o cartão e volta
+ *   quando a fatura é importada/paga.
+ *
+ * VALIDAÇÃO: SQL rodado contra o Neon real — ex.: cartão Santander 0578 com
+ * R$ 159,90 de OCs ainda não faturadas descontados do limite de R$ 70.000.
+ *
+ * ARQUIVOS: server/routers/cartao.ts, FinanceiroCartaoCredito.tsx.
+ * ZERO schema change (tudo derivado de tabelas existentes).
+ */
+
+/**
  * Rev. 4590 - UX: CARTÃO DE CRÉDITO — MODAL "USO DO CARTÃO" COM TILES VISUAIS
  *
  * PEDIDO DO USUÁRIO: "Fazer um layout moderno e organizado, mais fácil de
