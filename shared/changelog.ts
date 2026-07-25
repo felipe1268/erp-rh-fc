@@ -1,4 +1,28 @@
 /**
+ * Rev. 4588 - FIX: DEPLOY — BUILD DE PUBLICAÇÃO QUEBRAVA POR SCRIPT EXCLUÍDO NO .dockerignore
+ *
+ * PEDIDO DO USUÁRIO: "My deployment build failed to publish."
+ *
+ * CAUSA-RAIZ: o `.dockerignore` (criado p/ manter a imagem < 8 GiB)
+ * excluía a pasta `scripts/` INTEIRA — mas o comando de build do deploy
+ * (`pnpm run build`) termina com `node scripts/gen-build-info.mjs`.
+ * No servidor de publicação o arquivo não existia → build falhava,
+ * embora passasse normalmente no ambiente de desenvolvimento
+ * (validado: vite 1m51s + esbuild + build-info, EXIT=0 local).
+ *
+ * FIX: `scripts/` → `scripts/*` + negação `!scripts/gen-build-info.mjs`
+ * (padrão dir/* + ! é o único confiável p/ re-incluir arquivo de pasta
+ * excluída no Docker). `gen-build-info.mjs` já tolera ausência de .git
+ * (safe() retorna ""), então funciona mesmo com `.git/` excluído.
+ *
+ * POKA-YOKE (nível 3, prevenção): conferido que NENHUM outro caminho de
+ * build/runtime depende de `scripts/` (package.json start/build + grep
+ * no server); comentário no .dockerignore avisa sobre a exceção.
+ *
+ * ARQUIVOS: .dockerignore. ZERO schema/código de app change.
+ */
+
+/**
  * Rev. 4587 - FEAT: CONTAS A PAGAR — EDITAR COM AS MESMAS INFORMAÇÕES DE PAGAMENTO DA TELA "PAGAR"
  *
  * PEDIDO DO USUÁRIO: "na parte de editar (lapisinho), não aparece o que

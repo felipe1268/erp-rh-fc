@@ -10,7 +10,9 @@ attached_assets/
 docs/
 
 # Scripts auxiliares de dev/migração (não rodam em prod)
-scripts/
+# EXCEÇÃO: gen-build-info.mjs é chamado pelo `pnpm run build` no deploy!
+scripts/*
+!scripts/gen-build-info.mjs
 
 # Estados locais do agent
 .local/
