@@ -10,10 +10,12 @@
  * embora passasse normalmente no ambiente de desenvolvimento
  * (validado: vite 1m51s + esbuild + build-info, EXIT=0 local).
  *
- * FIX: `scripts/` → `scripts/*` + negação `!scripts/gen-build-info.mjs`
- * (padrão dir/* + ! é o único confiável p/ re-incluir arquivo de pasta
- * excluída no Docker). `gen-build-info.mjs` já tolera ausência de .git
- * (safe() retorna ""), então funciona mesmo com `.git/` excluído.
+ * FIX (endurecido após 2ª falha): (1) `scripts/` deixou de ser excluída
+ * no .dockerignore — a pasta tem só 368 KB e regras de negação (!) são
+ * frágeis; (2) o passo `node scripts/gen-build-info.mjs` no build virou
+ * NÃO-FATAL (`|| echo`) — se o arquivo faltar, o build segue e o server
+ * já trata build-info.json ausente (codeSyncService → fallback null).
+ * `gen-build-info.mjs` já tolera ausência de .git (safe() retorna "").
  *
  * POKA-YOKE (nível 3, prevenção): conferido que NENHUM outro caminho de
  * build/runtime depende de `scripts/` (package.json start/build + grep

@@ -9,10 +9,9 @@ attached_assets/
 # PDFs e prints de manual gerados localmente (não servidos pelo backend)
 docs/
 
-# Scripts auxiliares de dev/migração (não rodam em prod)
-# EXCEÇÃO: gen-build-info.mjs é chamado pelo `pnpm run build` no deploy!
-scripts/*
-!scripts/gen-build-info.mjs
+# scripts/ NÃO é mais excluída (368 KB apenas) — o build do deploy
+# precisa de scripts/gen-build-info.mjs e regras de negação (!) em
+# .dockerignore são frágeis. Custo de manter a pasta é desprezível.
 
 # Estados locais do agent
 .local/
