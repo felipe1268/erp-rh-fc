@@ -130,6 +130,13 @@ export default function PortalDashboard() {
 
   const handleSave = () => {
     if (!form.nomeCompleto || !form.cpf) { toast.error("Nome e CPF são obrigatórios"); return; }
+    // Rev. 4562 (Poka-Yoke): coerência de datas — admissão futura e validades anteriores à admissão são digitação.
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (form.dataAdmissao && form.dataAdmissao > hoje) { toast.error("Data de admissão não pode ser futura."); return; }
+    for (const [campo, rotulo] of [["asoValidade", "ASO"], ["nr35Validade", "NR-35"], ["nr10Validade", "NR-10"], ["nr33Validade", "NR-33"]] as const) {
+      const v = (form as any)[campo];
+      if (v && form.dataAdmissao && v < form.dataAdmissao) { toast.error(`Validade do ${rotulo} é anterior à data de admissão. Verifique as datas.`); return; }
+    }
     if (editingId) {
       atualizarMut.mutate({ token, id: editingId, ...form });
     } else {

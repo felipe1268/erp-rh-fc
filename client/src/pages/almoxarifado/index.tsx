@@ -3756,7 +3756,7 @@ export default function AlmoxarifadoPage() {
                   </div>
                   <button
                     className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                    disabled={!entradaItemId || !entradaQtd || registerEntry.isPending}
+                    disabled={!entradaItemId || !(parseFloat(entradaQtd) > 0) || registerEntry.isPending}
                     onClick={() => registerEntry.mutate({ companyId, itemId: entradaItemId, quantidade: parseFloat(entradaQtd), notaFiscal: entradaMotivo || undefined })}
                   >
                     {registerEntry.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "✅ CONFIRMAR ENTRADA"}
@@ -3825,7 +3825,7 @@ export default function AlmoxarifadoPage() {
                   </div>
                   <button
                     className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                    disabled={!saidaItemId || !saidaQtd || !saidaObraId || registerExit.isPending}
+                    disabled={!saidaItemId || !(parseFloat(saidaQtd) > 0) || !saidaObraId || registerExit.isPending}
                     onClick={() => {
                       const obraSel = obrasAtivas.find((o: any) => o.id === saidaObraId);
                       registerExit.mutate({ companyId, itemId: saidaItemId, quantidade: parseFloat(saidaQtd), obraId: saidaObraId || undefined, obraNome: obraSel ? (obraSel.codigo ? `${obraSel.codigo} – ${obraSel.nome}` : obraSel.nome) : undefined });

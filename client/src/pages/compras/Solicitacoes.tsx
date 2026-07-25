@@ -5823,14 +5823,14 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                 </Button>
                 {!["cancelado", "aprovado"].includes(detalhe.status) && (
                   <Button size="sm" variant="outline"
-                    onClick={() => cancelar.mutate({ id: detalhe.id, status: "cancelado" })}
+                    onClick={() => { if (confirm(`Cancelar a solicitação ${detalhe.numero ?? `#${detalhe.id}`}? Ela sai do fluxo de cotação/compra.`)) cancelar.mutate({ id: detalhe.id, status: "cancelado" }); }}
                     disabled={cancelar.isPending}
                     className="border-gray-300 text-gray-600 hover:bg-gray-50 text-xs">
                     Cancelar SC
                   </Button>
                 )}
                 <Button size="sm" variant="outline"
-                  onClick={() => excluir.mutate({ id: detalhe.id })}
+                  onClick={() => { if (confirm(`EXCLUIR a solicitação ${detalhe.numero ?? `#${detalhe.id}`}? Esta ação não pode ser desfeita.`)) excluir.mutate({ id: detalhe.id }); }}
                   disabled={excluir.isPending}
                   className="border-red-200 text-red-600 hover:bg-red-50 text-xs ml-auto gap-1">
                   <Trash2 className="h-3 w-3" /> Excluir

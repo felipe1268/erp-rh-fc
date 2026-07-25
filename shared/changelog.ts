@@ -1,4 +1,44 @@
 /**
+ * Rev. 4562 - QUALIDADE: POKA-YOKE EM 10 PONTOS DO ERP (À PROVA DE ERROS)
+ *
+ * PEDIDO DO USUÁRIO: aplicar a nova Regra de Ouro Poka-Yoke (prevenção >
+ * bloqueio > aviso) implementando TODOS os 10 achados da auditoria de uma vez.
+ *
+ * O QUE MUDOU (por achado):
+ * 1) FINANCEIRO/registrarBaixa (server/routers/financial.ts): valor da baixa
+ *    agora exige > 0 (.positive()) e data de baixa FUTURA é bloqueada no
+ *    servidor — baixa retro-futura distorcia fluxo de caixa.
+ * 2) FINANCEIRO/createRevenue (financial.ts): valorMedicao .positive() e
+ *    retenções .nonnegative() — receita zero/negativa era digitação.
+ * 3) RECEITAS (FinanceiroReceitas.tsx): todos os campos R$ com máscara pt-BR
+ *    (formatMoedaInput/parseMoedaBR — prevenção pelo design), validação
+ *    vm>0 + obra obrigatória no salvar.
+ * 4) COERÊNCIA DE DATAS: AvisoPrevio.tsx bloqueia data do aviso ANTERIOR à
+ *    admissão do colaborador; PortalDashboard.tsx (portal terceiro) bloqueia
+ *    admissão futura e validades (ASO/NR-35/NR-10/NR-33) anteriores à admissão.
+ * 5) DUPLO CLIQUE: verificado — Colaboradores.tsx e Solicitacoes.tsx já
+ *    desabilitam botões via isPending (cobertos por revisões anteriores).
+ * 6) ALMOXARIFADO (almoxarifado/index.tsx): botões CONFIRMAR ENTRADA e
+ *    CONFIRMAR SAÍDA só habilitam com quantidade > 0 (antes "0" passava);
+ *    compras/Almoxarifado.tsx já tinha guard qtd<=0.
+ * 7) EQUIPAMENTOS/proprioCriar (equipamentos.ts): data de aquisição FUTURA
+ *    bloqueada no schema zod (quebrava depreciação) + valorAquisicao
+ *    .nonnegative().
+ * 8) SOLICITAÇÕES (Solicitacoes.tsx): "Cancelar SC" e "Excluir" agora exigem
+ *    confirmação explícita (antes excluía sem perguntar).
+ * 9) RECEITAS: mudar status p/ cancelado exige checkbox de confirmação
+ *    dedicado (confirmCancel, resetado ao abrir o modal) + botão vermelho.
+ * 10) NOTAS FISCAIS (fiscalNotes.ts/criar): guard de DUPLICIDADE — mesmo
+ *    número (+série) na mesma empresa, ignorando canceladas → CONFLICT com
+ *    mensagem clara. Antes era possível lançar a mesma NF 2x.
+ *
+ * RACIONAL: cada item aplica o nível mais forte viável — máscara/disable
+ * (design) onde possível, validação server-side (bloqueio) para dados
+ * financeiros/fiscais, confirmação explícita para ações destrutivas.
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4561 - UX: CONTAS A PAGAR — REDESIGN LÚDICO DO MODAL "DETALHE DO TÍTULO"
  *
  * PEDIDO DO USUÁRIO: "Faça um novo layout moderno intuitivo e lúdico para

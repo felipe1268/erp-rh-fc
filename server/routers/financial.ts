@@ -4917,14 +4917,15 @@ export const financialRouter = router({
     clienteNome: z.string().optional(),
     clienteCnpj: z.string().optional(),
     valorContrato: z.number().optional(),
-    valorMedicao: z.number(),
+    // Rev. 4562 (Poka-Yoke): medição de R$ 0,00 ou negativa é sempre erro de digitação.
+    valorMedicao: z.number().positive("Valor da medição deve ser maior que zero."),
     medicaoNumero: z.number().optional(),
     percentualMedicao: z.number().optional(),
     dataVencimento: z.string().optional(),
-    retencaoISS: z.number().default(0),
-    retencaoINSS: z.number().default(0),
-    retencaoIR: z.number().default(0),
-    retencaoContratual: z.number().default(0),
+    retencaoISS: z.number().nonnegative().default(0),
+    retencaoINSS: z.number().nonnegative().default(0),
+    retencaoIR: z.number().nonnegative().default(0),
+    retencaoContratual: z.number().nonnegative().default(0),
     observacoes: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
@@ -10380,7 +10381,10 @@ export const financialRouter = router({
   registrarBaixa: protectedProcedure.input(z.object({
     id: z.number(),
     companyId: z.number(),
-    valor: z.number().nonnegative("Valor inválido."),
+    // Rev. 4562 (Poka-Yoke): baixa negativa nunca é intencional — bloquear no schema.
+    // Valor 0 é permitido SOMENTE com quitarTotal=true (quitação manual que perdoa o saldo);
+    // o guard runtime abaixo (`valor <= 0 && !quitarTotal`) cobre esse caso.
+    valor: z.number().nonnegative("Valor da baixa não pode ser negativo."),
     data: z.string().optional(),
     contaBancariaId: z.number().nullable().optional(),
     formaPagamento: z.string().optional(),
@@ -10406,6 +10410,10 @@ export const financialRouter = router({
       await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
     }
     const dataBaixa = (input.data || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    // Rev. 4562 (Poka-Yoke): baixa com data FUTURA distorce o fluxo de caixa realizado — bloquear.
+    if (dataBaixa > new Date().toISOString().slice(0, 10)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Data da baixa não pode ser futura." });
+    }
     const isCheque = input.formaPagamento === "cheque";
     // Rev. 3743 — TUDO numa transação com advisory lock por lançamento: serializa backfill +
     // insert + rollup contra baixas/estornos concorrentes do MESMO título (sem isso, dois cliques

@@ -397,8 +397,12 @@ export const equipamentosRouter = router({
       numeroSerie: z.string().max(100).optional(),
       marca: z.string().max(100).optional(),
       modelo: z.string().max(100).optional(),
-      dataAquisicao: z.string().max(10).optional(),
-      valorAquisicao: z.number().optional(),
+      // Rev. 4562 (Poka-Yoke): data futura quebra depreciação/CAPEX; valor negativo é digitação.
+      dataAquisicao: z.string().max(10).refine(
+        (d) => !d || d <= new Date().toISOString().slice(0, 10),
+        "Data de aquisição não pode ser futura."
+      ).optional(),
+      valorAquisicao: z.number().nonnegative("Valor de aquisição não pode ser negativo.").optional(),
       vidaUtilMeses: z.number().int().optional(),
       custoManutencaoMedioMes: z.number().optional(),
       custoSeguroMedioMes: z.number().optional(),

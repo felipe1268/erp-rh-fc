@@ -471,6 +471,13 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
+    // Rev. 4562 (Poka-Yoke): coerência de datas — aviso não pode ser ANTES da admissão.
+    const admRaw = selectedEmp?.dataAdmissao;
+    const admISO = admRaw instanceof Date ? admRaw.toISOString().slice(0, 10) : (typeof admRaw === "string" ? admRaw.slice(0, 10) : "");
+    if (admISO && form.dataDesligamento < admISO) {
+      toast.error(`Data do aviso (${form.dataDesligamento.split("-").reverse().join("/")}) é anterior à admissão do colaborador (${admISO.split("-").reverse().join("/")}). Verifique a data.`);
+      return;
+    }
     if (cipaCheckQ.data?.temEstabilidade) {
       const cipaMembro = cipaCheckQ.data.membros[0];
       const msg = `⚠️ ATENÇÃO: CIPEIRO COM ESTABILIDADE!\n\n` +

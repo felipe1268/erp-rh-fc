@@ -2,7 +2,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { fiscalNotes } from "../../drizzle/schema";
-import { eq, and, desc, ilike, or, isNull, notInArray, inArray } from "drizzle-orm";
+import { eq, and, desc, ilike, or, isNull, notInArray, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getUserCompanyLinks } from "../db";
 import { invokeGeminiVision, invokeAnthropicVision } from "../_core/llm";
@@ -211,16 +211,37 @@ export const fiscalNotesRouter = router({
       await _assertNfAccess(ctx.user, input.companyId);
       const db = await getDb();
       const now = new Date().toISOString();
-      // Valor líquido calculado server-side: Bruto − ISS retido − INSS − IRRF − PIS/COFINS retidos
-      // O frontend pode enviar uma sugestão mas o servidor sempre recalcula para consistência.
-      const valorLiquidoCalc = Math.max(0,
+      // Rev. 4562 (Poka-Yoke): bloqueia NF duplicada — mesmo número (+série) na mesma
+      // empresa, ignorando canceladas. Antes era possível lançar 2x a mesma nota.
+      // Advisory lock transacional por (company, numeroNf, serie) serializa duplo clique /
+      // requisições concorrentes: o check-then-insert roda atômico dentro da transação.
+      const serieNorm = input.serie ?? "";
+      const [row] = await (db as any).transaction(async (tx: any) => {
+        const lockKey = `nf_criar:${input.companyId}:${input.numeroNf}:${serieNorm}`;
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+        const dupRes: any = await tx.execute(sql`
+          SELECT id FROM fiscal_notes
+           WHERE company_id = ${input.companyId} AND numero_nf = ${input.numeroNf}
+             AND COALESCE(serie,'') = ${serieNorm}
+             AND status <> 'cancelada'
+           LIMIT 1`);
+        const dupRows: any[] = dupRes?.rows ?? (Array.isArray(dupRes) ? dupRes : []);
+        if (dupRows.length > 0) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Já existe uma nota fiscal nº ${input.numeroNf}${input.serie ? ` (série ${input.serie})` : ""} cadastrada nesta empresa.`,
+          });
+        }
+        // Valor líquido calculado server-side: Bruto − ISS retido − INSS − IRRF − PIS/COFINS retidos.
+        // O frontend pode enviar uma sugestão mas o servidor sempre recalcula para consistência.
+        const valorLiquidoCalc = Math.max(0,
         (input.valorBruto ?? 0)
         - (input.issRetido ?? 0)
         - (input.retencaoInss ?? 0)
         - (input.retencaoIrrf ?? 0)
         - (input.retencaoPisCofins ?? 0)
       );
-      const [row] = await db.insert(fiscalNotes).values({
+        const inserted = await tx.insert(fiscalNotes).values({
         companyId:          input.companyId,
         numeroNf:           input.numeroNf,
         serie:              input.serie ?? null,
@@ -254,6 +275,8 @@ export const fiscalNotesRouter = router({
         createdAt:          now,
         updatedAt:          now,
       }).returning();
+        return inserted;
+      });
       return row;
     }),
 

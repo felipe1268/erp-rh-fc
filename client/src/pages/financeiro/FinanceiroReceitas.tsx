@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, CheckCircle, Clock, XCircle, FileText } from "lucide-react";
+import { Plus, Search, CheckCircle, Clock, XCircle, FileText, AlertTriangle } from "lucide-react";
+import { formatMoedaInput, parseMoedaBR } from "@/lib/formatters";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -42,6 +43,7 @@ export default function FinanceiroReceitas() {
   const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [showUpdate, setShowUpdate] = useState<any | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false); // Rev. 4562 (Poka-Yoke)
 
   const [form, setForm] = useState({
     obraId: "",
@@ -97,22 +99,25 @@ export default function FinanceiroReceitas() {
   const totalPrevisto = filtered.filter((r: any) => r.status !== "cancelado").reduce((s: number, r: any) => s + Number(r.valorMedicao ?? 0), 0);
   const totalRecebido = filtered.filter((r: any) => r.status !== "cancelado").reduce((s: number, r: any) => s + Number(r.valorRecebido ?? 0), 0);
 
+  // Rev. 4562 (Poka-Yoke): campos R$ agora usam máscara pt-BR — parse via parseMoedaBR.
   function handleSave() {
-    if (!form.valorMedicao) { toast({ title: "Informe o valor da medição", variant: "destructive" }); return; }
+    const vm = parseMoedaBR(form.valorMedicao);
+    if (!vm || vm <= 0) { toast({ title: "Informe o valor da medição (maior que zero)", variant: "destructive" }); return; }
+    if (!form.obraId) { toast({ title: "Selecione a obra", variant: "destructive" }); return; }
     createMut.mutate({
       companyId,
       obraId: parseInt(form.obraId) || 0,
       obraNome: form.obraNome || undefined,
       clienteNome: form.clienteNome || undefined,
       clienteCnpj: form.clienteCnpj || undefined,
-      valorContrato: parseFloat(form.valorContrato) || undefined,
-      valorMedicao: parseFloat(form.valorMedicao),
+      valorContrato: parseMoedaBR(form.valorContrato) || undefined,
+      valorMedicao: vm,
       medicaoNumero: parseInt(form.medicaoNumero) || undefined,
       percentualMedicao: parseFloat(form.percentualMedicao) || undefined,
       dataVencimento: form.dataVencimento || undefined,
-      retencaoISS: parseFloat(form.retencaoISS) || 0,
-      retencaoINSS: parseFloat(form.retencaoINSS) || 0,
-      retencaoIR: parseFloat(form.retencaoIR) || 0,
+      retencaoISS: parseMoedaBR(form.retencaoISS) || 0,
+      retencaoINSS: parseMoedaBR(form.retencaoINSS) || 0,
+      retencaoIR: parseMoedaBR(form.retencaoIR) || 0,
       observacoes: form.observacoes || undefined,
     });
   }
@@ -203,7 +208,7 @@ export default function FinanceiroReceitas() {
                         <td className="px-4 py-3">
                           {r.status !== "cancelado" && (
                             <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                              onClick={() => { setShowUpdate(r); setUpdateForm({ status: r.status, nfNumero: r.nfNumero ?? "", nfEmitidaEm: r.nfEmitidaEm ?? "", dataRecebimento: "", valorRecebido: "", formaPagamento: "" }); }}>
+                              onClick={() => { setShowUpdate(r); setConfirmCancel(false); setUpdateForm({ status: r.status, nfNumero: r.nfNumero ?? "", nfEmitidaEm: r.nfEmitidaEm ?? "", dataRecebimento: "", valorRecebido: "", formaPagamento: "" }); }}>
                               <FileText className="w-3 h-3 mr-1" />Atualizar
                             </Button>
                           )}
@@ -253,11 +258,11 @@ export default function FinanceiroReceitas() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Valor do Contrato (R$)</Label>
-                  <Input type="number" step="0.01" value={form.valorContrato} onChange={e => setForm(f => ({ ...f, valorContrato: e.target.value }))} />
+                  <Input inputMode="decimal" placeholder="0,00" value={form.valorContrato} onChange={e => setForm(f => ({ ...f, valorContrato: formatMoedaInput(e.target.value) }))} />
                 </div>
                 <div>
                   <Label>Valor da Medição (R$) *</Label>
-                  <Input type="number" step="0.01" value={form.valorMedicao} onChange={e => setForm(f => ({ ...f, valorMedicao: e.target.value }))} />
+                  <Input inputMode="decimal" placeholder="0,00" value={form.valorMedicao} onChange={e => setForm(f => ({ ...f, valorMedicao: formatMoedaInput(e.target.value) }))} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -273,15 +278,15 @@ export default function FinanceiroReceitas() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label>Retenção ISS (R$)</Label>
-                  <Input type="number" step="0.01" value={form.retencaoISS} onChange={e => setForm(f => ({ ...f, retencaoISS: e.target.value }))} />
+                  <Input inputMode="decimal" placeholder="0,00" value={form.retencaoISS} onChange={e => setForm(f => ({ ...f, retencaoISS: formatMoedaInput(e.target.value) }))} />
                 </div>
                 <div>
                   <Label>Retenção INSS (R$)</Label>
-                  <Input type="number" step="0.01" value={form.retencaoINSS} onChange={e => setForm(f => ({ ...f, retencaoINSS: e.target.value }))} />
+                  <Input inputMode="decimal" placeholder="0,00" value={form.retencaoINSS} onChange={e => setForm(f => ({ ...f, retencaoINSS: formatMoedaInput(e.target.value) }))} />
                 </div>
                 <div>
                   <Label>Retenção IR (R$)</Label>
-                  <Input type="number" step="0.01" value={form.retencaoIR} onChange={e => setForm(f => ({ ...f, retencaoIR: e.target.value }))} />
+                  <Input inputMode="decimal" placeholder="0,00" value={form.retencaoIR} onChange={e => setForm(f => ({ ...f, retencaoIR: formatMoedaInput(e.target.value) }))} />
                 </div>
               </div>
               <div>
@@ -329,7 +334,7 @@ export default function FinanceiroReceitas() {
                 </div>
                 <div>
                   <Label>Valor Recebido (R$)</Label>
-                  <Input type="number" step="0.01" value={updateForm.valorRecebido} onChange={e => setUpdateForm(f => ({ ...f, valorRecebido: e.target.value }))} />
+                  <Input inputMode="decimal" placeholder="0,00" value={updateForm.valorRecebido} onChange={e => setUpdateForm(f => ({ ...f, valorRecebido: formatMoedaInput(e.target.value) }))} />
                 </div>
               </div>
               <div>
@@ -341,12 +346,27 @@ export default function FinanceiroReceitas() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* Rev. 4562 (Poka-Yoke): cancelamento exige confirmação explícita — antes o Select aplicava direto. */}
+              {updateForm.status === "cancelado" && showUpdate?.status !== "cancelado" && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                  <div className="text-xs text-red-700 break-words">
+                    <p className="font-semibold">Atenção: você está cancelando esta receita.</p>
+                    <p className="mt-0.5">Ela sai dos totais de medições e recebimentos. Marque a caixa abaixo para confirmar.</p>
+                    <label className="flex items-center gap-2 mt-2 font-semibold cursor-pointer">
+                      <input type="checkbox" checked={confirmCancel} onChange={e => setConfirmCancel(e.target.checked)} className="w-4 h-4 accent-red-600" />
+                      Confirmo o cancelamento
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowUpdate(null)}>Cancelar</Button>
-              <Button disabled={updateMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => updateMut.mutate({ id: showUpdate.id, companyId, status: updateForm.status, nfNumero: updateForm.nfNumero || undefined, nfEmitidaEm: updateForm.nfEmitidaEm || undefined, dataRecebimento: updateForm.dataRecebimento || undefined, valorRecebido: parseFloat(updateForm.valorRecebido) || undefined, formaPagamento: updateForm.formaPagamento || undefined })}>
-                {updateMut.isPending ? "Salvando..." : "Salvar"}
+              <Button disabled={updateMut.isPending || (updateForm.status === "cancelado" && showUpdate?.status !== "cancelado" && !confirmCancel)}
+                className={updateForm.status === "cancelado" ? "bg-red-600 hover:bg-red-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"}
+                onClick={() => updateMut.mutate({ id: showUpdate.id, companyId, status: updateForm.status, nfNumero: updateForm.nfNumero || undefined, nfEmitidaEm: updateForm.nfEmitidaEm || undefined, dataRecebimento: updateForm.dataRecebimento || undefined, valorRecebido: parseMoedaBR(updateForm.valorRecebido) || undefined, formaPagamento: updateForm.formaPagamento || undefined })}>
+                {updateMut.isPending ? "Salvando..." : updateForm.status === "cancelado" ? "Cancelar Receita" : "Salvar"}
               </Button>
             </DialogFooter>
           </DialogContent>
