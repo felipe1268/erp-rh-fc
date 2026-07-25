@@ -1,4 +1,39 @@
 /**
+ * Rev. 4586 - UX: FLUXO DE CAIXA — POP-UP DE DETALHAMENTO ULTRA MODERNO + BUSCA RÁPIDA
+ *
+ * PEDIDO DO USUÁRIO: "tela com layout mais agradável, intuitivo, colorido
+ * e fácil leitura. Ultra moderno e prático" — referindo-se ao pop-up de
+ * drill-down da Rev. 4584 (prints do iPad mostravam lista cinza e chapada,
+ * com descrição duplicada em várias linhas).
+ *
+ * O QUE MUDOU (client-only, FinanceiroFluxoCaixa.tsx):
+ * 1. CABEÇALHO EM DEGRADÊ — verde-esmeralda→teal (Entradas) ou
+ *    rosa→laranja (Saídas), com título+ícone, pills de contexto
+ *    (período, nº de lançamentos, escopo Efetivo/Projeção) e o TOTAL
+ *    da célula em destaque grande à direita.
+ * 2. BUSCA RÁPIDA — campo de busca client-side (descrição, fornecedor/
+ *    cliente, conta, obra, origem). Mostra "X de Y visíveis + soma dos
+ *    visíveis" mas deixa claro que o total da célula NÃO muda (Poka-Yoke:
+ *    transparência preservada — o número-âncora continua sendo o da matriz).
+ * 3. CARDS RANQUEADOS — cada lançamento vira card branco arredondado com
+ *    nº de ranking em bolinha colorida, valor em destaque + "% do total",
+ *    e BARRA DE PROPORÇÃO (largura relativa ao maior lançamento) — o olho
+ *    acha os pesos-pesados instantaneamente.
+ * 4. BADGES COLORIDOS — status Pago/Recebido = pill verde c/ check,
+ *    A Pagar = âmbar, cancelado = cinza; conta = azul-céu; obra = índigo;
+ *    projeção = violeta. Emojis discretos p/ leitura rápida no iPad.
+ * 5. FIX de leitura: linha do fornecedor só aparece se for DIFERENTE da
+ *    descrição (antes duplicava o mesmo texto em 2 linhas).
+ *
+ * POKA-YOKE: nível 1 (transparência/aviso) — busca deixa explícito que
+ * filtra só a visualização; total da célula permanece imutável e
+ * conferível contra a matriz. break-words em todo texto (regra dos Dialogs).
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx (só).
+ * ZERO schema/server change.
+ */
+
+/**
  * Rev. 4585 - FIX: FLUXO DE CAIXA — CRONOGRAMA FORA DA CONFERÊNCIA DE DUPLICIDADES (26 FALSOS POSITIVOS)
  *
  * PEDIDO DO USUÁRIO: ao ver a lista dos 61 possíveis pagamentos em

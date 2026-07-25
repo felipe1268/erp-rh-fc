@@ -361,6 +361,7 @@ export default function FinanceiroFluxoCaixa() {
       ? Number(c.valorRealizado ?? c.valorPrevisto ?? 0) || 0
       : Number(c.valorPrevisto ?? 0) || 0;
   const [drill, setDrill] = useState<Drill | null>(null);
+  const [drillBusca, setDrillBusca] = useState("");
   const drillRows = useMemo(() => {
     if (!drill) return [] as any[];
     const src: any[] = (drill.tipo === "entrada" ? receberQ.data : pagarQ.data) ?? [];
@@ -392,7 +393,16 @@ export default function FinanceiroFluxoCaixa() {
   const drillPeriodo = drill
     ? drill.mes != null ? `${MESES_FULL[drill.mes]}/${ano}` : `Ano inteiro · ${ano}`
     : "";
-  const abrirDrill = (d: Omit<Drill, "titulo"> & { titulo: string }) => setDrill(d);
+  const abrirDrill = (d: Omit<Drill, "titulo"> & { titulo: string }) => { setDrillBusca(""); setDrill(d); };
+  // Rev. 4586 — busca rápida dentro do pop-up (client-side, não muda o total da célula)
+  const drillRowsVisiveis = useMemo(() => {
+    const q = drillBusca.trim().toLowerCase();
+    if (!q) return drillRows;
+    return drillRows.filter((c: any) =>
+      [c.descricao, c.fornecedorNome, c.clienteNome, c.contaNome, c.obraNome, c.origemDescricao]
+        .some((t) => String(t ?? "").toLowerCase().includes(q)));
+  }, [drillRows, drillBusca]);
+  const drillMaior = drillRows.length ? valorDrill(drillRows[0], drill?.metrica) : 0;
   const fmtData = (s: any) => {
     const t = String(s ?? "").slice(0, 10);
     return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.split("-").reverse().join("/") : "—";
@@ -1313,66 +1323,131 @@ export default function FinanceiroFluxoCaixa() {
           </p>
         )}
 
-        {/* ── Rev. 4584 — POP-UP DE DETALHAMENTO (drill-down) ── */}
-        <Dialog open={!!drill} onOpenChange={(o) => { if (!o) setDrill(null); }}>
-          <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
-            <DialogHeader>
-              <DialogTitle className="break-words pr-6">
-                {drill?.tipo === "entrada" ? "🟢 " : "🔴 "}{drill?.titulo}
-              </DialogTitle>
-              <DialogDescription className="break-words">
-                {drillPeriodo}
-                {drill && !FINANCEIRO_SOMENTE_REAL && drill.escopo !== "todos" && (
-                  <> · escopo <strong>{drill.escopo === "efetivo" ? "Efetivo (real)" : "Projeção (previsão)"}</strong></>
-                )}
-                {" · "}são estes os lançamentos que formam o valor da célula — confira um a um.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs">
-              <span className="text-slate-500">
-                <strong className="text-slate-700">{drillRows.length}</strong> lançamento{drillRows.length === 1 ? "" : "s"}
-              </span>
-              <span className={`font-bold text-sm ${drill?.tipo === "entrada" ? "text-emerald-700" : "text-rose-700"}`}>
-                {BRL0(drillTotal)}
-              </span>
-            </div>
-
-            <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-1.5">
-              {drillRows.length === 0 && (
-                <p className="text-xs text-slate-400 text-center py-6">Nenhum lançamento encontrado para este filtro.</p>
-              )}
-              {drillRows.map((c: any, idx: number) => (
-                <div key={c.id ?? idx} className="border border-slate-200 rounded-lg px-3 py-2 text-xs bg-white">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-800 break-words">
-                        {c.descricao || c.fornecedorNome || c.clienteNome || "(sem descrição)"}
-                      </p>
-                      {(c.fornecedorNome || c.clienteNome) && c.descricao && (
-                        <p className="text-slate-500 break-words">{c.fornecedorNome || c.clienteNome}</p>
-                      )}
+        {/* ── Rev. 4584/4586 — POP-UP DE DETALHAMENTO (drill-down) — visual moderno ── */}
+        <Dialog open={!!drill} onOpenChange={(o) => { if (!o) { setDrill(null); setDrillBusca(""); } }}>
+          <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col gap-0 p-0 overflow-hidden">
+            {(() => {
+              const entrada = drill?.tipo === "entrada";
+              const grad = entrada
+                ? "bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500"
+                : "bg-gradient-to-br from-rose-600 via-rose-500 to-orange-500";
+              const cor = entrada ? "text-emerald-700" : "text-rose-700";
+              const barra = entrada ? "bg-emerald-400/70" : "bg-rose-400/70";
+              const statusBadge = (s: string) => {
+                const t = s.replace(/_/g, " ");
+                if (STATUS_RECEBIDO.has(s))
+                  return <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 font-semibold capitalize"><CheckCircle2 className="w-3 h-3" />{t}</span>;
+                if (s === "cancelado")
+                  return <span className="bg-slate-100 text-slate-500 border border-slate-200 rounded-full px-2 py-0.5 font-semibold capitalize">{t}</span>;
+                return <span className="bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 font-semibold capitalize">{t}</span>;
+              };
+              return (
+                <>
+                  {/* Cabeçalho em degradê */}
+                  <div className={`${grad} text-white px-5 pt-5 pb-4`}>
+                    <DialogHeader className="space-y-1">
+                      <DialogTitle className="break-words pr-8 text-white flex items-center gap-2 text-base sm:text-lg">
+                        {entrada
+                          ? <ArrowUpCircle className="w-5 h-5 flex-shrink-0" />
+                          : <ArrowDownCircle className="w-5 h-5 flex-shrink-0" />}
+                        {drill?.titulo}
+                      </DialogTitle>
+                      <DialogDescription className="break-words text-white/85 text-xs">
+                        São estes os lançamentos que formam o valor da célula — confira um a um. Somente leitura.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-wrap items-end justify-between gap-3 mt-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="bg-white/20 backdrop-blur rounded-full px-2.5 py-1 text-[11px] font-semibold">📅 {drillPeriodo}</span>
+                        <span className="bg-white/20 backdrop-blur rounded-full px-2.5 py-1 text-[11px] font-semibold">
+                          {drillRows.length} lançamento{drillRows.length === 1 ? "" : "s"}
+                        </span>
+                        {drill && !FINANCEIRO_SOMENTE_REAL && drill.escopo !== "todos" && (
+                          <span className="bg-white/20 backdrop-blur rounded-full px-2.5 py-1 text-[11px] font-semibold">
+                            {drill.escopo === "efetivo" ? "✔️ Efetivo (real)" : "🔮 Projeção (previsão)"}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-wide text-white/75 font-semibold">Total da célula</p>
+                        <p className="text-2xl font-extrabold leading-tight tabular-nums">{BRL0(drillTotal)}</p>
+                      </div>
                     </div>
-                    <span className={`font-bold whitespace-nowrap ${drill?.tipo === "entrada" ? "text-emerald-700" : "text-rose-700"}`}>
-                      {BRL0(valorDrill(c, drill?.metrica))}
-                    </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[10px] text-slate-500">
-                    <span>Venc.: <strong>{fmtData(c.dataVencimento)}</strong></span>
-                    {c.contaNome && <span className="bg-slate-100 rounded px-1.5 py-0.5 break-words">{c.contaNome}</span>}
-                    {c.obraNome && <span className="break-words">Obra: {c.obraNome}</span>}
-                    {c.status && <span className="capitalize">Status: {String(c.status).replace(/_/g, " ")}</span>}
-                    {c._proj && <span className="bg-violet-100 text-violet-700 rounded px-1.5 py-0.5 font-medium">projeção</span>}
-                    {c.origemDescricao && <span className="break-words">Origem: {c.origemDescricao}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
 
-            <p className="text-[10px] text-slate-400 break-words">
-              Somente leitura: nada é alterado aqui. O total acima usa exatamente os mesmos filtros da célula
-              tocada na matriz — se algum lançamento estiver errado, corrija no Contas a {drill?.tipo === "entrada" ? "Receber" : "Pagar"}.
-            </p>
+                  {/* Busca rápida */}
+                  <div className="px-4 py-2.5 border-b bg-slate-50">
+                    <input
+                      type="text"
+                      inputMode="search"
+                      value={drillBusca}
+                      onChange={(e) => setDrillBusca(e.target.value)}
+                      placeholder="🔎 Buscar por descrição, fornecedor, conta, obra…"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+                    />
+                    {drillBusca.trim() && (
+                      <p className="text-[11px] text-slate-500 mt-1.5">
+                        Mostrando <strong>{drillRowsVisiveis.length}</strong> de {drillRows.length} lançamentos ·
+                        soma dos visíveis: <strong className={cor}>{BRL0(drillRowsVisiveis.reduce((s: number, c: any) => s + valorDrill(c, drill?.metrica), 0))}</strong>
+                        {" · "}o total da célula acima não muda.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Lista */}
+                  <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 bg-slate-100/60">
+                    {drillRowsVisiveis.length === 0 && (
+                      <p className="text-xs text-slate-400 text-center py-8">Nenhum lançamento encontrado{drillBusca.trim() ? " para esta busca" : " para este filtro"}.</p>
+                    )}
+                    {drillRowsVisiveis.map((c: any, idx: number) => {
+                      const v = valorDrill(c, drill?.metrica);
+                      const pct = drillMaior > 0 ? Math.max(3, Math.round((v / drillMaior) * 100)) : 0;
+                      const pctTotal = drillTotal > 0 ? (v / drillTotal) * 100 : 0;
+                      const titulo = c.descricao || c.fornecedorNome || c.clienteNome || "(sem descrição)";
+                      const pessoa = c.fornecedorNome || c.clienteNome;
+                      const rank = drillRows.indexOf(c) + 1;
+                      return (
+                        <div key={c.id ?? idx}
+                          className="rounded-2xl bg-white shadow-sm border border-slate-200/80 px-3.5 py-3 text-xs relative overflow-hidden">
+                          <div className="flex items-start gap-2.5">
+                            <span className={`flex-shrink-0 w-6 h-6 rounded-full ${entrada ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"} text-[10px] font-bold flex items-center justify-center mt-0.5`}>
+                              {rank}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-slate-800 break-words leading-snug">{titulo}</p>
+                              {pessoa && c.descricao && pessoa !== c.descricao && (
+                                <p className="text-slate-500 break-words mt-0.5">{pessoa}</p>
+                              )}
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className={`font-extrabold whitespace-nowrap tabular-nums text-[13px] ${cor}`}>{BRL0(v)}</p>
+                              <p className="text-[10px] text-slate-400 tabular-nums">{pctTotal >= 0.05 ? pctTotal.toFixed(1).replace(".", ",") : "<0,1"}% do total</p>
+                            </div>
+                          </div>
+                          {/* Barra de proporção (vs. maior lançamento) */}
+                          <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div className={`h-full rounded-full ${barra}`} style={{ width: `${pct}%` }} />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[10px]">
+                            <span className="bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 font-medium">📅 {fmtData(c.dataVencimento)}</span>
+                            {c.status && statusBadge(String(c.status))}
+                            {c.contaNome && <span className="bg-sky-50 text-sky-700 border border-sky-200 rounded-full px-2 py-0.5 font-medium break-words">🏷️ {c.contaNome}</span>}
+                            {c.obraNome && <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-0.5 font-medium break-words">🏗️ {c.obraNome}</span>}
+                            {c._proj && <span className="bg-violet-100 text-violet-700 rounded-full px-2 py-0.5 font-semibold">🔮 projeção</span>}
+                            {c.origemDescricao && <span className="text-slate-500 break-words">Origem: {c.origemDescricao}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 break-words px-4 py-2.5 border-t bg-white">
+                    🔒 Somente leitura: nada é alterado aqui. O total acima usa exatamente os mesmos filtros da célula
+                    tocada na matriz — se algum lançamento estiver errado, corrija no Contas a {entrada ? "Receber" : "Pagar"}.
+                  </p>
+                </>
+              );
+            })()}
           </DialogContent>
         </Dialog>
 

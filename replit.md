@@ -50,19 +50,20 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4586** — **UX: FLUXO DE CAIXA — POP-UP DE DETALHAMENTO ULTRA MODERNO + BUSCA RÁPIDA.** Usuário pediu layout "agradável, intuitivo, colorido, ultra moderno" p/ o drill-down (Rev. 4584). Redesign client-only: cabeçalho em degradê (esmeralda→teal entradas / rosa→laranja saídas) com pills de contexto + total grande; campo de busca rápida (X de Y visíveis + soma, total da célula imutável); cards ranqueados com bolinha numerada, % do total e barra de proporção vs. maior lançamento; badges coloridos (status verde/âmbar/cinza, conta azul, obra índigo, projeção violeta); fix da descrição duplicada (fornecedor só aparece se ≠ descrição). Arquivo: `FinanceiroFluxoCaixa.tsx`. ZERO schema/server change.
 - **Rev. 4585** — **FIX: FLUXO DE CAIXA — CRONOGRAMA FORA DA CONFERÊNCIA DE DUPLICIDADES.** Usuário revisou a lista dos 61 pares e mandou tirar os do Cronograma. Causa: lançamentos `origem_modulo='cronograma_atividade'` são projeções de contrato (atividades EAP repetidas por pavimento têm mesmo valor por design), nunca pagamentos reais — 26 pares falsos (~R$ 210 mil). Fix server 1 linha: `getPossiveisDuplicidades` exclui `cronograma_atividade`. Validado no Neon: card cai de 61 (R$ 428 mil) p/ 31 pares (R$ 217,5 mil). Poka-Yoke nível 3 (prevenção na consulta). Arquivo: `financial.ts`. ZERO schema change.
-- **Rev. 4584** — **FEAT: FLUXO DE CAIXA — DRILL-DOWN EM TODA A MATRIZ.** Todo valor da matriz (ENTRADAS, linhas de receita — inclusive "já recebido em caixa" com métrica realizado —, SAÍDAS, Fixas/Variáveis, cada balde, coluna Total Anual) virou clicável e abre um Dialog somente-leitura listando os lançamentos que formam o número (contagem + total + descrição/fornecedor-cliente/venc/conta/obra/status/badge projeção, break-words). Filtro do drill espelha EXATA a agregação da matriz (skip aplicação/transferência, escopo efetivo×projeção, mês por vencimento, balde via bucketDespesa) — Poka-Yoke por transparência: total do pop-up = valor da célula, divergência se denuncia sozinha. Arquivo: `FinanceiroFluxoCaixa.tsx`. ZERO schema/server change.
 ### 5 one-liners
+
+- **Rev. 4584** — **FEAT: FLUXO DE CAIXA — DRILL-DOWN EM TODA A MATRIZ.** Todo valor da matriz virou clicável e abre Dialog somente-leitura com os lançamentos que formam o número; filtro espelha EXATA a agregação da matriz (Poka-Yoke por transparência). Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 
 - **Rev. 4583** — **FIX: FLUXO DE CAIXA — BALDES DE SAÍDA LEEM O PLANO DE CONTAS.** `bucketDespesa()` ganhou 2º critério `CONTA_RULES` sobre `conta_nome` (despesas da conciliação têm origem NULL); "Outros" caiu de R$ 14,5 mi p/ 1,59 mi. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4582** — **FIX: FLUXO DE CAIXA — SWEEP CONTAMAX NEUTRALIZADO + TEXTOS CORRIGIDOS.** Sweep bancário separado em `sweepAplicado/sweepResgatado` (fora da linha azul) + 37 despesas CONTAMAX da 60004 → `aplicacao_financeira`. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4581** — **FIX+FEAT: FLUXO DE CAIXA — TRANSFERÊNCIAS AO GRUPO FORA DAS SAÍDAS + CONFERÊNCIA DE DUPLICIDADES.** 36 despesas ao próprio grupo → `transferencia_interna`; card rosa de duplicidades com confirmação humana par a par (reversível). Detalhe em `shared/changelog.ts`. ZERO schema change.
 
 - **Rev. 4580** — **FIX+UX: FLUXO DE CAIXA — APLICAÇÕES FINANCEIRAS FORA DAS SAÍDAS + MODO SIMPLES.** 66 lançamentos "APLICACAO CONTAMAX" marcados `aplicacao_financeira` (fora das Saídas) + modo Simples (3 cartões) × Detalhado. Detalhe em `shared/changelog.ts`. ZERO schema change.
-- **Rev. 4579** — **FEAT: FLUXO DE CAIXA — "OUTRAS MOVIMENTAÇÕES BANCÁRIAS" + SALDO REAL DO EXTRATO.** Endpoint `getMovimentacoesBancariasByYear` + 2 linhas informativas (azul/índigo) na matriz; nada soma na matriz. Detalhe em `shared/changelog.ts`. ZERO schema change.
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4578 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4579 e anteriores.
 
 ## User preferences
 
