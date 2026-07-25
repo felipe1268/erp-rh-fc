@@ -1,4 +1,39 @@
 /**
+ * Rev. 4578 - UX: FLUXO DE CAIXA — REDESIGN DIDÁTICO NA ESTRUTURA DA LITERATURA
+ *
+ * PEDIDO DO USUÁRIO: "redesenhe totalmente o fluxo de caixa, de acordo com
+ * as literaturas que a gente estava estudando. Mais prático e lúdico, de
+ * forma que o iniciante de analista financeiro entenda tudo. Legendas e
+ * cards de insights. Seguindo a lógica do Poka-Yoke."
+ *
+ * O QUE MUDOU (client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx —
+ * rewrite completo do RENDER; computações de dados preservadas):
+ * - MATRIZ NA ORDEM DA LITERATURA (regime de caixa): Saldo Inicial do Mês
+ *   → (+) ENTRADAS → (−) SAÍDAS (fixas/variáveis) → (=) Geração de Caixa
+ *   → (=) Saldo Final do Mês (dark, vira o Inicial do próximo) → Margem %
+ *   → linha âmbar de cheques (Rev. 4577, informativa). saldoIniMes/
+ *   saldoFimMes substituem o antigo "Saldo Acumulado": ini[0] = saldo de
+ *   abertura das contas bancárias; fim[i] = ini[i] + geração[i].
+ * - 5 KPI CARDS NUMERADOS contando a história do ano: 1·Começou com,
+ *   2·Entrou(+), 3·Saiu(−), 4·Geração de Caixa(=), 5·Termina com — com
+ *   sub-explicações em linguagem simples e nota do float no card 5.
+ * - GUIA "COMO LER?" colapsável (6 pontos: a conta do extrato, entradas/
+ *   saídas, fixas×variáveis, geração de caixa, efetivo×projeção, pago ≠
+ *   liquidado/float).
+ * - INSIGHTS DETERMINÍSTICOS (sem IA, Poka-Yoke nível 1 — a tela é
+ *   read-only, então o "à prova de erro" é impedir a LEITURA errada):
+ *   saldo final do ano (vermelho/azul), meses com caixa negativo
+ *   (descasamento de prazos), pior/melhor mês de geração, peso das fixas
+ *   ≥50%, extrato "inflado" pelo float, previsto×já recebido com gap >10%.
+ * - Hints didáticos em todas as linhas de grupo; header "O que aconteceu
+ *   com o dinheiro"; ⚠ em saldo final negativo; break-words nos cards.
+ * - Hardening pós-review: sugestão "Tente o escopo Todos" oculta quando
+ *   FINANCEIRO_SOMENTE_REAL está ativo.
+ *
+ * ZERO schema/server change. Review do architect: Pass.
+ */
+
+/**
  * Rev. 4577 - FEAT: FLUXO DE CAIXA — LINHA "CHEQUES A COMPENSAR" (FLOAT)
  *
  * PEDIDO DO USUÁRIO: dúvida conceitual — conta paga em cheque é baixada
