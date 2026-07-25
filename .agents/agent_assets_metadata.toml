@@ -233,3 +233,9 @@ id = "Z8U_zKUckPwI8F53ZMcq_"
 uri = "file://exports/contas_pendentes_2018_2025.csv"
 type = "table"
 title = "Contas pendentes 2018–2025 (4.443 títulos)"
+
+[[outputs]]
+id = "nsINsW2KxieKCGZ3CL8pr"
+uri = "file://exports/cheques_pendentes_ate_2025.csv"
+type = "table"
+title = "Cheques pendentes até dez/2025 (539 · R$ 2.520.717,17)"
