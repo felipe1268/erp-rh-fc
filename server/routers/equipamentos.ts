@@ -1357,7 +1357,10 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
           condicaoPagamento: null,
           formaPagamento: null,
           numeroParcelas: 1,
-          dataBase: result.inicioISO,
+          // Vencimento da parcela = fim do NOVO ciclo (novaDataFim). Nunca usar
+          // o início do ciclo (inicioISO): se a locação estava atrasada, o início
+          // fica no PASSADO e a parcela some da tela do mês corrente (Rev. 4560).
+          dataBase: input.novaDataFim,
           numero: result.numeroOc,
         } as any, ctx.user.id, (ctx.user as any).name ?? "Sistema");
         if (entryIds?.length > 0) {

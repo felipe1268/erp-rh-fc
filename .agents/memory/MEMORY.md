@@ -146,4 +146,5 @@
 - [VARCHAR BR decimal cast](varchar-br-decimal-cast.md) — colunas numéricas VARCHAR guardam "680,75" (vírgula BR); `::numeric` direto falha → Promise.all rejeita → UI mostra "Sem dados" silenciosamente. Use `REPLACE(col,',','.')::numeric`.
 - [Lógica % Previsto CONGELADA](planejamento-previsto-logic-frozen.md) — usuário exige: NÃO alterar motor/literal/precedência do Previsto (Planejamento) sem alertar e confirmar; toda 'melhoria' nessa área já quebrou o sistema.
 - [Almox leitura global, escrita por obra](almox-global-read-obra-write.md) — reads globais por empresa exigem guard de empresa explícito; writes validam obra do RECURSO via getAlmoxAllowedObraIdSet.
+- [Renovação de locação — vencimento da parcela](locacao-renovacao-parcela-vencimento.md) — parcela vence no FIM do novo ciclo; usar o início gera entry vencida no passado que "some" do Contas a Pagar.
 - [Fluxo público identify anti-enum + Puppeteer sanitize](public-token-identify-antienum.md) — falha genérica + rate-limit token+IP em identify público; HTML de usuário no Puppeteer exige DOMPurify server-side + JS off + requests bloqueados.

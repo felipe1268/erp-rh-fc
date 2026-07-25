@@ -1,4 +1,29 @@
 /**
+ * Rev. 4560 - FIX: RENOVAÇÃO DE LOCAÇÃO — PARCELA DO CONTAS A PAGAR VENCIA NA DATA ERRADA (SUMIA DA TELA) + MÁSCARA R$ NO MODAL
+ *
+ * PEDIDO DO USUÁRIO: "Não foi para o contas a pagar" após renovar 2 locações
+ * pelo Almoxarifado (OC-2026-919 e OC-2026-920 geradas com sucesso).
+ *
+ * CAUSA-RAIZ: a parcela FOI criada (status 'previsto'), mas
+ * equipamentos.locadoRenovar passava dataBase = inicioISO (dia seguinte ao FIM
+ * DO CICLO ANTERIOR) pro purchaseFinancialBridge. Se a locação estava atrasada,
+ * esse início fica no PASSADO (ex.: OC-919 caiu com vencimento 28/05/2026) e a
+ * parcela não aparece na tela do Contas a Pagar filtrada pelo mês corrente —
+ * parecia que "não foi pro financeiro".
+ *
+ * FIX (server/routers/equipamentos.ts): dataBase da parcela agora é
+ * input.novaDataFim (fim do NOVO ciclo) — a locação vence junto com o ciclo
+ * renovado. Dados existentes reparados via UPDATE direto no Neon
+ * (financial_entries ← compras_ordens.locacao_data_fim para OC-919 → 30/08 e
+ * OC-920 → 31/07, ambos status 'previsto').
+ *
+ * EXTRA (client almoxarifado/index.tsx, pedido anterior): campo "Valor da nova
+ * OC" com máscara de moeda pt-BR (prefixo R$, digitação por centavos →
+ * 1.234,56, inputMode numeric, alinhado à direita); pré-preenchimento do valor
+ * mensal também formatado; parse BR no submit. ZERO schema change.
+ */
+
+/**
  * Rev. 4559 - FIX/UX: ALMOXARIFADO — RENOVAÇÃO DE LOCAÇÃO USA O FLUXO REAL (COMPRAS → FINANCEIRO) + HEADER 2 LINHAS + NÚMEROS pt-BR + PLURAL
  *
  * PEDIDO DO USUÁRIO: (a) "6 locaçãoões a vencer" — typo de plural; (b) melhorar
