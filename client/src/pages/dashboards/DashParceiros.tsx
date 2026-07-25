@@ -200,6 +200,18 @@ export default function DashParceiros() {
                 >
                   <ChevronRight className="h-5 w-5" />
                 </Button>
+                {/* Rev. 4569 — botão Ano todo (padrão PeriodSelectorCard) */}
+                <button
+                  type="button"
+                  onClick={() => setMes("todos")}
+                  className={`ml-1 h-8 px-3 rounded-full text-xs sm:text-sm font-medium transition-all ${
+                    mes === "todos"
+                      ? "bg-foreground text-background font-bold"
+                      : "bg-gray-100 text-gray-700 hover:opacity-80"
+                  }`}
+                >
+                  Ano todo
+                </button>
               </div>
               <div className="flex items-center gap-4 text-xs sm:text-sm text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5">

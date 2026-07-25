@@ -50,15 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4569** — **UX: DASHBOARD PARCEIROS — BOTÃO "ANO TODO" NO SELETOR DE PERÍODO.** Faltava o botão "Ano todo" ao lado da navegação ‹ 2026 › (Regra de Ouro do seletor de mês/ano): pílula após o chevron, `setMes("todos")`, ativo em bg-foreground negrito. Estado local é string ("todos"|"1".."12"), então foi inline seguindo o visual do `<PeriodSelectorCard>` sem refatorar as pílulas com semáforo da tela. Arquivo: `client/src/pages/dashboards/DashParceiros.tsx`. ZERO schema/server change.
 - **Rev. 4568** — **UX: ALMOXARIFADO — FOTO DO PRODUTO NO DROPDOWN DE TRANSFERÊNCIA.** No modal "Transferir entre Almoxarifados", cada linha da busca de itens ganhou thumbnail 36×36 (`fotoUrl`, lazy) ou placeholder com ícone Package; nome com truncate + estoque à direita. Poka-Yoke visual contra selecionar item errado. `compras.listarItens` já retornava `fotoUrl` — ZERO schema/server change. Arquivo: `client/src/pages/almoxarifado/index.tsx`.
-- **Rev. 4567** — **UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "PREENCHER PREÇOS COM IA".** Regra de Ouro dos botões longos: estado `iaPct` + interval simulado (duração ≈ max(12s, qtd×120ms), teto 95%, salta pra 100% no onSuccess, limpa após 800ms); barra de fundo roxa (width=pct%) + "Preenchendo… XX%" nos 2 botões (empresa e por obra); cleanup no unmount. Arquivo: `client/src/pages/almoxarifado/index.tsx`. ZERO schema/server change.
 ### 5 one-liners
 
+- **Rev. 4567** — **UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "PREENCHER PREÇOS COM IA".** `iaPct` + interval simulado (max(12s, qtd×120ms), teto 95%, 100% no onSuccess); barra roxa + "Preenchendo… XX%" nos 2 botões; cleanup no unmount. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4566** — **UX: ALMOXARIFADO — RENOMEAÇÃO E REORDENAÇÃO DOS BOTÕES DE AÇÃO.** Só labels/ordem (tudo MAIÚSCULO): ENTRADA/SAÍDA "DE MATERIAL"; FERRAMENTAS→ENTREGA e FECHAR DIA→DEVOLUÇÃO "DE FERRAMENTA" (par lado a lado); TRANSFERIR "MATERIAL E EQUIPAMENTO" à direita. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4565** — **UX: ALMOXARIFADO — CARDS DE KPI VIRAM FILTROS CLICÁVEIS.** `filtroEstoque` + `matchEstoque` (mesmos predicados dos contadores); cards viram botões-toggle nas 2 visões com ring ativo + "Filtrando · toque p/ limpar". Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4564** — **FEAT: EQUIPAMENTOS — TAG DE LOCALIZAÇÃO DO FIXO (OBRA × ALMOXARIFADO) + MARCAÇÃO EM LOTE.** `localizacao` ('em_obra'|'no_almox') nos instalados (empréstimo aberto OU obra vinculada OU sem vínculo almox = em obra); badges indigo/âmbar; 125 equipamentos marcados fixo no Neon. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4563** — **FEAT: EQUIPAMENTOS — REGIME DE USO (ROTATIVO × FIXO/INSTALADO EM OBRA).** Coluna `regime_uso` + ColFix 4563; fixos saem da ociosidade, contam como EM USO, seção "Instalados" + triagem em lote "Marcar fixos" e seletor no cadastro. Detalhe em `shared/changelog.ts`.
-- **Rev. 4562** — **QUALIDADE: POKA-YOKE EM 10 PONTOS DO ERP.** Validações fortes em lote (baixa>0/data não-futura, receita>0, máscaras R$, coerência de datas RH/Portal, qtd>0 almox, NF duplicada, confirmações destrutivas). Detalhe em `shared/changelog.ts`. ZERO schema change.
 
 ### Histórico completo
 

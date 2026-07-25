@@ -1,4 +1,26 @@
 /**
+ * Rev. 4569 - UX: DASHBOARD PARCEIROS — BOTÃO "ANO TODO" NO SELETOR DE PERÍODO
+ *
+ * PEDIDO DO USUÁRIO: no Dashboard Parceiros faltava o botão "Ano todo" ao
+ * lado da navegação de ano (‹ 2026 ›) pra voltar a ver todos os lançamentos
+ * do ano depois de filtrar um mês — padrão obrigatório do
+ * <PeriodSelectorCard> (Regra de Ouro do seletor de mês/ano).
+ *
+ * O QUE MUDOU (client/src/pages/dashboards/DashParceiros.tsx):
+ * 1) Botão-pílula "Ano todo" após o chevron de próximo ano; onClick
+ *    setMes("todos"). Ativo (mes==="todos") = bg-foreground/text-background
+ *    em negrito; inativo = cinza claro com hover.
+ *
+ * RACIONAL: o estado do mês nesta tela é string ("todos" | "1".."12"), não
+ * number|null como o PeriodSelectorCard — por isso o botão foi adicionado
+ * inline seguindo o mesmo layout visual do padrão, sem refatorar o seletor
+ * inteiro (que já tem pílulas com semáforo de dados específico da tela).
+ * Já era possível limpar clicando de novo no mês selecionado, mas isso é
+ * invisível pro usuário — o botão explícito é o Poka-Yoke de affordance.
+ * ZERO schema/server change.
+ */
+
+/**
  * Rev. 4568 - UX: ALMOXARIFADO — FOTO DO PRODUTO NO DROPDOWN DE TRANSFERÊNCIA
  *
  * PEDIDO DO USUÁRIO: no modal "Transferir entre Almoxarifados", a lista de
