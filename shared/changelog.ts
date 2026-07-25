@@ -1,4 +1,54 @@
 /**
+ * Rev. 4581 - FIX+FEAT: FLUXO DE CAIXA — TRANSFERÊNCIAS AO PRÓPRIO GRUPO FORA DAS SAÍDAS + CONFERÊNCIA DE DUPLICIDADES
+ *
+ * PEDIDO DO USUÁRIO: mesmo após a Rev. 4580 o déficit acumulado ainda parecia
+ * errado. Nova auditoria do Neon (extrato jan–jul: créditos 27,25 mi ≈ débitos
+ * 27,32 mi; banco praticamente estável −126 mil) encontrou 2 distorções
+ * remanescentes; o usuário aprovou (1) reclassificar as transferências ao
+ * próprio grupo e (2) ver a lista de possíveis duplicidades NA TELA para
+ * confirmar uma a uma.
+ *
+ * O QUE MUDOU:
+ * 1) DADOS (Neon, reversível): 36 despesas (R$ 660.524) que eram PIX/TED para
+ *    empresas do PRÓPRIO grupo (CNPJ 29.353.906 FC Eng. e Construção /
+ *    FELIPE COSTA ALVES ME) → origem_modulo = 'transferencia_interna'.
+ *    Transferência interna não é gasto: o dinheiro continua no grupo.
+ *    (Excluído id 889609 — Nayara, não é do grupo.)
+ * 2) client despBuckets/despSplit: pulam também 'transferencia_interna'
+ *    (mesmo tratamento da 'aplicacao_financeira' da Rev. 4580).
+ * 3) server getMovimentacoesBancariasByYear: a linha informativa azul agora
+ *    considera origem IN ('aplicacao_financeira','transferencia_interna')
+ *    (simetria ida+volta, sem somar na matriz).
+ * 4) FEAT — Conferência de duplicidades (Poka-Yoke: humano no circuito):
+ *    - financial.getPossiveisDuplicidades: pares de despesas com MESMO valor
+ *      (>R$ 3.000), até 10 dias de distância e mesmo token de texto
+ *      normalizado (12 primeiras letras da descrição sem números/símbolos —
+ *      critério apertado: 67 pares/R$ 598 mil vs 519 pares sem o token).
+ *      Exclui pares já descartados (tag '[dup-ok:<id>]' nas observações).
+ *    - financial.confirmarDuplicidade: cancela UM lançamento escolhido
+ *      (status='cancelado' + motivo com o id do par + autoria). REVERSÍVEL
+ *      no Contas a Pagar; nada é apagado.
+ *    - financial.descartarDuplicidade: marca o par como "não é duplicidade"
+ *      (appenda tag nas observações; some da lista; reversível).
+ *    - UI (FinanceiroFluxoCaixa): card rosa colapsável, visível nos 2 modos
+ *      quando há pares; cada par mostra os 2 lançamentos lado a lado com
+ *      data/descrição e botões "Cancelar este (duplicado)" (um por lado) e
+ *      "Não é duplicidade". Toasts + invalidations (lista + Contas a Pagar).
+ *
+ * RACIONAL/SEGURANÇA:
+ * - NADA é cancelado automaticamente — o usuário confirma um a um (pedido
+ *   explícito). Poka-Yoke nível 2: mutations exigem tipo='despesa' e status
+ *   não-cancelado no WHERE; tenancy via resolveCompanyIds +
+ *   _assertFinanceiroCompanyAccess e company_id no WHERE (anti-IDOR).
+ * - dbExecute binds por ORDEM DE APARIÇÃO no texto (não pelo $N) — params
+ *   arrays conferidos nessa ordem.
+ * - Restante do "déficit" (~1 mi) é operacional real, financiado por resgates
+ *   de aplicação/reserva — explicado ao usuário, sem mexer.
+ * - Arquivos: server/routers/financial.ts (3 procedures + 1 condição),
+ *   client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx. ZERO schema change.
+ */
+
+/**
  * Rev. 4580 - FIX+UX: FLUXO DE CAIXA — APLICAÇÕES FINANCEIRAS FORA DAS SAÍDAS + MODO SIMPLES
  *
  * PEDIDO DO USUÁRIO: a tela ainda estava "poluída" demais para leigo e o

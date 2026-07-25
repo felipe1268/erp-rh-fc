@@ -108,6 +108,7 @@
 - [PDF export XSS / per-function esc](pdf-export-xss-esc-scope.md) — print/PDF builders (document.write) define esc LOCALLY; new fields (esp. AI-sourced) must esc()/escAttr().
 - [Shared onSaved must refetch all lists](shared-onsaved-refetch-lists.md) — a save dialog's onSaved must invalidate EVERY query the write affects; auto-resolve UPDATEs need tenant + status='pendente' guards.
 - [Gemini free-tier transient failures](gemini-freetier-transient.md) — batch vision reads fail ~95% on transient 429/503; fix=backend retry on 429+5xx honoring retryDelay + client pacing.
+- [Fluxo de Caixa dup/origens excluídas](fluxo-caixa-dup-conferencia.md) — Saídas excluem 'aplicacao_financeira'+'transferencia_interna'; detector de duplicidade exige token de texto; tag [dup-ok:<id>] em observacoes.
 - [Financeiro "só real" lock](financeiro-so-real-trava.md) — flag global esconde projeções; despesa via sqlNotProjecao no server; receita do Fluxo de Caixa vem do getContasReceberMatrix (split client-side).
 - [canAccessObra true só p/ admin_master](canaccessobra-admin-semantics.md) — canAccessObra é true-p/-todas só quando allowedObraIds===null (admin_master); isAdmin comum=[] → lista filtrada fica VAZIA.
 - [Conciliação só sugestiva](conciliacao-so-sugestiva.md) — nada concilia/baixa sem confirmação EXPLÍCITA do usuário; "Selecionar todas" só pré-seleciona. Não reintroduzir one-click bulk apply.

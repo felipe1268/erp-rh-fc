@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -144,6 +145,33 @@ export default function FinanceiroFluxoCaixa() {
       ultimoMes: Number(d?.ultimoMesComExtrato ?? 0),
     };
   }, [movQ.data]);
+  // Rev. 4581 — conferência de possíveis DUPLICIDADES (usuário confirma 1 a 1;
+  // Poka-Yoke: nada é cancelado automaticamente, sempre reversível).
+  const { toast } = useToast();
+  const utils = (trpc as any).useUtils();
+  const [dupAberto, setDupAberto] = useState(false);
+  const dupQ = (trpc as any).financial.getPossiveisDuplicidades.useQuery(
+    { companyId, ano }, { enabled: !!companyId }
+  );
+  const dupPares: any[] = dupQ.data ?? [];
+  const dupTotal = useMemo(
+    () => dupPares.reduce((s, p) => s + (Number(p.valor) || 0), 0),
+    [dupPares]
+  );
+  const invalidarDup = () => {
+    utils.financial.getPossiveisDuplicidades.invalidate();
+    utils.financial.getContasAPagarByYear.invalidate();
+  };
+  const confirmarDupM = (trpc as any).financial.confirmarDuplicidade.useMutation({
+    onSuccess: () => { toast({ title: "Lançamento duplicado cancelado." }); invalidarDup(); },
+    onError: (e: any) => toast({ title: "Não foi possível cancelar", description: e?.message ?? "Erro", variant: "destructive" }),
+  });
+  const descartarDupM = (trpc as any).financial.descartarDuplicidade.useMutation({
+    onSuccess: () => { toast({ title: "Par marcado como não-duplicado." }); invalidarDup(); },
+    onError: (e: any) => toast({ title: "Não foi possível descartar", description: e?.message ?? "Erro", variant: "destructive" }),
+  });
+  const dupOcupado = confirmarDupM.isPending || descartarDupM.isPending;
+
   const movNetTotal = useMemo(() => movBanco.net.reduce((s, v) => s + v, 0), [movBanco]);
   const temMovBanco = movBanco.ultimoMes > 0 && movBanco.net.some(v => Math.abs(v) > 0.005);
   const temSaldoReal = movBanco.ultimoMes > 0 && movBanco.saldoReal.some(v => v != null);
@@ -206,7 +234,9 @@ export default function FinanceiroFluxoCaixa() {
       // Rev. 4580 — aplicação financeira NÃO é gasto (é o próprio dinheiro indo
       // p/ investimento); fica fora das Saídas e aparece na linha informativa
       // "Outras movimentações bancárias" (simetria com os resgates que voltam).
-      if (c.origemModulo === "aplicacao_financeira") continue;
+      // Rev. 4581 — transferência interna (dinheiro entre contas/empresas do
+      // grupo) também não é gasto real.
+      if (c.origemModulo === "aplicacao_financeira" || c.origemModulo === "transferencia_interna") continue;
       const proj = isProjecaoDespesa(c.origemModulo);
       if (natureza === "efetivo" && proj) continue;
       if (natureza === "projecao" && !proj) continue;
@@ -256,7 +286,7 @@ export default function FinanceiroFluxoCaixa() {
     const rowsP: any[] = pagarQ.data ?? [];
     let efet = 0, proj = 0;
     for (const c of rowsP) {
-      if (c.origemModulo === "aplicacao_financeira") continue; // Rev. 4580
+      if (c.origemModulo === "aplicacao_financeira" || c.origemModulo === "transferencia_interna") continue; // Rev. 4580/4581
       const key = String(c.dataVencimento ?? "").slice(0, 7);
       if (meses12.indexOf(key) < 0) continue;
       const v = Number(c.valorPrevisto ?? 0) || 0;
@@ -1069,6 +1099,66 @@ export default function FinanceiroFluxoCaixa() {
                 <> Além disso, {BRL0(chequesFloat.foraDoAno)} ({chequesFloat.qtdForaDoAno} cheque(s)) têm vencimento fora de {ano} ou sem data.</>
               )}
             </span>
+          </div>
+        )}
+
+        {/* Rev. 4581 — conferência de possíveis duplicidades (visível nos 2 modos,
+            só quando HÁ pares suspeitos). Usuário confirma UM A UM; nada é
+            cancelado automaticamente e tudo é reversível. */}
+        {dupPares.length > 0 && (
+          <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-xs text-rose-900">
+            <button
+              onClick={() => setDupAberto(a => !a)}
+              className="w-full flex items-center gap-2 text-left"
+            >
+              <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0" />
+              <span className="break-words flex-1">
+                <strong>{dupPares.length} possível{dupPares.length > 1 ? "is" : ""} pagamento{dupPares.length > 1 ? "s" : ""} em duplicidade</strong> — mesmo
+                valor em datas próximas, somando {BRL0(dupTotal)}. Toque para conferir um a um.
+              </span>
+              {dupAberto ? <ChevronUp className="w-4 h-4 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 flex-shrink-0" />}
+            </button>
+            {dupAberto && (
+              <div className="mt-3 space-y-3">
+                {dupPares.map((p: any) => (
+                  <div key={`${p.idA}-${p.idB}`} className="bg-white border border-rose-100 rounded-lg p-3">
+                    <div className="font-semibold text-sm mb-2">{BRL0(Number(p.valor))}</div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="border rounded-md p-2">
+                        <div className="text-[10px] text-muted-foreground mb-1">
+                          {String(p.dataA).split("-").reverse().join("/")}
+                        </div>
+                        <div className="break-words mb-2">{p.descA || "(sem descrição)"}</div>
+                        <Button size="sm" variant="destructive" disabled={dupOcupado}
+                          onClick={() => confirmarDupM.mutate({ companyId, entryId: p.idA, entryParId: p.idB })}>
+                          Cancelar este (duplicado)
+                        </Button>
+                      </div>
+                      <div className="border rounded-md p-2">
+                        <div className="text-[10px] text-muted-foreground mb-1">
+                          {String(p.dataB).split("-").reverse().join("/")}
+                        </div>
+                        <div className="break-words mb-2">{p.descB || "(sem descrição)"}</div>
+                        <Button size="sm" variant="destructive" disabled={dupOcupado}
+                          onClick={() => confirmarDupM.mutate({ companyId, entryId: p.idB, entryParId: p.idA })}>
+                          Cancelar este (duplicado)
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-right">
+                      <Button size="sm" variant="outline" disabled={dupOcupado}
+                        onClick={() => descartarDupM.mutate({ companyId, idA: p.idA, idB: p.idB })}>
+                        Não é duplicidade
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[10px] text-rose-700">
+                  Cancelar aqui não apaga nada: o lançamento vai para "cancelado" com o motivo registrado, e pode ser
+                  reativado no Contas a Pagar. "Não é duplicidade" tira o par desta lista.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

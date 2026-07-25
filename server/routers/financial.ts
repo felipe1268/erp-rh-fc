@@ -10167,7 +10167,7 @@ export const financialRouter = router({
          AND l.excluido_em IS NULL AND l.desconsiderado_em IS NULL
          AND EXTRACT(year FROM l.data) = $1
          AND (l.entry_id IS NULL OR e.tipo NOT IN ('receita','despesa')
-              OR e.origem_modulo = 'aplicacao_financeira')
+              OR e.origem_modulo IN ('aplicacao_financeira','transferencia_interna'))
        GROUP BY 1, 2`,
       [input.ano]
     );
@@ -10237,6 +10237,95 @@ export const financialRouter = router({
     }
 
     return { outrasEntradas, outrasSaidas, saldoExtratoFimMes, ultimoMesComExtrato: lastM };
+  }),
+
+  // Rev. 4581 — Conferência de possíveis DUPLICIDADES nas despesas.
+  // Pares de lançamentos com o MESMO valor (>R$ 1.000) em janela de até 10
+  // dias. Auditoria de 25/07/2026 encontrou ~R$ 250–330 mil de possíveis
+  // duplicados (título do fornecedor + linha do extrato conciliada). O usuário
+  // confirma UM A UM (Poka-Yoke: nada é cancelado automaticamente). Pares
+  // descartados são marcados via observacoes ("[dup-ok:<idPar>]") — reversível.
+  getPossiveisDuplicidades: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    ano: z.number(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    for (const cid of ids) await _assertFinanceiroCompanyAccess(ctx.user, cid);
+    const res = await dbExecute(db,
+      `WITH d AS (
+         SELECT id, company_id, data_vencimento::date dv,
+                ROUND(COALESCE(valor_realizado, valor_previsto)::numeric, 2) v,
+                COALESCE(descricao, fornecedor_nome, extrato_banco_descricao, '') t,
+                UPPER(LEFT(regexp_replace(COALESCE(descricao, fornecedor_nome, extrato_banco_descricao, ''), '[^A-Za-zÀ-ú]', '', 'g'), 12)) tk,
+                COALESCE(origem_modulo,'') om, COALESCE(observacoes,'') obs, status
+         FROM financial_entries
+         WHERE company_id IN (${inlineIds(ids)}) AND tipo = 'despesa'
+           AND status <> 'cancelado'
+           AND COALESCE(origem_modulo,'') NOT IN ('aplicacao_financeira','transferencia_interna')
+           AND COALESCE(valor_realizado, valor_previsto) > 3000
+           AND EXTRACT(year FROM data_vencimento) = $1
+       )
+       SELECT a.id AS "idA", b.id AS "idB", a.v::float8 AS valor,
+              a.dv::text AS "dataA", b.dv::text AS "dataB",
+              LEFT(a.t, 80) AS "descA", LEFT(b.t, 80) AS "descB",
+              a.om AS "origemA", b.om AS "origemB"
+       FROM d a JOIN d b
+         ON a.company_id = b.company_id AND a.v = b.v AND a.id < b.id
+        AND abs(a.dv - b.dv) <= 10 AND a.tk = b.tk
+       WHERE a.obs NOT LIKE '%[dup-ok:' || b.id || ']%'
+         AND b.obs NOT LIKE '%[dup-ok:' || a.id || ']%'
+       ORDER BY a.v DESC, a.dv
+       LIMIT 200`,
+      [input.ano]
+    );
+    return rows(res);
+  }),
+
+  // Rev. 4581 — cancela UM lançamento confirmado como duplicado pelo usuário.
+  // Reversível: status='cancelado' + motivo; nada é apagado.
+  confirmarDuplicidade: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    entryId: z.number(),
+    entryParId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `UPDATE financial_entries
+       SET status = 'cancelado',
+           motivo_cancelamento = 'Duplicidade confirmada pelo usuário (par do título #' || $1 || ')',
+           editado_em = NOW(), editado_por_id = $2, editado_por_nome = $3
+       WHERE id = $4 AND company_id = $5 AND tipo = 'despesa' AND status <> 'cancelado'
+       RETURNING id`,
+      [input.entryParId, ctx.user.id, ctx.user.name ?? "", input.entryId, input.companyId]
+    );
+    if (rows(res).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado ou já cancelado." });
+    return { ok: true };
+  }),
+
+  // Rev. 4581 — marca um par como "NÃO é duplicidade" (some da lista; reversível
+  // editando as observações do lançamento).
+  descartarDuplicidade: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    idA: z.number(),
+    idB: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `UPDATE financial_entries
+       SET observacoes = TRIM(COALESCE(observacoes,'') || ' [dup-ok:' || $1 || ']')
+       WHERE id = $2 AND company_id = $3 AND tipo = 'despesa' AND status <> 'cancelado'
+       RETURNING id`,
+      [input.idB, input.idA, input.companyId]
+    );
+    if (rows(res).length === 0) throw new TRPCError({ code: "NOT_FOUND" });
+    return { ok: true };
   }),
 
   // Cria título manual a receber. Com `parcelas` > 1 gera N linhas ligadas por
