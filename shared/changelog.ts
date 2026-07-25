@@ -1,4 +1,33 @@
 /**
+ * Rev. 4561 - UX: CONTAS A PAGAR — REDESIGN LÚDICO DO MODAL "DETALHE DO TÍTULO"
+ *
+ * PEDIDO DO USUÁRIO: "Faça um novo layout moderno intuitivo e lúdico para
+ * facilitar o entendimento" (com screenshots do modal atual, muito "formulário
+ * cinza": grid plano de campos, tabs neutras, sem hierarquia visual).
+ *
+ * O QUE MUDOU (client/src/pages/financeiro/FinanceiroContasAPagar.tsx —
+ * SOMENTE apresentação, zero mudança de dados/queries/mutations):
+ * - HERO DE STATUS: cabeçalho vira banner gradiente que muda de cor pela
+ *   situação (verde=pago, vermelho=vencido, laranja=a vencer), com círculos
+ *   decorativos, chips de origem/OC/fornecedor/obra, valor grande e pill de
+ *   status com ícone — o usuário entende a situação do título num relance.
+ * - TABS EM PILLS COLORIDAS: cada aba ativa ganha cor própria (Geral azul,
+ *   Origem índigo, Parcelas violeta, Histórico grafite) em trilho arredondado.
+ * - ABA GERAL AGRUPADA POR TEMA: novo componente DetSection (cartão com
+ *   cabeçalho tintado + ícone) organiza os campos em 4 blocos: "Valores &
+ *   Pagamento" (esmeralda), "Datas" (céu), "Classificação" (violeta) e
+ *   "Pessoas" (âmbar) — em vez do grid único de 15+ campos.
+ * - ORIGEM: OC, Fornecedor e Itens da OC também viram DetSection coloridas.
+ * - PARCELAS: tabela dentro de cartão temático violeta.
+ * - HISTÓRICO: vira linha do tempo com bolinhas coloridas por tipo de ação
+ *   (verde=pagamento/baixa, vermelho=estorno/cancelamento, âmbar=edição,
+ *   azul=demais) + empty-state amigável ("Nada por aqui ainda").
+ * - RODAPÉ: botões arredondados; "Validar e Pagar" com gradiente esmeralda.
+ * - KV levemente refinado (rounded-xl, sombra suave, break-words).
+ * ZERO schema/server change.
+ */
+
+/**
  * Rev. 4560 - FIX: RENOVAÇÃO DE LOCAÇÃO — PARCELA DO CONTAS A PAGAR VENCIA NA DATA ERRADA (SUMIA DA TELA) + MÁSCARA R$ NO MODAL
  *
  * PEDIDO DO USUÁRIO: "Não foi para o contas a pagar" após renovar 2 locações

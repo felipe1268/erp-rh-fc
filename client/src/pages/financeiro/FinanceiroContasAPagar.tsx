@@ -38,9 +38,22 @@ const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov"
 
 function KV({ label, children, highlight }: { label: string; children: ReactNode; highlight?: boolean }) {
   return (
-    <div className={`rounded-md border px-2.5 py-1.5 ${highlight ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"}`}>
-      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide leading-tight">{label}</div>
-      <div className={`text-sm leading-tight mt-0.5 ${highlight ? "font-bold text-amber-900" : "text-slate-800"}`}>{children}</div>
+    <div className={`rounded-xl border px-3 py-2 shadow-sm ${highlight ? "border-amber-300 bg-amber-50" : "border-slate-200/80 bg-white"}`}>
+      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide leading-tight">{label}</div>
+      <div className={`text-sm leading-tight mt-0.5 break-words ${highlight ? "font-bold text-amber-900" : "font-medium text-slate-800"}`}>{children}</div>
+    </div>
+  );
+}
+
+// Rev. 4561 — Seção temática do modal "Detalhe do Título" (layout lúdico)
+function DetSection({ icon, title, tint, children }: { icon: ReactNode; title: string; tint: string; children: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+      <div className={`flex items-center gap-2 px-4 py-2.5 ${tint}`}>
+        <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-white/70 shadow-sm">{icon}</span>
+        <span className="text-xs font-bold uppercase tracking-wide">{title}</span>
+      </div>
+      <div className="p-3">{children}</div>
     </div>
   );
 }
@@ -2166,11 +2179,13 @@ export default function FinanceiroContasAPagar() {
           >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-lg">
-                <Info className="w-5 h-5 text-blue-600" />
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow">
+                  <Receipt className="w-[18px] h-[18px] text-white" />
+                </span>
                 Detalhe do Título
                 {detailQuery.data?.entry && (
-                  <span className="ml-auto text-xs font-normal text-slate-500 tabular-nums">
-                    Lançamento #{detailQuery.data.entry.id}
+                  <span className="ml-auto text-[11px] font-semibold text-slate-500 tabular-nums bg-slate-100 border border-slate-200 rounded-full px-2.5 py-1">
+                    #{detailQuery.data.entry.id}
                   </span>
                 )}
               </DialogTitle>
@@ -2193,86 +2208,112 @@ export default function FinanceiroContasAPagar() {
               const vencida = e.dataVencimento && e.dataVencimento.slice(0,10) < hojeStr && e.status !== "pago";
               return (
                 <div className="space-y-4">
-                  {/* Cabeçalho de status */}
-                  <div className={`rounded-lg border-2 p-4 ${
-                    e.status === "pago" ? "border-green-300 bg-green-50" :
-                    vencida ? "border-red-300 bg-red-50" :
-                    "border-orange-300 bg-orange-50"
+                  {/* Rev. 4561 — Hero de status (gradiente lúdico por situação) */}
+                  <div className={`relative overflow-hidden rounded-2xl p-4 sm:p-5 text-white shadow-lg ${
+                    e.status === "pago" ? "bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700" :
+                    vencida ? "bg-gradient-to-br from-rose-500 via-red-600 to-red-700" :
+                    "bg-gradient-to-br from-amber-400 via-orange-500 to-orange-600"
                   }`}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold uppercase tracking-wide mb-1 text-slate-600">
-                          {ORIGEM_LABELS[e.origemModulo] ?? e.origemModulo ?? "Lançamento Manual"}
-                          {d.ordem?.numeroOc && <span className="ml-2 font-mono text-slate-700">· {formatNumeroOcDisplay(d.ordem.numeroOc)}</span>}
+                    <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10 pointer-events-none" />
+                    <div className="absolute -bottom-14 -left-8 w-36 h-36 rounded-full bg-white/10 pointer-events-none" />
+                    <div className="relative flex items-start justify-between gap-4 flex-wrap">
+                      <div className="flex-1 min-w-[220px]">
+                        <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                          <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide">
+                            {ORIGEM_LABELS[e.origemModulo] ?? e.origemModulo ?? "Lançamento Manual"}
+                          </span>
+                          {d.ordem?.numeroOc && (
+                            <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-full px-2.5 py-0.5 text-[11px] font-mono font-semibold">
+                              {formatNumeroOcDisplay(d.ordem.numeroOc)}
+                            </span>
+                          )}
                         </div>
-                        <h3 className="text-base font-bold text-slate-900 leading-tight">
+                        <h3 className="text-base sm:text-lg font-bold leading-tight break-words drop-shadow-sm">
                           {e.descricao || e.origemDescricao || e.contaNome || "—"}
                         </h3>
-                        {/* Rev. 2396 — Nome do fornecedor (quando preenchido no lançamento) */}
-                        {e.fornecedorNome && (
-                          <p className="text-xs text-slate-700 font-medium mt-1">🏢 {e.fornecedorNome}</p>
-                        )}
-                        {e.obraNome && (
-                          <p className="text-xs text-slate-600 mt-1">📍 {e.obraNome}</p>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap mt-2">
+                          {e.fornecedorNome && (
+                            <span className="inline-flex items-center gap-1 bg-black/15 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
+                              <Building2 className="w-3 h-3" />{e.fornecedorNome}
+                            </span>
+                          )}
+                          {e.obraNome && (
+                            <span className="inline-flex items-center gap-1 bg-black/15 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
+                              📍 {e.obraNome}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <div className="text-2xl font-bold tabular-nums text-slate-900">{formatBRL(Number(e.valorPrevisto))}</div>
-                        <div className={`text-xs font-semibold mt-1 ${
-                          e.status === "pago" ? "text-green-700" : vencida ? "text-red-700" : "text-orange-700"
-                        }`}>
-                          {e.status === "pago" ? `✓ Pago em ${fmtDateBR(e.dataPagamento)}` :
-                            vencida ? `⚠ Vencido há ${e.diasAtraso} dia(s)` :
-                            `Vence em ${fmtDateBR(e.dataVencimento)}`}
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-white/80">Valor do título</div>
+                        <div className="text-2xl sm:text-3xl font-extrabold tabular-nums drop-shadow-sm">{formatBRL(Number(e.valorPrevisto))}</div>
+                        <div className="inline-flex items-center gap-1.5 mt-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-bold">
+                          {e.status === "pago" ? <><CheckCircle className="w-3.5 h-3.5" />Pago em {fmtDateBR(e.dataPagamento)}</> :
+                            vencida ? <><AlertTriangle className="w-3.5 h-3.5" />Vencido há {e.diasAtraso} dia(s)</> :
+                            <><Calendar className="w-3.5 h-3.5" />Vence em {fmtDateBR(e.dataVencimento)}</>}
                         </div>
                       </div>
                     </div>
                   </div>
 
                   <Tabs defaultValue="geral" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4 h-auto">
-                      <TabsTrigger value="geral" className="text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate">
+                    <TabsList className="grid w-full grid-cols-4 h-auto rounded-full bg-slate-100 p-1 gap-1">
+                      <TabsTrigger value="geral" className="rounded-full text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow">
                         <Info className="w-3 h-3 mr-1 flex-shrink-0" /><span className="truncate">Geral</span>
                       </TabsTrigger>
-                      <TabsTrigger value="origem" className="text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate" disabled={!d.ordem && !d.fornecedor && !d.origemDetalhes}>
+                      <TabsTrigger value="origem" className="rounded-full text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow" disabled={!d.ordem && !d.fornecedor && !d.origemDetalhes}>
                         <Building2 className="w-3 h-3 mr-1 flex-shrink-0" />
                         <span className="truncate">{(d.origemDetalhes?.funcionarios || d.origemDetalhes?.pjs) ? "Memorial" : "Origem"}</span>
                       </TabsTrigger>
-                      <TabsTrigger value="parcelas" className="text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate">
+                      <TabsTrigger value="parcelas" className="rounded-full text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow">
                         <Hash className="w-3 h-3 mr-1 flex-shrink-0" />
                         <span className="truncate">Parcelas{d.parcelas?.length > 1 ? ` (${d.parcelas.length})` : ""}</span>
                       </TabsTrigger>
-                      <TabsTrigger value="historico" className="text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate">
+                      <TabsTrigger value="historico" className="rounded-full text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate data-[state=active]:bg-slate-700 data-[state=active]:text-white data-[state=active]:shadow">
                         <History className="w-3 h-3 mr-1 flex-shrink-0" /><span className="truncate">Histórico</span>
                       </TabsTrigger>
                     </TabsList>
 
-                    {/* GERAL */}
+                    {/* GERAL — Rev. 4561: agrupado em seções temáticas (💰 valores, 📅 datas, 🏷️ classificação, 👤 pessoas) */}
                     <TabsContent value="geral" className="mt-4 space-y-3">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <KV label="Tipo">{e.tipo ?? "—"}</KV>
-                        <KV label="Natureza">{e.natureza ?? "—"}</KV>
-                        <KV label="Conta Contábil">{e.contaNome ?? "—"}</KV>
-                        <KV label="Competência">{fmtDateBR(e.dataCompetencia)}</KV>
-                        <KV label="Vencimento" highlight={vencida}>{fmtDateBR(e.dataVencimento)}</KV>
-                        <KV label="Pagamento">{e.dataPagamento ? fmtDateBR(e.dataPagamento) : "—"}</KV>
-                        <KV label="Valor Previsto">{formatBRL(Number(e.valorPrevisto))}</KV>
-                        <KV label="Valor Realizado">{e.valorRealizado != null ? formatBRL(Number(e.valorRealizado)) : "—"}</KV>
-                        <KV label="Forma">{e.formaPagamento ?? "—"}</KV>
-                        {e.parcelaNumero && (
-                          <KV label="Parcela">{e.parcelaNumero}/{e.parcelaTotal}</KV>
-                        )}
-                        {e.codigoBarras && <KV label="Cód. de Barras"><span className="font-mono text-[11px]">{e.codigoBarras}</span></KV>}
-                        {e.chequeNumero && <KV label="Cheque">{e.chequeNumero} ({e.chequeBanco})</KV>}
-                        <KV label="Fornecedor / Cliente" highlight={!!e.fornecedorNome}>{e.fornecedorNome ?? "—"}</KV>
-                        <KV label="Conciliação">{e.conciliado ? `✓ ${fmtDateBR(e.dataConciliacao)}` : "Não conciliado"}</KV>
-                        <KV label="Criado por">{e.criadoPorNome ?? "—"}</KV>
-                        {e.aprovadoPorNome && <KV label="Aprovado por">{e.aprovadoPorNome}</KV>}
-                        {e.editadoPorNome && (
-                          <KV label="Editado por" highlight>
-                            {e.editadoPorNome}{e.editadoEm ? ` · ${fmtDateBR(e.editadoEm)}` : ""}
-                          </KV>
-                        )}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <DetSection icon={<Wallet className="w-3.5 h-3.5 text-emerald-700" />} title="Valores & Pagamento" tint="bg-emerald-50 text-emerald-800">
+                          <div className="grid grid-cols-2 gap-2">
+                            <KV label="Valor Previsto">{formatBRL(Number(e.valorPrevisto))}</KV>
+                            <KV label="Valor Realizado">{e.valorRealizado != null ? formatBRL(Number(e.valorRealizado)) : "—"}</KV>
+                            <KV label="Forma">{e.formaPagamento ?? "—"}</KV>
+                            <KV label="Parcela">{e.parcelaNumero ? `${e.parcelaNumero}/${e.parcelaTotal}` : "1/1"}</KV>
+                            {e.codigoBarras && <KV label="Cód. de Barras"><span className="font-mono text-[11px]">{e.codigoBarras}</span></KV>}
+                            {e.chequeNumero && <KV label="Cheque">{e.chequeNumero} ({e.chequeBanco})</KV>}
+                          </div>
+                        </DetSection>
+                        <DetSection icon={<Calendar className="w-3.5 h-3.5 text-sky-700" />} title="Datas" tint="bg-sky-50 text-sky-800">
+                          <div className="grid grid-cols-2 gap-2">
+                            <KV label="Competência">{fmtDateBR(e.dataCompetencia)}</KV>
+                            <KV label="Vencimento" highlight={vencida}>{fmtDateBR(e.dataVencimento)}</KV>
+                            <KV label="Pagamento">{e.dataPagamento ? fmtDateBR(e.dataPagamento) : "—"}</KV>
+                            <KV label="Conciliação">{e.conciliado ? `✓ ${fmtDateBR(e.dataConciliacao)}` : "Não conciliado"}</KV>
+                          </div>
+                        </DetSection>
+                        <DetSection icon={<Tag className="w-3.5 h-3.5 text-violet-700" />} title="Classificação" tint="bg-violet-50 text-violet-800">
+                          <div className="grid grid-cols-2 gap-2">
+                            <KV label="Tipo">{e.tipo ?? "—"}</KV>
+                            <KV label="Natureza">{e.natureza ?? "—"}</KV>
+                            <KV label="Conta Contábil">{e.contaNome ?? "—"}</KV>
+                            <KV label="Fornecedor / Cliente" highlight={!!e.fornecedorNome}>{e.fornecedorNome ?? "—"}</KV>
+                          </div>
+                        </DetSection>
+                        <DetSection icon={<Users className="w-3.5 h-3.5 text-amber-700" />} title="Pessoas" tint="bg-amber-50 text-amber-800">
+                          <div className="grid grid-cols-2 gap-2">
+                            <KV label="Criado por">{e.criadoPorNome ?? "—"}</KV>
+                            {e.aprovadoPorNome && <KV label="Aprovado por">{e.aprovadoPorNome}</KV>}
+                            {e.editadoPorNome && (
+                              <KV label="Editado por" highlight>
+                                {e.editadoPorNome}{e.editadoEm ? ` · ${fmtDateBR(e.editadoEm)}` : ""}
+                              </KV>
+                            )}
+                          </div>
+                        </DetSection>
                       </div>
 
                       {d.bancoEmpresa && (
@@ -2319,11 +2360,8 @@ export default function FinanceiroContasAPagar() {
                     {/* ORIGEM */}
                     <TabsContent value="origem" className="mt-4 space-y-4">
                       {d.ordem && (
-                        <div>
-                          <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
-                            <ShoppingCart className="w-4 h-4 text-blue-600" />Ordem de Compra {formatNumeroOcDisplay(d.ordem.numeroOc)}
-                          </h4>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <DetSection icon={<ShoppingCart className="w-3.5 h-3.5 text-blue-700" />} title={`Ordem de Compra ${formatNumeroOcDisplay(d.ordem.numeroOc)}`} tint="bg-blue-50 text-blue-800">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                             <KV label="Status OC">{d.ordem.status} · {d.ordem.aprovacaoStatus}</KV>
                             <KV label="Aprovador">{d.ordem.aprovadorNome ?? "—"}</KV>
                             <KV label="Aprovado em">{d.ordem.aprovadoEm ? fmtDateBR(d.ordem.aprovadoEm.slice(0,10)) : "—"}</KV>
@@ -2354,15 +2392,12 @@ export default function FinanceiroContasAPagar() {
                               </a>
                             ))}
                           </div>
-                        </div>
+                        </DetSection>
                       )}
 
                       {d.fornecedor && (
-                        <div>
-                          <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
-                            <Building2 className="w-4 h-4 text-indigo-600" />Fornecedor
-                          </h4>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <DetSection icon={<Building2 className="w-3.5 h-3.5 text-indigo-700" />} title="Fornecedor" tint="bg-indigo-50 text-indigo-800">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                             <KV label="Razão Social">{d.fornecedor.razaoSocial}</KV>
                             <KV label="Nome Fantasia">{d.fornecedor.nomeFantasia ?? "—"}</KV>
                             <KV label="CNPJ"><span className="font-mono">{d.fornecedor.cnpj ?? "—"}</span></KV>
@@ -2374,7 +2409,7 @@ export default function FinanceiroContasAPagar() {
                             <KV label="Ag./Conta">{[d.fornecedor.agencia, d.fornecedor.conta].filter(Boolean).join(" / ") || "—"}</KV>
                             {d.fornecedor.pix && <KV label="PIX" highlight><span className="font-mono text-[11px]">{d.fornecedor.pix}</span></KV>}
                           </div>
-                        </div>
+                        </DetSection>
                       )}
 
                       {/* Rev. 1628 — Origem genérica (cronograma, folha, pj, frota, parceiro, beneficio, almox, medição, seguro) */}
@@ -2504,11 +2539,8 @@ export default function FinanceiroContasAPagar() {
                       )}
 
                       {d.itens && d.itens.length > 0 && (
-                        <div>
-                          <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
-                            <Package className="w-4 h-4 text-amber-600" />Itens da OC ({d.itens.length})
-                          </h4>
-                          <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
+                        <DetSection icon={<Package className="w-3.5 h-3.5 text-amber-700" />} title={`Itens da OC (${d.itens.length})`} tint="bg-amber-50 text-amber-800">
+                          <div className="border border-slate-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
                             <table className="w-full text-xs">
                               <thead className="bg-slate-100 sticky top-0">
                                 <tr>
@@ -2536,13 +2568,14 @@ export default function FinanceiroContasAPagar() {
                               </tbody>
                             </table>
                           </div>
-                        </div>
+                        </DetSection>
                       )}
                     </TabsContent>
 
-                    {/* PARCELAS */}
+                    {/* PARCELAS — Rev. 4561: cartão temático */}
                     <TabsContent value="parcelas" className="mt-4">
-                      <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <DetSection icon={<Hash className="w-3.5 h-3.5 text-violet-700" />} title={`Parcelas do título${d.parcelas?.length > 1 ? ` (${d.parcelas.length})` : ""}`} tint="bg-violet-50 text-violet-800">
+                      <div className="border border-slate-200 rounded-xl overflow-hidden">
                         <table className="w-full text-xs">
                           <thead className="bg-slate-100">
                             <tr>
@@ -2587,24 +2620,39 @@ export default function FinanceiroContasAPagar() {
                           </tbody>
                         </table>
                       </div>
+                      </DetSection>
                     </TabsContent>
 
-                    {/* HISTÓRICO */}
+                    {/* HISTÓRICO — Rev. 4561: linha do tempo com bolinhas coloridas */}
                     <TabsContent value="historico" className="mt-4">
                       {d.auditoria && d.auditoria.length > 0 ? (
-                        <div className="space-y-2 max-h-80 overflow-y-auto">
-                          {d.auditoria.map((a: any) => (
-                            <div key={a.id} className="border-l-2 border-slate-300 pl-3 py-1">
-                              <div className="text-xs font-semibold text-slate-700">{a.action}</div>
-                              <div className="text-[11px] text-slate-500">
-                                {fmtDateBR(a.createdAt.slice(0,10))} · {a.userName ?? "—"} · {a.module}
+                        <DetSection icon={<History className="w-3.5 h-3.5 text-slate-700" />} title="Linha do tempo" tint="bg-slate-100 text-slate-700">
+                          <div className="space-y-0 max-h-80 overflow-y-auto pl-1">
+                            {d.auditoria.map((a: any, i: number) => (
+                              <div key={a.id} className="relative pl-6 pb-4 last:pb-1">
+                                {i < d.auditoria.length - 1 && <span className="absolute left-[7px] top-4 bottom-0 w-px bg-slate-200" />}
+                                <span className={`absolute left-0 top-1 w-[15px] h-[15px] rounded-full border-2 border-white shadow ${
+                                  /pag|baixa/i.test(String(a.action)) ? "bg-emerald-500" :
+                                  /estorn|cancel|exclu/i.test(String(a.action)) ? "bg-rose-500" :
+                                  /edit|alter/i.test(String(a.action)) ? "bg-amber-500" : "bg-blue-500"
+                                }`} />
+                                <div className="text-xs font-bold text-slate-800">{a.action}</div>
+                                <div className="text-[11px] text-slate-500">
+                                  {fmtDateBR(a.createdAt.slice(0,10))} · {a.userName ?? "—"} · {a.module}
+                                </div>
+                                {a.details && <div className="text-xs text-slate-600 mt-0.5 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 break-words">{a.details}</div>}
                               </div>
-                              {a.details && <div className="text-xs text-slate-600 mt-0.5">{a.details}</div>}
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        </DetSection>
                       ) : (
-                        <p className="text-sm text-slate-500 text-center py-6">Nenhum registro de auditoria.</p>
+                        <div className="text-center py-10 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60">
+                          <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-2">
+                            <History className="w-6 h-6 text-slate-400" />
+                          </span>
+                          <p className="text-sm font-medium text-slate-600">Nada por aqui ainda</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Este título não tem registros de auditoria.</p>
+                        </div>
                       )}
                     </TabsContent>
                   </Tabs>
@@ -2613,9 +2661,9 @@ export default function FinanceiroContasAPagar() {
             })() : null}
 
             <DialogFooter className="border-t pt-3">
-              <Button variant="outline" onClick={() => setDetailEntryId(null)}>Fechar</Button>
+              <Button variant="outline" className="rounded-full px-5" onClick={() => setDetailEntryId(null)}>Fechar</Button>
               {detailQuery.data?.entry && detailQuery.data.entry.status !== "pago" && (
-                <Button className="bg-green-600 hover:bg-green-700 text-white"
+                <Button className="rounded-full px-5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-md"
                   onClick={() => { setShowPay(detailQuery.data.entry); setDetailEntryId(null); }}>
                   <CheckCircle className="w-4 h-4 mr-1" />Validar e Pagar
                 </Button>
