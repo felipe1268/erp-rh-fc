@@ -1,4 +1,92 @@
 /**
+ * Rev. 4557 - FEAT: FLUXO RH → FINANCEIRO NO AVISO PRÉVIO (ENVIAR AO CONTAS A PAGAR + BAIXA AUTOMÁTICA)
+ *
+ * PEDIDO DO USUÁRIO: rescisões validadas pelo RH devem ir para o Contas a Pagar;
+ * quando o Financeiro registrar a baixa do pagamento, o aviso deve concluir e o
+ * funcionário ser desligado AUTOMATICAMENTE (aprovado via "Sim, implementar o
+ * fluxo completo").
+ *
+ * MUDANÇAS:
+ *   1. SCHEMA (`drizzle/schema.ts` — termination_notices): novas colunas
+ *      `enviado_financeiro_em` (timestamp), `enviado_financeiro_por` (varchar) e
+ *      `financeiro_entry_id` (integer) — link 1:1 aviso ↔ lançamento do Contas a
+ *      Pagar. Colunas aplicadas no Neon via ALTER idempotente (o SyncSchema do
+ *      startup reportou "nenhuma diferença" nesse boot; DDL rodado manualmente).
+ *   2. NOVA MUTATION `avisoPrevio.enviarParaFinanceiro` (avisoPrevioFerias.ts):
+ *      só p/ status 'aguardando_pagamento' e ainda não enviado; valida acesso à
+ *      empresa (getCompaniesForUser); INSERT em financial_entries (tipo despesa,
+ *      natureza variavel, conta_nome 'RESCISÃO - MÃO DE OBRA', status a_pagar,
+ *      origem_modulo 'aviso_previo', origem_id = aviso.id, valor =
+ *      valorEstimadoTotal, competência = dataFim, vencimento = dataFim + 10 dias
+ *      — art. 477 CLT; obra atual do funcionário como centro de custo) RETURNING
+ *      id → grava enviadoFinanceiroEm/Por + financeiroEntryId no aviso +
+ *      observação + audit log.
+ *   3. HELPER EXPORTADO `concluirAvisoPorBaixaFinanceira` (avisoPrevioFerias.ts):
+ *      chamado pelo Financeiro quando a baixa QUITA o lançamento. Conclui o aviso
+ *      (status concluido + dataBaixa + baixaRescisao* preenchidos com "Financeiro
+ *      (<user>)") e desliga o funcionário: categoria derivada de aviso.tipo
+ *      (empregador_* → demissao_sem_justa_causa; empregado_* → pedido_demissao),
+ *      logStatusChange, desalocação de obra_funcionarios, encerramento de
+ *      contratos PJ, audit. REGRAS DE SEGURANÇA: checklist de desligamento com
+ *      item OBRIGATÓRIO pendente → aviso conclui (o pagamento aconteceu) mas o
+ *      funcionário NÃO é desligado (fica registrado nas observações p/ o RH
+ *      resolver); funcionário já Desligado/Lista_Negra/Inativo nunca é tocado;
+ *      aviso já concluído/cancelado = no-op (idempotente).
+ *   4. HOOK NO FINANCEIRO (`financial.ts` — registrarBaixa, dentro do
+ *      `if (roll.quitado)`, ao lado do hook de pagamento_pj): origem_modulo
+ *      'aviso_previo' → dynamic import do helper (evita ciclo de imports) em
+ *      try/catch não-bloqueante (falha no fan-out nunca desfaz a baixa).
+ *   5. UI (`AvisoPrevio.tsx`): em "Aguardando Baixa", novo botão azul "Enviar ao
+ *      Financeiro" (com confirm) ao lado do "Dar Baixa" (mantido como caminho
+ *      manual); depois de enviado os 2 botões somem e entra o badge azul "No
+ *      Contas a Pagar" (tooltip com nº do lançamento). Banner âmbar reescrito
+ *      explicando o fluxo automático. list ganhou enviadoFinanceiroEm/Por +
+ *      financeiroEntryId.
+ *
+ * HARDENING (pós code-review, mesma revisão):
+ *   - `enviarParaFinanceiro` agora é TRANSACIONAL com pg_advisory_xact_lock por
+ *     aviso + re-check dentro do lock (cliques concorrentes/retries não criam
+ *     lançamento duplicado; INSERT + link são atômicos).
+ *   - Guard anti-dupla-via: aviso com baixa manual já registrada
+ *     (baixaRescisaoData/dataBaixa) NÃO pode ser enviado ao Financeiro.
+ *   - Guard extra: rejeita se já existe lançamento ATIVO (status<>'cancelado')
+ *     origem_modulo='aviso_previo' p/ o mesmo aviso + índice único parcial
+ *     uq_fin_entries_aviso_previo no Neon (defesa em profundidade).
+ *   - RECUPERAÇÃO: se o lançamento vinculado foi CANCELADO no Financeiro, o
+ *     RH pode reenviar (botão ↻ ao lado do badge "No Contas a Pagar"; server
+ *     valida). `revertConcluido` cancela automaticamente lançamento vinculado
+ *     ainda a_pagar e limpa o link; se o lançamento já tem pagamento, bloqueia
+ *     a reversão (estornar no Financeiro primeiro).
+ *
+ * LIMITAÇÕES CONHECIDAS: pagamento via pagarConsolidadoFornecedor não dispara o
+ * hook (rescisão não tem fornecedor — não entra no consolidado); estorno da
+ * baixa no Financeiro NÃO reabre o aviso automaticamente (usar "Reverter" no RH).
+ *
+ * Arquivos: drizzle/schema.ts, server/routers/avisoPrevioFerias.ts,
+ * server/routers/financial.ts, client/src/pages/AvisoPrevio.tsx.
+ */
+/**
+ * Rev. 4556 - FIX: BANNER "CONCLUÍDO INCORRETAMENTE" CONTAVA TODOS OS CONCLUÍDOS + REVERTALLCONCLUIDOS PERIGOSO
+ *
+ * CAUSA-RAIZ: o banner rosa da aba Concluídos (Rev. anterior) usava
+ * stats.concluidos (TODOS os concluídos) na condição e nos textos — mas
+ * verificação no Neon mostrou que TODOS os 53 avisos concluídos JÁ TÊM baixa
+ * registrada (baixaRescisaoData ou dataBaixa preenchidos). O banner acusava
+ * "53 avisos marcados como Concluído incorretamente" sem existir nenhum.
+ *
+ * MUDANÇAS:
+ *   1. `AvisoPrevio.tsx` — stats ganhou `concluidosSemBaixa` (concluído SEM
+ *      baixaRescisaoData E SEM dataBaixa); banner rosa e botão "Reativar" agora
+ *      usam esse número (banner só aparece se > 0).
+ *   2. `avisoPrevioFerias.ts` — `revertAllConcluidos` restringido com
+ *      isNull(dataBaixa) + isNull(baixaRescisaoData): não consegue mais reverter
+ *      em massa avisos com baixa legítima registrada.
+ *
+ * Nenhum backfill necessário (dados já estavam corretos).
+ * Arquivos: client/src/pages/AvisoPrevio.tsx, server/routers/avisoPrevioFerias.ts.
+ * ZERO schema change.
+ */
+/**
  * Rev. 4555 - UX: TOGGLE DO ALERTA DE LOCAÇÕES NO PAINEL "ALMOXARIFADO" DAS CONFIGURAÇÕES
  *
  * PEDIDO DO USUÁRIO: "coloque o criterio aqui para ligar.. e desligar a função"

@@ -10500,6 +10500,18 @@ export const financialRouter = router({
             [dataBaixa, meta.origem_id, input.companyId]
           );
         }
+        // Rev. 4557 — Fluxo RH → Financeiro: baixa TOTAL de rescisão enviada pelo
+        // Aviso Prévio conclui o aviso e desliga o funcionário automaticamente.
+        if (meta?.origem_modulo === 'aviso_previo' && meta?.origem_id) {
+          const { concluirAvisoPorBaixaFinanceira } = await import("./avisoPrevioFerias");
+          await concluirAvisoPorBaixaFinanceira({
+            avisoId: Number(meta.origem_id),
+            companyId: input.companyId,
+            dataPagamento: dataBaixa,
+            userName: ctx.user?.name ?? 'Sistema',
+            userId: ctx.user?.id,
+          });
+        }
       } catch (_) { /* não bloqueia a baixa principal */ }
     }
     return { ok: true, quitado: roll.quitado, acumulado: roll.acumulado, saldo: roll.saldo, status: roll.status };

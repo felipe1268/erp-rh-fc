@@ -1,3 +1,4 @@
+- [Aviso Prévio ↔ Contas a Pagar](aviso-previo-financeiro-link.md) — baixa manual e envio ao Financeiro são vias EXCLUSIVAS; advisory lock 477001 + índice único parcial (só no Neon); quitar baixa dispara conclusão/desligamento.
 - [DIXI group-key digit collision](dixi-groupkey-digit-collision.md) — relógio pode ter código "jfcNNN" no Nome; chave de agrupamento por pessoa deve PRESERVAR dígitos ou funde 2 funcionários.
 - [Equipamento utilização fonte de dados](equipamento-utilizacao-fonte-dados.md) — utilização diária vem de warehouse_loans (não equipamento_locado_eventos); link via almoxarifado_itens.equipamento_vinculado_id.
 - [Scorecard month-end date construction](scorecard-month-end-date.md) — `|| '-31'` rejeita junho/abr/set/nov/fev; sempre usar `|| '-01')::date + INTERVAL '1 month' - 1 day`.

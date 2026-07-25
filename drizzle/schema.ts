@@ -3429,6 +3429,12 @@ export const terminationNotices = pgTable("termination_notices", {
         mediaInsalubridade: varchar("media_insalubridade", { length: 20 }).default('0'),
         mediaHorasExtras: varchar("media_horas_extras", { length: 20 }).default('0'),
         descontarAvisoNaoCumprido: smallint().default(0),
+        // Rev. 4557 — Fluxo RH → Financeiro: RH valida e envia a rescisão para o
+        // Contas a Pagar; quando o Financeiro dá a baixa, o aviso conclui e o
+        // funcionário é desligado automaticamente.
+        enviadoFinanceiroEm: timestamp("enviado_financeiro_em", { mode: 'string' }),
+        enviadoFinanceiroPor: varchar("enviado_financeiro_por", { length: 255 }),
+        financeiroEntryId: integer("financeiro_entry_id"),
         baixaRescisaoValor: varchar("baixa_rescisao_valor", { length: 20 }),
         baixaRescisaoData: date("baixa_rescisao_data", { mode: 'string' }),
         baixaRescisaoPor: varchar("baixa_rescisao_por", { length: 255 }),

@@ -32,6 +32,115 @@ import { bancoHorasSaldo } from "../../drizzle/schema";
 import { resolveMealBenefitConfig } from "../services/mealBenefitResolver";
 
 /**
+ * Rev. 4557 — Fluxo RH → Financeiro: quando o Financeiro dá a baixa TOTAL do
+ * lançamento de rescisão no Contas a Pagar (origem_modulo='aviso_previo'),
+ * este helper conclui o aviso e desliga o funcionário automaticamente.
+ *
+ * Regras:
+ * - Registra a baixa da rescisão no aviso (valor = estimado, por = Financeiro).
+ * - Se a checklist de desligamento tiver item OBRIGATÓRIO pendente, o aviso é
+ *   concluído (pagamento aconteceu de fato) mas o funcionário NÃO é desligado —
+ *   fica registrado em observações para o RH resolver a checklist e desligar
+ *   manualmente pelo cadastro.
+ * - Nunca sobrescreve funcionário já Desligado/Lista_Negra.
+ */
+export async function concluirAvisoPorBaixaFinanceira(opts: {
+  avisoId: number;
+  companyId: number;
+  dataPagamento: string; // YYYY-MM-DD
+  userName: string;
+  userId?: number;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const [aviso] = await db.select().from(terminationNotices).where(and(
+    eq(terminationNotices.id, opts.avisoId),
+    eq(terminationNotices.companyId, opts.companyId),
+    isNull(terminationNotices.deletedAt),
+  ));
+  if (!aviso || aviso.status === 'concluido' || aviso.status === 'cancelado') return;
+
+  const hoje = opts.dataPagamento;
+  const porLabel = `Financeiro (${opts.userName})`;
+
+  // Checklist de desligamento — item obrigatório pendente bloqueia SÓ o desligamento.
+  let checklistPendentes: string[] = [];
+  try {
+    const itens = await db.select().from(employeeTerminationChecklist).where(and(
+      eq(employeeTerminationChecklist.companyId, aviso.companyId),
+      eq(employeeTerminationChecklist.employeeId, aviso.employeeId),
+    ));
+    checklistPendentes = itens.filter(i => i.obrigatorio === 1 && i.concluido === 0).map(i => i.label as string);
+  } catch { /* sem checklist = sem bloqueio */ }
+
+  const obsAppend = `\n[Baixa pelo Financeiro em ${hoje} por ${opts.userName}]: rescisão quitada no Contas a Pagar (lançamento #${(aviso as any).financeiroEntryId ?? '?'}).`
+    + (checklistPendentes.length > 0
+      ? ` ATENÇÃO: funcionário NÃO foi desligado automaticamente — checklist obrigatória pendente: ${checklistPendentes.join(', ')}.`
+      : '');
+
+  await db.update(terminationNotices).set({
+    status: 'concluido',
+    dataConclusao: hoje,
+    dataBaixa: hoje,
+    baixaRescisaoValor: (aviso as any).baixaRescisaoValor ?? aviso.valorEstimadoTotal ?? '0',
+    baixaRescisaoData: (aviso as any).baixaRescisaoData ?? hoje,
+    baixaRescisaoPor: (aviso as any).baixaRescisaoPor ?? porLabel,
+    observacoes: (aviso.observacoes || '') + obsAppend,
+    updatedAt: sql`NOW()`,
+  } as any).where(eq(terminationNotices.id, aviso.id));
+
+  // Desligamento automático (se checklist ok e funcionário ainda ativo).
+  if (checklistPendentes.length === 0 && aviso.employeeId) {
+    const [empAntes] = await db.select({ status: employees.status, nomeCompleto: employees.nomeCompleto })
+      .from(employees).where(eq(employees.id, aviso.employeeId));
+    if (empAntes && empAntes.status !== 'Desligado' && empAntes.status !== 'Lista_Negra' && empAntes.status !== 'Inativo') {
+      const categoria = String(aviso.tipo || '').startsWith('empregador')
+        ? 'demissao_sem_justa_causa' : 'pedido_demissao';
+      await db.update(employees).set({
+        status: 'Desligado',
+        categoriaDesligamento: categoria,
+        motivoDesligamento: `Rescisão paga pelo Financeiro (aviso prévio #${aviso.id})`,
+        dataDesligamentoEfetiva: hoje,
+        desligadoPor: porLabel,
+        desligadoUserId: opts.userId ?? null,
+      } as any).where(eq(employees.id, aviso.employeeId));
+      await logStatusChange({
+        db, companyId: aviso.companyId, employeeId: aviso.employeeId,
+        nomeCompleto: empAntes.nomeCompleto, statusAnterior: empAntes.status || 'Desconhecido',
+        statusNovo: 'Desligado', alteradoPor: porLabel,
+        alteradoPorUserId: opts.userId, motivo: `Baixa da rescisão no Contas a Pagar (aviso #${aviso.id})`,
+        origemModulo: 'financeiro.registrarBaixa',
+      });
+      try {
+        const [aloc] = await db.select({ id: obraFuncionarios.id }).from(obraFuncionarios)
+          .where(and(eq(obraFuncionarios.employeeId, aviso.employeeId), eq(obraFuncionarios.isActive, 1)));
+        if (aloc) {
+          await db.update(obraFuncionarios)
+            .set({ isActive: 0, dataDesligamento: hoje } as any)
+            .where(eq(obraFuncionarios.id, aloc.id));
+        }
+      } catch (e) { console.error('[baixaFinanceira] Erro ao desalocar obra:', e); }
+      try {
+        await encerrarContratosPjDoFuncionario(
+          aviso.employeeId,
+          `Desligamento via baixa financeira do aviso prévio #${aviso.id}`,
+          porLabel,
+        );
+      } catch (e) { console.error('[baixaFinanceira] Erro ao encerrar contratos PJ:', e); }
+      await createAuditLog({
+        userId: opts.userId ?? 0,
+        userName: porLabel,
+        action: 'DESLIGAR_FUNCIONARIO',
+        module: 'aviso_previo',
+        entityType: 'employee',
+        entityId: aviso.employeeId,
+        details: `Funcionário desligado automaticamente após baixa da rescisão no Contas a Pagar (aviso #${aviso.id}).`,
+      });
+    }
+  }
+}
+
+/**
  * Rev. 3977 — Lê o saldo (em minutos) do Banco de Horas do empregado, usado para
  * compor o acerto rescisório (provento se positivo, desconto se negativo). Sem
  * linha na tabela = saldo 0 (empregado nunca usou banco de horas).
@@ -602,6 +711,9 @@ export const avisoPrevioFeriasRouter = router({
           novoEmpregoCartaUrl: terminationNotices.novoEmpregoCartaUrl,
           avisoAssinadoUrl: terminationNotices.avisoAssinadoUrl,
           avisoAssinadoEnviadoEm: terminationNotices.avisoAssinadoEnviadoEm,
+          enviadoFinanceiroEm: terminationNotices.enviadoFinanceiroEm,
+          enviadoFinanceiroPor: terminationNotices.enviadoFinanceiroPor,
+          financeiroEntryId: terminationNotices.financeiroEntryId,
           baixaRescisaoValor: terminationNotices.baixaRescisaoValor,
           baixaRescisaoData: terminationNotices.baixaRescisaoData,
           baixaRescisaoPor: terminationNotices.baixaRescisaoPor,
@@ -2281,11 +2393,36 @@ export const avisoPrevioFeriasRouter = router({
         if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
         if (aviso.status !== 'concluido' && aviso.status !== 'aguardando_pagamento')
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas avisos Concluídos ou Aguardando Pagamento podem ser revertidos' });
-        
+
+        // Se o aviso foi enviado ao Contas a Pagar e o lançamento ainda está EM
+        // ABERTO (a_pagar), cancela o lançamento e desfaz o vínculo — evita
+        // pagável órfão no Financeiro. Lançamento já pago/parcial NÃO é tocado.
+        let obsExtra = '';
+        const feId = (aviso as any).financeiroEntryId as number | null;
+        if (feId) {
+          const fe: any = await db.execute(sql`
+            SELECT id, status FROM financial_entries WHERE id = ${feId}
+          `);
+          const feRow = (Array.isArray(fe) ? fe[0] : fe?.rows?.[0]) as any;
+          if (feRow && feRow.status === 'a_pagar') {
+            await db.execute(sql`
+              UPDATE financial_entries SET status = 'cancelado', updated_at = NOW()
+              WHERE id = ${feId} AND status = 'a_pagar'
+            `);
+            obsExtra = `\n[Reversão em ${new Date().toISOString().split('T')[0]} por ${ctx.user.name}]: lançamento #${feId} do Contas a Pagar foi CANCELADO automaticamente.`;
+          } else if (feRow && feRow.status !== 'cancelado') {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `Não é possível reverter: o lançamento #${feId} no Contas a Pagar já tem pagamento registrado (status ${feRow.status}). Estorne a baixa no Financeiro primeiro.` });
+          }
+        }
+
         await db.update(terminationNotices).set({
           status: 'em_andamento',
           dataConclusao: null,
           dataBaixa: null,
+          enviadoFinanceiroEm: null,
+          enviadoFinanceiroPor: null,
+          financeiroEntryId: null,
+          ...(obsExtra ? { observacoes: (aviso.observacoes || '') + obsExtra } : {}),
           revertidoManualmente: 1,
           baixaRescisaoValor: null,
           baixaRescisaoData: null,
@@ -2341,6 +2478,10 @@ export const avisoPrevioFeriasRouter = router({
           eq(terminationNotices.companyId, input.companyId),
           eq(terminationNotices.status, 'concluido'),
           isNull(terminationNotices.deletedAt),
+          // Rev. 4556 — só reativa quem realmente NÃO tem baixa registrada.
+          // Antes revertia (e APAGAVA a baixa de) TODOS os concluídos.
+          isNull(terminationNotices.dataBaixa),
+          isNull(terminationNotices.baixaRescisaoData),
         ));
         await createAuditLog({
           userId: ctx.user.id,
@@ -2352,6 +2493,135 @@ export const avisoPrevioFeriasRouter = router({
           details: `Todos os avisos concluídos revertidos para Aguardando Baixa por ${ctx.user.name}`,
         });
         return { success: true };
+      }),
+
+    /**
+     * Rev. 4557 — RH valida o aviso e ENVIA a rescisão para o Contas a Pagar.
+     * O Financeiro dá a baixa lá; quando quitar, o aviso conclui e o funcionário
+     * é desligado automaticamente (ver concluirAvisoPorBaixaFinanceira).
+     */
+    enviarParaFinanceiro: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [aviso] = await db.select().from(terminationNotices).where(and(
+          eq(terminationNotices.id, input.id),
+          isNull(terminationNotices.deletedAt),
+        ));
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+        const empresasDoUser = await getCompaniesForUser(ctx.user.id);
+        if (empresasDoUser !== null && !empresasDoUser.includes(aviso.companyId))
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a esta empresa' });
+        if (aviso.status !== 'aguardando_pagamento')
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Só é possível enviar ao Financeiro avisos em "Aguardando Baixa".' });
+        // Bloqueia dupla via de pagamento: se o RH já registrou baixa manual
+        // (mesmo parcial), o valor não pode ir também pro Contas a Pagar.
+        if ((aviso as any).baixaRescisaoData || (aviso as any).dataBaixa)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Este aviso já tem baixa manual registrada — não é possível enviar ao Financeiro (risco de pagamento em duplicidade).' });
+
+        const valor = parseFloat(String(aviso.valorEstimadoTotal ?? '0').replace(',', '.'));
+        if (!isFinite(valor) || valor <= 0)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Valor estimado da rescisão inválido — recalcule o aviso antes de enviar.' });
+
+        const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees)
+          .where(eq(employees.id, aviso.employeeId));
+        const nome = emp?.nome ?? `Funcionário #${aviso.employeeId}`;
+
+        // Obra atual (se alocado) para centro de custo.
+        let obraId: number | null = null;
+        let obraNome: string | null = null;
+        try {
+          const [aloc] = await db.select({ obraId: obraFuncionarios.obraId, obraNome: obras.nome })
+            .from(obraFuncionarios)
+            .leftJoin(obras, eq(obras.id, obraFuncionarios.obraId))
+            .where(and(eq(obraFuncionarios.employeeId, aviso.employeeId), eq(obraFuncionarios.isActive, 1)))
+            .orderBy(desc(obraFuncionarios.id)).limit(1);
+          if (aloc) { obraId = aloc.obraId; obraNome = aloc.obraNome ?? null; }
+        } catch { /* sem obra = lançamento sem centro de custo */ }
+
+        // Vencimento: dataFim + 10 dias (prazo legal do art. 477 CLT).
+        const venc = new Date(aviso.dataFim + 'T12:00:00');
+        venc.setDate(venc.getDate() + 10);
+        const vencStr = venc.toISOString().split('T')[0];
+
+        const descricao = `Rescisão — ${nome} (Aviso Prévio #${aviso.id})`;
+
+        // Transação + advisory lock por aviso: serializa cliques concorrentes e
+        // garante que INSERT no Contas a Pagar + link no aviso são atômicos.
+        const entryId = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(477001, ${aviso.id})`);
+
+          // Re-check dentro do lock (estado pode ter mudado entre a leitura e o lock).
+          const cur: any = await tx.execute(sql`
+            SELECT status, financeiro_entry_id AS "financeiroEntryId",
+                   baixa_rescisao_data AS "baixaRescisaoData", "dataBaixa"
+            FROM termination_notices WHERE id = ${aviso.id}
+          `);
+          const row = (Array.isArray(cur) ? cur[0] : cur?.rows?.[0]) as any;
+          if (!row || row.status !== 'aguardando_pagamento')
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'O aviso mudou de status — recarregue a tela.' });
+          if (row.baixaRescisaoData || row.dataBaixa)
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Este aviso já tem baixa manual registrada — não é possível enviar ao Financeiro.' });
+
+          // Já enviado antes? Só permite reenvio se o lançamento vinculado foi
+          // CANCELADO no Financeiro (ou não existe mais).
+          if (row.financeiroEntryId) {
+            const fe: any = await tx.execute(sql`
+              SELECT id, status FROM financial_entries WHERE id = ${Number(row.financeiroEntryId)}
+            `);
+            const feRow = (Array.isArray(fe) ? fe[0] : fe?.rows?.[0]) as any;
+            if (feRow && feRow.status !== 'cancelado')
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Este aviso já foi enviado ao Contas a Pagar (lançamento ativo).' });
+            // lançamento cancelado/inexistente → limpa o link e reenvia
+          }
+
+          // Guarda extra contra duplicidade: nenhum lançamento ATIVO do módulo
+          // aviso_previo pode existir para este aviso.
+          const dup: any = await tx.execute(sql`
+            SELECT id FROM financial_entries
+            WHERE origem_modulo = 'aviso_previo' AND origem_id = ${aviso.id}
+              AND status <> 'cancelado' AND company_id = ${aviso.companyId}
+            LIMIT 1
+          `);
+          const dupRow = (Array.isArray(dup) ? dup[0] : dup?.rows?.[0]) as any;
+          if (dupRow)
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `Já existe lançamento ativo no Contas a Pagar para este aviso (#${dupRow.id}).` });
+
+          const res: any = await tx.execute(sql`
+            INSERT INTO financial_entries (
+              company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+              valor_previsto, data_competencia, data_vencimento, status,
+              origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at
+            ) VALUES (
+              ${aviso.companyId}, ${obraId}, ${obraNome}, ${'RESCISÃO - MÃO DE OBRA'}, 'despesa', 'variavel',
+              ${valor.toFixed(2)}, ${aviso.dataFim}, ${vencStr}, 'a_pagar',
+              'aviso_previo', ${aviso.id}, ${descricao}, ${descricao}, NOW(), NOW()
+            ) RETURNING id
+          `);
+          const newId = Number((Array.isArray(res) ? res[0] : res?.rows?.[0])?.id);
+
+          await tx.update(terminationNotices).set({
+            enviadoFinanceiroEm: sql`NOW()`,
+            enviadoFinanceiroPor: ctx.user.name ?? 'Sistema',
+            financeiroEntryId: newId || null,
+            observacoes: (aviso.observacoes || '') +
+              `\n[Enviado ao Financeiro em ${new Date().toISOString().split('T')[0]} por ${ctx.user.name}]: rescisão de R$ ${valor.toFixed(2)} lançada no Contas a Pagar (#${newId}), vencimento ${vencStr}.`,
+            updatedAt: sql`NOW()`,
+          } as any).where(eq(terminationNotices.id, aviso.id));
+
+          return newId;
+        });
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'ENVIAR_RESCISAO_FINANCEIRO',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: aviso.id,
+          details: `Rescisão de ${nome} (R$ ${valor.toFixed(2)}) enviada ao Contas a Pagar (lançamento #${entryId}, venc. ${vencStr}).`,
+        });
+        return { success: true, entryId, valor: valor.toFixed(2), vencimento: vencStr };
       }),
 
     /** Editar o saldo real do FGTS manualmente (Súmula 276 / correção TR) */

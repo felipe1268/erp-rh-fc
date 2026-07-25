@@ -226,6 +226,13 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     },
     onError: (err) => toast.error(err.message || "Erro ao estornar baixa"),
   });
+  const enviarParaFinanceiro = trpc.avisoPrevio.avisoPrevio.enviarParaFinanceiro.useMutation({
+    onSuccess: (res: any) => {
+      refetch();
+      toast.success(`Rescisão enviada ao Contas a Pagar (lançamento #${res?.entryId}, venc. ${res?.vencimento ? res.vencimento.split('-').reverse().join('/') : '—'}). Quando o Financeiro der a baixa, o funcionário será desligado automaticamente.`);
+    },
+    onError: (err) => toast.error(err.message || "Erro ao enviar ao Financeiro"),
+  });
   const darBaixa = trpc.avisoPrevio.avisoPrevio.darBaixa.useMutation({
     onSuccess: (res: any) => {
       refetch();
@@ -437,11 +444,16 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     const aguardandoList  = list.filter(a => a.status === "aguardando_pagamento");
     const concluidosList  = list.filter(a => a.status === "concluido");
     const canceladosList  = list.filter(a => a.status === "cancelado");
+    // Rev. 4556 — só é "concluído incorretamente" quem NÃO tem nenhuma baixa registrada.
+    const concluidosSemBaixaList = concluidosList.filter(
+      a => !a.baixaRescisaoData && !a.dataBaixa
+    );
     return {
       total: list.length,
       emAndamento: emAndamentoList.length,
       aguardandoPagamento: aguardandoList.length,
       concluidos: concluidosList.length,
+      concluidosSemBaixa: concluidosSemBaixaList.length,
       cancelados: canceladosList.length,
       valorTotal: emAndamentoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
       valorEmAndamento: emAndamentoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
@@ -1158,22 +1170,23 @@ ${isExperiencia ? (() => {
               <p className="font-semibold text-amber-900 text-sm">Funcionários aguardando pagamento das verbas rescisórias</p>
               <p className="text-amber-800 text-xs mt-1 leading-relaxed">
                 Estes colaboradores já cumpriram integralmente o período de aviso prévio e <strong>não estão mais em atividade</strong>.
-                Estão aguardando o pagamento das verbas rescisórias pelo financeiro. Após a confirmação do pagamento de cada um,
-                dê baixa manualmente utilizando o botão <strong>"Dar Baixa"</strong> — o processo seguirá o fluxo de desligamento configurado.
+                Estão aguardando o pagamento das verbas rescisórias. Use <strong>"Enviar ao Financeiro"</strong> para lançar a rescisão
+                no Contas a Pagar — quando o Financeiro registrar a baixa do pagamento, o aviso será concluído e o funcionário
+                desligado <strong>automaticamente</strong>. Se preferir, ainda é possível dar baixa manualmente pelo botão <strong>"Dar Baixa"</strong>.
               </p>
             </div>
           </div>
         )}
 
         {/* Banner: Concluídos — oferecer reativação em massa */}
-        {statusFilter === "concluido" && stats.concluidos > 0 && (
+        {statusFilter === "concluido" && stats.concluidosSemBaixa > 0 && (
           <div className="flex items-start gap-3 rounded-xl border border-rose-300 bg-rose-50 p-4">
             <div className="mt-0.5 shrink-0">
               <AlertTriangle className="h-5 w-5 text-rose-600" />
             </div>
             <div className="flex-1">
               <p className="font-semibold text-rose-900 text-sm">
-                {stats.concluidos} aviso{stats.concluidos !== 1 ? 's' : ''} marcado{stats.concluidos !== 1 ? 's' : ''} como Concluído incorretamente
+                {stats.concluidosSemBaixa} aviso{stats.concluidosSemBaixa !== 1 ? 's' : ''} marcado{stats.concluidosSemBaixa !== 1 ? 's' : ''} como Concluído incorretamente
               </p>
               <p className="text-rose-800 text-xs mt-1 leading-relaxed">
                 Estes colaboradores <strong>não tiveram a baixa registrada</strong> — foram marcados como concluídos antes da confirmação do pagamento.
@@ -1182,14 +1195,14 @@ ${isExperiencia ? (() => {
             </div>
             <button
               onClick={() => {
-                if (confirm(`Reativar ${stats.concluidos} aviso${stats.concluidos !== 1 ? 's' : ''} para "Aguardando Baixa"?\n\nIsso permitirá dar baixa manualmente em cada um.`)) {
+                if (confirm(`Reativar ${stats.concluidosSemBaixa} aviso${stats.concluidosSemBaixa !== 1 ? 's' : ''} para "Aguardando Baixa"?\n\nIsso permitirá dar baixa manualmente em cada um.`)) {
                   revertAllConcluidos.mutate({ companyId });
                 }
               }}
               disabled={revertAllConcluidos.isPending}
               className="shrink-0 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-semibold transition-colors whitespace-nowrap"
             >
-              {revertAllConcluidos.isPending ? 'Reativando...' : `Reativar ${stats.concluidos} aviso${stats.concluidos !== 1 ? 's' : ''}`}
+              {revertAllConcluidos.isPending ? 'Reativando...' : `Reativar ${stats.concluidosSemBaixa} aviso${stats.concluidosSemBaixa !== 1 ? 's' : ''}`}
             </button>
           </div>
         )}
@@ -1342,16 +1355,54 @@ ${isExperiencia ? (() => {
                             )}
                             {a.status === "aguardando_pagamento" && (
                               <>
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
-                                  title="Dar Baixa — confirmar valores e registrar pagamento"
-                                  onClick={() => handleDarBaixa(a.id, a.funcionarioNome ?? a.employeeName ?? '', a)}
-                                  disabled={darBaixa.isPending}
-                                >
-                                  Dar Baixa
-                                </Button>
+                                {(a as any).financeiroEntryId ? (
+                                  <>
+                                    <Badge variant="outline" className="h-7 px-2 text-[11px] border-blue-300 bg-blue-50 text-blue-700 whitespace-nowrap" title={`Lançamento #${(a as any).financeiroEntryId} no Contas a Pagar — aguardando baixa do Financeiro. Ao quitar, o funcionário será desligado automaticamente.`}>
+                                      No Contas a Pagar
+                                    </Badge>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-blue-500"
+                                      title="Reenviar ao Financeiro — só funciona se o lançamento vinculado foi CANCELADO no Contas a Pagar"
+                                      onClick={() => {
+                                        if (confirm(`Reenviar a rescisão de ${a.funcionarioNome ?? a.employeeName ?? ''} ao Contas a Pagar?\n\nSó é permitido se o lançamento anterior (#${(a as any).financeiroEntryId}) foi cancelado no Financeiro.`)) {
+                                          enviarParaFinanceiro.mutate({ id: a.id });
+                                        }
+                                      }}
+                                      disabled={enviarParaFinanceiro.isPending}
+                                    >
+                                      <RotateCcw className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="default"
+                                      className="h-7 px-2 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                      title="Enviar ao Financeiro — lança a rescisão no Contas a Pagar; a baixa do Financeiro conclui o aviso e desliga o funcionário automaticamente"
+                                      onClick={() => {
+                                        if (confirm(`Enviar a rescisão de ${a.funcionarioNome ?? a.employeeName ?? ''} (R$ ${a.valorEstimadoTotal ?? '0'}) ao Contas a Pagar?\n\nQuando o Financeiro registrar a baixa do pagamento, o aviso será concluído e o funcionário desligado automaticamente.`)) {
+                                          enviarParaFinanceiro.mutate({ id: a.id });
+                                        }
+                                      }}
+                                      disabled={enviarParaFinanceiro.isPending}
+                                    >
+                                      Enviar ao Financeiro
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="default"
+                                      className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
+                                      title="Dar Baixa — confirmar valores e registrar pagamento"
+                                      onClick={() => handleDarBaixa(a.id, a.funcionarioNome ?? a.employeeName ?? '', a)}
+                                      disabled={darBaixa.isPending}
+                                    >
+                                      Dar Baixa
+                                    </Button>
+                                  </>
+                                )}
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-slate-500" title="Reverter para Em Andamento" onClick={() => {
                                   if (confirm('Reverter para Em Andamento?')) revertConcluido.mutate({ id: a.id });
                                 }}>
