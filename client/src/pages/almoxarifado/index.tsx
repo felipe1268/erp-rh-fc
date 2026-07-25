@@ -1786,7 +1786,7 @@ export default function AlmoxarifadoPage() {
                   title="Ver detalhes das locações a vencer"
                 >
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <span className="text-xs font-semibold text-amber-700">{itensLocadosVencendo.length} locação{itensLocadosVencendo.length > 1 ? "ões" : ""} a vencer</span>
+                  <span className="text-xs font-semibold text-amber-700">{itensLocadosVencendo.length} {itensLocadosVencendo.length > 1 ? "locações" : "locação"} a vencer</span>
                 </button>
               )}
               {totalCriticos > 0 && (
