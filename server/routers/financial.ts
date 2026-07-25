@@ -10282,7 +10282,10 @@ export const financialRouter = router({
          FROM financial_entries
          WHERE company_id IN (${inlineIds(ids)}) AND tipo = 'despesa'
            AND status <> 'cancelado'
-           AND COALESCE(origem_modulo,'') NOT IN ('aplicacao_financeira','transferencia_interna')
+           -- Rev. 4585: cronograma_atividade fora — são PROJEÇÕES de contrato
+           -- (atividades EAP repetidas por pavimento têm mesmo valor por design),
+           -- nunca pagamentos reais; geravam 26 falsos positivos no card.
+           AND COALESCE(origem_modulo,'') NOT IN ('aplicacao_financeira','transferencia_interna','cronograma_atividade')
            AND COALESCE(valor_realizado, valor_previsto) > 3000
            AND EXTRACT(year FROM data_vencimento) = $1
        )

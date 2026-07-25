@@ -1,4 +1,29 @@
 /**
+ * Rev. 4585 - FIX: FLUXO DE CAIXA — CRONOGRAMA FORA DA CONFERÊNCIA DE DUPLICIDADES (26 FALSOS POSITIVOS)
+ *
+ * PEDIDO DO USUÁRIO: ao ver a lista dos 61 possíveis pagamentos em
+ * duplicidade, confirmou que os pares vindos do Cronograma podem sair
+ * ("tudo que foi esses lançamentos daqui você pode tirar").
+ *
+ * CAUSA: lançamentos origem_modulo='cronograma_atividade' são PROJEÇÕES
+ * de contrato distribuídas mês a mês — atividades EAP repetidas por
+ * pavimento (cabos, portas, guarda-corpos...) têm o MESMO valor por
+ * design, nunca são pagamentos reais. Entravam no detector de
+ * duplicidades (Rev. 4581) e geravam 26 pares falsos (R$ 210 mil).
+ *
+ * FIX (server, 1 linha): getPossiveisDuplicidades exclui
+ * 'cronograma_atividade' junto com aplicacao_financeira/transferencia_
+ * interna. Validado no Neon: card cai de 61 pares (R$ 428.194,57) para
+ * 31 pares (R$ 217.528,42) — só candidatos reais (tarifas em dobro,
+ * cheques com mesmo número, cheque×PIX etc.).
+ *
+ * POKA-YOKE: nível 3 (prevenção pelo design) — a fonte de falso positivo
+ * é eliminada na consulta; não depende de o usuário descartar par a par.
+ *
+ * ARQUIVOS: server/routers/financial.ts (só). ZERO schema change.
+ */
+
+/**
  * Rev. 4584 - FEAT: FLUXO DE CAIXA — DRILL-DOWN (POP-UP DE DETALHAMENTO) EM TODA A MATRIZ
  *
  * PEDIDO DO USUÁRIO: poder tocar em qualquer valor da matriz do Fluxo de
