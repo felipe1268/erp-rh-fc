@@ -705,14 +705,29 @@ IMPORTANTE: Você TEM acesso completo aos dados acima. Use-os para responder. Nu
       if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN" });
 
       const apiKey = process.env.GOOGLE_API_KEY;
-      if (!apiKey) return { audio: null, fallback: true, voiceUsed: null };
 
       // Limpar markdown, emojis e símbolos para que a voz não leia "asterisco" ou
       // descrições de emoji. Resulta em fala muito mais natural.
       const cleanText = stripForTTS(input.text).slice(0, 4800);
       if (!cleanText.trim()) return { audio: null, fallback: true, voiceUsed: null };
 
-      // 1ª tentativa: Chirp3-HD (vozes ultra-naturais e conversacionais — v1beta1)
+      // 1ª tentativa: OpenAI gpt-audio via Replit AI Integrations (voz humanizada, sem chave própria)
+      if (process.env.AI_INTEGRATIONS_OPENAI_BASE_URL && process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
+        try {
+          const { textToSpeech } = await import("../replit_integrations/audio/client");
+          const buf = await textToSpeech(cleanText, "nova", "mp3");
+          if (buf && buf.length > 0) {
+            return { audio: buf.toString("base64"), fallback: false, voiceUsed: "OpenAI-Nova" };
+          }
+          console.warn("[ORÁCULO TTS] OpenAI retornou áudio vazio, caindo para Google");
+        } catch (e) {
+          console.warn("[ORÁCULO TTS] OpenAI TTS falhou, caindo para Google:", e);
+        }
+      }
+
+      if (!apiKey) return { audio: null, fallback: true, voiceUsed: null };
+
+      // 2ª tentativa: Chirp3-HD (vozes ultra-naturais e conversacionais — v1beta1)
       try {
         const res = await fetch(`https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=${apiKey}`, {
           method: "POST",

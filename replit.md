@@ -50,19 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4570** — **UX: DASHBOARD PARCEIROS — FOTO DOS COLABORADORES NAS LISTAS.** Foto do funcionário (cadastro RH, `employees.fotoUrl`) na coluna Colaborador de "Lançamentos Recentes" e no ranking "Top Colaboradores por Valor"; sem foto = círculo roxo com iniciais. Server: `empFotoMap` via 1 query inArray em getDashParceiros (`fotoUrl` no ranking, `employeeFotoUrl` nos detalhes). Client: componente `<ColabAvatar>` (28/32px, lazy, onError esconde). Arquivos: `server/routers/dashboards.ts`, `client/src/pages/dashboards/DashParceiros.tsx`. ZERO schema change.
-- **Rev. 4569** — **UX: DASHBOARD PARCEIROS — BOTÃO "ANO TODO" NO SELETOR DE PERÍODO.** Faltava o botão "Ano todo" ao lado da navegação ‹ 2026 › (Regra de Ouro do seletor de mês/ano): pílula após o chevron, `setMes("todos")`, ativo em bg-foreground negrito. Estado local é string ("todos"|"1".."12"), então foi inline seguindo o visual do `<PeriodSelectorCard>` sem refatorar as pílulas com semáforo da tela. Arquivo: `client/src/pages/dashboards/DashParceiros.tsx`. ZERO schema/server change.
+- **Rev. 4571** — **FEAT: ORÁCULO — VOZ HUMANIZADA VIA OPENAI (REPLIT AI INTEGRATIONS).** Causa da voz robotizada: GOOGLE_API_KEY com Cloud TTS bloqueada (403) → fallback pro speechSynthesis do navegador. Instalada a integração OpenAI da Replit (blueprint `javascript_openai_ai_integrations`, sem chave própria, cobrança via créditos): `oraculo.ts tts` agora tenta 1º gpt-audio (voz "Nova", MP3) e mantém fallback Google Chirp3-HD → Neural2 → navegador. Scaffolds em `server/replit_integrations/{audio,image}/` + `client/replit_integrations/audio/`; env vars AI_INTEGRATIONS_OPENAI_* automáticas. Testado ao vivo (MP3 pt-BR OK). ZERO schema change.
+- **Rev. 4570** — **UX: DASHBOARD PARCEIROS — FOTO DOS COLABORADORES NAS LISTAS.** Foto do funcionário (cadastro RH, `employees.fotoUrl`) na coluna Colaborador de "Lançamentos Recentes" e no ranking "Top Colaboradores por Valor"; sem foto = círculo roxo com iniciais. Server: `empFotoMap` via 1 query inArray tenant-scoped (companyWhere) em getDashParceiros (`fotoUrl` no ranking, `employeeFotoUrl` nos detalhes). Client: componente `<ColabAvatar>` (28/32px, lazy, onError esconde). Arquivos: `server/routers/dashboards.ts`, `client/src/pages/dashboards/DashParceiros.tsx`. ZERO schema change.
 ### 5 one-liners
 
+- **Rev. 4569** — **UX: DASHBOARD PARCEIROS — BOTÃO "ANO TODO" NO SELETOR DE PERÍODO.** Pílula "Ano todo" após ‹ 2026 › (`setMes("todos")`, ativo bg-foreground); inline seguindo visual do `<PeriodSelectorCard>`. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4568** — **UX: ALMOXARIFADO — FOTO DO PRODUTO NO DROPDOWN DE TRANSFERÊNCIA.** Thumbnail 36×36 (`fotoUrl`, lazy) ou placeholder Package em cada linha da busca do modal Transferir; nome truncate + estoque à direita. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4567** — **UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "PREENCHER PREÇOS COM IA".** `iaPct` + interval simulado (max(12s, qtd×120ms), teto 95%, 100% no onSuccess); barra roxa + "Preenchendo… XX%" nos 2 botões; cleanup no unmount. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4566** — **UX: ALMOXARIFADO — RENOMEAÇÃO E REORDENAÇÃO DOS BOTÕES DE AÇÃO.** Só labels/ordem (tudo MAIÚSCULO): ENTRADA/SAÍDA "DE MATERIAL"; FERRAMENTAS→ENTREGA e FECHAR DIA→DEVOLUÇÃO "DE FERRAMENTA" (par lado a lado); TRANSFERIR "MATERIAL E EQUIPAMENTO" à direita. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4565** — **UX: ALMOXARIFADO — CARDS DE KPI VIRAM FILTROS CLICÁVEIS.** `filtroEstoque` + `matchEstoque` (mesmos predicados dos contadores); cards viram botões-toggle nas 2 visões com ring ativo + "Filtrando · toque p/ limpar". Detalhe em `shared/changelog.ts`. ZERO schema/server change.
-- **Rev. 4564** — **FEAT: EQUIPAMENTOS — TAG DE LOCALIZAÇÃO DO FIXO (OBRA × ALMOXARIFADO) + MARCAÇÃO EM LOTE.** `localizacao` ('em_obra'|'no_almox') nos instalados (empréstimo aberto OU obra vinculada OU sem vínculo almox = em obra); badges indigo/âmbar; 125 equipamentos marcados fixo no Neon. Detalhe em `shared/changelog.ts`. ZERO schema change.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4551 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4564 e anteriores.
 
 ## User preferences
 

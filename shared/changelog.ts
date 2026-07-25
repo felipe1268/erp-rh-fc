@@ -1,4 +1,33 @@
 /**
+ * Rev. 4571 - FEAT: ORÁCULO — VOZ HUMANIZADA VIA OPENAI (REPLIT AI INTEGRATIONS)
+ *
+ * PEDIDO DO USUÁRIO: acabar com a voz robotizada do Oráculo. Causa-raiz
+ * (diagnosticada na Rev. anterior): a GOOGLE_API_KEY está com a API
+ * Cloud Text-to-Speech BLOQUEADA (403 API_KEY_SERVICE_BLOCKED em v1 e
+ * v1beta1), então o sistema caía sempre no speechSynthesis do navegador.
+ * Usuário perguntou "vc consegue fazer a conexão sozinha?" — sim, via
+ * integração OpenAI da Replit (AI Integrations), que dá acesso ao modelo
+ * gpt-audio SEM chave própria (cobrança via créditos Replit).
+ *
+ * O QUE MUDOU:
+ * 1) Integração "OpenAI (Replit AI Integrations)" instalada (blueprint
+ *    javascript_openai_ai_integrations): scaffolds em
+ *    server/replit_integrations/{audio,image}/ e
+ *    client/replit_integrations/audio/; env vars automáticas
+ *    AI_INTEGRATIONS_OPENAI_BASE_URL / AI_INTEGRATIONS_OPENAI_API_KEY;
+ *    pacote `openai` adicionado.
+ * 2) server/routers/oraculo.ts (tts): nova 1ª tentativa = OpenAI
+ *    gpt-audio (voz "Nova", MP3, via textToSpeech do scaffold, import
+ *    dinâmico); mantém cadeia de fallback Google Chirp3-HD → Neural2 →
+ *    navegador. Guard: só tenta OpenAI se as 2 env vars existem.
+ *
+ * RACIONAL: gpt-audio é a voz do ChatGPT (humanizada, pt-BR nativo).
+ * Testado ao vivo: retorno MP3 válido com transcript correto em pt-BR.
+ * Se um dia a API do Google for ativada, ela vira fallback natural.
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4570 - UX: DASHBOARD PARCEIROS — FOTO DOS COLABORADORES NAS LISTAS
  *
  * PEDIDO DO USUÁRIO: mostrar a foto dos funcionários no Dashboard Parceiros
