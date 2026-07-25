@@ -1764,69 +1764,77 @@ export default function AlmoxarifadoPage() {
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Boxes className="h-5 w-5 text-emerald-600" />
-                {obraContexto === null
-                  ? "Almoxarifado Central"
-                  : `Almoxarifado — ${obrasAtivas.find(o => o.id === obraContexto)?.nome ?? "Obra"}`}
-              </h1>
-              <p className="text-sm text-gray-500 mt-0.5">{itens.length} ite{itens.length !== 1 ? "ns" : "m"} cadastrado{itens.length !== 1 ? "s" : ""}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <AlertasAlmoxarifado companyId={companyId} />
-              {itensLocadosVencendo.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setModalLocacoesVencendo(true)}
-                  className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-lg px-3 py-1.5 transition hover:bg-amber-100 hover:border-amber-400 cursor-pointer"
-                  title="Ver detalhes das locações a vencer"
-                >
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <span className="text-xs font-semibold text-amber-700">{itensLocadosVencendo.length} {itensLocadosVencendo.length > 1 ? "locações" : "locação"} a vencer</span>
-                </button>
-              )}
-              {totalCriticos > 0 && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                  <span className="text-xs font-semibold text-red-700">{totalCriticos} abaixo do mínimo</span>
-                </div>
-              )}
-              <div className="flex border border-gray-200 rounded-lg overflow-hidden">
-                <button onClick={() => setViewMode("cards")} className={`px-3 py-1.5 flex items-center gap-1.5 text-xs font-medium transition ${viewMode === "cards" ? "bg-emerald-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
-                  <LayoutGrid className="h-3.5 w-3.5" /> Cards
-                </button>
-                <button onClick={() => setViewMode("table")} className={`px-3 py-1.5 flex items-center gap-1.5 text-xs font-medium transition ${viewMode === "table" ? "bg-emerald-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
-                  <List className="h-3.5 w-3.5" /> Tabela
-                </button>
+        {/* Header — Rev. 4559: 2 linhas (título + ações | alertas), com wrap responsivo */}
+        <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
+          <div className="max-w-7xl mx-auto space-y-3">
+            {/* Linha 1: título à esquerda, ações principais à direita */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Boxes className="h-5 w-5 text-emerald-600 shrink-0" />
+                  <span className="break-words">
+                    {obraContexto === null
+                      ? "Almoxarifado Central"
+                      : `Almoxarifado — ${obrasAtivas.find(o => o.id === obraContexto)?.nome ?? "Obra"}`}
+                  </span>
+                </h1>
+                <p className="text-sm text-gray-500 mt-0.5">{itens.length} ite{itens.length !== 1 ? "ns" : "m"} cadastrado{itens.length !== 1 ? "s" : ""}</p>
               </div>
-              {/* Rev. 2388 — Botão Auditoria com badge de pendências (só admin) */}
-              {isAdmin && (
-                <button
-                  onClick={() => setModalAuditoriaList(true)}
-                  className="relative flex items-center gap-1.5 bg-white hover:bg-amber-50 border border-amber-300 text-amber-800 text-sm font-medium px-3 py-2 rounded-lg transition"
-                  title="Auditoria do almoxarifado"
-                >
-                  <ShieldCheck className="h-4 w-4" /> Auditoria
-                  {pendenciasCount.data && pendenciasCount.data.count > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-bold rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center">
-                      {pendenciasCount.data.count}
-                    </span>
-                  )}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                  <button onClick={() => setViewMode("cards")} className={`px-3 py-2 flex items-center gap-1.5 text-xs font-medium transition ${viewMode === "cards" ? "bg-emerald-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
+                    <LayoutGrid className="h-3.5 w-3.5" /> Cards
+                  </button>
+                  <button onClick={() => setViewMode("table")} className={`px-3 py-2 flex items-center gap-1.5 text-xs font-medium transition ${viewMode === "table" ? "bg-emerald-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
+                    <List className="h-3.5 w-3.5" /> Tabela
+                  </button>
+                </div>
+                {/* Rev. 2388 — Botão Auditoria com badge de pendências (só admin) */}
+                {isAdmin && (
+                  <button
+                    onClick={() => setModalAuditoriaList(true)}
+                    className="relative flex items-center gap-1.5 bg-white hover:bg-amber-50 border border-amber-300 text-amber-800 text-sm font-medium px-3 py-2 rounded-lg transition"
+                    title="Auditoria do almoxarifado"
+                  >
+                    <ShieldCheck className="h-4 w-4" /> Auditoria
+                    {pendenciasCount.data && pendenciasCount.data.count > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-bold rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center">
+                        {pendenciasCount.data.count}
+                      </span>
+                    )}
+                  </button>
+                )}
+                {/* Rev. 4539 — obra somente-leitura: esconde ações de escrita */}
+                {!somenteLeitura && (<>
+                <button onClick={() => { setImportIAOpen(true); setImportIAStep("upload"); setImportIAItens([]); setImportIASelected(new Set()); }} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition">
+                  <Sparkles className="h-4 w-4" /> Importar (IA)
                 </button>
-              )}
-              {/* Rev. 4539 — obra somente-leitura: esconde ações de escrita */}
-              {!somenteLeitura && (<>
-              <button onClick={() => { setImportIAOpen(true); setImportIAStep("upload"); setImportIAItens([]); setImportIASelected(new Set()); }} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition">
-                <Sparkles className="h-4 w-4" /> Importar (IA)
-              </button>
-              <button onClick={abrirNovo} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition">
-                <Plus className="h-4 w-4" /> Novo Item
-              </button>
-              </>)}
+                <button onClick={abrirNovo} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition">
+                  <Plus className="h-4 w-4" /> Novo Item
+                </button>
+                </>)}
+              </div>
+            </div>
+            {/* Linha 2: chips de alerta */}
+            <div className="flex flex-wrap items-center gap-2">
+              <AlertasAlmoxarifado companyId={companyId} />
+                {itensLocadosVencendo.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setModalLocacoesVencendo(true)}
+                    className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-full px-3.5 py-1.5 transition hover:bg-amber-100 hover:border-amber-400 cursor-pointer"
+                    title="Ver detalhes das locações a vencer"
+                  >
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span className="text-xs font-semibold text-amber-700 whitespace-nowrap">{itensLocadosVencendo.length} {itensLocadosVencendo.length > 1 ? "locações" : "locação"} a vencer</span>
+                  </button>
+                )}
+                {totalCriticos > 0 && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-full px-3.5 py-1.5">
+                    <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                    <span className="text-xs font-semibold text-red-700 whitespace-nowrap">{totalCriticos} abaixo do mínimo</span>
+                  </div>
+                )}
             </div>
           </div>
         </div>
