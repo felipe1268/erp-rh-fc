@@ -1,4 +1,30 @@
 /**
+ * Rev. 4565 - UX: ALMOXARIFADO — CARDS DE KPI VIRAM FILTROS CLICÁVEIS
+ *
+ * PEDIDO DO USUÁRIO: ao clicar nos cards do topo do Almoxarifado (Total de
+ * Itens / Estoque OK / Estoque Baixo / Estoque Crítico), a lista de itens
+ * deve ser filtrada para mostrar exatamente os itens daquele status.
+ *
+ * O QUE MUDOU (client/src/pages/almoxarifado/index.tsx):
+ * 1) Novo estado `filtroEstoque` ('todos'|'ok'|'baixo'|'critico') + helper
+ *    `matchEstoque(qtd, min, f)` com as MESMAS regras usadas nos contadores:
+ *    ok = min==0 || qtd>=min; baixo = min>0 && qtd<min && qtd>=min*0.5;
+ *    critico = min>0 && qtd<min*0.5.
+ * 2) Cards de KPI viraram <button> nas DUAS visões (consolidada "todos" e
+ *    por almoxarifado/obra): clique aplica o filtro; clique de novo (ou no
+ *    "Total de Itens") limpa. Card ativo ganha ring colorido + legenda
+ *    "Filtrando · toque p/ limpar" (affordance clara no iPad).
+ * 3) Filtro aplicado em consListFinal (visão consolidada, quantidadeTotal)
+ *    e na `lista` da visão por obra (quantidadeAtual), compondo com busca,
+ *    categoria, "apenas abaixo do mínimo" e vínculo de equipamento; badge
+ *    "filtrado" do banner de Valor Total agora considera filtroEstoque.
+ *
+ * RACIONAL: KPI clicável = navegação natural (padrão já usado em outros
+ * dashboards do ERP); reusa exatamente os predicados dos contadores para o
+ * número do card SEMPRE bater com a lista filtrada. ZERO schema change.
+ */
+
+/**
  * Rev. 4564 - FEAT: EQUIPAMENTOS — TAG DE LOCALIZAÇÃO DO FIXO (OBRA × ALMOXARIFADO)
  *
  * PEDIDO DO USUÁRIO: um equipamento FIXO pode, eventualmente, estar

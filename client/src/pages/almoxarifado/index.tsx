@@ -289,6 +289,14 @@ export default function AlmoxarifadoPage() {
   // Rev. 2406 — filtro por vínculo com Controle de Equipamentos.
   // todos | proprio | locado | vinculado (qualquer) | nenhum (sem vínculo)
   const [filtroEquip, setFiltroEquip] = useState<"todos" | "proprio" | "locado" | "vinculado" | "nenhum">("todos");
+  // Rev. 4565 — filtro por status de estoque ao clicar nos cards de KPI.
+  const [filtroEstoque, setFiltroEstoque] = useState<"todos" | "ok" | "baixo" | "critico">("todos");
+  const matchEstoque = (qtd: number, min: number, f: "todos" | "ok" | "baixo" | "critico") => {
+    if (f === "todos") return true;
+    if (f === "ok") return min === 0 || qtd >= min;
+    if (f === "baixo") return min > 0 && qtd < min && qtd >= min * 0.5;
+    return min > 0 && qtd < min * 0.5; // critico
+  };
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [obraContexto, setObraContexto] = useState<number | null | "todos">("todos");
   const [fotoExpandida, setFotoExpandida] = useState<{ url: string; nome: string } | null>(null);
@@ -512,13 +520,17 @@ export default function AlmoxarifadoPage() {
       ? consFiltered.filter((i: any) => !i.categoria || String(i.categoria).trim() === "")
       : (filtroCateg !== "todas" ? consFiltered.filter((i: any) => i.categoria === filtroCateg) : consFiltered);
     const consAfterMin = apenasAbaixo ? consFinal.filter((i: any) => i.quantidadeMinima > 0 && i.quantidadeTotal < i.quantidadeMinima) : consFinal;
-    return filtroEquip === "todos" ? consAfterMin : consAfterMin.filter((i: any) => {
+    // Rev. 4565 — filtro por status de estoque (clique nos cards de KPI).
+    const consAfterEstoque = filtroEstoque === "todos"
+      ? consAfterMin
+      : consAfterMin.filter((i: any) => matchEstoque(Number(i.quantidadeTotal) || 0, Number(i.quantidadeMinima) || 0, filtroEstoque));
+    return filtroEquip === "todos" ? consAfterEstoque : consAfterEstoque.filter((i: any) => {
       const t = i.equipamentoVinculadoTipo;
       if (filtroEquip === "nenhum") return !t;
       if (filtroEquip === "vinculado") return !!t;
       return t === filtroEquip;
     });
-  }, [consolidado, busca, filtroCateg, apenasAbaixo, filtroEquip]);
+  }, [consolidado, busca, filtroCateg, apenasAbaixo, filtroEquip, filtroEstoque]);
   const [sugerindoPreco, setSugerindoPreco] = useState(false);
   const sugerirPrecoMut = trpc.compras.sugerirPrecoIA.useMutation({
     onSuccess: (d: any) => {
@@ -1070,6 +1082,8 @@ export default function AlmoxarifadoPage() {
     if (filtroCateg === "__sem__") r = r.filter(i => !i.categoria || String(i.categoria).trim() === "");
     else if (filtroCateg !== "todas") r = r.filter(i => i.categoria === filtroCateg);
     if (apenasAbaixo) r = r.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima));
+    // Rev. 4565 — filtro por status de estoque (clique nos cards de KPI).
+    if (filtroEstoque !== "todos") r = r.filter(i => matchEstoque(n(i.quantidadeAtual), n(i.quantidadeMinima), filtroEstoque));
     // Rev. 2406 — filtro por vínculo Equipamento Próprio/Locado.
     if (filtroEquip !== "todos") {
       r = r.filter((i: any) => {
@@ -1113,7 +1127,7 @@ export default function AlmoxarifadoPage() {
       }
     }
     return merged;
-  }, [itens, busca, filtroCateg, apenasAbaixo, filtroEquip]);
+  }, [itens, busca, filtroCateg, apenasAbaixo, filtroEquip, filtroEstoque]);
   // Rev. 2393 — keep listaRef em sync pro async closure do executar (retry).
   useEffect(() => { listaRef.current = lista as any[]; }, [lista]);
 
@@ -2142,7 +2156,7 @@ export default function AlmoxarifadoPage() {
           const valorTotal = valorPorAlmox.reduce((s, e) => s + e.valor, 0);
           // Flags p/ rótulos auxiliares no banner.
           const totalReflectsFilter =
-            !!busca.trim() || filtroCateg !== "todas" || apenasAbaixo || filtroEquip !== "todos";
+            !!busca.trim() || filtroCateg !== "todas" || apenasAbaixo || filtroEquip !== "todos" || filtroEstoque !== "todos";
           const qtdLocadosExcluidos = incluirLocadosNoTotal
             ? 0
             : consListFinal.filter((i: any) => i.equipamentoVinculadoTipo === "locado").length;
@@ -2152,21 +2166,30 @@ export default function AlmoxarifadoPage() {
           <div className="max-w-7xl mx-auto px-4 py-4 space-y-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: "Total de Itens", v: consTotalItens, icon: Package, color: "text-blue-600", bg: "bg-blue-50" },
-                { label: "Estoque OK", v: consEstoqueOk, icon: BarChart2, color: "text-emerald-600", bg: "bg-emerald-50" },
-                { label: "Estoque Baixo", v: consEstoqueBaixo, icon: AlertTriangle, color: "text-yellow-600", bg: "bg-yellow-50" },
-                { label: "Estoque Crítico", v: consEstoqueCritico, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50" },
-              ].map((k, i) => (
-                <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+                { label: "Total de Itens", v: consTotalItens, icon: Package, color: "text-blue-600", bg: "bg-blue-50", f: "todos" as const, ring: "ring-blue-400" },
+                { label: "Estoque OK", v: consEstoqueOk, icon: BarChart2, color: "text-emerald-600", bg: "bg-emerald-50", f: "ok" as const, ring: "ring-emerald-400" },
+                { label: "Estoque Baixo", v: consEstoqueBaixo, icon: AlertTriangle, color: "text-yellow-600", bg: "bg-yellow-50", f: "baixo" as const, ring: "ring-yellow-400" },
+                { label: "Estoque Crítico", v: consEstoqueCritico, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", f: "critico" as const, ring: "ring-red-400" },
+              ].map((k, i) => {
+                const ativo = filtroEstoque === k.f && k.f !== "todos";
+                return (
+                <button
+                  key={i}
+                  onClick={() => setFiltroEstoque(prev => (k.f === "todos" || prev === k.f) ? "todos" : k.f)}
+                  className={`bg-white rounded-xl border shadow-sm p-4 flex items-center gap-3 text-left transition active:scale-[0.98] cursor-pointer hover:shadow-md ${ativo ? `border-transparent ring-2 ${k.ring}` : "border-gray-100"}`}
+                  title={k.f === "todos" ? "Mostrar todos os itens" : `Filtrar itens: ${k.label}`}
+                >
                   <div className={`${k.bg} p-2 rounded-lg`}>
                     <k.icon className={`h-5 w-5 ${k.color}`} />
                   </div>
                   <div>
                     <p className="text-[11px] text-gray-400 uppercase tracking-wide">{k.label}</p>
                     <p className={`text-2xl font-bold ${k.color}`}>{k.v.toLocaleString("pt-BR")}</p>
+                    {ativo && <p className={`text-[10px] font-semibold ${k.color}`}>Filtrando · toque p/ limpar</p>}
                   </div>
-                </div>
-              ))}
+                </button>
+                );
+              })}
             </div>
 
             {consolidado && (
@@ -2596,7 +2619,7 @@ export default function AlmoxarifadoPage() {
             : lista.filter((i: any) => (i as any).equipamentoVinculadoTipo !== "locado");
           const valorTotalObra = itensParaTotalObra.reduce((s, i: any) => s + n(i.quantidadeAtual) * parseValorI(i.valorUnitario), 0);
           const totalReflectsFilterObra =
-            !!busca.trim() || filtroCateg !== "todas" || apenasAbaixo || filtroEquip !== "todos";
+            !!busca.trim() || filtroCateg !== "todas" || apenasAbaixo || filtroEquip !== "todos" || filtroEstoque !== "todos";
           const qtdLocadosExcluidosObra = incluirLocadosNoTotalI
             ? 0
             : lista.filter((i: any) => (i as any).equipamentoVinculadoTipo === "locado").length;
@@ -2606,21 +2629,30 @@ export default function AlmoxarifadoPage() {
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Total de Itens", v: itens.length, icon: Package, color: "text-blue-600", bg: "bg-blue-50" },
-              { label: "Estoque OK", v: itens.filter(i => n(i.quantidadeMinima) === 0 || n(i.quantidadeAtual) >= n(i.quantidadeMinima)).length, icon: BarChart2, color: "text-emerald-600", bg: "bg-emerald-50" },
-              { label: "Estoque Baixo", v: itens.filter(i => { const a = n(i.quantidadeAtual), m = n(i.quantidadeMinima); return m > 0 && a < m && a >= m * 0.5; }).length, icon: AlertTriangle, color: "text-yellow-600", bg: "bg-yellow-50" },
-              { label: "Estoque Crítico", v: totalCriticos, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50" },
-            ].map((k, i) => (
-              <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+              { label: "Total de Itens", v: itens.length, icon: Package, color: "text-blue-600", bg: "bg-blue-50", f: "todos" as const, ring: "ring-blue-400" },
+              { label: "Estoque OK", v: itens.filter(i => n(i.quantidadeMinima) === 0 || n(i.quantidadeAtual) >= n(i.quantidadeMinima)).length, icon: BarChart2, color: "text-emerald-600", bg: "bg-emerald-50", f: "ok" as const, ring: "ring-emerald-400" },
+              { label: "Estoque Baixo", v: itens.filter(i => { const a = n(i.quantidadeAtual), m = n(i.quantidadeMinima); return m > 0 && a < m && a >= m * 0.5; }).length, icon: AlertTriangle, color: "text-yellow-600", bg: "bg-yellow-50", f: "baixo" as const, ring: "ring-yellow-400" },
+              { label: "Estoque Crítico", v: itens.filter(i => { const m = n(i.quantidadeMinima); return m > 0 && n(i.quantidadeAtual) < m * 0.5; }).length, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", f: "critico" as const, ring: "ring-red-400" },
+            ].map((k, i) => {
+              const ativo = filtroEstoque === k.f && k.f !== "todos";
+              return (
+              <button
+                key={i}
+                onClick={() => setFiltroEstoque(prev => (k.f === "todos" || prev === k.f) ? "todos" : k.f)}
+                className={`bg-white rounded-xl border shadow-sm p-4 flex items-center gap-3 text-left transition active:scale-[0.98] cursor-pointer hover:shadow-md ${ativo ? `border-transparent ring-2 ${k.ring}` : "border-gray-100"}`}
+                title={k.f === "todos" ? "Mostrar todos os itens" : `Filtrar itens: ${k.label}`}
+              >
                 <div className={`${k.bg} p-2 rounded-lg`}>
                   <k.icon className={`h-5 w-5 ${k.color}`} />
                 </div>
                 <div>
                   <p className="text-[11px] text-gray-400 uppercase tracking-wide">{k.label}</p>
                   <p className={`text-2xl font-bold ${k.color}`}>{k.v.toLocaleString("pt-BR")}</p>
+                  {ativo && <p className={`text-[10px] font-semibold ${k.color}`}>Filtrando · toque p/ limpar</p>}
                 </div>
-              </div>
-            ))}
+              </button>
+              );
+            })}
           </div>
 
           {/* Banner de Valor Total do Estoque deste almoxarifado */}
