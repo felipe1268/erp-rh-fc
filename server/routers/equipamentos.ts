@@ -4428,9 +4428,30 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           el.foto_url,
           el.data_inicio,
           el.data_fim_prevista,
-          o.nome                    AS obra_nome
+          o.nome                    AS obra_nome,
+          -- Rev. 4564 — tag de localização do fixo: um fixo pode estar
+          -- fisicamente no almoxarifado (desmontado/aguardando). Se o item
+          -- vinculado no almox tem último empréstimo ABERTO → está na obra;
+          -- se o último movimento foi devolução (ou nunca saiu) → no almox;
+          -- sem vínculo com almox → considerado instalado na obra.
+          CASE
+            WHEN ai.id IS NULL THEN 'em_obra'
+            WHEN last_loan.status = 'emprestado' THEN 'em_obra'
+            ELSE 'no_almox'
+          END                       AS localizacao
         FROM equipamentos_locados el
         LEFT JOIN obras o ON o.id = el.obra_id
+        LEFT JOIN almoxarifado_itens ai
+          ON ai.equipamento_vinculado_tipo = 'locado'
+         AND ai.equipamento_vinculado_id  = el.id
+         AND ai.company_id                = ${cid}
+        LEFT JOIN LATERAL (
+          SELECT status FROM warehouse_loans
+          WHERE item_id    = ai.id
+            AND company_id = ${cid}
+          ORDER BY id DESC
+          LIMIT 1
+        ) last_loan ON ai.id IS NOT NULL
         WHERE el.company_id = ${cid}
           AND el.status NOT IN ('devolvido','aguardando_chegada')
           AND COALESCE(el.regime_uso,'rotativo') = 'fixo'
@@ -4581,6 +4602,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           obraNome:        r.obra_nome       as string | null,
           dataInicio:      r.data_inicio     as string,
           dataFimPrevista: r.data_fim_prevista as string,
+          localizacao:     (r.localizacao === "no_almox" ? "no_almox" : "em_obra") as "em_obra" | "no_almox",
         })),
         stats: {
           totalCiclos,
@@ -4718,9 +4740,26 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           (ep.fotos_json->0->>'url')  AS foto_url,
           ep.valor_aquisicao::numeric AS valor_aquisicao,
           ep.vida_util_meses,
-          o.nome                      AS obra_nome
+          o.nome                      AS obra_nome,
+          -- Rev. 4564 — tag de localização do fixo (obra × almoxarifado)
+          CASE
+            WHEN ai.id IS NULL THEN 'em_obra'
+            WHEN last_loan.status = 'emprestado' THEN 'em_obra'
+            ELSE 'no_almox'
+          END                          AS localizacao
         FROM equipamentos_proprios ep
         LEFT JOIN obras o ON o.id = ep.localizacao_atual_obra_id
+        LEFT JOIN almoxarifado_itens ai
+          ON ai.equipamento_vinculado_tipo = 'proprio'
+         AND ai.equipamento_vinculado_id  = ep.id
+         AND ai.company_id                = ${cid}
+        LEFT JOIN LATERAL (
+          SELECT status FROM warehouse_loans
+          WHERE item_id    = ai.id
+            AND company_id = ${cid}
+          ORDER BY id DESC
+          LIMIT 1
+        ) last_loan ON ai.id IS NOT NULL
         WHERE ep.company_id = ${cid}
           AND ep.ativo = true
           AND ep.status <> 'baixado'
@@ -4914,6 +4953,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
             fotoUrl:          r.foto_url           as string | null,
             obraNome:         r.obra_nome          as string | null,
             custoMensalDepreciacao: vum > 0 ? va / vum : 0,
+            localizacao:      (r.localizacao === "no_almox" ? "no_almox" : "em_obra") as "em_obra" | "no_almox",
           };
         }),
         stats: {

@@ -1,4 +1,29 @@
 /**
+ * Rev. 4564 - FEAT: EQUIPAMENTOS — TAG DE LOCALIZAÇÃO DO FIXO (OBRA × ALMOXARIFADO)
+ *
+ * PEDIDO DO USUÁRIO: um equipamento FIXO pode, eventualmente, estar
+ * fisicamente no almoxarifado (desmontado, aguardando remontagem). A seção
+ * "Instalados em obra" precisava de uma tag mostrando ONDE o fixo está.
+ *
+ * O QUE MUDOU:
+ * 1) SERVER (equipamentos.ts): fixosRaw de locadosUtilizacao E
+ *    propriosUtilizacao ganhou campo derivado `localizacao`
+ *    ('em_obra' | 'no_almox'), via LEFT JOIN almoxarifado_itens +
+ *    LATERAL do último warehouse_loan:
+ *      - sem vínculo com almox → 'em_obra' (instalado por natureza);
+ *      - último empréstimo ABERTO (status='emprestado') → 'em_obra';
+ *      - último movimento = devolução (ou nunca saiu do almox) → 'no_almox'.
+ *    Retornado no map de `instalados` dos dois endpoints.
+ * 2) UI (LocadosUtilizacao.tsx + PropriosUtilizacao.tsx): badge por item na
+ *    seção "Instalados em obra" — indigo "Instalado na obra" × âmbar
+ *    "No almoxarifado".
+ *
+ * RACIONAL: a fonte da verdade da localização física é o movimento do
+ * almoxarifado (warehouse_loans), a mesma usada pelo motor de ociosidade —
+ * nenhum campo novo/duplicado no schema. ZERO schema change.
+ */
+
+/**
  * Rev. 4563 - FEAT: EQUIPAMENTOS — REGIME DE USO (ROTATIVO × FIXO/INSTALADO EM OBRA)
  *
  * PEDIDO DO USUÁRIO: equipamentos de uso contínuo instalados na obra (guincho

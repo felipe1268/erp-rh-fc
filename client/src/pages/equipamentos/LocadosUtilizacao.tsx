@@ -798,6 +798,16 @@ export default function LocadosUtilizacao() {
                   <div className="flex-1 min-w-0">
                     <span className="font-semibold text-slate-900 text-sm truncate block">{item.descricao}</span>
                     <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                      {/* Rev. 4564 — tag onde o fixo está fisicamente */}
+                      {item.localizacao === "no_almox" ? (
+                        <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 ring-1 ring-amber-200 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                          No almoxarifado
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                          Instalado na obra
+                        </span>
+                      )}
                       {item.obraNome && <span className="text-indigo-700 font-medium">{item.obraNome}</span>}
                       {item.fornecedorNome && <span>{item.fornecedorNome}</span>}
                       <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" /> desde {fmtDt(item.dataInicio)}</span>
