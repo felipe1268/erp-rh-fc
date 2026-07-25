@@ -1951,8 +1951,9 @@ export default function AlmoxarifadoPage() {
                 </>
               )}
               <ArrowUpCircle className="w-8 h-8 relative z-[1]" />
-              <span className="relative z-[1]">
+              <span className="relative z-[1] text-center leading-tight">
                 ENTRADA
+                <span className="block text-[11px] font-semibold opacity-90">de material</span>
                 {qtdMaterialPendente > 0 && (
                   <span className="block text-[10px] font-semibold mt-0.5 bg-white/25 rounded px-1 py-0.5">
                     {qtdMaterialPendente} pra receber
@@ -1966,17 +1967,34 @@ export default function AlmoxarifadoPage() {
               className="flex flex-col items-center justify-center gap-2 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
             >
               <ArrowDownCircle className="w-8 h-8" />
-              SAÍDA
+              <span className="text-center leading-tight">
+                SAÍDA
+                <span className="block text-[11px] font-semibold opacity-90">de material</span>
+              </span>
             </button>
-            {/* FERRAMENTAS (empréstimo) */}
+            {/* Rev. 4566 — ENTREGA DE FERRAMENTA (ex-"Ferramentas") */}
             <button
               onClick={() => { resetEmprestimo(); setModalEmprestimo(true); }}
               className="flex flex-col items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
             >
               <Wrench className="w-8 h-8" />
-              🔧 FERRAMENTAS
+              <span className="text-center leading-tight">
+                ENTREGA
+                <span className="block text-[11px] font-semibold opacity-90">de ferramenta</span>
+              </span>
             </button>
-            {/* TRANSFERIR */}
+            {/* Rev. 4566 — DEVOLUÇÃO DE FERRAMENTA (ex-"Fechar Dia"), ao lado da Entrega */}
+            <button
+              onClick={() => setModalFecharDia(true)}
+              className="flex flex-col items-center justify-center gap-2 bg-gray-700 hover:bg-gray-800 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+            >
+              <ClipboardCheck className="w-8 h-8" />
+              <span className="text-center leading-tight">
+                DEVOLUÇÃO
+                <span className="block text-[11px] font-semibold opacity-90">de ferramenta</span>
+              </span>
+            </button>
+            {/* Rev. 4566 — TRANSFERIR (movido pra direita, depois do par de ferramentas) */}
             <button
               onClick={() => {
                 resetTransf();
@@ -1989,15 +2007,10 @@ export default function AlmoxarifadoPage() {
               className="flex flex-col items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
             >
               <ArrowLeftRight className="w-8 h-8" />
-              ↔ TRANSFERIR
-            </button>
-            {/* FECHAR DIA */}
-            <button
-              onClick={() => setModalFecharDia(true)}
-              className="flex flex-col items-center justify-center gap-2 bg-gray-700 hover:bg-gray-800 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
-            >
-              <ClipboardCheck className="w-8 h-8" />
-              📋 FECHAR DIA
+              <span className="text-center leading-tight">
+                TRANSFERIR
+                <span className="block text-[11px] font-semibold opacity-90">material e equipamento</span>
+              </span>
             </button>
             {/* Rev. 2317 — IMPORTAR PDF removido daqui (continua disponível no hero da tela Equipamentos Locados). */}
             {/* Rev. 2316 — RECEBER LOCAÇÃO (cadastro pontual de equipamento locado) */}

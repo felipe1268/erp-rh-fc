@@ -1,4 +1,27 @@
 /**
+ * Rev. 4566 - UX: ALMOXARIFADO — RENOMEAÇÃO E REORDENAÇÃO DOS BOTÕES DE AÇÃO
+ *
+ * PEDIDO DO USUÁRIO (aprovado após proposta prévia): nomes dos botões de
+ * ação rápida descreviam "o que o sistema faz", não a ação do operador.
+ *
+ * O QUE MUDOU (client/src/pages/almoxarifado/index.tsx — só labels/ordem):
+ * 1) "ENTRADA" → "ENTRADA / de material" (2 linhas); "SAÍDA" → "SAÍDA /
+ *    de material".
+ * 2) "🔧 FERRAMENTAS" → "ENTREGA / de ferramenta".
+ * 3) "📋 FECHAR DIA" → "DEVOLUÇÃO / de ferramenta" (o modal é exatamente a
+ *    devolução dos empréstimos em aberto) e movido pra ficar AO LADO da
+ *    Entrega — par natural entrega×devolução.
+ * 4) "↔ TRANSFERIR" → "TRANSFERIR / material e equipamento" e puxado pra
+ *    direita (depois do par de ferramentas).
+ * Nova ordem: Entrada · Saída · Entrega Ferr. · Devolução Ferr. ·
+ * Transferir · Receber Locação · Devolver Locação.
+ *
+ * RACIONAL: agrupamento por assunto (estoque → ferramentas → transferência
+ * → locação) com pares lado a lado; subtítulo em linha menor pra caber no
+ * iPad. Nenhum onClick/handler mudou. ZERO schema/server change.
+ */
+
+/**
  * Rev. 4565 - UX: ALMOXARIFADO — CARDS DE KPI VIRAM FILTROS CLICÁVEIS
  *
  * PEDIDO DO USUÁRIO: ao clicar nos cards do topo do Almoxarifado (Total de
