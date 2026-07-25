@@ -10,13 +10,20 @@
  *    propriosUtilizacao ganhou campo derivado `localizacao`
  *    ('em_obra' | 'no_almox'), via LEFT JOIN almoxarifado_itens +
  *    LATERAL do último warehouse_loan:
- *      - sem vínculo com almox → 'em_obra' (instalado por natureza);
  *      - último empréstimo ABERTO (status='emprestado') → 'em_obra';
- *      - último movimento = devolução (ou nunca saiu do almox) → 'no_almox'.
+ *      - obra vinculada no cadastro (el.obra_id / ep.localizacao_atual_obra_id)
+ *        → 'em_obra' (decisão do usuário: fixo com obra = instalado, mesmo
+ *        sem saída registrada no almox);
+ *      - sem vínculo com almox → 'em_obra' (instalado por natureza);
+ *      - senão (devolvido/nunca saiu E sem obra) → 'no_almox'.
  *    Retornado no map de `instalados` dos dois endpoints.
  * 2) UI (LocadosUtilizacao.tsx + PropriosUtilizacao.tsx): badge por item na
  *    seção "Instalados em obra" — indigo "Instalado na obra" × âmbar
  *    "No almoxarifado".
+ * 3) DADOS (a pedido do usuário, com lista prévia aprovada): marcados como
+ *    FIXO no Neon 125 equipamentos ativos com keyword de uso contínuo
+ *    (guincho, andaime, fachadeiro, painel, balancim…) — 60 locados +
+ *    65 próprios. Todos resolvem localizacao='em_obra' (têm obra vinculada).
  *
  * RACIONAL: a fonte da verdade da localização física é o movimento do
  * almoxarifado (warehouse_loans), a mesma usada pelo motor de ociosidade —

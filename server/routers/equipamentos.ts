@@ -4430,13 +4430,14 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           el.data_fim_prevista,
           o.nome                    AS obra_nome,
           -- Rev. 4564 — tag de localização do fixo: um fixo pode estar
-          -- fisicamente no almoxarifado (desmontado/aguardando). Se o item
-          -- vinculado no almox tem último empréstimo ABERTO → está na obra;
-          -- se o último movimento foi devolução (ou nunca saiu) → no almox;
-          -- sem vínculo com almox → considerado instalado na obra.
+          -- fisicamente no almoxarifado (desmontado/aguardando). Está NA OBRA
+          -- quando: empréstimo em aberto no almox, OU tem obra vinculada no
+          -- cadastro (decisão do usuário: fixo com obra = instalado, mesmo sem
+          -- saída registrada), OU nem tem vínculo com o almoxarifado.
           CASE
-            WHEN ai.id IS NULL THEN 'em_obra'
             WHEN last_loan.status = 'emprestado' THEN 'em_obra'
+            WHEN el.obra_id IS NOT NULL THEN 'em_obra'
+            WHEN ai.id IS NULL THEN 'em_obra'
             ELSE 'no_almox'
           END                       AS localizacao
         FROM equipamentos_locados el
@@ -4741,10 +4742,13 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           ep.valor_aquisicao::numeric AS valor_aquisicao,
           ep.vida_util_meses,
           o.nome                      AS obra_nome,
-          -- Rev. 4564 — tag de localização do fixo (obra × almoxarifado)
+          -- Rev. 4564 — tag de localização do fixo (obra × almoxarifado):
+          -- empréstimo aberto OU obra vinculada no cadastro OU sem vínculo
+          -- com almox = instalado na obra; senão, no almoxarifado.
           CASE
-            WHEN ai.id IS NULL THEN 'em_obra'
             WHEN last_loan.status = 'emprestado' THEN 'em_obra'
+            WHEN ep.localizacao_atual_obra_id IS NOT NULL THEN 'em_obra'
+            WHEN ai.id IS NULL THEN 'em_obra'
             ELSE 'no_almox'
           END                          AS localizacao
         FROM equipamentos_proprios ep
