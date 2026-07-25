@@ -860,6 +860,14 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3940: coluna sugestao_ignorada_em garantida em bank_statement_lines (ignorar sugestão de conciliação).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_statement_lines.sugestao_ignorada_em:`, e?.message || e); }
 
+        // Rev. 4589 — FINALIDADE do cartão de crédito ('recorrentes' | 'corporativo' |
+        // 'obra' | 'geral'). Compras (resumoParaCompra) só mostra recorrentes/geral —
+        // Poka-Yoke por design. DEFAULT 'geral' preserva o comportamento legado.
+        try {
+          await db.execute(sql`ALTER TABLE financial_cartoes ADD COLUMN IF NOT EXISTS finalidade varchar(20) DEFAULT 'geral'`);
+          console.log(`[SyncSchema+] Rev. 4589: coluna finalidade garantida em financial_cartoes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cartoes.finalidade:`, e?.message || e); }
+
         // Rev. 3743 — BAIXA PARCIAL de Contas a Pagar/Receber: histórico 1→N baixas por
         // título (datas/contas/formas diferentes). O valor_realizado do entry é o ROLLUP
         // (SUM das baixas ativas); status derivado (parcial vs quitado). Estorno SOFT

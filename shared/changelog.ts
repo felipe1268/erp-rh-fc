@@ -1,4 +1,44 @@
 /**
+ * Rev. 4589 - FEAT: CARTÃO DE CRÉDITO — FINALIDADE DE USO + FILTRO EM COMPRAS
+ *
+ * PEDIDO DO USUÁRIO: separar os cartões por finalidade para que o setor
+ * de Compras só veja/use os cartões destinados a compras recorrentes —
+ * evitando compras no cartão corporativo (viagens/escritório) ou no
+ * cartão dedicado a uma obra.
+ *
+ * O QUE MUDOU:
+ * 1. Novo campo FINALIDADE no cadastro do cartão (Financeiro > Cartões):
+ *    'recorrentes' (Compras Recorrentes — setor de Compras),
+ *    'corporativo' (viagens/refeições/escritório), 'obra' (dedicado a
+ *    uma obra) e 'geral' (sem restrição — DEFAULT/legado).
+ * 2. COMPRAS (resumoParaCompra — Cotação/OC): a query agora filtra
+ *    finalidade IN ('recorrentes','geral') além do escopo 'fc'.
+ *    Cartões corporativo/obra NEM APARECEM para o comprador.
+ * 3. UI: Select "Finalidade de uso" no modal do cartão (com texto
+ *    explicativo), badge colorido no card da listagem (azul=Recorrentes,
+ *    violeta=Corporativo, laranja=Obra, cinza=Geral) e badge
+ *    "Recorrentes" no CartaoDisponivelCard de Compras; título do bloco
+ *    virou "Cartões habilitados para Compras" + empty-state explicando
+ *    a regra.
+ *
+ * POKA-YOKE (nível 3, prevenção pelo design): o comprador não precisa
+ * saber qual cartão pode usar — os cartões errados simplesmente não são
+ * exibidos na Cotação/OC. Server-side (não só UI), enum zod fechado nas
+ * mutations, DEFAULT 'geral' preserva 100% do comportamento legado.
+ *
+ * DETALHE TÉCNICO: o helper dbExecute de cartao.ts interpola arrays em
+ * sql`` (expande para placeholders) — `= ANY($2)` quebraria; o filtro
+ * usa lista literal derivada da const FINALIDADES_COMPRA (sem input do
+ * usuário — sem risco de injeção).
+ *
+ * ARQUIVOS: drizzle/schema.ts (coluna finalidade em financial_cartoes),
+ * server/_core/index.ts ([SyncSchema+] ADD COLUMN IF NOT EXISTS),
+ * server/routers/cartao.ts (enum + listar/criar/atualizar/resumoParaCompra),
+ * client/src/pages/financeiro/FinanceiroCartaoCredito.tsx,
+ * client/src/components/compras/CartaoDisponivelCard.tsx.
+ */
+
+/**
  * Rev. 4588 - FIX: DEPLOY — BUILD DE PUBLICAÇÃO QUEBRAVA POR SCRIPT EXCLUÍDO NO .dockerignore
  *
  * PEDIDO DO USUÁRIO: "My deployment build failed to publish."

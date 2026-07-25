@@ -137,6 +137,16 @@ function ativoDeStatus(s: StatusCartao | undefined | null): number {
 // cartão em Cotação/OC; 'local' (obra/pessoal/terceiro) NUNCA entra.
 const ESCOPO_CARTAO = ["fc", "local"] as const;
 
+// Rev. 4589 — FINALIDADE de uso do cartão (separação pedida pelo usuário):
+// 'recorrentes'  → habilitado p/ o setor de Compras (Cotação/OC);
+// 'corporativo'  → viagens/refeições/escritório — NUNCA aparece em Compras;
+// 'obra'         → dedicado a uma obra — NUNCA aparece em Compras;
+// 'geral'        → sem restrição (default/legado) — aparece em Compras.
+// Poka-Yoke por design: em resumoParaCompra o comprador NEM VÊ cartões
+// corporativo/obra — impossível escolher o cartão errado.
+const FINALIDADE_CARTAO = ["recorrentes", "corporativo", "obra", "geral"] as const;
+const FINALIDADES_COMPRA = ["recorrentes", "geral"];
+
 // Dado dia de fechamento/vencimento e uma data de referência (hoje), calcula quantos
 // dias de "float" uma compra feita HOJE tem até o vencimento da fatura em que ela cai.
 // Mesma convenção de aproximação (mês=30 dias no gap fechamento→vencimento) usada em
@@ -383,6 +393,7 @@ export const cartaoRouter = router({
     const res = await dbExecute(db,
       `SELECT id, company_id AS "companyId", banco, bandeira, final4,
               titular, tipo_pessoa AS "tipoPessoa", COALESCE(escopo, 'fc') AS escopo,
+              COALESCE(finalidade, 'geral') AS finalidade,
               CASE WHEN status IS NOT NULL THEN status WHEN ativo = 0 THEN 'inativo' ELSE 'ativo' END AS status, dia_fechamento AS "diaFechamento",
               dia_vencimento AS "diaVencimento", limite, ativo, observacao,
               created_at AS "createdAt"
@@ -407,6 +418,7 @@ export const cartaoRouter = router({
     titular: z.string().max(255).optional(),
     tipoPessoa: z.enum(["PF", "PJ"]).default("PJ"),
     escopo: z.enum(ESCOPO_CARTAO).default("fc"),
+    finalidade: z.enum(FINALIDADE_CARTAO).default("geral"),
     status: z.enum(STATUS_CARTAO).default("ativo"),
     diaFechamento: z.number().int().min(1).max(31).nullable().optional(),
     diaVencimento: z.number().int().min(1).max(31).nullable().optional(),
@@ -418,13 +430,13 @@ export const cartaoRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const res = await dbExecute(db,
       `INSERT INTO financial_cartoes
-         (company_id, banco, bandeira, final4, titular, tipo_pessoa, escopo, status,
+         (company_id, banco, bandeira, final4, titular, tipo_pessoa, escopo, finalidade, status,
           dia_fechamento, dia_vencimento, limite, ativo, observacao, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW()) RETURNING id`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW(),NOW()) RETURNING id`,
       [
         input.companyId, input.banco ?? null, input.bandeira ?? null,
         input.final4 ? soDigitos(input.final4).slice(-4) : null,
-        input.titular ?? null, input.tipoPessoa, input.escopo, input.status,
+        input.titular ?? null, input.tipoPessoa, input.escopo, input.finalidade, input.status,
         input.diaFechamento ?? null, input.diaVencimento ?? null,
         input.limite ?? null, ativoDeStatus(input.status), input.observacao ?? null,
       ]);
@@ -440,6 +452,7 @@ export const cartaoRouter = router({
     titular: z.string().max(255).nullable().optional(),
     tipoPessoa: z.enum(["PF", "PJ"]).optional(),
     escopo: z.enum(ESCOPO_CARTAO).optional(),
+    finalidade: z.enum(FINALIDADE_CARTAO).optional(),
     status: z.enum(STATUS_CARTAO).optional(),
     diaFechamento: z.number().int().min(1).max(31).nullable().optional(),
     diaVencimento: z.number().int().min(1).max(31).nullable().optional(),
@@ -459,6 +472,7 @@ export const cartaoRouter = router({
     if (input.titular !== undefined) add("titular", input.titular);
     if (input.tipoPessoa !== undefined) add("tipo_pessoa", input.tipoPessoa);
     if (input.escopo !== undefined) add("escopo", input.escopo);
+    if (input.finalidade !== undefined) add("finalidade", input.finalidade);
     if (input.status !== undefined) { add("status", input.status); add("ativo", ativoDeStatus(input.status)); }
     if (input.diaFechamento !== undefined) add("dia_fechamento", input.diaFechamento);
     if (input.diaVencimento !== undefined) add("dia_vencimento", input.diaVencimento);
@@ -507,6 +521,7 @@ export const cartaoRouter = router({
     const res = await dbExecute(db,
       `SELECT c.id, c.banco, c.bandeira, c.final4, c.titular, c.tipo_pessoa AS "tipoPessoa",
               COALESCE(c.escopo, 'fc') AS escopo,
+              COALESCE(c.finalidade, 'geral') AS finalidade,
               c.dia_fechamento AS "diaFechamento", c.dia_vencimento AS "diaVencimento",
               c.limite,
               COALESCE((
@@ -519,6 +534,7 @@ export const cartaoRouter = router({
          FROM financial_cartoes c
         WHERE c.company_id=$1 AND c.excluido_em IS NULL AND c.ativo=1
           AND COALESCE(c.escopo, 'fc') = 'fc'
+          AND COALESCE(c.finalidade, 'geral') IN (${FINALIDADES_COMPRA.map((f) => `'${f}'`).join(", ")})
           AND COALESCE(c.status, 'ativo') = 'ativo'
         ORDER BY c.banco NULLS LAST, c.final4 NULLS LAST, c.id DESC`,
       [input.companyId]);

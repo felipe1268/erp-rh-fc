@@ -49,7 +49,7 @@ export function CartaoDisponivelCard({
         <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
           <AlertTriangle className="h-4 w-4" />
         </div>
-        Nenhum cartão FC cadastrado (cartões "local" não entram aqui). Cadastre em Financeiro &gt; Cartões.
+        Nenhum cartão habilitado para Compras (finalidade "Compras Recorrentes" ou "Geral", escopo FC). Cadastre/ajuste em Financeiro &gt; Cartões.
       </div>
     );
   }
@@ -61,7 +61,7 @@ export function CartaoDisponivelCard({
           <div className="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
             <CreditCard className="w-4 h-4" />
           </div>
-          <h4 className="text-[11px] font-bold text-gray-700 uppercase tracking-[0.12em]">Cartões FC disponíveis</h4>
+          <h4 className="text-[11px] font-bold text-gray-700 uppercase tracking-[0.12em]">Cartões habilitados para Compras</h4>
         </div>
         {cartaoIdSelecionado != null && (
           <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full">
@@ -112,6 +112,9 @@ export function CartaoDisponivelCard({
                 </p>
                 {c.alertaPessoal && (
                   <span className="text-[9px] font-bold text-amber-700 uppercase bg-amber-100 rounded-full px-1.5 py-0.5">PF</span>
+                )}
+                {c.finalidade === "recorrentes" && (
+                  <span className="text-[9px] font-bold text-blue-700 uppercase bg-blue-100 rounded-full px-1.5 py-0.5">Recorrentes</span>
                 )}
                 {c.recomendado && (
                   <span className="inline-flex items-center gap-1 text-[9px] font-bold text-violet-700 uppercase bg-violet-100 rounded-full px-1.5 py-0.5">

@@ -50,20 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4589** — **FEAT: CARTÃO DE CRÉDITO — FINALIDADE DE USO + FILTRO EM COMPRAS.** Novo campo `finalidade` no cartão (recorrentes/corporativo/obra/geral, default geral) para separar cartões por função. `resumoParaCompra` (Cotação/OC) agora só retorna cartões `recorrentes`/`geral` (além de escopo fc) — Poka-Yoke por design: o comprador NEM VÊ o cartão corporativo/de obra. UI: Select "Finalidade de uso" no modal + badge colorido na listagem + bloco de Compras renomeado "Cartões habilitados para Compras". Nota técnica: dbExecute de cartao.ts expande arrays em sql`` → filtro usa lista literal da const (sem input do usuário). Arquivos: `drizzle/schema.ts`, `server/_core/index.ts` ([SyncSchema+]), `server/routers/cartao.ts`, `FinanceiroCartaoCredito.tsx`, `CartaoDisponivelCard.tsx`.
 - **Rev. 4588** — **FIX: DEPLOY — BUILD DE PUBLICAÇÃO QUEBRAVA POR SCRIPT EXCLUÍDO NO .dockerignore.** Publicação falhava embora o build passasse localmente (validado: vite 1m51s + esbuild + build-info EXIT=0). Causa: `.dockerignore` excluía `scripts/` inteira, mas o build do deploy termina com `node scripts/gen-build-info.mjs` → arquivo inexistente no servidor de publicação. Fix endurecido (após 2ª falha): `scripts/` deixou de ser excluída (só 368 KB; negação `!` é frágil) + passo `gen-build-info` virou não-fatal (`|| echo`) — server já tolera `build-info.json` ausente. `gen-build-info.mjs` já tolera `.git/` ausente. Conferido que nenhum outro caminho de build/runtime depende de `scripts/`. Arquivos: `.dockerignore`, `package.json`. ZERO código de app change.
-- **Rev. 4587** — **FEAT: CONTAS A PAGAR — EDITAR COM AS MESMAS INFORMAÇÕES DE PAGAMENTO DA TELA "PAGAR".** Usuário pediu que o lápis (Editar) tivesse tudo que o Pagar tem. Forma de Pagamento ganhou Cheque (próprio)/Cheque de Terceiro/Débito Automático; novo seletor de Conta bancária (updateEntry ganhou contaBancariaId opcional + guard anti-IDOR); seção de cheque próprio com nº do 1º cheque, parcelas e prévia — ao salvar cadastra os cheques PENDENTES no Controle de Cheques (só se o nº foi informado — Poka-Yoke contra duplicidade); seção de cheque de terceiro seleciona cheques em carteira e aloca ao título. Sem baixa — pagar continua no fluxo "Pagar". Arquivos: `FinanceiroContasAPagar.tsx`, `financial.ts`. ZERO schema change.
 ### 5 one-liners
 
+- **Rev. 4587** — **FEAT: CONTAS A PAGAR — EDITAR COM AS MESMAS INFORMAÇÕES DE PAGAMENTO DO "PAGAR".** Editar ganhou cheque próprio/terceiro/débito automático, seletor de conta bancária (anti-IDOR) e cadastro de cheques pendentes no Controle. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4586** — **UX: FLUXO DE CAIXA — POP-UP DE DETALHAMENTO ULTRA MODERNO + BUSCA RÁPIDA.** Redesign client-only do drill-down: cabeçalho em degradê + busca rápida + cards ranqueados com % do total e barra de proporção + badges coloridos + fix da descrição duplicada. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4585** — **FIX: FLUXO DE CAIXA — CRONOGRAMA FORA DA CONFERÊNCIA DE DUPLICIDADES.** `getPossiveisDuplicidades` exclui `origem_modulo='cronograma_atividade'` (projeções de contrato, nunca pagamentos reais); card cai de 61 p/ 31 pares. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4584** — **FEAT: FLUXO DE CAIXA — DRILL-DOWN EM TODA A MATRIZ.** Todo valor da matriz virou clicável e abre Dialog somente-leitura com os lançamentos que formam o número; filtro espelha EXATA a agregação da matriz (Poka-Yoke por transparência). Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 
 - **Rev. 4583** — **FIX: FLUXO DE CAIXA — BALDES DE SAÍDA LEEM O PLANO DE CONTAS.** `bucketDespesa()` ganhou 2º critério `CONTA_RULES` sobre `conta_nome` (despesas da conciliação têm origem NULL); "Outros" caiu de R$ 14,5 mi p/ 1,59 mi. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
-- **Rev. 4582** — **FIX: FLUXO DE CAIXA — SWEEP CONTAMAX NEUTRALIZADO + TEXTOS CORRIGIDOS.** Sweep bancário separado em `sweepAplicado/sweepResgatado` (fora da linha azul) + 37 despesas CONTAMAX da 60004 → `aplicacao_financeira`. Detalhe em `shared/changelog.ts`. ZERO schema change.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4581 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4582 e anteriores.
 
 ## User preferences
 

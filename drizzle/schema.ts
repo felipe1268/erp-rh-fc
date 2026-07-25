@@ -7619,6 +7619,11 @@ export const financialCartoes = pgTable("financial_cartoes", {
   // automática de melhor cartão em Cotação/OC) | 'local' (obra/pessoal/terceiro,
   // NUNCA sugerido automaticamente, só cadastro/controle).
   escopo: varchar("escopo", { length: 10 }).default("fc"),
+  // Rev. 4589 — finalidade de uso do cartão: 'recorrentes' (setor de Compras),
+  // 'corporativo' (viagens/escritório), 'obra' (dedicado a obra), 'geral' (sem
+  // restrição). Em Cotação/OC só aparecem 'recorrentes' e 'geral' (Poka-Yoke
+  // por design: o comprador nem vê o cartão corporativo).
+  finalidade: varchar("finalidade", { length: 20 }).default("geral"),
   status: varchar("status", { length: 20 }).default("ativo"),
   diaFechamento: integer("dia_fechamento"),
   diaVencimento: integer("dia_vencimento"),

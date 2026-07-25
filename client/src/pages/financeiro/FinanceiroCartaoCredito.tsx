@@ -132,7 +132,30 @@ function tipoBadge(t: string) {
 const CARTAO_FORM_INICIAL = {
   banco: "", bandeira: "", final4: "", titular: "", tipoPessoa: "PJ", status: "ativo",
   diaFechamento: "", diaVencimento: "", limite: "", observacao: "", escopo: "fc",
+  finalidade: "geral",
 };
+
+// Rev. 4589 — Finalidade de uso: separa os cartões por função. Em Cotação/OC
+// (setor de Compras) só aparecem "Compras Recorrentes" e "Geral" — Poka-Yoke
+// por design: o comprador nem vê o cartão corporativo/de obra.
+const FINALIDADE_CARTAO_OPCOES = [
+  { value: "recorrentes", label: "Compras Recorrentes (setor de Compras)" },
+  { value: "corporativo", label: "Corporativo (viagens/escritório)" },
+  { value: "obra", label: "Obra específica" },
+  { value: "geral", label: "Geral (sem restrição)" },
+] as const;
+
+function finalidadeCartaoBadge(finalidade?: string) {
+  const f = (finalidade || "geral").toLowerCase();
+  const map: Record<string, { label: string; cls: string }> = {
+    recorrentes: { label: "Recorrentes", cls: "bg-blue-100 text-blue-700 hover:bg-blue-100" },
+    corporativo: { label: "Corporativo", cls: "bg-violet-100 text-violet-700 hover:bg-violet-100" },
+    obra: { label: "Obra", cls: "bg-orange-100 text-orange-700 hover:bg-orange-100" },
+    geral: { label: "Geral", cls: "bg-gray-100 text-gray-600 hover:bg-gray-100" },
+  };
+  const it = map[f] || map.geral;
+  return <Badge className={it.cls}>{it.label}</Badge>;
+}
 
 const ESCOPO_CARTAO_OPCOES = [
   { value: "fc", label: "FC (empresa)" },
@@ -218,6 +241,7 @@ export default function FinanceiroCartaoCredito() {
       limite: c.limite != null ? maskBRL(String(Math.round(Number(c.limite) * 100))) : "",
       observacao: c.observacao ?? "",
       escopo: c.escopo ?? "fc",
+      finalidade: c.finalidade ?? "geral",
     });
     setCartaoModal(true);
   }
@@ -236,6 +260,7 @@ export default function FinanceiroCartaoCredito() {
       limite: cartaoForm.limite.trim() === "" ? null : parseMaskBRL(cartaoForm.limite),
       observacao: cartaoForm.observacao.trim() || undefined,
       escopo: cartaoForm.escopo as "fc" | "local",
+      finalidade: cartaoForm.finalidade as "recorrentes" | "corporativo" | "obra" | "geral",
     };
     try {
       let novoId: number | null = null;
@@ -907,7 +932,10 @@ export default function FinanceiroCartaoCredito() {
                         {/* Corpo branco — dados + ações */}
                         <div className="p-3">
                           <div className="flex items-center justify-between gap-2">
-                            {statusCartaoBadge(c.status)}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {statusCartaoBadge(c.status)}
+                              {finalidadeCartaoBadge(c.finalidade)}
+                            </div>
                             <span className="text-xs text-muted-foreground">
                               Limite: <b className="text-foreground">{c.limite != null ? formatBRL(c.limite) : "—"}</b>
                             </span>
@@ -1787,6 +1815,20 @@ export default function FinanceiroCartaoCredito() {
                     </Select>
                     <p className="text-[11px] text-muted-foreground leading-tight">
                       Cartões "FC" aparecem como sugestão de pagamento nas Cotações/OCs de Compras. Cartões "Local" ficam de fora dessa sugestão.
+                    </p>
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs">Finalidade de uso</Label>
+                    <Select value={cartaoForm.finalidade} onValueChange={(v) => setCartaoForm((f) => ({ ...f, finalidade: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {FINALIDADE_CARTAO_OPCOES.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground leading-tight">
+                      Nas Cotações/OCs do setor de Compras só aparecem cartões <b>Compras Recorrentes</b> e <b>Geral</b>. Cartões <b>Corporativo</b> (viagens/escritório) e <b>Obra</b> nem são exibidos lá — evita usar o cartão errado.
                     </p>
                   </div>
                 </div>
