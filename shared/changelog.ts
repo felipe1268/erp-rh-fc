@@ -1,4 +1,38 @@
 /**
+ * Rev. 4583 - FIX: FLUXO DE CAIXA — BALDES DE SAÍDA AGORA LEEM O PLANO DE CONTAS (FOLHA/BENEFÍCIOS DEIXAM DE CAIR EM "OUTROS")
+ *
+ * PEDIDO DO USUÁRIO: "folha de pagamentos, benefícios, tudo isso não está
+ * mostrando no fluxo de caixa e está classificado corretamente no sistema".
+ * Ele estava CERTO: a matriz mostrava Folha com R$ 12 mil (só a recorrência
+ * manual) e "Outros" com R$ 2,4 mi/mês.
+ *
+ * CAUSA-RAIZ: bucketDespesa() classificava as Saídas SÓ por origem_modulo
+ * (BUCKET_MAP da Rev. 2944). Mas R$ 14,5 mi/ano de despesas criadas pela
+ * CONCILIAÇÃO DO EXTRATO têm origem_modulo NULL — e o usuário já tinha
+ * classificado cada uma no PLANO DE CONTAS (conta_nome: "FOLHA DE PAGAMENTO"
+ * R$ 2,27 mi, "ENCARGOS SOCIAIS - FGTS/INSS", "VALE ALIMENTAÇÃO",
+ * "SUBEMPREITEIROS"...). O balde ignorava essa classificação → tudo "Outros".
+ *
+ * FIX (client-only): bucketDespesa(origem, contaNome) ganha 2º critério —
+ * se origem_modulo não mapear, classifica pelo conta_nome normalizado (sem
+ * acento, uppercase) contra CONTA_RULES, lista ordenada de regex → balde
+ * (mais específico primeiro: "SEGURO DE VIDA"→benefícios antes de
+ * "SEGURO"→recorrente; "MATERIAIS PARA OBRA"→compras antes de "OBRA"→obras).
+ *
+ * VALIDADO contra o Neon (2026, origem NULL): folha 3,49 mi · compras
+ * 4,33 mi · terceiros 2,02 mi · obras 1,29 mi · recorrente 0,95 mi ·
+ * benefícios 0,48 mi · frota 0,27 mi · tributos 0,11 mi — e "Outros" caiu
+ * de 14,5 mi para 1,59 mi (sobrou o que É outros: depósitos, cartão
+ * empresarial, mútuo intercompany, bloqueio judicial, compra de terreno).
+ *
+ * POKA-YOKE: nível 2 — a classificação deixa de depender de um campo que a
+ * conciliação não preenche; a fonte é a classificação que o usuário já faz.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx (só).
+ * ZERO schema/server change.
+ */
+
+/**
  * Rev. 4582 - FIX: FLUXO DE CAIXA — SWEEP CONTAMAX (APLICAÇÃO AUTOMÁTICA) NEUTRALIZADO NA LINHA AZUL + TEXTOS CORRIGIDOS
  *
  * PEDIDO DO USUÁRIO: o usuário explicou que o CONTAMAX é uma APLICAÇÃO

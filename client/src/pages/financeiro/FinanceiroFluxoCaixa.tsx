@@ -62,9 +62,30 @@ const BUCKET_MAP: Record<string, DespBucket> = {
   pagamento_terceiro: "terceiros", contrato_terceiro: "terceiros",
   os_terceiro: "terceiros",
 };
-function bucketDespesa(origem?: string | null): DespBucket {
-  if (!origem) return "outros";
-  return BUCKET_MAP[origem] ?? "outros";
+// Rev. 4583 — 2º critério: PLANO DE CONTAS (conta_nome). Milhões em títulos
+// criados pela conciliação do extrato têm origem_modulo NULL, mas o usuário
+// JÁ classificou cada um no plano de contas ("FOLHA DE PAGAMENTO", "VALE
+// ALIMENTAÇÃO"...). Sem este fallback, tudo caía em "Outros" e a matriz
+// mostrava Folha/Benefícios vazios. Ordem dos testes importa (mais específico
+// primeiro: "SEGURO DE VIDA"→benefícios antes de "SEGURO"→recorrente).
+const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+const CONTA_RULES: Array<[RegExp, DespBucket]> = [
+  [/VALE ALIMENTACAO|VALE REFEICAO|VALE TRANSPORTE|SEGURO (DE )?VIDA|EXAME|PLANO DE SAUDE|CESTA BASICA/, "beneficios"],
+  [/FOLHA|ENCARGO|FGTS|INSS|PRO.?LABORE|MAO DE OBRA|ADIANTAMENTO|RESCISAO|FERIAS|DECIMO|13O? SALARIO|TRABALHISTA|SALARIO|PRESTADORES PJ|PJ INDIVIDUA/, "folha"],
+  [/VEICULO|COMBUSTIVEL|IPVA|PEDAGIO|FROTA|ABASTECIMENTO/, "frota"],
+  [/MATERIA(L|IS)|FERRAMENTA|\bEPI\b|UNIFORME|ALMOXARIFADO/, "compras"],
+  [/SUBEMPREITEIRO|TERCEIR|PRESTACAO DE SERVICO|SERVICOS PJ|MEDICAO PJ/, "terceiros"],
+  [/IMPOSTO|TRIBUTO|GUIA|DARF|\bDAS\b|SIMPLES NACIONAL|ALVARA/, "tributos"],
+  [/OBRA|MEDICAO|LOCACAO|FRETE|TRANSPORTE DE EQUIPE|ALUGUEL DE EQUIPAMENTO/, "obras"],
+  [/CONTABILIDADE|BANCARIA|FINANCEIRA|FINANCIAMENTO|EMPRESTIMO|CONSORCIO|CARTORIO|ENERGIA|\bAGUA\b|INTERNET|TELEFONE|SOFTWARE|ASSINATURA|SEGURO|ALUGUEL/, "recorrente"],
+];
+function bucketDespesa(origem?: string | null, contaNome?: string | null): DespBucket {
+  if (origem && BUCKET_MAP[origem]) return BUCKET_MAP[origem];
+  if (contaNome) {
+    const n = norm(String(contaNome));
+    for (const [re, b] of CONTA_RULES) if (re.test(n)) return b;
+  }
+  return "outros";
 }
 const FIXAS: DespBucket[]     = ["folha", "beneficios", "tributos", "recorrente"];
 const VARIAVEIS: DespBucket[] = ["compras", "frota", "obras", "terceiros", "outros"];
@@ -256,7 +277,7 @@ export default function FinanceiroFluxoCaixa() {
       const i = meses12.indexOf(key);
       if (i < 0) continue;
       const v = Number(c.valorPrevisto ?? 0) || 0;
-      buckets[bucketDespesa(c.origemModulo)][i] += v;
+      buckets[bucketDespesa(c.origemModulo, c.contaNome)][i] += v;
     }
     return buckets;
   }, [pagarQ.data, natureza, meses12]);
