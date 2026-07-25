@@ -1,4 +1,32 @@
 /**
+ * Rev. 4590 - UX: CARTÃO DE CRÉDITO — MODAL "USO DO CARTÃO" COM TILES VISUAIS
+ *
+ * PEDIDO DO USUÁRIO: "Fazer um layout moderno e organizado, mais fácil de
+ * entendimento" (screenshot do modal Editar cartão no iPad).
+ *
+ * O QUE MUDOU (client-only, FinanceiroCartaoCredito.tsx):
+ * 1. Nova seção "USO DO CARTÃO" separada da Identificação — os dois
+ *    dropdowns (Escopo e Finalidade) com parágrafos longos viraram
+ *    TILES CLICÁVEIS com ícone + título + descrição curta:
+ *    - "De quem é o cartão?" → 2 tiles (FC empresa / Local).
+ *    - "Para que ele serve?" → 4 tiles (Recorrentes, Geral,
+ *      Corporativo, Obra), cada um com selo verde "Aparece em Compras"
+ *      ou cinza "Fora de Compras" — a consequência da escolha é visível
+ *      ANTES de escolher.
+ * 2. Resumo dinâmico embaixo: banner verde/cinza dizendo na hora se o
+ *    cartão VAI ou NÃO aparecer nas Cotações/OCs de Compras, combinando
+ *    escopo + finalidade (inclui o caso escopo "Local").
+ *
+ * POKA-YOKE (nível 3, prevenção pelo design): tile só aceita valor
+ * válido (sem digitação), e o feedback imediato elimina a dúvida "esse
+ * cartão vai aparecer pro comprador?" — o usuário vê a regra aplicada
+ * ao vivo em vez de ler um parágrafo.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroCartaoCredito.tsx.
+ * ZERO schema/server change.
+ */
+
+/**
  * Rev. 4589 - FEAT: CARTÃO DE CRÉDITO — FINALIDADE DE USO + FILTRO EM COMPRAS
  *
  * PEDIDO DO USUÁRIO: separar os cartões por finalidade para que o setor

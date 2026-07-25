@@ -20,6 +20,7 @@ import {
   Search, Layers, BarChart3, TrendingUp, TrendingDown, Minus,
   PieChart as PieIcon, Repeat, Percent, Store, Receipt, Wallet, ListFilter,
   Zap, Calendar, Hash, Sparkles, ArrowRight, Clock, Check,
+  ShoppingCart, Briefcase, HardHat, Globe, EyeOff, Eye,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
 
@@ -1803,33 +1804,97 @@ export default function FinanceiroCartaoCredito() {
                       placeholder="Nome impresso no cartão"
                     />
                   </div>
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-xs">Escopo do cartão</Label>
-                    <Select value={cartaoForm.escopo} onValueChange={(v) => setCartaoForm((f) => ({ ...f, escopo: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {ESCOPO_CARTAO_OPCOES.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-muted-foreground leading-tight">
-                      Cartões "FC" aparecem como sugestão de pagamento nas Cotações/OCs de Compras. Cartões "Local" ficam de fora dessa sugestão.
-                    </p>
+                </div>
+              </div>
+            </div>
+
+            {/* ── SEÇÃO 1B: Uso do cartão (escopo + finalidade em tiles visuais) ── */}
+            <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 bg-[#1B2A4A]/5 px-4 py-2.5 border-b">
+                <ShoppingCart className="w-3.5 h-3.5 text-[#1B2A4A]" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#1B2A4A]">Uso do cartão</span>
+              </div>
+              <div className="px-4 py-4 space-y-4">
+
+                {/* Escopo — 2 tiles */}
+                <div className="space-y-2">
+                  <Label className="text-xs">De quem é o cartão?</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { value: "fc", label: "FC (empresa)", desc: "Cartão da empresa", Icon: Building2 },
+                      { value: "local", label: "Local", desc: "Obra / particular / terceiro", Icon: HardHat },
+                    ] as const).map(({ value, label, desc, Icon }) => {
+                      const ativo = cartaoForm.escopo === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setCartaoForm((f) => ({ ...f, escopo: value }))}
+                          className={`relative flex items-start gap-2.5 rounded-xl border-2 p-3 text-left transition-all
+                            ${ativo ? "border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm" : "border-gray-200 bg-gray-50/50 hover:border-[#1B2A4A]/40"}`}
+                        >
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${ativo ? "bg-[#1B2A4A] text-white" : "bg-gray-200 text-gray-500"}`}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className={`text-xs font-semibold ${ativo ? "text-[#1B2A4A]" : "text-gray-700"}`}>{label}</p>
+                            <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{desc}</p>
+                          </div>
+                          {ativo && <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-[#1B2A4A]" />}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-xs">Finalidade de uso</Label>
-                    <Select value={cartaoForm.finalidade} onValueChange={(v) => setCartaoForm((f) => ({ ...f, finalidade: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {FINALIDADE_CARTAO_OPCOES.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-muted-foreground leading-tight">
-                      Nas Cotações/OCs do setor de Compras só aparecem cartões <b>Compras Recorrentes</b> e <b>Geral</b>. Cartões <b>Corporativo</b> (viagens/escritório) e <b>Obra</b> nem são exibidos lá — evita usar o cartão errado.
-                    </p>
+                </div>
+
+                {/* Finalidade — 4 tiles com selo de visibilidade em Compras */}
+                <div className="space-y-2">
+                  <Label className="text-xs">Para que ele serve?</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { value: "recorrentes", label: "Compras Recorrentes", desc: "Uso do setor de Compras", Icon: ShoppingCart, compra: true },
+                      { value: "geral", label: "Geral", desc: "Sem restrição de uso", Icon: Globe, compra: true },
+                      { value: "corporativo", label: "Corporativo", desc: "Viagens, refeições, escritório", Icon: Briefcase, compra: false },
+                      { value: "obra", label: "Obra específica", desc: "Dedicado a uma obra", Icon: HardHat, compra: false },
+                    ] as const).map(({ value, label, desc, Icon, compra }) => {
+                      const ativo = cartaoForm.finalidade === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setCartaoForm((f) => ({ ...f, finalidade: value }))}
+                          className={`relative flex flex-col gap-1.5 rounded-xl border-2 p-3 text-left transition-all
+                            ${ativo ? "border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm" : "border-gray-200 bg-gray-50/50 hover:border-[#1B2A4A]/40"}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${ativo ? "bg-[#1B2A4A] text-white" : "bg-gray-200 text-gray-500"}`}>
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className={`text-xs font-semibold leading-tight ${ativo ? "text-[#1B2A4A]" : "text-gray-700"}`}>{label}</p>
+                              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{desc}</p>
+                            </div>
+                          </div>
+                          <span className={`inline-flex w-fit items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide
+                            ${compra ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-500"}`}>
+                            {compra ? <Eye className="w-2.5 h-2.5" /> : <EyeOff className="w-2.5 h-2.5" />}
+                            {compra ? "Aparece em Compras" : "Fora de Compras"}
+                          </span>
+                          {ativo && <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-[#1B2A4A]" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Resumo dinâmico — o usuário vê a consequência da escolha na hora */}
+                  <div className={`flex items-start gap-2 rounded-lg p-2.5 text-[11px] leading-tight
+                    ${cartaoForm.escopo === "fc" && (cartaoForm.finalidade === "recorrentes" || cartaoForm.finalidade === "geral")
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-gray-100 text-gray-600"}`}>
+                    {cartaoForm.escopo === "fc" && (cartaoForm.finalidade === "recorrentes" || cartaoForm.finalidade === "geral") ? (
+                      <><Eye className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span>Este cartão <b>vai aparecer</b> como opção de pagamento nas Cotações/OCs do setor de Compras.</span></>
+                    ) : (
+                      <><EyeOff className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span>Este cartão <b>não vai aparecer</b> nas Cotações/OCs de Compras{cartaoForm.escopo !== "fc" ? ' (escopo "Local" fica fora)' : ""} — evita usar o cartão errado.</span></>
+                    )}
                   </div>
                 </div>
               </div>
