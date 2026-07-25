@@ -1,4 +1,53 @@
 /**
+ * Rev. 4580 - FIX+UX: FLUXO DE CAIXA — APLICAÇÕES FINANCEIRAS FORA DAS SAÍDAS + MODO SIMPLES
+ *
+ * PEDIDO DO USUÁRIO: a tela ainda estava "poluída" demais para leigo e o
+ * déficit de ~R$ 5 mi continuava aparecendo nas Saídas apesar de o banco
+ * real ter variado só −R$ 126 mil no ano.
+ *
+ * CAUSA-RAIZ ENCONTRADA (Neon, empresa 60002):
+ * - 66 lançamentos "APLICACAO CONTAMAX" (R$ 3.204.643,45), criados via
+ *   conciliação do extrato Santander com origem_modulo NULL, estavam
+ *   classificados como DESPESA. Mas aplicação financeira NÃO é gasto — é o
+ *   próprio dinheiro da empresa indo para o investimento (CONTAMAX). Os
+ *   RESGATES que voltam (~3,18 mi) só apareciam como "outras movimentações"
+ *   (Rev. 4579), nunca como receita → assimetria: a matriz via a ida do
+ *   dinheiro mas não a volta, criando déficit fantasma de ~3,2 mi.
+ * - Verificado que NÃO há duplicidade nos "FOL PAGTO" (963 mil): é folha
+ *   real paga direto no banco; o módulo Folha quase não lança no Financeiro.
+ *
+ * O QUE MUDOU:
+ * 1) DADOS (Neon, reversível): UPDATE nos 66 lançamentos → origem_modulo =
+ *    'aplicacao_financeira' (era NULL; critério: company 60002, tipo despesa,
+ *    não-cancelado, origem NULL, descricao/fornecedor ILIKE '%APLICA%' —
+ *    amostrado 100% CONTAMAX antes do update). Nada foi apagado/cancelado.
+ * 2) client FinanceiroFluxoCaixa.tsx: despBuckets e despSplit pulam
+ *    origemModulo === 'aplicacao_financeira' → aplicações saem das Saídas.
+ * 3) server financial.getMovimentacoesBancariasByYear: linhas do extrato
+ *    ligadas a entries com origem 'aplicacao_financeira' agora contam na
+ *    linha informativa "Outras movimentações bancárias" (simetria com os
+ *    resgates: ida e volta do dinheiro aparecem juntas, líquidas, sem somar
+ *    na matriz).
+ * 4) UX MODO SIMPLES (padrão) × DETALHADO — Poka-Yoke nível 3 (prevenção
+ *    pelo design): a tela abre com o mínimo p/ leigo:
+ *    - 3 cartões grandes: "Entrou no ano", "Saiu no ano", "No banco hoje"
+ *      (saldo real do extrato; fallback saldo projetado).
+ *    - Matriz enxuta: Saldo Inicial → Entradas → Saídas → Geração → Saldo
+ *      Final (sem sub-linhas, sem margem %, sem cheques, sem outras mov).
+ *    - Insights limitados a 3; legenda e notas técnicas ocultas.
+ *    - Clicar para expandir Entradas/Saídas no modo Simples muda para o
+ *      modo Detalhado (descoberta progressiva).
+ *    Modo Detalhado = tela completa da Rev. 4578/4579 intacta.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx,
+ * server/routers/financial.ts (1 condição), shared/version.ts, changelog.
+ * ZERO schema change (UPDATE de dados apenas, reversível).
+ *
+ * FOLLOW-UPS: 13 possíveis despesas duplicadas (~167 mil) continuam apenas
+ * reportadas; conciliação poderia sugerir 'aplicacao_financeira'
+ * automaticamente ao criar despesa com descrição APLICACAO* (Poka-Yoke 3).
+ */
+/**
  * Rev. 4579 - FEAT: FLUXO DE CAIXA — "OUTRAS MOVIMENTAÇÕES BANCÁRIAS" + SALDO REAL DO EXTRATO
  *
  * PEDIDO DO USUÁRIO: "ainda estou achando que tem alguma coisa errada. Não

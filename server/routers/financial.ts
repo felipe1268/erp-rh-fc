@@ -10166,7 +10166,8 @@ export const financialRouter = router({
        WHERE l.company_id IN (${inlineIds(ids)})
          AND l.excluido_em IS NULL AND l.desconsiderado_em IS NULL
          AND EXTRACT(year FROM l.data) = $1
-         AND (l.entry_id IS NULL OR e.tipo NOT IN ('receita','despesa'))
+         AND (l.entry_id IS NULL OR e.tipo NOT IN ('receita','despesa')
+              OR e.origem_modulo = 'aplicacao_financeira')
        GROUP BY 1, 2`,
       [input.ano]
     );

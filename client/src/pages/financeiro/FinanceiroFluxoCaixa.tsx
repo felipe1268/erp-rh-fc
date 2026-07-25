@@ -92,6 +92,11 @@ export default function FinanceiroFluxoCaixa() {
   const [exVar, setExVar]       = useState(true);
   // Rev. 4578 — guia de leitura p/ iniciante (colapsável; começa fechado).
   const [guiaAberto, setGuiaAberto] = useState(false);
+  // Rev. 4580 — modo Simples (padrão, p/ leigo: só a história essencial) ×
+  // Detalhado (tudo: sub-linhas, margem, cheques, outras movimentações).
+  // Poka-Yoke nível 3 (prevenção pelo design): a tela abre no modo que não
+  // permite leitura errada — menos linhas, menos ruído.
+  const [modo, setModo] = useState<"simples" | "detalhado">("simples");
 
   // Rev. 2944 — Compõe os 2 endpoints já confiáveis dos módulos irmãos (paridade 1:1
   // com Contas a Receber / Contas a Pagar, por construção).
@@ -198,6 +203,10 @@ export default function FinanceiroFluxoCaixa() {
       ALL_BUCKETS.map(b => [b, Array(12).fill(0)])
     ) as Record<DespBucket, number[]>;
     for (const c of rows) {
+      // Rev. 4580 — aplicação financeira NÃO é gasto (é o próprio dinheiro indo
+      // p/ investimento); fica fora das Saídas e aparece na linha informativa
+      // "Outras movimentações bancárias" (simetria com os resgates que voltam).
+      if (c.origemModulo === "aplicacao_financeira") continue;
       const proj = isProjecaoDespesa(c.origemModulo);
       if (natureza === "efetivo" && proj) continue;
       if (natureza === "projecao" && !proj) continue;
@@ -247,6 +256,7 @@ export default function FinanceiroFluxoCaixa() {
     const rowsP: any[] = pagarQ.data ?? [];
     let efet = 0, proj = 0;
     for (const c of rowsP) {
+      if (c.origemModulo === "aplicacao_financeira") continue; // Rev. 4580
       const key = String(c.dataVencimento ?? "").slice(0, 7);
       if (meses12.indexOf(key) < 0) continue;
       const v = Number(c.valorPrevisto ?? 0) || 0;
@@ -632,12 +642,23 @@ export default function FinanceiroFluxoCaixa() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* Rev. 4580 — modo Simples (padrão) × Detalhado */}
+            <div className="flex rounded-lg border border-slate-300 overflow-hidden"
+              title="Simples = só a história essencial do caixa. Detalhado = todas as linhas, categorias e informações técnicas.">
+              {([["simples", "Simples"], ["detalhado", "Detalhado"]] as const).map(([v, label]) => (
+                <button key={v} onClick={() => setModo(v)}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors
+                    ${modo === v ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <button onClick={() => setGuiaAberto(v => !v)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors
                 ${guiaAberto ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"}`}>
               <HelpCircle className="w-3.5 h-3.5" /> Como ler?
             </button>
-            {!FINANCEIRO_SOMENTE_REAL && (
+            {!FINANCEIRO_SOMENTE_REAL && modo === "detalhado" && (
             <div className="flex rounded-lg border border-violet-200 overflow-hidden"
               title="Efetivo = dívida/receita real. Projeção = forecast do cronograma e folha.">
               {NAT_OPTS.map(({ v, label }) => (
@@ -682,7 +703,48 @@ export default function FinanceiroFluxoCaixa() {
           </div>
         )}
 
+        {/* ── Rev. 4580 — MODO SIMPLES: a história do ano em 3 cartões grandes ── */}
+        {modo === "simples" && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border p-5 bg-emerald-50 border-emerald-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-slate-600 font-semibold">Entrou no ano</span>
+                <ArrowUpCircle className="w-5 h-5 text-emerald-500" />
+              </div>
+              <p className="text-2xl font-bold text-emerald-700 break-words">{BRL0(totalRec)}</p>
+              <p className="text-[11px] text-slate-500 mt-1.5">Recebimentos de clientes em {ano}</p>
+            </div>
+            <div className="rounded-xl border p-5 bg-rose-50 border-rose-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-slate-600 font-semibold">Saiu no ano</span>
+                <ArrowDownCircle className="w-5 h-5 text-rose-500" />
+              </div>
+              <p className="text-2xl font-bold text-rose-700 break-words">{BRL0(totalDesp)}</p>
+              <p className="text-[11px] text-slate-500 mt-1.5">Pagamentos: folha, fornecedores, tributos…</p>
+            </div>
+            <div className={`rounded-xl border p-5 ${
+              (saldoRealUltimo ?? saldoFinalAno) >= 0 ? "bg-indigo-50 border-indigo-200" : "bg-rose-50 border-rose-300"}`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-slate-600 font-semibold">
+                  {saldoRealUltimo != null ? "No banco hoje" : "Termina o ano com"}
+                </span>
+                <Landmark className={`w-5 h-5 ${(saldoRealUltimo ?? saldoFinalAno) >= 0 ? "text-indigo-500" : "text-rose-500"}`} />
+              </div>
+              <p className={`text-2xl font-bold break-words ${
+                (saldoRealUltimo ?? saldoFinalAno) >= 0 ? "text-indigo-800" : "text-rose-700"}`}>
+                {BRL0(saldoRealUltimo ?? saldoFinalAno)}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1.5">
+                {saldoRealUltimo != null
+                  ? `Saldo real do extrato bancário (${MESES_FULL[movBanco.ultimoMes - 1] ?? ""})`
+                  : `Saldo projetado para 31/Dez/${ano}`}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── KPIs — a história do ano em 5 cartões, na ordem da literatura ── */}
+        {modo === "detalhado" && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {/* 1. Saldo inicial */}
           <div className="rounded-xl border p-4 bg-slate-50 border-slate-200">
@@ -749,6 +811,7 @@ export default function FinanceiroFluxoCaixa() {
             )}
           </div>
         </div>
+        )}
 
         {/* ── Insights automáticos (determinísticos) ── */}
         {insights.length > 0 && (
@@ -757,7 +820,7 @@ export default function FinanceiroFluxoCaixa() {
               <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> O que estes números estão dizendo
             </p>
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2.5">
-              {insights.map((ins, idx) => {
+              {(modo === "simples" ? insights.slice(0, 3) : insights).map((ins, idx) => {
                 const st = INSIGHT_STYLE[ins.tipo];
                 return (
                   <div key={idx} className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-xs ${st.bg}`}>
@@ -785,7 +848,8 @@ export default function FinanceiroFluxoCaixa() {
           </div>
         )}
 
-        {/* ── Legenda ── */}
+        {/* ── Legenda (só no modo Detalhado — Rev. 4580) ── */}
+        {modo === "detalhado" && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-slate-400 select-none">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300" />
@@ -807,9 +871,11 @@ export default function FinanceiroFluxoCaixa() {
             </span>
           )}
         </div>
+        )}
 
-        {/* Rev. 4577 — falha na consulta de cheques NÃO derruba a tela; avisa inline. */}
-        {chequesQ.isError && (
+        {/* Rev. 4577 — falha na consulta de cheques NÃO derruba a tela; avisa inline.
+            Rev. 4580 — só no modo Detalhado (a linha nem existe no Simples). */}
+        {modo === "detalhado" && chequesQ.isError && (
           <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
             <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
             <span>Não foi possível carregar os cheques a compensar — a linha informativa está oculta.
@@ -837,10 +903,10 @@ export default function FinanceiroFluxoCaixa() {
                 label="(+) ENTRADAS"
                 hint="dinheiro que entra: recebimentos de clientes"
                 vals={recVals} total={totalRec}
-                variant="receita" open={exReceit}
-                onToggle={() => setExReceit(v => !v)}
+                variant="receita" open={modo === "detalhado" && exReceit}
+                onToggle={() => modo === "detalhado" ? setExReceit(v => !v) : setModo("detalhado")}
               />
-              {exReceit && receitaRows.map((r) => (
+              {modo === "detalhado" && exReceit && receitaRows.map((r) => (
                 <DetailRow key={r.label} label={r.label} vals={r.vals}
                   total={sum(r.vals)} variant="receita" muted={r.muted} />
               ))}
@@ -852,10 +918,10 @@ export default function FinanceiroFluxoCaixa() {
                 label="(−) SAÍDAS"
                 hint="dinheiro que sai: pagamentos a fornecedores, folha, tributos…"
                 vals={despVals} total={totalDesp}
-                variant="despesa" open={exDesp}
-                onToggle={() => setExDesp(v => !v)}
+                variant="despesa" open={modo === "detalhado" && exDesp}
+                onToggle={() => modo === "detalhado" ? setExDesp(v => !v) : setModo("detalhado")}
               />
-              {exDesp && (
+              {modo === "detalhado" && exDesp && (
                 <>
                   <SubGroupRow label="Despesas Fixas"
                     hint="acontecem todo mês, com ou sem obra"
@@ -906,12 +972,14 @@ export default function FinanceiroFluxoCaixa() {
                 hint="Saldo Inicial + Geração de Caixa · vira o Inicial do mês seguinte"
                 vals={saldoFimMes} total={saldoFinalAno} />
 
+              {modo === "detalhado" && (
               <ResultRow label="Margem de Caixa %"
                 hint="quanto de cada R$ recebido sobra no mês"
                 vals={lucrVals} total={lucrAnual} variant="pct" />
+              )}
 
               {/* ══ Rev. 4577 — CHEQUES A COMPENSAR (float, informativo) ══ */}
-              {temCheques && (
+              {modo === "detalhado" && temCheques && (
                 <tr className="h-10 bg-amber-50/70 border-b border-amber-200">
                   <td style={{ width: LABEL_W, minWidth: LABEL_W }}
                     className="sticky left-0 z-10 px-4 text-xs font-semibold text-amber-800 border-r border-amber-200 whitespace-nowrap bg-amber-50"
@@ -935,7 +1003,7 @@ export default function FinanceiroFluxoCaixa() {
               )}
 
               {/* ══ Rev. 4579 — OUTRAS MOVIMENTAÇÕES BANCÁRIAS (informativo) ══ */}
-              {temMovBanco && (
+              {modo === "detalhado" && temMovBanco && (
                 <tr className="h-10 bg-sky-50/70 border-b border-sky-200">
                   <td style={{ width: LABEL_W, minWidth: LABEL_W }}
                     className="sticky left-0 z-10 px-4 text-xs font-semibold text-sky-800 border-r border-sky-200 whitespace-nowrap bg-sky-50"
@@ -989,7 +1057,7 @@ export default function FinanceiroFluxoCaixa() {
         </div>
 
         {/* ── Notas de rodapé ── */}
-        {temCheques && (
+        {modo === "detalhado" && temCheques && (
           <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
             <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
             <span>
@@ -1012,10 +1080,16 @@ export default function FinanceiroFluxoCaixa() {
               <strong>Por que o Saldo Final projetado não bate com o banco?</strong> A matriz acima soma apenas os
               títulos de Contas a Receber e Contas a Pagar (pelo vencimento). Mas o banco também recebe dinheiro que
               não vira título — resgates de aplicação, aportes de sócio, depósitos em dinheiro e transferências — e
-              há títulos em aberto e cheques que ainda não compensaram. A linha azul "Outras movimentações bancárias"
-              mostra esse dinheiro extra ({BRL0(movNetTotal)} líquido no ano até agora), e a linha "🏦 Saldo real no
-              banco" mostra o saldo verdadeiro do extrato no fim de cada mês
-              ({BRL0(saldoRealUltimo)} no último mês com extrato importado).
+              há títulos em aberto e cheques que ainda não compensaram.{" "}
+              {modo === "detalhado" ? (
+                <>A linha azul "Outras movimentações bancárias" mostra esse dinheiro extra ({BRL0(movNetTotal)} líquido
+                no ano até agora), e a linha "🏦 Saldo real no banco" mostra o saldo verdadeiro do extrato no fim de
+                cada mês ({BRL0(saldoRealUltimo)} no último mês com extrato importado).</>
+              ) : (
+                <>Esse dinheiro extra somou {BRL0(movNetTotal)} líquido no ano até agora. A linha "🏦 Saldo real no
+                banco" mostra o saldo verdadeiro do extrato ({BRL0(saldoRealUltimo)} no último mês importado). Para
+                ver tudo mês a mês, toque em <button onClick={() => setModo("detalhado")} className="underline font-semibold">Detalhado</button>.</>
+              )}
             </span>
           </div>
         )}
