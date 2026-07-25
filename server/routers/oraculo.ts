@@ -58,16 +58,16 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
   const queries = await Promise.allSettled([
     // 0 — Empresas (com nome fantasia, razão social, cnpj)
     db.execute(sql`
-      SELECT id, "nomeFantasia", razao_social, cnpj, cidade, estado
+      SELECT id, "nomeFantasia", "razaoSocial" as razao_social, cnpj, cidade, estado
       FROM companies
-      WHERE id = ANY(${ids}::int[]) AND "deletedAt" IS NULL
+      WHERE id IN ${ids} AND "deletedAt" IS NULL
       ORDER BY id
     `),
     // 1 — Colaboradores (status agregado)
     db.execute(sql`
       SELECT status, COUNT(*)::int as total
       FROM employees
-      WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL
+      WHERE "companyId" IN ${ids} AND "deletedAt" IS NULL
       GROUP BY status
     `),
     // 2 — Colaboradores DETALHADOS (lista completa com vínculos a obras)
@@ -87,7 +87,7 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
           ''
         ) as obras_vinculadas
       FROM employees e
-      WHERE e."companyId" = ANY(${ids}::int[]) AND e."deletedAt" IS NULL
+      WHERE e."companyId" IN ${ids} AND e."deletedAt" IS NULL
       ORDER BY e."nomeCompleto"
       LIMIT ${MAX_EMPLOYEES}
     `),
@@ -99,28 +99,28 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
         COUNT(CASE WHEN status ILIKE 'conclu%' THEN 1 END)::int as concluidas,
         COUNT(CASE WHEN status ILIKE 'paralis%' THEN 1 END)::int as paralisadas
       FROM obras
-      WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL
+      WHERE "companyId" IN ${ids} AND "deletedAt" IS NULL
     `),
     // 4 — Obras DETALHADAS (lista com responsáveis e efetivo)
     db.execute(sql`
       SELECT
         o.id, o."companyId", o.nome, o.codigo, o.cliente, o.responsavel, o.responsavel_id,
         o.status, o.cidade, o.estado, o."dataInicio", o."dataPrevisaoFim", o."dataFimReal",
-        o."valorContrato", o."tipoContrato", o.gerenciadora_nome,
+        o."valorContrato", o.tipo_contrato as "tipoContrato", o.gerenciadora_nome,
         (SELECT COUNT(*)::int FROM obra_funcionarios ofx
           WHERE ofx."obraId" = o.id AND ofx."isActive" = 1) as efetivo_ativo,
         (SELECT e."nomeCompleto" FROM employees e WHERE e.id = o.responsavel_id) as responsavel_funcionario
       FROM obras o
-      WHERE o."companyId" = ANY(${ids}::int[]) AND o."deletedAt" IS NULL
+      WHERE o."companyId" IN ${ids} AND o."deletedAt" IS NULL
       ORDER BY o.status, o.nome
       LIMIT ${MAX_OBRAS}
     `),
     // 5 — Processos jurídicos (contagem)
     db.execute(sql`
       SELECT
-        (SELECT COUNT(*)::int FROM processos_trabalhistas WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL) as trabalhistas,
-        (SELECT COUNT(*)::int FROM processos_tributarios WHERE company_id = ANY(${ids}::int[])) as tributarios,
-        (SELECT COUNT(*)::int FROM processos_civeis WHERE company_id = ANY(${ids}::int[])) as civis
+        (SELECT COUNT(*)::int FROM processos_trabalhistas WHERE "companyId" IN ${ids} AND "deletedAt" IS NULL) as trabalhistas,
+        (SELECT COUNT(*)::int FROM processos_tributarios WHERE company_id IN ${ids}) as tributarios,
+        (SELECT COUNT(*)::int FROM processos_civeis WHERE "companyId" IN ${ids}) as civis
     `),
     // 6 — Processos trabalhistas DETALHADOS
     db.execute(sql`
@@ -128,7 +128,7 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
         id, "numeroProcesso", reclamante, status, fase, risco, tribunal, comarca,
         "valorCausa", "dataDistribuicao", "dataAudiencia", reclamados
       FROM processos_trabalhistas
-      WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL
+      WHERE "companyId" IN ${ids} AND "deletedAt" IS NULL
       ORDER BY "dataDistribuicao" DESC NULLS LAST
       LIMIT ${MAX_PROCESSOS}
     `),
@@ -136,31 +136,34 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
     db.execute(sql`
       SELECT COUNT(*)::int as total
       FROM warnings
-      WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL AND "createdAt"::date >= ${trintaDias}
+      WHERE "companyId" IN ${ids} AND "deletedAt" IS NULL AND "createdAt"::date >= ${trintaDias}
     `),
     // 8 — Atestados (30 dias)
     db.execute(sql`
       SELECT COUNT(*)::int as total
       FROM atestados
-      WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL AND "dataInicio" >= ${trintaDias}
+      WHERE "companyId" IN ${ids} AND "deletedAt" IS NULL AND "dataEmissao" >= ${trintaDias}
     `),
     // 9 — Folha do mês
     db.execute(sql`
       SELECT
-        SUM(CASE WHEN tipo_lancamento = 'clt' THEN valor ELSE 0 END)::numeric as custo_clt,
-        SUM(CASE WHEN tipo_lancamento = 'pj' THEN valor ELSE 0 END)::numeric as custo_pj,
-        SUM(valor)::numeric as custo_total,
-        competencia
-      FROM monthly_payroll_summary
-      WHERE "companyId" = ANY(${ids}::int[]) AND competencia = ${mesAtual}
-      GROUP BY competencia
+        SUM(CASE WHEN "tipoLancamento" ILIKE '%pj%' THEN REPLACE(REPLACE("totalLiquido",'.',''),',','.')::numeric ELSE 0 END) as custo_pj,
+        SUM(CASE WHEN "tipoLancamento" NOT ILIKE '%pj%' THEN REPLACE(REPLACE("totalLiquido",'.',''),',','.')::numeric ELSE 0 END) as custo_clt,
+        SUM(REPLACE(REPLACE("totalLiquido",'.',''),',','.')::numeric) as custo_total,
+        "mesReferencia" as competencia
+      FROM folha_lancamentos
+      WHERE "companyId" IN ${ids} AND "mesReferencia" = (
+        SELECT MAX("mesReferencia") FROM folha_lancamentos
+        WHERE "companyId" IN ${ids} AND "mesReferencia" <= ${mesAtual}
+      )
+      GROUP BY "mesReferencia"
     `),
     // 10 — Frota (agregado)
     db.execute(sql`
       SELECT COUNT(*)::int as total_veiculos,
         COUNT(CASE WHEN "statusVeiculo" ILIKE 'ativo%' THEN 1 END)::int as ativos
       FROM vehicles
-      WHERE "companyId" = ANY(${ids}::int[])
+      WHERE "companyId" IN ${ids}
     `),
     // 11 — Frota DETALHADA
     db.execute(sql`
@@ -168,7 +171,7 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
         v."statusVeiculo", v.km_atual, v.responsavel, v.motorista_padrao,
         (SELECT o.nome FROM obras o WHERE o.id = v.obra_id) as obra_alocada
       FROM vehicles v
-      WHERE v."companyId" = ANY(${ids}::int[])
+      WHERE v."companyId" IN ${ids}
       ORDER BY v.placa
       LIMIT ${MAX_VEHICLES}
     `),
@@ -176,7 +179,7 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
     db.execute(sql`
       SELECT COUNT(*)::int as pendentes
       FROM epi_discount_alerts
-      WHERE "companyId" = ANY(${ids}::int[]) AND status = 'pendente'
+      WHERE "companyId" IN ${ids} AND status = 'pendente'
     `),
     // 13 — Contratos PJ DETALHADOS
     db.execute(sql`
@@ -187,20 +190,20 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
         (SELECT o.nome FROM obras o WHERE o.id = pj.obra_id) as obra_vinculada
       FROM pj_contracts pj
       LEFT JOIN employees e ON e.id = pj."employeeId"
-      WHERE pj."companyId" = ANY(${ids}::int[]) AND pj."deletedAt" IS NULL
+      WHERE pj."companyId" IN ${ids} AND pj."deletedAt" IS NULL
       ORDER BY pj.status, e."nomeCompleto"
       LIMIT ${MAX_PJ}
     `),
     // 14 — Setores
     db.execute(sql`
       SELECT id, nome, "companyId" FROM sectors
-      WHERE "companyId" = ANY(${ids}::int[])
+      WHERE "companyId" IN ${ids}
       ORDER BY nome
     `),
     // 15 — Funções/Cargos catalogados
     db.execute(sql`
       SELECT id, nome, "companyId" FROM job_functions
-      WHERE "companyId" = ANY(${ids}::int[])
+      WHERE "companyId" IN ${ids}
       ORDER BY nome
     `),
     // 16 — Empresas terceirizadas
@@ -208,16 +211,16 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
       SELECT id, "companyId", razao_social, nome_fantasia, cnpj, status,
         responsavel_nome, tipo_servico
       FROM empresas_terceiras
-      WHERE "companyId" = ANY(${ids}::int[]) AND deleted_at IS NULL
+      WHERE "companyId" IN ${ids} AND deleted_at IS NULL
       ORDER BY razao_social
       LIMIT ${MAX_TERCEIRIZADOS}
     `),
     // 17 — Funcionários terceirizados (CPF omitido — PII)
     db.execute(sql`
       SELECT id, "companyId", nome, funcao, status, "empresaTerceiraId",
-        obra_nome, status_aptidao
+        obra_nome, "statusAptidao" as status_aptidao
       FROM funcionarios_terceiros
-      WHERE "companyId" = ANY(${ids}::int[]) AND deleted_at IS NULL
+      WHERE "companyId" IN ${ids} AND deleted_at IS NULL
       ORDER BY nome
       LIMIT ${MAX_TERCEIRIZADOS}
     `),
@@ -226,7 +229,7 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
       SELECT id, company_id, razao_social, nome_fantasia, cnpj,
         atividade_principal, ativo
       FROM fornecedores
-      WHERE company_id = ANY(${ids}::int[])
+      WHERE company_id IN ${ids}
       ORDER BY razao_social
       LIMIT ${MAX_FORNECEDORES}
     `),
@@ -234,7 +237,7 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
     db.execute(sql`
       SELECT id, company_id, razao_social, nome_fantasia, cnpj, cidade, estado, ativo
       FROM clientes
-      WHERE company_id = ANY(${ids}::int[])
+      WHERE company_id IN ${ids}
       ORDER BY razao_social
       LIMIT 500
     `),
@@ -244,7 +247,7 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
         vp."dataInicio", vp."dataFim", vp.status, vp."diasGozo"
       FROM vacation_periods vp
       LEFT JOIN employees e ON e.id = vp."employeeId"
-      WHERE vp."companyId" = ANY(${ids}::int[])
+      WHERE vp."companyId" IN ${ids}
         AND vp."deletedAt" IS NULL
         AND vp.status NOT IN ('cancelada','concluida')
       ORDER BY vp."dataInicio" NULLS LAST

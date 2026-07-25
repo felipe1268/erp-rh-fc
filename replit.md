@@ -50,18 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4573** — **FIX: ORÁCULO — SNAPSHOT DE DADOS 100% QUEBRADO (21 QUERIES FALHANDO).** Todas as 21 queries do `buildContext` (`server/routers/oraculo.ts`) usavam `= ANY(${ids}::int[])` — o drizzle expande array em sql`` para `(($1,$2,$3))::int[]` (inválido) → snapshot vazio e o Oráculo dizia "sem acesso aos dados". Reescritas com `IN ${ids}` + 6 fixes de coluna que nunca tinham rodado (companies."razaoSocial", obras.tipo_contrato, processos_civeis."companyId", atestados."dataEmissao", funcionarios_terceiros."statusAptidao", folha reescrita p/ `folha_lancamentos` com REPLACE duplo no "totalLiquido" VARCHAR BR). Validado direto no Neon: 0 query_errors, snapshot ~405 KB com dados das 3 empresas. ZERO schema change.
 - **Rev. 4572** — **UX: ORÁCULO — BARRA LATERAL DO SISTEMA + BOTÃO "VOLTAR".** A tela do Oráculo era standalone (h-screen, sem menu). Agora renderiza dentro do `<DashboardLayout noPadding>` (barra lateral do módulo + header padrão Voltar/Início/empresas); altura vira `h-[calc(100svh-3.5rem)]` (desconta header h-14) pra manter chat full-height sem scroll duplo; branch de loading também embrulhada; botão interno de sair virou pill visível "← Voltar" → tela principal. Arquivo: `client/src/pages/Oraculo.tsx`. ZERO schema/server change.
-- **Rev. 4571** — **FEAT: ORÁCULO — VOZ HUMANIZADA VIA OPENAI (REPLIT AI INTEGRATIONS).** Causa da voz robotizada: GOOGLE_API_KEY com Cloud TTS bloqueada (403) → fallback pro speechSynthesis do navegador. Instalada a integração OpenAI da Replit (blueprint `javascript_openai_ai_integrations`, sem chave própria, cobrança via créditos): `oraculo.ts tts` agora tenta 1º gpt-audio (voz "Nova", MP3) e mantém fallback Google Chirp3-HD → Neural2 → navegador. Scaffolds em `server/replit_integrations/{audio,image}/` + `client/replit_integrations/audio/`; env vars AI_INTEGRATIONS_OPENAI_* automáticas. Testado ao vivo (MP3 pt-BR OK). ZERO schema change.
 ### 5 one-liners
 
+- **Rev. 4571** — **FEAT: ORÁCULO — VOZ HUMANIZADA VIA OPENAI (REPLIT AI INTEGRATIONS).** gpt-audio (voz "Nova", MP3) via blueprint `javascript_openai_ai_integrations` (cobrança via créditos); fallback Google Chirp3-HD → Neural2 → navegador. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4570** — **UX: DASHBOARD PARCEIROS — FOTO DOS COLABORADORES NAS LISTAS.** `employees.fotoUrl` no ranking e nos lançamentos recentes via `empFotoMap` tenant-scoped + `<ColabAvatar>` (iniciais como fallback). Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4569** — **UX: DASHBOARD PARCEIROS — BOTÃO "ANO TODO" NO SELETOR DE PERÍODO.** Pílula "Ano todo" após ‹ 2026 › (`setMes("todos")`, ativo bg-foreground); inline seguindo visual do `<PeriodSelectorCard>`. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4568** — **UX: ALMOXARIFADO — FOTO DO PRODUTO NO DROPDOWN DE TRANSFERÊNCIA.** Thumbnail 36×36 (`fotoUrl`, lazy) ou placeholder Package em cada linha da busca do modal Transferir; nome truncate + estoque à direita. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4567** — **UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "PREENCHER PREÇOS COM IA".** `iaPct` + interval simulado (max(12s, qtd×120ms), teto 95%, 100% no onSuccess); barra roxa + "Preenchendo… XX%" nos 2 botões; cleanup no unmount. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
-- **Rev. 4566** — **UX: ALMOXARIFADO — RENOMEAÇÃO E REORDENAÇÃO DOS BOTÕES DE AÇÃO.** Só labels/ordem (tudo MAIÚSCULO): ENTRADA/SAÍDA "DE MATERIAL"; FERRAMENTAS→ENTREGA e FECHAR DIA→DEVOLUÇÃO "DE FERRAMENTA" (par lado a lado); TRANSFERIR "MATERIAL E EQUIPAMENTO" à direita. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4565 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4566 e anteriores.
 
 ## User preferences
 

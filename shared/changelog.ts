@@ -1,4 +1,42 @@
 /**
+ * Rev. 4573 - FIX: ORÁCULO — SNAPSHOT DE DADOS 100% QUEBRADO (21 QUERIES FALHANDO)
+ *
+ * PEDIDO DO USUÁRIO: "o Oráculo diz que está com erro de conexão e não
+ * tem acesso a todos os dados da empresa — reavalie os endpoints para
+ * ele funcionar como um consultor de verdade."
+ *
+ * CAUSA-RAIZ (2 camadas), em server/routers/oraculo.ts / buildContext():
+ * 1) TODAS as 21 queries do snapshot usavam `= ANY(${ids}::int[])` com
+ *    array JS interpolado em drizzle sql`` — o drizzle expande o array
+ *    para `(($1,$2,$3))::int[]`, SQL inválido → 21/21 queries falhavam,
+ *    snapshot vazio, e o LLM respondia "sem acesso aos dados".
+ *    (Gotcha já documentado: drizzle-sql-array-any-vs-in.)
+ * 2) Corrigido o ANY, sobraram 6 queries com NOMES DE COLUNA errados
+ *    (nunca tinham rodado, então nunca foram validadas):
+ *    - companies: razao_social → "razaoSocial"
+ *    - obras: "tipoContrato" → tipo_contrato
+ *    - processos_civeis: company_id → "companyId"
+ *    - atestados: "dataInicio" → "dataEmissao"
+ *    - funcionarios_terceiros: status_aptidao → "statusAptidao"
+ *    - folha_mes: tabela monthly_payroll_summary estava VAZIA e com
+ *      colunas inexistentes; reescrita p/ folha_lancamentos (usa o
+ *      último "mesReferencia" disponível ≤ mês atual; "totalLiquido" é
+ *      VARCHAR em formato BR "130.695,00" → REPLACE duplo + ::numeric).
+ *
+ * O QUE MUDOU: todas as 21 queries reescritas com `IN ${ids}` (o array
+ * do drizzle já vem com parênteses) + os 6 fixes de coluna acima.
+ *
+ * VALIDAÇÃO: buildContext executado direto contra o Neon com as 3
+ * empresas (60002/60004/90001): 0 query_errors, snapshot ~405 KB com
+ * empresas, colaboradores, obras, frota, folha (R$ 130.695 em 06/2026),
+ * processos, PJ, terceirizados, fornecedores, clientes e férias.
+ *
+ * POKA-YOKE: o snapshot já expõe _query_errors por seção (diagnóstico
+ * embutido) — foi o que permitiu isolar as 6 queries restantes.
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4572 - UX: ORÁCULO — BARRA LATERAL DO SISTEMA + BOTÃO "VOLTAR"
  *
  * PEDIDO DO USUÁRIO: "coloque a barra de comando lateral e um botão de

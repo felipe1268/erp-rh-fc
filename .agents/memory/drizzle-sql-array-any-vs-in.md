@@ -27,10 +27,11 @@ const entRes = await dbExecute(db,
   [ids, companyId]);  // pg error 42846
 ```
 
-For Drizzle `sql`` ` template, use `IN (${arr})` (Drizzle expands correctly for IN):
+For Drizzle `sql`` ` template, use `IN ${arr}` — **WITHOUT extra parentheses**. Drizzle expands the array to `($1, $2, $3)` including its own parens; writing `IN (${arr})` produces `IN (($1,$2,$3))` which ALSO fails (verified live, Rev. 4573):
 
 ```typescript
-db.execute(sql`SELECT ... WHERE id IN (${arr})`)  // ✅
+db.execute(sql`SELECT ... WHERE id IN ${arr}`)  // ✅ expands to IN ($1,$2,$3)
+db.execute(sql`SELECT ... WHERE id IN (${arr})`)  // ❌ double parens → Failed query
 db.execute(sql`SELECT ... WHERE id = ANY(${arr}::int[])`)  // ❌
 ```
 
