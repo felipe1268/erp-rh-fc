@@ -227,3 +227,9 @@ id = "uHMSS0kGyR1er_2tbVI00"
 uri = "file://.local/analise_ajustes_compras_03072026.md"
 type = "text"
 title = "Análise dos Ajustes ERP – Compras (03/07/2026)"
+
+[[outputs]]
+id = "Z8U_zKUckPwI8F53ZMcq_"
+uri = "file://exports/contas_pendentes_2018_2025.csv"
+type = "table"
+title = "Contas pendentes 2018–2025 (4.443 títulos)"
