@@ -340,6 +340,16 @@ export default function FinanceiroContasAPagar() {
     descricao: "", valorPrevisto: "", dataCompetencia: "", dataVencimento: "",
     contaNome: "", obraNome: "", formaPagamento: "", fornecedorNome: "", observacoes: "",
   });
+  // Rev. 4587 — EDITAR com as mesmas informações de pagamento da tela "Pagar":
+  // conta bancária + programação de cheques próprios (nº/parcelas) + cheques de terceiro.
+  const [editContaBancariaId, setEditContaBancariaId] = useState<number | null>(null);
+  const [editChequeQtd, setEditChequeQtd] = useState("1");
+  const [editChequeNumIni, setEditChequeNumIni] = useState("");
+  const [editChequePrimVenc, setEditChequePrimVenc] = useState("");
+  const [editChequeBanco, setEditChequeBanco] = useState("");
+  const [editChequeAgencia, setEditChequeAgencia] = useState("");
+  const [editChequeConta, setEditChequeConta] = useState("");
+  const [editChequesTerceiroSel, setEditChequesTerceiroSel] = useState<number[]>([]);
   const [showAnexo, setShowAnexo] = useState<any | null>(null);
   const [anexoUrl, setAnexoUrl] = useState("");
   const [anexoNome, setAnexoNome] = useState("");
@@ -542,6 +552,15 @@ export default function FinanceiroContasAPagar() {
       fornecedorNome: c.fornecedorNome ?? "",
       observacoes: c.observacoes ?? "",
     });
+    // Rev. 4587 — inicializa os campos de pagamento (iguais à tela "Pagar")
+    setEditContaBancariaId(c.contaBancariaId ?? null);
+    setEditChequeQtd("1");
+    setEditChequeNumIni("");
+    setEditChequePrimVenc((c.dataVencimento ?? "").slice(0, 10));
+    setEditChequeBanco("");
+    setEditChequeAgencia("");
+    setEditChequeConta("");
+    setEditChequesTerceiroSel([]);
     setShowEdit(c);
   }
   function handleSaveEdit() {
@@ -555,6 +574,12 @@ export default function FinanceiroContasAPagar() {
       toast({ title: "Valor inválido", variant: "destructive" });
       return;
     }
+    // Rev. 4587 — Poka-Yoke (bloqueio): cheque de terceiro exige ao menos 1 cheque selecionado
+    if (editForm.formaPagamento === "cheque_terceiro" && editChequesTerceiroSel.length === 0) {
+      toast({ title: "Selecione ao menos 1 cheque de terceiro", description: "Ou troque a forma de pagamento.", variant: "destructive" });
+      return;
+    }
+    const entrySnapshot = showEdit;
     updateEntryMut.mutate({
       id: showEdit.id,
       companyId,
@@ -567,8 +592,70 @@ export default function FinanceiroContasAPagar() {
       formaPagamento: editForm.formaPagamento || undefined,
       fornecedorNome: editForm.fornecedorNome.trim() || undefined,
       observacoes: editForm.observacoes.trim() || undefined,
+      contaBancariaId: editContaBancariaId ?? null,
+    }, {
+      onSuccess: () => {
+        // Rev. 4587 — programação de cheques a partir do EDITAR (sem baixar o título):
+        // cheque próprio → cadastra os N cheques no Controle de Cheques (só se o Nº foi informado — Poka-Yoke contra duplicidade);
+        // cheque de terceiro → aloca os cheques recebidos selecionados ao título.
+        if (editForm.formaPagamento === "cheque" && editChequeNumIni.trim() && editChequePreview.length > 0) {
+          criarChequesLoteMut.mutate({
+            companyId,
+            fornecedorNome: editForm.fornecedorNome.trim() || entrySnapshot?.fornecedorNome || entrySnapshot?.descricao || undefined,
+            contaBancariaId: editContaBancariaId ?? undefined,
+            bancoNome: editChequeBanco || undefined,
+            agencia: editChequeAgencia || undefined,
+            contaCorrenteRaw: editChequeConta || undefined,
+            status: "pendente",
+            parcelas: editChequePreview.map(p => ({
+              valor: p.valor, numeroCheque: p.numeroCheque, parcela: p.parcela, dataVencimento: p.dataVencimento || undefined,
+            })),
+          });
+        }
+        if (editForm.formaPagamento === "cheque_terceiro" && editChequesTerceiroSel.length && alocarLoteMutAvulso) {
+          alocarLoteMutAvulso.mutate({
+            companyId,
+            ids: editChequesTerceiroSel,
+            fornecedorAlocadoNome: editForm.fornecedorNome.trim() || entrySnapshot?.fornecedorNome || undefined,
+            entryId: entrySnapshot?.id ?? null,
+          });
+        }
+      },
     });
   }
+
+  // Rev. 4587 — pré-visualização dos cheques próprios programados no EDITAR (mesma regra da baixa:
+  // total em centavos dividido em N, resto na última parcela; vencimentos mensais a partir do 1º).
+  const editChequePreview = useMemo(() => {
+    if (editForm.formaPagamento !== "cheque") return [] as any[];
+    const qtd = Math.min(120, Math.max(1, parseInt(editChequeQtd || "1", 10) || 1));
+    const total = parseFloat(String(editForm.valorPrevisto).replace(",", ".") || "0");
+    if (!Number.isFinite(total) || total <= 0) return [] as any[];
+    const centsTotal = Math.round(total * 100);
+    const base = Math.floor(centsTotal / qtd);
+    const resto = centsTotal - base * qtd;
+    const numIniNum = /^\d+$/.test(editChequeNumIni.trim()) ? parseInt(editChequeNumIni.trim(), 10) : null;
+    const baseVenc = editChequePrimVenc || editForm.dataVencimento || "";
+    return Array.from({ length: qtd }, (_, i) => ({
+      idx: i,
+      valor: (base + (i === qtd - 1 ? resto : 0)) / 100,
+      numeroCheque: numIniNum != null ? String(numIniNum + i).padStart(6, "0") : (qtd === 1 ? editChequeNumIni.trim() || "—" : "—"),
+      parcela: `${i + 1}/${qtd}`,
+      dataVencimento: addMonthsISO(baseVenc, i) || "",
+    }));
+  }, [editForm.formaPagamento, editForm.valorPrevisto, editForm.dataVencimento, editChequeQtd, editChequeNumIni, editChequePrimVenc]);
+
+  // Rev. 4587 — cheques recebidos disponíveis para o EDITAR com "Cheque de Terceiro"
+  const editValorNum = parseFloat(String(editForm.valorPrevisto).replace(",", ".") || "0");
+  const editChequesTerceiroQ = (trpc as any).chequesRecebidos?.sugerirPorValor?.useQuery(
+    { companyId, valorAlvo: editValorNum > 0 ? editValorNum : (showEdit?.valorPrevisto ?? 0) },
+    { enabled: !!companyId && !!showEdit && editForm.formaPagamento === "cheque_terceiro" }
+  );
+  const editChequesTerceiroDisp: any[] = editChequesTerceiroQ?.data?.cheques ?? [];
+  const editTotalTerceiroSel = editChequesTerceiroDisp
+    .filter((c: any) => editChequesTerceiroSel.includes(c.id))
+    .reduce((s: number, c: any) => s + Number(c.valor), 0);
+  const editDiffTerceiro = Math.round((editTotalTerceiroSel - (editValorNum > 0 ? editValorNum : 0)) * 100) / 100;
 
   // Rev. 2657 — ANEXAR documento ao título (boleto/NF/foto)
   const anexarMut = (trpc as any).financial.anexarDocumento.useMutation({
@@ -2855,12 +2942,143 @@ export default function FinanceiroContasAPagar() {
                         <SelectItem value="boleto">Boleto</SelectItem>
                         <SelectItem value="dinheiro">Dinheiro</SelectItem>
                         <SelectItem value="cartao">Cartão</SelectItem>
-                        <SelectItem value="cheque">Cheque</SelectItem>
+                        <SelectItem value="cheque">Cheque (próprio)</SelectItem>
+                        <SelectItem value="cheque_terceiro">Cheque de Terceiro</SelectItem>
+                        <SelectItem value="debito_automatico">Débito Automático</SelectItem>
                         <SelectItem value="transferencia">Transferência</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+                {/* Rev. 4587 — Conta bancária (igual à tela "Pagar") */}
+                <div>
+                  <Label className="text-xs text-slate-500">Conta bancária</Label>
+                  <Select value={editContaBancariaId != null ? String(editContaBancariaId) : "none"}
+                    onValueChange={v => setEditContaBancariaId(v === "none" ? null : Number(v))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Não informar —</SelectItem>
+                      {(bankAccounts ?? []).filter((a: any) => a.ativo).map((a: any) => (
+                        <SelectItem key={a.id} value={String(a.id)}>{a.nome}{a.bancoNome ? ` · ${a.bancoNome}` : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Rev. 4587 — Cheque próprio: programação dos cheques (mesma tela do "Pagar") */}
+                {editForm.formaPagamento === "cheque" && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-3">
+                    <p className="text-[11px] font-semibold text-blue-700 flex items-center gap-1">
+                      <Banknote className="w-3.5 h-3.5" /> Cheque próprio — programe os cheques deste título
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Em quantas vezes</p>
+                        <Input type="number" min={1} max={120} value={editChequeQtd}
+                          onChange={e => setEditChequeQtd(e.target.value)} placeholder="1" className="h-9" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Nº do 1º cheque</p>
+                        <Input value={editChequeNumIni} onChange={e => setEditChequeNumIni(e.target.value)}
+                          placeholder="Ex: 000429" className="h-9" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">1º vencimento</p>
+                        <Input type="date" value={editChequePrimVenc}
+                          onChange={e => setEditChequePrimVenc(e.target.value)} className="h-9" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Banco</p>
+                        <Input value={editChequeBanco} onChange={e => setEditChequeBanco(e.target.value)}
+                          placeholder="Ex: Caixa" className="h-9" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Agência</p>
+                        <Input value={editChequeAgencia} onChange={e => setEditChequeAgencia(e.target.value)}
+                          placeholder="Ex: 1234" className="h-9" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Conta corrente</p>
+                        <Input value={editChequeConta} onChange={e => setEditChequeConta(e.target.value)}
+                          placeholder="Ex: 00012345-6" className="h-9" />
+                      </div>
+                    </div>
+                    {editChequePreview.length > 0 && editChequeNumIni.trim() ? (
+                      <div className="rounded-lg border border-blue-200 bg-white overflow-hidden">
+                        <div className="px-3 py-2 bg-blue-100/60">
+                          <p className="text-[11px] font-semibold text-blue-700 break-words">
+                            Ao salvar, {editChequePreview.length} cheque{editChequePreview.length !== 1 ? "s serão cadastrados" : " será cadastrado"} no Controle de Cheques (situação: Pendente)
+                          </p>
+                        </div>
+                        <div className="divide-y divide-blue-100 max-h-36 overflow-y-auto">
+                          {editChequePreview.map((p: any) => (
+                            <div key={p.idx} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono text-blue-800 font-semibold">{p.numeroCheque}</span>
+                                <span className="text-slate-400">{p.parcela}</span>
+                                {p.dataVencimento && <span className="text-slate-500">venc. {fmtDateBR(p.dataVencimento)}</span>}
+                              </div>
+                              <span className="font-semibold tabular-nums text-slate-700">{formatBRL(p.valor)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-blue-600 italic break-words">
+                        Informe o <b>Nº do 1º cheque</b> para gerar os cheques no Controle de Cheques ao salvar. Deixe em branco para salvar apenas a forma de pagamento (sem gerar cheques).
+                      </p>
+                    )}
+                  </div>
+                )}
+                {/* Rev. 4587 — Cheque de terceiro: seleção dos cheques recebidos em carteira */}
+                {editForm.formaPagamento === "cheque_terceiro" && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
+                        <ArrowLeftRight className="w-3.5 h-3.5" /> Cheques recebidos disponíveis em carteira
+                      </p>
+                      {editChequesTerceiroSel.length > 0 && (
+                        <span className={`text-[11px] font-semibold tabular-nums px-2 py-0.5 rounded-full ${
+                          Math.abs(editDiffTerceiro) <= 0.05 ? "bg-green-100 text-green-700" :
+                          editDiffTerceiro > 0 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                        }`}>
+                          {Math.abs(editDiffTerceiro) <= 0.05 ? "✓ " : ""}
+                          {formatBRL(editTotalTerceiroSel)}
+                          {Math.abs(editDiffTerceiro) > 0.05 && (editDiffTerceiro > 0 ? ` (+${formatBRL(editDiffTerceiro)})` : ` (−${formatBRL(-editDiffTerceiro)})`)}
+                        </span>
+                      )}
+                    </div>
+                    {editChequesTerceiroQ?.isLoading ? (
+                      <div className="text-xs text-muted-foreground py-2">Buscando cheques disponíveis…</div>
+                    ) : editChequesTerceiroDisp.length === 0 ? (
+                      <div className="text-xs text-violet-700 bg-violet-100 rounded p-2 break-words">
+                        Nenhum cheque recebido disponível. Cadastre na aba "Cheques Recebidos" do Controle de Cheques.
+                      </div>
+                    ) : (
+                      <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                        {editChequesTerceiroDisp.map((c: any) => {
+                          const sel = editChequesTerceiroSel.includes(c.id);
+                          return (
+                            <div key={c.id}
+                              onClick={() => setEditChequesTerceiroSel(prev => sel ? prev.filter(id => id !== c.id) : [...prev, c.id])}
+                              className={`flex items-center justify-between cursor-pointer rounded border px-3 py-1.5 transition-colors ${sel ? "bg-violet-100 border-violet-400" : "bg-white border-violet-100 hover:border-violet-300"}`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`w-3 h-3 rounded-full border-2 shrink-0 ${sel ? "bg-violet-600 border-violet-600" : "border-gray-300"}`} />
+                                <span className="text-xs font-mono text-slate-700 truncate" title={`Cheque nº ${c.numeroCheque ?? "—"}`}>{c.numeroCheque ?? "—"}</span>
+                                {c.emitenteNome && <span className="text-[11px] text-slate-500 truncate" title={c.emitenteNome}>{c.emitenteNome}</span>}
+                                {c.dataBomPara && <span className="text-[11px] text-slate-400 shrink-0">bom p/ {fmtDateBR(String(c.dataBomPara).slice(0, 10))}</span>}
+                              </div>
+                              <span className="text-xs font-semibold tabular-nums text-slate-700 shrink-0">{formatBRL(Number(c.valor))}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <p className="text-[11px] text-emerald-700 break-words">
+                      Ao salvar, os cheques selecionados serão marcados como <b>Alocados</b> a este título no Controle de Cheques Recebidos.
+                    </p>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs text-slate-500">Competência</Label>

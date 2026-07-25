@@ -50,20 +50,20 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4587** — **FEAT: CONTAS A PAGAR — EDITAR COM AS MESMAS INFORMAÇÕES DE PAGAMENTO DA TELA "PAGAR".** Usuário pediu que o lápis (Editar) tivesse tudo que o Pagar tem. Forma de Pagamento ganhou Cheque (próprio)/Cheque de Terceiro/Débito Automático; novo seletor de Conta bancária (updateEntry ganhou contaBancariaId opcional + guard anti-IDOR); seção de cheque próprio com nº do 1º cheque, parcelas e prévia — ao salvar cadastra os cheques PENDENTES no Controle de Cheques (só se o nº foi informado — Poka-Yoke contra duplicidade); seção de cheque de terceiro seleciona cheques em carteira e aloca ao título. Sem baixa — pagar continua no fluxo "Pagar". Arquivos: `FinanceiroContasAPagar.tsx`, `financial.ts`. ZERO schema change.
 - **Rev. 4586** — **UX: FLUXO DE CAIXA — POP-UP DE DETALHAMENTO ULTRA MODERNO + BUSCA RÁPIDA.** Usuário pediu layout "agradável, intuitivo, colorido, ultra moderno" p/ o drill-down (Rev. 4584). Redesign client-only: cabeçalho em degradê (esmeralda→teal entradas / rosa→laranja saídas) com pills de contexto + total grande; campo de busca rápida (X de Y visíveis + soma, total da célula imutável); cards ranqueados com bolinha numerada, % do total e barra de proporção vs. maior lançamento; badges coloridos (status verde/âmbar/cinza, conta azul, obra índigo, projeção violeta); fix da descrição duplicada (fornecedor só aparece se ≠ descrição). Arquivo: `FinanceiroFluxoCaixa.tsx`. ZERO schema/server change.
-- **Rev. 4585** — **FIX: FLUXO DE CAIXA — CRONOGRAMA FORA DA CONFERÊNCIA DE DUPLICIDADES.** Usuário revisou a lista dos 61 pares e mandou tirar os do Cronograma. Causa: lançamentos `origem_modulo='cronograma_atividade'` são projeções de contrato (atividades EAP repetidas por pavimento têm mesmo valor por design), nunca pagamentos reais — 26 pares falsos (~R$ 210 mil). Fix server 1 linha: `getPossiveisDuplicidades` exclui `cronograma_atividade`. Validado no Neon: card cai de 61 (R$ 428 mil) p/ 31 pares (R$ 217,5 mil). Poka-Yoke nível 3 (prevenção na consulta). Arquivo: `financial.ts`. ZERO schema change.
 ### 5 one-liners
 
+- **Rev. 4585** — **FIX: FLUXO DE CAIXA — CRONOGRAMA FORA DA CONFERÊNCIA DE DUPLICIDADES.** `getPossiveisDuplicidades` exclui `origem_modulo='cronograma_atividade'` (projeções de contrato, nunca pagamentos reais); card cai de 61 p/ 31 pares. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4584** — **FEAT: FLUXO DE CAIXA — DRILL-DOWN EM TODA A MATRIZ.** Todo valor da matriz virou clicável e abre Dialog somente-leitura com os lançamentos que formam o número; filtro espelha EXATA a agregação da matriz (Poka-Yoke por transparência). Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 
 - **Rev. 4583** — **FIX: FLUXO DE CAIXA — BALDES DE SAÍDA LEEM O PLANO DE CONTAS.** `bucketDespesa()` ganhou 2º critério `CONTA_RULES` sobre `conta_nome` (despesas da conciliação têm origem NULL); "Outros" caiu de R$ 14,5 mi p/ 1,59 mi. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4582** — **FIX: FLUXO DE CAIXA — SWEEP CONTAMAX NEUTRALIZADO + TEXTOS CORRIGIDOS.** Sweep bancário separado em `sweepAplicado/sweepResgatado` (fora da linha azul) + 37 despesas CONTAMAX da 60004 → `aplicacao_financeira`. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4581** — **FIX+FEAT: FLUXO DE CAIXA — TRANSFERÊNCIAS AO GRUPO FORA DAS SAÍDAS + CONFERÊNCIA DE DUPLICIDADES.** 36 despesas ao próprio grupo → `transferencia_interna`; card rosa de duplicidades com confirmação humana par a par (reversível). Detalhe em `shared/changelog.ts`. ZERO schema change.
 
-- **Rev. 4580** — **FIX+UX: FLUXO DE CAIXA — APLICAÇÕES FINANCEIRAS FORA DAS SAÍDAS + MODO SIMPLES.** 66 lançamentos "APLICACAO CONTAMAX" marcados `aplicacao_financeira` (fora das Saídas) + modo Simples (3 cartões) × Detalhado. Detalhe em `shared/changelog.ts`. ZERO schema change.
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4579 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4580 e anteriores.
 
 ## User preferences
 

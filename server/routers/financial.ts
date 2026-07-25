@@ -4481,10 +4481,15 @@ export const financialRouter = router({
     tipo: z.string().optional(),
     clienteId: z.number().nullable().optional(),
     clienteNome: z.string().nullable().optional(),
+    contaBancariaId: z.number().nullable().optional(), // Rev. 4587
   })).mutation(async ({ input, ctx }) => {
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Rev. 4587 — Poka-Yoke: a conta bancária informada precisa pertencer à empresa (anti-IDOR)
+    if (input.contaBancariaId != null) {
+      await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+    }
     const r: any = await dbExecute(db,
       `SELECT id, descricao, valor_previsto, data_competencia, data_vencimento,
               conta_nome, obra_nome, forma_pagamento, fornecedor_nome, observacoes,
@@ -4528,6 +4533,7 @@ export const financialRouter = router({
     if (input.tipo !== undefined) push("tipo", input.tipo);
     if (input.clienteId !== undefined) push("cliente_id", input.clienteId ?? null);
     if (input.clienteNome !== undefined) push("cliente_nome", input.clienteNome?.trim() || null);
+    if (input.contaBancariaId !== undefined) push("conta_bancaria_id", input.contaBancariaId ?? null); // Rev. 4587
     if (sets.length === 0) return { ok: true, changed: false };
     // Rev. 2661 — registra QUEM editou e QUANDO no próprio título.
     push("editado_por_id", ctx.user?.id ?? null);

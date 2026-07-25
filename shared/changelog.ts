@@ -1,4 +1,49 @@
 /**
+ * Rev. 4587 - FEAT: CONTAS A PAGAR — EDITAR COM AS MESMAS INFORMAÇÕES DE PAGAMENTO DA TELA "PAGAR"
+ *
+ * PEDIDO DO USUÁRIO: "na parte de editar (lapisinho), não aparece o que
+ * aparece na parte de pagar — onde coloco o número do cheque, a forma que
+ * vou pagar (cheque próprio, cheque de terceiro, PIX). Preciso que todas
+ * essas informações estejam no editar."
+ *
+ * O QUE MUDOU:
+ * 1. FORMA DE PAGAMENTO no Editar agora tem as MESMAS opções do Pagar:
+ *    PIX, TED, Boleto, Dinheiro, Cartão, Cheque (próprio), Cheque de
+ *    Terceiro (novo valor "cheque_terceiro") e Débito Automático.
+ * 2. CONTA BANCÁRIA — novo seletor no Editar (mesma lista do Pagar);
+ *    salva em financial_entries.conta_bancaria_id via updateEntry.
+ * 3. CHEQUE PRÓPRIO — seção azul igual à da baixa: em quantas vezes,
+ *    nº do 1º cheque, 1º vencimento, banco/agência/conta + PRÉVIA das
+ *    parcelas (divisão em centavos, resto na última; vencimentos mensais).
+ *    Ao salvar, os N cheques são cadastrados no Controle de Cheques com
+ *    status PENDENTE (cheques.criarManualLote) — SEM baixar o título.
+ * 4. CHEQUE DE TERCEIRO — seção verde igual à da baixa: lista os cheques
+ *    recebidos em carteira (chequesRecebidos.sugerirPorValor pelo valor
+ *    do título), seleção multi-cheque com Δ colorido vs. o valor; ao
+ *    salvar, aloca ao título (alocarLote com entryId).
+ *
+ * POKA-YOKE:
+ * - Nível 2 (bloqueio): "cheque_terceiro" sem nenhum cheque selecionado
+ *   não deixa salvar; conta bancária informada é validada no server como
+ *   pertencente à empresa (_assertContaBancariaPertenceEmpresa, anti-IDOR).
+ * - Nível 3 (prevenção): cheques próprios SÓ são gerados se o Nº do 1º
+ *   cheque foi informado (campo começa vazio a cada abertura) — evita
+ *   duplicar cheques ao reeditar o título; texto explica o comportamento.
+ * - Transparência: prévia mostra exatamente quais cheques serão criados
+ *   ("Ao salvar, N cheques serão cadastrados... situação: Pendente").
+ *
+ * RACIONAL: o Editar programa o pagamento (dados + cheques futuros) sem
+ * registrar baixa — a baixa continua exclusiva do fluxo "Pagar". A OC de
+ * origem continua recebendo o espelhamento de forma de pagamento (write-back
+ * Rev. 2661 intacto). updateEntry ganhou apenas contaBancariaId opcional.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroContasAPagar.tsx
+ * (estados edit*, openEdit, handleSaveEdit, editChequePreview, dialog),
+ * server/routers/financial.ts (updateEntry: input contaBancariaId +
+ * guard + SET conta_bancaria_id). ZERO schema change.
+ */
+
+/**
  * Rev. 4586 - UX: FLUXO DE CAIXA — POP-UP DE DETALHAMENTO ULTRA MODERNO + BUSCA RÁPIDA
  *
  * PEDIDO DO USUÁRIO: "tela com layout mais agradável, intuitivo, colorido
