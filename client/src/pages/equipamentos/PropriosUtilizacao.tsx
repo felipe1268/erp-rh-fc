@@ -16,8 +16,11 @@ import {
   Package, TrendingDown, DollarSign, Activity,
   BadgeDollarSign, Hourglass, Zap, ThumbsDown, Bell,
   Timer, Sun, Sunset, Sunrise, X, ExternalLink, HardHat, Wrench,
+  Anchor, Check,
 } from "lucide-react";
 import { Link } from "wouter";
+import { toast } from "sonner";
+import { sugereFixo } from "./LocadosUtilizacao";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function fmtDt(iso?: string | null) {
@@ -251,6 +254,21 @@ export default function PropriosUtilizacao() {
   const [drill, setDrill] = useState<"campo" | "almox" | "custo" | "mais" | "retornar" | "manut" | null>(null);
   const [drillHora, setDrillHora] = useState<number | null>(null);
   const [expandedColaborador, setExpandedColaborador] = useState<{ fotoUrl: string | null; nome: string } | null>(null);
+  // Rev. 4563 — triagem de equipamentos fixos (instalados em obra)
+  const [triagemOpen, setTriagemOpen] = useState(false);
+  const [triagemSel, setTriagemSel] = useState<Set<number>>(new Set());
+
+  const utils = trpc.useUtils();
+  const regimeLote = trpc.equipamentos.regimeUsoAtualizarLote.useMutation({
+    onSuccess: (r) => {
+      toast.success(`${r.atualizados} equipamento(s) marcado(s) como instalado(s) em obra.`);
+      setTriagemOpen(false);
+      setTriagemSel(new Set());
+      utils.equipamentos.propriosUtilizacao.invalidate();
+      utils.equipamentos.propriosListar.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "Falha ao atualizar regime de uso."),
+  });
 
   const { data, isLoading } = trpc.equipamentos.propriosUtilizacao.useQuery(
     { companyId, mes, ano },
@@ -259,6 +277,7 @@ export default function PropriosUtilizacao() {
 
   const ciclos   = data?.ciclos     ?? [];
   const emAlmox  = data?.emAlmox    ?? [];
+  const instalados = (data as any)?.instalados ?? [];
   const emCampo  = data?.emCampo    ?? [];
   const emManut  = data?.emManut    ?? [];
   const stats    = data?.stats;
@@ -900,7 +919,133 @@ export default function PropriosUtilizacao() {
                 </button>
               </div>
             )}
+            {/* Rev. 4563 — atalho pra triagem: item fixo não deveria estar aqui */}
+            <div className="border-t border-amber-100 px-5 py-2.5 bg-slate-50/60 flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[11px] text-slate-500">
+                Algum destes é fixo/instalado na obra (guincho, andaime…)? Ele não deveria contar como ocioso.
+              </span>
+              <button
+                onClick={() => {
+                  const pre = new Set<number>(emAlmox.filter((i: any) => sugereFixo(i.descricao, i.categoria)).map((i: any) => i.id));
+                  setTriagemSel(pre);
+                  setTriagemOpen(true);
+                }}
+                className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 ring-1 ring-indigo-200 rounded-lg px-3 py-1.5 transition"
+              >
+                <Anchor className="h-3.5 w-3.5" /> Marcar fixos
+              </button>
+            </div>
           </section>
+        )}
+
+        {/* ── Rev. 4563 — Instalados em obra (regime fixo) ── */}
+        {!isLoading && instalados.length > 0 && (
+          <section className="bg-white border border-indigo-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-3 bg-indigo-50/80 border-b border-indigo-100 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                  <Anchor className="h-4 w-4 text-indigo-600" />
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-900 text-sm">Instalados em obra</div>
+                  <div className="text-xs text-slate-500">
+                    {instalados.length} equipamento{instalados.length !== 1 ? "s" : ""} de uso contínuo — fora do custo de ociosidade
+                  </div>
+                </div>
+              </div>
+              <span className="shrink-0 inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200 rounded-full px-3 py-1 text-xs font-semibold">
+                <Check className="h-3 w-3" /> Em uso
+              </span>
+            </div>
+            <div className="divide-y divide-indigo-100/60">
+              {instalados.map((item: any) => (
+                <div key={item.id} className="flex items-center gap-3 px-5 py-3 hover:bg-indigo-50/40 transition">
+                  <EquipFoto fotoUrl={item.fotoUrl} descricao={item.descricao} sm />
+                  <div className="flex-1 min-w-0">
+                    <span className="font-semibold text-slate-900 text-sm truncate block">{item.descricao}</span>
+                    <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                      {item.codigoPatrimonio && (
+                        <span className="font-mono text-[10px] bg-slate-100 px-1.5 rounded">{item.codigoPatrimonio}</span>
+                      )}
+                      {item.obraNome && <span className="text-indigo-700 font-medium">{item.obraNome}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {item.custoMensalDepreciacao > 0 && (
+                      <div className="font-bold text-slate-800 text-sm tabular-nums">{fmtMoeda(item.custoMensalDepreciacao)}/mês</div>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (!confirm(`Voltar "${item.descricao}" para o regime rotativo? Ele voltará a contar na ociosidade.`)) return;
+                        regimeLote.mutate({ companyId, tipo: "proprio", ids: [item.id], regimeUso: "rotativo" });
+                      }}
+                      className="text-[10px] font-semibold text-slate-500 hover:text-indigo-700 underline decoration-dotted mt-0.5"
+                    >
+                      voltar p/ rotativo
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Rev. 4563 — Modal de triagem: marcar fixos em lote ── */}
+        {triagemOpen && (
+          <DrillModal
+            titulo="Marcar equipamentos fixos"
+            subtitulo="Selecione os que ficam instalados na obra — os sugeridos já vêm marcados. Nada é salvo sem sua confirmação."
+            onClose={() => setTriagemOpen(false)}
+          >
+            {emAlmox.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-400">Nenhum equipamento ocioso para triagem.</div>
+            ) : (
+              <>
+                {emAlmox.map((item: any) => {
+                  const sel = triagemSel.has(item.id);
+                  const sugerido = sugereFixo(item.descricao, item.categoria);
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setTriagemSel(prev => {
+                        const n = new Set(prev);
+                        sel ? n.delete(item.id) : n.add(item.id);
+                        return n;
+                      })}
+                      className={`w-full flex items-center gap-3 px-4 py-3 border-b last:border-0 text-left transition ${sel ? "bg-indigo-50" : "hover:bg-slate-50"}`}
+                    >
+                      <span className={`h-5 w-5 rounded-md border-2 flex items-center justify-center shrink-0 ${sel ? "bg-indigo-600 border-indigo-600" : "border-slate-300"}`}>
+                        {sel && <Check className="h-3.5 w-3.5 text-white" />}
+                      </span>
+                      <EquipFoto fotoUrl={item.fotoUrl} descricao={item.descricao} sm />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-slate-900 text-sm truncate">{item.descricao}</div>
+                        <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                          {item.codigoPatrimonio && (
+                            <span className="font-mono text-[10px] bg-slate-100 px-1.5 rounded">{item.codigoPatrimonio}</span>
+                          )}
+                          {sugerido && (
+                            <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5">sugerido</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+                <div className="sticky bottom-0 bg-white border-t px-4 py-3 flex items-center justify-between gap-3">
+                  <span className="text-xs text-slate-500">{triagemSel.size} selecionado(s)</span>
+                  <button
+                    disabled={triagemSel.size === 0 || regimeLote.isPending}
+                    onClick={() => regimeLote.mutate({ companyId, tipo: "proprio", ids: [...triagemSel], regimeUso: "fixo" })}
+                    className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-4 py-2 transition"
+                  >
+                    <Anchor className="h-4 w-4" />
+                    {regimeLote.isPending ? "Salvando…" : `Marcar ${triagemSel.size} como fixo(s)`}
+                  </button>
+                </div>
+              </>
+            )}
+          </DrillModal>
         )}
         {!isLoading && emAlmox.length === 0 && stats && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 flex items-center gap-3">

@@ -56,6 +56,8 @@ const EMPTY_FORM = {
   status: "disponivel" as StatusEquip,
   // Rev. 2514 — obra atual (só usada quando status="em_obra"; senão NULL).
   localizacaoAtualObraId: null as number | null,
+  // Rev. 4563 — regime de uso: rotativo (sai/volta do almox) ou fixo (instalado na obra).
+  regimeUso: "rotativo" as "rotativo" | "fixo",
 };
 
 // Rev. 2364 — chips de categoria de toque rápido (servente toca em vez de digitar).
@@ -389,6 +391,8 @@ export default function EquipamentosProprios() {
       status: toStatus(p.status), // Rev. 2512 — type-safe (sem `any`)
       // Rev. 2514 — obra atual (number|null pro <select>).
       localizacaoAtualObraId: p.localizacaoAtualObraId ?? null,
+      // Rev. 4563 — regime de uso
+      regimeUso: (p.regimeUso === "fixo" ? "fixo" : "rotativo") as "rotativo" | "fixo",
     });
     setFotos((p.fotosJson as FotoItem[]) || []);
     setEditingId(p.id);
@@ -433,7 +437,6 @@ export default function EquipamentosProprios() {
         }
       }
     },
-    onError: (e) => toast.error(errMsg(e)),
   });
   const atualizar = trpc.equipamentos.proprioAtualizar.useMutation({
     onSuccess: () => { utils.equipamentos.propriosListar.invalidate(); setModal(false); toast.success("Atualizado."); },
@@ -544,6 +547,7 @@ export default function EquipamentosProprios() {
         localizacaoAtualTipo: emObra ? "obra" : "almoxarifado",
         localizacaoAtualObraId: emObra ? form.localizacaoAtualObraId : null,
         fotos: fotos.length > 0 ? fotos : undefined,
+        regimeUso: form.regimeUso, // Rev. 4563
       });
     } else {
       // Rev. 2552 — status/obra já no cadastro. Mesma coerência da edição:
@@ -571,6 +575,7 @@ export default function EquipamentosProprios() {
         status: form.status,
         localizacaoAtualObraId: emObra ? form.localizacaoAtualObraId : null,
         quantidade: qtd,
+        regimeUso: form.regimeUso, // Rev. 4563
       });
     }
   }
@@ -1517,6 +1522,37 @@ export default function EquipamentosProprios() {
                         )}
                       </div>
                     )}
+                    {/* Rev. 4563 — Regime de uso: rotativo × fixo (instalado em obra) */}
+                    <div className="mt-3">
+                      <label className="block text-xs font-semibold text-slate-800 mb-1">Regime de uso</label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setForm(p => ({ ...p, regimeUso: "rotativo" }))}
+                          className={`px-2.5 py-2 rounded-lg text-xs font-semibold border-2 transition ${
+                            form.regimeUso === "rotativo"
+                              ? "bg-blue-600 text-white border-transparent shadow"
+                              : "bg-white text-blue-700 border-blue-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          Rotativo (sai e volta)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setForm(p => ({ ...p, regimeUso: "fixo" }))}
+                          className={`px-2.5 py-2 rounded-lg text-xs font-semibold border-2 transition ${
+                            form.regimeUso === "fixo"
+                              ? "bg-indigo-600 text-white border-transparent shadow"
+                              : "bg-white text-indigo-700 border-indigo-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          Fixo (instalado na obra)
+                        </button>
+                      </div>
+                      <p className="mt-1 text-[10.5px] text-slate-500">
+                        Fixo = guincho, andaime fachadeiro, etc. Não conta como ocioso nos rankings de utilização.
+                      </p>
+                    </div>
                     {/* Rev. 2514 — Auditoria read-only: quem cadastrou + quando (só edição). */}
                     {editingId && (editingMeta.criadoPorNome || editingMeta.createdAt) && (
                       <p className="mt-2 text-[10.5px] text-slate-500 inline-flex items-center gap-1 uppercase tracking-wide">

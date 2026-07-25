@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, ChevronRight, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, ZoomIn, Undo2, Pencil, Package, PackageCheck, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, ChevronRight, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, ZoomIn, Undo2, Pencil, Package, PackageCheck, Anchor, type LucideIcon } from "lucide-react";
 import { ModalConfirmacaoAuditoria } from "@/components/almoxarifado/ModalConfirmacaoAuditoria";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
@@ -61,6 +61,8 @@ const EMPTY = {
   quantidade: 1,
   funcionarioResponsavelNome: "",
   observacoes: "",
+  // Rev. 4563 — regime de uso: rotativo (sai/volta) ou fixo (instalado na obra).
+  regimeUso: "rotativo" as "rotativo" | "fixo",
 };
 
 export default function EquipamentosLocados() {
@@ -1213,6 +1215,7 @@ export default function EquipamentosLocados() {
       observacoes: obsComDivergencia || undefined,
       fotosRecebimento: fotos,
       quantidade: form.quantidade || 1, // Rev. 4345 — quantidade de unidades físicas.
+      regimeUso: form.regimeUso, // Rev. 4563 — regime de uso
       ordemCompraId: ocSelecionada?.id, // Rev. 2371 — vincula OC quando o user clicou em "Receber esta OC"
       // Rev. 2465 — assinaturas só quando não é fluxo de importação em lote.
       ...(!noFluxoImport && recEntSig && recRecSig ? {
@@ -3376,6 +3379,37 @@ export default function EquipamentosLocados() {
                   <input type="number" min={1} value={form.quantidade} onChange={e => setForm(p => ({ ...p, quantidade: parseInt(e.target.value) || 1 }))} className="inp" />
                 </Field>
               </div>
+              {/* Rev. 4563 — Regime de uso: rotativo × fixo (instalado em obra) */}
+              <div className="mt-3">
+                <label className="block text-xs font-semibold text-slate-800 mb-1">Regime de uso</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, regimeUso: "rotativo" }))}
+                    className={`px-2.5 py-2 rounded-lg text-xs font-semibold border-2 transition ${
+                      form.regimeUso === "rotativo"
+                        ? "bg-blue-600 text-white border-transparent shadow"
+                        : "bg-white text-blue-700 border-blue-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    Rotativo (sai e volta)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, regimeUso: "fixo" }))}
+                    className={`px-2.5 py-2 rounded-lg text-xs font-semibold border-2 transition ${
+                      form.regimeUso === "fixo"
+                        ? "bg-indigo-600 text-white border-transparent shadow"
+                        : "bg-white text-indigo-700 border-indigo-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    Fixo (instalado na obra)
+                  </button>
+                </div>
+                <p className="mt-1 text-[10.5px] text-slate-500">
+                  Fixo = guincho, andaime fachadeiro, painel, etc. Não conta como ocioso nos rankings de utilização.
+                </p>
+              </div>
             </Section>
 
             <Section icon={Building2} title="Fornecedor (locadora)" tint="blue">
@@ -4218,6 +4252,46 @@ export default function EquipamentosLocados() {
                         {l.categoria || <span className="italic text-slate-500 font-normal">Sem categoria</span>}
                       </div>
                     )}
+                    {/* Rev. 4563 — Edição inline do regime de uso */}
+                    <hr className="border-slate-100" />
+                    <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5">
+                      <Anchor className="h-3.5 w-3.5" /> Regime de uso
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        disabled={atualizarLocadoMut.isPending}
+                        onClick={() => {
+                          if ((l.regimeUso || "rotativo") === "rotativo") return;
+                          atualizarLocadoMut.mutate({ companyId, id: l.id, regimeUso: "rotativo" } as any);
+                        }}
+                        className={`px-2.5 py-2 rounded-lg text-xs font-semibold border-2 transition ${
+                          (l.regimeUso || "rotativo") === "rotativo"
+                            ? "bg-blue-600 text-white border-transparent shadow"
+                            : "bg-white text-blue-700 border-blue-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        Rotativo (sai e volta)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={atualizarLocadoMut.isPending}
+                        onClick={() => {
+                          if (l.regimeUso === "fixo") return;
+                          atualizarLocadoMut.mutate({ companyId, id: l.id, regimeUso: "fixo" } as any);
+                        }}
+                        className={`px-2.5 py-2 rounded-lg text-xs font-semibold border-2 transition ${
+                          l.regimeUso === "fixo"
+                            ? "bg-indigo-600 text-white border-transparent shadow"
+                            : "bg-white text-indigo-700 border-indigo-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        Fixo (instalado na obra)
+                      </button>
+                    </div>
+                    <p className="text-[10.5px] text-slate-500">
+                      Fixo = guincho, andaime fachadeiro, etc. Não conta como ocioso na utilização.
+                    </p>
                   </div>
                   <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4 space-y-3">
                     <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Período</div>

@@ -5650,7 +5650,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4485-2026-07-21-prazo-nf-template-pj";
+    const COLFIX_VERSION = "v4563-2026-07-25-regime-uso-equipamentos";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7539,6 +7539,16 @@ REGRAS DE EXTRAÇÃO:
         }
         console.log(`[ColFix Rev.4485] template contrato_pj: parágrafo de prazo de NF injetado (${rows4485.rows?.length ?? 0} registro(s) atualizado(s)).`);
       } catch (e: any) { console.error("[ColFix Rev.4485] FALHA prazo NF template:", e?.message ?? e); }
+
+      // Rev. 4563 — regime de uso (rotativo|fixo) em equipamentos próprios e locados.
+      // Fixo = instalado na obra (guincho, andaime...) → fora do custo de ociosidade.
+      try {
+        const _db4563 = await getDb();
+        if (!_db4563) throw new Error("db indisponível");
+        await _db4563.$client.query(`ALTER TABLE equipamentos_proprios ADD COLUMN IF NOT EXISTS regime_uso VARCHAR(20) NOT NULL DEFAULT 'rotativo'`);
+        await _db4563.$client.query(`ALTER TABLE equipamentos_locados  ADD COLUMN IF NOT EXISTS regime_uso VARCHAR(20) NOT NULL DEFAULT 'rotativo'`);
+        console.log("[ColFix Rev.4563] regime_uso garantido em equipamentos_proprios e equipamentos_locados.");
+      } catch (e: any) { console.error("[ColFix Rev.4563] FALHA regime_uso:", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

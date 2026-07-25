@@ -416,6 +416,8 @@ export const equipamentosRouter = router({
       // (cada um ganha SEU próprio patrimônio EQP-NNNN sequencial). Evita
       // repetir o formulário pra equipamentos iguais (ex.: 10 pranchas).
       quantidade: z.number().int().min(1).max(100).optional(),
+      // Rev. 4563 — regime de uso: rotativo (padrão) | fixo (instalado na obra).
+      regimeUso: z.enum(["rotativo", "fixo"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -464,6 +466,7 @@ export const equipamentosRouter = router({
         marca: upperBR(input.marca) ?? null,
         modelo: upperBR(input.modelo) ?? null,
         dataAquisicao: input.dataAquisicao ?? null,
+        regimeUso: input.regimeUso ?? "rotativo",
         valorAquisicao: input.valorAquisicao != null ? String(input.valorAquisicao) : null,
         vidaUtilMeses: input.vidaUtilMeses ?? null,
         custoManutencaoMedioMes: input.custoManutencaoMedioMes != null ? String(input.custoManutencaoMedioMes) : "0",
@@ -550,6 +553,8 @@ export const equipamentosRouter = router({
       localizacaoAtualObraId: z.number().nullable().optional(),
       observacoes: z.string().nullable().optional(),
       fotos: fotoSchema,
+      // Rev. 4563 — regime de uso: rotativo | fixo.
+      regimeUso: z.enum(["rotativo", "fixo"]).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -572,6 +577,7 @@ export const equipamentosRouter = router({
       map("status", input.status);
       map("localizacaoAtualTipo", input.localizacaoAtualTipo);
       map("localizacaoAtualObraId", input.localizacaoAtualObraId);
+      map("regimeUso", input.regimeUso);
       mapUpper("observacoes", input.observacoes);
       if (input.fotos !== undefined) update.fotosJson = input.fotos ?? null;
       // Rev. 2561 — traduz erro de banco pra mensagem limpa (sem vazar
@@ -1009,6 +1015,8 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       assinaturaRecebedorUrl:   z.string().optional(),
       // Rev. 4345 — quantidade de unidades físicas (padrão 1).
       quantidade: z.number().int().min(1).optional(),
+      // Rev. 4563 — regime de uso: rotativo (padrão) | fixo (instalado na obra).
+      regimeUso: z.enum(["rotativo", "fixo"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1047,6 +1055,7 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
         observacoes: input.observacoes ?? null,
         ocAnteriorId: input.ocAnteriorId ?? null,
         quantidade: input.quantidade ?? 1,
+        regimeUso: input.regimeUso ?? "rotativo",
       }).returning({ id: equipamentosLocados.id });
 
       // Rev. 2465 — Token HMAC pro comprovante PDF público (só quando há
@@ -1132,6 +1141,8 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       quantidade: z.number().int().min(1).nullable().optional(),
       // Rev. 4514 — permite corrigir a categoria diretamente no painel de detalhes.
       categoria: z.string().max(100).nullable().optional(),
+      // Rev. 4563 — regime de uso: rotativo | fixo.
+      regimeUso: z.enum(["rotativo", "fixo"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1156,6 +1167,7 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
       map("codigoPatrimonioFornecedor", input.codigoPatrimonioFornecedor);
       // Rev. 4345 — quantidade de unidades físicas.
       if (input.quantidade != null) map("quantidade", input.quantidade);
+      map("regimeUso", input.regimeUso);
       // Rev. 4514 — categoria editável pelo painel de detalhes.
       if (input.categoria !== undefined) {
         update.categoria = input.categoria && input.categoria.trim() ? input.categoria.trim() : null;
@@ -4257,6 +4269,34 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       };
     }),
 
+  // ── Rev. 4563 — Regime de uso em LOTE (triagem de fixos) ─────────────────
+  // Marca vários equipamentos de uma vez como "fixo" (instalado na obra) ou
+  // "rotativo". Usado pela tela de triagem do painel de utilização.
+  regimeUsoAtualizarLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      tipo: z.enum(["locado", "proprio"]),
+      ids: z.array(z.number().int()).min(1).max(500),
+      regimeUso: z.enum(["rotativo", "fixo"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const table = input.tipo === "locado" ? equipamentosLocados : equipamentosProprios;
+      const r = await db.update(table as any)
+        .set({ regimeUso: input.regimeUso, updatedAt: sql`now()` } as any)
+        .where(and(
+          inArray((table as any).id, input.ids),
+          eq((table as any).companyId, input.companyId),
+        ))
+        .returning({ id: (table as any).id });
+      return { atualizados: r.length };
+    }),
+
   // ── Rev. 4512 — Utilização de Equipamentos Locados ───────────────────────
   // Rastreia ciclos SAIDA_ALMOX→RETORNO_ALMOX dos equipamentos locados.
   // Métrica principal: custo de ociosidade = dias_parado × (valor_mensal/30).
@@ -4269,9 +4309,14 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       mes: z.number().nullable().optional(),
       ano: z.number(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Rev. 4563 — tenant guard explícito (antes confiava só no protectedProcedure)
+      const _allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(_allowed as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
       const cid = input.companyId;
       const mes = input.mes ?? null;
       const ano = input.ano;
@@ -4366,8 +4411,30 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         ) last_loan ON ai.id IS NOT NULL
         WHERE el.company_id = ${cid}
           AND el.status NOT IN ('devolvido','aguardando_chegada')
+          AND COALESCE(el.regime_uso,'rotativo') <> 'fixo'
           AND (last_loan.status IS NULL OR last_loan.status IN ('devolvido','perdido'))
         ORDER BY parado_desde ASC
+      `)).rows as any[];
+
+      // ── Rev. 4563 — Fixos/instalados em obra: uso contínuo, FORA da ociosidade ─
+      const fixosRaw = (await db.execute(sql`
+        SELECT
+          el.id,
+          el.descricao,
+          el.categoria,
+          el.quantidade,
+          el.valor_mensal::numeric AS valor_mensal,
+          el.fornecedor_nome,
+          el.foto_url,
+          el.data_inicio,
+          el.data_fim_prevista,
+          o.nome                    AS obra_nome
+        FROM equipamentos_locados el
+        LEFT JOIN obras o ON o.id = el.obra_id
+        WHERE el.company_id = ${cid}
+          AND el.status NOT IN ('devolvido','aguardando_chegada')
+          AND COALESCE(el.regime_uso,'rotativo') = 'fixo'
+        ORDER BY el.data_inicio ASC
       `)).rows as any[];
 
       // ── Em campo agora: locados com empréstimo ativo (status='emprestado') ─
@@ -4387,6 +4454,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         ) last_loan ON last_loan.status = 'emprestado'
         WHERE el.company_id = ${cid}
           AND el.status NOT IN ('devolvido','aguardando_chegada')
+          AND COALESCE(el.regime_uso,'rotativo') <> 'fixo'
       `)).rows as any[];
 
       // ── Derivações JS ─────────────────────────────────────────────────────
@@ -4394,6 +4462,8 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       const ciclosCompletos = cycleRaw.filter(r => r.devolvido_em != null).length;
       const emAlmoxCount   = idleRaw.length;
       const emCampoCount   = Number(emCampoRaw[0]?.cnt ?? 0);
+      // Rev. 4563 — fixos instalados contam como EM USO contínuo.
+      const fixosCount     = fixosRaw.length;
 
       const custoOciosidadeTotal = idleRaw.reduce((s, r) => {
         const vm   = Number(r.valor_mensal) || 0;
@@ -4405,8 +4475,8 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       const mediaHoras = horasArr.length > 0
         ? horasArr.reduce((a, b) => a + b, 0) / horasArr.length : 0;
 
-      const utilizacaoMedia = (emCampoCount + emAlmoxCount) > 0
-        ? (emCampoCount / (emCampoCount + emAlmoxCount)) * 100
+      const utilizacaoMedia = (emCampoCount + fixosCount + emAlmoxCount) > 0
+        ? ((emCampoCount + fixosCount) / (emCampoCount + fixosCount + emAlmoxCount)) * 100
         : null;
 
       // Ciclos por mês (para o gráfico de barras)
@@ -4499,11 +4569,25 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           custoDiario:     (Number(r.valor_mensal) || 0) / 30,
           custoOciosidade: ((Number(r.valor_mensal) || 0) / 30) * (Number(r.dias_ociosos) || 0),
         })),
+        // Rev. 4563 — instalados em obra (regime fixo): uso contínuo.
+        instalados: fixosRaw.map(r => ({
+          id:              Number(r.id),
+          descricao:       r.descricao       as string,
+          categoria:       r.categoria       as string | null,
+          quantidade:      Number(r.quantidade) || 1,
+          valorMensal:     Number(r.valor_mensal) || 0,
+          fornecedorNome:  r.fornecedor_nome as string | null,
+          fotoUrl:         r.foto_url        as string | null,
+          obraNome:        r.obra_nome       as string | null,
+          dataInicio:      r.data_inicio     as string,
+          dataFimPrevista: r.data_fim_prevista as string,
+        })),
         stats: {
           totalCiclos,
           ciclosCompletos,
           emAlmoxCount,
           emCampoCount,
+          fixosCount,
           custoOciosidadeTotal,
           mediaHorasPorCiclo: Math.round(mediaHoras * 10) / 10,
           utilizacaoMedia,
@@ -4521,9 +4605,14 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       mes: z.number().nullable().optional(),
       ano: z.number(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Rev. 4563 — tenant guard explícito (antes confiava só no protectedProcedure)
+      const _allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(_allowed as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
       const cid = input.companyId;
       const mes = input.mes ?? null;
       const ano = input.ano;
@@ -4614,8 +4703,29 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         WHERE ep.company_id = ${cid}
           AND ep.ativo = true
           AND ep.status = 'disponivel'
+          AND COALESCE(ep.regime_uso,'rotativo') <> 'fixo'
           AND (last_loan.status IS NULL OR last_loan.status IN ('devolvido','perdido'))
         ORDER BY parado_desde ASC
+      `)).rows as any[];
+
+      // ── Rev. 4563 — Fixos/instalados em obra: uso contínuo, FORA da ociosidade ─
+      const fixosRaw = (await db.execute(sql`
+        SELECT
+          ep.id,
+          ep.descricao,
+          ep.categoria,
+          ep.codigo_patrimonio,
+          (ep.fotos_json->0->>'url')  AS foto_url,
+          ep.valor_aquisicao::numeric AS valor_aquisicao,
+          ep.vida_util_meses,
+          o.nome                      AS obra_nome
+        FROM equipamentos_proprios ep
+        LEFT JOIN obras o ON o.id = ep.localizacao_atual_obra_id
+        WHERE ep.company_id = ${cid}
+          AND ep.ativo = true
+          AND ep.status <> 'baixado'
+          AND COALESCE(ep.regime_uso,'rotativo') = 'fixo'
+        ORDER BY ep.descricao ASC
       `)).rows as any[];
 
       // ── Em campo (em_obra): lista com quem está com o equipamento ──────────
@@ -4664,10 +4774,12 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       `)).rows as any[];
 
       // ── Contagens por status ───────────────────────────────────────────────
+      // Rev. 4563 — fixos ficam FORA das contagens rotativas (contam como em uso).
       const statusRaw = (await db.execute(sql`
         SELECT status, COUNT(*)::int AS cnt
         FROM equipamentos_proprios
         WHERE company_id = ${cid} AND ativo = true
+          AND COALESCE(regime_uso,'rotativo') <> 'fixo'
         GROUP BY status
       `)).rows as { status: string; cnt: number }[];
 
@@ -4675,8 +4787,9 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       const emCampoCount   = statusMap["em_obra"]    ?? 0;
       const emAlmoxCount   = statusMap["disponivel"] ?? 0;
       const emManutCount   = statusMap["manutencao"] ?? 0;
-      const totalAtivo     = emCampoCount + emAlmoxCount + emManutCount;
-      const utilizacaoMedia = totalAtivo > 0 ? (emCampoCount / totalAtivo) * 100 : null;
+      const fixosCount     = fixosRaw.length;
+      const totalAtivo     = emCampoCount + emAlmoxCount + emManutCount + fixosCount;
+      const utilizacaoMedia = totalAtivo > 0 ? ((emCampoCount + fixosCount) / totalAtivo) * 100 : null;
 
       // ── Custo de ociosidade (depreciação) ──────────────────────────────────
       const custoOciosidadeTotal = idleRaw.reduce((s: number, r: any) => {
@@ -4789,9 +4902,23 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           horasFora:        Number(r.horas_fora) || 0,
           saiuEm:           r.saiu_em            as string,
         })),
+        // Rev. 4563 — instalados em obra (regime fixo): uso contínuo.
+        instalados: fixosRaw.map((r: any) => {
+          const va  = Number(r.valor_aquisicao) || 0;
+          const vum = Number(r.vida_util_meses) || 0;
+          return {
+            id:               Number(r.id),
+            descricao:        r.descricao          as string,
+            categoria:        r.categoria          as string | null,
+            codigoPatrimonio: r.codigo_patrimonio  as string | null,
+            fotoUrl:          r.foto_url           as string | null,
+            obraNome:         r.obra_nome          as string | null,
+            custoMensalDepreciacao: vum > 0 ? va / vum : 0,
+          };
+        }),
         stats: {
           totalCiclos, ciclosCompletos,
-          emAlmoxCount, emCampoCount, emManutCount,
+          emAlmoxCount, emCampoCount, emManutCount, fixosCount,
           custoOciosidadeTotal,
           mediaHorasPorCiclo: Math.round(mediaHoras * 10) / 10,
           utilizacaoMedia,

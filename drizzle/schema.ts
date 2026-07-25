@@ -10056,6 +10056,10 @@ export const equipamentosProprios = pgTable("equipamentos_proprios", {
   transferenciaPendenteId: integer("transferencia_pendente_id"),
   // Status: disponivel | em_obra | manutencao | baixado
   status:                  varchar({ length: 20 }).notNull().default("disponivel"),
+  // Rev. 4563 — regime de uso: "rotativo" (sai/volta do almox — padrão) ou
+  // "fixo" (instalado na obra: guincho de coluna, andaime, contêiner...).
+  // Fixo NÃO conta no ranking/custo de ociosidade — é uso contínuo.
+  regimeUso:               varchar("regime_uso", { length: 20 }).notNull().default("rotativo"),
   fotosJson:               jsonb("fotos_json"),
   observacoes:             text(),
   ativo:                   boolean().default(true),
@@ -10092,6 +10096,9 @@ export const equipamentosLocados = pgTable("equipamentos_locados", {
   valorMensal:                 numeric("valor_mensal", { precision: 14, scale: 2 }),
   // Status: em_uso | devolvido | atrasado | em_renovacao | localizacao_pendente | em_manutencao
   status:                      varchar({ length: 30 }).notNull().default("em_uso"),
+  // Rev. 4563 — regime de uso: "rotativo" (padrão) ou "fixo" (instalado na
+  // obra — guincho, andaime, painel fachadeiro). Fixo fica FORA da ociosidade.
+  regimeUso:                   varchar("regime_uso", { length: 20 }).notNull().default("rotativo"),
   fotosRecebimentoJson:        jsonb("fotos_recebimento_json"),
   fotosDevolucaoJson:          jsonb("fotos_devolucao_json"),
   // Rev. 2340 — URL de foto buscada por IA (Google Custom Search Image).

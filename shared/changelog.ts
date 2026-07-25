@@ -1,4 +1,52 @@
 /**
+ * Rev. 4563 - FEAT: EQUIPAMENTOS — REGIME DE USO (ROTATIVO × FIXO/INSTALADO EM OBRA)
+ *
+ * PEDIDO DO USUÁRIO: equipamentos de uso contínuo instalados na obra (guincho
+ * de coluna, andaime fachadeiro, painel, balancim…) apareciam como "parados/
+ * ociosos" nos painéis de utilização, inflando o custo de ociosidade — eles
+ * NÃO circulam pelo almoxarifado por natureza.
+ *
+ * O QUE MUDOU:
+ * 1) SCHEMA (drizzle/schema.ts): coluna `regime_uso` varchar(20) default
+ *    'rotativo' em equipamentos_proprios E equipamentos_locados. ColFix
+ *    Rev. 4563 (ADD COLUMN IF NOT EXISTS em bloco isolado próprio) +
+ *    COLFIX_VERSION bump — cura automática no Neon no boot.
+ * 2) SERVER (equipamentos.ts):
+ *    - proprioCriar/proprioAtualizar/locadoCriar/locadoAtualizar aceitam
+ *      regimeUso z.enum(["rotativo","fixo"]).
+ *    - NOVA mutation regimeUsoAtualizarLote (companyId, tipo locado|proprio,
+ *      ids[]≤500, regimeUso) com tenant guard via getCompaniesForUser — usada
+ *      pela triagem em lote.
+ *    - locadosUtilizacao/propriosUtilizacao: fixos SAEM do ranking de
+ *      ociosidade (COALESCE(regime_uso,'rotativo') <> 'fixo'), entram numa
+ *      lista própria `instalados` (com obra vinculada) e CONTAM COMO EM USO
+ *      na utilização média: (emCampo+fixos)/(emCampo+fixos+emAlmox).
+ * 3) UI UTILIZAÇÃO (LocadosUtilizacao.tsx + PropriosUtilizacao.tsx):
+ *    - Seção "Instalados em obra" (indigo) com custo mensal e ação
+ *      "voltar p/ rotativo" (confirm) por item.
+ *    - Botão "Marcar fixos" sob a lista de ociosos: abre modal de triagem
+ *      com checkboxes; sugestões pré-marcadas por keyword (sugereFixo:
+ *      guincho, andaime, fachadeiro, balancim, elevador, grua, torre,
+ *      betoneira estacionária etc.). NADA é salvo sem confirmação explícita
+ *      no rodapé (Poka-Yoke: triagem só sugere).
+ * 4) CADASTRO (Proprios.tsx + Locados.tsx): seletor "Regime de uso"
+ *    (Rotativo sai-e-volta × Fixo instalado na obra) no cadastro e edição —
+ *    prevenção pelo design: o regime nasce certo no cadastro. Em Locados,
+ *    além do cadastro, edição inline do regime no detalhe do card (padrão
+ *    da edição de categoria Rev. 4514).
+ * 5) SECURITY (pós-review): locadosUtilizacao/propriosUtilizacao ganharam
+ *    tenant guard explícito (getCompaniesForUser) — antes confiavam só no
+ *    protectedProcedure, permitindo consultar dados de outra empresa via
+ *    companyId (IDOR de leitura).
+ *
+ * RACIONAL: ociosidade só faz sentido pra equipamento ROTATIVO. Um guincho
+ * instalado 6 meses na obra não está "parado" — está trabalhando. Separar o
+ * regime corrige o KPI de utilização e o custo de ociosidade sem esconder o
+ * custo do equipamento (fixos aparecem em seção própria com o valor mensal).
+ * Extra: removido onError duplicado (dead code) no criar de Proprios.tsx.
+ */
+
+/**
  * Rev. 4562 - QUALIDADE: POKA-YOKE EM 10 PONTOS DO ERP (À PROVA DE ERROS)
  *
  * PEDIDO DO USUÁRIO: aplicar a nova Regra de Ouro Poka-Yoke (prevenção >
