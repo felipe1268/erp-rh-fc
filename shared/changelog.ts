@@ -1,4 +1,47 @@
 /**
+ * Rev. 4582 - FIX: FLUXO DE CAIXA — SWEEP CONTAMAX (APLICAÇÃO AUTOMÁTICA) NEUTRALIZADO NA LINHA AZUL + TEXTOS CORRIGIDOS
+ *
+ * PEDIDO DO USUÁRIO: o usuário explicou que o CONTAMAX é uma APLICAÇÃO
+ * AUTOMÁTICA de liquidez diária (sweep): o banco aplica o saldo da conta à
+ * meia-noite e devolve no dia seguinte conforme a necessidade. NÃO é reserva
+ * nem aporte — é o MESMO dinheiro indo e voltando todos os dias. Logo:
+ * (a) o vai-e-vem não pode inflar a linha azul "Outras movimentações
+ * bancárias" (os resgates de 3,39 mi apareciam como "dinheiro extra");
+ * (b) os textos que falavam em "coberto pela reserva/resgates" estavam
+ * conceitualmente errados (não existia dinheiro guardado).
+ *
+ * AUDITORIA (Neon, extrato 2026): aplicado R$ 3.451.501 × resgatado
+ * R$ 3.388.771 — quase se anulam; líquido +R$ 62.729 estacionado na
+ * aplicação; rendimento creditado ~R$ 11. Confirma sweep, não investimento.
+ *
+ * O QUE MUDOU:
+ * 1) server getMovimentacoesBancariasByYear (financial.ts): linhas do extrato
+ *    com descricao ILIKE '%CONTAMAX%' E ('%APLIC%' OU '%RESGAT%') — critério
+ *    apertado após review p/ não capturar CDB/fundos reais — saem de
+ *    outrasEntradas/outrasSaidas e vão para 2 arrays novos informativos
+ *    sweepAplicado[12]/sweepResgatado[12] no retorno. A linha azul agora
+ *    mostra só dinheiro genuinamente "de fora" (aportes, depósitos, PIX
+ *    avulsos, transferências).
+ * 2) client FinanceiroFluxoCaixa.tsx: movBanco lê os arrays novos; nota
+ *    índigo ganha frase explicando o sweep (aplicado × devolvido × líquido
+ *    estacionado); tooltip da linha azul e insight "banco real conta outra
+ *    história" trocam "resgates de aplicação" por "aportes, depósitos, PIX
+ *    avulsos" e explicam que o CONTAMAX fica fora de todas as contas.
+ * 3) DADOS (Neon, reversível): +37 despesas "APLICACAO CONTAMAX /
+ *    CANCELAMENTO RESGATE CONTAMAX" (R$ 259.143; 35 da empresa 60004 e 2 da
+ *    60002) que a Rev. 4580 não pegou (o UPDATE de lá cobriu só a 60002)
+ *    → origem_modulo='aplicacao_financeira'. Sem isso, a matriz da empresa
+ *    irmã ainda contava sweep como Saída.
+ *
+ * POKA-YOKE: nível 2 — o server passa a IMPEDIR que linhas de sweep entrem
+ * na linha azul (bloqueio no cálculo, não aviso); textos deixam de induzir a
+ * leitura errada de "reserva".
+ *
+ * ARQUIVOS: server/routers/financial.ts, client/src/pages/financeiro/
+ * FinanceiroFluxoCaixa.tsx. ZERO schema change; UPDATE de dados reversível.
+ */
+
+/**
  * Rev. 4581 - FIX+FEAT: FLUXO DE CAIXA — TRANSFERÊNCIAS AO PRÓPRIO GRUPO FORA DAS SAÍDAS + CONFERÊNCIA DE DUPLICIDADES
  *
  * PEDIDO DO USUÁRIO: mesmo após a Rev. 4580 o déficit acumulado ainda parecia

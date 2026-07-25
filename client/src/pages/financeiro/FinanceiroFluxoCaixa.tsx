@@ -139,8 +139,15 @@ export default function FinanceiroFluxoCaixa() {
     const d = movQ.data;
     const ent = (d?.outrasEntradas as number[]) ?? Array(12).fill(0);
     const sai = (d?.outrasSaidas as number[]) ?? Array(12).fill(0);
+    // Rev. 4582 — sweep da aplicação automática (CONTAMAX, liquidez diária)
+    // vem separado: é o MESMO dinheiro indo e voltando todo dia, não é
+    // dinheiro novo — fica fora da linha azul.
+    const swA = (d?.sweepAplicado as number[]) ?? Array(12).fill(0);
+    const swR = (d?.sweepResgatado as number[]) ?? Array(12).fill(0);
     return {
       net: ent.map((v, i) => v - sai[i]),
+      sweepAplicado: swA,
+      sweepResgatado: swR,
       saldoReal: (d?.saldoExtratoFimMes as (number | null)[]) ?? Array(12).fill(null),
       ultimoMes: Number(d?.ultimoMesComExtrato ?? 0),
     };
@@ -173,6 +180,11 @@ export default function FinanceiroFluxoCaixa() {
   const dupOcupado = confirmarDupM.isPending || descartarDupM.isPending;
 
   const movNetTotal = useMemo(() => movBanco.net.reduce((s, v) => s + v, 0), [movBanco]);
+  // Rev. 4582 — totais do sweep (informativo): aplicado × resgatado quase se
+  // anulam; o líquido é o que está "estacionado" na aplicação hoje.
+  const sweepAplicadoTotal  = useMemo(() => movBanco.sweepAplicado.reduce((s, v) => s + v, 0), [movBanco]);
+  const sweepResgatadoTotal = useMemo(() => movBanco.sweepResgatado.reduce((s, v) => s + v, 0), [movBanco]);
+  const temSweep = sweepAplicadoTotal > 0 || sweepResgatadoTotal > 0;
   const temMovBanco = movBanco.ultimoMes > 0 && movBanco.net.some(v => Math.abs(v) > 0.005);
   const temSaldoReal = movBanco.ultimoMes > 0 && movBanco.saldoReal.some(v => v != null);
   const saldoRealUltimo = temSaldoReal ? movBanco.saldoReal[movBanco.ultimoMes - 1] : null;
@@ -367,7 +379,7 @@ export default function FinanceiroFluxoCaixa() {
       if (Math.abs(gap) > Math.max(50000, Math.abs(saldoRealUltimo) * 0.25)) {
         list.push({
           tipo: "info", titulo: "O banco real conta outra história",
-          texto: `No fim de ${MESES_FULL[iUlt]} o extrato mostra ${BRL0(saldoRealUltimo)} no banco, mas a projeção acima diz ${BRL0(projNoMes)}. A diferença vem de dinheiro que não vira título (resgates, aportes, depósitos — linha azul), títulos em aberto e cheques não compensados. Use a linha "Saldo real no banco" como a verdade do extrato.`,
+          texto: `No fim de ${MESES_FULL[iUlt]} o extrato mostra ${BRL0(saldoRealUltimo)} no banco, mas a projeção acima diz ${BRL0(projNoMes)}. A diferença vem de dinheiro que não vira título (aportes, depósitos, PIX avulsos — linha azul), títulos em aberto e cheques não compensados. Use a linha "Saldo real no banco" como a verdade do extrato.`,
         });
       }
     }
@@ -1037,9 +1049,9 @@ export default function FinanceiroFluxoCaixa() {
                 <tr className="h-10 bg-sky-50/70 border-b border-sky-200">
                   <td style={{ width: LABEL_W, minWidth: LABEL_W }}
                     className="sticky left-0 z-10 px-4 text-xs font-semibold text-sky-800 border-r border-sky-200 whitespace-nowrap bg-sky-50"
-                    title="Dinheiro real que entrou/saiu do banco mas não vira Contas a Receber nem Contas a Pagar: resgates de aplicação, aportes de sócio, depósitos em dinheiro e transferências. É por isso que o saldo real do banco não bate com o Saldo Final projetado acima.">
+                    title="Dinheiro real que entrou/saiu do banco mas não vira Contas a Receber nem Contas a Pagar: aportes de sócio, depósitos em dinheiro, PIX avulsos e transferências. O vai-e-vem da aplicação automática (CONTAMAX, liquidez diária) fica FORA desta linha — é o mesmo dinheiro indo e voltando todo dia.">
                     (±) Outras movimentações bancárias
-                    <span className="block text-[10px] font-normal text-sky-600">resgates, aportes, depósitos · líquido do extrato · informativo</span>
+                    <span className="block text-[10px] font-normal text-sky-600">aportes, depósitos, PIX avulsos · líquido do extrato · informativo</span>
                   </td>
                   {movBanco.net.map((v, i) => (
                     <td key={i} style={{ width: COL_W, minWidth: COL_W }}
@@ -1169,8 +1181,13 @@ export default function FinanceiroFluxoCaixa() {
             <span className="break-words">
               <strong>Por que o Saldo Final projetado não bate com o banco?</strong> A matriz acima soma apenas os
               títulos de Contas a Receber e Contas a Pagar (pelo vencimento). Mas o banco também recebe dinheiro que
-              não vira título — resgates de aplicação, aportes de sócio, depósitos em dinheiro e transferências — e
+              não vira título — aportes de sócio, depósitos em dinheiro, PIX avulsos e transferências — e
               há títulos em aberto e cheques que ainda não compensaram.{" "}
+              {temSweep && (
+                <>A aplicação automática (CONTAMAX) é só o saldo do dia rendendo: o banco aplicou {BRL0(sweepAplicadoTotal)} e
+                devolveu {BRL0(sweepResgatadoTotal)} no ano — o mesmo dinheiro indo e voltando, por isso ela fica fora de todas
+                as contas ({BRL0(sweepAplicadoTotal - sweepResgatadoTotal)} estacionado na aplicação no momento).{" "}</>
+              )}
               {modo === "detalhado" ? (
                 <>A linha azul "Outras movimentações bancárias" mostra esse dinheiro extra ({BRL0(movNetTotal)} líquido
                 no ano até agora), e a linha "🏦 Saldo real no banco" mostra o saldo verdadeiro do extrato no fim de

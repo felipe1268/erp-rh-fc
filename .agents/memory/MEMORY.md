@@ -149,6 +149,7 @@
 - [Lógica % Previsto CONGELADA](planejamento-previsto-logic-frozen.md) — usuário exige: NÃO alterar motor/literal/precedência do Previsto (Planejamento) sem alertar e confirmar; toda 'melhoria' nessa área já quebrou o sistema.
 - [Almox leitura global, escrita por obra](almox-global-read-obra-write.md) — reads globais por empresa exigem guard de empresa explícito; writes validam obra do RECURSO via getAlmoxAllowedObraIdSet.
 - [Renovação de locação — vencimento da parcela](locacao-renovacao-parcela-vencimento.md) — parcela vence no FIM do novo ciclo; usar o início gera entry vencida no passado que "some" do Contas a Pagar.
+- [CONTAMAX é sweep de liquidez diária](contamax-sweep-neutral.md) — aplica/resgata o MESMO dinheiro todo dia; fora de Saídas e da linha azul; classificador exige %CONTAMAX%+APLIC/RESGAT.
 - [Fluxo público identify anti-enum + Puppeteer sanitize](public-token-identify-antienum.md) — falha genérica + rate-limit token+IP em identify público; HTML de usuário no Puppeteer exige DOMPurify server-side + JS off + requests bloqueados.
 - [Fluxo de Caixa cheque float](fluxo-caixa-cheque-float.md) — cheques pendentes são linha INFORMATIVA (pago ≠ liquidado); nunca somar nas Saídas (dupla contagem); falha não derruba a tela.
-- [Aplicação financeira não é despesa](aplicacao-financeira-nao-e-despesa.md) — extrato APLICACAO* deve ter origem 'aplicacao_financeira' e ficar fora das Saídas; ida+volta líquidas em 'outras movimentações'.
+- [Aplicação financeira não é despesa](aplicacao-financeira-nao-e-despesa.md) — extrato APLICACAO* deve ter origem 'aplicacao_financeira' e ficar fora das Saídas; sweep CONTAMAX também fora da linha azul (ver contamax-sweep-neutral.md).

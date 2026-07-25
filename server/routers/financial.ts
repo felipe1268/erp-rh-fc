@@ -10158,8 +10158,16 @@ export const financialRouter = router({
     for (const cid of ids) await _assertFinanceiroCompanyAccess(ctx.user, cid);
 
     // 1) Outras movimentações (sem título receita/despesa) por mês.
+    // Rev. 4582 — o SWEEP da aplicação automática (CONTAMAX: banco aplica o
+    // saldo à meia-noite e resgata quando precisa — liquidez diária) é o MESMO
+    // dinheiro indo e voltando (2026: aplicado 3,45 mi × resgatado 3,39 mi).
+    // Ele sai das "outras movimentações" (não é dinheiro novo) e vai para
+    // campos próprios, informativos.
     const mov = await dbExecute(db,
       `SELECT EXTRACT(month FROM l.data)::int AS m, l.tipo,
+              CASE WHEN l.descricao ILIKE '%CONTAMAX%'
+                        AND (l.descricao ILIKE '%APLIC%' OR l.descricao ILIKE '%RESGAT%')
+                   THEN 1 ELSE 0 END AS sweep,
               SUM(ABS(l.valor))::float8 AS total, COUNT(*)::int AS qtd
        FROM bank_statement_lines l
        LEFT JOIN financial_entries e ON e.id = l.entry_id
@@ -10168,16 +10176,23 @@ export const financialRouter = router({
          AND EXTRACT(year FROM l.data) = $1
          AND (l.entry_id IS NULL OR e.tipo NOT IN ('receita','despesa')
               OR e.origem_modulo IN ('aplicacao_financeira','transferencia_interna'))
-       GROUP BY 1, 2`,
+       GROUP BY 1, 2, 3`,
       [input.ano]
     );
     const outrasEntradas = Array(12).fill(0);
     const outrasSaidas   = Array(12).fill(0);
+    const sweepAplicado  = Array(12).fill(0);
+    const sweepResgatado = Array(12).fill(0);
     for (const r of rows(mov)) {
       const i = Number(r.m) - 1;
       if (i < 0 || i > 11) continue;
-      if (String(r.tipo) === "credito") outrasEntradas[i] += Number(r.total) || 0;
-      else outrasSaidas[i] += Number(r.total) || 0;
+      const isCredito = String(r.tipo) === "credito";
+      const total = Number(r.total) || 0;
+      if (Number(r.sweep) === 1) {
+        if (isCredito) sweepResgatado[i] += total;
+        else sweepAplicado[i] += total;
+      } else if (isCredito) outrasEntradas[i] += total;
+      else outrasSaidas[i] += total;
     }
 
     // 2) Saldo real por conta: último saldo_apos conhecido em cada mês do ano
@@ -10236,7 +10251,10 @@ export const financialRouter = router({
       saldoExtratoFimMes[m - 1] = temDado ? soma : null;
     }
 
-    return { outrasEntradas, outrasSaidas, saldoExtratoFimMes, ultimoMesComExtrato: lastM };
+    return {
+      outrasEntradas, outrasSaidas, sweepAplicado, sweepResgatado,
+      saldoExtratoFimMes, ultimoMesComExtrato: lastM,
+    };
   }),
 
   // Rev. 4581 — Conferência de possíveis DUPLICIDADES nas despesas.
