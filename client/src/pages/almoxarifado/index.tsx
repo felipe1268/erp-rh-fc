@@ -4424,10 +4424,18 @@ export default function AlmoxarifadoPage() {
                               <button
                                 key={i.id}
                                 type="button"
-                                className="w-full text-left px-3 py-2 hover:bg-purple-50 text-sm border-b last:border-b-0 flex justify-between items-center"
+                                className="w-full text-left px-3 py-2 hover:bg-purple-50 text-sm border-b last:border-b-0 flex items-center gap-2"
                                 onClick={() => { setTransfItemId(i.id); setTransfBusca(""); setTransfDropOpen(false); }}
                               >
-                                <span className="truncate">
+                                {/* Rev. 4568 — foto do produto no dropdown de transferência */}
+                                {i.fotoUrl ? (
+                                  <img src={i.fotoUrl} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} className="w-9 h-9 rounded-lg object-cover border border-gray-200 flex-shrink-0 bg-white" />
+                                ) : (
+                                  <span className="w-9 h-9 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0 text-gray-300">
+                                    <Package className="w-4 h-4" />
+                                  </span>
+                                )}
+                                <span className="truncate flex-1 min-w-0">
                                   {i.codigoInterno ? <span className="text-purple-600 font-mono mr-1">{i.codigoInterno}</span> : null}
                                   {i.nome}
                                 </span>

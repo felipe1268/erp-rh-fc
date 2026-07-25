@@ -1,4 +1,24 @@
 /**
+ * Rev. 4568 - UX: ALMOXARIFADO — FOTO DO PRODUTO NO DROPDOWN DE TRANSFERÊNCIA
+ *
+ * PEDIDO DO USUÁRIO: no modal "Transferir entre Almoxarifados", a lista de
+ * busca de itens só mostrava código + nome + estoque; ele quer ver a FOTO
+ * do produto pra identificar visualmente (Poka-Yoke nível 3: prevenção —
+ * reduz seleção do item errado entre nomes parecidos).
+ *
+ * O QUE MUDOU (client/src/pages/almoxarifado/index.tsx, dropdown ~4427):
+ * 1) Cada linha do dropdown ganhou thumbnail 36×36 (rounded, object-cover,
+ *    loading="lazy") quando o item tem `fotoUrl`; sem foto, placeholder
+ *    cinza com ícone Package (já importado).
+ * 2) Layout da linha virou flex com gap; nome com flex-1 min-w-0 +
+ *    truncate; estoque continua à direita.
+ *
+ * RACIONAL: `compras.listarItens` já retorna a row completa de
+ * almoxarifado_itens (incluindo fotoUrl) — zero mudança de server/schema.
+ * lazy loading evita baixar centenas de fotos de uma vez no iPad.
+ */
+
+/**
  * Rev. 4567 - UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "PREENCHER PREÇOS COM IA"
  *
  * PEDIDO DO USUÁRIO: o botão de preencher preços com IA (hero "Valor Total
