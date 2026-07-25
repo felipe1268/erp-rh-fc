@@ -997,6 +997,25 @@ export default function FinanceiroContasAPagar() {
       .reduce((s, c) => s + Number(c.valorPrevisto ?? 0), 0);
   }, [allContas, selectedIds]);
 
+  // Rev. 4575 — Poka-Yoke: linhas CONSOLIDADAS (Consolidado: ON) têm id string
+  // ("grp:fech|...") e carregam os títulos reais em itensIds. Enviar o id do
+  // grupo pro servidor quebrava o lote inteiro (zod espera number). Este helper
+  // expande grupos nos ids numéricos reais e descarta qualquer id não-numérico.
+  const expandToNumericIds = (rows: any[], extraFilter?: (c: any) => boolean): number[] => {
+    const out = new Set<number>();
+    for (const c of rows) {
+      if (!selectedIds.has(c.id)) continue;
+      if (extraFilter && !extraFilter(c)) continue;
+      if (c.agrupado && Array.isArray(c.itensIds)) {
+        for (const i of c.itensIds) { const n = Number(i); if (Number.isFinite(n)) out.add(n); }
+      } else {
+        const n = Number(c.id);
+        if (Number.isFinite(n)) out.add(n);
+      }
+    }
+    return Array.from(out);
+  };
+
   // Exportar CSV (Excel-friendly, BOM + ; separador padrão BR)
   const exportCsv = () => {
     if (!filtered.length) return;
@@ -2694,7 +2713,7 @@ export default function FinanceiroContasAPagar() {
             <div className="space-y-4">
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                 <p className="text-xs text-blue-700 font-medium">Você está prestes a marcar como pagos:</p>
-                <p className="text-2xl font-bold text-blue-900 tabular-nums mt-1">{selectedIds.size} <span className="text-sm font-normal">títulos</span></p>
+                <p className="text-2xl font-bold text-blue-900 tabular-nums mt-1">{expandToNumericIds(escopoData as any[], (c: any) => c.status !== "pago").length} <span className="text-sm font-normal">títulos</span></p>
                 <p className="text-base font-semibold text-blue-800 tabular-nums">{formatBRL(selectedTotal)}</p>
               </div>
               <div>
@@ -2720,10 +2739,9 @@ export default function FinanceiroContasAPagar() {
               <Button variant="outline" onClick={() => setShowBulkPay(false)}>Cancelar</Button>
               <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={bulkPayMut.isPending || selectedIds.size === 0}
                 onClick={() => {
-                  // Garantir que só enviamos IDs ainda visíveis/válidos no escopo corrente (mês ou ano todo)
-                  const validIds = Array.from(selectedIds).filter(id =>
-                    (escopoData as any[]).some((c: any) => c.id === id && c.status !== "pago")
-                  );
+                  // Garantir que só enviamos IDs ainda visíveis/válidos no escopo corrente (mês ou ano todo).
+                  // Rev. 4575 — grupos consolidados (id "grp:...") são expandidos nos títulos reais.
+                  const validIds = expandToNumericIds(escopoData as any[], (c: any) => c.status !== "pago");
                   if (validIds.length === 0) {
                     toast({ title: "Nenhum título válido na seleção", variant: "destructive" });
                     return;
@@ -2736,7 +2754,7 @@ export default function FinanceiroContasAPagar() {
                     formaPagamento: bulkFormaPagamento,
                   });
                 }}>
-                {bulkPayMut.isPending ? "Processando..." : `Confirmar ${selectedIds.size} pagamento(s)`}
+                {bulkPayMut.isPending ? "Processando..." : `Confirmar ${expandToNumericIds(escopoData as any[], (c: any) => c.status !== "pago").length} pagamento(s)`}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -2937,7 +2955,7 @@ export default function FinanceiroContasAPagar() {
             <div className="space-y-3">
               <div className="rounded-lg border border-red-200 bg-red-50 p-3">
                 <p className="text-xs text-red-700 font-semibold uppercase tracking-wide mb-1">
-                  {selectedIds.size} lançamento(s) · {formatBRL(selectedTotal)}
+                  {expandToNumericIds((allContas as any[]) ?? []).length} lançamento(s) · {formatBRL(selectedTotal)}
                 </p>
                 <p className="text-sm text-slate-700">
                   Os lançamentos serão <strong>cancelados</strong> (removidos da lista de pendentes). 
@@ -2959,12 +2977,20 @@ export default function FinanceiroContasAPagar() {
               <Button variant="outline" onClick={() => { setShowBulkCancel(false); setMotivoBulkCancel(""); }}>Voltar</Button>
               <Button className="bg-red-600 hover:bg-red-700 text-white"
                 disabled={bulkCancelMut.isPending || motivoBulkCancel.trim().length < 5}
-                onClick={() => bulkCancelMut.mutate({
-                  ids: Array.from(selectedIds),
-                  companyId,
-                  motivoCancelamento: motivoBulkCancel.trim(),
-                })}>
-                {bulkCancelMut.isPending ? "Cancelando..." : `Confirmar — apagar ${selectedIds.size} lançamento(s)`}
+                onClick={() => {
+                  // Rev. 4575 — mesmo Poka-Yoke do pagamento em lote: expandir grupos consolidados.
+                  const idsNum = expandToNumericIds((allContas as any[]) ?? []);
+                  if (idsNum.length === 0) {
+                    toast({ title: "Nenhum lançamento válido na seleção", variant: "destructive" });
+                    return;
+                  }
+                  bulkCancelMut.mutate({
+                    ids: idsNum,
+                    companyId,
+                    motivoCancelamento: motivoBulkCancel.trim(),
+                  });
+                }}>
+                {bulkCancelMut.isPending ? "Cancelando..." : `Confirmar — apagar ${expandToNumericIds((allContas as any[]) ?? []).length} lançamento(s)`}
               </Button>
             </DialogFooter>
           </DialogContent>

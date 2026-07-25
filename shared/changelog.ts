@@ -1,4 +1,30 @@
 /**
+ * Rev. 4575 - FIX: CONTAS A PAGAR — PAGAMENTO/CANCELAMENTO EM LOTE QUEBRAVA COM LINHAS CONSOLIDADAS
+ *
+ * PEDIDO DO USUÁRIO: print do iPad — "Pagamento em Lote" com 62 títulos
+ * (R$ 81.411,02) falhando com erro zod "Invalid input: expected number,
+ * received string" nos ids 56-61.
+ *
+ * CAUSA-RAIZ: com "Consolidado: ON", getContasAPagarByYear devolve linhas
+ * AGRUPADAS por ciclo de fechamento do fornecedor com id STRING
+ * ("grp:fech|forn|janela") e os títulos reais em itensIds (number[]).
+ * A seleção em lote da tela mandava esse id de grupo direto pro servidor
+ * (bulkUpdateStatus/bulkCancel exigem z.array(z.number())) → o LOTE
+ * INTEIRO era rejeitado, inclusive os títulos normais.
+ *
+ * O QUE MUDOU (client/src/pages/financeiro/FinanceiroContasAPagar.tsx):
+ * - Novo helper expandToNumericIds(rows, extraFilter?): expande linha
+ *   agrupada (agrupado + itensIds) nos ids numéricos reais, dedup via
+ *   Set, e descarta qualquer id não-numérico remanescente.
+ * - "Pagar selecionados" (bulkPayMut) e "Apagar selecionados"
+ *   (bulkCancelMut) usam o helper; o apagar também ganhou guard de
+ *   seleção vazia com toast (antes mandava array cru).
+ *
+ * POKA-YOKE (nível 2 — bloqueio): payload agora é SEMPRE numérico por
+ * construção; impossível reenviar id de grupo. ZERO schema/server change.
+ */
+
+/**
  * Rev. 4574 - FEAT: ORÁCULO CONSULTOR-CEO — FINANCEIRO + COMPRAS + ALMOX + PLANEJAMENTO + DIAGNÓSTICO EXECUTIVO
  *
  * PEDIDO DO USUÁRIO: "quero um oráculo consultor... conversa fluida...
