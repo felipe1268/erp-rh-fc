@@ -2508,7 +2508,7 @@ export default function EquipamentosLocados() {
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Novo vencimento *</label>
                     <input type="date" value={renNovaDataFim} min={l.dataFimPrevista} onChange={e => setRenNovaDataFim(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      className="w-full min-w-0 max-w-full appearance-none border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                     <p className="text-[10px] text-slate-500 mt-1">Atual: {fmtDate(l.dataFimPrevista)}</p>
                   </div>
                   <div>

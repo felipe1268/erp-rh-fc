@@ -181,13 +181,13 @@ export function AlertaLocacoesVencendo() {
                   <div className="px-4 pb-4 mt-auto">
                     <div className="bg-indigo-50/60 rounded-xl border border-indigo-200 p-3 space-y-2">
                       <p className="text-[11px] text-indigo-800 break-words">Gera nova OC de locação no Compras e atualiza o vencimento.</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="min-w-0">
                           <label className="block text-[10px] font-semibold text-gray-600 mb-0.5">Novo vencimento</label>
                           <input type="date" value={renData} onChange={e => setRenData(e.target.value)}
-                            className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                            className="w-full min-w-0 max-w-full appearance-none border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <label className="block text-[10px] font-semibold text-gray-600 mb-0.5">Valor da nova OC (R$)</label>
                           <input type="number" min="0.01" step="0.01" value={renValor} onChange={e => setRenValor(e.target.value)}
                             className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="0,00" />

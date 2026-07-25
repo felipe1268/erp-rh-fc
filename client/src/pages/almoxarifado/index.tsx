@@ -6353,17 +6353,17 @@ export default function AlmoxarifadoPage() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="min-w-0">
                   <label className="text-xs font-semibold text-gray-700">Novo vencimento</label>
                   <input
                     type="date"
                     value={novaDataVencLocacao}
                     onChange={e => setNovaDataVencLocacao(e.target.value)}
-                    className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-indigo-400"
+                    className="mt-1 w-full min-w-0 max-w-full appearance-none px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-indigo-400"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="text-xs font-semibold text-gray-700">Valor da nova OC</label>
                   <div className="relative mt-1">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium pointer-events-none">R$</span>
