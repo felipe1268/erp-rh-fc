@@ -1310,7 +1310,18 @@ export default function AlmoxarifadoPage() {
       d.setDate(d.getDate() + 30);
       setNovaDataVencLocacao(d.toISOString().slice(0, 10));
     } catch { setNovaDataVencLocacao(""); }
-    setNovoValorOcLocacao(item?.valorLocacaoMensal != null && Number(item.valorLocacaoMensal) > 0 ? String(Number(item.valorLocacaoMensal)) : "");
+    setNovoValorOcLocacao(item?.valorLocacaoMensal != null && Number(item.valorLocacaoMensal) > 0 ? maskValorBRL(String(Math.round(Number(item.valorLocacaoMensal) * 100))) : "");
+  };
+  // Máscara de moeda pt-BR: digitação por centavos → "1.234,56".
+  const maskValorBRL = (raw: string): string => {
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) return "";
+    const num = parseInt(digits, 10) / 100;
+    return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+  };
+  const parseValorBRL = (raw: string): number => {
+    const clean = raw.replace(/[R$\s.]/g, "").replace(",", ".");
+    return parseFloat(clean) || 0;
   };
   const renovarLocadoMut = trpc.equipamentos.locadoRenovar.useMutation({
     onSuccess: (data: any) => {
@@ -6353,21 +6364,24 @@ export default function AlmoxarifadoPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-700">Valor da nova OC (R$)</label>
-                  <input
-                    type="number" min="0.01" step="0.01"
-                    value={novoValorOcLocacao}
-                    onChange={e => setNovoValorOcLocacao(e.target.value)}
-                    placeholder="0,00"
-                    className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-indigo-400"
-                  />
+                  <label className="text-xs font-semibold text-gray-700">Valor da nova OC</label>
+                  <div className="relative mt-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium pointer-events-none">R$</span>
+                    <input
+                      type="text" inputMode="numeric"
+                      value={novoValorOcLocacao}
+                      onChange={e => setNovoValorOcLocacao(maskValorBRL(e.target.value))}
+                      placeholder="0,00"
+                      className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-indigo-400 text-right"
+                    />
+                  </div>
                 </div>
               </div>
               <div className="flex gap-3 pt-1 border-t border-gray-100">
                 <button onClick={() => setModalRenovarLocacao(null)} disabled={renovarLocadoMut.isPending} className="flex-1 h-10 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition disabled:opacity-50">Cancelar</button>
                 <button
                   onClick={() => {
-                    const v = parseFloat(novoValorOcLocacao);
+                    const v = parseValorBRL(novoValorOcLocacao);
                     if (!novaDataVencLocacao) { toast.error("Selecione a nova data de vencimento."); return; }
                     if (!v || v <= 0) { toast.error("Informe o valor da nova OC."); return; }
                     renovarLocadoMut.mutate({ companyId, id: locadoId, novaDataFim: novaDataVencLocacao, valorOc: v });
