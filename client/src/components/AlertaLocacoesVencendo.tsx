@@ -80,76 +80,106 @@ export function AlertaLocacoesVencendo() {
     setRenValor(i.valorLocacaoMensal != null ? String(i.valorLocacaoMensal) : "");
   }
 
+  const vencidos = (itens as any[]).filter((i) => i.diasParaVencimento <= 0).length;
+  const aVencer = itens.length - vencidos;
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
-      <div className="relative bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-xl mx-4 max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
-          <h2 className="text-base font-bold flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5" />
-            Locações a Vencer ({itens.length})
-          </h2>
-          <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white"><X className="h-5 w-5" /></button>
+    <div className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-sm">
+      <div className="absolute inset-0 bg-slate-50 flex flex-col overflow-hidden">
+        {/* Header full-width moderno */}
+        <div className="relative flex-shrink-0 bg-gradient-to-br from-slate-900 via-slate-800 to-amber-900 text-white overflow-hidden">
+          <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-amber-500/20 blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-20 left-1/3 w-72 h-72 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
+          <div className="relative max-w-6xl mx-auto w-full px-4 sm:px-6 pt-5 pb-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/20 ring-1 ring-amber-400/40 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-amber-300" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-xl font-bold tracking-tight break-words">Locações a Vencer</h2>
+                  <p className="text-xs text-slate-300 break-words">Renove direto daqui — a nova OC é gerada no Compras e segue ao Contas a Pagar.</p>
+                </div>
+              </div>
+              <button onClick={() => setOpen(false)} className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition flex-shrink-0">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3 max-w-md">
+              <div className="rounded-xl bg-white/10 ring-1 ring-white/10 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Total</p>
+                <p className="text-xl font-bold leading-tight">{itens.length}</p>
+              </div>
+              <div className="rounded-xl bg-red-500/15 ring-1 ring-red-400/30 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-red-300 font-semibold">Vencidas</p>
+                <p className="text-xl font-bold leading-tight text-red-200">{vencidos}</p>
+              </div>
+              <div className="rounded-xl bg-amber-500/15 ring-1 ring-amber-400/30 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-amber-300 font-semibold">A vencer</p>
+                <p className="text-xl font-bold leading-tight text-amber-200">{aVencer}</p>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="px-5 pt-3">
-          <p className="text-xs text-gray-600 break-words">
-            Existem equipamentos locados com vencimento próximo ou vencido nas suas obras. Você pode <span className="font-semibold text-indigo-700">renovar direto por aqui</span> (gera a nova OC no Compras) ou abrir a tela de locados para devolver.
-          </p>
-        </div>
-        <div className="p-4 space-y-2 overflow-y-auto">
+
+        {/* Grid de cards */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
           {(itens as any[]).map((i) => {
             const vencido = i.diasParaVencimento <= 0;
             const renov = Number(i.renovacoesCount) || 0;
             const emRenovacao = renId != null && renId === i.equipamentoLocadoId;
             return (
-              <div key={i.id} className={`rounded-xl border overflow-hidden ${vencido ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
-                <div className="p-3 flex items-start gap-3">
+              <div key={i.id} className="rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+                {/* Faixa de status no topo */}
+                <div className={`h-1.5 w-full ${vencido ? "bg-red-500" : "bg-amber-400"}`} />
+                <div className="p-4 flex items-start gap-3">
                   {i.fotoLocado ? (
-                    <img src={i.fotoLocado} className="w-14 h-14 rounded-lg object-cover ring-1 ring-black/10 flex-shrink-0" alt="" loading="lazy" />
+                    <img src={i.fotoLocado} className="w-16 h-16 rounded-xl object-cover ring-1 ring-slate-200 flex-shrink-0" alt="" loading="lazy" />
                   ) : (
-                    <div className="w-14 h-14 rounded-lg bg-white/70 ring-1 ring-black/10 flex items-center justify-center flex-shrink-0">
-                      <Camera className="h-5 w-5 text-gray-400" />
+                    <div className="w-16 h-16 rounded-xl bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center flex-shrink-0">
+                      <Camera className="h-5 w-5 text-slate-400" />
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold text-gray-900 break-words">{i.nome}</p>
-                      <span className={`shrink-0 inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${vencido ? "bg-red-600 text-white" : "bg-amber-500 text-white"}`}>
+                    <p className="text-sm font-bold text-slate-900 break-words leading-snug">{i.nome}</p>
+                    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${vencido ? "bg-red-100 text-red-700 ring-1 ring-red-200" : "bg-amber-100 text-amber-800 ring-1 ring-amber-200"}`}>
                         {vencido
                           ? `Vencido${i.diasParaVencimento < 0 ? ` há ${Math.abs(i.diasParaVencimento)}d` : " hoje"}`
                           : `Vence em ${i.diasParaVencimento}d`}
                       </span>
-                    </div>
-                    <div className="mt-1 flex items-center gap-1 flex-wrap">
-                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${renov > 0 ? "bg-indigo-100 text-indigo-700 border-indigo-300" : "bg-white text-gray-600 border-gray-300"}`}>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${renov > 0 ? "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200" : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"}`}>
                         <RefreshCw className="h-2.5 w-2.5" />
                         {renov > 0 ? `${renov}ª Renovação` : "1ª Locação"}
                       </span>
-                      {i.obraNome && <span className="text-[10px] text-gray-600 font-medium truncate">{i.obraNome}</span>}
                     </div>
-                    <div className="text-xs text-gray-600 mt-1 space-x-2">
-                      {i.dataVencimentoLocacao && (
-                        <span>Venc.: <b>{new Date(i.dataVencimentoLocacao + "T00:00:00").toLocaleDateString("pt-BR")}</b></span>
-                      )}
-                      {i.valorLocacaoMensal != null && (
-                        <span>R$ <b>{Number(i.valorLocacaoMensal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>/mês</span>
-                      )}
-                    </div>
-                    {i.fornecedorLocacao && <p className="text-[11px] text-gray-500 truncate mt-0.5">{i.fornecedorLocacao}</p>}
+                  </div>
+                </div>
+                <div className="px-4 pb-3 space-y-1 text-xs text-slate-600">
+                  {i.obraNome && <p className="break-words"><span className="text-slate-400 font-medium">Obra:</span> {i.obraNome}</p>}
+                  {i.fornecedorLocacao && <p className="break-words"><span className="text-slate-400 font-medium">Fornecedor:</span> {i.fornecedorLocacao}</p>}
+                  <div className="flex items-center justify-between pt-1">
+                    {i.dataVencimentoLocacao ? (
+                      <span>Venc.: <b className="text-slate-800">{new Date(i.dataVencimentoLocacao + "T00:00:00").toLocaleDateString("pt-BR")}</b></span>
+                    ) : <span />}
+                    {i.valorLocacaoMensal != null && (
+                      <span className="font-bold text-slate-900">R$ {Number(i.valorLocacaoMensal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<span className="text-[10px] font-medium text-slate-500">/mês</span></span>
+                    )}
                   </div>
                 </div>
                 {i.equipamentoLocadoId != null && !emRenovacao && (
-                  <div className="px-3 pb-3 flex justify-end">
+                  <div className="px-4 pb-4 mt-auto">
                     <button
                       onClick={() => abrirRenInline(i)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition shadow-sm">
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition shadow-sm">
                       <RefreshCw className="h-3.5 w-3.5" /> Renovar ({renov + 1}ª renovação)
                     </button>
                   </div>
                 )}
                 {emRenovacao && (
-                  <div className="px-3 pb-3">
-                    <div className="bg-white rounded-lg border border-indigo-200 p-3 space-y-2">
+                  <div className="px-4 pb-4 mt-auto">
+                    <div className="bg-indigo-50/60 rounded-xl border border-indigo-200 p-3 space-y-2">
                       <p className="text-[11px] text-indigo-800 break-words">Gera nova OC de locação no Compras e atualiza o vencimento.</p>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -184,15 +214,20 @@ export function AlertaLocacoesVencendo() {
               </div>
             );
           })}
+          </div>
         </div>
-        <div className="flex gap-3 px-5 py-4 border-t border-gray-100 flex-shrink-0">
-          <button onClick={() => setOpen(false)} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition">Fechar</button>
-          <button
-            onClick={() => { setOpen(false); setLocation("/equipamentos/locados"); }}
-            className="flex-1 h-9 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition"
-          >
-            Ver Equipamentos Locados
-          </button>
+
+        {/* Footer fixo */}
+        <div className="flex-shrink-0 bg-white/90 backdrop-blur border-t border-slate-200">
+          <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-3 flex gap-3">
+            <button onClick={() => setOpen(false)} className="flex-1 sm:flex-none sm:px-8 h-11 text-sm border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 font-medium transition">Fechar</button>
+            <button
+              onClick={() => { setOpen(false); setLocation("/equipamentos/locados"); }}
+              className="flex-1 h-11 text-sm rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-semibold transition shadow-sm"
+            >
+              Ver Equipamentos Locados
+            </button>
+          </div>
         </div>
       </div>
     </div>
