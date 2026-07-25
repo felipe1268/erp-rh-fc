@@ -2959,7 +2959,9 @@ export default function FinanceiroContasAPagar() {
                     <SelectContent>
                       <SelectItem value="none">— Não informar —</SelectItem>
                       {(bankAccounts ?? []).filter((a: any) => a.ativo).map((a: any) => (
-                        <SelectItem key={a.id} value={String(a.id)}>{a.nome}{a.bancoNome ? ` · ${a.bancoNome}` : ""}</SelectItem>
+                        <SelectItem key={a.id} value={String(a.id)}>
+                          {[a.descricao || a.banco, a.agencia ? `Ag ${a.agencia}` : null, a.conta ? `CC ${a.conta}` : null].filter(Boolean).join(" · ")}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
