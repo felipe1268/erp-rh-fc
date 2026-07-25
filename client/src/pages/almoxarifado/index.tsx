@@ -542,15 +542,45 @@ export default function AlmoxarifadoPage() {
   });
   const utils = trpc.useUtils();
   const [preenchendoIA, setPreenchendoIA] = useState(false);
+  // Rev. 4567 — progresso 0→100% no botão (fase IA é não-determinística: intervalo simulado até ~95%, salta pra 100% no fim)
+  const [iaPct, setIaPct] = useState(0);
+  const iaPctTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const iaPctResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const iniciarProgressoIA = (qtdItens: number) => {
+    if (iaPctTimer.current) clearInterval(iaPctTimer.current);
+    setIaPct(0);
+    // estimativa: ~120ms por item (lotes no servidor), mínimo 12s
+    const duracaoMs = Math.max(12000, qtdItens * 120);
+    const passoMs = 400;
+    const incremento = (95 * passoMs) / duracaoMs;
+    iaPctTimer.current = setInterval(() => {
+      setIaPct(p => Math.min(95, p + incremento));
+    }, passoMs);
+  };
+  const finalizarProgressoIA = (ok: boolean) => {
+    if (iaPctTimer.current) { clearInterval(iaPctTimer.current); iaPctTimer.current = null; }
+    if (ok) {
+      setIaPct(100);
+      if (iaPctResetTimer.current) clearTimeout(iaPctResetTimer.current);
+      iaPctResetTimer.current = setTimeout(() => { setPreenchendoIA(false); setIaPct(0); iaPctResetTimer.current = null; }, 800);
+    } else {
+      setPreenchendoIA(false);
+      setIaPct(0);
+    }
+  };
+  useEffect(() => () => {
+    if (iaPctTimer.current) { clearInterval(iaPctTimer.current); iaPctTimer.current = null; }
+    if (iaPctResetTimer.current) { clearTimeout(iaPctResetTimer.current); iaPctResetTimer.current = null; }
+  }, []);
   const preencherIAMut = trpc.compras.preencherPrecosFaltantesIA.useMutation({
     onSuccess: (d: any) => {
-      setPreenchendoIA(false);
+      finalizarProgressoIA(true);
       toast.success(`✨ ${d.mensagem}`, { duration: 8000 });
       utils.compras.listarItens.invalidate();
       utils.compras.listarItensConsolidado.invalidate();
     },
     onError: (e) => {
-      setPreenchendoIA(false);
+      finalizarProgressoIA(false);
       toast.error(`Falha ao preencher preços: ${e.message}`);
     },
   });
@@ -568,8 +598,10 @@ export default function AlmoxarifadoPage() {
   const executarPreencherIA = () => {
     if (!companyId || !confirmIAPrecos) return;
     const escopo = confirmIAPrecos.escopo;
+    const qtdParaPreencher = confirmIAPrecos.qtd;
     setConfirmIAPrecos(null);
     setPreenchendoIA(true);
+    iniciarProgressoIA(qtdParaPreencher);
     preencherIAMut.mutate({
       companyId,
       ...(escopo === "obra" && typeof obraContexto === "number" ? { obraId: obraContexto } : escopo === "obra" && obraContexto === null ? { obraId: null } : {}),
@@ -2224,10 +2256,13 @@ export default function AlmoxarifadoPage() {
                       onClick={() => dispararPreencherIA("empresa")}
                       disabled={preenchendoIA}
                       title="Estimar preço médio de mercado dos itens sem valor cadastrado usando IA"
-                      className="inline-flex items-center gap-2 bg-white/95 hover:bg-white text-purple-700 font-semibold px-3 py-2 rounded-xl shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed text-sm"
+                      className="relative overflow-hidden inline-flex items-center gap-2 bg-white/95 hover:bg-white text-purple-700 font-semibold px-3 py-2 rounded-xl shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed text-sm"
                     >
+                      {preenchendoIA && (
+                        <span className="absolute inset-y-0 left-0 bg-purple-200/60 transition-all duration-300 pointer-events-none" style={{ width: `${iaPct}%` }} />
+                      )}
                       {preenchendoIA ? (
-                        <><Loader2 className="h-4 w-4 animate-spin" /> Preenchendo {consolidado.itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length} itens…</>
+                        <span className="relative z-[1] inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Preenchendo… {Math.round(iaPct)}%</span>
                       ) : (
                         <>🤖 Preencher {consolidado.itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length} preços com IA</>
                       )}
@@ -2687,10 +2722,13 @@ export default function AlmoxarifadoPage() {
                   onClick={() => dispararPreencherIA("obra")}
                   disabled={preenchendoIA}
                   title="Estimar preço médio de mercado dos itens sem valor cadastrado deste almoxarifado usando IA"
-                  className="inline-flex items-center gap-2 bg-white/95 hover:bg-white text-purple-700 font-semibold px-3 py-2 rounded-xl shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed text-sm"
+                  className="relative overflow-hidden inline-flex items-center gap-2 bg-white/95 hover:bg-white text-purple-700 font-semibold px-3 py-2 rounded-xl shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed text-sm"
                 >
+                  {preenchendoIA && (
+                    <span className="absolute inset-y-0 left-0 bg-purple-200/60 transition-all duration-300 pointer-events-none" style={{ width: `${iaPct}%` }} />
+                  )}
                   {preenchendoIA ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Preenchendo {itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length} itens…</>
+                    <span className="relative z-[1] inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Preenchendo… {Math.round(iaPct)}%</span>
                   ) : (
                     <>🤖 Preencher {itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length} preços com IA</>
                   )}

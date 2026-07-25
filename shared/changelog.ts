@@ -1,4 +1,28 @@
 /**
+ * Rev. 4567 - UX: ALMOXARIFADO — PROGRESSO 0→100% NO BOTÃO "PREENCHER PREÇOS COM IA"
+ *
+ * PEDIDO DO USUÁRIO: o botão de preencher preços com IA (hero "Valor Total
+ * do Estoque", visões empresa e por obra) só mostrava spinner + texto fixo;
+ * ele quer ver a evolução de 0 a 100% (Regra de Ouro dos botões de
+ * carregamento longo).
+ *
+ * O QUE MUDOU (client/src/pages/almoxarifado/index.tsx):
+ * 1) Novo estado `iaPct` + timer `iaPctTimer` (useRef). Como a operação é
+ *    UMA mutation server-side (não-determinística), o progresso é simulado:
+ *    duração estimada = max(12s, qtdItens × 120ms), incrementos a cada
+ *    400ms até o teto de 95%; `onSuccess` salta pra 100% e limpa após
+ *    800ms (padrão da Regra de Ouro); `onError` reseta imediatamente.
+ * 2) Ambos os botões (empresa ~2253 e obra ~2719) ganharam barra de fundo
+ *    (`bg-purple-200/60`, width = iaPct%) + rótulo "Preenchendo… XX%".
+ *    Botão já era `disabled` durante a operação — mantido.
+ * 3) Cleanup do interval no unmount (useEffect de desmontagem).
+ *
+ * RACIONAL: ~1.382 itens levam minutos; sem feedback numérico o usuário
+ * acha que travou. Estado compartilhado entre os 2 botões é ok porque só
+ * um pode disparar por vez (disabled global). ZERO schema/server change.
+ */
+
+/**
  * Rev. 4566 - UX: ALMOXARIFADO — RENOMEAÇÃO E REORDENAÇÃO DOS BOTÕES DE AÇÃO
  *
  * PEDIDO DO USUÁRIO (aprovado após proposta prévia): nomes dos botões de
