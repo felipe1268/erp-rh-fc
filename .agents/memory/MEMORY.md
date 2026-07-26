@@ -5,11 +5,8 @@
 - [Equipamento utilização fonte de dados](equipamento-utilizacao-fonte-dados.md) — utilização diária vem de warehouse_loans (não equipamento_locado_eventos); link via almoxarifado_itens.equipamento_vinculado_id.
 - [Scorecard month-end date construction](scorecard-month-end-date.md) — `|| '-31'` rejeita junho/abr/set/nov/fev; sempre usar `|| '-01')::date + INTERVAL '1 month' - 1 day`.
 - [Férias custo via JOIN cross-company](ferias-custo-join-cross-company.md) — empSalarioMap filtrado por companyFilter perde funcionários de empresa irmã; fix: incluir salarioBase no SELECT do JOIN que já existe.
-- [site_periods isActive fallback bug](site-periods-isactive-fallback.md) — Ramo B usa CURRENT_DATE quando isActive=0; Ramo A Prioridade 2 precisa de isActive=1 no OF check; ex-funcionários aparecem no mês corrente.
 - [NFS-e Nacional SPED/RFB format](nfse-nacional-sped-format.md) — XMLs da Prefeitura de Guaratinguetá (e outros municípios RFB) usam root `<NFSe xmlns="sped.fazenda..."><infNFSe>`, campos abreviados (nNFSe/dhEmi/prest/toma/serv/valores), completamente diferente do ABRASF/SIAP GEO.
 - [Cotacao preco_unitario vs total drift](cotacao-preco-unitario-total-drift.md) — preco_unitario (4dp roundeado) × qty ≠ total salvo; usar resp.total para itens não-alterados; só recomputar preco*qty para itens mudados.
-- [Scorecard MO — equipe duplicada multi-obra](scorecard-mo-multi-obra.md) — Ramo B (obra_funcionarios sem history) incluía funcionário em TODAS as obras que ele estava alocado; fix: NOT EXISTS(obra mais recente) + remover time_records do relevant_emp.
-- [Scorecard MO site_periods floor](scorecard-mo-site-periods-floor.md) — obra_funcionarios fallback usava dataAdmissao (anos atrás) como periodo_inicio → custo retroativo inflado; fix: GREATEST(of2.createdAt, obra.dataInicio) + CTE obra_inicio como piso absoluto em ambos os ramos.
 - [orcamentos valor_negociado snake_case](orcamentos-valor-negociado-snake.md) — `orcamentos.valorNegociado` tem nome explícito `"valor_negociado"` (snake); safe() engole erros → diagnose silent failures com logging antes de mudar query logic.
 - [date minus date is integer not interval](date-minus-date-integer.md) — No Postgres, (date - date) retorna INTEGER (dias); EXTRACT(days FROM integer) não existe → safe() captura silenciosamente. Use (date - date) direto para aritmética de dias.
 - [Billing module active/inactive toggle](billing-module-active-toggle.md) — isActive (comercializável) ≠ preço; grandfather: desativar módulo nunca revoga de quem já tem, só bloqueia ADICIONAR novo.
@@ -24,12 +21,8 @@
 - [Medição FD ↔ Compras link](medicao-fd-compras-link.md) — medicao_fd_registros.compraId (coluna já existia sem uso) é o ponto de integração p/ puxar valor de OC de Faturamento Direto direto pro boletim.
 - [Medição × Cronograma: casar por atividadeId, não EAP](medicao-cronograma-atividade-id-match.md) — eap_codigo do cronograma real vem vazio na maioria das atividades; use a PK atividade_id (1:1, sempre presente).
 - [SEFAZ sync gating & NSU](sefaz-nsu-rate-limit-loop.md) — cStat=656 deve persistir ultNSU (senão loop eterno); 4 fórmulas de gate DEVEM casar; elapsed via SQL/EXTRACT EPOCH não `new Date()` JS (skew 3h).
-- [ColFix DO-block silent rollback](colfix-do-block-silent-rollback.md) — o bloco `[ColFix]` engole falha de QUALQUER ALTER e ainda marca versão como aplicada; novo ALTER deve ir em bloco isolado próprio.
 - [Dissídio — HE excluída da base retroativa](dissidio-he-excluded-from-base.md) — toda HE vira banco de horas, nunca é paga em dinheiro; nunca somar HE na base de diferença salarial retroativa/reajuste.
 - [VR/VT desconto de falta não misturado](folha-vr-vt-faltas-not-mixed.md) — VT de falta entra na Folha (coluna VT); VR/VA de falta NUNCA entra na Folha (só no Vale Alimentação).
-- [Banco de Horas saldo list filter](banco-horas-saldo-list-filter.md) — lista "Saldos" excluía negativos (`>0`); fix `<> 0` + gate admin_master em toggles sensíveis.
-- [Rescisão × Banco de Horas integration](rescisao-banco-horas-integration.md) — saldo positivo=provento×1,5, negativo=desconto valor cheio sem multiplicador; 1 helper único reusado nos 8 pontos de cálculo.
-- [Banco de Horas — múltiplos tipos de débito discriminados](banco-horas-debito-tipos.md) — tipo é text livre; novo tipo de débito exige batch+reversão+insert próprios + revisar filtros `tipo==="debito"` no front.
 - [Meal benefit config vigência pattern](meal-benefit-vigencia.md) — annual dissídio readjustments close-old+insert-new (never UPDATE in-place); all reads go through a resolver with an explicit reference date.
 - [Dialog no-truncate rule](dialog-no-truncate.md) — dialogs NUNCA truncam texto; use break-words/break-all; truncate só em linhas compactas de tabela com title= tooltip.
 - [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
@@ -69,9 +62,6 @@
 - [Group-expansion IDOR](group-expansion-idor.md) — reads que expandem por grupo devem INTERSECTAR com as empresas acessíveis do user, não só validar o companyId de entrada.
 - [% Previsto congelado no cadastro](previsto-congelado-cadastro.md) — curva previsto_semanas_json gera 1x no cadastro; upload SEMANAL NUNCA regenera o calendário-base.
 - [financial_accounts categorias gotchas](financial-accounts-categorias.md) — `tipo` só receita/despesa; índice único `(company,lower(nome)) WHERE ativo=1` abrange Plano+Categorias → rename colide.
-- [obras schema quirks](obras-orcamento-schema-quirks.md) — `obras` columns are camelCase (`companyId`/`isActive`) and have NO orcamento col; obra→orçamento link lives in `orcamentos.obraId`.
-- [orcamentos/employees camelCase columns](orcamentos-employees-camelcase.md) — `orcamentos`/`orcamento_itens`/`obra_funcionarios` all camelCase; `employees` has NO `obra_id` — link via `obra_funcionarios."obraId"/"employeeId"`.
-- [payroll/HR tables camelCase](payroll-hr-tables-camelcase.md) — `payroll_payments`, `employee_site_history`, `vr_benefits`, `vacation_periods` são TODOS camelCase; `seguro_vida_coberturas` é snake_case.
 - [Numeração de FD (Painel FD)](fd-numbering.md) — FD-001… é DERIVADO (não persistido): por obra, data/criadoEm asc + id; mesma regra nas 2 rotas; cancelar reindexar.
 - [Fornecedor write paths](fornecedor-write-paths.md) — tela "Fornecedores" salva em fornecedores via compras.criarFornecedor/atualizar (NAO terceiros.empresas).
 - [Cancelamento cascata preserva OC recebida](cancel-cascade-received-oc.md) — cascade NÃO cancela OC entregue/entregue_parcial nem seus financeiros pendentes; tudo em db.transaction.
@@ -83,7 +73,6 @@
 - [EPI "restrito não escreve no Central"](epi-central-write-rule.md) — inventarie TODAS as rotas que escrevem num recurso ao impor permissão (transferir 2 sentidos, entradaEstoque, create).
 - [Public route ↔ auth whitelist drift](public-route-whitelist-drift.md) — a public route in App.tsx also needs its prefix in BOTH `publicPaths` arrays in main.tsx.
 - [Lazy chunk stale after deploy](lazy-chunk-stale-deploy.md) — every deploy rotates chunk hashes; Wrap React.lazy (lazyWithRetry) to retry+reload.
-- [ColFix block is version-gated](colfix-version-gate.md) — new ALTER/backfill in `[ColFix]` needs a COLFIX_VERSION bump or it silently skips.
 - [SyncSchema+ log is capped](syncschema-log-cap.md) — `[SyncSchema+]` log file caps ~49 lines; missing `Rev. N` line ≠ failure. Verify via NEON_DATABASE_URL direct pg.
 - [Master-only field must gate at backend](master-only-field-backend-gate.md) — a "só Admin Master" field must be stripped from the payload by role server-side, not just hidden in the UI.
 - [react-pdf worker version match](pdfjs-worker-version-match.md) — "Erro ao carregar PDF" = bundled worker version ≠ react-pdf's internal pdfjs API; pin pdfjs-dist EXACTLY to react-pdf's dep.
@@ -121,7 +110,6 @@
 - [Date object String().slice bug](date-object-string-slice-bug.md) — `String(pgDateObj).slice(0,10)` → "Fri May 15" not "2026-05-15"; always check `instanceof Date ? .toISOString().slice(0,10)`.
 - [RQ cache-hit hydration race](rq-cache-hit-hydration-race.md) — dois useEffects (um hidrata de query.data, outro reseta) anulam estado em cache hit; unifique num só effect.
 - [Conceder obra implica empresa](grant-obra-implies-company.md) — usuário comum: empresas visíveis = user_companies + DONAS das obras de getEffectiveAllowedObraIds.
-- [Cheque devolvido — forma de pagamento](cheque-devolvido-forma-pagamento.md) — vínculo 'ajuste' exige forma_pagamento; statusBadge() deve tratar compensado_pix.
 - [criarManual explicit-id IDOR](cheques-criar-manual-idor.md) — INSERT que aceita FK id explícito deve validar ownership da empresa; assertCompanyAccess só autoriza a empresa, não o recurso referenciado.
 - [Conciliação cheque/boleto cross-month](conciliacao-cheque-cross-month.md) — sugestão de cheque/boleto deve buscar lançamentos de OUTROS meses (janela ampla); demais formas seguem estritas ao período.
 - [HTML cache stale post-deploy](html-cache-stale-deploy.md) — express.static com maxAge=1h serve index.html stale após deploy → chunks 404. Fix: setHeaders para .html/.sw.js = no-cache,no-store.
@@ -144,8 +132,6 @@
 - [Desconsiderar cheque devolvido do %](conciliacao-desconsiderar-cheque.md) — flag `desconsiderado_em` tira par do % sem apagar; mutation precisa de guard de elegibilidade.
 - [Conciliar cheque do Controle de Cheques](conciliar-cheque-controle-atomicity.md) — conciliar linha×cheque cria despesa+concilia linha+baixa cheque; reservar o CHEQUE primeiro (RETURNING+rows-check) ou corrida concilia 2×.
 - [Batch VALUES date<text silent-zero](batch-values-date-cast.md) — `(VALUES('YYYY-MM-DD')) AS p(...,data_fim)` compared to a DATE col throws; try/catch zeroes ALL counts. Cast `p.data_fim::date`.
-- [Cheque estorno/match heuristics](cheque-estorno-pairing-false-positive.md) — pareamento débito×devolução é heurístico; matcher que GRAVA conciliado=1 exige unicidade em TODOS os índices.
-- [Medição × Área: casar por atividadeId](medicao-cronograma-atividade-id-match.md) — ver acima; eap_codigo vem vazio; use PK atividade_id (1:1).
 - [Fetch server-side de URL do cliente = SSRF](comprovante-fetch-ssrf.md) — baixar anexo a partir de coluna *_url gravável pelo cliente NÃO pode usar fetch genérico; só resolver /uploads/<key> interno.
 - [VARCHAR BR decimal cast](varchar-br-decimal-cast.md) — colunas numéricas VARCHAR guardam "680,75" (vírgula BR); `::numeric` direto falha → Promise.all rejeita → UI mostra "Sem dados" silenciosamente. Use `REPLACE(col,',','.')::numeric`.
 - [Lógica % Previsto CONGELADA](planejamento-previsto-logic-frozen.md) — usuário exige: NÃO alterar motor/literal/precedência do Previsto (Planejamento) sem alertar e confirmar; toda 'melhoria' nessa área já quebrou o sistema.
@@ -157,3 +143,9 @@
 - [Fluxo de Caixa cheque float](fluxo-caixa-cheque-float.md) — cheques pendentes são linha INFORMATIVA (pago ≠ liquidado); nunca somar nas Saídas (dupla contagem); falha não derruba a tela.
 - [Aplicação financeira não é despesa](aplicacao-financeira-nao-e-despesa.md) — extrato APLICACAO* deve ter origem 'aplicacao_financeira' e ficar fora das Saídas; sweep CONTAMAX também fora da linha azul (ver contamax-sweep-neutral.md).
 - [Desconciliar desfaz o que a conciliação criou](desconciliar-releases-created-artifacts.md) — estorno deve cancelar entries origem cheque_conciliacao e liberar cheques com lancamento_id revertido; senão duplicidades + cheque preso.
+- [Neon template republish tx](neon-template-republish-tx.md) — erro em statement dentro de BEGIN aborta a tx; COMMIT vira ROLLBACK silencioso após RETURNING "de sucesso"; sempre re-verificar com SELECT pós-commit.
+- [Scorecard MO gotchas](scorecard-mo-multi-obra.md) — [equipe duplicada multi-obra](scorecard-mo-multi-obra.md); [floor de período](scorecard-mo-site-periods-floor.md); [isActive fallback](site-periods-isactive-fallback.md).
+- [Banco de Horas gotchas](rescisao-banco-horas-integration.md) — rescisão: positivo=provento×1,5, negativo=valor cheio ([detalhe](rescisao-banco-horas-integration.md)); [saldo list `<> 0`](banco-horas-saldo-list-filter.md); [tipos de débito discriminados](banco-horas-debito-tipos.md).
+- [ColFix gotchas](colfix-version-gate.md) — novo ALTER precisa de COLFIX_VERSION bump ([gate](colfix-version-gate.md)) e bloco isolado próprio ou falha é engolida ([silent rollback](colfix-do-block-silent-rollback.md)).
+- [Cheque devolvido/estorno](cheque-devolvido-forma-pagamento.md) — vínculo 'ajuste' exige forma_pagamento; [pareamento débito×devolução heurístico exige unicidade](cheque-estorno-pairing-false-positive.md).
+- [Casing das tabelas (camelCase quirks)](orcamentos-employees-camelcase.md) — obras/orcamentos/obra_funcionarios/payroll/HR camelCase; employees sem obra_id ([obras](obras-orcamento-schema-quirks.md), [payroll/HR](payroll-hr-tables-camelcase.md)); seguro_vida_coberturas é snake.

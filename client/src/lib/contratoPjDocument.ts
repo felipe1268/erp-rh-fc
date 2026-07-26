@@ -71,6 +71,7 @@ export interface ContratoPjForDoc {
   percentualFechamento?: number | null;
   diaAdiantamento?: number | null;
   diaFechamento?: number | null;
+  diaCorte?: number | null;
   revisao?: string | null;
   employeeName?: string | null;
   employeeCpf?: string | null;
@@ -168,9 +169,10 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
   const diaFechamento = c.diaFechamento || 5;
   const isUltimoDia = diaFechamento === 31 || diaFechamento === 0;
   const prazoNotaAdiant = Math.max(1, diaAdiantamento - 5);
-  const prazoNotaFechNum = isUltimoDia ? null : Math.max(1, diaFechamento - 5);
-  const textoDiaFechamento = isUltimoDia ? "no último dia do mês subsequente" : `no dia ${diaFechamento} do mês subsequente`;
-  const prazoNotaFechStr = isUltimoDia ? "5 (cinco) dias antes do último dia" : `o dia ${prazoNotaFechNum}`;
+  // Rev. 4604 — 2ª medição: NF até o dia de corte (diaCorte, padrão 25) do mês corrente,
+  // pagamento em até 5 dias corridos após recebimento/aprovação da NF (mesmo mês).
+  const textoDiaFechamento = "em até 5 (cinco) dias corridos após o recebimento e a aprovação da Nota Fiscal da segunda medição";
+  const prazoNotaFechStr = String((c as any).diaCorte || 25);
   const valorAdiantamento = formatMoeda((valorMensal * percAdiantamento) / 100);
   const valorFechamento = formatMoeda((valorMensal * percFechamento) / 100);
   const dataAssinatura = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });

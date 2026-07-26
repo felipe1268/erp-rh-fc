@@ -2847,8 +2847,6 @@ export const pjContracts = pgTable("pj_contracts", {
         estadoPrestador: varchar("estado_prestador", { length: 2 }),
         cepPrestador: varchar("cep_prestador", { length: 10 }),
         sociosPrestador: text("socios_prestador"),
-        // Rev. 4604 — Anexo I: indicadores de SLA editáveis por contrato (JSON de SlaItem[])
-        slaItensJson: text("sla_itens_json"),
 },
 (table) => [
         index("pjc_company").on(table.companyId),

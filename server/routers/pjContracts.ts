@@ -265,9 +265,9 @@ DO PREÇO, DAS MEDIÇÕES E DO PAGAMENTO
 
 Cláusula 12ª. Pela integralidade dos serviços objeto deste contrato, durante o prazo de vigência ajustado, a CONTRATANTE pagará à CONTRATADA o VALOR TOTAL de R$ [VALOR_TOTAL_CONTRATO] ([VALOR_TOTAL_EXTENSO]), correspondente à base mensal de referência de R$ [VALOR_MENSAL] ([VALOR_EXTENSO]) pelo prazo de [PRAZO_VIGENCIA].
 
-Cláusula 13ª. O desembolso do valor total contratado será realizado de forma parcelada, de acordo com MEDIÇÕES MENSAIS dos serviços efetivamente executados, apuradas e aprovadas pela CONTRATANTE, na seguinte proporção: [PERCENTUAL_ADIANTAMENTO]% no dia [DIA_ADIANTAMENTO] do mês corrente e [PERCENTUAL_FECHAMENTO]% [TEXTO_DIA_FECHAMENTO], sempre mediante apresentação da respectiva Nota Fiscal de Serviços.
+Cláusula 13ª. O desembolso do valor total contratado será realizado de forma parcelada, de acordo com MEDIÇÕES MENSAIS dos serviços efetivamente executados, apuradas e aprovadas pela CONTRATANTE, por meio de DUAS MEDIÇÕES no mês, na seguinte proporção: [PERCENTUAL_ADIANTAMENTO]% na primeira medição, com pagamento até o dia [DIA_ADIANTAMENTO] do mês corrente, e [PERCENTUAL_FECHAMENTO]% na segunda medição, com pagamento [TEXTO_DIA_FECHAMENTO], sempre mediante apresentação da respectiva Nota Fiscal de Serviços.
 
-PARÁGRAFO 1º: Para recebimento dos pagamentos, a CONTRATADA deverá emitir e encaminhar a Nota Fiscal de Serviços com antecedência mínima de 5 (cinco) dias da data de pagamento, observando os seguintes prazos: (i) Nota Fiscal referente à primeira medição do mês: até o dia [PRAZO_NOTA_ADIANTAMENTO] do mês corrente; (ii) Nota Fiscal referente à segunda medição: até [PRAZO_NOTA_FECHAMENTO] do mês do pagamento. O não envio da Nota Fiscal dentro do prazo estipulado implicará no adiamento do pagamento para o mês subsequente, sem ônus para a CONTRATANTE.
+PARÁGRAFO 1º: Para recebimento dos pagamentos, a CONTRATADA deverá emitir e encaminhar a Nota Fiscal de Serviços observando os seguintes prazos: (i) Nota Fiscal referente à primeira medição: até o dia [PRAZO_NOTA_ADIANTAMENTO] do mês corrente, para pagamento até o dia [DIA_ADIANTAMENTO] do mesmo mês; (ii) Nota Fiscal referente à segunda medição: até o dia [PRAZO_NOTA_FECHAMENTO] do mês corrente, para pagamento em até 5 (cinco) dias corridos após o recebimento e a aprovação da respectiva Nota Fiscal. O não envio da Nota Fiscal dentro do prazo estipulado implicará no adiamento do pagamento para o ciclo de medição subsequente, sem ônus para a CONTRATANTE.
 
 PARÁGRAFO 2º: As medições refletem os serviços efetivamente executados no período, podendo o valor de cada parcela variar em razão do avanço, de paralisações, de aditivos ou de glosas fundamentadas, não caracterizando os pagamentos periodicidade remuneratória de natureza salarial.
 
@@ -275,39 +275,29 @@ PARÁGRAFO 3º: Dados bancários da CONTRATADA para pagamento: [DADOS_BANCARIOS_
 
 Cláusula 14ª. O não pagamento, no prazo, de parcela incontroversa devidamente medida e faturada acarretará multa de 10% (dez por cento) sobre o valor da parcela em atraso, incidindo ainda juros de mora e correção monetária, nos termos da legislação vigente.
 
-DOS NÍVEIS DE SERVIÇO (SLA)
-
-Cláusula 15ª. A qualidade dos serviços será aferida exclusivamente por indicadores objetivos de RESULTADO, definidos de comum acordo entre as partes no ANEXO I — NÍVEIS DE SERVIÇO (SLA), que integra o presente CONTRATO para todos os fins de direito.
-
-PARÁGRAFO 1º: Os indicadores do ANEXO I medem entregas, prazos e qualidade técnica, sendo expressamente vedada sua utilização para aferição de presença, jornada, horário ou frequência da CONTRATADA ou de seus sócios, prepostos e equipe.
-
-PARÁGRAFO 2º: O não atingimento dos níveis de serviço pactuados terá consequência exclusivamente comercial, na forma prevista no ANEXO I (glosa proporcional na medição do período e/ou refazimento às expensas da CONTRATADA), não configurando, em nenhuma hipótese, sanção de natureza disciplinar.
-
-PARÁGRAFO 3º: Os indicadores e metas do ANEXO I poderão ser revistos de comum acordo entre as partes, mediante Termo Aditivo.
-
 DA RESCISÃO
 
-Cláusula 16ª. O presente contrato poderá ser rescindido imotivadamente por qualquer das partes, mediante comunicação por escrito com antecedência mínima de 30 (trinta) dias, sem a incidência de qualquer multa ou ônus, sendo devidos à CONTRATADA apenas os valores das medições dos serviços efetivamente executados até a data da rescisão. Fica ressalvada a possibilidade de rescisão imediata pela parte inocente em caso de descumprimento de qualquer cláusula ou obrigação prevista neste instrumento pela outra parte.
+Cláusula 15ª. O presente contrato poderá ser rescindido imotivadamente por qualquer das partes, mediante comunicação por escrito com antecedência mínima de 30 (trinta) dias, sem a incidência de qualquer multa ou ônus, sendo devidos à CONTRATADA apenas os valores das medições dos serviços efetivamente executados até a data da rescisão. Fica ressalvada a possibilidade de rescisão imediata pela parte inocente em caso de descumprimento de qualquer cláusula ou obrigação prevista neste instrumento pela outra parte.
 
 DO PRAZO E DO REAJUSTE DO VALOR
 
-Cláusula 17ª. O presente contrato terá vigência de [PRAZO_VIGENCIA], com início em [DATA_INICIO] e término em [DATA_FIM], podendo ser prorrogado exclusivamente de forma expressa, mediante Termo Aditivo assinado pelas partes, com reavaliação do escopo, do prazo e do valor dos serviços a cada prorrogação.
+Cláusula 16ª. O presente contrato terá vigência de [PRAZO_VIGENCIA], com início em [DATA_INICIO] e término em [DATA_FIM], podendo ser prorrogado exclusivamente de forma expressa, mediante Termo Aditivo assinado pelas partes, com reavaliação do escopo, do prazo e do valor dos serviços a cada prorrogação.
 
-Cláusula 18ª. Em caso de prorrogação por período igual ou superior a 12 (doze) meses, o valor do contrato poderá ser reajustado anualmente, na data de aniversário de sua assinatura, pela variação do IGP-M/FGV ou, na sua falta, por índice oficial que o substitua.
+Cláusula 17ª. Em caso de prorrogação por período igual ou superior a 12 (doze) meses, o valor do contrato poderá ser reajustado anualmente, na data de aniversário de sua assinatura, pela variação do IGP-M/FGV ou, na sua falta, por índice oficial que o substitua.
 
 DAS CONDIÇÕES GERAIS
 
-Cláusula 19ª. A CONTRATADA poderá executar os serviços por meio de seus sócios, prepostos, empregados ou equipe própria devidamente qualificada, podendo substituí-los livremente, mediante simples comunicação à CONTRATANTE, desde que mantida a qualificação técnica necessária à execução do objeto. É vedada apenas a cessão ou transferência deste contrato a outra pessoa jurídica sem o prévio consentimento por escrito da CONTRATANTE.
+Cláusula 18ª. A CONTRATADA poderá executar os serviços por meio de seus sócios, prepostos, empregados ou equipe própria devidamente qualificada, podendo substituí-los livremente, mediante simples comunicação à CONTRATANTE, desde que mantida a qualificação técnica necessária à execução do objeto. É vedada apenas a cessão ou transferência deste contrato a outra pessoa jurídica sem o prévio consentimento por escrito da CONTRATANTE.
 
-Cláusula 20ª. Qualquer tolerância de uma das partes em relação ao não cumprimento das obrigações e deveres neste instrumento assumidos não importará em novação quanto aos seus termos, condições ou prazos, não devendo, sob quaisquer hipóteses, ser interpretada como renúncia ou desistência do cumprimento dos dispositivos do presente em seus estritos termos.
+Cláusula 19ª. Qualquer tolerância de uma das partes em relação ao não cumprimento das obrigações e deveres neste instrumento assumidos não importará em novação quanto aos seus termos, condições ou prazos, não devendo, sob quaisquer hipóteses, ser interpretada como renúncia ou desistência do cumprimento dos dispositivos do presente em seus estritos termos.
 
-Cláusula 21ª. Toda e qualquer alteração do objeto ou das condições do presente Contrato necessitará da concordância prévia e expressa de ambas as partes e será formalizada mediante Termo Aditivo.
+Cláusula 20ª. Toda e qualquer alteração do objeto ou das condições do presente Contrato necessitará da concordância prévia e expressa de ambas as partes e será formalizada mediante Termo Aditivo.
 
-Cláusula 22ª. A contratação da presente prestação de serviços se dá sob a égide do disposto no artigo 593 e seguintes do Código Civil Brasileiro, não configurando, em nenhuma hipótese, relação empregatícia entre as partes, seus sócios, prepostos ou empregados.
+Cláusula 21ª. A contratação da presente prestação de serviços se dá sob a égide do disposto no artigo 593 e seguintes do Código Civil Brasileiro, não configurando, em nenhuma hipótese, relação empregatícia entre as partes, seus sócios, prepostos ou empregados.
 
 DO FORO
 
-Cláusula 23ª. Para dirimir quaisquer controvérsias oriundas do presente CONTRATO, as partes elegem o foro da comarca de [FORO_COMARCA], com renúncia a qualquer outro, por mais privilegiado que seja.
+Cláusula 22ª. Para dirimir quaisquer controvérsias oriundas do presente CONTRATO, as partes elegem o foro da comarca de [FORO_COMARCA], com renúncia a qualquer outro, por mais privilegiado que seja.
 
 Por estarem assim justas e contratadas, firmam o presente instrumento, em duas vias de igual teor, juntamente com 2 (duas) testemunhas.
 
@@ -324,15 +314,7 @@ _____________________________
 TESTEMUNHAS:
 ___________________________ ___________________________
 Nome:                       Nome:
-RG:                         RG:
-
-ANEXO I — NÍVEIS DE SERVIÇO (SLA)
-
-Indicadores de resultado pactuados entre as partes, apurados por medição, nos termos da cláusula de Níveis de Serviço deste CONTRATO:
-
-[SLA_INDICADORES]
-
-O não atingimento das metas acima terá as consequências comerciais indicadas em cada indicador, apuradas na medição do período correspondente.`;
+RG:                         RG:`;
 
 // ---------------------------------------------------------------------------
 // Cruzamento prestador PJ × catálogo de Fornecedores (Rev. 3262)
@@ -476,6 +458,7 @@ export const pjContractsRouter = router({
           percentualFechamento: pjContracts.percentualFechamento,
           diaAdiantamento: pjContracts.diaAdiantamento,
           diaFechamento: pjContracts.diaFechamento,
+          diaCorte: pjContracts.diaCorte,
           contratoAssinadoUrl: pjContracts.contratoAssinadoUrl,
           tipoAssinatura: pjContracts.tipoAssinatura,
           status: pjContracts.status,
@@ -545,6 +528,7 @@ export const pjContractsRouter = router({
           percentualFechamento: pjContracts.percentualFechamento,
           diaAdiantamento: pjContracts.diaAdiantamento,
           diaFechamento: pjContracts.diaFechamento,
+          diaCorte: pjContracts.diaCorte,
           modeloContratoUrl: pjContracts.modeloContratoUrl,
           contratoAssinadoUrl: pjContracts.contratoAssinadoUrl,
           tipoAssinatura: pjContracts.tipoAssinatura,
@@ -734,12 +718,13 @@ export const pjContractsRouter = router({
         const diaFech = contrato.diaFechamento || 5;
         const isUltimoDia = diaFech === 31 || diaFech === 0;
         const prazoNotaAdiant = Math.max(1, diaAdiant - 5);
-        const prazoNotaFechNum = isUltimoDia ? null : Math.max(1, diaFech - 5);
         texto = texto.replace(/\[DIA_ADIANTAMENTO\]/g, String(diaAdiant));
         texto = texto.replace(/\[DIA_FECHAMENTO\]/g, isUltimoDia ? "último dia do mês" : String(diaFech));
-        texto = texto.replace(/\[TEXTO_DIA_FECHAMENTO\]/g, isUltimoDia ? "no último dia do mês subsequente" : `no dia ${diaFech} do mês subsequente`);
+        // Rev. 4604 — 2ª medição: NF até o dia de corte (diaCorte, padrão 25) do mês corrente,
+        // pagamento em até 5 dias corridos após recebimento/aprovação da NF (mesmo mês).
+        texto = texto.replace(/\[TEXTO_DIA_FECHAMENTO\]/g, "em até 5 (cinco) dias corridos após o recebimento e a aprovação da Nota Fiscal da segunda medição");
         texto = texto.replace(/\[PRAZO_NOTA_ADIANTAMENTO\]/g, String(prazoNotaAdiant));
-        texto = texto.replace(/\[PRAZO_NOTA_FECHAMENTO\]/g, isUltimoDia ? "5 (cinco) dias antes do último dia" : `o dia ${prazoNotaFechNum}`);
+        texto = texto.replace(/\[PRAZO_NOTA_FECHAMENTO\]/g, String(contrato.diaCorte || 25));
         texto = texto.replace(/\[DATA_ASSINATURA\]/g, new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
         
         return { texto };
@@ -1337,6 +1322,7 @@ export const pjContractsRouter = router({
           percentualFechamento: pjContracts.percentualFechamento,
           diaAdiantamento: pjContracts.diaAdiantamento,
           diaFechamento: pjContracts.diaFechamento,
+          diaCorte: pjContracts.diaCorte,
           bancoPrestador: pjContracts.bancoPrestador,
           agenciaPrestador: pjContracts.agenciaPrestador,
           contaPrestador: pjContracts.contaPrestador,

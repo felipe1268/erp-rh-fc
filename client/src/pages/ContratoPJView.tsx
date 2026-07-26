@@ -197,9 +197,9 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
   const valorTotalNum = mesesVig > 0 ? valorMensal * mesesVig : valorMensal;
   const isUltimoDia = diaFechamento === 31 || diaFechamento === 0;
   const prazoNotaAdiant = Math.max(1, diaAdiantamento - 5);
-  const prazoNotaFechNum = isUltimoDia ? null : Math.max(1, diaFechamento - 5);
-  const textoDiaFechamento = isUltimoDia ? "no último dia do mês subsequente" : `no dia ${diaFechamento} do mês subsequente`;
-  const prazoNotaFechStr = isUltimoDia ? "5 (cinco) dias antes do último dia" : `o dia ${prazoNotaFechNum}`;
+  // Rev. 4604 — 2ª medição: NF até o dia de corte (diaCorte, padrão 25), pagamento em até 5 dias corridos após aprovação.
+  const textoDiaFechamento = "em até 5 (cinco) dias corridos após o recebimento e a aprovação da Nota Fiscal da segunda medição";
+  const prazoNotaFechStr = String((contrato as any)?.diaCorte || 25);
   const hoje = new Date();
   const dataAssinatura = hoje.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 

@@ -5571,12 +5571,6 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4454: endereco/cidade/estado/cep/socios_prestador garantidos em pj_contracts.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4454 pj_contracts endereço:", e?.message || e); }
 
-        // Rev. 4604 — SLA por contrato PJ (Anexo I do Contrato de Prestação de Serviços)
-        try {
-          await db.execute(sql`ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS sla_itens_json TEXT`);
-          console.log("[SyncSchema+] Rev. 4604: sla_itens_json garantida em pj_contracts (Anexo I — SLA editável por prestador).");
-        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4604 pj_contracts.sla_itens_json:", e?.message || e); }
-
         // Rev. 4424 — tabela de lista de peças para recebimento de OC de locação
         try {
           await db.execute(sql.raw(`

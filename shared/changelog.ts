@@ -1,4 +1,57 @@
 /**
+ * Rev. 4604 - FEAT: CONTRATO DE PRESTAÇÃO DE SERVIÇOS — FLUXO DE DUAS MEDIÇÕES EXPLÍCITO (NF ATÉ DIA 10 → PGTO ATÉ 15; NF ATÉ DIA DE CORTE → PGTO EM ATÉ 5 DIAS)
+ *
+ * PEDIDO DO USUÁRIO: o contrato precisava deixar claro o fluxo real de
+ * medição praticado pela empresa: DUAS medições por mês; nota fiscal da 1ª
+ * medição até o dia 10 para pagamento até o dia 15 (mesmo mês); nota da 2ª
+ * medição até o dia 25 para pagamento em até 5 dias após o envio/aprovação.
+ * O modelo anterior (Rev. 4602) jogava a 2ª parcela para o dia 5 do MÊS
+ * SUBSEQUENTE ("[TEXTO_DIA_FECHAMENTO] = no dia X do mês subsequente"), o que
+ * não batia com a prática (pagamento ainda dentro do mesmo mês).
+ *
+ * O QUE MUDOU (Cláusula 13ª + Parágrafo 1º — modelo mestre):
+ * 1. Cláusula 13ª agora fala explicitamente em "DUAS MEDIÇÕES no mês":
+ *    X% na primeira medição (pgto até o dia [DIA_ADIANTAMENTO] do mês corrente)
+ *    e Y% na segunda medição (pgto [TEXTO_DIA_FECHAMENTO]).
+ * 2. PARÁGRAFO 1º reescrito com o ciclo completo:
+ *    (i) NF da 1ª medição até o dia [PRAZO_NOTA_ADIANTAMENTO] (= diaAdiantamento−5,
+ *        padrão 10) → pagamento até o dia [DIA_ADIANTAMENTO] (padrão 15) do MESMO mês;
+ *    (ii) NF da 2ª medição até o dia [PRAZO_NOTA_FECHAMENTO] (= diaCorte do
+ *        contrato, padrão 25) do mês corrente → pagamento em até 5 (cinco) dias
+ *        corridos após recebimento E APROVAÇÃO da NF.
+ *    Atraso no envio da NF adia o pagamento para o CICLO DE MEDIÇÃO subsequente
+ *    (antes: "mês subsequente").
+ * 3. RESOLUÇÃO DOS PLACEHOLDERS (3 pontos espelhados — server gerarTexto,
+ *    client contratoPjDocument.ts e ContratoPJView.tsx):
+ *    - [TEXTO_DIA_FECHAMENTO] → texto fixo "em até 5 (cinco) dias corridos após
+ *      o recebimento e a aprovação da Nota Fiscal da segunda medição"
+ *      (não depende mais de diaFechamento/mês subsequente);
+ *    - [PRAZO_NOTA_FECHAMENTO] → contrato.diaCorte || 25 (campo JÁ EXISTENTE
+ *      no pj_contracts, editável por contrato — ZERO schema change);
+ *    - diaCorte exposto nos 3 SELECTs de contratos (list/getById) p/ o front.
+ * 4. RACIONAL JURÍDICO PRESERVADO: mantida a redação de que as parcelas variam
+ *    conforme serviço executado/aprovado (medição ≠ salário quinzenal fixo) e
+ *    o Parágrafo 2º (variação por avanço/paralisação/glosas) intacto.
+ *
+ * SLA (Anexo I): rascunhado nesta sessão, mas REVERTIDO a pedido do usuário —
+ * ele quer primeiro desenhar como os indicadores serão medidos na prática.
+ * Revertidos: shared/slaPadrao.ts, coluna sla_itens_json (schema + SyncSchema+),
+ * seção "DOS NÍVEIS DE SERVIÇO (SLA)" e Anexo I do modelo. Modelo segue com
+ * 22 cláusulas, byte-idêntico nos 2 constants (pjContracts.ts e
+ * controleDocumentos.ts).
+ *
+ * NEON: template id 8 (contrato_pj) republicado DIRETO como Vigente — versão 15
+ * (replace cirúrgico dos 2 trechos no conteudo_html + linha de auditoria em
+ * system_document_template_versions). Obs.: primeira tentativa de UPDATE foi
+ * ROLLBACK silencioso (INSERT de auditoria com coluna errada abortou a
+ * transação); reaplicado de forma idempotente com verificação de estado.
+ *
+ * ARQUIVOS: pjContracts.ts (modelo + gerarTexto + SELECTs), controleDocumentos.ts
+ * (modelo default), contratoPjDocument.ts, ContratoPJView.tsx.
+ * ZERO schema change. Contratos já assinados preservam o texto próprio.
+ */
+
+/**
  * Rev. 4603 - FEAT: CONTRATO DE PRESTAÇÃO DE SERVIÇOS — 7 REFORÇOS ANTI-DESCARACTERIZAÇÃO (BLINDAGEM CONTRA RECONHECIMENTO DE VÍNCULO CLT)
  *
  * PEDIDO DO USUÁRIO: análise completa do modelo da Rev. 4602 com foco em
