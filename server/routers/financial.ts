@@ -9177,6 +9177,9 @@ export const financialRouter = router({
     const temGrupo = !!(rows(grupoChk)[0] as any)?.reg;
 
     await db.transaction(async (tx: any) => {
+      // Rev. 4601 — ids de TODOS os lançamentos revertidos por esta linha (grupo +
+      // direto), coletados p/ liberar os cheques baixados por eles no passo 2b.
+      const idsRevertidos: number[] = [];
       // 1) Reverter todos os lançamentos vinculados por grupo (N:1)
       if (temGrupo) {
         const grupoRes = await dbExecute(tx,
@@ -9184,14 +9187,24 @@ export const financialRouter = router({
             WHERE statement_line_id=$1 AND company_id=$2`,
           [input.linhaId, input.companyId]);
         const entryIds = rows(grupoRes).map((r: any) => r.entry_id).filter(Boolean) as number[];
+        idsRevertidos.push(...entryIds.map(Number));
         if (entryIds.length) {
+          // Rev. 4601 — Poka-Yoke: lançamento CRIADO pela própria conciliação
+          // (origem 'cheque_conciliacao') não pode virar "a pagar" órfão — vira
+          // CANCELADO com motivo (senão ele fica pendurado no Contas a Pagar e a
+          // re-conciliação cria um gêmeo → card de duplicidade no Fluxo de Caixa).
           await dbExecute(tx,
             `UPDATE financial_entries
                 SET conciliado=0, data_conciliacao=NULL,
                     status = CASE
+                      WHEN COALESCE(origem_modulo,'')='cheque_conciliacao' THEN 'cancelado'
                       WHEN status='pago'     THEN 'a_pagar'
                       WHEN status='recebido' THEN 'a_receber'
-                      ELSE status END
+                      ELSE status END,
+                    motivo_cancelamento = CASE
+                      WHEN COALESCE(origem_modulo,'')='cheque_conciliacao'
+                        THEN 'Estorno de conciliação — lançamento havia sido criado pela própria conciliação do cheque'
+                      ELSE motivo_cancelamento END
               WHERE id = ANY($1::int[]) AND company_id=$2`,
             [entryIds, input.companyId]);
         }
@@ -9207,11 +9220,35 @@ export const financialRouter = router({
           `UPDATE financial_entries
               SET conciliado=0, data_conciliacao=NULL,
                   status = CASE
+                    WHEN COALESCE(origem_modulo,'')='cheque_conciliacao' THEN 'cancelado'
                     WHEN status='pago'     THEN 'a_pagar'
                     WHEN status='recebido' THEN 'a_receber'
-                    ELSE status END
+                    ELSE status END,
+                  motivo_cancelamento = CASE
+                    WHEN COALESCE(origem_modulo,'')='cheque_conciliacao'
+                      THEN 'Estorno de conciliação — lançamento havia sido criado pela própria conciliação do cheque'
+                    ELSE motivo_cancelamento END
             WHERE id=$1 AND company_id=$2`,
           [linha.entryId, input.companyId]);
+      }
+
+      // 2b) Rev. 4601 — LIBERAR o(s) cheque(s) do Controle de Cheques baixados por
+      // esses lançamentos. Antes, o estorno da conciliação NÃO devolvia o cheque:
+      // ele ficava conciliado=1 + lancamento_id preso → re-conciliar com a linha
+      // certa dava CONFLICT ("cheque já conciliado"). Compensado volta a pendente;
+      // devolvido/sustado/cancelado mantêm o status (só soltam o vínculo).
+      if (linha.entryId) idsRevertidos.push(Number(linha.entryId));
+      if (idsRevertidos.length) {
+        await dbExecute(tx,
+          `UPDATE financial_cheques
+              SET conciliado=0, data_conciliacao=NULL, lancamento_id=NULL,
+                  data_compensacao = CASE WHEN status='compensado' THEN NULL ELSE data_compensacao END,
+                  status = CASE WHEN status='compensado' THEN 'pendente' ELSE status END,
+                  conta_bancaria_tentativa_id=NULL, conta_bancaria_tentativa_nome=NULL,
+                  updated_at=NOW()
+            WHERE company_id=$1 AND excluido_em IS NULL
+              AND lancamento_id = ANY($2::int[])`,
+          [input.companyId, idsRevertidos]);
       }
 
       // 3) Desconciliar a linha do extrato SEM soft-delete — ela volta p/ a fila
@@ -9272,7 +9309,7 @@ export const financialRouter = router({
     await createAuditLog({
       userId: ctx.user?.id,
       action: "bank_statement_line_desconciliar",
-      details: `Desconciliação da linha #${input.linhaId} (entryId=${linha.entryId ?? "grupo"}) — linha mantida no extrato, lançamento revertido a pendente.`,
+      details: `Desconciliação da linha #${input.linhaId} (entryId=${linha.entryId ?? "grupo"}) — linha mantida no extrato; lançamento revertido a pendente (ou cancelado, se criado pela própria conciliação) e cheque(s) vinculados liberados.`,
       companyId: input.companyId,
     });
 
@@ -10307,7 +10344,8 @@ export const financialRouter = router({
                 ROUND(COALESCE(valor_realizado, valor_previsto)::numeric, 2) v,
                 COALESCE(descricao, fornecedor_nome, extrato_banco_descricao, '') t,
                 UPPER(LEFT(regexp_replace(COALESCE(descricao, fornecedor_nome, extrato_banco_descricao, ''), '[^A-Za-zÀ-ú]', '', 'g'), 12)) tk,
-                COALESCE(origem_modulo,'') om, COALESCE(observacoes,'') obs, status
+                COALESCE(origem_modulo,'') om, COALESCE(observacoes,'') obs, status,
+                COALESCE(conciliado,0) conc, conciliado_em concem
          FROM financial_entries
          WHERE company_id IN (${inlineIds(ids)}) AND tipo = 'despesa'
            AND status <> 'cancelado'
@@ -10321,7 +10359,14 @@ export const financialRouter = router({
        SELECT a.id AS "idA", b.id AS "idB", a.v::float8 AS valor,
               a.dv::text AS "dataA", b.dv::text AS "dataB",
               LEFT(a.t, 80) AS "descA", LEFT(b.t, 80) AS "descB",
-              a.om AS "origemA", b.om AS "origemB"
+              a.om AS "origemA", b.om AS "origemB",
+              -- Rev. 4601 — órfão de ESTORNO: lançamento que já foi conciliado
+              -- (conciliado_em preenchido), voltou a "a pagar" na desconciliação e
+              -- tem um gêmeo pago+conciliado → provável duplicado a cancelar.
+              (a.status='a_pagar' AND a.conc=0 AND a.concem IS NOT NULL
+                 AND b.status='pago' AND b.conc=1) AS "orfaoA",
+              (b.status='a_pagar' AND b.conc=0 AND b.concem IS NOT NULL
+                 AND a.status='pago' AND a.conc=1) AS "orfaoB"
        FROM d a JOIN d b
          ON a.company_id = b.company_id AND a.v = b.v AND a.id < b.id
         AND abs(a.dv - b.dv) <= 10 AND a.tk = b.tk

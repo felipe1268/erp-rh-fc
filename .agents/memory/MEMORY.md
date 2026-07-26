@@ -156,3 +156,4 @@
 - [Fluxo público identify anti-enum + Puppeteer sanitize](public-token-identify-antienum.md) — falha genérica + rate-limit token+IP em identify público; HTML de usuário no Puppeteer exige DOMPurify server-side + JS off + requests bloqueados.
 - [Fluxo de Caixa cheque float](fluxo-caixa-cheque-float.md) — cheques pendentes são linha INFORMATIVA (pago ≠ liquidado); nunca somar nas Saídas (dupla contagem); falha não derruba a tela.
 - [Aplicação financeira não é despesa](aplicacao-financeira-nao-e-despesa.md) — extrato APLICACAO* deve ter origem 'aplicacao_financeira' e ficar fora das Saídas; sweep CONTAMAX também fora da linha azul (ver contamax-sweep-neutral.md).
+- [Desconciliar desfaz o que a conciliação criou](desconciliar-releases-created-artifacts.md) — estorno deve cancelar entries origem cheque_conciliacao e liberar cheques com lancamento_id revertido; senão duplicidades + cheque preso.

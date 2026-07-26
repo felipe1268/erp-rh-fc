@@ -1248,21 +1248,31 @@ export default function FinanceiroFluxoCaixa() {
                   <div key={`${p.idA}-${p.idB}`} className="bg-white border border-rose-100 rounded-lg p-3">
                     <div className="font-semibold text-sm mb-2">{BRL0(Number(p.valor))}</div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="border rounded-md p-2">
+                      <div className={`border rounded-md p-2 ${p.orfaoA ? "border-rose-300 bg-rose-50/60" : ""}`}>
                         <div className="text-[10px] text-muted-foreground mb-1">
                           {String(p.dataA).split("-").reverse().join("/")}
                         </div>
                         <div className="break-words mb-2">{p.descA || "(sem descrição)"}</div>
+                        {p.orfaoA && (
+                          <div className="text-[10px] font-semibold text-rose-700 mb-2 break-words">
+                            ⚠ Ficou pendente ("a pagar") após um estorno de conciliação — provável duplicado a cancelar.
+                          </div>
+                        )}
                         <Button size="sm" variant="destructive" disabled={dupOcupado}
                           onClick={() => confirmarDupM.mutate({ companyId, entryId: p.idA, entryParId: p.idB })}>
                           Cancelar este (duplicado)
                         </Button>
                       </div>
-                      <div className="border rounded-md p-2">
+                      <div className={`border rounded-md p-2 ${p.orfaoB ? "border-rose-300 bg-rose-50/60" : ""}`}>
                         <div className="text-[10px] text-muted-foreground mb-1">
                           {String(p.dataB).split("-").reverse().join("/")}
                         </div>
                         <div className="break-words mb-2">{p.descB || "(sem descrição)"}</div>
+                        {p.orfaoB && (
+                          <div className="text-[10px] font-semibold text-rose-700 mb-2 break-words">
+                            ⚠ Ficou pendente ("a pagar") após um estorno de conciliação — provável duplicado a cancelar.
+                          </div>
+                        )}
                         <Button size="sm" variant="destructive" disabled={dupOcupado}
                           onClick={() => confirmarDupM.mutate({ companyId, entryId: p.idB, entryParId: p.idA })}>
                           Cancelar este (duplicado)

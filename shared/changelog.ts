@@ -1,4 +1,60 @@
 /**
+ * Rev. 4601 - FIX: CONCILIAÇÃO — ESTORNO DEIXAVA LANÇAMENTO ÓRFÃO ("A PAGAR") E CHEQUE PRESO → DUPLICIDADES NO FLUXO DE CAIXA
+ *
+ * PEDIDO DO USUÁRIO: o card "31 possíveis pagamentos em duplicidade" do Fluxo
+ * de Caixa acusou pares idênticos (ex.: DEB TARIFA Doc 148476 2×). O usuário
+ * relatou: conciliou, percebeu vínculo com cheque/PIX errado, estornou
+ * ("parece que o estorno não aconteceu") e re-conciliou — e o sistema acusou
+ * duplicidade. Pediu pra verificar se é real.
+ *
+ * VERIFICAÇÃO (Neon, empresa 60002): CONFIRMADO. 24 dos ~31 pares seguem o
+ * padrão: lançamento ANTIGO com status 'a_pagar', conciliado=0 e conciliado_em
+ * preenchido (ou seja, JÁ foi conciliado e foi desconciliado) + gêmeo NOVO
+ * 'pago'/conciliado=1 criado na re-conciliação dias depois. Ou seja: o estorno
+ * ACONTECEU (a linha do extrato voltou pra fila), mas o lançamento criado na
+ * conciliação original NÃO era cancelado — voltava como "a pagar" e ficava
+ * pendurado no Contas a Pagar. A re-conciliação criava um lançamento novo →
+ * par duplicado. Além disso, 2 cheques do Controle de Cheques ficaram PRESOS
+ * (lancamento_id apontando p/ lançamento cancelado/estornado): nº 347
+ * (compensado) e nº 393 (devolvido) — re-conciliar dava CONFLICT.
+ *
+ * CAUSA-RAIZ (desconciliarLinha):
+ * 1. O revert fazia status pago→a_pagar SEM distinguir lançamento que EXISTIA
+ *    antes (título legítimo, deve voltar a pendente) de lançamento CRIADO pela
+ *    própria conciliação (origem 'cheque_conciliacao' — sem a conciliação ele
+ *    não deveria existir).
+ * 2. Não tocava financial_cheques: cheque baixado pela conciliação ficava
+ *    conciliado=1 + lancamento_id preso + status compensado.
+ *
+ * COMO FUNCIONA AGORA:
+ * - desconciliarLinha (grupo E direto): lançamento com origem_modulo=
+ *   'cheque_conciliacao' vira status='cancelado' + motivo_cancelamento
+ *   explicando; demais seguem voltando a a_pagar/a_receber (inalterado).
+ * - Novo passo 2b: TODOS os cheques com lancamento_id ∈ lançamentos revertidos
+ *   são liberados (conciliado=0, lancamento_id=NULL; compensado→pendente +
+ *   data_compensacao=NULL; devolvido/sustado/cancelado mantêm o status, só
+ *   soltam o vínculo). Poka-Yoke nível 3 (prevenção pelo design): o estorno
+ *   deixa o estado EXATAMENTE pronto pra re-conciliar certo.
+ * - getPossiveisDuplicidades: novas flags orfaoA/orfaoB (lado 'a_pagar',
+ *   conciliado=0, conciliado_em preenchido, com gêmeo pago+conciliado). O card
+ *   do Fluxo de Caixa destaca esse lado em rosa com o aviso "Ficou pendente
+ *   ('a pagar') após um estorno de conciliação — provável duplicado a
+ *   cancelar" — Poka-Yoke nível 1 guiando QUAL dos dois cancelar (nada é
+ *   cancelado automaticamente; regra "conciliação só sugestiva" preservada).
+ * - Cura de dados no Neon: cheques nº 347 (→ pendente) e nº 393 (devolvido,
+ *   vínculo solto) liberados após conferir que nenhuma linha de extrato
+ *   conciliada ainda apontava pros lançamentos cancelados.
+ *
+ * NÃO FEITO DE PROPÓSITO: os 24 pares órfãos NÃO foram cancelados em massa —
+ * o card existe justamente pro usuário confirmar UM A UM (alguns pares, ex.
+ * cheques 584/585 SERGOVALE de R$ 15.000, são DOIS cheques legítimos → botão
+ * "Não é duplicidade").
+ *
+ * ARQUIVOS: server/routers/financial.ts (desconciliarLinha,
+ * getPossiveisDuplicidades), client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx.
+ * ZERO schema change.
+ */
+/**
  * Rev. 4600 - FIX: CONTAS A PAGAR — CHEQUES RESPEITAM O "PRAZO ENTRE PARCELAS" DO CICLO DO FORNECEDOR
  *
  * PEDIDO DO USUÁRIO: o fornecedor FRANCISNEI (GILÓ) tem ciclo de fechamento
