@@ -773,10 +773,15 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
                       </button>
                     </td>
                     <td className="p-2">
-                      <button onClick={() => onClickEmployee(f.id)} className="text-left hover:text-primary hover:underline font-medium break-all">
-                        {f.nomeCompleto}
-                      </button>
-                      <div className="text-xs text-muted-foreground">{formatCPF(f.cpf || "")}</div>
+                      <div className="flex items-center gap-2">
+                        <PersonPhoto src={(f as any).fotoUrl} alt={f.nomeCompleto} size="sm" />
+                        <div className="min-w-0">
+                          <button onClick={() => onClickEmployee(f.id)} className="text-left hover:text-primary hover:underline font-medium break-all">
+                            {f.nomeCompleto}
+                          </button>
+                          <div className="text-xs text-muted-foreground">{formatCPF(f.cpf || "")}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="p-2 text-muted-foreground text-xs hidden md:table-cell">{f.funcao || "—"}</td>
                     <td className="p-2 text-center"><AsoChip aso={f.aso} /></td>

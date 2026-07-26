@@ -1,4 +1,21 @@
 /**
+ * Rev. 4608 - UI: CONTROLE DE DOCUMENTOS — FOTO DOS FUNCIONÁRIOS NA LISTA DO DOSSIÊ
+ *
+ * Pedido do usuário: exibir a foto de cada funcionário na lista da aba
+ * "Dossiê" do Controle de Documentos (como já acontece em outras listas do
+ * módulo, ex.: painel de validade e mapeamento).
+ *
+ * - Backend (server/routers/controleDocumentos.ts, painelDossie): incluído
+ *   `fotoUrl` no SELECT de employees e no payload de cada funcionário.
+ * - Frontend (client/src/pages/ControleDocumentos.tsx, DossiePanel): célula
+ *   "Funcionário" agora renderiza `<PersonPhoto size="sm">` (componente
+ *   padrão já usado no restante do módulo, com fallback de iniciais) ao lado
+ *   do nome/CPF, com min-w-0 para não quebrar o layout em telas estreitas.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4607 - FIX: QR DO CRACHÁ — VERIFICAÇÃO DE APTIDÃO CALCULA AO VIVO + LISTA DE DOCUMENTOS (LGPD-SAFE)
  *
  * PROBLEMA: ao escanear o QR do crachá, funcionários com documentação em dia

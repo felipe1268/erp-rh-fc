@@ -3245,6 +3245,7 @@ export const controleDocumentosRouter = router({
           cpf: employees.cpf,
           funcao: employees.funcao,
           status: employees.status,
+          fotoUrl: employees.fotoUrl,
         })
         .from(employees)
         .where(and(companyFilter(employees.companyId, input), isNull(employees.deletedAt), empNaoDesligado()))
@@ -3331,6 +3332,7 @@ export const controleDocumentosRouter = router({
             cpf: emp.cpf,
             funcao: emp.funcao,
             status: emp.status,
+            fotoUrl: emp.fotoUrl,
             aso: latestAso ? { ...latestAso, ...(asoCalc || {}) } : null,
             treinamentos: empTreins,
             piorStatusTrein: piorTrein,
