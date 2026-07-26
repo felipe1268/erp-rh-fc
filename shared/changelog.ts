@@ -1,4 +1,21 @@
 /**
+ * Rev. 4618 - FIX: BACKUP DIÁRIO EM STREAMING — FIM DO OOM QUE DERRUBAVA O SERVIDOR
+ *
+ * Sintoma: erro "The string did not match the expected pattern" no Safari/iPad
+ * (resposta HTML em vez de JSON) — o servidor caía com "JavaScript heap out of
+ * memory" logo após "[Backup] 526 tabelas descobertas no banco".
+ *
+ * Causa: executarBackup montava exportData{} com TODAS as tabelas em memória
+ * antes do gzipSync; com heap de 1GB (--max-old-space-size=1024), estourava.
+ *
+ * Fix (server/services/backupService.ts):
+ * - Leitura por lotes de 2.000 linhas com keyset por ctid (estável, sem OFFSET);
+ * - Escrita incremental num stream gzip em /tmp ({"tabelas":{...},"metadata":...});
+ * - Só o arquivo COMPRIMIDO volta pra memória (S3 + snapshot Neon inalterados);
+ * - uploaded_files continua só com metadata (sem base64);
+ * - Erro no meio limpa o arquivo temporário. ZERO schema change.
+ */
+/**
  * Rev. 4617 - FIX: CRACHÁS — PILLS COM TODOS OS TREINAMENTOS FEITOS (REGRA DE OURO)
  *
  * Pedido do usuário (regra de ouro, 26/07/2026): o crachá deve classificar

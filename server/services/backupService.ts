@@ -162,47 +162,148 @@ export async function executarBackup(
       WHERE id = ${backupId}
     `);
 
-    const exportData: Record<string, unknown[]> = {};
+    // Rev. 4618 — STREAMING: nunca acumula o banco inteiro na memória.
+    // O backup antigo montava exportData{} com TODAS as 500+ tabelas de uma vez
+    // e estourava o heap de 1GB (OOM derrubava o servidor em produção).
+    // Agora cada tabela é lida em lotes (keyset por ctid) e escrita direto num
+    // stream gzip em /tmp; só o arquivo COMPRIMIDO volta pra memória no final.
+    const { createGzip } = await import("zlib");
+    const fs = await import("fs");
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const tmpPath = `/tmp/erp-fc-backup-${timestamp}-${backupId}.json.gz`;
+
+    const gzip = createGzip({ level: 9 });
+    const fileStream = fs.createWriteStream(tmpPath);
+    gzip.pipe(fileStream);
+    const write = (chunk: string) =>
+      new Promise<void>((resolve, reject) => {
+        const ok = gzip.write(chunk, (err) => (err ? reject(err) : undefined));
+        if (ok) resolve();
+        else gzip.once("drain", () => resolve());
+      });
+
     let totalRegistros = 0;
     let tabelasExportadas = 0;
+    const CTID_RE = /^\(\d+,\d+\)$/;
 
-    for (const tableName of allTables) {
-      if (tableName === "backup_snapshots") {
-        tabelasExportadas++;
-        continue;
+    // Lote adaptativo: tabelas com linhas gigantes (ex.: eventos com fotos base64,
+    // ~190KB/linha) não podem vir 2.000 de uma vez — o driver parseia o lote
+    // inteiro em memória. Alvo ~8MB por lote, entre 25 e 2.000 linhas.
+    const TARGET_CHUNK_BYTES = 8 * 1024 * 1024;
+    const avgRowBytes = new Map<string, number>();
+    try {
+      const sizes = await db.execute(sql`
+        SELECT c.relname AS t, pg_table_size(c.oid) AS bytes, c.reltuples::bigint AS rows
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r'
+      `);
+      for (const r of ((sizes as any).rows || [])) {
+        const rows = Number(r.rows);
+        // reltuples <= 0 = tabela nunca analisada → sem estimativa confiável.
+        if (rows > 0) avgRowBytes.set(String(r.t), Number(r.bytes) / rows);
       }
+    } catch (e: any) {
+      console.warn(`[Backup] Falha ao medir tabelas (usando lote padrão): ${e.message}`);
+    }
+    const chunkFor = (t: string) => {
+      const avg = avgRowBytes.get(t) || 512;
+      return Math.max(25, Math.min(2000, Math.floor(TARGET_CHUNK_BYTES / Math.max(avg, 256))));
+    };
 
-      try {
-        if (tableName === "uploaded_files") {
-          const rows = await db.execute(sql.raw(
-            `SELECT id, file_key, content_type, LENGTH(data_base64) as tamanho_base64 FROM uploaded_files`
-          ));
-          const data = (rows as any).rows || [];
-          if (data.length > 0) {
-            exportData[tableName] = data;
-            totalRegistros += data.length;
-          }
-        } else {
-          const rows = await db.execute(sql.raw(`SELECT * FROM "${tableName}"`));
-          const data = (rows as any).rows || [];
-          if (data.length > 0) {
-            exportData[tableName] = data;
-            totalRegistros += data.length;
-          }
+    await write(`{"tabelas":{`);
+    let firstTable = true;
+
+    try {
+      for (const tableName of allTables) {
+        if (tableName === "backup_snapshots") {
+          tabelasExportadas++;
+          continue;
         }
-        tabelasExportadas++;
-      } catch (err: any) {
-        console.warn(`[Backup] Tabela ${tableName} ignorada: ${err.message}`);
+
+        try {
+          let rowsDaTabela = 0;
+          let lastCtid: string | null = null;
+          let tabelaAberta = false;
+
+          const baseSelect = tableName === "uploaded_files"
+            ? `SELECT id, file_key, content_type, pg_column_size(data_base64) as tamanho_base64, ctid AS __ctid FROM uploaded_files`
+            : `SELECT *, ctid AS __ctid FROM "${tableName}"`;
+
+          // Keyset por ctid: estável, sem OFFSET quadrático, sem ORDER BY de coluna de negócio.
+          const CHUNK = chunkFor(tableName);
+          const t0Tabela = Date.now();
+          for (;;) {
+            const whereCtid = lastCtid ? ` WHERE ctid > '${lastCtid}'::tid` : "";
+            const result = await db.execute(sql.raw(
+              `${baseSelect}${whereCtid} ORDER BY ctid LIMIT ${CHUNK}`
+            ));
+            const data: any[] = (result as any).rows || [];
+            if (data.length === 0) break;
+
+            const rawCtid = String(data[data.length - 1].__ctid ?? "");
+            if (!CTID_RE.test(rawCtid)) throw new Error(`ctid inesperado em ${tableName}: ${rawCtid}`);
+            lastCtid = rawCtid;
+
+            const parts: string[] = [];
+            for (const row of data) {
+              delete row.__ctid;
+              parts.push(JSON.stringify(row));
+            }
+
+            if (!tabelaAberta) {
+              await write(`${firstTable ? "" : ","}${JSON.stringify(tableName)}:[`);
+              tabelaAberta = true;
+              firstTable = false;
+            } else {
+              await write(",");
+            }
+            await write(parts.join(","));
+            rowsDaTabela += data.length;
+            if (data.length < CHUNK) break;
+          }
+
+          if (tabelaAberta) await write("]");
+          totalRegistros += rowsDaTabela;
+          tabelasExportadas++;
+          const durTabela = Date.now() - t0Tabela;
+          if (durTabela > 15_000) {
+            console.log(`[Backup] Tabela lenta: ${tableName} — ${rowsDaTabela} linhas em ${(durTabela / 1000).toFixed(1)}s (lote ${CHUNK})`);
+          }
+        } catch (err: any) {
+          console.warn(`[Backup] Tabela ${tableName} ignorada: ${err.message}`);
+        }
+
+        // Progresso incremental: a cada 10 tabelas, atualiza o contador para o painel mostrar o %.
+        if (tabelasExportadas % 10 === 0) {
+          try {
+            await db.execute(sql`
+              UPDATE backups SET "tabelasExportadas" = ${tabelasExportadas} WHERE id = ${backupId}
+            `);
+          } catch { /* progresso é best-effort; não interrompe o backup */ }
+        }
       }
 
-      // Progresso incremental: a cada 10 tabelas, atualiza o contador para o painel mostrar o %.
-      if (tabelasExportadas % 10 === 0) {
-        try {
-          await db.execute(sql`
-            UPDATE backups SET "tabelasExportadas" = ${tabelasExportadas} WHERE id = ${backupId}
-          `);
-        } catch { /* progresso é best-effort; não interrompe o backup */ }
-      }
+      const metadata = {
+        versao: "2.0",
+        dataBackup: now.toISOString(),
+        tipo,
+        iniciadoPor,
+        tabelasExportadas,
+        totalRegistros,
+        tabelasTotal: allTables.length,
+      };
+      await write(`},"metadata":${JSON.stringify(metadata)}}`);
+
+      await new Promise<void>((resolve, reject) => {
+        fileStream.on("finish", resolve);
+        fileStream.on("error", reject);
+        gzip.on("error", reject);
+        gzip.end();
+      });
+    } catch (err) {
+      try { gzip.destroy(); fileStream.destroy(); fs.unlinkSync(tmpPath); } catch { /* cleanup best-effort */ }
+      throw err;
     }
 
     // Checkpoint final do contador ao sair do loop (cobre a defasagem se o último passo não foi múltiplo de 10).
@@ -212,23 +313,8 @@ export async function executarBackup(
       `);
     } catch { /* best-effort */ }
 
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const jsonContent = JSON.stringify({
-      metadata: {
-        versao: "2.0",
-        dataBackup: now.toISOString(),
-        tipo,
-        iniciadoPor,
-        tabelasExportadas,
-        totalRegistros,
-        tabelasTotal: allTables.length,
-      },
-      tabelas: exportData,
-    });
-
-    const { gzipSync } = await import("zlib");
-    const compressed = gzipSync(Buffer.from(jsonContent, "utf-8"), { level: 9 });
+    const compressed = fs.readFileSync(tmpPath);
+    try { fs.unlinkSync(tmpPath); } catch { /* best-effort */ }
     const tamanhoBytes = compressed.length;
 
     const s3Key = `backups/erp-fc-backup-${timestamp}.json.gz`;
