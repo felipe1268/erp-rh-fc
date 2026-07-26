@@ -13,6 +13,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
+import logoCrachaNavy from "@assets/cracha_logo_navy.png";
+import logoCrachaWhite from "@assets/cracha_logo_white.png";
 import {
   CreditCard, Search, Download, Printer, User, Building2, HardHat,
   Eye, Filter, Users, CheckCircle, AlertTriangle, Camera, Palette, RotateCcw,
@@ -536,169 +538,149 @@ function BadgeCard({ badge, color, label, onPreview }: { badge: BadgeData; color
   );
 }
 
-// Badge Preview Component — Rev. 4606: novo modelo de arte (header curvo navy +
-// faixa laranja, foto circular sobreposta, linhas de dados com ícones; verso com
-// QR emoldurado, slogan e rodapé de contato). Cor principal segue personalizável
-// por tipo (Personalizar Cores); o laranja de destaque (ACCENT) é fixo da marca.
+// Badge Preview Component — Rev. 4606/4607: réplica fiel da arte enviada pelo
+// usuário (attached_assets/IMG_4471). Paleta FIXA da marca extraída da própria
+// arte: navy #0A1E3C + laranja #EE9803. Logos recortados da arte (versão fundo
+// navy p/ frente, fundo branco p/ verso). Sem selo de tipo e sem QR na frente
+// (a arte não tem); QR só no verso, emoldurado em laranja.
+const CRACHA_NAVY = "#0A1E3C";
+const CRACHA_ORANGE = "#EE9803";
+
 function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, color, label }: {
   badge: BadgeData; companyName: string; companyLogo?: string; companyPhone?: string;
   side: "front" | "back"; color: string; label: string;
 }) {
   const qrData = `${window.location.origin}/verificar/${badge.tipo}/${badge.id}`;
+  const NAVY = CRACHA_NAVY;
+  const OR = CRACHA_ORANGE;
 
-  // Marca d'água de construção (linhas leves de prédios/guindaste) usada em frente e verso
-  const Watermark = () => (
-    <svg className="absolute bottom-0 right-0 pointer-events-none" width="220" height="260" viewBox="0 0 220 260" fill="none" style={{ opacity: 0.07 }}>
-      <g stroke={color} strokeWidth="2">
-        <rect x="20" y="120" width="60" height="140" />
-        <rect x="30" y="135" width="12" height="12" /><rect x="56" y="135" width="12" height="12" />
-        <rect x="30" y="160" width="12" height="12" /><rect x="56" y="160" width="12" height="12" />
-        <rect x="30" y="185" width="12" height="12" /><rect x="56" y="185" width="12" height="12" />
-        <rect x="30" y="210" width="12" height="12" /><rect x="56" y="210" width="12" height="12" />
-        <rect x="100" y="160" width="70" height="100" />
-        <rect x="112" y="175" width="14" height="14" /><rect x="140" y="175" width="14" height="14" />
-        <rect x="112" y="205" width="14" height="14" /><rect x="140" y="205" width="14" height="14" />
-        <line x1="150" y1="160" x2="150" y2="40" />
-        <line x1="150" y1="40" x2="215" y2="40" />
-        <line x1="150" y1="60" x2="205" y2="40" />
-        <line x1="195" y1="40" x2="195" y2="75" />
-        <rect x="188" y="75" width="14" height="16" />
+  // Marca d'água de construção (linhas leves de prédios/guindaste), como na arte
+  const Watermark = ({ topOffset }: { topOffset?: number }) => (
+    <svg className="absolute right-0 pointer-events-none" style={{ bottom: topOffset ?? 0, opacity: 0.08 }} width="200" height="240" viewBox="0 0 200 240" fill="none">
+      <g stroke="#8a93a6" strokeWidth="1.5">
+        <rect x="14" y="110" width="54" height="130" />
+        <rect x="23" y="124" width="11" height="11" /><rect x="46" y="124" width="11" height="11" />
+        <rect x="23" y="147" width="11" height="11" /><rect x="46" y="147" width="11" height="11" />
+        <rect x="23" y="170" width="11" height="11" /><rect x="46" y="170" width="11" height="11" />
+        <rect x="23" y="193" width="11" height="11" /><rect x="46" y="193" width="11" height="11" />
+        <rect x="86" y="150" width="62" height="90" />
+        <rect x="97" y="163" width="12" height="12" /><rect x="122" y="163" width="12" height="12" />
+        <rect x="97" y="190" width="12" height="12" /><rect x="122" y="190" width="12" height="12" />
+        <line x1="130" y1="150" x2="130" y2="34" />
+        <line x1="130" y1="34" x2="196" y2="34" />
+        <line x1="130" y1="52" x2="186" y2="34" />
+        <line x1="176" y1="34" x2="176" y2="66" />
+        <rect x="169" y="66" width="13" height="15" />
       </g>
     </svg>
-  );
-
-  const LogoBlock = ({ dark }: { dark: boolean }) => (
-    companyLogo ? (
-      <img src={companyLogo} alt="" className="h-12 object-contain" style={dark ? {} : { filter: "none" }} />
-    ) : (
-      <div className="flex items-baseline gap-1">
-        <span className="text-3xl font-black italic tracking-tight" style={{ color: dark ? "#fff" : color }}>FC</span>
-        <span className="text-[11px] font-bold tracking-[0.18em]" style={{ color: dark ? "#fff" : color }}>
-          {(companyName || "ENGENHARIA").toUpperCase().replace(/^FC\s*/, "") || "ENGENHARIA"}
-        </span>
-      </div>
-    )
   );
 
   if (side === "back") {
     return (
       <div className="w-[340px] h-[540px] rounded-2xl overflow-hidden shadow-xl mx-auto relative bg-white flex flex-col">
-        <Watermark />
-        {/* Logo topo */}
-        <div className="flex flex-col items-center pt-7">
-          <LogoBlock dark={false} />
-          <div className="mt-2 h-[3px] w-24 rounded-full" style={{ backgroundColor: ACCENT }} />
+        <Watermark topOffset={70} />
+        {/* Logo topo (versão fundo branco, recortada da arte) */}
+        <div className="flex flex-col items-center pt-6">
+          <img src={logoCrachaWhite} alt="" className="h-12 object-contain" />
+          <div className="mt-3 h-[2px] w-[200px] rounded-full" style={{ backgroundColor: OR }} />
         </div>
-        {/* QR emoldurado */}
+        {/* QR emoldurado em laranja */}
         <div className="flex flex-col items-center mt-5">
-          <div className="p-3 rounded-xl border-2" style={{ borderColor: ACCENT }}>
-            <QRCodeSVG value={qrData} size={140} level="H" />
+          <div className="p-3 rounded-lg border" style={{ borderColor: OR, borderWidth: 1.5 }}>
+            <QRCodeSVG value={qrData} size={132} level="H" fgColor="#111111" />
           </div>
-          <p className="text-[11px] mt-3 text-center leading-snug" style={{ color: "#5b6473" }}>
+          <p className="text-[10.5px] mt-3 text-center leading-snug" style={{ color: "#4a5568" }}>
             Verifique a autenticidade<br />deste crachá.
           </p>
         </div>
         {/* Slogan */}
-        <div className="flex flex-col items-center mt-4 px-8 text-center">
-          <Users className="w-6 h-6 mb-1" style={{ color }} />
-          <p className="text-lg font-extrabold leading-tight" style={{ color }}>
+        <div className="flex flex-col items-center mt-5 px-8 text-center relative">
+          <Users className="w-6 h-6 mb-1" style={{ color: NAVY }} />
+          <p className="text-[17px] font-extrabold leading-snug" style={{ color: NAVY }}>
             Grandes obras<br />começam com{" "}
-            <span style={{ color: ACCENT }}>grandes pessoas.</span>
+            <span style={{ color: OR }}>grandes<br />pessoas.</span>
           </p>
-          <div className="my-2 h-px w-40" style={{ backgroundColor: "#e2e6ee" }} />
-          <p className="text-[11px] font-medium" style={{ color: "#5b6473" }}>Compromisso que vira resultado.</p>
+          <div className="mt-3 mb-2 h-px w-[210px]" style={{ backgroundColor: "#e4e8ef" }} />
+          <p className="text-[10.5px] font-semibold" style={{ color: NAVY }}>Compromisso que vira resultado.</p>
+          <div className="mt-2 h-px w-[210px]" style={{ backgroundColor: "#e4e8ef" }} />
         </div>
-        {/* Rodapé de contato */}
-        <div className="mt-auto relative" style={{ backgroundColor: color }}>
-          <div className="flex items-center justify-center gap-3 py-4 px-6">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: ACCENT }}>
-              <Phone className="w-5 h-5 text-white" />
+        {/* Rodapé navy com telefone */}
+        <div className="mt-auto" style={{ backgroundColor: NAVY }}>
+          <div className="flex items-center justify-center gap-4 py-4 px-6">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: OR }}>
+              <Phone className="w-5 h-5" style={{ color: NAVY }} fill={NAVY} />
             </div>
-            <div className="text-white">
-              <p className="text-[11px] leading-tight opacity-90">Em caso de perda,<br />entre em contato:</p>
+            <div className="text-white text-center">
+              <p className="text-[10.5px] leading-tight font-medium">Em caso de perda,<br />entre em contato:</p>
+              <p className="text-[17px] font-extrabold mt-0.5 whitespace-nowrap">{companyPhone || "(12) 3133-5504"}</p>
             </div>
-            <p className="text-white text-lg font-extrabold whitespace-nowrap">{companyPhone || "(12) 3133-5504"}</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // FRENTE
-  const detalhes: { icon: React.ReactNode; rotulo: string; valor?: string; bold?: boolean }[] = [
-    badge.matricula ? { icon: <User className="w-3.5 h-3.5" />, rotulo: "Nº INTERNO", valor: badge.matricula, bold: true } : null,
-    badge.setor ? { icon: <Briefcase className="w-3.5 h-3.5" />, rotulo: "SETOR", valor: badge.setor.toUpperCase(), bold: true } : null,
+  // FRENTE — réplica da arte
+  const detalhes = [
+    badge.matricula ? { icon: <User className="w-3.5 h-3.5" />, rotulo: "Nº INTERNO", valor: badge.matricula } : null,
+    badge.setor ? { icon: <Briefcase className="w-3.5 h-3.5" />, rotulo: "SETOR", valor: badge.setor.toUpperCase() } : null,
     badge.empresaTerceira ? { icon: <Building2 className="w-3.5 h-3.5" />, rotulo: "EMPRESA", valor: badge.empresaTerceira } : null,
     badge.obra ? { icon: <HardHat className="w-3.5 h-3.5" />, rotulo: "OBRA", valor: badge.obra } : null,
-    badge.dataAdmissao ? { icon: <Calendar className="w-3.5 h-3.5" />, rotulo: "ADMISSÃO", valor: formatDateBR(badge.dataAdmissao), bold: true } : null,
-  ].filter(Boolean) as any[];
+    badge.dataAdmissao ? { icon: <Calendar className="w-3.5 h-3.5" />, rotulo: "ADMISSÃO", valor: formatDateBR(badge.dataAdmissao) } : null,
+  ].filter(Boolean) as { icon: React.ReactNode; rotulo: string; valor: string }[];
 
   return (
     <div className="w-[340px] h-[540px] rounded-2xl overflow-hidden shadow-xl mx-auto relative bg-white">
       <Watermark />
-      {/* Header navy com curva laranja */}
-      <div className="relative" style={{ height: 170 }}>
-        <div className="absolute inset-0" style={{ backgroundColor: color }} />
-        {/* Curvas: faixa laranja + recorte branco */}
-        <svg className="absolute bottom-0 left-0 w-full" viewBox="0 0 340 70" preserveAspectRatio="none" style={{ height: 70 }}>
-          <path d="M0,70 C90,10 240,55 340,8 L340,70 Z" fill={ACCENT} />
-          <path d="M0,70 C95,22 245,62 340,20 L340,70 Z" fill="#ffffff" />
+      {/* Header navy com curva e faixa laranja (como na arte: sobe da esquerda p/ direita) */}
+      <div className="relative" style={{ height: 168 }}>
+        <div className="absolute inset-0" style={{ backgroundColor: NAVY }} />
+        <svg className="absolute bottom-0 left-0 w-full" viewBox="0 0 340 64" preserveAspectRatio="none" style={{ height: 64 }}>
+          {/* faixa laranja acompanhando a curva */}
+          <path d="M0,64 C110,60 210,16 340,6 L340,20 C210,28 110,68 0,72 Z" fill={CRACHA_ORANGE} transform="translate(0,-8)" />
+          {/* recorte branco */}
+          <path d="M0,64 C110,60 210,20 340,12 L340,64 Z" fill="#ffffff" />
         </svg>
-        {/* Selo do tipo */}
-        <div className="absolute top-3 right-3 rounded-md px-2 py-0.5" style={{ backgroundColor: "rgba(255,255,255,0.18)" }}>
-          <span className="text-white text-[10px] font-bold tracking-wider">{label}</span>
-        </div>
-        {/* Logo */}
-        <div className="absolute inset-x-0 top-6 flex justify-center">
-          <LogoBlock dark />
+        {/* Logo da arte (fundo navy) */}
+        <div className="absolute inset-x-0 top-4 flex justify-center">
+          <img src={logoCrachaNavy} alt="" className="h-[74px] object-contain" />
         </div>
       </div>
 
-      {/* Foto sobreposta à curva */}
-      <div className="relative flex justify-center" style={{ marginTop: -64 }}>
-        <div className="w-32 h-32 rounded-full bg-white border-4 border-white shadow-lg overflow-hidden flex items-center justify-center"
-          style={{ boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
+      {/* Foto circular sobreposta à curva */}
+      <div className="relative flex justify-center" style={{ marginTop: -60 }}>
+        <div className="w-[120px] h-[120px] rounded-full bg-white overflow-hidden flex items-center justify-center"
+          style={{ border: "4px solid #ffffff", boxShadow: "0 6px 16px rgba(10,30,60,0.25)" }}>
           {badge.foto ? (
             <img src={badge.foto} alt="" className="w-full h-full object-cover" />
           ) : (
-            <User className="w-16 h-16 text-muted-foreground/40" />
+            <User className="w-14 h-14 text-muted-foreground/40" />
           )}
         </div>
       </div>
 
-      {/* Nome + função */}
-      <div className="text-center mt-3 px-5">
-        <h2 className="text-xl font-extrabold uppercase leading-tight tracking-wide line-clamp-2 overflow-hidden" style={{ color }}>
+      {/* Nome + ponto laranja + função */}
+      <div className="text-center mt-3 px-6">
+        <h2 className="text-[21px] font-extrabold uppercase leading-tight tracking-wide line-clamp-2 overflow-hidden" style={{ color: NAVY }}>
           {badge.nome}
         </h2>
-        <div className="flex justify-center my-1.5">
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: ACCENT }} />
+        <div className="flex justify-center my-1">
+          <span className="w-[5px] h-[5px] rounded-full" style={{ backgroundColor: OR }} />
         </div>
-        <div className="mx-auto inline-block border-t border-b py-1 px-3 max-w-[280px]" style={{ borderColor: "#dfe4ec" }}>
-          <p className="text-[12px] font-semibold truncate" style={{ color: "#3d4757" }}>{badge.funcao || "—"}</p>
+        <div className="mx-auto inline-block border-t border-b py-[3px] px-4 max-w-[280px]" style={{ borderColor: "#d8dee8" }}>
+          <p className="text-[11.5px] font-semibold truncate" style={{ color: NAVY }}>{badge.funcao || "—"}</p>
         </div>
       </div>
 
-      {/* Linhas de dados */}
-      <div className="mt-4 px-8 space-y-2.5 relative">
+      {/* Linhas de dados (ícone + rótulo à esquerda, valor bold à direita, sublinhado) */}
+      <div className="mt-4 px-9 space-y-[11px] relative">
         {detalhes.map((d, i) => (
-          <div key={i} className="flex items-center gap-2 border-b pb-1.5" style={{ borderColor: "#dfe4ec" }}>
-            <span className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-              style={{ backgroundColor: "rgba(0,0,0,0.04)", color }}>{d.icon}</span>
-            <span className="text-[10px] font-semibold tracking-[0.12em]" style={{ color: "#5b6473" }}>{d.rotulo}</span>
-            <span className={`ml-auto text-[12px] text-right max-w-[150px] truncate ${d.bold ? "font-extrabold" : "font-semibold"}`}
-              style={{ color }}>{d.valor}</span>
+          <div key={i} className="flex items-center gap-2.5 border-b pb-[6px]" style={{ borderColor: "#d8dee8" }}>
+            <span className="shrink-0" style={{ color: NAVY }}>{d.icon}</span>
+            <span className="text-[9.5px] font-semibold tracking-[0.14em]" style={{ color: "#4a5568" }}>{d.rotulo}</span>
+            <span className="ml-auto text-[12px] font-extrabold text-right max-w-[150px] truncate" style={{ color: NAVY }}>{d.valor}</span>
           </div>
         ))}
-      </div>
-
-      {/* QR pequeno + ID */}
-      <div className="absolute bottom-3 inset-x-0 flex items-center justify-center gap-3">
-        <QRCodeSVG value={qrData} size={44} level="M" />
-        <div className="text-[10px]" style={{ color: "#5b6473" }}>
-          <p className="font-bold">ID: {badge.tipo.toUpperCase()}-{String(badge.id).padStart(5, "0")}</p>
-          <p>{companyName || "FC Engenharia"}</p>
-        </div>
       </div>
     </div>
   );

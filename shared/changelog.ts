@@ -5,28 +5,35 @@
  * layout para TODOS os tipos (CLT, PJ e Terceiros). O componente BadgePreview
  * (client/src/pages/terceiros/Crachas.tsx) foi redesenhado:
  *
- * FRENTE: cabeçalho na cor do tipo (personalizável em "Personalizar Cores")
- * com o logo da empresa e curva dupla — faixa laranja da marca (ACCENT
- * #F49D1F) + recorte branco; foto circular grande sobreposta à curva com anel
- * branco e sombra; nome em caixa alta na cor do tipo com ponto laranja e
- * função entre filetes; linhas de dados com ícone + rótulo à esquerda e valor
- * em negrito à direita, sublinhadas (Nº INTERNO, SETOR, EMPRESA, OBRA,
- * ADMISSÃO — cada linha só aparece se houver dado); QR pequeno + ID no rodapé;
- * marca d'água de construção (prédios/guindaste em linhas leves, opacity .07).
+ * ITERAÇÃO FINAL (a pedido: "exatamente igual, cada detalhe, cada cor"):
+ * réplica FIEL da arte. Paleta FIXA extraída pixel a pixel da própria arte —
+ * navy #0A1E3C + laranja #EE9803 — para TODOS os tipos (o crachá em si não
+ * usa mais a cor personalizável por tipo; ela segue nos cards da listagem).
+ * Logos RECORTADOS da arte original e salvos como assets:
+ * attached_assets/cracha_logo_navy.png (versão fundo navy, frente) e
+ * cracha_logo_white.png (versão fundo branco, verso), importados via @assets.
  *
- * VERSO: logo no topo com sublinhado laranja; QR grande emoldurado em borda
- * laranja + "Verifique a autenticidade deste crachá."; ícone de pessoas +
- * slogan "Grandes obras começam com grandes pessoas." (destaque laranja) e
- * "Compromisso que vira resultado."; rodapé na cor do tipo com ícone de
- * telefone em círculo laranja e "Em caso de perda, entre em contato:" +
- * telefone da empresa (companyObj.telefone/phone, fallback (12) 3133-5504).
+ * FRENTE: header navy com o logo da arte + curva subindo da esquerda p/ a
+ * direita com faixa laranja acompanhando; foto circular sobreposta com anel
+ * branco e sombra; nome caixa alta navy (line-clamp-2) + ponto laranja +
+ * função entre filetes (truncate); linhas de dados com ícone navy + rótulo
+ * pequeno à esquerda e valor em negrito navy à direita, sublinhadas
+ * (Nº INTERNO/SETOR/EMPRESA/OBRA/ADMISSÃO, só se houver dado); marca d'água
+ * de construção. SEM QR/ID e SEM selo de tipo na frente (a arte não tem).
  *
- * A cor principal por tipo continua personalizável (localStorage
- * "cracha-colors"); só o laranja de destaque é fixo da marca. Tamanho do
- * cartão mantido (340×540) — download PNG (toPng pixelRatio 3) e impressão
- * continuam funcionando sem mudança. ZERO mudança de server/schema.
+ * VERSO: logo (fundo branco) + sublinhado laranja; QR emoldurado em borda
+ * laranja fina + "Verifique a autenticidade deste crachá."; ícone de pessoas
+ * + "Grandes obras começam com grandes pessoas." (destaque laranja) entre
+ * filetes com "Compromisso que vira resultado."; rodapé navy com círculo
+ * laranja + telefone da empresa (companyObj.telefone/phone, fallback
+ * (12) 3133-5504).
  *
- * Arquivos: client/src/pages/terceiros/Crachas.tsx.
+ * formatDateBR sem new Date (evita off-by-one de fuso na admissão — achado
+ * do architect). Cartão 340×540; download PNG (toPng pixelRatio 3) e
+ * impressão inalterados. ZERO mudança de server/schema.
+ *
+ * Arquivos: client/src/pages/terceiros/Crachas.tsx,
+ * attached_assets/cracha_logo_navy.png, attached_assets/cracha_logo_white.png.
  */
 
 /**
