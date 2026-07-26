@@ -54,6 +54,7 @@ import { parseSantanderIbpjPdf } from "../services/santanderIbpjParser";
 import { parseBancoBrasilExtratoPdf } from "../services/bbPdfParser";
 import { parseExtratoComIA } from "../services/extratoIaParser";
 import { detectarTemplateExtrato } from "./bankStatementTemplates";
+import { assertNumeroChequeDisponivel } from "./cheques";
 import {
   computeThreeWayMatch, blockPaymentByThreeWay, releasePaymentByThreeWay,
   parseOFX, parseCNAB, suggestReconciliation, applyReconciliation,
@@ -10817,6 +10818,21 @@ export const financialRouter = router({
       const totalCheques = Math.round((input.cheques!.reduce((s, c) => s + (Number(c.valor) || 0), 0)) * 100) / 100;
       if (Math.abs(totalCheques - totalGrupo) > 0.05) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `A soma dos cheques (R$${totalCheques.toFixed(2)}) não bate com o total do grupo (R$${totalGrupo.toFixed(2)}).` });
+      }
+      // Rev. 4596 — Poka-Yoke: bloqueia nº de cheque duplicado (mesma regra do
+      // Controle de Cheques): já existente na base (mesma conta OU fornecedor)
+      // ou repetido dentro do próprio pagamento.
+      const numerosDoLote = new Set<string>();
+      for (const c of input.cheques!) {
+        const norm = String(c.numero ?? "").replace(/[^0-9]/g, "").replace(/^0+(?=.)/, "");
+        if (norm && numerosDoLote.has(norm)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `O nº de cheque ${c.numero} está repetido dentro deste pagamento.` });
+        }
+        if (norm) numerosDoLote.add(norm);
+        await assertNumeroChequeDisponivel(db, input.companyId, c.numero, {
+          contaBancariaId: input.contaBancariaId ?? null,
+          fornecedorNome: input.fornecedorNome ?? null,
+        });
       }
     }
     const chequesCriados: number[] = [];

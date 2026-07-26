@@ -1,4 +1,38 @@
 /**
+ * Rev. 4596 - FEAT: CHEQUES — REGRA DE Nº DUPLICADO TAMBÉM NA IMPORTAÇÃO E NO PAGAMENTO PELO CONTAS A PAGAR
+ *
+ * PEDIDO DO USUÁRIO: estender a regra da Rev. 4595 (bloqueio de nº de cheque
+ * duplicado) também para a IMPORTAÇÃO (planilha e PDFs por IA), que até então
+ * mantinha só o dedup idempotente (nº+valor+mês+ano) e deixava passar o mesmo
+ * número com valor/mês diferentes.
+ *
+ * COMO FUNCIONA:
+ * - IMPORTAÇÃO (cheques.ts): novo índice `carregarNumerosExistentes` (número
+ *   normalizado → contextos conta/fornecedor dos cheques ativos) + helper
+ *   `numeroColide` que ESPELHA a regra do lançamento manual: mesmo nº
+ *   normalizado + mesma conta bancária OU mesmo fornecedor = duplicado.
+ *   Aplicado nas 4 rotas (importarPreview/Confirmar e importarPdfPreview/
+ *   Confirmar) via montarRelatorio + inserirCheques (mesma classificação nas
+ *   duas etapas — o que a prévia mostra é o que a gravação faz).
+ * - ORDEM de classificação por linha: JA_EXISTE (dedup idempotente — re-upload
+ *   de histórico continua funcionando igual) > DUP_ARQUIVO (linha repetida no
+ *   arquivo) > DUP_NUMERO (novo: nº já existe na base OU apareceu antes no
+ *   próprio arquivo no mesmo contexto de talão) > NOVO. DUP_NUMERO NÃO grava
+ *   (conta como pulado) — Poka-Yoke nível bloqueio, sem abortar o lote.
+ * - PRÉVIA (FinanceiroCheques.tsx): card + chip + badge vermelhos "Nº duplicado"
+ *   (com tooltip explicando) e contagem `resumo.dupNumero` — o usuário vê
+ *   ANTES de gravar exatamente quais linhas serão bloqueadas e por quê.
+ * - CONTAS A PAGAR (financial.ts, pagamento consolidado com cheque próprio):
+ *   `assertNumeroChequeDisponivel` exportado de cheques.ts e chamado por
+ *   cheque ANTES da transação (mesma conta/fornecedor do pagamento) + Set
+ *   anti-repetição dentro do próprio pagamento — era o último caminho de
+ *   criação de cheque sem a regra.
+ *
+ * ARQUIVOS: server/routers/cheques.ts (índice+helper+4 rotas de importação),
+ * server/routers/financial.ts (pagamento consolidado), FinanceiroCheques.tsx
+ * (card/chip/badge DUP_NUMERO). ZERO schema change.
+ */
+/**
  * Rev. 4595 - FEAT: CONTROLE DE CHEQUES — BLOQUEIO DE Nº DE CHEQUE DUPLICADO (POKA-YOKE) + LIMPEZA DE DUPLICATAS
  *
  * PEDIDO DO USUÁRIO: depois de encontrarmos 11 grupos de cheques duplicados

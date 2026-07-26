@@ -258,7 +258,7 @@ export default function FinanceiroCheques() {
   const [progresso, setProgresso] = useState<number>(0);
   const [progLabel, setProgLabel] = useState<string>("");
   // Validação da prévia de importação: filtro por categoria + busca livre.
-  const [previewFiltro, setPreviewFiltro] = useState<"todos" | "novos" | "jaExistem" | "dup" | "semFornecedor" | "semConta" | "semValor">("todos");
+  const [previewFiltro, setPreviewFiltro] = useState<"todos" | "novos" | "jaExistem" | "dup" | "dupNumero" | "semFornecedor" | "semConta" | "semValor">("todos");
   const [previewBusca, setPreviewBusca] = useState<string>("");
   const progRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -687,6 +687,7 @@ export default function FinanceiroCheques() {
         case "novos": return l.situacao === "NOVO";
         case "jaExistem": return l.situacao === "JA_EXISTE";
         case "dup": return l.situacao === "DUP_ARQUIVO";
+        case "dupNumero": return l.situacao === "DUP_NUMERO";
         case "semFornecedor": return !l.fornecedorIdentificado;
         case "semConta": return !l.contaIdentificada;
         case "semValor": return l.semValor === true || l.valor == null || Number(l.valor) <= 0;
@@ -1713,6 +1714,11 @@ export default function FinanceiroCheques() {
                         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Dup. no arquivo</div>
                         <div className="text-2xl font-bold">{preview.resumo.dupNoArquivo}</div>
                       </button>
+                      <button type="button" onClick={() => setPreviewFiltro("dupNumero")}
+                        className={`text-left rounded-lg border border-red-200 bg-red-50 p-3.5 transition hover:ring-2 hover:ring-red-300 ${previewFiltro === "dupNumero" ? "ring-2 ring-red-500" : ""}`}>
+                        <div className="text-[11px] uppercase tracking-wide text-red-700/70">Nº duplicado</div>
+                        <div className="text-2xl font-bold text-red-700">{preview.resumo.dupNumero ?? 0}</div>
+                      </button>
                       <button type="button" onClick={() => setPreviewFiltro("semFornecedor")}
                         className={`text-left rounded-lg border bg-card p-3.5 transition hover:ring-2 hover:ring-primary/30 ${previewFiltro === "semFornecedor" ? "ring-2 ring-primary" : ""}`}>
                         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Sem fornecedor</div>
@@ -1795,6 +1801,7 @@ export default function FinanceiroCheques() {
                     ["novos", "Novos", preview.resumo.novos],
                     ["jaExistem", "Já existem", preview.resumo.jaExistem],
                     ["dup", "Duplicados", preview.resumo.dupNoArquivo],
+                    ["dupNumero", "Nº duplicado", preview.resumo.dupNumero ?? 0],
                     ["semFornecedor", "Sem fornecedor", preview.resumo.semFornecedor],
                     ["semConta", "Sem conta", preview.resumo.semConta ?? 0],
                     ["semValor", "Sem valor", preview.resumo.semValor ?? 0],
@@ -1847,7 +1854,9 @@ export default function FinanceiroCheques() {
                               ? <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[11px]">Novo</span>
                               : a.situacao === "JA_EXISTE"
                                 ? <span className="inline-flex items-center rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 text-[11px]">Já existe</span>
-                                : <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 text-[11px]">Dup.</span>}
+                                : a.situacao === "DUP_NUMERO"
+                                  ? <span className="inline-flex items-center rounded-full bg-red-50 text-red-700 px-2 py-0.5 text-[11px]" title="Já existe cheque ativo com este número na mesma conta ou fornecedor — não será gravado">Nº duplicado</span>
+                                  : <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 text-[11px]">Dup.</span>}
                           </td>
                         </tr>
                       ))}

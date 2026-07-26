@@ -395,6 +395,41 @@ function chaveDedup(row: ChequeRow): string {
   return `${row.numeroCheque ?? ""}|${cents}|${row.ano}|${row.mes ?? ""}`;
 }
 
+// Rev. 4596 — índice de números de cheque ATIVOS por número normalizado, com o
+// contexto (conta bancária + fornecedor) de cada um. Usado pela IMPORTAÇÃO
+// (planilha e PDFs por IA) p/ aplicar a MESMA regra Poka-Yoke do lançamento
+// manual: mesmo nº + mesma conta OU mesmo fornecedor = duplicado (não grava).
+type NumeroCtx = { conta: number | null; forn: string };
+async function carregarNumerosExistentes(db: any, companyId: number): Promise<Map<string, NumeroCtx[]>> {
+  const res = await dbExecute(db,
+    `SELECT numero_cheque AS n, conta_bancaria_id AS c, fornecedor_nome AS f
+       FROM financial_cheques WHERE company_id=$1 AND excluido_em IS NULL`, [companyId]);
+  const map = new Map<string, NumeroCtx[]>();
+  for (const r of res.rows) {
+    const num = numChequeNorm(r.n);
+    if (!num) continue;
+    const arr = map.get(num) ?? [];
+    arr.push({ conta: r.c != null ? Number(r.c) : null, forn: String(r.f ?? "").trim().toUpperCase() });
+    map.set(num, arr);
+  }
+  return map;
+}
+// true se o nº da linha colide com algum cheque existente no MESMO contexto de
+// talão (mesma conta OU mesmo fornecedor). Espelha assertNumeroChequeDisponivel.
+function numeroColide(
+  numerosExistentes: Map<string, NumeroCtx[]>,
+  numeroCheque: unknown, contaBancariaId: number | null, fornecedorNome: string | null | undefined,
+): boolean {
+  const num = numChequeNorm(numeroCheque);
+  if (!num) return false;
+  const ctxs = numerosExistentes.get(num);
+  if (!ctxs || ctxs.length === 0) return false;
+  const fornNorm = String(fornecedorNome ?? "").trim().toUpperCase();
+  return ctxs.some((c) =>
+    (contaBancariaId != null && c.conta != null && c.conta === contaBancariaId) ||
+    (fornNorm !== "" && c.forn === fornNorm));
+}
+
 // Rev. 4595 — Poka-Yoke (nível 2, bloqueio): número de cheque DUPLICADO.
 // Um cheque físico tem número único no talão; a base já sofreu duplicatas por
 // zeros à esquerda ("000531" × "531") e relançamentos em mês errado. Regra:
@@ -409,7 +444,7 @@ const numChequeNorm = (s: unknown) => {
   // "0000" normaliza para "0" (não para vazio) — senão cheques "só zeros" escapariam do bloqueio.
   return digitos.replace(/^0+(?=.)/, "");
 };
-async function assertNumeroChequeDisponivel(db: any, companyId: number, numeroCheque: unknown, opts: {
+export async function assertNumeroChequeDisponivel(db: any, companyId: number, numeroCheque: unknown, opts: {
   contaBancariaId?: number | null;
   fornecedorNome?: string | null;
   ignoreId?: number | null;
@@ -616,9 +651,11 @@ function montarRelatorio(
   fornecedores: { id: number; chaves: string[] }[],
   contas: { id: number; digitos: string }[],
   existentes: Set<string>,
+  numerosExistentes: Map<string, NumeroCtx[]>,
 ) {
   const vistosNoArquivo = new Set<string>();
-  let novos = 0, jaExistem = 0, dupNoArquivo = 0, semFornecedor = 0, semConta = 0, semValor = 0, valorTotalNovos = 0;
+  const numerosNoArquivo = new Map<string, NumeroCtx[]>();
+  let novos = 0, jaExistem = 0, dupNoArquivo = 0, dupNumero = 0, semFornecedor = 0, semConta = 0, semValor = 0, valorTotalNovos = 0;
   const porMes: Record<string, { mes: number; novos: number; jaExistem: number; valor: number }> = {};
   const linhas: any[] = [];
 
@@ -632,10 +669,25 @@ function montarRelatorio(
     if (!temConta) semConta++;
     if (!temValor) semValor++;
     const chave = chaveDedup(row);
-    let situacao: "NOVO" | "JA_EXISTE" | "DUP_ARQUIVO";
+    // Rev. 4596 — mesma regra Poka-Yoke do lançamento manual: nº normalizado já
+    // existe na base (ou apareceu antes NO PRÓPRIO arquivo) no mesmo contexto de
+    // talão (mesma conta OU mesmo fornecedor) = Nº DUPLICADO (não grava).
+    const num = numChequeNorm(row.numeroCheque);
+    let situacao: "NOVO" | "JA_EXISTE" | "DUP_ARQUIVO" | "DUP_NUMERO";
     if (existentes.has(chave)) { situacao = "JA_EXISTE"; jaExistem++; }
     else if (vistosNoArquivo.has(chave)) { situacao = "DUP_ARQUIVO"; dupNoArquivo++; }
-    else { situacao = "NOVO"; novos++; valorTotalNovos += row.valor ?? 0; vistosNoArquivo.add(chave); }
+    else if (numeroColide(numerosExistentes, row.numeroCheque, contaBancariaId, row.fornecedorNome)
+      || numeroColide(numerosNoArquivo, row.numeroCheque, contaBancariaId, row.fornecedorNome)) {
+      situacao = "DUP_NUMERO"; dupNumero++;
+    }
+    else {
+      situacao = "NOVO"; novos++; valorTotalNovos += row.valor ?? 0; vistosNoArquivo.add(chave);
+      if (num) {
+        const arr = numerosNoArquivo.get(num) ?? [];
+        arr.push({ conta: contaBancariaId ?? null, forn: String(row.fornecedorNome ?? "").trim().toUpperCase() });
+        numerosNoArquivo.set(num, arr);
+      }
+    }
 
     const mk = `${row.ano}-${String(row.mes).padStart(2, "0")}`;
     if (!porMes[mk]) porMes[mk] = { mes: row.mes ?? 0, novos: 0, jaExistem: 0, valor: 0 };
@@ -654,7 +706,7 @@ function montarRelatorio(
 
   return {
     resumo: {
-      totalLinhas: rows.length, novos, jaExistem, dupNoArquivo,
+      totalLinhas: rows.length, novos, jaExistem, dupNoArquivo, dupNumero,
       semFornecedor, semConta, semValor, valorTotalNovos: Math.round(valorTotalNovos * 100) / 100,
     },
     porMes: Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => ({ ref: k, ...v })),
@@ -669,9 +721,11 @@ async function inserirCheques(
   tx: any, companyId: number, rows: ChequeRow[],
   fornecedores: { id: number; chaves: string[] }[],
   contas: { id: number; digitos: string }[],
-  existentes: Set<string>, origem: string, loteId: string,
+  existentes: Set<string>, numerosExistentes: Map<string, NumeroCtx[]>,
+  origem: string, loteId: string,
 ): Promise<{ inseridos: number; pulados: number }> {
   const vistos = new Set<string>();
+  const numerosNoArquivo = new Map<string, NumeroCtx[]>();
   let pulados = 0;
 
   // 1) Dedup + match de fornecedor/conta EM MEMÓRIA → coleta as linhas a gravar.
@@ -680,9 +734,19 @@ async function inserirCheques(
   for (const row of rows) {
     const chave = chaveDedup(row);
     if (existentes.has(chave) || vistos.has(chave)) { pulados++; continue; }
-    vistos.add(chave);
     const fornecedorId = matchFornecedor(row.fornecedorNome, fornecedores);
     const contaBancariaId = matchConta(row.contaCorrenteRaw, contas);
+    // Rev. 4596 — Poka-Yoke: nº normalizado já existe no mesmo contexto de talão
+    // (base OU linhas anteriores do arquivo) → pula (espelha o montarRelatorio).
+    if (numeroColide(numerosExistentes, row.numeroCheque, contaBancariaId, row.fornecedorNome)
+      || numeroColide(numerosNoArquivo, row.numeroCheque, contaBancariaId, row.fornecedorNome)) { pulados++; continue; }
+    vistos.add(chave);
+    const numNorm = numChequeNorm(row.numeroCheque);
+    if (numNorm) {
+      const arr = numerosNoArquivo.get(numNorm) ?? [];
+      arr.push({ conta: contaBancariaId ?? null, forn: String(row.fornecedorNome ?? "").trim().toUpperCase() });
+      numerosNoArquivo.set(numNorm, arr);
+    }
     valoresPorLinha.push([
       companyId, contaBancariaId, row.contaCorrenteRaw, row.bancoCodigo, row.bancoNome,
       row.agencia, row.numeroCheque, row.fornecedorNome, fornecedorId, row.parcela, row.nf, row.valor,
@@ -955,13 +1019,14 @@ export const chequesRouter = router({
     try { parsed = parseWorkbook(input.fileBase64, input.ano ?? new Date().getFullYear()); }
     catch (e: any) { throw new TRPCError({ code: "BAD_REQUEST", message: `Não consegui ler a planilha: ${e?.message || e}` }); }
 
-    const [fornecedores, contas, existentes] = await Promise.all([
+    const [fornecedores, contas, existentes, numerosExistentes] = await Promise.all([
       carregarFornecedores(db, input.companyId),
       carregarContas(db, input.companyId),
       carregarExistentes(db, input.companyId),
+      carregarNumerosExistentes(db, input.companyId),
     ]);
 
-    const relatorio = montarRelatorio(parsed.rows, fornecedores, contas, existentes);
+    const relatorio = montarRelatorio(parsed.rows, fornecedores, contas, existentes, numerosExistentes);
     return {
       ...relatorio,
       abasLidas: parsed.abasLidas,
@@ -985,10 +1050,11 @@ export const chequesRouter = router({
     try { parsed = parseWorkbook(input.fileBase64, input.ano ?? new Date().getFullYear()); }
     catch (e: any) { throw new TRPCError({ code: "BAD_REQUEST", message: `Não consegui ler a planilha: ${e?.message || e}` }); }
 
-    const [fornecedores, contas, existentes] = await Promise.all([
+    const [fornecedores, contas, existentes, numerosExistentes] = await Promise.all([
       carregarFornecedores(db, input.companyId),
       carregarContas(db, input.companyId),
       carregarExistentes(db, input.companyId),
+      carregarNumerosExistentes(db, input.companyId),
     ]);
 
     const loteId = randomUUID();
@@ -996,7 +1062,7 @@ export const chequesRouter = router({
     let resultado = { inseridos: 0, pulados: 0 };
 
     await db.transaction(async (tx: any) => {
-      resultado = await inserirCheques(tx, input.companyId, parsed.rows, fornecedores, contas, existentes, origem, loteId);
+      resultado = await inserirCheques(tx, input.companyId, parsed.rows, fornecedores, contas, existentes, numerosExistentes, origem, loteId);
     });
 
     return { ...resultado, loteId };
@@ -1032,12 +1098,13 @@ export const chequesRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const rows = input.rows.map(sanitizeChequeRow);
-    const [fornecedores, contas, existentes] = await Promise.all([
+    const [fornecedores, contas, existentes, numerosExistentes] = await Promise.all([
       carregarFornecedores(db, input.companyId),
       carregarContas(db, input.companyId),
       carregarExistentes(db, input.companyId),
+      carregarNumerosExistentes(db, input.companyId),
     ]);
-    const relatorio = montarRelatorio(rows, fornecedores, contas, existentes);
+    const relatorio = montarRelatorio(rows, fornecedores, contas, existentes, numerosExistentes);
     return { ...relatorio, abasLidas: [] as string[], abasIgnoradas: [] as AbaIgnorada[] };
   }),
 
@@ -1052,16 +1119,17 @@ export const chequesRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const rows = input.rows.map(sanitizeChequeRow);
-    const [fornecedores, contas, existentes] = await Promise.all([
+    const [fornecedores, contas, existentes, numerosExistentes] = await Promise.all([
       carregarFornecedores(db, input.companyId),
       carregarContas(db, input.companyId),
       carregarExistentes(db, input.companyId),
+      carregarNumerosExistentes(db, input.companyId),
     ]);
     const loteId = randomUUID();
     const origem = (input.origemArquivo || "PDFs (IA)").slice(0, 255);
     let resultado = { inseridos: 0, pulados: 0 };
     await db.transaction(async (tx: any) => {
-      resultado = await inserirCheques(tx, input.companyId, rows, fornecedores, contas, existentes, origem, loteId);
+      resultado = await inserirCheques(tx, input.companyId, rows, fornecedores, contas, existentes, numerosExistentes, origem, loteId);
     });
     return { ...resultado, loteId };
   }),
