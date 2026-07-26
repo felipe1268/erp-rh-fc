@@ -1,4 +1,55 @@
 /**
+ * Rev. 4593 - FEAT: CARTÃO DE CRÉDITO — FATURA ENTRA AUTOMATICAMENTE NO CONTAS A PAGAR (VÍNCULO BIDIRECIONAL)
+ *
+ * PEDIDO DO USUÁRIO: a fatura de cartão importada deve virar automaticamente
+ * um título no Contas a Pagar; a baixa feita lá (total ou parcial) deve
+ * refletir de volta na fatura do módulo de Cartão.
+ *
+ * COMO FUNCIONA:
+ * - Ao confirmar a importação da fatura (importarConfirmar) e ao vincular a
+ *   fatura a um cartão (vincularFaturaCartao), o helper idempotente
+ *   `sincronizarFaturaFinanceiro` cria/atualiza um lançamento em
+ *   financial_entries com origem_modulo='cartao_fatura' e origem_id=faturaId
+ *   (status 'a_pagar', vencimento e valor da fatura). Título já com baixa
+ *   ativa NÃO é sobrescrito (respeita a decisão do Financeiro).
+ * - Coluna nova financial_cartao_faturas.financial_entry_id guarda o vínculo
+ *   direto fatura→título (+ índice). Excluir a fatura (excluirFatura) ou
+ *   reverter o lote (reverterLote) cancela o título via
+ *   `cancelarEntryDaFatura` (status='cancelado' + motivo) — nunca deleta.
+ * - VOLTA (Financeiro → Cartão): `_aplicarRollupBaixas` (financial.ts) ganhou
+ *   fan-out não-bloqueante: quando o entry baixado tem origem 'cartao_fatura',
+ *   o acumulado das baixas ativas é gravado em
+ *   financial_cartao_faturas.pagamentos — que alimenta o "em aberto" e o
+ *   limite disponível (Rev. 4591/4592) automaticamente.
+ * - UI (FinanceiroCartaoCredito.tsx): coluna "Financeiro" na tabela de
+ *   Faturas com badge Liquidada (pago) / Parcial · R$ X / No Contas a Pagar;
+ *   texto do cabeçalho explica o fluxo automático.
+ * - [SyncSchema+] Rev. 4593: ADD COLUMN financial_entry_id + índice + backfill
+ *   idempotente (só faturas com vencimento >= hoje e total > 0 — histórico já
+ *   pago fica fora, coerente com a leitura da Rev. 4592). Validado no Neon:
+ *   coluna criada; 0 faturas em aberto hoje (correto — próxima importação já
+ *   nasce vinculada).
+ *
+ * POKA-YOKE: sincronização idempotente por origem_modulo+origem_id (nunca
+ * duplica título); cancelamento em vez de delete; título com baixa ativa é
+ * intocável; fan-out em try/catch não-bloqueante (falha não trava a baixa).
+ * ANTI-CORRIDA (4593b, pós-review): índice único parcial
+ * uniq_fe_cartao_fatura_ativo (company_id, origem_id WHERE cartao_fatura ativo)
+ * + INSERT ... ON CONFLICT DO NOTHING + re-SELECT do id canônico nos 2 caminhos
+ * de criação (helper e backfill) + dedup migratório (mantém título com baixa
+ * ativa, senão menor id). Validado no Neon: índice criado e duplicata bloqueada
+ * em teste transacional (ROLLBACK).
+ *
+ * LIMITAÇÃO CONHECIDA: pagamentos de fatura lançados MANUALMENTE no passado
+ * não têm como ser deduplicados de forma confiável contra os novos títulos
+ * automáticos (sem vínculo, descrição livre) — por isso o backfill só olha
+ * pra frente (vencimento >= hoje).
+ *
+ * ARQUIVOS: server/routers/cartao.ts, server/routers/financial.ts,
+ * server/_core/index.ts ([SyncSchema+]), FinanceiroCartaoCredito.tsx.
+ */
+
+/**
  * Rev. 4592 - FIX: CARTÃO DE CRÉDITO — SALDO EM ABERTO LIDO COMO O BANCO LÊ
  *
  * PEDIDO DO USUÁRIO: "Você não consegue ler a fatura e entender qual é o

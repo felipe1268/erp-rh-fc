@@ -5654,6 +5654,79 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4529: status/data_saida em funcionarios_terceiros + terceiro_obra_vinculos garantidos.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4529 terceiro_obra_vinculos:", e?.message || e); }
 
+        // Rev. 4593 — Vínculo fatura de cartão ↔ Contas a Pagar
+        try {
+          await db.execute(sql.raw(`ALTER TABLE financial_cartao_faturas ADD COLUMN IF NOT EXISTS financial_entry_id INTEGER`));
+          await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_fcf_financial_entry ON financial_cartao_faturas(financial_entry_id)`));
+          console.log("[SyncSchema+] Rev. 4593: financial_entry_id em financial_cartao_faturas garantido.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4593 financial_entry_id:", e?.message || e); }
+
+        // Rev. 4593b — Anti-duplicidade a nível de banco: dedup de títulos
+        // 'cartao_fatura' ativos (mantém o que tem baixa ativa; senão o menor id)
+        // + índice único parcial que impede corrida de criar 2 títulos p/ 1 fatura.
+        try {
+          await db.execute(sql.raw(`
+            WITH ranked AS (
+              SELECT e.id, ROW_NUMBER() OVER (
+                       PARTITION BY e.company_id, e.origem_id
+                       ORDER BY (EXISTS (SELECT 1 FROM financial_entry_baixas b
+                                          WHERE b.entry_id=e.id AND b.estornada_em IS NULL)) DESC, e.id ASC
+                     ) AS rn
+                FROM financial_entries e
+               WHERE e.origem_modulo='cartao_fatura' AND e.status<>'cancelado'
+            )
+            UPDATE financial_entries SET status='cancelado',
+                   motivo_cancelamento='Duplicidade de título de fatura de cartão (dedup Rev. 4593)', updated_at=NOW()
+             WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
+          `));
+          await db.execute(sql.raw(`
+            UPDATE financial_cartao_faturas f SET financial_entry_id=e.id, updated_at=NOW()
+              FROM financial_entries e
+             WHERE e.origem_modulo='cartao_fatura' AND e.origem_id=f.id AND e.company_id=f.company_id
+               AND e.status<>'cancelado' AND f.excluido_em IS NULL
+               AND (f.financial_entry_id IS DISTINCT FROM e.id)
+          `));
+          await db.execute(sql.raw(`
+            CREATE UNIQUE INDEX IF NOT EXISTS uniq_fe_cartao_fatura_ativo
+              ON financial_entries(company_id, origem_id)
+              WHERE origem_modulo='cartao_fatura' AND status<>'cancelado'
+          `));
+          console.log("[SyncSchema+] Rev. 4593b: dedup + índice único parcial de títulos de fatura de cartão garantidos.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4593b uniq cartao_fatura:", e?.message || e); }
+
+        // Rev. 4593 (backfill idempotente) — faturas de cartão AINDA em aberto
+        // (vencimento >= hoje) e sem título vinculado ganham lançamento no Contas
+        // a Pagar. Faturas históricas (vencidas) NÃO entram — já foram pagas fora
+        // do vínculo. Dedup dupla: financial_entry_id IS NULL + NOT EXISTS origem.
+        try {
+          await db.execute(sql.raw(`
+            INSERT INTO financial_entries
+              (company_id, tipo, natureza, valor_previsto, data_competencia, data_vencimento,
+               status, origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
+            SELECT f.company_id, 'despesa', 'variavel', f.total,
+                   COALESCE(f.fechamento, f.vencimento)::date, f.vencimento::date,
+                   'a_pagar', 'cartao_fatura', f.id,
+                   'Fatura cartão ' || COALESCE(c.banco,'?') || ' final ' || COALESCE(c.final4,'????') || ' — ' || LPAD(COALESCE(f.mes_ref::text,'?'),2,'0') || '/' || COALESCE(f.ano_ref::text,'?'),
+                   'Fatura cartão ' || COALESCE(c.banco,'?') || ' final ' || COALESCE(c.final4,'????') || ' — ' || LPAD(COALESCE(f.mes_ref::text,'?'),2,'0') || '/' || COALESCE(f.ano_ref::text,'?'),
+                   NOW(), NOW()
+              FROM financial_cartao_faturas f
+              JOIN financial_cartoes c ON c.id=f.cartao_id AND c.company_id=f.company_id AND c.excluido_em IS NULL
+             WHERE f.excluido_em IS NULL AND f.financial_entry_id IS NULL
+               AND f.total IS NOT NULL AND f.total > 0
+               AND f.vencimento IS NOT NULL AND f.vencimento::date >= CURRENT_DATE
+               AND NOT EXISTS (SELECT 1 FROM financial_entries e
+                                WHERE e.origem_modulo='cartao_fatura' AND e.origem_id=f.id AND e.company_id=f.company_id)
+            ON CONFLICT (company_id, origem_id) WHERE origem_modulo='cartao_fatura' AND status<>'cancelado' DO NOTHING
+          `));
+          await db.execute(sql.raw(`
+            UPDATE financial_cartao_faturas f SET financial_entry_id=e.id, updated_at=NOW()
+              FROM financial_entries e
+             WHERE e.origem_modulo='cartao_fatura' AND e.origem_id=f.id AND e.company_id=f.company_id
+               AND e.status<>'cancelado' AND f.financial_entry_id IS NULL AND f.excluido_em IS NULL
+          `));
+          console.log("[SyncSchema+] Rev. 4593: backfill de faturas em aberto → Contas a Pagar concluído.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4593 backfill faturas:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

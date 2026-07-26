@@ -827,7 +827,7 @@ export default function FinanceiroCartaoCredito() {
               <CreditCard className="w-6 h-6 text-blue-700" /> Controle de Cartão de Crédito
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Cadastro de cartões, importação de faturas (PDF lido por IA) e classificação de gastos por obra/centro de custo. O cartão NÃO vira lançamento — é controle.
+              Cadastro de cartões, importação de faturas (PDF lido por IA) e classificação de gastos por obra/centro de custo. A fatura importada entra automaticamente no Contas a Pagar — e o pagamento feito lá (total ou parcial) reflete aqui.
             </p>
           </div>
           <div className="flex gap-2">
@@ -1078,6 +1078,7 @@ export default function FinanceiroCartaoCredito() {
                           <th className="py-2 pr-3 text-right">Total</th>
                           <th className="py-2 pr-3 text-center">Itens</th>
                           <th className="py-2 pr-3">Ref.</th>
+                          <th className="py-2 pr-3">Financeiro</th>
                           <th className="py-2 pr-3 text-right">Ações</th>
                         </tr>
                       </thead>
@@ -1098,6 +1099,20 @@ export default function FinanceiroCartaoCredito() {
                             <td className="py-2 pr-3 text-right font-medium">{formatBRL(f.total)}</td>
                             <td className="py-2 pr-3 text-center">{f.qtdItens}</td>
                             <td className="py-2 pr-3">{f.mes ? `${MESES[f.mes]}/${f.ano}` : (f.ano ?? "—")}</td>
+                            <td className="py-2 pr-3">
+                              {/* Rev. 4593 — status do título vinculado no Contas a Pagar */}
+                              {f.financialEntryId == null ? (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              ) : f.financeiroStatus === "pago" ? (
+                                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[11px]">Liquidada</Badge>
+                              ) : (f.financeiroValorPago ?? 0) > 0 ? (
+                                <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[11px]">
+                                  Parcial · {formatBRL(f.financeiroValorPago)}
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[11px]">No Contas a Pagar</Badge>
+                              )}
+                            </td>
                             <td className="py-2 pr-3 text-right">
                               <Button size="sm" variant="outline" className="h-7" onClick={() => abrirVincular(f)}><Pencil className="w-3.5 h-3.5 mr-1" /> Vincular</Button>
                               <Button size="sm" variant="outline" className="h-7" onClick={() => setFaturaItens(f)}><ListTree className="w-3.5 h-3.5 mr-1" /> Classificar</Button>

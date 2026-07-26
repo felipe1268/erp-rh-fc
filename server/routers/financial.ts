@@ -143,7 +143,7 @@ async function _estornarBaixasAtivasDoEntry(tx: any, entryId: number, companyId:
 
 async function _aplicarRollupBaixas(db: any, entryId: number, companyId: number) {
   const [entry]: any = await dbExecute(db,
-    `SELECT id, tipo, valor_previsto FROM financial_entries WHERE id=$1 AND company_id=$2`,
+    `SELECT id, tipo, valor_previsto, origem_modulo, origem_id FROM financial_entries WHERE id=$1 AND company_id=$2`,
     [entryId, companyId]
   ).then((r: any) => (Array.isArray(r) ? r : r?.rows ?? []));
   if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
@@ -184,6 +184,22 @@ async function _aplicarRollupBaixas(db: any, entryId: number, companyId: number)
      WHERE id=$5 AND company_id=$6`,
     [acumulado > 0 ? acumulado : null, novoStatus, dataPag, ultimaConta, entryId, companyId]
   );
+  // Rev. 4593 — fan-out p/ o Controle de Cartão de Crédito: título de fatura de
+  // cartão (origem 'cartao_fatura') propaga o valor pago (total OU parcial, e
+  // também estornos — sempre a SOMA das baixas ativas) p/ a coluna `pagamentos`
+  // da fatura vinculada. Assim a tela de Cartões mostra liquidado/parcial igual
+  // ao Financeiro, sem informação equivocada. Não-bloqueante: falha aqui nunca
+  // derruba a baixa em si.
+  if (entry.origem_modulo === "cartao_fatura" && entry.origem_id != null) {
+    try {
+      await dbExecute(db,
+        `UPDATE financial_cartao_faturas SET pagamentos=$1, updated_at=NOW()
+         WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL`,
+        [acumulado, Number(entry.origem_id), companyId]);
+    } catch (e: any) {
+      console.error("[Baixa→CartaoFatura] falha ao propagar pagamento p/ fatura:", e?.message || e);
+    }
+  }
   return {
     acumulado, previsto, quitado, status: novoStatus,
     saldo: Math.max(0, Math.round((previsto - acumulado) * 100) / 100),

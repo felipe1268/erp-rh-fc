@@ -56,6 +56,95 @@ async function dbExecute(db: any, query: string, params: unknown[] = []): Promis
   return { rows: (res as any)?.rows ?? (Array.isArray(res) ? res : []) };
 }
 
+// ── Rev. 4593 — Vínculo fatura ↔ Contas a Pagar ─────────────────────────
+// Toda fatura identificada (cartão + vencimento + total > 0) gera/atualiza
+// AUTOMATICAMENTE um lançamento de despesa no Financeiro (origem_modulo
+// 'cartao_fatura', origem_id = fatura.id) e guarda o vínculo bidirecional em
+// financial_cartao_faturas.financial_entry_id. O caminho inverso (baixa
+// total/parcial no Contas a Pagar → pagamentos da fatura) vive no rollup de
+// baixas em server/routers/financial.ts (_aplicarRollupBaixas).
+// Poka-Yoke: idempotente (procura entry existente pela origem antes de criar);
+// NUNCA reescreve título que já tem baixa ativa (não corrompe pagamento feito).
+async function sincronizarFaturaFinanceiro(tx: any, companyId: number, faturaId: number) {
+  const fq = await dbExecute(tx,
+    `SELECT f.id, f.cartao_id AS "cartaoId", f.vencimento, f.fechamento, f.total,
+            f.mes_ref AS mes, f.ano_ref AS ano, f.financial_entry_id AS "entryId",
+            c.banco, c.final4
+       FROM financial_cartao_faturas f
+       LEFT JOIN financial_cartoes c ON c.id=f.cartao_id AND c.company_id=f.company_id AND c.excluido_em IS NULL
+      WHERE f.id=$1 AND f.company_id=$2 AND f.excluido_em IS NULL LIMIT 1`,
+    [faturaId, companyId]);
+  const f = fq.rows[0];
+  if (!f) return;
+  const total = f.total != null ? parseFloat(f.total) : 0;
+  const elegivel = f.cartaoId != null && !!f.vencimento && total > 0;
+  const desc = `Fatura cartão ${f.banco ?? "?"} final ${f.final4 ?? "????"} — ${f.mes != null ? String(f.mes).padStart(2, "0") : "??"}/${f.ano ?? "????"}`;
+  let entryId: number | null = f.entryId ?? null;
+  if (entryId == null) {
+    // Reconciliação idempotente: reimport/re-vínculo não pode criar título duplicado.
+    const ex = await dbExecute(tx,
+      `SELECT id FROM financial_entries
+        WHERE company_id=$1 AND origem_modulo='cartao_fatura' AND origem_id=$2 AND status<>'cancelado'
+        ORDER BY id DESC LIMIT 1`,
+      [companyId, faturaId]);
+    entryId = ex.rows[0]?.id ?? null;
+  }
+  if (entryId == null) {
+    if (!elegivel) return;
+    // Anti-corrida: índice único parcial uniq_fe_cartao_fatura_ativo garante 1
+    // título ativo por fatura; se outra transação inseriu antes, DO NOTHING e
+    // recupera o id canônico existente.
+    const ins = await dbExecute(tx,
+      `INSERT INTO financial_entries
+         (company_id, tipo, natureza, valor_previsto, data_competencia, data_vencimento,
+          status, origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
+       VALUES ($1,'despesa','variavel',$2,COALESCE($3,$4)::date,$5::date,'a_pagar','cartao_fatura',$6,$7,$8,NOW(),NOW())
+       ON CONFLICT (company_id, origem_id) WHERE origem_modulo='cartao_fatura' AND status<>'cancelado' DO NOTHING
+       RETURNING id`,
+      [companyId, total, f.fechamento ?? null, f.vencimento, f.vencimento, faturaId, desc, desc]);
+    entryId = ins.rows[0]?.id ?? null;
+    if (entryId == null) {
+      const ex2 = await dbExecute(tx,
+        `SELECT id FROM financial_entries
+          WHERE company_id=$1 AND origem_modulo='cartao_fatura' AND origem_id=$2 AND status<>'cancelado'
+          ORDER BY id ASC LIMIT 1`,
+        [companyId, faturaId]);
+      entryId = ex2.rows[0]?.id ?? null;
+    }
+  } else if (elegivel) {
+    // Atualiza valor/vencimento/descrição SÓ enquanto o título está intacto
+    // (sem baixa ativa e não pago/cancelado) — pagamento já feito nunca é mexido.
+    await dbExecute(tx,
+      `UPDATE financial_entries e
+          SET valor_previsto=$1, data_vencimento=$2::date, descricao=$3, origem_descricao=$4, updated_at=NOW()
+        WHERE e.id=$5 AND e.company_id=$6
+          AND e.status IN ('a_pagar','previsto')
+          AND NOT EXISTS (SELECT 1 FROM financial_entry_baixas b
+                           WHERE b.entry_id=e.id AND b.company_id=e.company_id AND b.estornada_em IS NULL)`,
+      [total, f.vencimento, desc, desc, entryId, companyId]);
+  }
+  if (entryId != null) {
+    await dbExecute(tx,
+      `UPDATE financial_cartao_faturas SET financial_entry_id=$1, updated_at=NOW()
+        WHERE id=$2 AND company_id=$3`,
+      [entryId, faturaId, companyId]);
+  }
+}
+
+// Cancela o título vinculado quando a fatura é excluída/revertida no Controle.
+// Só cancela título AINDA não pago e SEM baixa ativa (histórico de pagamento é
+// preservado — informação nunca some do Financeiro).
+async function cancelarEntryDaFatura(tx: any, companyId: number, faturaId: number) {
+  await dbExecute(tx,
+    `UPDATE financial_entries e
+        SET status='cancelado', motivo_cancelamento='Fatura de cartão excluída no Controle de Cartão de Crédito', updated_at=NOW()
+      WHERE e.company_id=$1 AND e.origem_modulo='cartao_fatura' AND e.origem_id=$2
+        AND e.status NOT IN ('pago','cancelado')
+        AND NOT EXISTS (SELECT 1 FROM financial_entry_baixas b
+                         WHERE b.entry_id=e.id AND b.company_id=e.company_id AND b.estornada_em IS NULL)`,
+    [companyId, faturaId]);
+}
+
 // ─────────────────────────── Helpers ───────────────────────────
 function normTxt(s: any): string {
   return String(s ?? "")
@@ -664,9 +753,12 @@ export const cartaoRouter = router({
               f.conciliado, f.data_conciliacao AS "dataConciliacao", f.observacao,
               f.created_at AS "createdAt",
               (SELECT COUNT(*)::int FROM financial_cartao_itens i
-                 WHERE i.fatura_id=f.id AND i.excluido_em IS NULL) AS "qtdItens"
+                 WHERE i.fatura_id=f.id AND i.excluido_em IS NULL) AS "qtdItens",
+              fe.id AS "financialEntryId", fe.status AS "financeiroStatus",
+              fe.valor_realizado AS "financeiroValorPago", fe.valor_previsto AS "financeiroValorPrevisto"
          FROM financial_cartao_faturas f
          LEFT JOIN financial_cartoes c ON c.id=f.cartao_id AND c.company_id=f.company_id AND c.excluido_em IS NULL
+         LEFT JOIN financial_entries fe ON fe.id=f.financial_entry_id AND fe.company_id=f.company_id AND fe.status<>'cancelado'
         WHERE ${where.join(" AND ")}
         ORDER BY f.ano_ref DESC NULLS LAST, f.mes_ref DESC NULLS LAST, f.vencimento DESC NULLS LAST, f.id DESC
         LIMIT $${p}`,
@@ -677,6 +769,8 @@ export const cartaoRouter = router({
       totalCompras: r.totalCompras != null ? parseFloat(r.totalCompras) : null,
       faturaAnterior: r.faturaAnterior != null ? parseFloat(r.faturaAnterior) : null,
       pagamentos: r.pagamentos != null ? parseFloat(r.pagamentos) : null,
+      financeiroValorPago: r.financeiroValorPago != null ? parseFloat(r.financeiroValorPago) : null,
+      financeiroValorPrevisto: r.financeiroValorPrevisto != null ? parseFloat(r.financeiroValorPrevisto) : null,
     }));
   }),
 
@@ -721,6 +815,8 @@ export const cartaoRouter = router({
         `UPDATE financial_cartao_itens SET cartao_id=$1, updated_at=NOW()
           WHERE fatura_id=$2 AND company_id=$3`,
         [input.cartaoId, input.id, input.companyId]);
+      // Rev. 4593 — fatura ganhou cartão → garante/atualiza o título no Contas a Pagar.
+      await sincronizarFaturaFinanceiro(tx, input.companyId, input.id);
       return { ok: true };
     });
   }),
@@ -973,6 +1069,8 @@ export const cartaoRouter = router({
         `UPDATE financial_cartao_faturas SET excluido_em=NOW()
           WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
         [input.id, input.companyId]);
+      // Rev. 4593 — cancela o título vinculado (só se ainda sem baixa/pagamento).
+      await cancelarEntryDaFatura(tx, input.companyId, input.id);
     });
     return { ok: true };
   }),
@@ -996,6 +1094,8 @@ export const cartaoRouter = router({
           `UPDATE financial_cartao_itens SET excluido_em=NOW()
             WHERE fatura_id=$1 AND company_id=$2 AND excluido_em IS NULL`,
           [fid, input.companyId]);
+        // Rev. 4593 — cancela o título vinculado (só se ainda sem baixa/pagamento).
+        await cancelarEntryDaFatura(tx, input.companyId, fid);
       }
       await dbExecute(tx,
         `UPDATE financial_cartao_faturas SET excluido_em=NOW()
@@ -1334,6 +1434,10 @@ export const cartaoRouter = router({
             ]);
           itensInseridos++;
         }
+
+        // Rev. 4593 — fatura importada entra AUTOMATICAMENTE no Contas a Pagar
+        // (cria/atualiza o título vinculado; idempotente no reimport).
+        await sincronizarFaturaFinanceiro(tx, input.companyId, faturaId);
       }
     });
 
