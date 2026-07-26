@@ -1,4 +1,29 @@
 /**
+ * Rev. 4599 - UX: CONTAS A PAGAR — SETINHAS −/+ NA QUANTIDADE DE CHEQUES + VALORES NO PADRÃO BR (1.234,56)
+ *
+ * PEDIDO DO USUÁRIO: (1) o campo "Em quantas vezes" devia ser um misto —
+ * digitar OU clicar em setinhas pra subir/descer a quantidade de parcelas
+ * (no iPad o spinner nativo do input number não aparece); (2) todo valor em
+ * reais na tela deve ter ponto de milhar e vírgula decimal (1.234,56).
+ *
+ * COMO FUNCIONA:
+ * - Componente novo QtdStepper: [−] [input numérico digitável] [+], clamp
+ *   1..120, normaliza no blur. Usado no "Em quantas vezes" dos diálogos
+ *   "Pagar" e "Editar".
+ * - Campos de valor (Valor/Juros/Descontos/Outros do Pagar + Valor (R$) do
+ *   Editar) viraram type=text inputMode=decimal com formatação BR no blur
+ *   (1.234,56) — teclado numérico no iPad, aceita vírgula E ponto.
+ * - parseValorBR centraliza o parse: com vírgula → pontos são milhar; sem
+ *   vírgula → ponto é decimal (compatível com valores antigos "615.44").
+ *   Substituiu TODOS os parseFloat/replace desses campos (total, preview de
+ *   cheques, payload da baixa, tiles da fatura de cartão, salvar edição).
+ * - Pré-preenchimentos (saldo em aberto, tiles Total/Mínimo, abrir Editar)
+ *   já chegam formatados em BR.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroContasAPagar.tsx.
+ * ZERO schema/server change.
+ */
+/**
  * Rev. 4598 - UX: CONTAS A PAGAR — PAGAMENTO COM CHEQUE PRÓPRIO SÓ LISTA CONTAS COM TALÃO
  *
  * PEDIDO DO USUÁRIO: no seletor de Conta Bancária dos diálogos "Pagar" e

@@ -50,18 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4599** — **UX: CONTAS A PAGAR — SETINHAS −/+ NA QUANTIDADE DE CHEQUES + VALORES NO PADRÃO BR (1.234,56).** Componente `QtdStepper` ([−] input digitável [+], clamp 1..120) no "Em quantas vezes" dos diálogos "Pagar" e "Editar" (no iPad o spinner nativo não aparece). Campos de valor (Valor/Juros/Descontos/Outros + Valor (R$) do Editar) viraram text/inputMode=decimal com formatação BR no blur; `parseValorBR` centraliza o parse (com vírgula → pontos são milhar; sem vírgula → ponto decimal, compatível com "615.44" antigo) e substituiu todos os parseFloat desses campos; pré-preenchimentos chegam formatados. ZERO schema/server change. Arquivo: `FinanceiroContasAPagar.tsx`.
 - **Rev. 4598** — **UX: CONTAS A PAGAR — PAGAMENTO COM CHEQUE PRÓPRIO SÓ LISTA CONTAS COM TALÃO.** Poka-Yoke nível 3: nos diálogos "Pagar" (forma cheque + subtipo empresa) e "Editar" (formaPagamento cheque), o seletor de Conta Bancária filtra só contas com `temTalao === 1` (mesma regra do PagarConsolidadoDialog) — não dá pra programar cheque de conta sem talão (ex.: Banco do Brasil, CAIXA INTERNO). Guarda extra: se a conta já selecionada não tem talão ao trocar a forma p/ cheque próprio, a seleção é limpa junto com os campos auto-preenchidos da Rev. 4597. ZERO schema/server change. Arquivo: `FinanceiroContasAPagar.tsx`.
-- **Rev. 4597** — **UX: CONTAS A PAGAR — CONTA BANCÁRIA PREENCHE BANCO/AGÊNCIA/CONTA DO CHEQUE AUTOMATICAMENTE.** Poka-Yoke nível 3 (prevenção pelo design): ao escolher a Conta Bancária nos diálogos "Pagar" (Registrar baixa) e "Editar" do Contas a Pagar, os campos Banco / Agência / Conta corrente do bloco "Cheque Empresa" são preenchidos automaticamente com os dados cadastrados da conta — zero redigitação e zero risco de dado divergente; trocar a conta re-preenche; campos seguem editáveis para exceções. Efeitos re-executam ao abrir o diálogo (deps `showPay?.id`/`showEdit?.id`). ZERO schema/server change. Arquivo: `FinanceiroContasAPagar.tsx`.
 ### 5 one-liners
 
+- **Rev. 4597** — **UX: CONTAS A PAGAR — CONTA BANCÁRIA PREENCHE BANCO/AGÊNCIA/CONTA DO CHEQUE AUTOMATICAMENTE.** Poka-Yoke nível 3: seleção da conta nos diálogos "Pagar"/"Editar" auto-preenche Banco/Agência/Conta do bloco "Cheque Empresa"; campos seguem editáveis. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4596** — **FEAT: CHEQUES — REGRA DE Nº DUPLICADO TAMBÉM NA IMPORTAÇÃO E NO PAGAMENTO PELO CONTAS A PAGAR.** Importação (planilha/PDF IA) classifica `DUP_NUMERO` via `carregarNumerosExistentes`+`numeroColide` (vermelho na prévia, não grava); pagamento consolidado valida via `assertNumeroChequeDisponivel`. Detalhe em `shared/changelog.ts`.
 - **Rev. 4595** — **FEAT: CONTROLE DE CHEQUES — BLOQUEIO DE Nº DE CHEQUE DUPLICADO (POKA-YOKE) + LIMPEZA DE DUPLICATAS.** `assertNumeroChequeDisponivel` bloqueia (CONFLICT) nº normalizado já existente na mesma conta OU fornecedor (criarManual/Lote/atualizar) + 10 duplicatas de 2026 limpas direto no Neon e série J ALVES 516–520 corrigida. Detalhe em `shared/changelog.ts`.
 - **Rev. 4594** — **FEAT: CONTAS A PAGAR — FATURA DE CARTÃO IDENTIFICADA + OPÇÕES TOTAL / MÍNIMO / PARCIAL.** Coluna nova `pagamento_minimo` extraída da fatura; query `cartao.faturaPorEntry` identifica o cartão no título; dialog "Pagar" com tiles Total/Mínimo/Parcial + aviso quando valor < mínimo. Detalhe em `shared/changelog.ts`.
 - **Rev. 4593** — **FEAT: CARTÃO DE CRÉDITO — FATURA ENTRA AUTOMATICAMENTE NO CONTAS A PAGAR (VÍNCULO BIDIRECIONAL).** Fatura vira título (origem 'cartao_fatura', idempotente); baixa no Contas a Pagar faz fan-out pro acumulado da fatura; coluna nova `financial_entry_id`. Detalhe em `shared/changelog.ts`.
-- **Rev. 4592** — **FIX: CARTÃO DE CRÉDITO — SALDO EM ABERTO LIDO COMO O BANCO LÊ.** Fatura em aberto = só vencimento >= hoje, abatendo só `pagamentos > 0`; OCs a faturar = só criadas após o último fechamento. Validado no Neon. Detalhe em `shared/changelog.ts`. ZERO schema/client change.
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4591 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4592 e anteriores.
 
 ## User preferences
 

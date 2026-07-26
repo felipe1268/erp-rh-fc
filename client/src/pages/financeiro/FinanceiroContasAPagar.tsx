@@ -61,6 +61,39 @@ function DetSection({ icon, title, tint, children }: { icon: ReactNode; title: s
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
+// Rev. 4599 — valores em reais digitados no padrão BR (1.234,56).
+// Regra de parse: se tem vírgula, pontos são milhar; senão, ponto é decimal.
+function parseValorBR(s: string): number {
+  const t = String(s ?? "").trim();
+  if (!t) return 0;
+  const x = t.includes(",") ? parseFloat(t.replace(/\./g, "").replace(",", ".")) : parseFloat(t);
+  return Number.isFinite(x) ? x : 0;
+}
+function formatValorBRInput(s: string | number): string {
+  const t = String(s ?? "").trim();
+  if (!t) return "";
+  return parseValorBR(t).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Rev. 4599 — quantidade de parcelas com misto: digitação + setinhas −/+.
+function QtdStepper({ value, onChange, min = 1, max = 120, className = "" }: {
+  value: string; onChange: (v: string) => void; min?: number; max?: number; className?: string;
+}) {
+  const num = Math.min(max, Math.max(min, parseInt(value || String(min), 10) || min));
+  return (
+    <div className={`flex items-stretch h-9 rounded-md border border-input bg-background overflow-hidden ${className}`}>
+      <button type="button" aria-label="Diminuir" onClick={() => onChange(String(Math.max(min, num - 1)))}
+        className="w-9 shrink-0 text-lg font-bold text-slate-500 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-40"
+        disabled={num <= min}>−</button>
+      <input type="text" inputMode="numeric" pattern="[0-9]*" value={value}
+        onChange={e => onChange(e.target.value.replace(/[^0-9]/g, ""))}
+        onBlur={() => onChange(String(num))}
+        className="w-full min-w-0 text-center text-sm font-semibold outline-none bg-transparent" placeholder="1" />
+      <button type="button" aria-label="Aumentar" onClick={() => onChange(String(Math.min(max, num + 1)))}
+        className="w-9 shrink-0 text-lg font-bold text-slate-500 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-40"
+        disabled={num >= max}>+</button>
+    </div>
+  );
+}
 
 // Rev. 1619 — dd/MM/aaaa (regra de ouro do projeto)
 function fmtDateBR(dateStr: string | null | undefined): string {
@@ -428,7 +461,7 @@ export default function FinanceiroContasAPagar() {
       // Rev. 4529 — se forma=cheque próprio, criar N cheques no Controle de Cheques Emitidos
       if (formaPagamento === "cheque" && chequeSubtipo === "empresa" && companyId) {
         const qtd = Math.min(120, Math.max(1, parseInt(chequeQtd || "1", 10) || 1));
-        const total = parseFloat(valorPagar || "0") + parseFloat(jurosPay || "0") - parseFloat(descontosPay || "0") + parseFloat(outrosPay || "0");
+        const total = parseValorBR(valorPagar) + parseValorBR(jurosPay) - parseValorBR(descontosPay) + parseValorBR(outrosPay);
         if (total > 0 && qtd > 0) {
           const centsTotal = Math.round(total * 100);
           const base = Math.floor(centsTotal / qtd);
@@ -467,7 +500,7 @@ export default function FinanceiroContasAPagar() {
   );
 
   // Rev. 4096 — cheques recebidos disponíveis (para baixa avulsa com "Cheque de Terceiro")
-  const totalPagarNum = parseFloat(valorPagar || "0") + parseFloat(jurosPay || "0") - parseFloat(descontosPay || "0") + parseFloat(outrosPay || "0");
+  const totalPagarNum = parseValorBR(valorPagar) + parseValorBR(jurosPay) - parseValorBR(descontosPay) + parseValorBR(outrosPay);
   const chequesDisponiveisAvulsoQ = (trpc as any).chequesRecebidos?.sugerirPorValor?.useQuery(
     { companyId, valorAlvo: totalPagarNum > 0 ? totalPagarNum : (showPay?.valorSaldo ?? showPay?.valor ?? 0) },
     { enabled: !!companyId && formaPagamento === "cheque" && chequeSubtipo === "terceiros" }
@@ -544,7 +577,7 @@ export default function FinanceiroContasAPagar() {
     // de volta na Ordem de Compra (ver banner informativo no modal).
     setEditForm({
       descricao: c.descricao ?? "",
-      valorPrevisto: String(c.valorPrevisto ?? ""),
+      valorPrevisto: formatValorBRInput(String(c.valorPrevisto ?? "")),
       dataCompetencia: (c.dataCompetencia ?? "").slice(0, 10),
       dataVencimento: (c.dataVencimento ?? "").slice(0, 10),
       contaNome: c.contaNome ?? "",
@@ -570,7 +603,7 @@ export default function FinanceiroContasAPagar() {
       toast({ title: "Preencha descrição e valor", variant: "destructive" });
       return;
     }
-    const valor = parseFloat(String(editForm.valorPrevisto).replace(",", "."));
+    const valor = parseValorBR(String(editForm.valorPrevisto));
     if (!Number.isFinite(valor) || valor <= 0) {
       toast({ title: "Valor inválido", variant: "destructive" });
       return;
@@ -630,7 +663,7 @@ export default function FinanceiroContasAPagar() {
   const editChequePreview = useMemo(() => {
     if (editForm.formaPagamento !== "cheque") return [] as any[];
     const qtd = Math.min(120, Math.max(1, parseInt(editChequeQtd || "1", 10) || 1));
-    const total = parseFloat(String(editForm.valorPrevisto).replace(",", ".") || "0");
+    const total = parseValorBR(String(editForm.valorPrevisto));
     if (!Number.isFinite(total) || total <= 0) return [] as any[];
     const centsTotal = Math.round(total * 100);
     const base = Math.floor(centsTotal / qtd);
@@ -647,7 +680,7 @@ export default function FinanceiroContasAPagar() {
   }, [editForm.formaPagamento, editForm.valorPrevisto, editForm.dataVencimento, editChequeQtd, editChequeNumIni, editChequePrimVenc]);
 
   // Rev. 4587 — cheques recebidos disponíveis para o EDITAR com "Cheque de Terceiro"
-  const editValorNum = parseFloat(String(editForm.valorPrevisto).replace(",", ".") || "0");
+  const editValorNum = parseValorBR(String(editForm.valorPrevisto));
   const editChequesTerceiroQ = (trpc as any).chequesRecebidos?.sugerirPorValor?.useQuery(
     { companyId, valorAlvo: editValorNum > 0 ? editValorNum : (showEdit?.valorPrevisto ?? 0) },
     { enabled: !!companyId && !!showEdit && editForm.formaPagamento === "cheque_terceiro" }
@@ -754,7 +787,7 @@ export default function FinanceiroContasAPagar() {
     const saldoAbertoInit = showPay
       ? Math.max(0, Math.round((Number(showPay.valorPrevisto ?? 0) - Number(showPay.valorRealizado ?? 0)) * 100) / 100)
       : 0;
-    setValorPagar(showPay ? String(saldoAbertoInit) : "");
+    setValorPagar(showPay ? formatValorBRInput(String(saldoAbertoInit)) : "");
     setJurosPay("");
     setDescontosPay("");
     setOutrosPay("");
@@ -778,15 +811,14 @@ export default function FinanceiroContasAPagar() {
 
   // Rev. 2655 — total da baixa = valor + juros − descontos + outros (±)
   const totalPagar = useMemo(() => {
-    const n = (s: string) => { const x = parseFloat(String(s).replace(",", ".")); return Number.isFinite(x) ? x : 0; };
-    return n(valorPagar) + n(jurosPay) - n(descontosPay) + n(outrosPay);
+    return parseValorBR(valorPagar) + parseValorBR(jurosPay) - parseValorBR(descontosPay) + parseValorBR(outrosPay);
   }, [valorPagar, jurosPay, descontosPay, outrosPay]);
 
   // Rev. 4529 — preview dos cheques gerados (cheque próprio)
   const chequePreviewBaixa = useMemo(() => {
     if (formaPagamento !== "cheque" || chequeSubtipo !== "empresa") return [];
     const qtd = Math.min(120, Math.max(1, parseInt(chequeQtd || "1", 10) || 1));
-    const total = parseFloat(valorPagar || "0") + parseFloat(jurosPay || "0") - parseFloat(descontosPay || "0") + parseFloat(outrosPay || "0");
+    const total = parseValorBR(valorPagar) + parseValorBR(jurosPay) - parseValorBR(descontosPay) + parseValorBR(outrosPay);
     if (total <= 0 || qtd <= 0) return [];
     const centsTotal = Math.round(total * 100);
     const base = Math.floor(centsTotal / qtd);
@@ -805,7 +837,7 @@ export default function FinanceiroContasAPagar() {
   // Rev. 3743 — payload da baixa (registrarBaixa). `valor` = principal aplicado ao título
   // (juros/descontos/outros vão separados, p/ registro). quitarTotal é injetado no caller.
   function baixaPayload() {
-    const num = (s: string) => { const x = parseFloat(String(s).replace(",", ".")); return Number.isFinite(x) ? x : 0; };
+    const num = parseValorBR;
     return {
       id: showPay.id, companyId,
       valor: num(valorPagar),
@@ -2972,8 +3004,9 @@ export default function FinanceiroContasAPagar() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs text-slate-500">Valor (R$)</Label>
-                    <Input type="number" step="0.01" value={editForm.valorPrevisto}
-                      onChange={e => setEditForm(f => ({ ...f, valorPrevisto: e.target.value }))} placeholder="0,00" />
+                    <Input type="text" inputMode="decimal" value={editForm.valorPrevisto}
+                      onChange={e => setEditForm(f => ({ ...f, valorPrevisto: e.target.value }))}
+                      onBlur={e => setEditForm(f => ({ ...f, valorPrevisto: formatValorBRInput(e.target.value) }))} placeholder="0,00" />
                   </div>
                   <div>
                     <Label className="text-xs text-slate-500">Forma de Pagamento</Label>
@@ -3019,8 +3052,7 @@ export default function FinanceiroContasAPagar() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <div>
                         <p className="text-[11px] text-gray-400 mb-1">Em quantas vezes</p>
-                        <Input type="number" min={1} max={120} value={editChequeQtd}
-                          onChange={e => setEditChequeQtd(e.target.value)} placeholder="1" className="h-9" />
+                        <QtdStepper value={editChequeQtd} onChange={setEditChequeQtd} />
                       </div>
                       <div>
                         <p className="text-[11px] text-gray-400 mb-1">Nº do 1º cheque</p>
@@ -3412,7 +3444,7 @@ export default function FinanceiroContasAPagar() {
                 {showPay.origemModulo === "cartao_fatura" && faturaCartao && (() => {
                   const saldoAberto = Math.max(0, Math.round((Number(showPay.valorPrevisto ?? 0) - Number(showPay.valorRealizado ?? 0)) * 100) / 100);
                   const minimo = faturaCartao.pagamentoMinimo != null && faturaCartao.pagamentoMinimo > 0 ? faturaCartao.pagamentoMinimo : null;
-                  const valorAtual = parseFloat(String(valorPagar).replace(",", ".")) || 0;
+                  const valorAtual = parseValorBR(valorPagar);
                   const eq = (a: number, b: number) => Math.abs(a - b) < 0.005;
                   const opBtn = (ativo: boolean) =>
                     `flex-1 rounded-lg border-2 px-3 py-2 text-left transition-all ${ativo ? "border-violet-500 bg-violet-50 shadow-sm" : "border-slate-200 bg-white hover:border-violet-300"}`;
@@ -3423,13 +3455,13 @@ export default function FinanceiroContasAPagar() {
                         {faturaCartao.mes != null && ` · Fatura ${String(faturaCartao.mes).padStart(2, "0")}/${faturaCartao.ano ?? ""}`}
                       </p>
                       <div className="flex flex-col sm:flex-row gap-2">
-                        <button type="button" className={opBtn(eq(valorAtual, saldoAberto))} onClick={() => setValorPagar(String(saldoAberto))}>
+                        <button type="button" className={opBtn(eq(valorAtual, saldoAberto))} onClick={() => setValorPagar(formatValorBRInput(saldoAberto))}>
                           <p className="text-xs font-bold text-slate-700">Pagar total</p>
                           <p className="text-sm font-mono font-semibold text-emerald-700">{formatBRL(saldoAberto)}</p>
                           <p className="text-[10px] text-slate-500">Quita a fatura — sem juros no próximo mês</p>
                         </button>
                         {minimo != null && (
-                          <button type="button" className={opBtn(eq(valorAtual, minimo))} onClick={() => setValorPagar(String(minimo))}>
+                          <button type="button" className={opBtn(eq(valorAtual, minimo))} onClick={() => setValorPagar(formatValorBRInput(minimo))}>
                             <p className="text-xs font-bold text-slate-700">Pagamento mínimo</p>
                             <p className="text-sm font-mono font-semibold text-amber-700">{formatBRL(minimo)}</p>
                             <p className="text-[10px] text-slate-500">Evita atraso — o restante entra no rotativo (juros)</p>
@@ -3454,19 +3486,23 @@ export default function FinanceiroContasAPagar() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div>
                       <Label className="text-xs text-slate-500">Valor</Label>
-                      <Input type="number" step="0.01" value={valorPagar} onChange={e => setValorPagar(e.target.value)} className="mt-1 font-mono" />
+                      <Input type="text" inputMode="decimal" value={valorPagar} onChange={e => setValorPagar(e.target.value)}
+                        onBlur={e => setValorPagar(formatValorBRInput(e.target.value))} className="mt-1 font-mono" />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-500">Juros (+)</Label>
-                      <Input type="number" step="0.01" placeholder="0,00" value={jurosPay} onChange={e => setJurosPay(e.target.value)} className="mt-1 font-mono" />
+                      <Input type="text" inputMode="decimal" placeholder="0,00" value={jurosPay} onChange={e => setJurosPay(e.target.value)}
+                        onBlur={e => setJurosPay(formatValorBRInput(e.target.value))} className="mt-1 font-mono" />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-500">Descontos (−)</Label>
-                      <Input type="number" step="0.01" placeholder="0,00" value={descontosPay} onChange={e => setDescontosPay(e.target.value)} className="mt-1 font-mono" />
+                      <Input type="text" inputMode="decimal" placeholder="0,00" value={descontosPay} onChange={e => setDescontosPay(e.target.value)}
+                        onBlur={e => setDescontosPay(formatValorBRInput(e.target.value))} className="mt-1 font-mono" />
                     </div>
                     <div>
                       <Label className="text-xs text-slate-500">Outros (±)</Label>
-                      <Input type="number" step="0.01" placeholder="0,00" value={outrosPay} onChange={e => setOutrosPay(e.target.value)} className="mt-1 font-mono" />
+                      <Input type="text" inputMode="decimal" placeholder="0,00" value={outrosPay} onChange={e => setOutrosPay(e.target.value)}
+                        onBlur={e => setOutrosPay(formatValorBRInput(e.target.value))} className="mt-1 font-mono" />
                     </div>
                   </div>
                   {/* Total destaque */}
@@ -3546,8 +3582,7 @@ export default function FinanceiroContasAPagar() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           <div>
                             <p className="text-[11px] text-gray-400 mb-1">Em quantas vezes</p>
-                            <Input type="number" min={1} max={120} value={chequeQtd}
-                              onChange={e => setChequeQtd(e.target.value)} placeholder="1" className="h-9" />
+                            <QtdStepper value={chequeQtd} onChange={setChequeQtd} />
                           </div>
                           <div>
                             <p className="text-[11px] text-gray-400 mb-1">Nº do 1º cheque</p>
