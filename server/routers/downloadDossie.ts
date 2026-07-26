@@ -96,16 +96,47 @@ export function registerDownloadDossieRoute(app: Express) {
       const validIds = empRows.map(e => e.id);
 
       // Busca todos os documentos em paralelo
-      const [asoRows, treinRows, atesRows, advRows] = await Promise.all([
+      const [asoRowsAll, treinRowsAll, atesRows, advRows] = await Promise.all([
         db.select({ id: asos.id, employeeId: asos.employeeId, tipo: asos.tipo, dataExame: asos.dataExame, documentoUrl: asos.documentoUrl })
           .from(asos).where(and(inArray(asos.employeeId, validIds), isNull(asos.deletedAt))),
-        db.select({ id: trainings.id, employeeId: trainings.employeeId, nome: trainings.nome, norma: trainings.norma, dataRealizacao: trainings.dataRealizacao, certificadoUrl: trainings.certificadoUrl })
+        db.select({ id: trainings.id, employeeId: trainings.employeeId, nome: trainings.nome, norma: trainings.norma, dataRealizacao: trainings.dataRealizacao, dataValidade: trainings.dataValidade, certificadoUrl: trainings.certificadoUrl })
           .from(trainings).where(and(inArray(trainings.employeeId, validIds), isNull(trainings.deletedAt))),
         db.select({ id: atestados.id, employeeId: atestados.employeeId, tipo: atestados.tipo, dataEmissao: atestados.dataEmissao, documentoUrl: atestados.documentoUrl })
           .from(atestados).where(and(inArray(atestados.employeeId, validIds), isNull(atestados.deletedAt))),
         db.select({ id: warnings.id, employeeId: warnings.employeeId, tipoAdvertencia: warnings.tipoAdvertencia, dataOcorrencia: warnings.dataOcorrencia, documentoUrl: warnings.documentoUrl })
           .from(warnings).where(and(inArray(warnings.employeeId, validIds), isNull(warnings.deletedAt))),
       ]);
+
+      // Rev. 4613 — o ZIP que vai pro CLIENTE leva SÓ a versão ATUAL de cada
+      // documento: ASO mais recente por tipo e treinamento mais recente por
+      // norma. Revisões antigas ficam de fora (documentação desnecessária).
+      const treinKey = (t: { norma: string | null; nome: string | null }) =>
+        String(t.norma || t.nome || "").toUpperCase().replace(/[^A-Z0-9]/g, "") || "SEM_TIPO";
+
+      const asoRows: typeof asoRowsAll = [];
+      {
+        const porEmpTipo = new Map<string, typeof asoRowsAll[0]>();
+        for (const a of asoRowsAll) {
+          const k = `${a.employeeId}|${String(a.tipo || "").toUpperCase().trim()}`;
+          const atual = porEmpTipo.get(k);
+          if (!atual || String(a.dataExame || "") > String(atual.dataExame || "")) porEmpTipo.set(k, a);
+        }
+        asoRows.push(...porEmpTipo.values());
+      }
+
+      const treinRows: typeof treinRowsAll = [];
+      {
+        const porEmpNorma = new Map<string, typeof treinRowsAll[0]>();
+        for (const t of treinRowsAll) {
+          const k = `${t.employeeId}|${treinKey(t)}`;
+          const atual = porEmpNorma.get(k);
+          const melhor = !atual
+            || String(t.dataValidade || "") > String(atual.dataValidade || "")
+            || (String(t.dataValidade || "") === String(atual.dataValidade || "") && String(t.dataRealizacao || "") > String(atual.dataRealizacao || ""));
+          if (melhor) porEmpNorma.set(k, t);
+        }
+        treinRows.push(...porEmpNorma.values());
+      }
 
       // Monta lista de arquivos com path organizado
       const files: Array<{ url: string; path: string }> = [];

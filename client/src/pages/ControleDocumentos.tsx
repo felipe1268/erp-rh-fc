@@ -637,17 +637,27 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
   const [dlProgress, setDlProgress] = useState(0);
+  const [filtroPend, setFiltroPend] = useState<"todos" | "pendencia" | "emdia">("todos");
+
+  const contadores = useMemo(() => {
+    const funcs = data?.funcionarios || [];
+    const pend = funcs.filter((f: any) => (f.pendencias?.length ?? 0) > 0).length;
+    return { todos: funcs.length, pendencia: pend, emdia: funcs.length - pend };
+  }, [data]);
 
   const filtered = useMemo(() => {
     if (!data?.funcionarios) return [];
-    if (!search.trim()) return data.funcionarios;
+    let base = data.funcionarios as any[];
+    if (filtroPend === "pendencia") base = base.filter(f => (f.pendencias?.length ?? 0) > 0);
+    if (filtroPend === "emdia") base = base.filter(f => (f.pendencias?.length ?? 0) === 0);
+    if (!search.trim()) return base;
     const s = removeAccents(search.toLowerCase());
-    return data.funcionarios.filter(f =>
+    return base.filter(f =>
       removeAccents((f.nomeCompleto || "").toLowerCase()).includes(s) ||
       removeAccents((f.funcao || "").toLowerCase()).includes(s) ||
       (f.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, ""))
     );
-  }, [data, search]);
+  }, [data, search, filtroPend]);
 
   function toggleSelect(id: number) {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -736,6 +746,27 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
         <p className="text-sm text-muted-foreground">{filtered.length} funcionário{filtered.length !== 1 ? "s" : ""}</p>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setFiltroPend("todos")}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${filtroPend === "todos" ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-input hover:bg-muted"}`}
+        >
+          Todos ({contadores.todos})
+        </button>
+        <button
+          onClick={() => setFiltroPend("pendencia")}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${filtroPend === "pendencia" ? "bg-red-600 text-white border-red-600" : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"}`}
+        >
+          ❌ Falta documento ({contadores.pendencia})
+        </button>
+        <button
+          onClick={() => setFiltroPend("emdia")}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${filtroPend === "emdia" ? "bg-green-600 text-white border-green-600" : "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"}`}
+        >
+          ✓ Em dia ({contadores.emdia})
+        </button>
+      </div>
+
       <div className="rounded-lg border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -780,6 +811,13 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
                             {f.nomeCompleto}
                           </button>
                           <div className="text-xs text-muted-foreground">{formatCPF(f.cpf || "")}</div>
+                          {((f as any).pendencias?.length ?? 0) > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {((f as any).pendencias as string[]).map((p, i) => (
+                                <span key={i} className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 border border-red-200">{p}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>

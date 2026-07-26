@@ -3296,23 +3296,34 @@ export const controleDocumentosRouter = router({
       for (const r of atesRows) { if (!atesByEmp.has(r.employeeId)) atesByEmp.set(r.employeeId, []); atesByEmp.get(r.employeeId)!.push(r); }
       for (const r of advRows) { if (!advByEmp.has(r.employeeId)) advByEmp.set(r.employeeId, []); advByEmp.get(r.employeeId)!.push(r); }
 
+      // Rev. 4613 — chave canônica de tipo de treinamento (NR-18 == NR 18 == nr18).
+      // Sem isso, a REVISÃO antiga (vencida) do mesmo treinamento pintava o
+      // funcionário de ❌ mesmo com a versão atual em dia — não-fidedigno.
+      const treinKey = (t: { norma: string | null; nome: string | null }) =>
+        String(t.norma || t.nome || "").toUpperCase().replace(/[^A-Z0-9]/g, "") || "SEM_TIPO";
+
       return {
         funcionarios: empRows.map(emp => {
           const empAsos = asoByEmp.get(emp.id) || [];
-          // ASO mais recente por tipo (dedup por tipo, pega o 1º = mais recente)
-          const asosPorTipo = new Map<string, typeof empAsos[0]>();
-          for (const a of empAsos) {
-            if (!asosPorTipo.has(a.tipo)) asosPorTipo.set(a.tipo, a);
-          }
           const latestAso = empAsos[0] || null;
           const asoCalc = latestAso ? calcularStatusASO(latestAso.dataValidade || "") : null;
+          const asoVencido = !!(latestAso && asoCalc?.status === "VENCIDO");
 
-          const empTreins = (treinByEmp.get(emp.id) || []).map(t => ({
+          // Rev. 4613 — só a versão MAIS RECENTE de cada tipo de treinamento conta
+          // (rows já vêm em ordem desc(dataRealizacao); em empate, maior validade vence)
+          const vistos = new Map<string, typeof treinRows[0]>();
+          for (const t of (treinByEmp.get(emp.id) || [])) {
+            const k = treinKey(t);
+            const atual = vistos.get(k);
+            if (!atual) { vistos.set(k, t); continue; }
+            if (String(t.dataValidade || "") > String(atual.dataValidade || "")) vistos.set(k, t);
+          }
+          const empTreins = Array.from(vistos.values()).map(t => ({
             ...t,
             ...calcularStatusASO(t.dataValidade || ""),
           }));
 
-          // Pior status de treinamentos
+          // Pior status de treinamentos (só sobre as versões vigentes)
           const piorTrein = empTreins.reduce((pior, t) => {
             if (t.status === "VENCIDO") return "VENCIDO";
             if (pior === "VENCIDO") return pior;
@@ -3326,6 +3337,13 @@ export const controleDocumentosRouter = router({
           const empAtes = atesByEmp.get(emp.id) || [];
           const empAdvs = advByEmp.get(emp.id) || [];
 
+          // Rev. 4613 — pendências objetivas (base p/ o filtro "faltam documentos")
+          const pendencias: string[] = [];
+          if (!latestAso) pendencias.push("Sem ASO");
+          else if (asoVencido) pendencias.push("ASO vencido");
+          if (empTreins.length === 0) pendencias.push("Sem treinamento");
+          else if (piorTrein === "VENCIDO") pendencias.push("Treinamento vencido");
+
           return {
             id: emp.id,
             nomeCompleto: emp.nomeCompleto,
@@ -3338,9 +3356,12 @@ export const controleDocumentosRouter = router({
             piorStatusTrein: piorTrein,
             atestados: empAtes,
             advertencias: empAdvs,
+            pendencias,
+            emDia: pendencias.length === 0,
             totais: {
               asos: empAsos.length,
               treinamentos: empTreins.length,
+              treinamentosHistorico: (treinByEmp.get(emp.id) || []).length,
               atestados: empAtes.length,
               advertencias: empAdvs.length,
             },

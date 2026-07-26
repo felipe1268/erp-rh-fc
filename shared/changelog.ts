@@ -1,4 +1,40 @@
 /**
+ * Rev. 4613 - FIX: CONTROLE DE DOCUMENTOS/DOSSIÊ — STATUS FIDEDIGNO + FILTRO "FALTA DOCUMENTO" + ZIP SÓ COM DOCS ATUAIS
+ *
+ * Contexto: a aba Dossiê é a base principal que vai pro CLIENTE — precisa ser
+ * 100% fidedigna. Dois problemas relatados:
+ *
+ * 1) Falso ❌ em Treinamentos: o "pior status" era reduzido sobre TODAS as
+ *    linhas de treinamento, incluindo REVISÕES ANTIGAS já substituídas. Um
+ *    funcionário com NR-18 renovada (válida até 2027) mas com a revisão de
+ *    2024 vencida ainda no histórico aparecia como ❌ VENCIDO.
+ *    Fix (painelDossie): dedup por tipo canônico de treinamento — chave
+ *    UPPER(sem separadores) sobre norma||nome (NR-18 == NR 18 == nr18) —
+ *    mantendo só a MAIOR dataValidade por tipo. O pior-status, a contagem do
+ *    chip e a lista expandida passam a refletir SÓ as versões vigentes
+ *    (totais.treinamentosHistorico preserva o total bruto p/ referência).
+ *    Colunas date são mode:'string' no drizzle → comparação lexicográfica
+ *    YYYY-MM-DD é segura.
+ *
+ * 2) Visibilidade de quem falta documento: o servidor agora devolve
+ *    `pendencias: string[]` (Sem ASO / ASO vencido / Sem treinamento /
+ *    Treinamento vencido) + `emDia`. O DossiePanel ganhou pills de filtro
+ *    "Todos (N)" / "❌ Falta documento (N)" / "✓ Em dia (N)" e tags vermelhas
+ *    de pendência sob o nome do funcionário.
+ *
+ * 3) ZIP do dossiê (rota /api/download/dossie-zip): passa a incluir SÓ a
+ *    versão ATUAL de cada documento — ASO mais recente por tipo (dataExame) e
+ *    treinamento mais recente por norma canônica (dataValidade, desempate por
+ *    dataRealizacao). Revisões antigas ficam FORA do pacote enviado ao
+ *    cliente. Atestados e advertências seguem completos (eventos únicos, não
+ *    revisões).
+ *
+ * Arquivos: server/routers/controleDocumentos.ts (painelDossie),
+ * server/routers/downloadDossie.ts, client/src/pages/ControleDocumentos.tsx
+ * (DossiePanel). ZERO schema change.
+ */
+
+/**
  * Rev. 4612 - UI: EMISSÃO DE CRACHÁS — FRENTE COM MODO COMPACTO (TUDO CABE NOS 540px, NADA CORTADO)
  *
  * Problema (print do usuário): com selos NR + faixa de restrição + 4-5 linhas
