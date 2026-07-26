@@ -538,13 +538,55 @@ function BadgeCard({ badge, color, label, onPreview }: { badge: BadgeData; color
   );
 }
 
-// Badge Preview Component — Rev. 4606/4607: réplica fiel da arte enviada pelo
-// usuário (attached_assets/IMG_4471). Paleta FIXA da marca extraída da própria
-// arte: navy #0A1E3C + laranja #EE9803. Logos recortados da arte (versão fundo
-// navy p/ frente, fundo branco p/ verso). Sem selo de tipo e sem QR na frente
-// (a arte não tem); QR só no verso, emoldurado em laranja.
+// Badge Preview Component — Rev. 4606 (iteração 3): réplica FIEL da arte.
+// Detalhes da arte respeitados: margem branca em volta do painel navy (bordas),
+// faixa branca no topo com slot p/ furação do cordão (logo desce), anel LARANJA
+// na foto, função em texto simples (sem caixa), linhas de dados com filete só
+// sob rótulo/valor, verso com rodapé navy de topo CURVO com friso laranja e
+// ícone de 3 pessoas. Paleta fixa da arte: navy #0A1E3C + laranja #EE9803.
 const CRACHA_NAVY = "#0A1E3C";
 const CRACHA_ORANGE = "#EE9803";
+
+// Ícone de 3 pessoas (outline), igual ao da arte — lucide Users só tem 2
+const TresPessoas = ({ color }: { color: string }) => (
+  <svg width="30" height="22" viewBox="0 0 30 22" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="15" cy="6" r="3.2" />
+    <path d="M9.5 20c0-3 2.4-5 5.5-5s5.5 2 5.5 5" />
+    <circle cx="5.5" cy="7.5" r="2.4" />
+    <path d="M1.5 18.5c0-2.4 1.7-4 4-4 .8 0 1.5.2 2.1.5" />
+    <circle cx="24.5" cy="7.5" r="2.4" />
+    <path d="M28.5 18.5c0-2.4-1.7-4-4-4-.8 0-1.5.2-2.1.5" />
+  </svg>
+);
+
+// Marca d'água de construção (prédios à esquerda, guindaste à direita), como na arte
+const Watermark = () => (
+  <>
+    <svg className="absolute left-0 bottom-0 pointer-events-none" style={{ opacity: 0.06 }} width="120" height="170" viewBox="0 0 120 170" fill="none">
+      <g stroke="#7d8798" strokeWidth="1.3">
+        <rect x="6" y="60" width="46" height="110" />
+        <rect x="14" y="72" width="10" height="10" /><rect x="34" y="72" width="10" height="10" />
+        <rect x="14" y="92" width="10" height="10" /><rect x="34" y="92" width="10" height="10" />
+        <rect x="14" y="112" width="10" height="10" /><rect x="34" y="112" width="10" height="10" />
+        <rect x="14" y="132" width="10" height="10" /><rect x="34" y="132" width="10" height="10" />
+        <rect x="62" y="95" width="50" height="75" />
+        <rect x="70" y="106" width="11" height="11" /><rect x="92" y="106" width="11" height="11" />
+        <rect x="70" y="128" width="11" height="11" /><rect x="92" y="128" width="11" height="11" />
+      </g>
+    </svg>
+    <svg className="absolute right-0 pointer-events-none" style={{ bottom: 40, opacity: 0.07 }} width="110" height="220" viewBox="0 0 110 220" fill="none">
+      <g stroke="#7d8798" strokeWidth="1.3">
+        <line x1="52" y1="220" x2="52" y2="20" /><line x1="62" y1="220" x2="62" y2="20" />
+        <line x1="52" y1="40" x2="62" y2="20" /><line x1="52" y1="70" x2="62" y2="50" />
+        <line x1="52" y1="100" x2="62" y2="80" /><line x1="52" y1="130" x2="62" y2="110" />
+        <line x1="52" y1="20" x2="108" y2="20" /><line x1="52" y1="32" x2="98" y2="20" />
+        <line x1="12" y1="20" x2="52" y2="20" /><line x1="12" y1="20" x2="12" y2="34" />
+        <line x1="90" y1="20" x2="90" y2="52" />
+        <rect x="83" y="52" width="14" height="16" />
+      </g>
+    </svg>
+  </>
+);
 
 function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, color, label }: {
   badge: BadgeData; companyName: string; companyLogo?: string; companyPhone?: string;
@@ -554,65 +596,53 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
   const NAVY = CRACHA_NAVY;
   const OR = CRACHA_ORANGE;
 
-  // Marca d'água de construção (linhas leves de prédios/guindaste), como na arte
-  const Watermark = ({ topOffset }: { topOffset?: number }) => (
-    <svg className="absolute right-0 pointer-events-none" style={{ bottom: topOffset ?? 0, opacity: 0.08 }} width="200" height="240" viewBox="0 0 200 240" fill="none">
-      <g stroke="#8a93a6" strokeWidth="1.5">
-        <rect x="14" y="110" width="54" height="130" />
-        <rect x="23" y="124" width="11" height="11" /><rect x="46" y="124" width="11" height="11" />
-        <rect x="23" y="147" width="11" height="11" /><rect x="46" y="147" width="11" height="11" />
-        <rect x="23" y="170" width="11" height="11" /><rect x="46" y="170" width="11" height="11" />
-        <rect x="23" y="193" width="11" height="11" /><rect x="46" y="193" width="11" height="11" />
-        <rect x="86" y="150" width="62" height="90" />
-        <rect x="97" y="163" width="12" height="12" /><rect x="122" y="163" width="12" height="12" />
-        <rect x="97" y="190" width="12" height="12" /><rect x="122" y="190" width="12" height="12" />
-        <line x1="130" y1="150" x2="130" y2="34" />
-        <line x1="130" y1="34" x2="196" y2="34" />
-        <line x1="130" y1="52" x2="186" y2="34" />
-        <line x1="176" y1="34" x2="176" y2="66" />
-        <rect x="169" y="66" width="13" height="15" />
-      </g>
-    </svg>
-  );
-
   if (side === "back") {
     return (
       <div className="w-[340px] h-[540px] rounded-2xl overflow-hidden shadow-xl mx-auto relative bg-white flex flex-col">
-        <Watermark topOffset={70} />
-        {/* Logo topo (versão fundo branco, recortada da arte) */}
-        <div className="flex flex-col items-center pt-6">
-          <img src={logoCrachaWhite} alt="" className="h-12 object-contain" />
-          <div className="mt-3 h-[2px] w-[200px] rounded-full" style={{ backgroundColor: OR }} />
+        <Watermark />
+        {/* Espaço p/ furação */}
+        <div className="flex justify-center pt-[10px]">
+          <div className="w-[34px] h-[7px] rounded-full" style={{ backgroundColor: "#e4e8ef" }} />
+        </div>
+        {/* Logo (versão fundo branco, recortada da arte) + linha laranja */}
+        <div className="flex flex-col items-center pt-[6px] relative">
+          <img src={logoCrachaWhite} alt="" className="h-[52px] object-contain" />
+          <div className="mt-[10px] h-[2.5px] w-[228px] rounded-full" style={{ backgroundColor: OR }} />
         </div>
         {/* QR emoldurado em laranja */}
-        <div className="flex flex-col items-center mt-5">
-          <div className="p-3 rounded-lg border" style={{ borderColor: OR, borderWidth: 1.5 }}>
-            <QRCodeSVG value={qrData} size={132} level="H" fgColor="#111111" />
+        <div className="flex flex-col items-center mt-[14px] relative">
+          <div className="rounded-xl border-2 p-[9px] bg-white" style={{ borderColor: OR }}>
+            <QRCodeSVG value={qrData} size={118} level="H" fgColor="#111111" />
           </div>
-          <p className="text-[10.5px] mt-3 text-center leading-snug" style={{ color: "#4a5568" }}>
+          <p className="text-[11px] mt-[10px] text-center leading-snug font-medium" style={{ color: NAVY }}>
             Verifique a autenticidade<br />deste crachá.
           </p>
         </div>
         {/* Slogan */}
-        <div className="flex flex-col items-center mt-5 px-8 text-center relative">
-          <Users className="w-6 h-6 mb-1" style={{ color: NAVY }} />
-          <p className="text-[17px] font-extrabold leading-snug" style={{ color: NAVY }}>
-            Grandes obras<br />começam com{" "}
-            <span style={{ color: OR }}>grandes<br />pessoas.</span>
+        <div className="flex flex-col items-center mt-[16px] px-8 text-center relative">
+          <TresPessoas color={NAVY} />
+          <p className="text-[19px] font-extrabold leading-[1.25] mt-[6px]" style={{ color: NAVY }}>
+            Grandes obras<br />começam com<br />
+            <span style={{ color: OR }}>grandes pessoas.</span>
           </p>
-          <div className="mt-3 mb-2 h-px w-[210px]" style={{ backgroundColor: "#e4e8ef" }} />
-          <p className="text-[10.5px] font-semibold" style={{ color: NAVY }}>Compromisso que vira resultado.</p>
-          <div className="mt-2 h-px w-[210px]" style={{ backgroundColor: "#e4e8ef" }} />
+          <div className="mt-[12px] mb-[8px] h-px w-[216px]" style={{ backgroundColor: "#dfe4ec" }} />
+          <p className="text-[11px] font-semibold" style={{ color: NAVY }}>Compromisso que vira resultado.</p>
         </div>
-        {/* Rodapé navy com telefone */}
-        <div className="mt-auto" style={{ backgroundColor: NAVY }}>
-          <div className="flex items-center justify-center gap-4 py-4 px-6">
-            <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: OR }}>
-              <Phone className="w-5 h-5" style={{ color: NAVY }} fill={NAVY} />
-            </div>
-            <div className="text-white text-center">
-              <p className="text-[10.5px] leading-tight font-medium">Em caso de perda,<br />entre em contato:</p>
-              <p className="text-[17px] font-extrabold mt-0.5 whitespace-nowrap">{companyPhone || "(12) 3133-5504"}</p>
+        {/* Rodapé navy com topo curvo + friso laranja (como na arte) */}
+        <div className="mt-auto relative px-[8px] pb-[8px]">
+          <div className="relative overflow-hidden rounded-b-xl rounded-t-[60px]">
+            <svg className="block w-full" viewBox="0 0 324 96" preserveAspectRatio="none" style={{ height: 88 }}>
+              <path d="M0,26 Q162,-14 324,26 L324,96 L0,96 Z" fill={CRACHA_NAVY} />
+              <path d="M0,26 Q162,-14 324,26" fill="none" stroke={CRACHA_ORANGE} strokeWidth="4" />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center gap-[14px] pt-[14px]">
+              <div className="w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: OR }}>
+                <Phone className="w-[19px] h-[19px]" style={{ color: NAVY }} fill={NAVY} />
+              </div>
+              <div className="text-white">
+                <p className="text-[10.5px] leading-[1.3] font-medium">Em caso de perda,<br />entre em contato:</p>
+                <p className="text-[17px] font-extrabold mt-[1px] whitespace-nowrap tracking-wide">{companyPhone || "(12) 3133-5504"}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -620,65 +650,70 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
     );
   }
 
-  // FRENTE — réplica da arte
+  // FRENTE
   const detalhes = [
-    badge.matricula ? { icon: <User className="w-3.5 h-3.5" />, rotulo: "Nº INTERNO", valor: badge.matricula } : null,
-    badge.setor ? { icon: <Briefcase className="w-3.5 h-3.5" />, rotulo: "SETOR", valor: badge.setor.toUpperCase() } : null,
-    badge.empresaTerceira ? { icon: <Building2 className="w-3.5 h-3.5" />, rotulo: "EMPRESA", valor: badge.empresaTerceira } : null,
-    badge.obra ? { icon: <HardHat className="w-3.5 h-3.5" />, rotulo: "OBRA", valor: badge.obra } : null,
-    badge.dataAdmissao ? { icon: <Calendar className="w-3.5 h-3.5" />, rotulo: "ADMISSÃO", valor: formatDateBR(badge.dataAdmissao) } : null,
+    badge.matricula ? { icon: <User className="w-[15px] h-[15px]" strokeWidth={2} />, rotulo: "Nº INTERNO", valor: badge.matricula } : null,
+    badge.setor ? { icon: <Briefcase className="w-[15px] h-[15px]" strokeWidth={2} />, rotulo: "SETOR", valor: badge.setor.toUpperCase() } : null,
+    badge.empresaTerceira ? { icon: <Building2 className="w-[15px] h-[15px]" strokeWidth={2} />, rotulo: "EMPRESA", valor: badge.empresaTerceira } : null,
+    badge.obra ? { icon: <HardHat className="w-[15px] h-[15px]" strokeWidth={2} />, rotulo: "OBRA", valor: badge.obra } : null,
+    badge.dataAdmissao ? { icon: <Calendar className="w-[15px] h-[15px]" strokeWidth={2} />, rotulo: "ADMISSÃO", valor: formatDateBR(badge.dataAdmissao) } : null,
   ].filter(Boolean) as { icon: React.ReactNode; rotulo: string; valor: string }[];
 
   return (
     <div className="w-[340px] h-[540px] rounded-2xl overflow-hidden shadow-xl mx-auto relative bg-white">
       <Watermark />
-      {/* Header navy com curva e faixa laranja (como na arte: sobe da esquerda p/ direita) */}
-      <div className="relative" style={{ height: 168 }}>
-        <div className="absolute inset-0" style={{ backgroundColor: NAVY }} />
-        <svg className="absolute bottom-0 left-0 w-full" viewBox="0 0 340 64" preserveAspectRatio="none" style={{ height: 64 }}>
-          {/* faixa laranja acompanhando a curva */}
-          <path d="M0,64 C110,60 210,16 340,6 L340,20 C210,28 110,68 0,72 Z" fill={CRACHA_ORANGE} transform="translate(0,-8)" />
-          {/* recorte branco */}
-          <path d="M0,64 C110,60 210,20 340,12 L340,64 Z" fill="#ffffff" />
+      {/* Faixa branca no topo com slot de furação (o logo desce, como na arte) */}
+      <div className="flex justify-center pt-[10px] pb-[6px]">
+        <div className="w-[34px] h-[7px] rounded-full" style={{ backgroundColor: "#e4e8ef" }} />
+      </div>
+      {/* Painel navy com margem branca nas laterais, cantos arredondados e curva */}
+      <div className="relative mx-[8px]" style={{ height: 158 }}>
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 324 158" preserveAspectRatio="none">
+          {/* faixa laranja acompanhando a curva (mais grossa à esquerda, some à direita) */}
+          <path d="M12,0 H312 Q324,0 324,12 V96 C240,88 130,132 0,158 V12 Q0,0 12,0 Z" fill="none" />
+          <path d="M0,158 C130,132 240,88 324,96 L324,86 C240,78 130,122 0,148 Z" fill={CRACHA_ORANGE} />
+          {/* painel navy */}
+          <path d="M12,0 H312 Q324,0 324,12 V88 C240,80 130,124 0,150 V12 Q0,0 12,0 Z" fill={CRACHA_NAVY} />
         </svg>
         {/* Logo da arte (fundo navy) */}
-        <div className="absolute inset-x-0 top-4 flex justify-center">
-          <img src={logoCrachaNavy} alt="" className="h-[74px] object-contain" />
+        <div className="absolute inset-x-0 top-[16px] flex justify-center">
+          <img src={logoCrachaNavy} alt="" className="h-[78px] object-contain" />
         </div>
       </div>
 
-      {/* Foto circular sobreposta à curva */}
-      <div className="relative flex justify-center" style={{ marginTop: -60 }}>
-        <div className="w-[120px] h-[120px] rounded-full bg-white overflow-hidden flex items-center justify-center"
-          style={{ border: "4px solid #ffffff", boxShadow: "0 6px 16px rgba(10,30,60,0.25)" }}>
-          {badge.foto ? (
-            <img src={badge.foto} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <User className="w-14 h-14 text-muted-foreground/40" />
-          )}
+      {/* Foto circular com anel laranja sobreposta à curva */}
+      <div className="relative flex justify-center" style={{ marginTop: -52 }}>
+        <div className="w-[124px] h-[124px] rounded-full bg-white p-[3px]" style={{ boxShadow: "0 6px 16px rgba(10,30,60,0.22)" }}>
+          <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-white" style={{ border: `2.5px solid ${OR}` }}>
+            {badge.foto ? (
+              <img src={badge.foto} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-14 h-14 text-muted-foreground/40" />
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Nome + ponto laranja + função */}
-      <div className="text-center mt-3 px-6">
-        <h2 className="text-[21px] font-extrabold uppercase leading-tight tracking-wide line-clamp-2 overflow-hidden" style={{ color: NAVY }}>
+      {/* Nome + ponto laranja + função (texto simples, como na arte) */}
+      <div className="text-center mt-[10px] px-6 relative">
+        <h2 className="text-[23px] font-extrabold uppercase leading-[1.15] tracking-wide line-clamp-2 overflow-hidden" style={{ color: NAVY }}>
           {badge.nome}
         </h2>
-        <div className="flex justify-center my-1">
-          <span className="w-[5px] h-[5px] rounded-full" style={{ backgroundColor: OR }} />
+        <div className="flex justify-center mt-[6px] mb-[6px]">
+          <span className="w-[7px] h-[7px] rounded-full" style={{ backgroundColor: OR }} />
         </div>
-        <div className="mx-auto inline-block border-t border-b py-[3px] px-4 max-w-[280px]" style={{ borderColor: "#d8dee8" }}>
-          <p className="text-[11.5px] font-semibold truncate" style={{ color: NAVY }}>{badge.funcao || "—"}</p>
-        </div>
+        <p className="text-[13px] leading-tight truncate" style={{ color: NAVY }}>{badge.funcao || "—"}</p>
       </div>
 
-      {/* Linhas de dados (ícone + rótulo à esquerda, valor bold à direita, sublinhado) */}
-      <div className="mt-4 px-9 space-y-[11px] relative">
+      {/* Linhas de dados: ícone + rótulo à esquerda, valor bold à direita, filete sob rótulo/valor */}
+      <div className="mt-[16px] pl-[38px] pr-[34px] relative">
         {detalhes.map((d, i) => (
-          <div key={i} className="flex items-center gap-2.5 border-b pb-[6px]" style={{ borderColor: "#d8dee8" }}>
+          <div key={i} className="flex items-center gap-[10px] pt-[9px]">
             <span className="shrink-0" style={{ color: NAVY }}>{d.icon}</span>
-            <span className="text-[9.5px] font-semibold tracking-[0.14em]" style={{ color: "#4a5568" }}>{d.rotulo}</span>
-            <span className="ml-auto text-[12px] font-extrabold text-right max-w-[150px] truncate" style={{ color: NAVY }}>{d.valor}</span>
+            <div className="flex-1 flex items-center border-b pb-[7px]" style={{ borderColor: "#c9d1dd" }}>
+              <span className="text-[10px] font-semibold tracking-[0.13em]" style={{ color: NAVY }}>{d.rotulo}</span>
+              <span className="ml-auto text-[13px] font-extrabold text-right max-w-[150px] truncate" style={{ color: NAVY }}>{d.valor}</span>
+            </div>
           </div>
         ))}
       </div>

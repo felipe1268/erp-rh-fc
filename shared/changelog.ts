@@ -28,6 +28,15 @@
  * laranja + telefone da empresa (companyObj.telefone/phone, fallback
  * (12) 3133-5504).
  *
+ * ITERAÇÃO 3 (detalhes finos da arte apontados pelo usuário): margem branca
+ * em volta do painel navy (bordas do cartão) + faixa branca no topo com slot
+ * de furação p/ o cordão (logo desce); anel LARANJA na foto (não branco);
+ * função em texto simples sem caixa/filetes; filete das linhas de dados só
+ * sob rótulo/valor (não sob o ícone); verso com rodapé navy de topo CURVO
+ * com friso laranja acompanhando o arco, slot de furação e ícone de 3
+ * pessoas (SVG próprio — lucide Users só tem 2); marca d'água dupla
+ * (prédios à esquerda + guindaste à direita).
+ *
  * formatDateBR sem new Date (evita off-by-one de fuso na admissão — achado
  * do architect). Cartão 340×540; download PNG (toPng pixelRatio 3) e
  * impressão inalterados. ZERO mudança de server/schema.
