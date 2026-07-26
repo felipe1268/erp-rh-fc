@@ -13,7 +13,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
-import logoCrachaNavy from "@assets/cracha_logo_navy.png";
 import logoCrachaWhite from "@assets/cracha_logo_white.png";
 import {
   CreditCard, Search, Download, Printer, User, Building2, HardHat,
@@ -671,18 +670,6 @@ const CRACHA_ORANGE = "#EE9803";
 // Telefone fixo do crachá (conforme arte/pedido do usuário 26/07/2026)
 const CRACHA_TELEFONE = "(12) 3133-5504";
 
-// Ícone de 3 pessoas (outline), igual ao da arte — lucide Users só tem 2
-const TresPessoas = ({ color }: { color: string }) => (
-  <svg width="30" height="22" viewBox="0 0 30 22" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="15" cy="6" r="3.2" />
-    <path d="M9.5 20c0-3 2.4-5 5.5-5s5.5 2 5.5 5" />
-    <circle cx="5.5" cy="7.5" r="2.4" />
-    <path d="M1.5 18.5c0-2.4 1.7-4 4-4 .8 0 1.5.2 2.1.5" />
-    <circle cx="24.5" cy="7.5" r="2.4" />
-    <path d="M28.5 18.5c0-2.4-1.7-4-4-4-.8 0-1.5.2-2.1.5" />
-  </svg>
-);
-
 // Marca d'água de construção (prédios à esquerda, guindaste à direita), como na arte
 const Watermark = () => (
   <>
@@ -721,53 +708,44 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
   const OR = CRACHA_ORANGE;
 
   if (side === "back") {
+    // VERSO — layout "Opção 5": fundo branco, logo, QR em cartão com sombra,
+    // "Verifique a autenticidade deste crachá", ID laranja e chevron navy no rodapé.
+    const idLabel = `${(badge.tipo || "").toUpperCase()}-${badge.id}`;
     return (
       <div className="w-[340px] h-[540px] rounded-2xl overflow-hidden shadow-xl mx-auto relative bg-white flex flex-col">
         <Watermark />
         {/* Espaço p/ furação */}
-        <div className="flex justify-center pt-[10px]">
+        <div className="flex justify-center pt-[12px]">
           <div className="w-[34px] h-[7px] rounded-full" style={{ backgroundColor: "#e4e8ef" }} />
         </div>
-        {/* Logo (versão fundo branco, recortada da arte) + linha laranja */}
-        <div className="flex flex-col items-center pt-[6px] relative">
-          <img src={logoCrachaWhite} alt="" className="h-[52px] object-contain" />
-          <div className="mt-[10px] h-[2.5px] w-[228px] rounded-full" style={{ backgroundColor: OR }} />
+        {/* Logo (fundo branco) */}
+        <div className="flex justify-center pt-[16px] relative">
+          <img src={logoCrachaWhite} alt="" className="h-[58px] object-contain" />
         </div>
-        {/* QR emoldurado em laranja */}
-        <div className="flex flex-col items-center mt-[14px] relative">
-          <div className="rounded-xl border-2 p-[9px] bg-white" style={{ borderColor: OR }}>
-            <QRCodeSVG value={qrData} size={118} level="H" fgColor="#111111" />
+        {/* QR em cartão branco com sombra suave */}
+        <div className="flex flex-col items-center mt-[34px] relative">
+          <div className="rounded-[18px] bg-white p-[16px]" style={{ boxShadow: "0 8px 24px rgba(10,30,60,0.14)", border: "1px solid #eef1f6" }}>
+            <QRCodeSVG value={qrData} size={132} level="H" fgColor="#111111" />
           </div>
-          <p className="text-[11px] mt-[10px] text-center leading-snug font-medium" style={{ color: NAVY }}>
-            Verifique a autenticidade<br />deste crachá.
+          <p className="text-[13px] mt-[22px] text-center leading-snug font-medium" style={{ color: NAVY }}>
+            Verifique a autenticidade<br />deste crachá
+          </p>
+          <p className="text-[15px] mt-[16px] font-extrabold tracking-wide" style={{ color: OR }}>
+            ID: {idLabel}
           </p>
         </div>
-        {/* Slogan */}
-        <div className="flex flex-col items-center mt-[16px] px-8 text-center relative">
-          <TresPessoas color={NAVY} />
-          <p className="text-[19px] font-extrabold leading-[1.25] mt-[6px]" style={{ color: NAVY }}>
-            Grandes obras<br />começam com<br />
-            <span style={{ color: OR }}>grandes pessoas.</span>
-          </p>
-          <div className="mt-[12px] mb-[8px] h-px w-[216px]" style={{ backgroundColor: "#dfe4ec" }} />
-          <p className="text-[11px] font-semibold" style={{ color: NAVY }}>Compromisso que vira resultado.</p>
-        </div>
-        {/* Rodapé navy com topo curvo + friso laranja (como na arte) */}
-        <div className="mt-auto relative px-[8px] pb-[8px]">
-          <div className="relative overflow-hidden rounded-b-xl rounded-t-[60px]">
-            <svg className="block w-full" viewBox="0 0 324 96" preserveAspectRatio="none" style={{ height: 88 }}>
-              <path d="M0,26 Q162,-14 324,26 L324,96 L0,96 Z" fill={CRACHA_NAVY} />
-              <path d="M0,26 Q162,-14 324,26" fill="none" stroke={CRACHA_ORANGE} strokeWidth="4" />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center gap-[14px] pt-[14px]">
-              <div className="w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: OR }}>
-                <Phone className="w-[19px] h-[19px]" style={{ color: NAVY }} fill={NAVY} />
-              </div>
-              <div className="text-white">
-                <p className="text-[10.5px] leading-[1.3] font-medium">Em caso de perda,<br />entre em contato:</p>
-                <p className="text-[17px] font-extrabold mt-[1px] whitespace-nowrap tracking-wide">{CRACHA_TELEFONE}</p>
-              </div>
-            </div>
+        {/* Rodapé navy em chevron + friso laranja (como na arte) */}
+        <div className="mt-auto relative">
+          <svg className="block w-full" viewBox="0 0 340 110" preserveAspectRatio="none" style={{ height: 104 }}>
+            <path d="M0,58 L190,16 L340,52 L340,110 L0,110 Z" fill={CRACHA_NAVY} />
+            <path d="M0,50 L190,8 L340,44 L340,52 L190,16 L0,58 Z" fill={CRACHA_ORANGE} />
+          </svg>
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-[10px]" style={{ height: 62 }}>
+            <Phone className="w-[15px] h-[15px] text-white shrink-0" fill="white" />
+            <p className="text-white text-[11px] font-medium leading-tight">
+              Em caso de perda, entre em contato:{" "}
+              <span className="font-extrabold text-[12.5px] whitespace-nowrap">{CRACHA_TELEFONE}</span>
+            </p>
           </div>
         </div>
       </div>
@@ -785,48 +763,43 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
 
   return (
     <div className="w-[340px] h-[540px] rounded-2xl overflow-hidden shadow-xl mx-auto relative bg-white">
-      <Watermark />
-      {/* Faixa branca no topo com slot de furação (o logo desce, como na arte) */}
-      <div className="flex justify-center pt-[10px] pb-[6px]">
+      {/* Canto navy diagonal no topo-esquerdo + faixa laranja paralela (arte "Opção 5") */}
+      <svg className="absolute left-0 top-0 pointer-events-none" width="120" height="440" viewBox="0 0 120 440" fill="none">
+        <path d="M0,0 L64,0 C52,120 30,260 0,368 Z" fill={CRACHA_NAVY} />
+        <path d="M74,0 L88,0 C74,140 48,290 14,412 L0,412 L0,392 C32,278 60,132 74,0 Z" fill={CRACHA_ORANGE} />
+      </svg>
+      {/* Slot de furação */}
+      <div className="flex justify-center pt-[12px] pb-[4px] relative">
         <div className="w-[34px] h-[7px] rounded-full" style={{ backgroundColor: "#e4e8ef" }} />
       </div>
-      {/* Painel navy com margem branca nas laterais, cantos arredondados e curva */}
-      <div className="relative mx-[8px]" style={{ height: 158 }}>
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 324 158" preserveAspectRatio="none">
-          {/* faixa laranja acompanhando a curva (mais grossa à esquerda, some à direita) */}
-          <path d="M12,0 H312 Q324,0 324,12 V96 C240,88 130,132 0,158 V12 Q0,0 12,0 Z" fill="none" />
-          <path d="M0,158 C130,132 240,88 324,96 L324,86 C240,78 130,122 0,148 Z" fill={CRACHA_ORANGE} />
-          {/* painel navy */}
-          <path d="M12,0 H312 Q324,0 324,12 V88 C240,80 130,124 0,150 V12 Q0,0 12,0 Z" fill={CRACHA_NAVY} />
-        </svg>
-        {/* Logo da arte (fundo navy) */}
-        <div className="absolute inset-x-0 top-[16px] flex justify-center">
-          <img src={logoCrachaNavy} alt="" className="h-[78px] object-contain" />
+      {/* Logo em fundo branco, centralizado */}
+      <div className="flex justify-center pt-[8px] relative">
+        <img src={logoCrachaWhite} alt="" className="h-[54px] object-contain" />
+      </div>
+
+      {/* Foto quadrada arredondada com borda navy */}
+      <div className="relative flex justify-center mt-[18px]">
+        <div className="w-[158px] h-[144px] rounded-[22px] overflow-hidden flex items-center justify-center bg-white" style={{ border: `4px solid ${NAVY}`, boxShadow: "0 6px 16px rgba(10,30,60,0.16)" }}>
+          {badge.foto ? (
+            <img src={badge.foto} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <User className="w-14 h-14 text-muted-foreground/40" />
+          )}
         </div>
       </div>
 
-      {/* Foto circular com anel laranja sobreposta à curva */}
-      <div className="relative flex justify-center" style={{ marginTop: -52 }}>
-        <div className="w-[124px] h-[124px] rounded-full bg-white p-[3px]" style={{ boxShadow: "0 6px 16px rgba(10,30,60,0.22)" }}>
-          <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-white" style={{ border: `2.5px solid ${OR}` }}>
-            {badge.foto ? (
-              <img src={badge.foto} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <User className="w-14 h-14 text-muted-foreground/40" />
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Nome + ponto laranja + função (texto simples, como na arte) */}
-      <div className="text-center mt-[10px] px-6 relative">
-        <h2 className="text-[23px] font-extrabold uppercase leading-[1.15] tracking-wide line-clamp-2 overflow-hidden" style={{ color: NAVY }}>
+      {/* Nome + função laranja entre traços (— FUNÇÃO —) */}
+      <div className="text-center mt-[12px] px-6 relative">
+        <h2 className="text-[21px] font-extrabold uppercase leading-[1.15] tracking-wide line-clamp-2 overflow-hidden" style={{ color: NAVY }}>
           {badge.nome}
         </h2>
-        <div className="flex justify-center mt-[6px] mb-[6px]">
-          <span className="w-[7px] h-[7px] rounded-full" style={{ backgroundColor: OR }} />
+        <div className="flex items-center justify-center gap-[8px] mt-[6px]">
+          <span className="h-[2px] w-[18px] rounded-full shrink-0" style={{ backgroundColor: OR }} />
+          <p className="text-[12.5px] font-extrabold uppercase tracking-[0.08em] leading-tight truncate max-w-[190px]" style={{ color: OR }}>
+            {badge.funcao || "—"}
+          </p>
+          <span className="h-[2px] w-[18px] rounded-full shrink-0" style={{ backgroundColor: OR }} />
         </div>
-        <p className="text-[13px] leading-tight truncate" style={{ color: NAVY }}>{badge.funcao || "—"}</p>
       </div>
 
       {/* Rev. 4609 — selos de competência vigentes (NR-35 / NR-10) */}
@@ -849,16 +822,24 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
 
       {/* Linhas de dados: ícone + rótulo à esquerda, valor bold à direita, filete sob rótulo/valor.
           Rev. 4609 — espaçamento compacta quando há selos NR/faixa de restrição (cartão tem 540px fixos) */}
-      <div className={`${(badge.docStatus?.nr35 || badge.docStatus?.nr10 || badge.docStatus?.restricao) ? "mt-[8px]" : "mt-[16px]"} pl-[38px] pr-[34px] relative`}>
+      <div className={`${(badge.docStatus?.nr35 || badge.docStatus?.nr10 || badge.docStatus?.restricao) ? "mt-[8px]" : "mt-[16px]"} pl-[40px] pr-[34px] relative`}>
         {detalhes.map((d, i) => (
-          <div key={i} className="flex items-center gap-[10px] pt-[9px]">
-            <span className="shrink-0" style={{ color: NAVY }}>{d.icon}</span>
+          <div key={i} className="flex items-center gap-[11px] pt-[8px]">
+            {/* Ícone em caixinha arredondada com contorno navy (como na arte) */}
+            <span className="shrink-0 w-[26px] h-[26px] rounded-[7px] flex items-center justify-center" style={{ color: NAVY, border: `1.5px solid ${NAVY}` }}>{d.icon}</span>
             <div className="flex-1 flex items-center border-b pb-[7px]" style={{ borderColor: "#c9d1dd" }}>
               <span className="text-[10px] font-semibold tracking-[0.13em]" style={{ color: NAVY }}>{d.rotulo}</span>
-              <span className="ml-auto text-[13px] font-extrabold text-right max-w-[150px] truncate" style={{ color: NAVY }}>{d.valor}</span>
+              <span className="ml-auto text-[13px] font-extrabold text-right max-w-[145px] truncate" style={{ color: NAVY }}>{d.valor}</span>
             </div>
           </div>
         ))}
+      </div>
+
+      {/* 3 pontinhos do rodapé (navy • laranja • navy), como na arte */}
+      <div className="absolute inset-x-0 bottom-[14px] flex justify-center gap-[8px]">
+        <span className="w-[8px] h-[8px] rounded-full" style={{ backgroundColor: NAVY }} />
+        <span className="w-[8px] h-[8px] rounded-full" style={{ backgroundColor: OR }} />
+        <span className="w-[8px] h-[8px] rounded-full" style={{ backgroundColor: NAVY }} />
       </div>
     </div>
   );

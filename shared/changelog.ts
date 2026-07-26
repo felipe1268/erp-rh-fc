@@ -1,4 +1,38 @@
 /**
+ * Rev. 4610 - UI: EMISSÃO DE CRACHÁS — LAYOUT "OPÇÃO 5" (NOVA ARTE ENVIADA PELO USUÁRIO)
+ *
+ * Pedido do usuário: "Ajusta o layout pra ser exatamente igual a esse aqui.
+ * Mantém as frases, as melhorias, mas o layout de formatação eu quero dessa
+ * forma" — anexou a arte "OPÇÃO 5" (frente + verso).
+ *
+ * FRENTE (novo layout):
+ * - Fundo branco com canto navy diagonal no topo-esquerdo + faixa laranja
+ *   paralela (SVG), substituindo o painel navy curvo da Rev. 4606;
+ * - Logo FC (versão fundo branco) centralizado no topo;
+ * - Foto QUADRADA arredondada (158×144, raio 22px) com borda navy 4px — antes
+ *   era circular com anel laranja;
+ * - Função em LARANJA bold uppercase entre traços ("— PEDREIRO I —");
+ * - Linhas de dados ganham ícone em caixinha arredondada com contorno navy;
+ * - 3 pontinhos no rodapé (navy • laranja • navy).
+ * - MANTIDOS da Rev. 4609: selos NR-35/NR-10 e faixa vermelha "RESTRIÇÃO DE
+ *   ATIVIDADE" (entre a função e as linhas de dados).
+ *
+ * VERSO (novo layout):
+ * - Logo no topo em fundo branco (sem linha laranja);
+ * - QR em cartão branco com sombra suave (não mais moldura laranja);
+ * - "Verifique a autenticidade deste crachá" + "ID: CLT-XXXXXX" em laranja;
+ * - Rodapé navy em CHEVRON (pico ao centro) com friso laranja na borda;
+ *   telefone "Em caso de perda, entre em contato: (12) 3133-5504" mantido
+ *   dentro do chevron; marca d'água de construção mantida.
+ * - Slogan "Grandes obras começam com grandes pessoas" removido (não existe
+ *   na nova arte).
+ *
+ * Arquivo: client/src/pages/terceiros/Crachas.tsx (só BadgePreview + limpeza
+ * de logo navy/ícone TresPessoas que ficaram sem uso).
+ * ZERO schema/server change.
+ */
+
+/**
  * Rev. 4609 - FEAT: EMISSÃO DE CRACHÁS — TAG DE DOCUMENTAÇÃO + SELOS NR-35/NR-10 + FAIXA DE RESTRIÇÃO (LGPD-SAFE)
  *
  * Pedido do usuário (plano validado antes de codar):
