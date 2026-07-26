@@ -111,6 +111,22 @@ function addMonthsISO(dateISO: string, n: number): string {
   return `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}-${String(nd.getDate()).padStart(2, "0")}`;
 }
 
+// Rev. 4600 — helper: adiciona N dias a uma data ISO (YYYY-MM-DD)
+function addDaysISO(dateISO: string, n: number): string {
+  if (!dateISO) return "";
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const nd = new Date(y, m - 1, d + n);
+  return `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}-${String(nd.getDate()).padStart(2, "0")}`;
+}
+
+// Rev. 4600 — prazo (em dias) entre cheques vindo do ciclo de fechamento do
+// fornecedor (empresas_terceiras.ciclo_prazo_parcela, anotado pelo backend no
+// título). null = sem ciclo → espaçamento mensal padrão.
+function cicloStepDias(c: any): number | null {
+  const n = Number(c?.cicloPrazoParcela);
+  return Number.isFinite(n) && n > 0 && n <= 365 ? n : null;
+}
+
 // Rev. 1619 — Extrai nº OC/OS/MED/Folha de origem ou descrição
 function extractOcNumero(c: any): string {
   const candidates = [c.origemDescricao, c.descricao, c.contaNome].filter(Boolean) as string[];
@@ -468,11 +484,13 @@ export default function FinanceiroContasAPagar() {
           const resto = centsTotal - base * qtd;
           const numIniNum = /^\d+$/.test(chequeNumIni.trim()) ? parseInt(chequeNumIni.trim(), 10) : null;
           const baseVenc = chequePrimVenc || dataPagamento || "";
+          // Rev. 4600 — respeita o "Prazo entre parcelas" do ciclo do fornecedor (ex.: 15d)
+          const stepDias = cicloStepDias(showPay);
           const parcelas = Array.from({ length: qtd }, (_, i) => ({
             valor: (base + (i === qtd - 1 ? resto : 0)) / 100,
             numeroCheque: numIniNum != null ? String(numIniNum + i) : (qtd === 1 ? chequeNumIni.trim() || undefined : undefined),
             parcela: `${i + 1}/${qtd}`,
-            dataVencimento: addMonthsISO(baseVenc, i) || undefined,
+            dataVencimento: (stepDias ? addDaysISO(baseVenc, i * stepDias) : addMonthsISO(baseVenc, i)) || undefined,
           }));
           criarChequesLoteMut.mutate({
             companyId,
@@ -670,14 +688,16 @@ export default function FinanceiroContasAPagar() {
     const resto = centsTotal - base * qtd;
     const numIniNum = /^\d+$/.test(editChequeNumIni.trim()) ? parseInt(editChequeNumIni.trim(), 10) : null;
     const baseVenc = editChequePrimVenc || editForm.dataVencimento || "";
+    // Rev. 4600 — respeita o "Prazo entre parcelas" do ciclo do fornecedor (ex.: 15d)
+    const stepDias = cicloStepDias(showEdit);
     return Array.from({ length: qtd }, (_, i) => ({
       idx: i,
       valor: (base + (i === qtd - 1 ? resto : 0)) / 100,
       numeroCheque: numIniNum != null ? String(numIniNum + i).padStart(6, "0") : (qtd === 1 ? editChequeNumIni.trim() || "—" : "—"),
       parcela: `${i + 1}/${qtd}`,
-      dataVencimento: addMonthsISO(baseVenc, i) || "",
+      dataVencimento: (stepDias ? addDaysISO(baseVenc, i * stepDias) : addMonthsISO(baseVenc, i)) || "",
     }));
-  }, [editForm.formaPagamento, editForm.valorPrevisto, editForm.dataVencimento, editChequeQtd, editChequeNumIni, editChequePrimVenc]);
+  }, [editForm.formaPagamento, editForm.valorPrevisto, editForm.dataVencimento, editChequeQtd, editChequeNumIni, editChequePrimVenc, showEdit]);
 
   // Rev. 4587 — cheques recebidos disponíveis para o EDITAR com "Cheque de Terceiro"
   const editValorNum = parseValorBR(String(editForm.valorPrevisto));
@@ -802,7 +822,14 @@ export default function FinanceiroContasAPagar() {
     setChequeTitular("");
     setChequeDataEmissao("");
     setChequeDataBomPara("");
-    setChequeQtd("1");
+    // Rev. 4600 — se o fornecedor tem ciclo de fechamento com cheque, pré-preenche
+    // o nº de parcelas com o "Nº de parcelas" do cadastro (editável).
+    const cicloQtd = Number(showPay?.cicloNumParcelas);
+    setChequeQtd(
+      String(showPay?.cicloFormaPagamento || "").toLowerCase() === "cheque" && Number.isFinite(cicloQtd) && cicloQtd >= 1 && cicloQtd <= 120
+        ? String(cicloQtd)
+        : "1"
+    );
     setChequeNumIni("");
     setChequePrimVenc("");
     setChequeStatusIni("pendente");
@@ -825,14 +852,16 @@ export default function FinanceiroContasAPagar() {
     const resto = centsTotal - base * qtd;
     const numIniNum = /^\d+$/.test(chequeNumIni.trim()) ? parseInt(chequeNumIni.trim(), 10) : null;
     const baseVenc = chequePrimVenc || dataPagamento || "";
+    // Rev. 4600 — respeita o "Prazo entre parcelas" do ciclo do fornecedor (ex.: 15d)
+    const stepDias = cicloStepDias(showPay);
     return Array.from({ length: qtd }, (_, i) => ({
       idx: i + 1,
       valor: (base + (i === qtd - 1 ? resto : 0)) / 100,
       numeroCheque: numIniNum != null ? String(numIniNum + i).padStart(6, "0") : (qtd === 1 ? chequeNumIni.trim() : `—`),
-      dataVencimento: addMonthsISO(baseVenc, i),
+      dataVencimento: stepDias ? addDaysISO(baseVenc, i * stepDias) : addMonthsISO(baseVenc, i),
       parcela: `${i + 1}/${qtd}`,
     }));
-  }, [formaPagamento, chequeSubtipo, chequeQtd, valorPagar, jurosPay, descontosPay, outrosPay, chequeNumIni, chequePrimVenc, dataPagamento]);
+  }, [formaPagamento, chequeSubtipo, chequeQtd, valorPagar, jurosPay, descontosPay, outrosPay, chequeNumIni, chequePrimVenc, dataPagamento, showPay]);
 
   // Rev. 3743 — payload da baixa (registrarBaixa). `valor` = principal aplicado ao título
   // (juros/descontos/outros vão separados, p/ registro). quitarTotal é injetado no caller.
@@ -3085,6 +3114,7 @@ export default function FinanceiroContasAPagar() {
                         <div className="px-3 py-2 bg-blue-100/60">
                           <p className="text-[11px] font-semibold text-blue-700 break-words">
                             Ao salvar, {editChequePreview.length} cheque{editChequePreview.length !== 1 ? "s serão cadastrados" : " será cadastrado"} no Controle de Cheques (situação: Pendente)
+                            {cicloStepDias(showEdit) ? ` · vencimentos a cada ${cicloStepDias(showEdit)} dias (ciclo do fornecedor)` : ""}
                           </p>
                         </div>
                         <div className="divide-y divide-blue-100 max-h-36 overflow-y-auto">
@@ -3625,6 +3655,7 @@ export default function FinanceiroContasAPagar() {
                             <div className="px-3 py-2 bg-blue-100/60">
                               <p className="text-[11px] font-semibold text-blue-700">
                                 {chequePreviewBaixa.length} cheque{chequePreviewBaixa.length !== 1 ? "s" : ""} serão gerados no Controle de Cheques
+                                {cicloStepDias(showPay) ? ` · vencimentos a cada ${cicloStepDias(showPay)} dias (ciclo do fornecedor)` : ""}
                               </p>
                             </div>
                             <div className="divide-y divide-blue-100 max-h-36 overflow-y-auto">

@@ -1,4 +1,37 @@
 /**
+ * Rev. 4600 - FIX: CONTAS A PAGAR — CHEQUES RESPEITAM O "PRAZO ENTRE PARCELAS" DO CICLO DO FORNECEDOR
+ *
+ * PEDIDO DO USUÁRIO: o fornecedor FRANCISNEI (GILÓ) tem ciclo de fechamento
+ * cadastrado (quinzenal, cheque, 3 parcelas, prazo de 15 dias entre parcelas),
+ * mas ao lançar cheques no diálogo "Pagar" o 2º vencimento caía 1 MÊS depois
+ * (25/07 → 25/08) em vez de 15 dias depois (25/07 → 09/08).
+ *
+ * CAUSA-RAIZ: os vencimentos dos cheques próprios (diálogos "Pagar" e
+ * "Editar" + payload do criarChequesLote) eram calculados SEMPRE com
+ * addMonthsISO (mês em mês, hardcoded). O ciclo do fornecedor
+ * (empresas_terceiras.ciclo_prazo_parcela) só era usado no consolidado
+ * (PagarConsolidadoDialog) — e o consolidado só se forma com 2+ títulos em
+ * aberto na mesma janela; com 1 título, o pagamento cai no diálogo comum, que
+ * ignorava o ciclo.
+ *
+ * COMO FUNCIONA AGORA:
+ * - Backend (_agruparContasPagarPorCicloForn): todo título de fornecedor com
+ *   ciclo configurado ganha as anotações cicloPrazoParcela / cicloNumParcelas /
+ *   cicloFormaPagamento — mesmo quando fica individual (fora de grupo).
+ * - Frontend: helper addDaysISO + cicloStepDias(c). Nos 3 pontos de cálculo de
+ *   vencimento (payload da baixa, prévia do "Pagar", prévia do "Editar"):
+ *   se o título tem ciclo, vencimentos = 1º venc + i × prazoDias; senão,
+ *   mensal como antes (comportamento inalterado p/ fornecedores sem ciclo).
+ * - Poka-Yoke nível 3: ao abrir o "Pagar" de título com ciclo de cheque, o
+ *   "Em quantas vezes" já vem pré-preenchido com o Nº de parcelas do cadastro
+ *   (editável). A prévia mostra "vencimentos a cada N dias (ciclo do
+ *   fornecedor)" pra deixar a regra visível.
+ *
+ * ARQUIVOS: server/routers/financial.ts,
+ *   client/src/pages/financeiro/FinanceiroContasAPagar.tsx.
+ * ZERO schema change.
+ */
+/**
  * Rev. 4599 - UX: CONTAS A PAGAR — SETINHAS −/+ NA QUANTIDADE DE CHEQUES + VALORES NO PADRÃO BR (1.234,56)
  *
  * PEDIDO DO USUÁRIO: (1) o campo "Em quantas vezes" devia ser um misto —

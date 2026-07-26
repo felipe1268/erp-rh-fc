@@ -472,6 +472,12 @@ function _agruparContasPagarPorCicloForn(arr: any[], supplierCycleMap: Map<strin
     if (!cycleConfig || !cycleConfig.cicloPagamento || cycleConfig.cicloPagamento === "avista") {
       out.push(r); continue;
     }
+    // Rev. 4600 — anota o ciclo do fornecedor no PRÓPRIO título (mesmo quando ele
+    // acaba ficando individual, i.e. só 1 título na janela): o diálogo "Pagar" usa
+    // cicloPrazoParcela pra espaçar os cheques (ex.: 15 em 15 dias, não mensal).
+    r.cicloPrazoParcela = cycleConfig.cicloPrazoParcela ?? null;
+    r.cicloNumParcelas = cycleConfig.cicloNumParcelas ?? null;
+    r.cicloFormaPagamento = cycleConfig.cicloFormaPagamento ?? null;
     const fornNorm = match!.key;
     const fornecedorLabel = cycleConfig.nome || r.fornecedorNome || "Fornecedor";
     // Rev. 4071 — a janela de fechamento deve ser calculada pela data da COMPRA
