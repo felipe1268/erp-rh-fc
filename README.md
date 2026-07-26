@@ -1,8 +1,8 @@
 # Cópia de segurança do código-fonte do ERP
 
 Arquivo: erp-source-latest.zip (dividido em 6 partes de até 4MB)
-Tamanho total: 23019513 bytes
-SHA-256 do zip completo: ea2ebe77f863acf2559c4939df833de35ad5f867ac021bb8c16ce1b2bfaab993
+Tamanho total: 23023632 bytes
+SHA-256 do zip completo: f021592b9122628240707b9fb02ad1cb936ff37ac6eec5cf5d12dcdaf9ec3961
 
 Para reconstituir:
 ```
