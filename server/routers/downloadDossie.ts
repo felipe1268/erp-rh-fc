@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import archiver from "archiver";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, userCompanies } from "../../drizzle/schema";
+import { asos, trainings, warnings, employees, userCompanies, employeeIntegrations } from "../../drizzle/schema";
 import { eq, isNull, and, inArray } from "drizzle-orm";
 import { sdk } from "../_core/sdk";
 import { dbRetrieve } from "../storage";
@@ -96,13 +96,15 @@ export function registerDownloadDossieRoute(app: Express) {
       const validIds = empRows.map(e => e.id);
 
       // Busca todos os documentos em paralelo
-      const [asoRowsAll, treinRowsAll, atesRows, advRows] = await Promise.all([
+      // Rev. 4615 — atestado é documento INTERNO e não vai pro cliente;
+      // no lugar entram as evidências de INTEGRAÇÃO (quando anexadas)
+      const [asoRowsAll, treinRowsAll, intRows, advRows] = await Promise.all([
         db.select({ id: asos.id, employeeId: asos.employeeId, tipo: asos.tipo, dataExame: asos.dataExame, documentoUrl: asos.documentoUrl })
           .from(asos).where(and(inArray(asos.employeeId, validIds), isNull(asos.deletedAt))),
         db.select({ id: trainings.id, employeeId: trainings.employeeId, nome: trainings.nome, norma: trainings.norma, dataRealizacao: trainings.dataRealizacao, dataValidade: trainings.dataValidade, certificadoUrl: trainings.certificadoUrl })
           .from(trainings).where(and(inArray(trainings.employeeId, validIds), isNull(trainings.deletedAt))),
-        db.select({ id: atestados.id, employeeId: atestados.employeeId, tipo: atestados.tipo, dataEmissao: atestados.dataEmissao, documentoUrl: atestados.documentoUrl })
-          .from(atestados).where(and(inArray(atestados.employeeId, validIds), isNull(atestados.deletedAt))),
+        db.select({ id: employeeIntegrations.id, employeeId: employeeIntegrations.employeeId, tipo: employeeIntegrations.tipo, clienteNome: employeeIntegrations.clienteNome, dataRealizacao: employeeIntegrations.dataRealizacao, evidencia: employeeIntegrations.evidencia })
+          .from(employeeIntegrations).where(and(inArray(employeeIntegrations.employeeId, validIds), eq(employeeIntegrations.companyId, companyId))),
         db.select({ id: warnings.id, employeeId: warnings.employeeId, tipoAdvertencia: warnings.tipoAdvertencia, dataOcorrencia: warnings.dataOcorrencia, documentoUrl: warnings.documentoUrl })
           .from(warnings).where(and(inArray(warnings.employeeId, validIds), isNull(warnings.deletedAt))),
       ]);
@@ -162,13 +164,14 @@ export function registerDownloadDossieRoute(app: Express) {
             files.push({ url: t.certificadoUrl!, path: `${nome}/Treinamentos/${nm}_${data}.${ext}` });
           });
 
-        atesRows
-          .filter(a => a.employeeId === emp.id && a.documentoUrl?.trim())
-          .forEach((a) => {
-            const ext = extFromUrl(a.documentoUrl!);
-            const data = String(a.dataEmissao || "").slice(0, 10) || "sem-data";
-            const tp = sanitize(a.tipo || "Atestado");
-            files.push({ url: a.documentoUrl!, path: `${nome}/Atestados/${tp}_${data}.${ext}` });
+        intRows
+          .filter(i => i.employeeId === emp.id && typeof i.evidencia === "string" && /^\/uploads\//.test(i.evidencia.trim()))
+          .forEach((i) => {
+            const url = i.evidencia!.trim();
+            const ext = extFromUrl(url);
+            const data = String(i.dataRealizacao || "").slice(0, 10) || "sem-data";
+            const tp = sanitize(i.clienteNome || (i.tipo === "interna" ? "Interna" : "Integracao"));
+            files.push({ url, path: `${nome}/Integracoes/${tp}_${data}.${ext}` });
           });
 
         advRows

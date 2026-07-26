@@ -1,4 +1,33 @@
 /**
+ * Rev. 4615 - FEAT: DOSSIÊ — SAI ATESTADO (INTERNO), ENTRA INTEGRAÇÃO (TELA + ZIP)
+ *
+ * Pedido do usuário: o dossiê é o pacote de documentos de INTEGRAÇÃO que vai
+ * pro cliente (ASO, treinamentos, integrações). Atestado médico é documento
+ * INTERNO e não deve nem aparecer na aba Dossiê nem ir no ZIP entregue.
+ *
+ * Backend:
+ * - painelDossie (controleDocumentos.ts): deixa de consultar/devolver
+ *   `atestados`; passa a devolver `integracoes` (employee_integrations, com
+ *   companyFilter) + `integracaoVigente` (existe integração sem vencimento ou
+ *   com vencimento >= hoje) + totais.integracoes. Pendências ganham
+ *   "Sem integração"/"Integração vencida" — entra no filtro ❌ Falta documento.
+ * - downloadDossie.ts (ZIP): remove a pasta Atestados; adiciona pasta
+ *   Integracoes com a EVIDÊNCIA anexada (só caminhos internos /uploads/ —
+ *   evidencia é campo gravável pelo cliente, fetch genérico de URL externa
+ *   seria SSRF). Nome do arquivo: Cliente_data.ext.
+ *
+ * Frontend (ControleDocumentos.tsx, DossiePanel):
+ * - Coluna "Atestados" vira "Integração": chip ✓ N (verde, vigente),
+ *   ❌ Vencida (vermelho) ou "— Sem" (cinza).
+ * - Bloco expandido "Atestados" vira "Integrações": cliente/tipo, link da
+ *   evidência (/uploads), data de realização → vencimento.
+ * - Advertências permanecem (não fazem parte do pedido).
+ *
+ * Poka-Yoke: status de integração agora é BLOQUEIO visível (pendência no
+ * filtro "Falta documento"), não só informação. ZERO schema change.
+ */
+
+/**
  * Rev. 4614 - FEAT: CRACHÁS — TODOS OS TREINAMENTOS VIGENTES NA FRENTE (PILLS SUTIS)
  *
  * Pedido do usuário: o crachá deve indicar TODOS os treinamentos do colaborador

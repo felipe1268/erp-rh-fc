@@ -781,7 +781,7 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
               <th className="p-2 text-left font-medium text-muted-foreground hidden md:table-cell">Função</th>
               <th className="p-2 text-center font-medium text-muted-foreground">ASO</th>
               <th className="p-2 text-center font-medium text-muted-foreground">Treinamentos</th>
-              <th className="p-2 text-center font-medium text-muted-foreground">Atestados</th>
+              <th className="p-2 text-center font-medium text-muted-foreground">Integração</th>
               <th className="p-2 text-center font-medium text-muted-foreground">Advertências</th>
               <th className="p-2 w-8" />
             </tr>
@@ -825,9 +825,13 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
                     <td className="p-2 text-center"><AsoChip aso={f.aso} /></td>
                     <td className="p-2 text-center"><TreinChip pior={f.piorStatusTrein} total={f.totais.treinamentos} /></td>
                     <td className="p-2 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${f.totais.atestados > 0 ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-400"}`}>
-                        {f.totais.atestados > 0 ? f.totais.atestados : "—"}
-                      </span>
+                      {f.totais.integracoes === 0 ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-400 font-medium">— Sem</span>
+                      ) : (f as any).integracaoVigente ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 font-medium">✓ {f.totais.integracoes}</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 font-medium">❌ Vencida</span>
+                      )}
                     </td>
                     <td className="p-2 text-center">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${f.totais.advertencias > 0 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-400"}`}>
@@ -881,19 +885,20 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
                             )}
                           </div>
                           <div>
-                            <p className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> Atestados ({f.totais.atestados})</p>
-                            {f.atestados.length === 0 ? (
-                              <p className="text-xs text-muted-foreground italic">Nenhum atestado</p>
+                            <p className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> Integrações ({f.totais.integracoes})</p>
+                            {((f as any).integracoes?.length ?? 0) === 0 ? (
+                              <p className="text-xs text-muted-foreground italic">Nenhuma integração</p>
                             ) : (
                               <div className="space-y-1 max-h-28 overflow-y-auto">
-                                {(f.atestados as any[]).slice(0, 5).map((a: any) => (
-                                  <div key={a.id} className="text-xs">
-                                    <span className="font-medium">{a.tipo}</span>
-                                    {a.documentoUrl && <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-primary hover:underline"><ExternalLink className="h-3 w-3 inline" /></a>}
-                                    <span className="text-muted-foreground ml-1">· {formatDate(a.dataEmissao)}</span>
+                                {((f as any).integracoes as any[]).slice(0, 5).map((i: any) => (
+                                  <div key={i.id} className="text-xs">
+                                    <span className="font-medium">{i.clienteNome || (i.tipo === "interna" ? "Interna" : "Externa")}</span>
+                                    {i.evidencia && /^\/uploads\//.test(String(i.evidencia)) && <a href={i.evidencia} target="_blank" rel="noopener noreferrer" className="ml-1 text-primary hover:underline"><ExternalLink className="h-3 w-3 inline" /></a>}
+                                    <span className="text-muted-foreground ml-1">· {formatDate(i.dataRealizacao)}</span>
+                                    {i.dataVencimento && <span className="text-muted-foreground ml-1">→ {formatDate(i.dataVencimento)}</span>}
                                   </div>
                                 ))}
-                                {f.atestados.length > 5 && <p className="text-xs text-muted-foreground">+{f.atestados.length - 5} mais</p>}
+                                {((f as any).integracoes as any[]).length > 5 && <p className="text-xs text-muted-foreground">+{((f as any).integracoes as any[]).length - 5} mais</p>}
                               </div>
                             )}
                           </div>

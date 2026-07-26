@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier, getCompaniesForUser } from "../db";
 import { TRPCError } from "@trpc/server";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes, clienteAvaliacaoDetalhes } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes, clienteAvaliacaoDetalhes, employeeIntegrations } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte, or, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut, dbRetrieve } from "../storage";
@@ -3256,7 +3256,9 @@ export const controleDocumentosRouter = router({
       const empIds = empRows.map(e => e.id);
 
       // Todos os documentos em paralelo
-      const [asoRows, treinRows, atesRows, advRows] = await Promise.all([
+      // Rev. 4615 — atestados FORA do dossiê (documento interno, não vai pro
+      // cliente); entram as INTEGRAÇÕES (documento de integração do colaborador)
+      const [asoRows, treinRows, intRows, advRows] = await Promise.all([
         db.select({
           id: asos.id, employeeId: asos.employeeId,
           tipo: asos.tipo, dataExame: asos.dataExame,
@@ -3272,10 +3274,12 @@ export const controleDocumentosRouter = router({
         }).from(trainings).where(and(inArray(trainings.employeeId, empIds), isNull(trainings.deletedAt))).orderBy(desc(trainings.dataRealizacao)),
 
         db.select({
-          id: atestados.id, employeeId: atestados.employeeId,
-          tipo: atestados.tipo, dataEmissao: atestados.dataEmissao,
-          diasAfastamento: atestados.diasAfastamento, documentoUrl: atestados.documentoUrl,
-        }).from(atestados).where(and(inArray(atestados.employeeId, empIds), isNull(atestados.deletedAt))).orderBy(desc(atestados.dataEmissao)),
+          id: employeeIntegrations.id, employeeId: employeeIntegrations.employeeId,
+          tipo: employeeIntegrations.tipo, clienteNome: employeeIntegrations.clienteNome,
+          dataRealizacao: employeeIntegrations.dataRealizacao,
+          dataVencimento: employeeIntegrations.dataVencimento,
+          evidencia: employeeIntegrations.evidencia,
+        }).from(employeeIntegrations).where(and(inArray(employeeIntegrations.employeeId, empIds), companyFilter(employeeIntegrations.companyId, input))).orderBy(desc(employeeIntegrations.dataRealizacao)),
 
         db.select({
           id: warnings.id, employeeId: warnings.employeeId,
@@ -3289,11 +3293,11 @@ export const controleDocumentosRouter = router({
       // Agrupamento por funcionário
       const asoByEmp = new Map<number, typeof asoRows>();
       const treinByEmp = new Map<number, typeof treinRows>();
-      const atesByEmp = new Map<number, typeof atesRows>();
+      const intByEmp = new Map<number, typeof intRows>();
       const advByEmp = new Map<number, typeof advRows>();
       for (const r of asoRows) { if (!asoByEmp.has(r.employeeId)) asoByEmp.set(r.employeeId, []); asoByEmp.get(r.employeeId)!.push(r); }
       for (const r of treinRows) { if (!treinByEmp.has(r.employeeId)) treinByEmp.set(r.employeeId, []); treinByEmp.get(r.employeeId)!.push(r); }
-      for (const r of atesRows) { if (!atesByEmp.has(r.employeeId)) atesByEmp.set(r.employeeId, []); atesByEmp.get(r.employeeId)!.push(r); }
+      for (const r of intRows) { if (!intByEmp.has(r.employeeId)) intByEmp.set(r.employeeId, []); intByEmp.get(r.employeeId)!.push(r); }
       for (const r of advRows) { if (!advByEmp.has(r.employeeId)) advByEmp.set(r.employeeId, []); advByEmp.get(r.employeeId)!.push(r); }
 
       // Rev. 4613 — chave canônica de tipo de treinamento (NR-18 == NR 18 == nr18).
@@ -3334,8 +3338,18 @@ export const controleDocumentosRouter = router({
             return "VALIDO";
           }, empTreins.length === 0 ? "SEM" : "VALIDO");
 
-          const empAtes = atesByEmp.get(emp.id) || [];
+          const empInts = intByEmp.get(emp.id) || [];
           const empAdvs = advByEmp.get(emp.id) || [];
+          // Integração vigente = sem vencimento OU vencimento >= hoje
+          // (mesma lógica de dia LOCAL do calcularStatus em integracoes.ts —
+          // toISOString é UTC e viraria o dia mais cedo)
+          const hojeLocal = new Date();
+          hojeLocal.setHours(0, 0, 0, 0);
+          const intVigente = empInts.some(i => {
+            if (!i.dataVencimento) return true;
+            const venc = new Date(String(i.dataVencimento) + "T00:00:00");
+            return venc.getTime() >= hojeLocal.getTime();
+          });
 
           // Rev. 4613 — pendências objetivas (base p/ o filtro "faltam documentos")
           const pendencias: string[] = [];
@@ -3343,6 +3357,7 @@ export const controleDocumentosRouter = router({
           else if (asoVencido) pendencias.push("ASO vencido");
           if (empTreins.length === 0) pendencias.push("Sem treinamento");
           else if (piorTrein === "VENCIDO") pendencias.push("Treinamento vencido");
+          if (!intVigente) pendencias.push(empInts.length === 0 ? "Sem integração" : "Integração vencida");
 
           return {
             id: emp.id,
@@ -3354,7 +3369,8 @@ export const controleDocumentosRouter = router({
             aso: latestAso ? { ...latestAso, ...(asoCalc || {}) } : null,
             treinamentos: empTreins,
             piorStatusTrein: piorTrein,
-            atestados: empAtes,
+            integracoes: empInts,
+            integracaoVigente: intVigente,
             advertencias: empAdvs,
             pendencias,
             emDia: pendencias.length === 0,
@@ -3362,7 +3378,7 @@ export const controleDocumentosRouter = router({
               asos: empAsos.length,
               treinamentos: empTreins.length,
               treinamentosHistorico: (treinByEmp.get(emp.id) || []).length,
-              atestados: empAtes.length,
+              integracoes: empInts.length,
               advertencias: empAdvs.length,
             },
           };
