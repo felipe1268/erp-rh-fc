@@ -782,7 +782,7 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
               <th className="p-2 text-center font-medium text-muted-foreground">ASO</th>
               <th className="p-2 text-center font-medium text-muted-foreground">Treinamentos</th>
               <th className="p-2 text-center font-medium text-muted-foreground">Integração</th>
-              <th className="p-2 text-center font-medium text-muted-foreground">Advertências</th>
+              <th className="p-2 text-center font-medium text-muted-foreground">Documentos</th>
               <th className="p-2 w-8" />
             </tr>
           </thead>
@@ -834,8 +834,8 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
                       )}
                     </td>
                     <td className="p-2 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${f.totais.advertencias > 0 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-400"}`}>
-                        {f.totais.advertencias > 0 ? f.totais.advertencias : "—"}
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${((f as any).totais?.documentos || 0) > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"}`}>
+                        {((f as any).totais?.documentos || 0) > 0 ? (f as any).totais.documentos : "—"}
                       </span>
                     </td>
                     <td className="p-2">
@@ -903,19 +903,19 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
                             )}
                           </div>
                           <div>
-                            <p className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1"><ShieldAlert className="h-3.5 w-3.5" /> Advertências ({f.totais.advertencias})</p>
-                            {f.advertencias.length === 0 ? (
-                              <p className="text-xs text-muted-foreground italic">Nenhuma advertência</p>
+                            <p className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> Documentos ({(f as any).totais?.documentos || 0})</p>
+                            {(((f as any).documentos as any[]) || []).length === 0 ? (
+                              <p className="text-xs text-muted-foreground italic">Nenhum documento</p>
                             ) : (
                               <div className="space-y-1 max-h-28 overflow-y-auto">
-                                {(f.advertencias as any[]).slice(0, 5).map((a: any) => (
-                                  <div key={a.id} className="text-xs">
-                                    <span className="font-medium">{a.tipoAdvertencia}</span>
-                                    {a.documentoUrl && <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-primary hover:underline"><ExternalLink className="h-3 w-3 inline" /></a>}
-                                    <span className="text-muted-foreground ml-1">· {formatDate(a.dataOcorrencia)}</span>
+                                {(((f as any).documentos as any[]) || []).slice(0, 5).map((d: any) => (
+                                  <div key={d.id} className="text-xs">
+                                    <span className="font-medium">{TIPOS_DOC_LABELS[d.tipo] || d.tipo}</span>
+                                    {d.fileUrl && <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-primary hover:underline"><ExternalLink className="h-3 w-3 inline" /></a>}
+                                    {d.nome && <span className="text-muted-foreground ml-1 break-all">· {d.nome}</span>}
                                   </div>
                                 ))}
-                                {f.advertencias.length > 5 && <p className="text-xs text-muted-foreground">+{f.advertencias.length - 5} mais</p>}
+                                {(((f as any).documentos as any[]) || []).length > 5 && <p className="text-xs text-muted-foreground">+{(((f as any).documentos as any[]) || []).length - 5} mais</p>}
                               </div>
                             )}
                           </div>

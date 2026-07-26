@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier, getCompaniesForUser } from "../db";
 import { TRPCError } from "@trpc/server";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes, clienteAvaliacaoDetalhes, employeeIntegrations } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes, clienteAvaliacaoDetalhes, employeeIntegrations, employeeDocuments } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte, or, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut, dbRetrieve } from "../storage";
@@ -3234,8 +3234,11 @@ export const controleDocumentosRouter = router({
   // ===================== EXAMES CUSTOMIZADOS =====================
   painelDossie: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = (await getDb())!;
+      // Rev. 4616 — guard de tenancy: interseção das empresas pedidas com as
+      // permitidas do usuário (companyFilter sozinho confia no input = IDOR)
+      const idsPermitidos = await resolveCompanyIdsGuard(ctx as any, input);
 
       // Funcionários ativos
       const empRows = await db
@@ -3248,7 +3251,7 @@ export const controleDocumentosRouter = router({
           fotoUrl: employees.fotoUrl,
         })
         .from(employees)
-        .where(and(companyFilter(employees.companyId, input), isNull(employees.deletedAt), empNaoDesligado()))
+        .where(and(inArray(employees.companyId, idsPermitidos), isNull(employees.deletedAt), empNaoDesligado()))
         .orderBy(employees.nomeCompleto);
 
       if (empRows.length === 0) return { funcionarios: [] };
@@ -3256,9 +3259,11 @@ export const controleDocumentosRouter = router({
       const empIds = empRows.map(e => e.id);
 
       // Todos os documentos em paralelo
-      // Rev. 4615 — atestados FORA do dossiê (documento interno, não vai pro
-      // cliente); entram as INTEGRAÇÕES (documento de integração do colaborador)
-      const [asoRows, treinRows, intRows, advRows] = await Promise.all([
+      // Rev. 4615/4616 — dossiê = pacote de INTEGRAÇÃO pro cliente: ASO/exames,
+      // treinamentos, integrações e documentos pessoais. Documentos INTERNOS
+      // (atestado, advertência, contrato/rescisão) ficam FORA.
+      const DOCS_INTERNOS = ["atestado_medico", "termo_rescisao", "contrato_trabalho"];
+      const [asoRows, treinRows, intRows, docRows] = await Promise.all([
         db.select({
           id: asos.id, employeeId: asos.employeeId,
           tipo: asos.tipo, dataExame: asos.dataExame,
@@ -3279,26 +3284,29 @@ export const controleDocumentosRouter = router({
           dataRealizacao: employeeIntegrations.dataRealizacao,
           dataVencimento: employeeIntegrations.dataVencimento,
           evidencia: employeeIntegrations.evidencia,
-        }).from(employeeIntegrations).where(and(inArray(employeeIntegrations.employeeId, empIds), companyFilter(employeeIntegrations.companyId, input))).orderBy(desc(employeeIntegrations.dataRealizacao)),
+        }).from(employeeIntegrations).where(and(inArray(employeeIntegrations.employeeId, empIds), inArray(employeeIntegrations.companyId, idsPermitidos))).orderBy(desc(employeeIntegrations.dataRealizacao)),
 
         db.select({
-          id: warnings.id, employeeId: warnings.employeeId,
-          tipoAdvertencia: warnings.tipoAdvertencia, dataOcorrencia: warnings.dataOcorrencia,
-          documentoUrl: warnings.documentoUrl,
-          assinaturaFuncionarioUrl: warnings.assinaturaFuncionarioUrl,
-          assinaturaAplicadorUrl: warnings.assinaturaAplicadorUrl,
-        }).from(warnings).where(and(inArray(warnings.employeeId, empIds), isNull(warnings.deletedAt))).orderBy(desc(warnings.dataOcorrencia)),
+          id: employeeDocuments.id, employeeId: employeeDocuments.employeeId,
+          tipo: employeeDocuments.tipo, nome: employeeDocuments.nome,
+          fileUrl: employeeDocuments.fileUrl, dataValidade: employeeDocuments.dataValidade,
+        }).from(employeeDocuments).where(and(
+          inArray(employeeDocuments.employeeId, empIds),
+          inArray(employeeDocuments.companyId, idsPermitidos),
+          isNull(employeeDocuments.deletedAt),
+          sql`${employeeDocuments.tipo} NOT IN (${sql.join(DOCS_INTERNOS.map(t => sql`${t}`), sql`, `)})`,
+        )).orderBy(desc(employeeDocuments.createdAt)),
       ]);
 
       // Agrupamento por funcionário
       const asoByEmp = new Map<number, typeof asoRows>();
       const treinByEmp = new Map<number, typeof treinRows>();
       const intByEmp = new Map<number, typeof intRows>();
-      const advByEmp = new Map<number, typeof advRows>();
+      const docByEmp = new Map<number, typeof docRows>();
       for (const r of asoRows) { if (!asoByEmp.has(r.employeeId)) asoByEmp.set(r.employeeId, []); asoByEmp.get(r.employeeId)!.push(r); }
       for (const r of treinRows) { if (!treinByEmp.has(r.employeeId)) treinByEmp.set(r.employeeId, []); treinByEmp.get(r.employeeId)!.push(r); }
       for (const r of intRows) { if (!intByEmp.has(r.employeeId)) intByEmp.set(r.employeeId, []); intByEmp.get(r.employeeId)!.push(r); }
-      for (const r of advRows) { if (!advByEmp.has(r.employeeId)) advByEmp.set(r.employeeId, []); advByEmp.get(r.employeeId)!.push(r); }
+      for (const r of docRows) { if (!docByEmp.has(r.employeeId)) docByEmp.set(r.employeeId, []); docByEmp.get(r.employeeId)!.push(r); }
 
       // Rev. 4613 — chave canônica de tipo de treinamento (NR-18 == NR 18 == nr18).
       // Sem isso, a REVISÃO antiga (vencida) do mesmo treinamento pintava o
@@ -3339,7 +3347,7 @@ export const controleDocumentosRouter = router({
           }, empTreins.length === 0 ? "SEM" : "VALIDO");
 
           const empInts = intByEmp.get(emp.id) || [];
-          const empAdvs = advByEmp.get(emp.id) || [];
+          const empDocs = docByEmp.get(emp.id) || [];
           // Integração vigente = sem vencimento OU vencimento >= hoje
           // (mesma lógica de dia LOCAL do calcularStatus em integracoes.ts —
           // toISOString é UTC e viraria o dia mais cedo)
@@ -3371,7 +3379,7 @@ export const controleDocumentosRouter = router({
             piorStatusTrein: piorTrein,
             integracoes: empInts,
             integracaoVigente: intVigente,
-            advertencias: empAdvs,
+            documentos: empDocs,
             pendencias,
             emDia: pendencias.length === 0,
             totais: {
@@ -3379,7 +3387,7 @@ export const controleDocumentosRouter = router({
               treinamentos: empTreins.length,
               treinamentosHistorico: (treinByEmp.get(emp.id) || []).length,
               integracoes: empInts.length,
-              advertencias: empAdvs.length,
+              documentos: empDocs.length,
             },
           };
         }),

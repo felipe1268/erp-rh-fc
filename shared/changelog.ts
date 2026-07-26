@@ -1,4 +1,36 @@
 /**
+ * Rev. 4616 - FEAT: DOSSIÊ — SAI ADVERTÊNCIA (INTERNA), ENTRAM DOCUMENTOS PESSOAIS
+ *
+ * Pedido do usuário: o dossiê é o pacote COMPLETO de integração que vai pra
+ * indústria/cliente — exames, treinamentos, integração e documentação do
+ * funcionário. Documentos INTERNOS (advertência, atestado, contrato/rescisão)
+ * NÃO entram. Análise das fontes existentes no sistema definiu a composição:
+ * ASO + Treinamentos + Integrações + Documentos pessoais (employee_documents:
+ * RG, CNH, CTPS, comprovante de residência, PIS, foto 3x4, diploma,
+ * certificado etc.).
+ *
+ * Backend:
+ * - painelDossie (controleDocumentos.ts): deixa de consultar/devolver
+ *   `advertencias`; devolve `documentos` (employee_documents com companyFilter,
+ *   deletedAt IS NULL, EXCLUINDO tipos internos atestado_medico/termo_rescisao/
+ *   contrato_trabalho) + totais.documentos.
+ * - downloadDossie.ts (ZIP): pasta Advertencias removida; pasta Documentos com
+ *   os arquivos pessoais (mesma exclusão de tipos internos), nome
+ *   TipoLabel_Nome.ext. fileUrl é gerado pelo servidor (storagePut), não é
+ *   campo livre do cliente — sem risco SSRF equivalente ao da evidência.
+ *
+ * Frontend (ControleDocumentos.tsx, DossiePanel):
+ * - Coluna "Advertências" vira "Documentos" (chip azul com contagem / — cinza).
+ * - Bloco expandido "Advertências" vira "Documentos": tipo (label PT-BR),
+ *   nome e link do arquivo.
+ *
+ * Racional: dossiê agora reflete exatamente o que a contratante pede na
+ * integração; nenhum documento disciplinar/interno vaza pro cliente.
+ * Poka-Yoke: exclusão de documentos internos é feita NO SERVIDOR (painel e
+ * ZIP), não só escondida na UI. ZERO schema change.
+ */
+
+/**
  * Rev. 4615 - FEAT: DOSSIÊ — SAI ATESTADO (INTERNO), ENTRA INTEGRAÇÃO (TELA + ZIP)
  *
  * Pedido do usuário: o dossiê é o pacote de documentos de INTEGRAÇÃO que vai

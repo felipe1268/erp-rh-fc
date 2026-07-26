@@ -1,10 +1,17 @@
 import type { Express, Request, Response } from "express";
 import archiver from "archiver";
 import { getDb } from "../db";
-import { asos, trainings, warnings, employees, userCompanies, employeeIntegrations } from "../../drizzle/schema";
-import { eq, isNull, and, inArray } from "drizzle-orm";
+import { asos, trainings, employees, userCompanies, employeeIntegrations, employeeDocuments } from "../../drizzle/schema";
+import { eq, isNull, and, inArray, notInArray } from "drizzle-orm";
 import { sdk } from "../_core/sdk";
 import { dbRetrieve } from "../storage";
+
+const TIPO_DOC_LABEL: Record<string, string> = {
+  rg: "RG", cnh: "CNH", ctps: "CTPS", comprovante_residencia: "Comprovante de Residencia",
+  certidao_nascimento: "Certidao de Nascimento", titulo_eleitor: "Titulo de Eleitor",
+  reservista: "Reservista", pis: "PIS", foto_3x4: "Foto 3x4",
+  diploma: "Diploma", certificado: "Certificado", outros: "Outros",
+};
 
 function sanitize(name: string): string {
   return (name || "")
@@ -96,17 +103,24 @@ export function registerDownloadDossieRoute(app: Express) {
       const validIds = empRows.map(e => e.id);
 
       // Busca todos os documentos em paralelo
-      // Rev. 4615 — atestado é documento INTERNO e não vai pro cliente;
-      // no lugar entram as evidências de INTEGRAÇÃO (quando anexadas)
-      const [asoRowsAll, treinRowsAll, intRows, advRows] = await Promise.all([
+      // Rev. 4615/4616 — o ZIP é o pacote de INTEGRAÇÃO pro cliente: ASO,
+      // treinamentos, integrações e documentos pessoais. Documentos INTERNOS
+      // (atestado, advertência, contrato/rescisão) NÃO entram.
+      const DOCS_INTERNOS = ["atestado_medico", "termo_rescisao", "contrato_trabalho"];
+      const [asoRowsAll, treinRowsAll, intRows, docRows] = await Promise.all([
         db.select({ id: asos.id, employeeId: asos.employeeId, tipo: asos.tipo, dataExame: asos.dataExame, documentoUrl: asos.documentoUrl })
           .from(asos).where(and(inArray(asos.employeeId, validIds), isNull(asos.deletedAt))),
         db.select({ id: trainings.id, employeeId: trainings.employeeId, nome: trainings.nome, norma: trainings.norma, dataRealizacao: trainings.dataRealizacao, dataValidade: trainings.dataValidade, certificadoUrl: trainings.certificadoUrl })
           .from(trainings).where(and(inArray(trainings.employeeId, validIds), isNull(trainings.deletedAt))),
         db.select({ id: employeeIntegrations.id, employeeId: employeeIntegrations.employeeId, tipo: employeeIntegrations.tipo, clienteNome: employeeIntegrations.clienteNome, dataRealizacao: employeeIntegrations.dataRealizacao, evidencia: employeeIntegrations.evidencia })
           .from(employeeIntegrations).where(and(inArray(employeeIntegrations.employeeId, validIds), eq(employeeIntegrations.companyId, companyId))),
-        db.select({ id: warnings.id, employeeId: warnings.employeeId, tipoAdvertencia: warnings.tipoAdvertencia, dataOcorrencia: warnings.dataOcorrencia, documentoUrl: warnings.documentoUrl })
-          .from(warnings).where(and(inArray(warnings.employeeId, validIds), isNull(warnings.deletedAt))),
+        db.select({ id: employeeDocuments.id, employeeId: employeeDocuments.employeeId, tipo: employeeDocuments.tipo, nome: employeeDocuments.nome, fileUrl: employeeDocuments.fileUrl, createdAt: employeeDocuments.createdAt })
+          .from(employeeDocuments).where(and(
+            inArray(employeeDocuments.employeeId, validIds),
+            eq(employeeDocuments.companyId, companyId),
+            isNull(employeeDocuments.deletedAt),
+            notInArray(employeeDocuments.tipo, DOCS_INTERNOS),
+          )),
       ]);
 
       // Rev. 4613 — o ZIP que vai pro CLIENTE leva SÓ a versão ATUAL de cada
@@ -174,13 +188,13 @@ export function registerDownloadDossieRoute(app: Express) {
             files.push({ url, path: `${nome}/Integracoes/${tp}_${data}.${ext}` });
           });
 
-        advRows
-          .filter(a => a.employeeId === emp.id && a.documentoUrl?.trim())
-          .forEach((a) => {
-            const ext = extFromUrl(a.documentoUrl!);
-            const data = String(a.dataOcorrencia || "").slice(0, 10) || "sem-data";
-            const tp = sanitize(a.tipoAdvertencia || "Advertencia");
-            files.push({ url: a.documentoUrl!, path: `${nome}/Advertencias/${tp}_${data}.${ext}` });
+        docRows
+          .filter(d => d.employeeId === emp.id && d.fileUrl?.trim())
+          .forEach((d) => {
+            const ext = extFromUrl(d.fileUrl!);
+            const tp = sanitize(TIPO_DOC_LABEL[d.tipo] || d.tipo || "Documento");
+            const nm = sanitize(d.nome || tp);
+            files.push({ url: d.fileUrl!, path: `${nome}/Documentos/${tp}_${nm}.${ext}` });
           });
       }
 
