@@ -5737,7 +5737,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4563-2026-07-25-regime-uso-equipamentos";
+    const COLFIX_VERSION = "v4605-2026-07-26-trava-duplicidade-projecoes";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7637,10 +7637,57 @@ REGRAS DE EXTRAÇÃO:
         console.log("[ColFix Rev.4563] regime_uso garantido em equipamentos_proprios e equipamentos_locados.");
       } catch (e: any) { console.error("[ColFix Rev.4563] FALHA regime_uso:", e?.message ?? e); }
 
-      // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
-      import("../services/startupCache").then(({ setCache }) =>
-        setCache("colfix_version", COLFIX_VERSION)
-      ).catch(() => {});
+      // Rev. 4605 — TRAVA (Poka-Yoke nível 3) contra duplicidade de PROJEÇÕES de folha/PJ:
+      // duas execuções concorrentes do gerador (job + chamada manual) faziam DELETE+INSERT
+      // simultâneos e o `ON CONFLICT DO NOTHING` do insert não tinha ÍNDICE ÚNICO para
+      // apoiar → pares duplicados (caso André/PJ e férias em 17/06). Dedup primeiro
+      // (mantém o menor id de cada grupo) e cria índice único parcial em
+      // (company_id, origem_modulo, origem_id) só para status='previsto'.
+      // FAIL-SAFE: dedup + índice rodam numa TRANSAÇÃO com advisory lock (o gerador de
+      // projeções não insere entre o dedup e o CREATE INDEX) e, se este bloco falhar,
+      // NÃO marcamos colfix_version — o próximo boot tenta de novo (senão a trava
+      // ficaria silenciosamente ausente para sempre — lição do ColFix DO-block).
+      let colFix4605Ok = false;
+      try {
+        const _db4605 = await getDb();
+        if (!_db4605) throw new Error("db indisponível");
+        const origens4605 = "('folha_projetada','encargos_projetado','beneficio_va_projetado','beneficio_vr_projetado','decimo_terceiro_projetado','pj_projetado','ferias_projetada','rescisao_projetada')";
+        await _db4605.$client.query('BEGIN');
+        try {
+          // mesmo lock usado pelo gerador de projeções impediria corrida; aqui usamos
+          // um lock transacional dedicado — segura INSERTs concorrentes dessas origens
+          await _db4605.$client.query(`SELECT pg_advisory_xact_lock(460500)`);
+          const del4605 = await _db4605.$client.query(
+            `DELETE FROM financial_entries a
+              USING financial_entries b
+              WHERE a.id > b.id
+                AND a.company_id = b.company_id
+                AND a.origem_modulo = b.origem_modulo
+                AND a.origem_id = b.origem_id
+                AND a.status = 'previsto' AND b.status = 'previsto'
+                AND a.origem_modulo IN ${origens4605}`
+          );
+          await _db4605.$client.query(
+            `CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_entries_projecao
+               ON financial_entries (company_id, origem_modulo, origem_id)
+               WHERE status = 'previsto' AND origem_modulo IN ${origens4605}`
+          );
+          await _db4605.$client.query('COMMIT');
+          colFix4605Ok = true;
+          console.log(`[ColFix Rev.4605] projeções: ${del4605.rowCount ?? 0} duplicada(s) removida(s) + índice único uq_fin_entries_projecao garantido.`);
+        } catch (inner) {
+          await _db4605.$client.query('ROLLBACK').catch(() => {});
+          throw inner;
+        }
+      } catch (e: any) { console.error("[ColFix Rev.4605] FALHA trava projeções (colfix_version NÃO será marcada — retry no próximo boot):", e?.message ?? e); }
+
+      // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos.
+      // Rev. 4605: só marca se o bloco crítico (índice único de projeções) passou.
+      if (colFix4605Ok) {
+        import("../services/startupCache").then(({ setCache }) =>
+          setCache("colfix_version", COLFIX_VERSION)
+        ).catch(() => {});
+      }
     });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada
     // [REMOVIDO Rev.844] Purga de orfanatos/fantasmas — já completada, limpar via deleteObra cascata

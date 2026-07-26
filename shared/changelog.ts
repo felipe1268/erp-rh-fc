@@ -1,4 +1,64 @@
 /**
+ * Rev. 4605 - FIX: TRAVAS ANTI-DUPLICIDADE — CHEQUE RE-CONCILIADO NÃO CRIA GÊMEO + ÍNDICE ÚNICO NAS PROJEÇÕES DE FOLHA/PJ
+ *
+ * DOIS CASOS REPORTADOS PELO USUÁRIO, MESMA DOENÇA (duplicidade), DUAS TRAVAS:
+ *
+ * CASO 1 — "Cheque nº 13 FERRAGENS SANTA RITA aparece 6 vezes" na tela de
+ * duplicidades do Fluxo de Caixa. CAUSA-RAIZ (rastreada linha a linha no Neon):
+ * o cheque 13 (R$ 3.876,50, compensado 16/06) tinha TRÊS lançamentos vivos:
+ * #892112 (pago, 15/07 18:56 Tatiane), #892127 (a pagar, 15/07 19:02 Andressa)
+ * e #894231 (pago, 26/07 12:31 Tatiane — o único conciliado com a linha do
+ * extrato). 3 lançamentos iguais → 3 combinações de pares → "6 cards".
+ * COMO NASCEM: o diálogo "Novo lançamento" da Conciliação pré-preenche a
+ * descrição "Cheque nº X — FORNECEDOR" e cria a despesa via createEntry — SEM
+ * a marca origem_modulo='cheque_conciliacao'. No estorno (desconciliarLinha),
+ * a regra da Rev. 4601 só CANCELA lançamentos com essa marca; os criados pelo
+ * "Novo lançamento" viram "a pagar" ÓRFÃOS. A re-conciliação cria OUTRO
+ * lançamento → gêmeos se acumulam a cada ciclo estorna/refaz.
+ * TRAVA (Poka-Yoke nível 2 — bloqueio no server, createEntry):
+ * despesa com nº de cheque (coluna cheque_numero OU "Cheque nº X" na descrição
+ * com forma_pagamento='cheque') + MESMO valor + já existe lançamento NÃO
+ * cancelado com o mesmo nº → CONFLICT com mensagem apontando o lançamento
+ * existente (id, status, data) e orientando a usá-lo. Override consciente via
+ * flag forcarDuplicado (caso raro: bancos diferentes com numeração igual).
+ * Comparação por número LIMPO (regexp digits + ltrim de zeros) — "13" ≠ "1344"
+ * (o próprio diagnóstico quase tropeçou nisso: ILIKE '%Cheque nº 13%' pegava o
+ * cheque 1344).
+ * FRONT (FinanceiroConciliacao.tsx): o "Novo lançamento" agora envia
+ * chequeNumero quando a linha do extrato foi identificada com cheque do
+ * Controle — a despesa nasce com cheque_numero preenchido (alimenta a trava e
+ * o rastreio extrato ↔ Controle de Cheques).
+ * CURA (Neon, empresa 60002): #892112 e #892127 cancelados com motivo
+ * auditável; cheque id 374 (nº 13) baixado → conciliado=1, lancamento_id
+ * #894231, status compensado, data_compensacao 16/06/2026. Tela de duplicidade
+ * limpa.
+ *
+ * CASO 2 — Lançamentos PROJETADOS duplicados em pares (PJ do André R$ 8.000/mês
+ * ×10 meses + 4 férias projetadas, todos criados 17/06 00:25). CAUSA-RAIZ:
+ * payrollProjectionBridge insere com `ON CONFLICT DO NOTHING` mas NÃO EXISTIA
+ * índice único para apoiar o conflito → duas execuções concorrentes
+ * (financialAutoImportJob + chamada manual em financial.ts) passaram juntas
+ * pelo DELETE+INSERT e gravaram tudo em dobro.
+ * TRAVA (Poka-Yoke nível 3 — prevenção pelo design, ColFix Rev.4605):
+ * 1) dedup (DELETE USING mantendo o menor id de cada grupo company/origem/id,
+ *    só status='previsto' das 8 origens *_projetado/a);
+ * 2) CREATE UNIQUE INDEX uq_fin_entries_projecao (company_id, origem_modulo,
+ *    origem_id) WHERE status='previsto' AND origem IN (8 origens). O
+ *    ON CONFLICT DO NOTHING existente passa a ter apoio real: corrida agora é
+ *    inócua. COLFIX_VERSION bumpada (bloco isolado, try/catch próprio — regra
+ *    do ColFix DO-block).
+ *
+ * ARQUIVOS: server/routers/financial.ts (createEntry trava),
+ * client/src/pages/financeiro/FinanceiroConciliacao.tsx (chequeNumero no
+ * criarLancMut), server/_core/index.ts (ColFix Rev.4605 + version bump),
+ * server/services/payrollProjectionBridge.ts (comentário do índice).
+ * ZERO schema change em tabelas (só índice único parcial novo).
+ *
+ * FOLLOW-UP CONHECIDO (não bloqueante): build de produção local morre por
+ * memória (vite build OOM) — investigação do deploy pausada a pedido do
+ * usuário; retomar depois.
+ */
+/**
  * Rev. 4604 - FEAT: CONTRATO DE PRESTAÇÃO DE SERVIÇOS — FLUXO DE DUAS MEDIÇÕES EXPLÍCITO (NF ATÉ DIA 10 → PGTO ATÉ 15; NF ATÉ DIA DE CORTE → PGTO EM ATÉ 5 DIAS)
  *
  * PEDIDO DO USUÁRIO: o contrato precisava deixar claro o fluxo real de

@@ -884,6 +884,10 @@ export default function FinanceiroConciliacao() {
           fornecedorNome: (lancForm.fornecedorNome.trim() || lancFornDisplay.trim()) || undefined,
           descricao: descricao || undefined,
           formaPagamento: lancForm.formaPagamento || undefined,
+          // Rev. 4605 — grava o nº do cheque identificado na linha do extrato (coluna
+          // cheque_numero): alimenta a trava anti-duplicidade do servidor e o rastreio
+          // extrato ↔ Controle de Cheques.
+          chequeNumero: lancStatement?.chequeNumero != null ? String(lancStatement.chequeNumero) : undefined,
         });
         entryId = novo?.id;
         if (entryId) lancCreatedRef.current = { stmtId: lancStatement.id, entryId };

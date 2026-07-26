@@ -21,3 +21,8 @@ call, using a direct `db.$client.query()` call for just your new statement(s). B
 `COLFIX_VERSION` to force re-run. Always verify the column actually landed via a direct query
 against `NEON_DATABASE_URL` (not just trusting the log line or `executeSql`, which may hit a
 different DB — see `db-connection.md`).
+
+**Update (Rev. 4605):** the final `setCache("colfix_version")` is now conditional on a
+`colFixOk`-style flag for critical blocks — if a critical isolated block fails, the version is
+NOT marked and the block retries on next boot. When adding a must-land migration (unique
+index, dedup), set the flag pattern instead of relying on the unconditional version write.

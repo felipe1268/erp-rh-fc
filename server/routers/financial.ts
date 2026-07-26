@@ -2938,6 +2938,8 @@ export const financialRouter = router({
     // financial_entries; Análise de Custos resolve explícito → derivado da categoria → nenhum).
     centroCustoId: z.number().optional(),
     centroCustoNome: z.string().optional(),
+    // Rev. 4605 — override consciente da trava anti-duplicidade de cheque (ver abaixo).
+    forcarDuplicado: z.boolean().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -3015,6 +3017,41 @@ export const financialRouter = router({
       });
       await createAuditLog({ action: "financial_transfer_created", userId: ctx.user?.id, companyId: input.companyId, details: `Transferência R$${input.valorPrevisto}: ${labelOrigem} → ${labelDestino}` });
       return { id: idSaida, idDestino: idEntrada };
+    }
+
+    // ── Rev. 4605 — TRAVA ANTI-DUPLICIDADE DE CHEQUE (Poka-Yoke nível 2) ────────
+    // Causa-raiz do "Cheque nº 13 em 6 cards": cada re-conciliação via "Novo
+    // lançamento" CRIAVA outra despesa do MESMO cheque (a anterior virava órfã
+    // "a pagar" após o estorno, pois nasce sem origem 'cheque_conciliacao').
+    // Aqui bloqueamos a recriação: despesa paga em CHEQUE com o MESMO número
+    // (coluna cheque_numero OU "Cheque nº X" na descrição) + MESMO valor já
+    // existente e NÃO cancelada → CONFLICT apontando o lançamento existente.
+    // Override consciente via forcarDuplicado (ex.: cheques de bancos diferentes
+    // com numeração coincidente).
+    if (input.tipo === "despesa" && !input.forcarDuplicado) {
+      const numeroChequeNovo = (input.chequeNumero?.trim())
+        || (input.formaPagamento === "cheque" ? (String(input.descricao ?? "").match(/cheque\s*n[ºo°.]?\s*(\d+)/i)?.[1] ?? null) : null);
+      if (numeroChequeNovo) {
+        const numLimpo = numeroChequeNovo.replace(/^0+/, "") || numeroChequeNovo;
+        const dupRes = await dbExecute(db,
+          `SELECT id, status, descricao, to_char(created_at AT TIME ZONE 'America/Sao_Paulo','DD/MM/YYYY') AS criado
+             FROM financial_entries
+            WHERE company_id=$1 AND tipo='despesa' AND status <> 'cancelado'
+              AND (COALESCE(valor_realizado, valor_previsto)::numeric = $2::numeric OR valor_previsto::numeric = $3::numeric)
+              AND (
+                regexp_replace(COALESCE(cheque_numero,''),'[^0-9]','','g') = $4
+                OR (COALESCE(forma_pagamento,'')='cheque' AND ltrim((regexp_match(COALESCE(descricao,''), 'cheque\\s*n[ºo°.]?\\s*(\\d+)', 'i'))[1], '0') = $5)
+              )
+            ORDER BY id DESC LIMIT 1`,
+          [input.companyId, input.valorRealizado ?? input.valorPrevisto, input.valorPrevisto, numLimpo, numLimpo]);
+        const dup: any = rows(dupRes)[0];
+        if (dup) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Já existe o lançamento #${dup.id} para o cheque nº ${numeroChequeNovo} com este valor (status: ${dup.status === "a_pagar" ? "a pagar" : dup.status}, criado em ${dup.criado}). Para evitar duplicidade, concilie/use o lançamento existente em vez de criar outro. Se for realmente OUTRO cheque (banco diferente com o mesmo número), edite a descrição diferenciando-o.`,
+          });
+        }
+      }
     }
 
     const res = await dbExecute(db, 

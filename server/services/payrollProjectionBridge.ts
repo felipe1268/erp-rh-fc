@@ -146,7 +146,9 @@ async function insertProjEntry(db: any, e: {
        status, origem_modulo, origem_id, origem_descricao, descricao,
        created_at, updated_at)
      VALUES ($1,$2,$3,'despesa','fixo',$4,$5,$6,'previsto',$7,$8,$9,$10,NOW(),NOW())
-     ON CONFLICT DO NOTHING`,
+     ON CONFLICT DO NOTHING`, // Rev. 4605 — agora apoiado pelo índice único parcial
+                              // uq_fin_entries_projecao (company_id, origem_modulo, origem_id)
+                              // WHERE status='previsto': 2 execuções concorrentes não duplicam mais.
     [
       e.companyId,
       e.obraId ?? null,
