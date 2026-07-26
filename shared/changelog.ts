@@ -1,4 +1,40 @@
 /**
+ * Rev. 4594 - FEAT: CONTAS A PAGAR — FATURA DE CARTÃO IDENTIFICADA + OPÇÕES TOTAL / MÍNIMO / PARCIAL
+ *
+ * PEDIDO DO USUÁRIO: no Contas a Pagar, o título da fatura de cartão deve
+ * deixar claro DE QUAL CARTÃO é a fatura, e o pagamento deve oferecer as
+ * opções reais de uma fatura de cartão: pagar o total, o pagamento mínimo
+ * ou um valor parcial.
+ *
+ * COMO FUNCIONA:
+ * - EXTRAÇÃO: o importador de faturas (IA) agora extrai também o
+ *   `pagamentoMinimo` impresso na fatura (PROMPT_FATURA + SCHEMA_FATURA em
+ *   cartao.ts) e grava na coluna nova financial_cartao_faturas.pagamento_minimo
+ *   ([SyncSchema+] Rev. 4594 — ADD COLUMN IF NOT EXISTS NUMERIC(14,2), bloco
+ *   isolado próprio, regra do ColFix). Faturas antigas ficam com NULL (sem
+ *   mínimo conhecido) — o dialog simplesmente não mostra o botão "Mínimo".
+ * - IDENTIFICAÇÃO: nova query `cartao.faturaPorEntry({companyId, entryId})`
+ *   (tenant guard via assertCompanyAccess + JOIN por company_id) devolve
+ *   banco/bandeira/final4/mês/ano/total/pagamentoMinimo da fatura vinculada
+ *   ao título. Código curto "CARTÃO-{id}" e label "Fatura de Cartão"
+ *   (financialOrigins.ts) para a origem 'cartao_fatura'.
+ * - DIALOG DE PAGAMENTO (FinanceiroContasAPagar.tsx): quando o título é de
+ *   fatura de cartão, aparece um painel violeta "💳 Cartão de crédito {banco}
+ *   — final {final4} · Fatura MM/AAAA" com 3 tiles: Pagar total (saldo em
+ *   aberto — quita sem juros), Pagamento mínimo (evita atraso; resto vai pro
+ *   rotativo) e Valor parcial (digitar livre). Clicar preenche o campo Valor;
+ *   o tile ativo é destacado conforme o valor digitado.
+ * - POKA-YOKE: aviso vermelho quando o valor digitado fica ABAIXO do
+ *   pagamento mínimo conhecido (risco de atraso/negativação) — nível aviso,
+ *   pois pagar abaixo do mínimo é decisão legítima que o sistema não bloqueia.
+ *
+ * ARQUIVOS: server/routers/cartao.ts (prompt/schema/insert/listarFaturas/
+ * faturaPorEntry), server/_core/index.ts ([SyncSchema+] 4594),
+ * client/src/lib/financialOrigins.ts, FinanceiroContasAPagar.tsx.
+ * ZERO impacto em faturas/baixas existentes (coluna nova nullable; painel só
+ * aparece p/ origem 'cartao_fatura').
+ */
+/**
  * Rev. 4593 - FEAT: CARTÃO DE CRÉDITO — FATURA ENTRA AUTOMATICAMENTE NO CONTAS A PAGAR (VÍNCULO BIDIRECIONAL)
  *
  * PEDIDO DO USUÁRIO: a fatura de cartão importada deve virar automaticamente

@@ -290,6 +290,7 @@ Extraia TODAS as faturas contidas no documento. Um PDF pode conter VÁRIOS cart�
 - diaFechamento: dia do mês de fechamento da fatura (número inteiro 1-31, ex.: 28). Extraia SEMPRE que houver qualquer menção de fechamento/corte, mesmo que seja só o dia (ex.: "fecha dia 28", "corte: 28", "melhor dia de compra: 29 (fecha: 28)").
 - limiteTotalCartao: limite TOTAL do cartão em BRL (número), se aparecer explicitamente na fatura (ex.: "Limite total R$ 20.000,00" ou "Limite do cartão"). Use null se não encontrar.
 - total: valor TOTAL da fatura (número, ponto decimal).
+- pagamentoMinimo: valor do PAGAMENTO MÍNIMO da fatura (número), se aparecer (ex.: "Pagamento mínimo R$ 250,00"). Use null se não encontrar.
 - totalCompras: soma das compras do período (número), se houver.
 - faturaAnterior: saldo da fatura anterior (número), se houver.
 - pagamentos: total de pagamentos/créditos do período (número negativo ou positivo), se houver.
@@ -327,6 +328,7 @@ const SCHEMA_FATURA = {
           diaFechamento: { type: "number", nullable: true },
           limiteTotalCartao: { type: "number", nullable: true },
           total: { type: "number", nullable: true },
+          pagamentoMinimo: { type: "number", nullable: true },
           totalCompras: { type: "number", nullable: true },
           faturaAnterior: { type: "number", nullable: true },
           pagamentos: { type: "number", nullable: true },
@@ -746,7 +748,8 @@ export const cartaoRouter = router({
               c.banco AS "cartaoBanco", c.bandeira AS "cartaoBandeira",
               c.final4 AS "cartaoFinal4", c.titular AS "cartaoTitular",
               c.tipo_pessoa AS "cartaoTipoPessoa",
-              f.vencimento, f.fechamento, f.total, f.total_compras AS "totalCompras",
+              f.vencimento, f.fechamento, f.total, f.pagamento_minimo AS "pagamentoMinimo",
+              f.total_compras AS "totalCompras",
               f.fatura_anterior AS "faturaAnterior", f.pagamentos,
               f.mes_ref AS "mes", f.ano_ref AS "ano",
               f.origem_arquivo AS "origemArquivo", f.lote_id AS "loteId",
@@ -766,12 +769,42 @@ export const cartaoRouter = router({
     return res.rows.map((r: any) => ({
       ...r,
       total: r.total != null ? parseFloat(r.total) : null,
+      pagamentoMinimo: r.pagamentoMinimo != null ? parseFloat(r.pagamentoMinimo) : null,
       totalCompras: r.totalCompras != null ? parseFloat(r.totalCompras) : null,
       faturaAnterior: r.faturaAnterior != null ? parseFloat(r.faturaAnterior) : null,
       pagamentos: r.pagamentos != null ? parseFloat(r.pagamentos) : null,
       financeiroValorPago: r.financeiroValorPago != null ? parseFloat(r.financeiroValorPago) : null,
       financeiroValorPrevisto: r.financeiroValorPrevisto != null ? parseFloat(r.financeiroValorPrevisto) : null,
     }));
+  }),
+
+  // Rev. 4594 — Dados da fatura vinculada a um título do Contas a Pagar.
+  // Usado pelo diálogo "Pagar" p/ identificar o cartão (banco + final) e
+  // oferecer opções rápidas: Total / Pagamento mínimo / Parcial.
+  // Tenant guard: entry e fatura filtrados pela empresa autorizada.
+  faturaPorEntry: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    entryId: z.number(),
+  })).query(async ({ ctx, input }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `SELECT f.id AS "faturaId", f.total, f.pagamento_minimo AS "pagamentoMinimo",
+              f.pagamentos, f.vencimento, f.mes_ref AS "mes", f.ano_ref AS "ano",
+              c.banco, c.bandeira, c.final4, c.titular
+         FROM financial_entries e
+         JOIN financial_cartao_faturas f ON f.id=e.origem_id AND f.company_id=e.company_id AND f.excluido_em IS NULL
+         LEFT JOIN financial_cartoes c ON c.id=f.cartao_id AND c.company_id=f.company_id AND c.excluido_em IS NULL
+        WHERE e.id=$1 AND e.company_id=$2 AND e.origem_modulo='cartao_fatura'
+        LIMIT 1`,
+      [input.entryId, input.companyId]);
+    const r = res.rows[0];
+    if (!r) return null;
+    return {
+      ...r,
+      total: r.total != null ? parseFloat(r.total) : null,
+      pagamentoMinimo: r.pagamentoMinimo != null ? parseFloat(r.pagamentoMinimo) : null,
+      pagamentos: r.pagamentos != null ? parseFloat(r.pagamentos) : null,
+    };
   }),
 
   // Vincula (ou desvincula) uma fatura a um cartão cadastrado. Usado pelo botão
@@ -1337,13 +1370,13 @@ export const cartaoRouter = router({
         if (!faturaJaExistia) {
           const fatRes = await dbExecute(tx,
             `INSERT INTO financial_cartao_faturas
-               (company_id, cartao_id, vencimento, fechamento, total, total_compras,
+               (company_id, cartao_id, vencimento, fechamento, total, pagamento_minimo, total_compras,
                 fatura_anterior, pagamentos, mes_ref, ano_ref, origem_arquivo, lote_id,
                 observacao, created_at, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW()) RETURNING id`,
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW(),NOW()) RETURNING id`,
             [
               input.companyId, cartaoId, f.vencimento ?? null, f.fechamento ?? null,
-              f.total ?? null, f.totalCompras ?? null, f.faturaAnterior ?? null,
+              f.total ?? null, f.pagamentoMinimo ?? null, f.totalCompras ?? null, f.faturaAnterior ?? null,
               f.pagamentos ?? null, mesRef, anoRef,
               (f.origemArquivo || origem).slice(0, 255), loteId,
               // Guarda final4/titular crus quando o cartão não foi identificado, p/ rastreio.

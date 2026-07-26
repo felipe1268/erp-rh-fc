@@ -4,7 +4,7 @@
 // purchaseFinancialBridge, payroll, beneficios), espelhar aqui.
 import {
   ShoppingCart, Users, Briefcase, Truck, Receipt, Scale, Package,
-  Wallet, FileText, Banknote, Calendar, type LucideIcon
+  Wallet, FileText, Banknote, Calendar, CreditCard, type LucideIcon
 } from "lucide-react";
 
 export type FinancialOrigin =
@@ -69,6 +69,8 @@ export const ORIGEM_LABELS: Record<string, string> = {
   ferias_projetada: "Férias (Projeção)",
   rescisao_projetada: "Rescisão (Projeção)",
   transferencia_estoque: "Transferência Estoque",
+  // Cartão de crédito (Rev. 4594)
+  cartao_fatura: "Fatura de Cartão",
   // Genéricos
   manual: "Manual", recorrente: "Recorrente",
 };
@@ -91,6 +93,7 @@ export const ORIGEM_ICONS: Record<string, LucideIcon> = {
   decimo_terceiro_projetado: Calendar, pj_projetado: Briefcase,
   ferias_projetada: Calendar, rescisao_projetada: FileText,
   transferencia_estoque: Package,
+  cartao_fatura: CreditCard,
   manual: Wallet, recorrente: Wallet,
 };
 
@@ -141,6 +144,7 @@ export const ORIGEM_COLORS: Record<string, string> = {
   pj_projetado: "bg-violet-50 text-violet-700 border-violet-200",
   ferias_projetada: "bg-violet-50 text-violet-700 border-violet-200",
   rescisao_projetada: "bg-violet-50 text-violet-700 border-violet-200",
+  cartao_fatura: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
   manual: "bg-gray-50 text-gray-700 border-gray-200",
   recorrente: "bg-violet-50 text-violet-700 border-violet-200",
 };

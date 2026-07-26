@@ -50,19 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4594** — **FEAT: CONTAS A PAGAR — FATURA DE CARTÃO IDENTIFICADA + OPÇÕES TOTAL / MÍNIMO / PARCIAL.** Importador extrai `pagamentoMinimo` da fatura (prompt+schema) → coluna nova `pagamento_minimo` ([SyncSchema+] 4594, validada no Neon); nova query `cartao.faturaPorEntry` (tenant guard) identifica banco/final4/mês da fatura no título; dialog "Pagar" ganha painel "💳 Cartão {banco} final {final4}" com tiles Pagar total / Pagamento mínimo / Valor parcial que preenchem o Valor + aviso Poka-Yoke quando valor < mínimo. Código curto "CARTÃO-{id}" e label "Fatura de Cartão". Arquivos: `cartao.ts`, `_core/index.ts`, `financialOrigins.ts`, `FinanceiroContasAPagar.tsx`.
 - **Rev. 4593** — **FEAT: CARTÃO DE CRÉDITO — FATURA ENTRA AUTOMATICAMENTE NO CONTAS A PAGAR (VÍNCULO BIDIRECIONAL).** Fatura importada/vinculada vira título em `financial_entries` (origem 'cartao_fatura', idempotente via `sincronizarFaturaFinanceiro`); excluir fatura/reverter lote cancela o título (nunca deleta); baixa no Contas a Pagar (total/parcial) faz fan-out em `_aplicarRollupBaixas` gravando o acumulado em `financial_cartao_faturas.pagamentos` — em aberto e limite disponível (Rev. 4591/4592) descem sozinhos. Coluna nova `financial_entry_id` (+índice+backfill só p/ faturas vencimento >= hoje). UI: coluna "Financeiro" (Liquidada/Parcial/No Contas a Pagar) na tabela de Faturas. Arquivos: `cartao.ts`, `financial.ts`, `_core/index.ts`, `FinanceiroCartaoCredito.tsx`.
-- **Rev. 4592** — **FIX: CARTÃO DE CRÉDITO — SALDO EM ABERTO LIDO COMO O BANCO LÊ.** Feedback do usuário: Caixa 5553 mostrava R$ 194 mil "em aberto" e disponível R$ 0 (irreal). Causa: Rev. 4591 somava TODAS as faturas importadas — mas fatura de cartão é cumulativa (pagamento da anterior aparece como crédito negativo em `pagamentos` da seguinte; confirmado no Neon). Nova leitura: fatura em aberto = só faturas com vencimento >= hoje, abatendo só `pagamentos > 0` (`GREATEST(total - GREATEST(pagamentos,0), 0)`); OCs a faturar = só OCs criadas DEPOIS do último fechamento (anteriores já estão dentro da fatura) + dedup NOT EXISTS de sempre. Validado no Neon: históricas zeram; sobra só o ciclo atual. Arquivo: `server/routers/cartao.ts`. ZERO schema/client change.
 ### 5 one-liners
 
+- **Rev. 4592** — **FIX: CARTÃO DE CRÉDITO — SALDO EM ABERTO LIDO COMO O BANCO LÊ.** Fatura em aberto = só vencimento >= hoje, abatendo só `pagamentos > 0`; OCs a faturar = só criadas após o último fechamento. Validado no Neon. Detalhe em `shared/changelog.ts`. ZERO schema/client change.
 - **Rev. 4591** — **FEAT: CARTÃO DE CRÉDITO — LIMITE DISPONÍVEL (PREVISÃO) QUE DESCE COM AS OCs.** Comprometido = faturas em aberto + OCs pagas no cartão não faturadas (dedup via `compra_oc_id`); disponível = limite − comprometido; barra colorida no card + painel no modal. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4590** — **UX: CARTÃO DE CRÉDITO — MODAL "USO DO CARTÃO" COM TILES VISUAIS.** Escopo/Finalidade viraram tiles clicáveis com selo "Aparece em Compras"/"Fora de Compras" + banner dinâmico — consequência visível antes de escolher. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4589** — **FEAT: CARTÃO DE CRÉDITO — FINALIDADE DE USO + FILTRO EM COMPRAS.** Campo `finalidade` (recorrentes/corporativo/obra/geral); `resumoParaCompra` só retorna recorrentes/geral (escopo fc) — comprador nem vê o cartão errado. Detalhe em `shared/changelog.ts`.
 - **Rev. 4588** — **FIX: DEPLOY — BUILD QUEBRAVA POR SCRIPT EXCLUÍDO NO .dockerignore.** `scripts/` voltou pra imagem (368 KB) + `gen-build-info` virou não-fatal (`|| echo`); server já tolera `build-info.json` ausente. Detalhe em `shared/changelog.ts`. ZERO código de app change.
-- **Rev. 4587** — **FEAT: CONTAS A PAGAR — EDITAR COM AS MESMAS INFORMAÇÕES DE PAGAMENTO DO "PAGAR".** Editar ganhou cheque próprio/terceiro/débito automático, seletor de conta bancária (anti-IDOR) e cadastro de cheques pendentes no Controle. Detalhe em `shared/changelog.ts`. ZERO schema change.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4586 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4587 e anteriores.
 
 ## User preferences
 

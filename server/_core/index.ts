@@ -5661,6 +5661,12 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4593: financial_entry_id em financial_cartao_faturas garantido.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4593 financial_entry_id:", e?.message || e); }
 
+        // Rev. 4594 — Pagamento mínimo da fatura (extraído do PDF pela IA)
+        try {
+          await db.execute(sql.raw(`ALTER TABLE financial_cartao_faturas ADD COLUMN IF NOT EXISTS pagamento_minimo NUMERIC(14,2)`));
+          console.log("[SyncSchema+] Rev. 4594: pagamento_minimo em financial_cartao_faturas garantido.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4594 pagamento_minimo:", e?.message || e); }
+
         // Rev. 4593b — Anti-duplicidade a nível de banco: dedup de títulos
         // 'cartao_fatura' ativos (mantém o que tem baixa ativa; senão o menor id)
         // + índice único parcial que impede corrida de criar 2 títulos p/ 1 fatura.

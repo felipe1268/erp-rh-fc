@@ -96,6 +96,7 @@ function extractOcNumero(c: any): string {
   if (c.origemModulo === "frota" && c.origemId) return `FROTA-${c.origemId}`;
   if (c.origemModulo === "terceiros" && c.origemId) return `MED-${c.origemId}`;
   if (c.origemModulo === "tributario") return `TRIB${c.origemId ? "-" + c.origemId : ""}`;
+  if (c.origemModulo === "cartao_fatura" && c.origemId) return `CARTÃO-${c.origemId}`;
   if (c.origemModulo === "beneficios" && c.origemId) return `BEN-${c.origemId}`;
   if (c.origemModulo === "almoxarifado" && c.origemId) return `ALM-${c.origemId}`;
   if (c.origemId) return `#${c.origemId}`;
@@ -701,6 +702,12 @@ export default function FinanceiroContasAPagar() {
   const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
     { companyId },
     { enabled: !!companyId }
+  );
+  // Rev. 4594 — dados da fatura de cartão vinculada ao título (identificação do
+  // cartão + opções rápidas Total / Mínimo / Parcial no diálogo de pagamento).
+  const { data: faturaCartao } = (trpc as any).cartao.faturaPorEntry.useQuery(
+    { companyId, entryId: showPay?.id ?? 0 },
+    { enabled: !!companyId && !!showPay && showPay.origemModulo === "cartao_fatura" }
   );
   // Sincroniza conta bancária do lançamento ao abrir o diálogo (permite alterar)
   useEffect(() => {
@@ -3363,6 +3370,46 @@ export default function FinanceiroContasAPagar() {
                     ))}
                   </div>
                 </div>
+
+                {/* ── Rev. 4594: fatura de cartão — identificação + opções rápidas ── */}
+                {showPay.origemModulo === "cartao_fatura" && faturaCartao && (() => {
+                  const saldoAberto = Math.max(0, Math.round((Number(showPay.valorPrevisto ?? 0) - Number(showPay.valorRealizado ?? 0)) * 100) / 100);
+                  const minimo = faturaCartao.pagamentoMinimo != null && faturaCartao.pagamentoMinimo > 0 ? faturaCartao.pagamentoMinimo : null;
+                  const valorAtual = parseFloat(String(valorPagar).replace(",", ".")) || 0;
+                  const eq = (a: number, b: number) => Math.abs(a - b) < 0.005;
+                  const opBtn = (ativo: boolean) =>
+                    `flex-1 rounded-lg border-2 px-3 py-2 text-left transition-all ${ativo ? "border-violet-500 bg-violet-50 shadow-sm" : "border-slate-200 bg-white hover:border-violet-300"}`;
+                  return (
+                    <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3">
+                      <p className="text-[10px] font-bold text-violet-500 uppercase tracking-widest">
+                        💳 Cartão de crédito {faturaCartao.banco ?? "?"} — final {faturaCartao.final4 ?? "????"}
+                        {faturaCartao.mes != null && ` · Fatura ${String(faturaCartao.mes).padStart(2, "0")}/${faturaCartao.ano ?? ""}`}
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button type="button" className={opBtn(eq(valorAtual, saldoAberto))} onClick={() => setValorPagar(String(saldoAberto))}>
+                          <p className="text-xs font-bold text-slate-700">Pagar total</p>
+                          <p className="text-sm font-mono font-semibold text-emerald-700">{formatBRL(saldoAberto)}</p>
+                          <p className="text-[10px] text-slate-500">Quita a fatura — sem juros no próximo mês</p>
+                        </button>
+                        {minimo != null && (
+                          <button type="button" className={opBtn(eq(valorAtual, minimo))} onClick={() => setValorPagar(String(minimo))}>
+                            <p className="text-xs font-bold text-slate-700">Pagamento mínimo</p>
+                            <p className="text-sm font-mono font-semibold text-amber-700">{formatBRL(minimo)}</p>
+                            <p className="text-[10px] text-slate-500">Evita atraso — o restante entra no rotativo (juros)</p>
+                          </button>
+                        )}
+                        <button type="button" className={opBtn(!eq(valorAtual, saldoAberto) && (minimo == null || !eq(valorAtual, minimo)))} onClick={() => setValorPagar("")}>
+                          <p className="text-xs font-bold text-slate-700">Valor parcial</p>
+                          <p className="text-sm font-mono font-semibold text-blue-700">Digitar abaixo</p>
+                          <p className="text-[10px] text-slate-500">Informe qualquer valor no campo "Valor"</p>
+                        </button>
+                      </div>
+                      {minimo != null && valorAtual > 0 && valorAtual < minimo && (
+                        <p className="text-[11px] font-semibold text-red-600">⚠️ Valor abaixo do pagamento mínimo ({formatBRL(minimo)}) — risco de atraso/negativação junto ao banco.</p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* ── Composição do valor ── */}
                 <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
