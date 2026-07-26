@@ -62,7 +62,7 @@ const MODELOS_ADVERTENCIA = {
 // Placeholders: [CONTRATANTE_NOME], [CONTRATANTE_CNPJ], [CONTRATANTE_ENDERECO], [CONTRATANTE_CIDADE], [CONTRATANTE_ESTADO], [CONTRATANTE_REPRESENTANTE]
 // [CONTRATADA_RAZAO_SOCIAL], [CONTRATADA_CNPJ], [CONTRATADA_ENDERECO], [CONTRATADA_CIDADE], [CONTRATADA_ESTADO]
 // [OBJETO_CONTRATO], [VALOR_MENSAL], [VALOR_EXTENSO], [DATA_INICIO], [DATA_FIM], [FORO_COMARCA]
-const MODELO_CONTRATO_PJ_DEFAULT = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS TÉCNICOS ESPECIALIZADOS DE MÃO DE OBRA
+const MODELO_CONTRATO_PJ_DEFAULT = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS TÉCNICOS ESPECIALIZADOS
 
 IDENTIFICAÇÃO DAS PARTES CONTRATANTES
 
@@ -74,7 +74,7 @@ As partes acima identificadas têm, entre si, justo e acertado o presente Contra
 
 DO OBJETO DO CONTRATO
 
-Cláusula 1ª. O presente contrato tem como OBJETO a prestação, pela CONTRATADA à CONTRATANTE, de serviços técnicos especializados de mão de obra, consistentes em:
+Cláusula 1ª. O presente contrato tem como OBJETO a prestação, pela CONTRATADA à CONTRATANTE, de serviços técnicos especializados, por resultado, consistentes em:
 
 [OBJETO_CONTRATO]
 
@@ -86,7 +86,7 @@ Cláusula 2ª. É obrigação da CONTRATADA:
 a) Executar os serviços objeto deste contrato com profissionalismo, qualidade técnica e observância das normas técnicas e da legislação aplicáveis à sua atividade;
 b) Responder tecnicamente pelos serviços que executar, aplicando seus próprios métodos e conhecimentos, respondendo por seus resultados;
 c) Responder pela guarda e conservação de quaisquer equipamentos, materiais, documentos e informações de propriedade da CONTRATANTE que lhe forem confiados durante a execução dos serviços;
-d) Utilizar os equipamentos de proteção individual (EPIs) necessários à sua segurança, de acordo com as Normas Regulamentadoras relativas à Segurança e Medicina do Trabalho previstas na legislação em vigor;
+d) Fornecer, às suas próprias expensas, e utilizar os equipamentos de proteção individual (EPIs) necessários à sua segurança, de acordo com as Normas Regulamentadoras relativas à Segurança e Medicina do Trabalho previstas na legislação em vigor;
 e) Arcar integralmente com todos os tributos, contribuições e encargos de qualquer natureza incidentes sobre sua atividade empresarial, inclusive os relativos a seus sócios, prepostos e empregados, se houver;
 f) Emitir Nota Fiscal de Prestação de Serviços correspondente a cada medição aprovada, nos prazos previstos neste contrato;
 g) Manter regularidade fiscal e cadastral de sua empresa durante toda a vigência contratual, apresentando, quando solicitado, os comprovantes de recolhimento dos tributos incidentes sobre sua atividade;
@@ -94,11 +94,19 @@ h) Comunicar formalmente à CONTRATANTE qualquer fato que possa afetar a execuç
 
 Cláusula 3ª. A CONTRATADA executará os serviços com autonomia técnica e organizacional, podendo estabelecer seus próprios horários e métodos de trabalho, respeitados os cronogramas e as normas internas de segurança e de acesso das instalações onde os serviços forem prestados.
 
+Parágrafo único. A CONTRATADA não estará sujeita a qualquer forma de controle de jornada ou de frequência pela CONTRATANTE, tais como registro de ponto, obrigação de comparecimento diário ou necessidade de autorização para ausências, sendo o acompanhamento dos serviços realizado exclusivamente pelo resultado das medições e pelo cumprimento dos cronogramas acordados.
+
 Cláusula 4ª. A CONTRATADA não possui responsabilidade regressiva pelo adimplemento de eventuais verbas salariais decorrentes de condenação da CONTRATANTE em processos judiciais, procedimentos de mediação ou arbitragem propostos pelos empregados desta, assim como a CONTRATANTE não responde por obrigações trabalhistas, previdenciárias ou fiscais da CONTRATADA, não havendo vínculo de subordinação ou empregatício entre as partes.
+
+DA NÃO EXCLUSIVIDADE E DA ASSUNÇÃO DOS RISCOS DA ATIVIDADE
+
+Cláusula 5ª. A presente contratação NÃO é exclusiva, sendo assegurado à CONTRATADA o direito de prestar serviços a quaisquer outros clientes e tomadores, inclusive do mesmo ramo de atividade da CONTRATANTE, desde que observadas as obrigações de sigilo e confidencialidade previstas neste instrumento, assim como é assegurado à CONTRATANTE o direito de contratar outros prestadores para serviços da mesma natureza.
+
+Cláusula 6ª. A CONTRATADA, na qualidade de empresa autônoma, assume integralmente os riscos econômicos de sua atividade empresarial, executando os serviços com instrumentos, recursos e organização próprios, e obrigando-se, como obrigação de resultado, a refazer, às suas exclusivas expensas, os serviços executados em desacordo com as especificações técnicas acordadas.
 
 DAS OBRIGAÇÕES DA CONTRATANTE
 
-Cláusula 5ª. A CONTRATANTE está obrigada a:
+Cláusula 7ª. A CONTRATANTE está obrigada a:
 a) Fornecer as condições, informações e documentos necessários para que a CONTRATADA possa executar adequadamente os serviços contratados;
 b) Permitir o acesso da CONTRATADA às instalações e frentes de serviço, quando a execução assim o exigir;
 c) Efetuar os pagamentos na forma e nos prazos ajustados neste contrato, mediante apresentação da respectiva Nota Fiscal de Serviços;
@@ -106,7 +114,7 @@ d) Gerenciar e coordenar a interdependência dos trabalhos desenvolvidos nas ár
 
 DA INEXISTÊNCIA DE VÍNCULO EMPREGATÍCIO
 
-Cláusula 6ª. As partes reconhecem expressamente que não existirá entre as mesmas, tampouco entre os prepostos e/ou funcionários da CONTRATADA e da CONTRATANTE, qualquer vínculo de natureza trabalhista, sendo o presente contrato regulado pelas cláusulas aqui expressas com base no Código Civil (art. 593 e seguintes) e Leis vigentes adequadas à espécie, razão pela qual a CONTRATADA assume integralmente a responsabilidade pelo pagamento de todos os salários, encargos trabalhistas e previdenciários de toda mão de obra envolvida na execução dos serviços ora contratados.
+Cláusula 8ª. As partes reconhecem expressamente que não existirá entre as mesmas, tampouco entre os prepostos e/ou funcionários da CONTRATADA e da CONTRATANTE, qualquer vínculo de natureza trabalhista, sendo o presente contrato regulado pelas cláusulas aqui expressas com base no Código Civil (art. 593 e seguintes) e Leis vigentes adequadas à espécie, razão pela qual a CONTRATADA assume integralmente a responsabilidade pelo pagamento de todos os salários, encargos trabalhistas e previdenciários de todo o pessoal por ela alocado na execução dos serviços ora contratados.
 
 PARÁGRAFO 1º: Em caso de processos trabalhistas movidos pelos funcionários da CONTRATADA contra a mesma, eximir-se-á a CONTRATANTE de qualquer prejuízo de responsabilidade da CONTRATADA.
 
@@ -114,17 +122,17 @@ PARÁGRAFO 2º: Da mesma forma, em caso de processos trabalhistas movidos pelos 
 
 DO SIGILO E DA CONFIDENCIALIDADE
 
-Cláusula 7ª. As PARTES CONTRATANTES obrigam-se por si, por seus funcionários, contratados e/ou prepostos pela guarda de todas as informações trocadas reciprocamente entre seus funcionários e terceiros, de que venham a ter ciência em razão da presente prestação de serviços, obrigando-se a não divulgarem, comunicarem e nem fazerem uso de quaisquer destas informações, além dos limites estipulados neste Contrato para realização das atividades contratadas.
+Cláusula 9ª. As PARTES CONTRATANTES obrigam-se por si, por seus funcionários, contratados e/ou prepostos pela guarda de todas as informações trocadas reciprocamente entre seus funcionários e terceiros, de que venham a ter ciência em razão da presente prestação de serviços, obrigando-se a não divulgarem, comunicarem e nem fazerem uso de quaisquer destas informações, além dos limites estipulados neste Contrato para realização das atividades contratadas.
 
-Cláusula 8ª. É obrigação das PARTES CONTRATANTES manter por prazo indeterminado, em absoluto sigilo e confidencialidade e não usar, reproduzir, copiar ou revelar, em proveito próprio ou de terceiros, as informações confidenciais as quais tiveram acesso em razão do presente CONTRATO e da utilização de sistemas, softwares ou de dados transmitidos por alguma delas ou por empresas terceirizadas a seu serviço, sob pena de responsabilização civil e criminalmente.
+Cláusula 10ª. É obrigação das PARTES CONTRATANTES manter por prazo indeterminado, em absoluto sigilo e confidencialidade e não usar, reproduzir, copiar ou revelar, em proveito próprio ou de terceiros, as informações confidenciais as quais tiveram acesso em razão do presente CONTRATO e da utilização de sistemas, softwares ou de dados transmitidos por alguma delas ou por empresas terceirizadas a seu serviço, sob pena de responsabilização civil e criminalmente.
 
-Cláusula 9ª. No caso de rescisão do presente Contrato, a CONTRATADA devolverá à CONTRATANTE todos os documentos e informações existentes em seus bancos de dados e que estiverem sob sua guarda, mediante assinatura de termo de entrega pela CONTRATANTE. Efetuada a entrega e assinatura do respectivo termo, a CONTRATADA deverá proceder a inutilização de quaisquer cópias de dados, informações e documentos encontrados em seus arquivos físicos ou de computação, visando assegurar o devido sigilo e confidencialidade, nos termos da Lei Geral de Proteção de Dados (Lei nº 13.709/2018).
+Cláusula 11ª. No caso de rescisão do presente Contrato, a CONTRATADA devolverá à CONTRATANTE todos os documentos e informações existentes em seus bancos de dados e que estiverem sob sua guarda, mediante assinatura de termo de entrega pela CONTRATANTE. Efetuada a entrega e assinatura do respectivo termo, a CONTRATADA deverá proceder a inutilização de quaisquer cópias de dados, informações e documentos encontrados em seus arquivos físicos ou de computação, visando assegurar o devido sigilo e confidencialidade, nos termos da Lei Geral de Proteção de Dados (Lei nº 13.709/2018).
 
 DO PREÇO, DAS MEDIÇÕES E DO PAGAMENTO
 
-Cláusula 10ª. Pela integralidade dos serviços objeto deste contrato, durante o prazo de vigência ajustado, a CONTRATANTE pagará à CONTRATADA o VALOR TOTAL de R$ [VALOR_TOTAL_CONTRATO] ([VALOR_TOTAL_EXTENSO]), correspondente à base mensal de referência de R$ [VALOR_MENSAL] ([VALOR_EXTENSO]) pelo prazo de [PRAZO_VIGENCIA].
+Cláusula 12ª. Pela integralidade dos serviços objeto deste contrato, durante o prazo de vigência ajustado, a CONTRATANTE pagará à CONTRATADA o VALOR TOTAL de R$ [VALOR_TOTAL_CONTRATO] ([VALOR_TOTAL_EXTENSO]), correspondente à base mensal de referência de R$ [VALOR_MENSAL] ([VALOR_EXTENSO]) pelo prazo de [PRAZO_VIGENCIA].
 
-Cláusula 11ª. O desembolso do valor total contratado será realizado de forma parcelada, de acordo com MEDIÇÕES MENSAIS dos serviços efetivamente executados, apuradas e aprovadas pela CONTRATANTE, na seguinte proporção: [PERCENTUAL_ADIANTAMENTO]% no dia [DIA_ADIANTAMENTO] do mês corrente e [PERCENTUAL_FECHAMENTO]% [TEXTO_DIA_FECHAMENTO], sempre mediante apresentação da respectiva Nota Fiscal de Serviços.
+Cláusula 13ª. O desembolso do valor total contratado será realizado de forma parcelada, de acordo com MEDIÇÕES MENSAIS dos serviços efetivamente executados, apuradas e aprovadas pela CONTRATANTE, na seguinte proporção: [PERCENTUAL_ADIANTAMENTO]% no dia [DIA_ADIANTAMENTO] do mês corrente e [PERCENTUAL_FECHAMENTO]% [TEXTO_DIA_FECHAMENTO], sempre mediante apresentação da respectiva Nota Fiscal de Serviços.
 
 PARÁGRAFO 1º: Para recebimento dos pagamentos, a CONTRATADA deverá emitir e encaminhar a Nota Fiscal de Serviços com antecedência mínima de 5 (cinco) dias da data de pagamento, observando os seguintes prazos: (i) Nota Fiscal referente à primeira medição do mês: até o dia [PRAZO_NOTA_ADIANTAMENTO] do mês corrente; (ii) Nota Fiscal referente à segunda medição: até [PRAZO_NOTA_FECHAMENTO] do mês do pagamento. O não envio da Nota Fiscal dentro do prazo estipulado implicará no adiamento do pagamento para o mês subsequente, sem ônus para a CONTRATANTE.
 
@@ -132,31 +140,31 @@ PARÁGRAFO 2º: As medições refletem os serviços efetivamente executados no p
 
 PARÁGRAFO 3º: Dados bancários da CONTRATADA para pagamento: [DADOS_BANCARIOS_CONTRATADA]
 
-Cláusula 12ª. O não pagamento, no prazo, de parcela incontroversa devidamente medida e faturada acarretará multa de 10% (dez por cento) sobre o valor da parcela em atraso, incidindo ainda juros de mora e correção monetária, nos termos da legislação vigente.
+Cláusula 14ª. O não pagamento, no prazo, de parcela incontroversa devidamente medida e faturada acarretará multa de 10% (dez por cento) sobre o valor da parcela em atraso, incidindo ainda juros de mora e correção monetária, nos termos da legislação vigente.
 
 DA RESCISÃO
 
-Cláusula 13ª. O presente contrato poderá ser rescindido imotivadamente por qualquer das partes, mediante comunicação por escrito com antecedência mínima de 30 (trinta) dias, sem a incidência de qualquer multa ou ônus, sendo devidos à CONTRATADA apenas os valores das medições dos serviços efetivamente executados até a data da rescisão. Fica ressalvada a possibilidade de rescisão imediata pela parte inocente em caso de descumprimento de qualquer cláusula ou obrigação prevista neste instrumento pela outra parte.
+Cláusula 15ª. O presente contrato poderá ser rescindido imotivadamente por qualquer das partes, mediante comunicação por escrito com antecedência mínima de 30 (trinta) dias, sem a incidência de qualquer multa ou ônus, sendo devidos à CONTRATADA apenas os valores das medições dos serviços efetivamente executados até a data da rescisão. Fica ressalvada a possibilidade de rescisão imediata pela parte inocente em caso de descumprimento de qualquer cláusula ou obrigação prevista neste instrumento pela outra parte.
 
 DO PRAZO E DO REAJUSTE DO VALOR
 
-Cláusula 14ª. O presente contrato terá vigência de [PRAZO_VIGENCIA], com início em [DATA_INICIO] e término em [DATA_FIM], podendo ser prorrogado expressamente, por adendo a este instrumento, ou tacitamente, desde que não haja manifestação em contrário, por escrito, dentro de 30 (trinta) dias antes do fim do prazo acima estipulado.
+Cláusula 16ª. O presente contrato terá vigência de [PRAZO_VIGENCIA], com início em [DATA_INICIO] e término em [DATA_FIM], podendo ser prorrogado exclusivamente de forma expressa, mediante Termo Aditivo assinado pelas partes, com reavaliação do escopo, do prazo e do valor dos serviços a cada prorrogação.
 
-Cláusula 15ª. Em caso de prorrogação por período igual ou superior a 12 (doze) meses, o valor do contrato poderá ser reajustado anualmente, na data de aniversário de sua assinatura, pela variação do IGP-M/FGV ou, na sua falta, por índice oficial que o substitua.
+Cláusula 17ª. Em caso de prorrogação por período igual ou superior a 12 (doze) meses, o valor do contrato poderá ser reajustado anualmente, na data de aniversário de sua assinatura, pela variação do IGP-M/FGV ou, na sua falta, por índice oficial que o substitua.
 
 DAS CONDIÇÕES GERAIS
 
-Cláusula 16ª. A CONTRATADA não poderá transferir este contrato ou as obrigações por ela assumidas a terceiros, nem se fazer substituir, sem prévio consentimento por escrito da CONTRATANTE, que poderá concedê-lo ou não a seu exclusivo critério.
+Cláusula 18ª. A CONTRATADA poderá executar os serviços por meio de seus sócios, prepostos, empregados ou equipe própria devidamente qualificada, podendo substituí-los livremente, mediante simples comunicação à CONTRATANTE, desde que mantida a qualificação técnica necessária à execução do objeto. É vedada apenas a cessão ou transferência deste contrato a outra pessoa jurídica sem o prévio consentimento por escrito da CONTRATANTE.
 
-Cláusula 17ª. Qualquer tolerância de uma das partes em relação ao não cumprimento das obrigações e deveres neste instrumento assumidos não importará em novação quanto aos seus termos, condições ou prazos, não devendo, sob quaisquer hipóteses, ser interpretada como renúncia ou desistência do cumprimento dos dispositivos do presente em seus estritos termos.
+Cláusula 19ª. Qualquer tolerância de uma das partes em relação ao não cumprimento das obrigações e deveres neste instrumento assumidos não importará em novação quanto aos seus termos, condições ou prazos, não devendo, sob quaisquer hipóteses, ser interpretada como renúncia ou desistência do cumprimento dos dispositivos do presente em seus estritos termos.
 
-Cláusula 18ª. Toda e qualquer alteração do objeto ou das condições do presente Contrato necessitará da concordância prévia e expressa de ambas as partes e será formalizada mediante Termo Aditivo.
+Cláusula 20ª. Toda e qualquer alteração do objeto ou das condições do presente Contrato necessitará da concordância prévia e expressa de ambas as partes e será formalizada mediante Termo Aditivo.
 
-Cláusula 19ª. A contratação da presente prestação de serviços se dá sob a égide do disposto no artigo 593 e seguintes do Código Civil Brasileiro, não configurando, em nenhuma hipótese, relação empregatícia entre as partes, seus sócios, prepostos ou empregados.
+Cláusula 21ª. A contratação da presente prestação de serviços se dá sob a égide do disposto no artigo 593 e seguintes do Código Civil Brasileiro, não configurando, em nenhuma hipótese, relação empregatícia entre as partes, seus sócios, prepostos ou empregados.
 
 DO FORO
 
-Cláusula 20ª. Para dirimir quaisquer controvérsias oriundas do presente CONTRATO, as partes elegem o foro da comarca de [FORO_COMARCA], com renúncia a qualquer outro, por mais privilegiado que seja.
+Cláusula 22ª. Para dirimir quaisquer controvérsias oriundas do presente CONTRATO, as partes elegem o foro da comarca de [FORO_COMARCA], com renúncia a qualquer outro, por mais privilegiado que seja.
 
 Por estarem assim justas e contratadas, firmam o presente instrumento, em duas vias de igual teor, juntamente com 2 (duas) testemunhas.
 

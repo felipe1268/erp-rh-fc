@@ -1,4 +1,48 @@
 /**
+ * Rev. 4603 - FEAT: CONTRATO DE PRESTAÇÃO DE SERVIÇOS — 7 REFORÇOS ANTI-DESCARACTERIZAÇÃO (BLINDAGEM CONTRA RECONHECIMENTO DE VÍNCULO CLT)
+ *
+ * PEDIDO DO USUÁRIO: análise completa do modelo da Rev. 4602 com foco em
+ * afastar a descaracterização da relação PJ em vínculo empregatício. Análise
+ * feita sobre os critérios do art. 3º da CLT (subordinação, pessoalidade,
+ * habitualidade, onerosidade) + art. 2º (assunção de risco pelo empregador).
+ * Usuário aprovou aplicar as 7 melhorias.
+ *
+ * O QUE MUDOU NO MODELO (20 → 22 cláusulas, renumeração automática):
+ * 1. TÍTULO/OBJETO — removida a expressão "de mão de obra" (vocabulário de
+ *    terceirização irregular/pejotização); objeto agora é "serviços técnicos
+ *    especializados, por resultado".
+ * 2. CLÁUSULA DE SUBSTITUIÇÃO (antiga 16ª, pior risco do contrato) — antes
+ *    VEDAVA a substituição sem consentimento (= pessoalidade, requisito nº 1
+ *    do vínculo). Agora PERMITE execução por sócios/prepostos/equipe própria
+ *    qualificada com substituição livre mediante comunicação; vedada apenas a
+ *    cessão do contrato a outra PJ.
+ * 3. NOVA SEÇÃO "DA NÃO EXCLUSIVIDADE E DA ASSUNÇÃO DOS RISCOS DA ATIVIDADE"
+ *    (2 cláusulas novas): não exclusividade recíproca expressa (CONTRATADA
+ *    pode atender outros clientes, inclusive do mesmo ramo) + assunção dos
+ *    riscos econômicos, instrumentos/recursos próprios e refazimento às suas
+ *    expensas (obrigação de resultado).
+ * 4. CLÁUSULA 3ª ganhou Parágrafo único: SEM controle de jornada/frequência
+ *    (sem ponto, sem comparecimento diário, sem autorização p/ ausências);
+ *    acompanhamento só por medições/cronogramas.
+ * 5. EPIs (2ª "d") — fornecidos ÀS EXPENSAS DA CONTRATADA (empresa fornecer
+ *    EPI/ferramenta é indício de subordinação).
+ * 6. PRORROGAÇÃO (antiga 14ª) — removida a prorrogação TÁCITA (habitualidade);
+ *    só por Termo Aditivo expresso com reavaliação de escopo/prazo/valor.
+ *
+ * IMPLEMENTAÇÃO: edições aplicadas por replace no texto-mestre + renumeração
+ * sequencial automática de TODAS as cláusulas (regex "Cláusula Nª."); nenhum
+ * código depende de número de cláusula (gerarTexto/extrairClausulas são
+ * format-based). Propagado para MODELO_CONTRATO_PJ (pjContracts.ts) e
+ * MODELO_CONTRATO_PJ_DEFAULT (controleDocumentos.ts); Neon: template id 8
+ * republicado direto como Vigente (versão 14).
+ *
+ * POKA-YOKE: nível 3 — a renumeração é gerada por código (imune a erro manual
+ * de numeração); modelo único propagado por replace exato (assert falha se o
+ * texto-base divergir entre os 2 arquivos).
+ *
+ * ZERO SCHEMA CHANGE. Contratos já assinados intactos (snapshot próprio).
+ */
+/**
  * Rev. 4602 - FEAT: CONTRATO PJ → "CONTRATO DE PRESTAÇÃO DE SERVIÇOS" — NOVO MODELO DO JURÍDICO + VALOR TOTAL COM MEDIÇÕES MENSAIS (BLINDAGEM CONTRA VÍNCULO CLT)
  *
  * PEDIDO DO USUÁRIO: o advogado alertou que o formato antigo ("Contrato PJ",
