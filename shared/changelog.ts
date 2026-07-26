@@ -1,4 +1,27 @@
 /**
+ * Rev. 4597 - UX: CONTAS A PAGAR — CONTA BANCÁRIA PREENCHE BANCO/AGÊNCIA/CONTA DO CHEQUE AUTOMATICAMENTE
+ *
+ * PEDIDO DO USUÁRIO: ao registrar baixa com cheque próprio, ele escolhia a
+ * Conta Bancária no seletor e depois tinha que DIGITAR de novo Banco, Agência
+ * e Conta corrente nos campos do cheque — retrabalho puro e risco de digitar
+ * dado divergente da conta escolhida.
+ *
+ * COMO FUNCIONA (Poka-Yoke nível 3 — prevenção pelo design):
+ * - Ao selecionar a Conta Bancária no diálogo "Pagar" (Registrar baixa),
+ *   os campos Banco / Agência / Conta corrente do bloco "Cheque Empresa"
+ *   são preenchidos automaticamente com os dados cadastrados da conta
+ *   (banco ou descrição, agência, conta). Trocar a conta re-preenche.
+ * - Mesmo comportamento no diálogo "Editar" (Rev. 4587), que tem os mesmos
+ *   campos de cheque.
+ * - Os campos continuam EDITÁVEIS — caso excepcional (talão de outra conta)
+ *   ainda é possível, mas o caminho padrão é zero digitação.
+ * - Efeitos re-executam ao abrir o diálogo (dep showPay?.id / showEdit?.id),
+ *   cobrindo o caso de reabrir com a MESMA conta após o reset dos campos.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroContasAPagar.tsx (2 useEffect).
+ * ZERO schema/server change.
+ */
+/**
  * Rev. 4596 - FEAT: CHEQUES — REGRA DE Nº DUPLICADO TAMBÉM NA IMPORTAÇÃO E NO PAGAMENTO PELO CONTAS A PAGAR
  *
  * PEDIDO DO USUÁRIO: estender a regra da Rev. 4595 (bloqueio de nº de cheque

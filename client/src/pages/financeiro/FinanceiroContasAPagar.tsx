@@ -703,6 +703,25 @@ export default function FinanceiroContasAPagar() {
     { companyId },
     { enabled: !!companyId }
   );
+  // Rev. 4597 — Poka-Yoke (prevenção pelo design): escolher a Conta Bancária
+  // preenche automaticamente Banco/Agência/Conta corrente do cheque próprio —
+  // zero redigitação. Campos continuam editáveis para casos excepcionais.
+  useEffect(() => {
+    if (contaBancariaId == null) return;
+    const acc = (bankAccounts ?? []).find((a: any) => a.id === contaBancariaId);
+    if (!acc) return;
+    setChequeBanco(acc.banco || acc.descricao || "");
+    setChequeAgencia(acc.agencia || "");
+    setChequeConta(acc.conta || "");
+  }, [contaBancariaId, bankAccounts, showPay?.id]);
+  useEffect(() => {
+    if (editContaBancariaId == null) return;
+    const acc = (bankAccounts ?? []).find((a: any) => a.id === editContaBancariaId);
+    if (!acc) return;
+    setEditChequeBanco(acc.banco || acc.descricao || "");
+    setEditChequeAgencia(acc.agencia || "");
+    setEditChequeConta(acc.conta || "");
+  }, [editContaBancariaId, bankAccounts, showEdit?.id]);
   // Rev. 4594 — dados da fatura de cartão vinculada ao título (identificação do
   // cartão + opções rápidas Total / Mínimo / Parcial no diálogo de pagamento).
   const { data: faturaCartao } = (trpc as any).cartao.faturaPorEntry.useQuery(
