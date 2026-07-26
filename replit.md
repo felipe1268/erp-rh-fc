@@ -50,18 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4612** — **UI: EMISSÃO DE CRACHÁS — FRENTE COM MODO COMPACTO (TUDO CABE NOS 540px, NADA CORTADO).** Com selos NR + faixa de restrição + 4-5 linhas de dados, a frente estourava o cartão (SETOR/ADMISSÃO cortados). Agora há 3 níveis proporcionais (normal/compact/denso — foto, logo, nome e selos encolhem juntos) e o bloco de linhas virou `flex-1 + justify-evenly`: impossível estourar em qualquer combinação. Fix vale também p/ o PNG baixado (mesmo DOM). Arquivo: `client/src/pages/terceiros/Crachas.tsx`. ZERO schema/server change.
 - **Rev. 4611** — **FIX: EMISSÃO DE CRACHÁS — CONTAGEM BATE COM COLABORADORES (CRACHÁ P/ TODO EMPREGADO, SOME AO DESLIGAR).** Filtro exigia status literal "Ativo" e escondia Férias/Afastado/Aviso/Recluso (87 vs 107 CLT). Regra nova: crachá aparece p/ todo NÃO-desligado via `EMPLOYEE_STATUS_DESLIGADOS` (fonte única) e some automaticamente quando o funcionário é desligado; `badgeStatus` (backend) alinhado à mesma regra. Validado no Neon (CLT 107 ✔, PJ 14 ✔, terceiros 65 ✔). Arquivos: `client/src/pages/terceiros/Crachas.tsx`, `server/routers/sprint1Foundation.ts`. ZERO schema change.
-- **Rev. 4610** — **UI: EMISSÃO DE CRACHÁS — LAYOUT "OPÇÃO 5" (NOVA ARTE ENVIADA PELO USUÁRIO).** `BadgePreview` refeito conforme a arte anexada: frente branca com canto navy diagonal + faixa laranja, logo em fundo branco, foto quadrada arredondada com borda navy, função laranja entre traços, ícones em caixinhas com contorno navy e 3 pontinhos no rodapé; verso com QR em cartão com sombra, "ID: CLT-XXXXXX" laranja e rodapé navy em chevron com telefone. Mantidos os selos NR-35/NR-10 e a faixa de restrição da Rev. 4609. Arquivo: `client/src/pages/terceiros/Crachas.tsx`. ZERO schema/server change.
 ### 5 one-liners
 
+- **Rev. 4610** — **UI: EMISSÃO DE CRACHÁS — LAYOUT "OPÇÃO 5" (NOVA ARTE ENVIADA PELO USUÁRIO).** `BadgePreview` refeito conforme a arte: frente branca com canto navy + faixa laranja, foto com borda navy, função laranja entre traços; verso com QR em cartão com sombra e rodapé navy em chevron. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4609** — **FEAT: EMISSÃO DE CRACHÁS — TAG DE DOCUMENTAÇÃO + SELOS NR-35/NR-10 + FAIXA DE RESTRIÇÃO (LGPD-SAFE).** `badgeStatus` batch (regras do recalcAll + guarda anti-IDOR) alimenta tags/pills/selos NR e faixa de restrição genérica; rota pública devolve só booleano. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4608** — **UI: CONTROLE DE DOCUMENTOS — FOTO DOS FUNCIONÁRIOS NA LISTA DO DOSSIÊ.** Backend `painelDossie` passa a devolver `fotoUrl`; célula "Funcionário" do `DossiePanel` renderiza `<PersonPhoto size="sm">` (componente padrão do módulo, fallback de iniciais) ao lado do nome/CPF. Arquivos: `server/routers/controleDocumentos.ts`, `client/src/pages/ControleDocumentos.tsx`. ZERO schema change.
 - **Rev. 4607** — **FIX: QR DO CRACHÁ — "VERIFICAR APTIDÃO" CALCULA AO VIVO + LISTA DE DOCUMENTOS (LGPD-SAFE).** `portalExterno.verificar.funcionario` deixa de ler snapshot defasada e calcula ao vivo de `asos`/`trainings`; página pública exibe cards ASO/Treinamentos sem dados sensíveis. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4606** — **UI: EMISSÃO DE CRACHÁS — RÉPLICA FIEL DA ARTE ENVIADA (CLT/PJ/TERCEIROS).** BadgePreview refeito como réplica da arte (navy `#0A1E3C` + laranja `#EE9803`, logos recortados via `@assets`); frente sem QR, verso com QR emoldurado + rodapé com telefone fixo. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
-- **Rev. 4605** — **FIX: TRAVAS ANTI-DUPLICIDADE — CHEQUE RE-CONCILIADO NÃO CRIA GÊMEO + ÍNDICE ÚNICO NAS PROJEÇÕES.** Trava nível 2 no `createEntry` (cheque nº limpo + valor + não-cancelado → CONFLICT c/ override); estorno cura órfãos; ColFix dedupa projeções e cria `uq_fin_entries_projecao` parcial. Detalhe em `shared/changelog.ts`. ZERO schema change (só índice).
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4604 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4605 e anteriores.
 
 ## User preferences
 

@@ -571,7 +571,7 @@ export default function Crachas() {
 }
 
 // Rev. 4609 — selos de competência (NR-35 azul / NR-10 amarelo)
-function SeloNR({ tipo, mini }: { tipo: "nr35" | "nr10"; mini?: boolean }) {
+function SeloNR({ tipo, mini, size = 46 }: { tipo: "nr35" | "nr10"; mini?: boolean; size?: number }) {
   const cfg = tipo === "nr35"
     ? { bg: "#1d4ed8", txt: "NR-35", rotulo: "ALTURA" }
     : { bg: "#d97706", txt: "NR-10", rotulo: "ELÉTRICA" };
@@ -589,10 +589,10 @@ function SeloNR({ tipo, mini }: { tipo: "nr35" | "nr10"; mini?: boolean }) {
   return (
     <span
       className="inline-flex flex-col items-center justify-center rounded-full text-white shrink-0"
-      style={{ backgroundColor: cfg.bg, width: 46, height: 46 }}
+      style={{ backgroundColor: cfg.bg, width: size, height: size }}
     >
-      <span className="text-[10px] font-extrabold leading-none">{cfg.txt}</span>
-      <span className="text-[6.5px] font-bold leading-none mt-[2px] tracking-wide">{cfg.rotulo}</span>
+      <span className="font-extrabold leading-none" style={{ fontSize: size >= 44 ? 10 : 9 }}>{cfg.txt}</span>
+      <span className="font-bold leading-none mt-[2px] tracking-wide" style={{ fontSize: size >= 44 ? 6.5 : 6 }}>{cfg.rotulo}</span>
     </span>
   );
 }
@@ -764,25 +764,39 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
     badge.dataAdmissao ? { icon: <Calendar className="w-[15px] h-[15px]" strokeWidth={2} />, rotulo: "ADMISSÃO", valor: formatDateBR(badge.dataAdmissao) } : null,
   ].filter(Boolean) as { icon: React.ReactNode; rotulo: string; valor: string }[];
 
+  // Rev. 4611 — modo compacto: quando há selos NR / faixa de restrição ou 4+ linhas
+  // de dados, TODOS os blocos encolhem proporcionalmente pra caber nos 540px fixos
+  // do cartão (antes o Setor/Admissão estouravam pra fora da frente).
+  const temSelos = !!(badge.docStatus?.nr35 || badge.docStatus?.nr10);
+  const temFaixa = !!badge.docStatus?.restricao;
+  const blocosExtras = (temSelos ? 1 : 0) + (temFaixa ? 1 : 0);
+  const compact = blocosExtras > 0 || detalhes.length >= 4;
+  const denso = blocosExtras === 2 || (blocosExtras >= 1 && detalhes.length >= 4);
+
+  const fotoH = denso ? 104 : compact ? 118 : 144;
+  const fotoW = denso ? 118 : compact ? 132 : 158;
+  const logoH = denso ? 40 : compact ? 46 : 54;
+  const nomePx = denso ? 16 : compact ? 18 : 21;
+
   return (
-    <div className="w-[340px] h-[540px] rounded-2xl overflow-hidden shadow-xl mx-auto relative bg-white">
+    <div className="w-[340px] h-[540px] rounded-2xl overflow-hidden shadow-xl mx-auto relative bg-white flex flex-col">
       {/* Canto navy diagonal no topo-esquerdo + faixa laranja paralela (arte "Opção 5") */}
       <svg className="absolute left-0 top-0 pointer-events-none" width="120" height="440" viewBox="0 0 120 440" fill="none">
         <path d="M0,0 L64,0 C52,120 30,260 0,368 Z" fill={CRACHA_NAVY} />
         <path d="M74,0 L88,0 C74,140 48,290 14,412 L0,412 L0,392 C32,278 60,132 74,0 Z" fill={CRACHA_ORANGE} />
       </svg>
       {/* Slot de furação */}
-      <div className="flex justify-center pt-[12px] pb-[4px] relative">
+      <div className={`flex justify-center ${denso ? "pt-[8px]" : "pt-[12px]"} pb-[4px] relative shrink-0`}>
         <div className="w-[34px] h-[7px] rounded-full" style={{ backgroundColor: "#e4e8ef" }} />
       </div>
       {/* Logo em fundo branco, centralizado */}
-      <div className="flex justify-center pt-[8px] relative">
-        <img src={logoCrachaWhite} alt="" className="h-[54px] object-contain" />
+      <div className={`flex justify-center ${denso ? "pt-[2px]" : compact ? "pt-[4px]" : "pt-[8px]"} relative shrink-0`}>
+        <img src={logoCrachaWhite} alt="" className="object-contain" style={{ height: logoH }} />
       </div>
 
       {/* Foto quadrada arredondada com borda navy */}
-      <div className="relative flex justify-center mt-[18px]">
-        <div className="w-[158px] h-[144px] rounded-[22px] overflow-hidden flex items-center justify-center bg-white" style={{ border: `4px solid ${NAVY}`, boxShadow: "0 6px 16px rgba(10,30,60,0.16)" }}>
+      <div className={`relative flex justify-center ${denso ? "mt-[8px]" : compact ? "mt-[12px]" : "mt-[18px]"} shrink-0`}>
+        <div className="rounded-[20px] overflow-hidden flex items-center justify-center bg-white" style={{ width: fotoW, height: fotoH, border: `${denso ? 3 : 4}px solid ${NAVY}`, boxShadow: "0 6px 16px rgba(10,30,60,0.16)" }}>
           {badge.foto ? (
             <img src={badge.foto} alt="" className="w-full h-full object-cover" />
           ) : (
@@ -792,13 +806,13 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
       </div>
 
       {/* Nome + função laranja entre traços (— FUNÇÃO —) */}
-      <div className="text-center mt-[12px] px-6 relative">
-        <h2 className="text-[21px] font-extrabold uppercase leading-[1.15] tracking-wide line-clamp-2 overflow-hidden" style={{ color: NAVY }}>
+      <div className={`text-center ${denso ? "mt-[8px]" : "mt-[12px]"} px-6 relative shrink-0`}>
+        <h2 className="font-extrabold uppercase leading-[1.12] tracking-wide line-clamp-2 overflow-hidden" style={{ color: NAVY, fontSize: nomePx }}>
           {badge.nome}
         </h2>
-        <div className="flex items-center justify-center gap-[8px] mt-[6px]">
+        <div className={`flex items-center justify-center gap-[8px] ${denso ? "mt-[4px]" : "mt-[6px]"}`}>
           <span className="h-[2px] w-[18px] rounded-full shrink-0" style={{ backgroundColor: OR }} />
-          <p className="text-[12.5px] font-extrabold uppercase tracking-[0.08em] leading-tight truncate max-w-[190px]" style={{ color: OR }}>
+          <p className="font-extrabold uppercase tracking-[0.08em] leading-tight truncate max-w-[190px]" style={{ color: OR, fontSize: denso ? 11 : 12.5 }}>
             {badge.funcao || "—"}
           </p>
           <span className="h-[2px] w-[18px] rounded-full shrink-0" style={{ backgroundColor: OR }} />
@@ -806,40 +820,40 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
       </div>
 
       {/* Rev. 4609 — selos de competência vigentes (NR-35 / NR-10) */}
-      {(badge.docStatus?.nr35 || badge.docStatus?.nr10) && (
-        <div className="flex justify-center gap-[8px] mt-[8px] relative">
-          {badge.docStatus?.nr35 && <SeloNR tipo="nr35" />}
-          {badge.docStatus?.nr10 && <SeloNR tipo="nr10" />}
+      {temSelos && (
+        <div className={`flex justify-center gap-[8px] ${denso ? "mt-[6px]" : "mt-[8px]"} relative shrink-0`}>
+          {badge.docStatus?.nr35 && <SeloNR tipo="nr35" size={denso ? 38 : 44} />}
+          {badge.docStatus?.nr10 && <SeloNR tipo="nr10" size={denso ? 38 : 44} />}
         </div>
       )}
 
       {/* Rev. 4609 — faixa de restrição de atividade (aviso genérico, LGPD-safe) */}
-      {badge.docStatus?.restricao && (
-        <div className="mx-[8px] mt-[8px] relative">
-          <div className="flex items-center justify-center gap-[6px] rounded-md py-[6px] px-2" style={{ backgroundColor: "#dc2626" }}>
-            <AlertTriangle className="w-[14px] h-[14px] text-white shrink-0" strokeWidth={2.5} />
-            <span className="text-white text-[11.5px] font-extrabold tracking-wide">RESTRIÇÃO DE ATIVIDADE</span>
+      {temFaixa && (
+        <div className={`mx-[10px] ${denso ? "mt-[6px]" : "mt-[8px]"} relative shrink-0`}>
+          <div className={`flex items-center justify-center gap-[6px] rounded-md ${denso ? "py-[4px]" : "py-[6px]"} px-2`} style={{ backgroundColor: "#dc2626" }}>
+            <AlertTriangle className="w-[13px] h-[13px] text-white shrink-0" strokeWidth={2.5} />
+            <span className="text-white text-[11px] font-extrabold tracking-wide">RESTRIÇÃO DE ATIVIDADE</span>
           </div>
         </div>
       )}
 
       {/* Linhas de dados: ícone + rótulo à esquerda, valor bold à direita, filete sob rótulo/valor.
-          Rev. 4609 — espaçamento compacta quando há selos NR/faixa de restrição (cartão tem 540px fixos) */}
-      <div className={`${(badge.docStatus?.nr35 || badge.docStatus?.nr10 || badge.docStatus?.restricao) ? "mt-[8px]" : "mt-[16px]"} pl-[40px] pr-[34px] relative`}>
+          flex-1 + distribuição uniforme: as linhas ocupam SÓ o espaço restante, sem estourar o cartão */}
+      <div className={`flex-1 min-h-0 flex flex-col justify-evenly ${denso ? "mt-[2px] mb-[26px]" : compact ? "mt-[4px] mb-[28px]" : "mt-[10px] mb-[30px]"} pl-[40px] pr-[34px] relative`}>
         {detalhes.map((d, i) => (
-          <div key={i} className="flex items-center gap-[11px] pt-[8px]">
+          <div key={i} className="flex items-center gap-[11px]">
             {/* Ícone em caixinha arredondada com contorno navy (como na arte) */}
-            <span className="shrink-0 w-[26px] h-[26px] rounded-[7px] flex items-center justify-center" style={{ color: NAVY, border: `1.5px solid ${NAVY}` }}>{d.icon}</span>
-            <div className="flex-1 flex items-center border-b pb-[7px]" style={{ borderColor: "#c9d1dd" }}>
+            <span className={`shrink-0 ${denso ? "w-[22px] h-[22px]" : "w-[26px] h-[26px]"} rounded-[7px] flex items-center justify-center`} style={{ color: NAVY, border: `1.5px solid ${NAVY}` }}>{d.icon}</span>
+            <div className={`flex-1 flex items-center border-b ${denso ? "pb-[4px]" : "pb-[6px]"}`} style={{ borderColor: "#c9d1dd" }}>
               <span className="text-[10px] font-semibold tracking-[0.13em]" style={{ color: NAVY }}>{d.rotulo}</span>
-              <span className="ml-auto text-[13px] font-extrabold text-right max-w-[145px] truncate" style={{ color: NAVY }}>{d.valor}</span>
+              <span className={`ml-auto ${denso ? "text-[12px]" : "text-[13px]"} font-extrabold text-right max-w-[145px] truncate`} style={{ color: NAVY }}>{d.valor}</span>
             </div>
           </div>
         ))}
       </div>
 
       {/* 3 pontinhos do rodapé (navy • laranja • navy), como na arte */}
-      <div className="absolute inset-x-0 bottom-[14px] flex justify-center gap-[8px]">
+      <div className="absolute inset-x-0 bottom-[10px] flex justify-center gap-[8px]">
         <span className="w-[8px] h-[8px] rounded-full" style={{ backgroundColor: NAVY }} />
         <span className="w-[8px] h-[8px] rounded-full" style={{ backgroundColor: OR }} />
         <span className="w-[8px] h-[8px] rounded-full" style={{ backgroundColor: NAVY }} />

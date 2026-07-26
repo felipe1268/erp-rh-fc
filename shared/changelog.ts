@@ -1,4 +1,26 @@
 /**
+ * Rev. 4612 - UI: EMISSÃO DE CRACHÁS — FRENTE COM MODO COMPACTO (TUDO CABE NOS 540px, NADA CORTADO)
+ *
+ * Problema (print do usuário): com selos NR + faixa de restrição + 4-5 linhas
+ * de dados, a frente estourava a altura fixa do cartão — "SETOR" e "ADMISSÃO"
+ * ficavam cortados pra fora.
+ *
+ * Solução — modo compacto proporcional em 3 níveis:
+ * - normal: sem extras — foto 158×144, logo 54, nome 21px (layout original).
+ * - compact: selos OU faixa OU 4+ linhas — foto 132×118, logo 46, nome 18px.
+ * - denso: (selos E faixa) OU (extras + 4+ linhas) — foto 118×104, logo 40,
+ *   nome 16px, selos 38px, faixa/paddings/ícones reduzidos.
+ * - Bloco de linhas de dados virou `flex-1 + justify-evenly` (card é flex-col):
+ *   as linhas distribuem-se SÓ no espaço restante — é IMPOSSÍVEL estourar,
+ *   independente da combinação de blocos.
+ * - `SeloNR` ganhou prop `size` (default 46, sem impacto nos outros usos).
+ * - Download PNG usa o MESMO DOM (html-to-image), então o fix vale p/ o
+ *   arquivo exportado também.
+ *
+ * Arquivo: client/src/pages/terceiros/Crachas.tsx. ZERO schema/server change.
+ */
+
+/**
  * Rev. 4611 - FIX: EMISSÃO DE CRACHÁS — CONTAGEM BATE COM COLABORADORES (CRACHÁ P/ TODO EMPREGADO, SOME AO DESLIGAR)
  *
  * Problema relatado: Colaboradores mostrava 107 CLT / 14 PJ, mas a tela de
