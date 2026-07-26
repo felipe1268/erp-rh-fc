@@ -50,19 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4592** — **FIX: CARTÃO DE CRÉDITO — SALDO EM ABERTO LIDO COMO O BANCO LÊ.** Feedback do usuário: Caixa 5553 mostrava R$ 194 mil "em aberto" e disponível R$ 0 (irreal). Causa: Rev. 4591 somava TODAS as faturas importadas — mas fatura de cartão é cumulativa (pagamento da anterior aparece como crédito negativo em `pagamentos` da seguinte; confirmado no Neon). Nova leitura: fatura em aberto = só faturas com vencimento >= hoje, abatendo só `pagamentos > 0` (`GREATEST(total - GREATEST(pagamentos,0), 0)`); OCs a faturar = só OCs criadas DEPOIS do último fechamento (anteriores já estão dentro da fatura) + dedup NOT EXISTS de sempre. Validado no Neon: históricas zeram; sobra só o ciclo atual. Arquivo: `server/routers/cartao.ts`. ZERO schema/client change.
 - **Rev. 4591** — **FEAT: CARTÃO DE CRÉDITO — LIMITE DISPONÍVEL (PREVISÃO) QUE DESCE COM AS OCs.** Pedido: limite disponível que desce automaticamente conforme as OCs usam o cartão. Comprometido = faturas em aberto + OCs pagas no cartão ainda não faturadas (dedup pelo vínculo `financial_cartao_itens.compra_oc_id` da importação de fatura — sem dupla contagem); disponível = limite − comprometido. `listarCartoes` retorna comprometidoFatura/comprometidoOc/limiteDisponivel; `resumoParaCompra` soma OCs não faturadas (sugestão de cartão em Compras mais realista). UI: linha "Disponível (previsão)" + barra colorida por faixa (verde/âmbar/vermelho) no card da listagem + painel no modal Datas & Limite. Validado contra Neon real. Arquivos: `server/routers/cartao.ts`, `FinanceiroCartaoCredito.tsx`. ZERO schema change.
-- **Rev. 4590** — **UX: CARTÃO DE CRÉDITO — MODAL "USO DO CARTÃO" COM TILES VISUAIS.** Pedido: layout moderno e mais fácil de entender no modal Editar cartão. Escopo e Finalidade deixaram de ser dropdowns com parágrafos longos e viraram nova seção "Uso do cartão" com tiles clicáveis (ícone + título + descrição curta): "De quem é o cartão?" (FC/Local) e "Para que ele serve?" (4 finalidades, cada uma com selo verde "Aparece em Compras" ou cinza "Fora de Compras") + banner dinâmico embaixo dizendo na hora se o cartão vai ou não aparecer nas Cotações/OCs. Poka-Yoke por design: consequência visível ANTES de escolher. Arquivo: `FinanceiroCartaoCredito.tsx`. ZERO schema/server change.
 ### 5 one-liners
 
+- **Rev. 4590** — **UX: CARTÃO DE CRÉDITO — MODAL "USO DO CARTÃO" COM TILES VISUAIS.** Escopo/Finalidade viraram tiles clicáveis com selo "Aparece em Compras"/"Fora de Compras" + banner dinâmico — consequência visível antes de escolher. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
 - **Rev. 4589** — **FEAT: CARTÃO DE CRÉDITO — FINALIDADE DE USO + FILTRO EM COMPRAS.** Campo `finalidade` (recorrentes/corporativo/obra/geral); `resumoParaCompra` só retorna recorrentes/geral (escopo fc) — comprador nem vê o cartão errado. Detalhe em `shared/changelog.ts`.
 - **Rev. 4588** — **FIX: DEPLOY — BUILD QUEBRAVA POR SCRIPT EXCLUÍDO NO .dockerignore.** `scripts/` voltou pra imagem (368 KB) + `gen-build-info` virou não-fatal (`|| echo`); server já tolera `build-info.json` ausente. Detalhe em `shared/changelog.ts`. ZERO código de app change.
 - **Rev. 4587** — **FEAT: CONTAS A PAGAR — EDITAR COM AS MESMAS INFORMAÇÕES DE PAGAMENTO DO "PAGAR".** Editar ganhou cheque próprio/terceiro/débito automático, seletor de conta bancária (anti-IDOR) e cadastro de cheques pendentes no Controle. Detalhe em `shared/changelog.ts`. ZERO schema change.
 - **Rev. 4586** — **UX: FLUXO DE CAIXA — POP-UP DE DETALHAMENTO ULTRA MODERNO + BUSCA RÁPIDA.** Redesign client-only do drill-down: cabeçalho em degradê + busca rápida + cards ranqueados com % do total e barra de proporção + badges coloridos + fix da descrição duplicada. Detalhe em `shared/changelog.ts`. ZERO schema/server change.
-- **Rev. 4585** — **FIX: FLUXO DE CAIXA — CRONOGRAMA FORA DA CONFERÊNCIA DE DUPLICIDADES.** `getPossiveisDuplicidades` exclui `origem_modulo='cronograma_atividade'` (projeções de contrato, nunca pagamentos reais); card cai de 61 p/ 31 pares. Detalhe em `shared/changelog.ts`. ZERO schema change.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4584 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4585 e anteriores.
 
 ## User preferences
 

@@ -390,10 +390,13 @@ export const cartaoRouter = router({
     await assertCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    // Rev. 4591 — previsão de limite disponível: comprometido = faturas em aberto
-    // (total > pagamentos) + OCs pagas no cartão que AINDA não apareceram em
-    // nenhuma fatura importada (dedup pelo vínculo financial_cartao_itens.compra_oc_id,
-    // preenchido automaticamente na importação da fatura — sem dupla contagem).
+    // Rev. 4592 — previsão de limite disponível lendo o cartão como o banco lê:
+    // (a) fatura em aberto = SÓ faturas com vencimento >= hoje (fatura vencida foi
+    //     paga; saldo não pago rola pra fatura seguinte — somar o histórico inteiro
+    //     dupla-conta). `pagamentos` negativo = crédito do pagamento da fatura
+    //     anterior, NUNCA subtrai (só pagamentos > 0 abatem).
+    // (b) OCs a faturar = SÓ compras feitas DEPOIS do último fechamento (as
+    //     anteriores já estão dentro da fatura, mesmo sem vínculo item→OC).
     const res = await dbExecute(db,
       `SELECT c.id, c.company_id AS "companyId", c.banco, c.bandeira, c.final4,
               c.titular, c.tipo_pessoa AS "tipoPessoa", COALESCE(c.escopo, 'fc') AS escopo,
@@ -402,17 +405,23 @@ export const cartaoRouter = router({
               c.dia_vencimento AS "diaVencimento", c.limite, c.ativo, c.observacao,
               c.created_at AS "createdAt",
               COALESCE((
-                SELECT SUM(f.total - COALESCE(f.pagamentos, 0))
+                SELECT SUM(GREATEST(f.total - GREATEST(COALESCE(f.pagamentos, 0), 0), 0))
                   FROM financial_cartao_faturas f
                  WHERE f.cartao_id = c.id AND f.company_id = c.company_id
                    AND f.excluido_em IS NULL
-                   AND f.total > COALESCE(f.pagamentos, 0)
+                   AND f.vencimento IS NOT NULL AND f.vencimento::date >= CURRENT_DATE
               ), 0) AS "comprometidoFatura",
               COALESCE((
                 SELECT SUM(COALESCE(o.total, 0))
                   FROM compras_ordens o
                  WHERE o.cartao_id = c.id AND o.company_id = c.company_id
                    AND o.status <> 'cancelada'
+                   AND o.created_at::date > COALESCE((
+                     SELECT MAX(f2.fechamento)::date
+                       FROM financial_cartao_faturas f2
+                      WHERE f2.cartao_id = c.id AND f2.company_id = c.company_id
+                        AND f2.excluido_em IS NULL
+                   ), DATE '1900-01-01')
                    AND NOT EXISTS (
                      SELECT 1 FROM financial_cartao_itens i
                       WHERE i.compra_oc_id = o.id AND i.company_id = o.company_id
@@ -557,17 +566,23 @@ export const cartaoRouter = router({
               c.dia_fechamento AS "diaFechamento", c.dia_vencimento AS "diaVencimento",
               c.limite,
               COALESCE((
-                SELECT SUM(f.total - COALESCE(f.pagamentos, 0))
+                SELECT SUM(GREATEST(f.total - GREATEST(COALESCE(f.pagamentos, 0), 0), 0))
                   FROM financial_cartao_faturas f
                  WHERE f.cartao_id = c.id AND f.company_id = c.company_id
                    AND f.excluido_em IS NULL
-                   AND f.total > COALESCE(f.pagamentos, 0)
+                   AND f.vencimento IS NOT NULL AND f.vencimento::date >= CURRENT_DATE
               ), 0) AS comprometido,
               COALESCE((
                 SELECT SUM(COALESCE(o.total, 0))
                   FROM compras_ordens o
                  WHERE o.cartao_id = c.id AND o.company_id = c.company_id
                    AND o.status <> 'cancelada'
+                   AND o.created_at::date > COALESCE((
+                     SELECT MAX(f2.fechamento)::date
+                       FROM financial_cartao_faturas f2
+                      WHERE f2.cartao_id = c.id AND f2.company_id = c.company_id
+                        AND f2.excluido_em IS NULL
+                   ), DATE '1900-01-01')
                    AND NOT EXISTS (
                      SELECT 1 FROM financial_cartao_itens i
                       WHERE i.compra_oc_id = o.id AND i.company_id = o.company_id

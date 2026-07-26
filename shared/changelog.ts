@@ -1,4 +1,35 @@
 /**
+ * Rev. 4592 - FIX: CARTÃO DE CRÉDITO — SALDO EM ABERTO LIDO COMO O BANCO LÊ
+ *
+ * PEDIDO DO USUÁRIO: "Você não consegue ler a fatura e entender qual é o
+ * saldo atual?" (screenshot: Caixa 5553 mostrava R$ 194 mil "em aberto" e
+ * disponível R$ 0 — irreal).
+ *
+ * CAUSA-RAIZ (Rev. 4591 somava o histórico inteiro):
+ * - `comprometidoFatura` somava TODAS as faturas importadas sem pagamento
+ *   registrado. Mas a fatura de cartão é CUMULATIVA: o pagamento da fatura
+ *   anterior aparece como crédito NEGATIVO na coluna `pagamentos` da fatura
+ *   seguinte (padrão confirmado no Neon real, cartões 6/7/8). Somar meses
+ *   antigos = dupla contagem; e `total - pagamentos` com pagamentos negativo
+ *   ainda INFLAVA o saldo.
+ *
+ * NOVA LEITURA (como o banco):
+ * - Fatura em aberto = SÓ faturas com vencimento >= hoje (fatura vencida foi
+ *   paga; resto não pago rola pra próxima). Abatimento só com pagamentos > 0:
+ *   GREATEST(total - GREATEST(pagamentos,0), 0).
+ * - OCs a faturar = SÓ OCs criadas DEPOIS do último fechamento do cartão
+ *   (compra anterior ao fechamento já está DENTRO da fatura, mesmo sem o
+ *   vínculo item→OC) + o NOT EXISTS de sempre (dedup compra_oc_id).
+ *
+ * VALIDAÇÃO NEON REAL: faturas históricas zeram (todas pagas); sobra só o
+ * ciclo atual — Santander 0578 R$ 159,90 · Caixa 9556 R$ 1.091,59 ·
+ * Santander 4466 R$ 4.733,52. Caixa 5553 deixa de mostrar R$ 194 mil.
+ *
+ * ARQUIVOS: server/routers/cartao.ts (listarCartoes + resumoParaCompra).
+ * ZERO schema/client change.
+ */
+
+/**
  * Rev. 4591 - FEAT: CARTÃO DE CRÉDITO — LIMITE DISPONÍVEL (PREVISÃO) QUE DESCE COM AS OCs
  *
  * PEDIDO DO USUÁRIO: "campo de limite disponível — conforme as OCs vão
