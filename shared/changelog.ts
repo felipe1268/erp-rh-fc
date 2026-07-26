@@ -1,4 +1,64 @@
 /**
+ * Rev. 4602 - FEAT: CONTRATO PJ → "CONTRATO DE PRESTAÇÃO DE SERVIÇOS" — NOVO MODELO DO JURÍDICO + VALOR TOTAL COM MEDIÇÕES MENSAIS (BLINDAGEM CONTRA VÍNCULO CLT)
+ *
+ * PEDIDO DO USUÁRIO: o advogado alertou que o formato antigo ("Contrato PJ",
+ * valor fixo mensal) tem cara de salário e expõe a empresa a reconhecimento de
+ * vínculo empregatício. Pediu para (1) renomear o template para "Contrato de
+ * Prestação de Serviços" (sem "PJ" no texto voltado ao usuário/documento),
+ * (2) substituir o corpo pelo modelo DOCX do jurídico e (3) — ideia do próprio
+ * usuário, validada — declarar VALOR TOTAL do contrato (mensal × meses de
+ * vigência) com desembolso via MEDIÇÕES MENSAIS, caracterizando relação
+ * comercial B2B (obrigação de resultado), não remuneração salarial.
+ *
+ * DECISÕES VALIDADAS COM O USUÁRIO:
+ * - Objeto/atividades AUTOMÁTICOS do cadastro do prestador ([OBJETO_CONTRATO]),
+ *   NÃO as cláusulas fixas de SST do DOCX (que citavam PPRA/PCMSO/ASO — só
+ *   faziam sentido para consultoria de Segurança do Trabalho). Estrutura e
+ *   cláusulas de blindagem do jurídico mantidas para todos os prestadores.
+ * - Publicado DIRETO como Vigente (template id 8, empresa 60002, Rev. 13 do
+ *   template) — sem passar por rascunho.
+ *
+ * O QUE MUDOU NO MODELO (20 cláusulas, base civil art. 593 CC):
+ * - Objeto com Parágrafo único de AUTONOMIA (sem subordinação/pessoalidade/
+ *   exclusividade) — núcleo da blindagem.
+ * - DA INEXISTÊNCIA DE VÍNCULO EMPREGATÍCIO (cláusula 6ª + 2 parágrafos do
+ *   jurídico, verbatim) e SIGILO/LGPD (7ª-9ª, verbatim).
+ * - DO PREÇO, DAS MEDIÇÕES E DO PAGAMENTO: novo VALOR TOTAL
+ *   ([VALOR_TOTAL_CONTRATO]/[VALOR_TOTAL_EXTENSO] = mensal × mesesDeVigencia,
+ *   inclusivo) + desembolso por medições mensais (percentuais/dias do ciclo já
+ *   configurados no contrato) + parágrafo explicitando que as parcelas variam
+ *   por avanço/glosas (sem periodicidade salarial) + dados bancários.
+ * - Rescisão imotivada 30 dias sem multa (só medições executadas), prorrogação
+ *   tácita, reajuste IGP-M, foro automático.
+ *
+ * ARQUIVOS:
+ * - server/routers/controleDocumentos.ts — MODELO_CONTRATO_PJ_DEFAULT novo +
+ *   título default "Contrato de Prestação de Serviços".
+ * - server/routers/pjContracts.ts — MODELO_CONTRATO_PJ novo; gerarTexto agora
+ *   resolve [CONTRATANTE_*]/[CONTRATADA_*]/[VALOR_TOTAL_*]/[FORO_COMARCA]/
+ *   [DADOS_BANCARIOS_CONTRATADA] e valor por extenso real (antes TODO vazio);
+ *   extrairClausulas adaptado ao formato "Cláusula Nª." + seções MAIÚSCULAS.
+ * - shared/contratoPrazo.ts — novo valorPorExtensoBR (reais por extenso até
+ *   milhões, com centavos).
+ * - shared/documentTemplates.ts — título/descrição novos + placeholders
+ *   valorTotalContrato/valorTotalExtenso.
+ * - client/src/lib/contratoPjDocument.ts — computa valor total (mensal ×
+ *   mesesDeVigencia) e resolve os novos placeholders nos DOIS formatos
+ *   ([X] e {{x}}); títulos de página/documento sem "PJ".
+ * - client/src/components/FCSignPJSendDialog.tsx / ContratoPJView.tsx —
+ *   rótulos voltados ao usuário renomeados.
+ * - Neon: system_document_templates id 8 atualizado (conteudo_html novo,
+ *   titulo novo, versao_atual 12→13, status vigente, aprovado_em=now).
+ *
+ * POKA-YOKE: nível 3 — placeholders resolvidos automaticamente do cadastro
+ * (objeto, valores, datas, foro, banco) eliminam preenchimento manual do
+ * contrato; fallback de mesesDeVigencia<=0 usa o valor mensal (nunca R$ 0,00
+ * no valor total). Chave interna "contrato_pj" preservada (zero migração,
+ * contratos assinados intactos).
+ *
+ * ZERO SCHEMA CHANGE.
+ */
+/**
  * Rev. 4601 - FIX: CONCILIAÇÃO — ESTORNO DEIXAVA LANÇAMENTO ÓRFÃO ("A PAGAR") E CHEQUE PRESO → DUPLICIDADES NO FLUXO DE CAIXA
  *
  * PEDIDO DO USUÁRIO: o card "31 possíveis pagamentos em duplicidade" do Fluxo

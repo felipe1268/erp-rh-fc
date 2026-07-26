@@ -6,7 +6,7 @@ import { eq, and, sql, isNull, desc, asc, lte, gte, inArray } from "drizzle-orm"
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
-import { calcularPrazoVigencia } from "../../shared/contratoPrazo";
+import { calcularPrazoVigencia, mesesDeVigencia, valorPorExtensoBR } from "../../shared/contratoPrazo";
 import { assertAiModuleEnabled } from "../_core/aiConfig";
 
 // ---------------------------------------------------------------------------
@@ -195,167 +195,118 @@ async function gerarPrevisoesDoContrato(
 }
 
 // Modelo de contrato PJ padrão (FC Engenharia) — mantido apenas para referência de placeholders disponíveis
-const MODELO_CONTRATO_PJ = `CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS E COMPROMISSO DE CONFIDENCIALIDADE E NÃO CONCORRÊNCIA ENTRE SI
+const MODELO_CONTRATO_PJ = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS TÉCNICOS ESPECIALIZADOS DE MÃO DE OBRA
 
-CONTRATANTE: [CONTRATANTE_NOME], inscrita no CNPJ/MF sob n.º [CONTRATANTE_CNPJ], com sede em [CONTRATANTE_ENDERECO], [CONTRATANTE_CIDADE], Estado de [CONTRATANTE_ESTADO], neste ato representado por seu representante legal, [CONTRATANTE_REPRESENTANTE], doravante denominada simplesmente "CONTRATANTE".
+IDENTIFICAÇÃO DAS PARTES CONTRATANTES
 
-CONTRATADA: [CONTRATADA_RAZAO_SOCIAL], com sede em [CONTRATADA_CIDADE], no Estado de [CONTRATADA_ESTADO], [CONTRATADA_ENDERECO], inscrita sob o CNPJ n.º [CONTRATADA_CNPJ], neste ato representado na forma de seu CNPJ, doravante denominada simplesmente "CONTRATADA".
+CONTRATANTE: [CONTRATANTE_NOME], pessoa jurídica de direito privado, inscrita no CNPJ/MF sob n.º [CONTRATANTE_CNPJ], com sede em [CONTRATANTE_ENDERECO], [CONTRATANTE_CIDADE], Estado de [CONTRATANTE_ESTADO], neste ato representada por seu representante legal, [CONTRATANTE_REPRESENTANTE], doravante denominada simplesmente "CONTRATANTE".
 
-CONSIDERANDO QUE:
+CONTRATADA: [CONTRATADA_RAZAO_SOCIAL], pessoa jurídica de direito privado, inscrita no CNPJ/MF sob n.º [CONTRATADA_CNPJ], com sede em [CONTRATADA_ENDERECO], [CONTRATADA_CIDADE], Estado de [CONTRATADA_ESTADO], neste ato representada na forma de seus atos constitutivos, doravante denominada simplesmente "CONTRATADA".
 
-(I) A CONTRATADA apresenta a necessária qualificação e o "know-how" adequado para prestar os serviços almejados pela CONTRATANTE;
+As partes acima identificadas têm, entre si, justo e acertado o presente Contrato de Prestação de Serviços Técnicos Especializados, de natureza civil, que se regerá pelas cláusulas seguintes e pelas condições descritas no presente.
 
-(II) a CONTRATANTE tem interesse em contratar a CONTRATADA para a prestação dos serviços especializados descritos na Cláusula Primeira deste instrumento, de forma autônoma e independente;
+DO OBJETO DO CONTRATO
 
-RESOLVEM as partes celebrar o presente Contrato de Prestação de Serviços, de acordo com as cláusulas e condições seguintes:
-
-CLÁUSULA PRIMEIRA: DO OBJETO
+Cláusula 1ª. O presente contrato tem como OBJETO a prestação, pela CONTRATADA à CONTRATANTE, de serviços técnicos especializados de mão de obra, consistentes em:
 
 [OBJETO_CONTRATO]
 
-CLÁUSULA SEGUNDA: CONDIÇÕES GERAIS DO CONTRATO
+Parágrafo único. Os serviços descritos nesta cláusula serão prestados pela CONTRATADA de forma autônoma e independente, mediante aplicação de seus conhecimentos, métodos, cronograma e estrutura próprios, visando ao resultado técnico acordado entre as partes, sem que haja prestação de trabalho pessoal em caráter subordinado, com pessoalidade obrigatória ou qualquer outro vínculo de subordinação, exclusividade ou emprego com a CONTRATANTE.
 
-2.1 Os serviços contratados serão executados mediante solicitação da CONTRATANTE à CONTRATADA, que a partir desta solicitação deverá executar os serviços em conformidade com as normas e condições estabelecidas no presente contrato.
+DAS OBRIGAÇÕES DA CONTRATADA
 
-2.2 Os serviços contratados serão prestados com orientação e responsabilidade técnica da CONTRATADA, preferencialmente no estabelecimento da CONTRATANTE, de conformidade com os cronogramas de execução dos serviços, estabelecido de comum acordo entre as partes contratantes, devendo sempre ser respeitado e priorizado as necessidades da CONTRATANTE.
+Cláusula 2ª. É obrigação da CONTRATADA:
+a) Executar os serviços objeto deste contrato com profissionalismo, qualidade técnica e observância das normas técnicas e da legislação aplicáveis à sua atividade;
+b) Responder tecnicamente pelos serviços que executar, aplicando seus próprios métodos e conhecimentos, respondendo por seus resultados;
+c) Responder pela guarda e conservação de quaisquer equipamentos, materiais, documentos e informações de propriedade da CONTRATANTE que lhe forem confiados durante a execução dos serviços;
+d) Utilizar os equipamentos de proteção individual (EPIs) necessários à sua segurança, de acordo com as Normas Regulamentadoras relativas à Segurança e Medicina do Trabalho previstas na legislação em vigor;
+e) Arcar integralmente com todos os tributos, contribuições e encargos de qualquer natureza incidentes sobre sua atividade empresarial, inclusive os relativos a seus sócios, prepostos e empregados, se houver;
+f) Emitir Nota Fiscal de Prestação de Serviços correspondente a cada medição aprovada, nos prazos previstos neste contrato;
+g) Manter regularidade fiscal e cadastral de sua empresa durante toda a vigência contratual, apresentando, quando solicitado, os comprovantes de recolhimento dos tributos incidentes sobre sua atividade;
+h) Comunicar formalmente à CONTRATANTE qualquer fato que possa afetar a execução dos serviços contratados.
 
-2.3 A CONTRATANTE, durante a vigência do presente contrato e quando o serviço for executado no seu estabelecimento, permitirá que a CONTRATADA se utilize de suas instalações e de todos os seus equipamentos e maquinários necessários à execução dos serviços ora contratados.
+Cláusula 3ª. A CONTRATADA executará os serviços com autonomia técnica e organizacional, podendo estabelecer seus próprios horários e métodos de trabalho, respeitados os cronogramas e as normas internas de segurança e de acesso das instalações onde os serviços forem prestados.
 
-Parágrafo Único – Ocorrendo esta hipótese, a CONTRATADA ficará responsável pelo bom uso dos equipamentos cedidos para a execução dos serviços, bem como pelos eventuais danos causados aos equipamentos da CONTRATANTE.
+Cláusula 4ª. A CONTRATADA não possui responsabilidade regressiva pelo adimplemento de eventuais verbas salariais decorrentes de condenação da CONTRATANTE em processos judiciais, procedimentos de mediação ou arbitragem propostos pelos empregados desta, assim como a CONTRATANTE não responde por obrigações trabalhistas, previdenciárias ou fiscais da CONTRATADA, não havendo vínculo de subordinação ou empregatício entre as partes.
 
-CLÁUSULA TERCEIRA: DO COMPROMISSO DE CONFIDENCIALIDADE E NÃO CONCORRÊNCIA ENTRE SI
+DAS OBRIGAÇÕES DA CONTRATANTE
 
-3.1 A CONTRATADA, durante a vigência do presente contrato e nos 03 (três) anos subsequentes ao seu término ou rescisão, obriga-se a manter confidencialidade das informações e Segredos Comerciais que significam, sem qualquer limitação, as invenções, segredos de profissão e dados comerciais, cadastro de clientes, lista de vendas, informações técnicas, "Know-how", projetos, especificações, patentes, plantas de qualquer espécie, utilizados ou desenvolvidos durante o prazo do presente contrato ou de qualquer acordo anterior, que constitua propriedade ou do qual seja licenciada a CONTRATANTE ou suas filiais, controladas, coligadas ou combinadas ("Segredos Comerciais"), ressalvadas informações que: (a) sejam ou se tornem de domínio público por outros meios; (b) sejam independentemente descobertas ou criadas pela CONTRATADA; e (c) quando expressamente comunicada a terceiros pela CONTRATANTE.
+Cláusula 5ª. A CONTRATANTE está obrigada a:
+a) Fornecer as condições, informações e documentos necessários para que a CONTRATADA possa executar adequadamente os serviços contratados;
+b) Permitir o acesso da CONTRATADA às instalações e frentes de serviço, quando a execução assim o exigir;
+c) Efetuar os pagamentos na forma e nos prazos ajustados neste contrato, mediante apresentação da respectiva Nota Fiscal de Serviços;
+d) Gerenciar e coordenar a interdependência dos trabalhos desenvolvidos nas áreas em que atuará a CONTRATADA.
 
-3.2 A CONTRATANTE e a CONTRATADA ajustam entre si que todos os Segredos Comerciais e Industriais de cada parte são de propriedade da mesma e só poderão ser utilizados pela outra parte exclusivamente para os fins previstos neste contrato. Cada parte obriga-se a não divulgar, propagar, reproduzir, explorar, publicar, duplicar, transferir ou revelar, direta ou indiretamente, por si ou através de terceiros, quaisquer Segredos Comerciais e Industriais sem a prévia e expressa autorização da parte titular dos mesmos.
+DA INEXISTÊNCIA DE VÍNCULO EMPREGATÍCIO
 
-3.3 Em caso de cessação dos efeitos do presente contrato, as partes deverão devolver imediatamente à outra parte todos os documentos, materiais, registros, planos, especificações, programas e todos os outros meios de informação que constituam Segredos Comerciais da outra parte.
+Cláusula 6ª. As partes reconhecem expressamente que não existirá entre as mesmas, tampouco entre os prepostos e/ou funcionários da CONTRATADA e da CONTRATANTE, qualquer vínculo de natureza trabalhista, sendo o presente contrato regulado pelas cláusulas aqui expressas com base no Código Civil (art. 593 e seguintes) e Leis vigentes adequadas à espécie, razão pela qual a CONTRATADA assume integralmente a responsabilidade pelo pagamento de todos os salários, encargos trabalhistas e previdenciários de toda mão de obra envolvida na execução dos serviços ora contratados.
 
-3.4 As partes convencionam que toda inteligência desenvolvida durante a vigência do presente contrato pertence à parte CONTRATANTE, sendo certo que ao término do presente contrato, não poderá a parte CONTRATADA utilizar as informações, projetos, ferramentas de trabalho e ou qualquer outro produto desenvolvido ao longo do presente instrumento.
+PARÁGRAFO 1º: Em caso de processos trabalhistas movidos pelos funcionários da CONTRATADA contra a mesma, eximir-se-á a CONTRATANTE de qualquer prejuízo de responsabilidade da CONTRATADA.
 
-3.5 Durante a vigência do presente Contrato e após o encerramento e, pelo período de 03 (três) anos subsequentes, a CONTRATADA se compromete a não fazer concorrência com os clientes da CONTRATANTE.
+PARÁGRAFO 2º: Da mesma forma, em caso de processos trabalhistas movidos pelos funcionários da CONTRATANTE contra a mesma, eximir-se-á a CONTRATADA de qualquer prejuízo de responsabilidade da CONTRATANTE.
 
-3.6 Será compreendido como concorrência, apta a ensejar a rescisão do presente contrato com e ou as penalidades cabíveis:
+DO SIGILO E DA CONFIDENCIALIDADE
 
-a) Angariar clientes da CONTRATANTE através da prestação de serviços do presente contrato;
+Cláusula 7ª. As PARTES CONTRATANTES obrigam-se por si, por seus funcionários, contratados e/ou prepostos pela guarda de todas as informações trocadas reciprocamente entre seus funcionários e terceiros, de que venham a ter ciência em razão da presente prestação de serviços, obrigando-se a não divulgarem, comunicarem e nem fazerem uso de quaisquer destas informações, além dos limites estipulados neste Contrato para realização das atividades contratadas.
 
-b) Disputar clientes no mesmo mercado da CONTRATANTE (construção civil, projetos, arquitetura etc.), sobretudo através de marketing de qualquer natureza.
+Cláusula 8ª. É obrigação das PARTES CONTRATANTES manter por prazo indeterminado, em absoluto sigilo e confidencialidade e não usar, reproduzir, copiar ou revelar, em proveito próprio ou de terceiros, as informações confidenciais as quais tiveram acesso em razão do presente CONTRATO e da utilização de sistemas, softwares ou de dados transmitidos por alguma delas ou por empresas terceirizadas a seu serviço, sob pena de responsabilização civil e criminalmente.
 
-3.7 A CONTRATADA não poderá ser admitida pelos clientes e seus concorrentes, até 06 (seis) meses após a rescisão com a CONTRATANTE.
+Cláusula 9ª. No caso de rescisão do presente Contrato, a CONTRATADA devolverá à CONTRATANTE todos os documentos e informações existentes em seus bancos de dados e que estiverem sob sua guarda, mediante assinatura de termo de entrega pela CONTRATANTE. Efetuada a entrega e assinatura do respectivo termo, a CONTRATADA deverá proceder a inutilização de quaisquer cópias de dados, informações e documentos encontrados em seus arquivos físicos ou de computação, visando assegurar o devido sigilo e confidencialidade, nos termos da Lei Geral de Proteção de Dados (Lei nº 13.709/2018).
 
-3.8 Fica mutuamente pactuado entre as partes contratantes, que não poderá a CONTRATADA divulgar ou apresentar qualquer projeto ou trabalho desenvolvido por força do presente contrato como se fosse seu, seja pessoalmente, seja através de marketing de qualquer natureza, sobretudo com publicações e "posts" através de redes sociais ou qualquer outro veículo de comunicação.
+DO PREÇO, DAS MEDIÇÕES E DO PAGAMENTO
 
-Parágrafo Único – A inobservância do disposto na presente cláusula, sujeitará a CONTRATADA às penalidades decorrentes da violação do compromisso de confidencialidade, quebra de sigilo e não concorrência entre si, apurados na multa de R$ 100.000,00 (Cem mil reais), bem como arcará com o pagamento de eventuais perdas e danos, mais prejuízos de demais indenizações decorrentes do seu ato, apurado em processo judicial competente para esta finalidade.
+Cláusula 10ª. Pela integralidade dos serviços objeto deste contrato, durante o prazo de vigência ajustado, a CONTRATANTE pagará à CONTRATADA o VALOR TOTAL de R$ [VALOR_TOTAL_CONTRATO] ([VALOR_TOTAL_EXTENSO]), correspondente à base mensal de referência de R$ [VALOR_MENSAL] ([VALOR_EXTENSO]) pelo prazo de [PRAZO_VIGENCIA].
 
-CLÁUSULA QUARTA: PRAZO E FORMA DE EXECUÇÃO
+Cláusula 11ª. O desembolso do valor total contratado será realizado de forma parcelada, de acordo com MEDIÇÕES MENSAIS dos serviços efetivamente executados, apuradas e aprovadas pela CONTRATANTE, na seguinte proporção: [PERCENTUAL_ADIANTAMENTO]% no dia [DIA_ADIANTAMENTO] do mês corrente e [PERCENTUAL_FECHAMENTO]% [TEXTO_DIA_FECHAMENTO], sempre mediante apresentação da respectiva Nota Fiscal de Serviços.
 
-4.1 O contrato tem validade de [PRAZO_VIGENCIA] e terá início a partir do dia [DATA_INICIO], nas seguintes condições:
+PARÁGRAFO 1º: Para recebimento dos pagamentos, a CONTRATADA deverá emitir e encaminhar a Nota Fiscal de Serviços com antecedência mínima de 5 (cinco) dias da data de pagamento, observando os seguintes prazos: (i) Nota Fiscal referente à primeira medição do mês: até o dia [PRAZO_NOTA_ADIANTAMENTO] do mês corrente; (ii) Nota Fiscal referente à segunda medição: até [PRAZO_NOTA_FECHAMENTO] do mês do pagamento. O não envio da Nota Fiscal dentro do prazo estipulado implicará no adiamento do pagamento para o mês subsequente, sem ônus para a CONTRATANTE.
 
-a) O presente contrato poderá ser rescindido pela CONTRATANTE, a qualquer momento, desde que haja comprovação de quebra de quaisquer cláusulas deste contrato por parte da CONTRATADA;
+PARÁGRAFO 2º: As medições refletem os serviços efetivamente executados no período, podendo o valor de cada parcela variar em razão do avanço, de paralisações, de aditivos ou de glosas fundamentadas, não caracterizando os pagamentos periodicidade remuneratória de natureza salarial.
 
-b) A rescisão contratual a que se refere o item "a" da cláusula 4.1 não ensejará à parte CONTRATANTE o pagamento de qualquer multa, com o que concorda expressamente a parte CONTRATADA;
+PARÁGRAFO 3º: Dados bancários da CONTRATADA para pagamento: [DADOS_BANCARIOS_CONTRATADA]
 
-c) O presente contrato poderá ser rescindido por qualquer uma das partes, a qualquer momento, sem multas contratuais.
+Cláusula 12ª. O não pagamento, no prazo, de parcela incontroversa devidamente medida e faturada acarretará multa de 10% (dez por cento) sobre o valor da parcela em atraso, incidindo ainda juros de mora e correção monetária, nos termos da legislação vigente.
 
-4.2 Toda e qualquer alteração do objeto do presente Contrato necessitará da concordância prévia e expressa da CONTRATADA e da CONTRATANTE e será feita mediante Aditivo Contratual.
+DA RESCISÃO
 
-CLÁUSULA QUINTA: OBRIGAÇÕES DAS PARTES
+Cláusula 13ª. O presente contrato poderá ser rescindido imotivadamente por qualquer das partes, mediante comunicação por escrito com antecedência mínima de 30 (trinta) dias, sem a incidência de qualquer multa ou ônus, sendo devidos à CONTRATADA apenas os valores das medições dos serviços efetivamente executados até a data da rescisão. Fica ressalvada a possibilidade de rescisão imediata pela parte inocente em caso de descumprimento de qualquer cláusula ou obrigação prevista neste instrumento pela outra parte.
 
-5.1 OBRIGAÇÕES DA CONTRATADA - Além das demais obrigações que lhe são impostas nos termos do presente instrumento caberão, ainda, à CONTRATADA:
+DO PRAZO E DO REAJUSTE DO VALOR
 
-a) Realizar suas atividades com profissionalismo, cabendo-lhe total e exclusiva responsabilidade pelo integral atendimento de toda a legislação;
+Cláusula 14ª. O presente contrato terá vigência de [PRAZO_VIGENCIA], com início em [DATA_INICIO] e término em [DATA_FIM], podendo ser prorrogado expressamente, por adendo a este instrumento, ou tacitamente, desde que não haja manifestação em contrário, por escrito, dentro de 30 (trinta) dias antes do fim do prazo acima estipulado.
 
-b) Respeitar e seguir integralmente as normas e procedimentos internos da empresa, bem como facilitar a ação fiscalizadora da CONTRATANTE quanto à execução dos serviços;
+Cláusula 15ª. Em caso de prorrogação por período igual ou superior a 12 (doze) meses, o valor do contrato poderá ser reajustado anualmente, na data de aniversário de sua assinatura, pela variação do IGP-M/FGV ou, na sua falta, por índice oficial que o substitua.
 
-c) Responder pela guarda e conservação de quaisquer equipamentos, materiais ou documentos e informações sigilosas de propriedade da CONTRATANTE, que lhes forem entregues durante a execução dos serviços contratados;
+DAS CONDIÇÕES GERAIS
 
-d) Realizar suas atividades utilizando os equipamentos de proteção individual (EPIs) necessários à sua segurança, de acordo com o exigido nas Normas relativas à Segurança, Higiene e Medicina do Trabalho, previsto na legislação em vigor;
+Cláusula 16ª. A CONTRATADA não poderá transferir este contrato ou as obrigações por ela assumidas a terceiros, nem se fazer substituir, sem prévio consentimento por escrito da CONTRATANTE, que poderá concedê-lo ou não a seu exclusivo critério.
 
-e) Cumprir a prestação de serviço no horário de funcionamento da empresa CONTRATANTE;
+Cláusula 17ª. Qualquer tolerância de uma das partes em relação ao não cumprimento das obrigações e deveres neste instrumento assumidos não importará em novação quanto aos seus termos, condições ou prazos, não devendo, sob quaisquer hipóteses, ser interpretada como renúncia ou desistência do cumprimento dos dispositivos do presente em seus estritos termos.
 
-f) Apresentar mensalmente os comprovantes de Recolhimento de DAS (MEI);
+Cláusula 18ª. Toda e qualquer alteração do objeto ou das condições do presente Contrato necessitará da concordância prévia e expressa de ambas as partes e será formalizada mediante Termo Aditivo.
 
-g) Assinar mensalmente recibos que comprovem o pagamento da prestação de serviço;
+Cláusula 19ª. A contratação da presente prestação de serviços se dá sob a égide do disposto no artigo 593 e seguintes do Código Civil Brasileiro, não configurando, em nenhuma hipótese, relação empregatícia entre as partes, seus sócios, prepostos ou empregados.
 
-h) Apresentar apólice de seguro de vida individual com coberturas compatíveis à atividade desenvolvida;
+DO FORO
 
-i) Emitir Nota Fiscal de Prestação de Serviços no valor encaminhado pela CONTRATANTE.
+Cláusula 20ª. Para dirimir quaisquer controvérsias oriundas do presente CONTRATO, as partes elegem o foro da comarca de [FORO_COMARCA], com renúncia a qualquer outro, por mais privilegiado que seja.
 
-5.2 OBRIGAÇÕES DA CONTRATANTE - Caberá à CONTRATANTE:
-
-a) Disponibilizar todo o recurso financeiro conforme cláusula 6.1 para a execução dos serviços necessários;
-
-b) Fornecer todos os materiais, equipamentos e informações necessários para a execução dos serviços;
-
-c) Fornecer todos os equipamentos de proteção individual (EPIs) necessários à segurança do trabalho, de acordo com o exigido nas normas relativas à Segurança, Higiene e Medicina do Trabalho previsto na legislação em vigor e uniforme no padrão da CONTRATANTE, devidamente identificado;
-
-d) Gerenciar e coordenar a interdependência de todos os trabalhos que serão desenvolvidos nas áreas em que atuará a CONTRATADA.
-
-CLÁUSULA SEXTA: PREÇOS E FORMA DE PAGAMENTO
-
-6.1 PREÇOS – Pela prestação dos serviços definidos neste Contrato, a CONTRATANTE pagará à CONTRATADA o preço certo e ajustado de R$ [VALOR_MENSAL] ([VALOR_EXTENSO]), pagos mensalmente, mediante emissão de nota fiscal.
-
-Parágrafo Único – Sob quaisquer hipóteses não poderá a contratada divulgar seus dividendos a terceiros.
-
-6.2 FATURAMENTO E PAGAMENTO:
-
-Pagamento realizado na proporção de [PERCENTUAL_ADIANTAMENTO]% no dia [DIA_ADIANTAMENTO] do mês corrente e [PERCENTUAL_FECHAMENTO]% [TEXTO_DIA_FECHAMENTO].
-
-Parágrafo Único – Para recebimento dos pagamentos, a CONTRATADA deverá emitir e encaminhar a Nota Fiscal de Serviços com antecedência mínima de 5 (cinco) dias da data de pagamento, observando os seguintes prazos: (i) Nota Fiscal referente ao adiantamento: até o dia [PRAZO_NOTA_ADIANTAMENTO] do mês corrente; (ii) Nota Fiscal referente ao fechamento: até [PRAZO_NOTA_FECHAMENTO] do mês do pagamento. O não envio da Nota Fiscal dentro do prazo estipulado implicará no adiamento do pagamento para o mês subsequente, sem ônus para a CONTRATANTE.
-
-CLÁUSULA SÉTIMA: LIMITE DE RESPONSABILIDADE
-
-7.1 Fica o CONTRATANTE responsável pela entrega das informações para a execução dos serviços à CONTRATADA e o CONTRATANTE assume solidariamente com a CONTRATADA a responsabilidade por eventuais prejuízos causados nas funcionalidades dos projetos desde que a CONTRATADA tenha atuado de forma direta e tenha incorrido em culpa, sendo responsável pelo pagamento de até 50% (cinquenta por cento) dos prejuízos causados na execução da obra.
-
-7.2 Na ocorrência de qualquer fato comprovado que impeça definitivamente a prestação dos serviços, mas sem culpa das partes, fica o presente contrato rescindido de pleno direito, devendo cada qual suportar o ônus que isso representar, não incidindo nas penalidades previstas.
-
-7.3 Havendo qualquer fato justificável que atrase a prestação de serviços não poderá ser invocado, por qualquer das partes, para rescisão do presente contrato nem incidência da multa ou penalidades previstas.
-
-7.4 Se for constatada situação de falência ou concordata, de qualquer das partes, ter-se-á a rescisão do presente contrato, independente de notificação judicial ou extrajudicial.
-
-Parágrafo Único – Fica a critério da CONTRATANTE descontar ou não o valor integral (até 50%) ou parcial dos prejuízos causados, conforme previsto na cláusula 7.1.
-
-CLÁUSULA OITAVA: VÍNCULO EMPREGATÍCIO
-
-8.1 Fica estabelecido que, por força deste contrato, não se estabelece nenhum vínculo empregatício entre as partes na forma do artigo 3º da Consolidação das Leis do Trabalho, não estando a CONTRATANTE e os funcionários da CONTRATADA, se houver, sujeitos aos requisitos empregatícios de continuidade, subordinação, onerosidade e pessoalidade com a CONTRATANTE, bem como é de responsabilidade exclusiva da CONTRATADA os direitos trabalhistas e previdenciários que esta empresa possuir com sua eventual equipe de empregados.
-
-CLÁUSULA NONA: DEMAIS DISPOSIÇÕES
-
-9.1 O presente instrumento não implica em qualquer vínculo de solidariedade entre as partes, ficando cada qual responsável pelas obrigações derivadas de suas respectivas atividades, sejam elas de caráter fiscal, trabalhista, previdenciário ou acidentário, sem exclusão de qualquer outra, declarando as mesmas não existir qualquer tipo de vínculo societário, trabalhista, fiscal ou previdenciário entre si, assim como relação de emprego com sócios ou prepostos da CONTRATADA.
-
-9.2 Não haverá responsabilidade solidária ou subsidiária da CONTRATANTE com nenhuma questão relativa ao presente contrato especialmente relacionada com a mão-de-obra utilizada pela CONTRATADA na execução dos serviços, objeto do presente contrato.
-
-9.3 Qualquer tolerância de uma das partes em relação ao não cumprimento das obrigações e deveres neste instrumento assumidos, não importará em novação quanto aos seus termos, condições ou prazos, não devendo, portanto, sob quaisquer hipóteses, ser interpretada como renúncia ou desistência do cumprimento dos dispositivos do presente em seus estritos termos.
-
-CLÁUSULA DÉCIMA: DO FORO
-
-Fica eleito o foro da Comarca de [FORO_COMARCA] para dirimir quaisquer controvérsias resultantes deste contrato, com renúncia a qualquer outro, por mais privilegiado que seja.
-
-E, por estarem assim justas e contratadas, as partes firmam o presente instrumento em 02 (duas) vias de igual teor e forma, na presença de 2 (duas) testemunhas.
+Por estarem assim justas e contratadas, firmam o presente instrumento, em duas vias de igual teor, juntamente com 2 (duas) testemunhas.
 
 [CONTRATANTE_CIDADE], [DATA_ASSINATURA].
 
+CONTRATANTE:
+_____________________________
+[CONTRATANTE_NOME]
 
-_______________________________
-CONTRATANTE: [CONTRATANTE_NOME]
-CNPJ: [CONTRATANTE_CNPJ]
+CONTRATADA:
+_____________________________
+[CONTRATADA_RAZAO_SOCIAL]
 
-
-_______________________________
-CONTRATADA: [CONTRATADA_RAZAO_SOCIAL]
-CNPJ: [CONTRATADA_CNPJ]
-
-
-_______________________________
-Testemunha 1
-Nome:
-CPF:
-
-
-_______________________________
-Testemunha 2
-Nome:
-CPF:`;
+TESTEMUNHAS:
+___________________________ ___________________________
+Nome:                       Nome:
+RG:                         RG:`;
 
 // ---------------------------------------------------------------------------
 // Cruzamento prestador PJ × catálogo de Fornecedores (Rev. 3262)
@@ -706,7 +657,31 @@ export const pjContractsRouter = router({
         const percAdiant = contrato.percentualAdiantamento ?? 50;
         const percFech = contrato.percentualFechamento ?? 50;
         
+        // Rev. 4602 — valor TOTAL do contrato (mensal × meses de vigência)
+        const mesesVig = mesesDeVigencia(contrato.dataInicio, contrato.dataFim);
+        const valorTotal = mesesVig > 0 ? valorMensal * mesesVig : valorMensal;
+
         let texto = MODELO_CONTRATO_PJ;
+        texto = texto.replace(/\[CONTRATANTE_NOME\]/g, empresa.razaoSocial || '');
+        texto = texto.replace(/\[CONTRATANTE_CNPJ\]/g, empresa.cnpj || '');
+        texto = texto.replace(/\[CONTRATANTE_ENDERECO\]/g, empresa.endereco || '');
+        texto = texto.replace(/\[CONTRATANTE_CIDADE\]/g, empresa.cidade || '');
+        texto = texto.replace(/\[CONTRATANTE_ESTADO\]/g, empresa.estado || '');
+        texto = texto.replace(/\[CONTRATANTE_REPRESENTANTE\]/g, (empresa as any).representanteLegal || '_______________');
+        texto = texto.replace(/\[CONTRATADA_RAZAO_SOCIAL\]/g, contrato.razaoSocialPrestador || emp.nomeCompleto || '');
+        texto = texto.replace(/\[CONTRATADA_CNPJ\]/g, contrato.cnpjPrestador || '');
+        texto = texto.replace(/\[CONTRATADA_ENDERECO\]/g, (contrato as any).enderecoPrestador || emp.logradouro || '');
+        texto = texto.replace(/\[CONTRATADA_CIDADE\]/g, (contrato as any).cidadePrestador || empresa.cidade || '');
+        texto = texto.replace(/\[CONTRATADA_ESTADO\]/g, (contrato as any).estadoPrestador || empresa.estado || '');
+        texto = texto.replace(/\[VALOR_TOTAL_CONTRATO\]/g, valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+        texto = texto.replace(/\[VALOR_TOTAL_EXTENSO\]/g, valorPorExtensoBR(valorTotal));
+        texto = texto.replace(/\[FORO_COMARCA\]/g, (contrato as any).foroComarca || `${empresa.cidade || 'São José dos Campos'}/${empresa.estado || 'SP'}`);
+        texto = texto.replace(/\[DADOS_BANCARIOS_CONTRATADA\]/g, [
+          contrato.bancoPrestador && `Banco: ${contrato.bancoPrestador}`,
+          contrato.agenciaPrestador && `Agência: ${contrato.agenciaPrestador}`,
+          contrato.contaPrestador && `Conta: ${contrato.contaPrestador}`,
+          contrato.pixPrestador && `PIX: ${contrato.pixPrestador}`,
+        ].filter(Boolean).join(' | ') || '_______________');
         texto = texto.replace(/\[EMPRESA_RAZAO_SOCIAL\]/g, empresa.razaoSocial || '');
         texto = texto.replace(/\[EMPRESA_CNPJ\]/g, empresa.cnpj || '');
         texto = texto.replace(/\[EMPRESA_ENDERECO\]/g, empresa.endereco || '');
@@ -724,7 +699,7 @@ export const pjContractsRouter = router({
         texto = texto.replace(/\[DATA_INICIO\]/g, contrato.dataInicio || '');
         texto = texto.replace(/\[DATA_FIM\]/g, contrato.dataFim || '');
         texto = texto.replace(/\[VALOR_MENSAL\]/g, valorMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-        texto = texto.replace(/\[VALOR_EXTENSO\]/g, ''); // TODO: extenso
+        texto = texto.replace(/\[VALOR_EXTENSO\]/g, valorPorExtensoBR(valorMensal));
         texto = texto.replace(/\[PERCENTUAL_ADIANTAMENTO\]/g, String(percAdiant));
         texto = texto.replace(/\[VALOR_ADIANTAMENTO\]/g, (valorMensal * percAdiant / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
         texto = texto.replace(/\[PERCENTUAL_FECHAMENTO\]/g, String(percFech));
@@ -2254,23 +2229,24 @@ INSTRUÇÕES OBRIGATÓRIAS:
       const [contrato] = await db.select().from(pjContracts).where(and(eq(pjContracts.id, input.contractId), eq(pjContracts.companyId, input.companyId)));
       if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
 
+      // Rev. 4602 — novo modelo usa seções em MAIÚSCULAS ("DO OBJETO DO CONTRATO")
+      // e cláusulas numeradas "Cláusula Nª." — parser adaptado ao novo formato.
       const template = MODELO_CONTRATO_PJ;
       const clausulas: Array<{ numero: string; titulo: string; textoCompleto: string }> = [];
       const lines = template.split('\n');
       let current: { numero: string; titulo: string; textoCompleto: string } | null = null;
+      let secaoAtual = '';
 
       for (const line of lines) {
-        const match = line.match(/^CL[ÁA]USULA\s+(PRIMEIRA|SEGUNDA|TERCEIRA|QUARTA|QUINTA|SEXTA|S[ÉE]TIMA|OITAVA|NONA|D[ÉE]CIMA):\s*(.*)/i);
+        const trimmed = line.trim();
+        const isSecao = trimmed.length > 3 && trimmed === trimmed.toUpperCase() && /^D[OA]S?\s/.test(trimmed) && !/^\[/.test(trimmed);
+        if (isSecao) { secaoAtual = trimmed; continue; }
+        const match = trimmed.match(/^Cl[áa]usula\s+(\d+)ª\.\s*(.*)/i);
         if (match) {
           if (current) clausulas.push(current);
-          const ordinalMap: Record<string, string> = {
-            'PRIMEIRA': '01', 'SEGUNDA': '02', 'TERCEIRA': '03', 'QUARTA': '04',
-            'QUINTA': '05', 'SEXTA': '06', 'SÉTIMA': '07', 'SETIMA': '07',
-            'OITAVA': '08', 'NONA': '09', 'DÉCIMA': '10', 'DECIMA': '10',
-          };
           current = {
-            numero: ordinalMap[match[1].toUpperCase()] || match[1],
-            titulo: match[2].trim(),
+            numero: String(match[1]).padStart(2, '0'),
+            titulo: secaoAtual,
             textoCompleto: line,
           };
         } else if (current) {

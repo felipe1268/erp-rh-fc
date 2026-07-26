@@ -17,7 +17,7 @@
  * SEGURANÇA: todo valor interpolado é escapado com `esc()` antes de virar HTML.
  */
 import { buildFcDocument, type FcDocumentParams } from "./fcDocumentTemplate";
-import { calcularPrazoVigencia } from "@shared/contratoPrazo";
+import { calcularPrazoVigencia, mesesDeVigencia, valorPorExtensoBR } from "@shared/contratoPrazo";
 
 function esc(v: unknown): string {
   if (v === null || v === undefined) return "";
@@ -57,59 +57,6 @@ function formatMoeda(val: number): string {
   return val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function valorPorExtenso(valor: number): string {
-  if (valor === 0) return "zero reais";
-  const unidades = ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove"];
-  const especiais = ["dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"];
-  const dezenas = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
-  const centenas = ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos"];
-
-  function grupo(n: number): string {
-    if (n === 0) return "";
-    if (n === 100) return "cem";
-    let s = "";
-    const c = Math.floor(n / 100);
-    const d = Math.floor((n % 100) / 10);
-    const u = n % 10;
-    if (c > 0) s += centenas[c];
-    if (d === 1) {
-      if (s) s += " e ";
-      s += especiais[u];
-      return s;
-    }
-    if (d > 0) {
-      if (s) s += " e ";
-      s += dezenas[d];
-    }
-    if (u > 0) {
-      if (s) s += " e ";
-      s += unidades[u];
-    }
-    return s;
-  }
-
-  const inteiro = Math.floor(valor);
-  const centavos = Math.round((valor - inteiro) * 100);
-
-  let resultado = "";
-  const milhares = Math.floor(inteiro / 1000);
-  const resto = inteiro % 1000;
-
-  if (milhares > 0) {
-    resultado += grupo(milhares) + " mil";
-    if (resto > 0) resultado += " e " + grupo(resto);
-  } else {
-    resultado += grupo(resto);
-  }
-
-  resultado += inteiro === 1 ? " real" : " reais";
-
-  if (centavos > 0) {
-    resultado += " e " + grupo(centavos) + (centavos === 1 ? " centavo" : " centavos");
-  }
-
-  return resultado.charAt(0).toUpperCase() + resultado.slice(1);
-}
 
 /** Subset de `getById` necessário pra montar o documento. */
 export interface ContratoPjForDoc {
@@ -204,7 +151,7 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
 
   // Valor mensal em vermelho para htmlMode
   const valorMensalFmt = formatMoeda(valorMensal);
-  const valorExtensoFmt = valorPorExtenso(valorMensal);
+  const valorExtensoFmt = valorPorExtensoBR(valorMensal);
   const valorMensalOut = htmlMode
     ? `<strong style="color:#b91c1c;">${valorMensalFmt}</strong>`
     : valorMensalFmt;
@@ -231,6 +178,18 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
   const dataInicioFmt = formatDateExtenso(c.dataInicio);
   const dataFimFmt = formatDate(c.dataFim);
   const prazoVigencia = calcularPrazoVigencia(c.dataInicio, c.dataFim);
+  // Rev. 4602 — VALOR TOTAL do contrato (mensal × meses de vigência): caracteriza
+  // valor global fechado (B2B), com desembolso via medições mensais.
+  const mesesVig = mesesDeVigencia(c.dataInicio, c.dataFim);
+  const valorTotalNum = mesesVig > 0 ? valorMensal * mesesVig : valorMensal;
+  const valorTotalFmt = formatMoeda(valorTotalNum);
+  const valorTotalExtensoFmt = valorPorExtensoBR(valorTotalNum);
+  const valorTotalOut = htmlMode
+    ? `<strong style="color:#b91c1c;">${valorTotalFmt}</strong>`
+    : valorTotalFmt;
+  const valorTotalExtensoOut = htmlMode
+    ? `<strong style="color:#b91c1c;">${valorTotalExtensoFmt}</strong>`
+    : valorTotalExtensoFmt;
   const foro = cidadeEmpresa + " - " + estadoEmpresa;
   const numeroContrato = c.numeroContrato || "S/N";
 
@@ -257,6 +216,8 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
     .replace(/\[OBJETO_CONTRATO\]/g, objetoHtml)
     .replace(/\[VALOR_MENSAL\]/g, valorMensalOut)
     .replace(/\[VALOR_EXTENSO\]/g, valorExtensoOut)
+    .replace(/\[VALOR_TOTAL_CONTRATO\]/g, valorTotalOut)
+    .replace(/\[VALOR_TOTAL_EXTENSO\]/g, valorTotalExtensoOut)
     .replace(/\[VALOR_ADIANTAMENTO\]/g, valorAdiantamento)
     .replace(/\[VALOR_FECHAMENTO\]/g, valorFechamento)
     .replace(/\[PERCENTUAL_ADIANTAMENTO\]/g, String(percAdiantamento))
@@ -292,6 +253,8 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc, htmlMode = false
     .replace(/\{\{objetoContrato\}\}/gi, objetoHtml)
     .replace(/\{\{valorMensal\}\}/gi, valorMensalOut)
     .replace(/\{\{valorExtenso\}\}/gi, valorExtensoOut)
+    .replace(/\{\{valorTotalContrato\}\}/gi, valorTotalOut)
+    .replace(/\{\{valorTotalExtenso\}\}/gi, valorTotalExtensoOut)
     .replace(/\{\{dataInicio\}\}/gi, dataInicioFmt)
     .replace(/\{\{dataFim\}\}/gi, dataFimFmt)
     .replace(/\{\{foroComarca\}\}/gi, foro)
@@ -490,10 +453,10 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
         estado: c.companyEstado || undefined,
         logoUrl: c.companyLogoUrl || undefined,
       },
-      titulo: "CONTRATO PJ",
+      titulo: "CONTRATO DE PRESTAÇÃO DE SERVIÇOS",
       numero: c.numeroContrato || "S/N",
       dataEmissao: hojeStr,
-      assunto: { valor: "Contrato de Prestação de Serviços PJ" },
+      assunto: { valor: "Contrato de Prestação de Serviços" },
       corpoHtml,
       assinaturas: {
         partes: [
@@ -507,7 +470,7 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
         localData: `${c.companyCidade || "Guaratinguetá"} - ${c.companyEstado || "SP"}, ${hojeStr}`,
       },
       geradoPor,
-      pageTitle: `Contrato PJ ${c.numeroContrato || ""} — ${nomePrestador}`,
+      pageTitle: `Contrato de Prestação de Serviços ${c.numeroContrato || ""} — ${nomePrestador}`,
       logoSrc: `${origin}/logo-fc.jpg`,
       margins,
       forSign: args.forSign,
@@ -537,7 +500,7 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
       estado: c.companyEstado || undefined,
       logoUrl: c.companyLogoUrl || undefined,
     },
-    titulo: "CONTRATO DE PRESTAÇÃO DE SERVIÇOS — PJ",
+    titulo: "CONTRATO DE PRESTAÇÃO DE SERVIÇOS TÉCNICOS ESPECIALIZADOS",
     numero: c.numeroContrato || "S/N",
     dataEmissao: hojeStr,
     assunto: { label: "OBJETO:", valor: c.objetoContrato || c.employeeName || "Prestação de serviços de engenharia" },
@@ -554,7 +517,7 @@ export function buildContratoPjSignHtml(args: BuildContratoPjSignHtmlArgs): stri
       localData: `${c.companyCidade || "São José dos Campos"} - ${c.companyEstado || "SP"}, ${hojeStr}`,
     },
     geradoPor,
-    pageTitle: `Contrato PJ ${c.numeroContrato || ""} — ${nomePrestador}`,
+    pageTitle: `Contrato de Prestação de Serviços ${c.numeroContrato || ""} — ${nomePrestador}`,
     margins,
     forSign: args.forSign,
   };

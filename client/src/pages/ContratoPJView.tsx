@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useCompany } from "@/contexts/CompanyContext";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { toast } from "sonner";
-import { calcularPrazoVigencia } from "@shared/contratoPrazo";
+import { calcularPrazoVigencia, mesesDeVigencia, valorPorExtensoBR } from "@shared/contratoPrazo";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "___/___/______";
@@ -37,59 +37,6 @@ function formatMoeda(val: number): string {
   return val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function valorPorExtenso(valor: number): string {
-  if (valor === 0) return "zero reais";
-  const unidades = ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove"];
-  const especiais = ["dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"];
-  const dezenas = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
-  const centenas = ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos"];
-
-  function grupo(n: number): string {
-    if (n === 0) return "";
-    if (n === 100) return "cem";
-    let s = "";
-    const c = Math.floor(n / 100);
-    const d = Math.floor((n % 100) / 10);
-    const u = n % 10;
-    if (c > 0) s += centenas[c];
-    if (d === 1) {
-      if (s) s += " e ";
-      s += especiais[u];
-      return s;
-    }
-    if (d > 0) {
-      if (s) s += " e ";
-      s += dezenas[d];
-    }
-    if (u > 0) {
-      if (s) s += " e ";
-      s += unidades[u];
-    }
-    return s;
-  }
-
-  const inteiro = Math.floor(valor);
-  const centavos = Math.round((valor - inteiro) * 100);
-  
-  let resultado = "";
-  const milhares = Math.floor(inteiro / 1000);
-  const resto = inteiro % 1000;
-  
-  if (milhares > 0) {
-    resultado += grupo(milhares) + " mil";
-    if (resto > 0) resultado += " e " + grupo(resto);
-  } else {
-    resultado += grupo(resto);
-  }
-  
-  resultado += inteiro === 1 ? " real" : " reais";
-  
-  if (centavos > 0) {
-    resultado += " e " + grupo(centavos) + (centavos === 1 ? " centavo" : " centavos");
-  }
-  
-  return resultado.charAt(0).toUpperCase() + resultado.slice(1);
-}
 
 export default function ContratoPJViewWrapper() {
   const [, params] = useRoute("/contrato-pj/:id");
@@ -245,6 +192,14 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
   const diaFechamento = contrato?.diaFechamento || 5;
   const valorAdiantamento = formatMoeda(valorMensal * percAdiantamento / 100);
   const valorFechamento = formatMoeda(valorMensal * percFechamento / 100);
+  // Rev. 4602 — valor total (mensal × meses de vigência) + textos do ciclo de medições
+  const mesesVig = mesesDeVigencia(contrato.dataInicio, contrato.dataFim);
+  const valorTotalNum = mesesVig > 0 ? valorMensal * mesesVig : valorMensal;
+  const isUltimoDia = diaFechamento === 31 || diaFechamento === 0;
+  const prazoNotaAdiant = Math.max(1, diaAdiantamento - 5);
+  const prazoNotaFechNum = isUltimoDia ? null : Math.max(1, diaFechamento - 5);
+  const textoDiaFechamento = isUltimoDia ? "no último dia do mês subsequente" : `no dia ${diaFechamento} do mês subsequente`;
+  const prazoNotaFechStr = isUltimoDia ? "5 (cinco) dias antes do último dia" : `o dia ${prazoNotaFechNum}`;
   const hoje = new Date();
   const dataAssinatura = hoje.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 
@@ -265,7 +220,12 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
       .replace(/\[CONTRATADA_ESTADO\]/g, estadoPrestador)
       .replace(/\[OBJETO_CONTRATO\]/g, contrato.objetoContrato || contrato.employeeCargo || "engenharia civil")
       .replace(/\[VALOR_MENSAL\]/g, formatMoeda(valorMensal))
-      .replace(/\[VALOR_EXTENSO\]/g, valorPorExtenso(valorMensal))
+      .replace(/\[VALOR_EXTENSO\]/g, valorPorExtensoBR(valorMensal))
+      .replace(/\[VALOR_TOTAL_CONTRATO\]/g, formatMoeda(valorTotalNum))
+      .replace(/\[VALOR_TOTAL_EXTENSO\]/g, valorPorExtensoBR(valorTotalNum))
+      .replace(/\[TEXTO_DIA_FECHAMENTO\]/g, textoDiaFechamento)
+      .replace(/\[PRAZO_NOTA_ADIANTAMENTO\]/g, String(prazoNotaAdiant))
+      .replace(/\[PRAZO_NOTA_FECHAMENTO\]/g, prazoNotaFechStr)
       .replace(/\[VALOR_ADIANTAMENTO\]/g, valorAdiantamento)
       .replace(/\[VALOR_FECHAMENTO\]/g, valorFechamento)
       .replace(/\[PERCENTUAL_ADIANTAMENTO\]/g, String(percAdiantamento))
@@ -294,7 +254,7 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-lg font-bold">Contrato de Prestação de Serviços PJ</h1>
+            <h1 className="text-lg font-bold">Contrato de Prestação de Serviços</h1>
             <p className="text-sm text-white/80">{contrato.numeroContrato || "S/N"} — {contrato.employeeName}</p>
           </div>
         </div>
@@ -330,7 +290,7 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
       {isRascunho && (
         <div className="print:hidden bg-amber-50 border-b border-amber-300 px-6 py-2 flex items-center gap-2 text-amber-800 text-sm">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span><strong>Atenção:</strong> o template de contrato PJ está em <strong>rascunho</strong> (não aprovado). Esta prévia usa o rascunho para referência, mas o envio para assinatura só será possível após aprovação em <strong>Configurações → Templates de Documentos → Contrato PJ</strong>.</span>
+          <span><strong>Atenção:</strong> o template do Contrato de Prestação de Serviços está em <strong>rascunho</strong> (não aprovado). Esta prévia usa o rascunho para referência, mas o envio para assinatura só será possível após aprovação em <strong>Configurações → Templates de Documentos → Contrato de Prestação de Serviços</strong>.</span>
         </div>
       )}
 
@@ -373,7 +333,7 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
               />
             ) : (
               <p className="text-center text-gray-500 py-8">
-                Nenhum modelo de contrato configurado. Acesse Configurações → Templates de Documentos → Contrato PJ para criar o template vigente.
+                Nenhum modelo de contrato configurado. Acesse Configurações → Templates de Documentos → Contrato de Prestação de Serviços para criar o template vigente.
               </p>
             )}
           </div>

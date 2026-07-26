@@ -150,7 +150,7 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
     const modeloHtml = modeloQ.data?.modeloHtml || null;
     const modelo = modeloQ.data?.modelo || "";
     if (!modeloHtml && !modelo) {
-      toast.error("Modelo de contrato não configurado. Configure em Configurações → Templates de Documentos → Contrato PJ.");
+      toast.error("Modelo de contrato não configurado. Configure em Configurações → Templates de Documentos → Contrato de Prestação de Serviços.");
       return;
     }
     const html = buildContratoPjSignHtml({
@@ -186,7 +186,7 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
     }
     const modeloHtml = modeloQ.data?.modeloHtml || null;
     const modelo = modeloQ.data?.modelo || "";
-    if (!modeloHtml && !modelo) { toast.error("Modelo de contrato não configurado. Configure em Configurações → Templates de Documentos → Contrato PJ."); return; }
+    if (!modeloHtml && !modelo) { toast.error("Modelo de contrato não configurado. Configure em Configurações → Templates de Documentos → Contrato de Prestação de Serviços."); return; }
     try {
       const documentHtml = buildContratoPjSignHtml({
         contrato,
@@ -212,7 +212,7 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
         companyId: Number(contrato.companyId),
         employeeId: Number(contrato.employeeId),
         tipo: "contrato_pj",
-        documentTitle: `Contrato PJ ${contrato.numeroContrato || ""} — ${prestadorNome}`.trim(),
+        documentTitle: `Contrato de Prestação de Serviços ${contrato.numeroContrato || ""} — ${prestadorNome}`.trim(),
         documentHtml,
         signers,
         observacoes: `contrato_pj:${contratoId}`,
@@ -239,7 +239,7 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
         className="!w-[100vw] !max-w-none !h-[100dvh] !max-h-[100dvh] !rounded-none !p-0 !top-0 !left-0 !translate-x-0 !translate-y-0 overflow-hidden flex flex-col gap-0"
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>Enviar Contrato PJ para Assinatura (FCSign)</DialogTitle>
+          <DialogTitle>Enviar Contrato de Prestação de Serviços para Assinatura (FCSign)</DialogTitle>
         </DialogHeader>
         {/* Header gradient */}
         <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 text-white px-6 py-5 shadow-md">
@@ -248,7 +248,7 @@ export default function FCSignPJSendDialog({ open, onOpenChange, contratoId, ger
               <FileSignature className="h-6 w-6" />
             </div>
             <div className="flex-1 min-w-0">
-              <h2 className="text-xl font-bold leading-tight">FCSign — Contrato PJ para Assinatura</h2>
+              <h2 className="text-xl font-bold leading-tight">FCSign — Contrato de Prestação de Serviços para Assinatura</h2>
               <p className="text-blue-100 text-sm mt-0.5">
                 {contrato ? `${contrato.numeroContrato || "S/N"} — ${prestadorNome}` : "Carregando contrato…"}
               </p>

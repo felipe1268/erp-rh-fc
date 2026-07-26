@@ -335,8 +335,8 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
   },
   {
     tipo: "contrato_pj",
-    titulo: "Contrato PJ",
-    descricao: "Contrato de prestação de serviços PJ (pessoa jurídica / autônomo).",
+    titulo: "Contrato de Prestação de Serviços",
+    descricao: "Contrato civil de prestação de serviços técnicos especializados (art. 593 e seguintes do Código Civil).",
     icone: "FileText",
     categoria: "contratos",
     placeholders: [
@@ -349,6 +349,8 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
       { chave: "objetoContrato",        rotulo: "Objeto do Contrato",                exemplo: "Execução de serviços de topografia", grupo: "Específicos" },
       { chave: "valorMensal",           rotulo: "Valor Mensal (R$)",                 exemplo: "R$ 10.000,00",                    grupo: "Específicos" },
       { chave: "valorExtenso",          rotulo: "Valor por Extenso",                 exemplo: "dez mil reais",                   grupo: "Específicos" },
+      { chave: "valorTotalContrato",    rotulo: "Valor Total do Contrato (R$)",      exemplo: "R$ 60.000,00",                    grupo: "Específicos" },
+      { chave: "valorTotalExtenso",     rotulo: "Valor Total por Extenso",           exemplo: "sessenta mil reais",              grupo: "Específicos" },
       { chave: "dataInicio",            rotulo: "Data de Início",                    exemplo: "01/07/2026",                      grupo: "Específicos" },
       { chave: "dataFim",               rotulo: "Data de Término",                   exemplo: "31/12/2026",                      grupo: "Específicos" },
       { chave: "foroComarca",           rotulo: "Foro / Comarca",                    exemplo: "Guaratinguetá/SP",                 grupo: "Específicos" },

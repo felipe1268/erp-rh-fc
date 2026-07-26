@@ -58,6 +58,28 @@ export function mesesDeVigencia(dataInicio?: string | null, dataFim?: string | n
 }
 
 /**
+ * Valor monetário por extenso em reais (ex.: 6000 → "seis mil reais").
+ * Rev. 4602 — usado na cláusula de VALOR TOTAL do contrato de prestação de
+ * serviços (valor mensal × meses de vigência). Cobre até centenas de milhões.
+ */
+export function valorPorExtensoBR(valor: number): string {
+  if (!Number.isFinite(valor) || valor < 0) return "";
+  const inteiro = Math.floor(valor);
+  const centavos = Math.round((valor - inteiro) * 100);
+  const partes: string[] = [];
+  const milhoes = Math.floor(inteiro / 1_000_000);
+  const milhares = Math.floor((inteiro % 1_000_000) / 1000);
+  const resto = inteiro % 1000;
+  if (milhoes > 0) partes.push(`${numeroPorExtenso(milhoes)} ${milhoes === 1 ? "milhão" : "milhões"}`);
+  if (milhares > 0) partes.push(milhares === 1 ? "mil" : `${numeroPorExtenso(milhares)} mil`);
+  if (resto > 0) partes.push(numeroPorExtenso(resto));
+  let texto = partes.length ? partes.join(" e ") : "zero";
+  texto += inteiro === 1 ? " real" : " reais";
+  if (centavos > 0) texto += ` e ${numeroPorExtenso(centavos)} ${centavos === 1 ? "centavo" : "centavos"}`;
+  return texto;
+}
+
+/**
  * Texto do prazo de validade do contrato a partir da vigência preenchida.
  * Ex.: 6 meses → "6 (seis) meses"; 12 meses → "1 (um) ano"; 24 → "2 (dois) anos".
  * Fallback "prazo determinado" quando não há vigência válida.
