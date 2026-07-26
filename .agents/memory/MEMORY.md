@@ -14,6 +14,7 @@
 - [Conciliação → sub-razões (Controle de Cheques)](conciliacao-fanout-subledgers.md) — conciliar lançamento não baixa cheque sozinho; toda mutation de conciliação deve varrer sub-razões dependentes com match inequívoco + try/catch não-bloqueante.
 - [Cross-company-group employee duplication](employee-cross-company-group-duplication.md) — sibling companies sharing recursos already share employees; re-registering the same CPF in the other company creates status-drifting duplicates.
 - [Poka-Yoke em toda revisão](poka-yoke-rule.md) — regra de ouro: toda revisão aplica mistake-proofing (design > bloqueio > aviso); validar valor/data no server, isPending nos botões.
+- [Crachá: pills = TODOS os treinamentos feitos](cracha-treinamentos-todos-feitos.md) — regra de ouro: pills sem filtro de vigência (histórico); selos NR e pendências continuam só vigentes (aptidão).
 - [Period selector golden rule](period-selector-golden-rule.md) — SEMPRE usar `<PeriodSelectorCard>` para filtro mês/ano; estado `number|null`; NUNCA seletor inline. Regra de ouro do usuário (13/07/2026).
 - [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
 - [Marketing screenshot fictional data](marketing-screenshot-fictional-data.md) — public marketing screenshots of authenticated screens must use 100% fictional seed data, never real tenant PII; revert any temp auth bypass fully.

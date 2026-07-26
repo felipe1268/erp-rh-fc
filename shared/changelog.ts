@@ -1,4 +1,23 @@
 /**
+ * Rev. 4617 - FIX: CRACHÁS — PILLS COM TODOS OS TREINAMENTOS FEITOS (REGRA DE OURO)
+ *
+ * Pedido do usuário (regra de ouro, 26/07/2026): o crachá deve classificar
+ * TODOS os treinamentos que o funcionário FEZ — não só os vigentes. A Rev.
+ * 4614 filtrava por dataValidade >= hoje, o que sumia com treinamentos
+ * vencidos E com treinamentos sem data de validade cadastrada.
+ *
+ * Fix (server/routers/sprint1Foundation.ts, badgeStatus):
+ * - A lista `treinamentos` das pills passa a iterar empTreins (todos os
+ *   registros do funcionário) em vez de `vigentes`. Dedup por rótulo canônico
+ *   mantido (NR1/NR01 → "NR-01"), ordenação alfabética mantida.
+ * - Selos NR-35/NR-10 e a pendência "Nenhum treinamento vigente" CONTINUAM
+ *   olhando só vigentes (selo = aptidão atual; pill = histórico de formação).
+ * - Vale pra lista de crachás, preview e PNG baixado (mesma fonte).
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4616 - FEAT: DOSSIÊ — SAI ADVERTÊNCIA (INTERNA), ENTRAM DOCUMENTOS PESSOAIS
  *
  * Pedido do usuário: o dossiê é o pacote COMPLETO de integração que vai pra

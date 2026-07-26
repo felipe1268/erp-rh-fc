@@ -117,7 +117,7 @@ interface DocStatus {
   nr35: boolean;
   nr10: boolean;
   restricao: boolean;
-  /** Rev. 4614 — rótulos dos treinamentos VIGENTES (dedup, ex.: ["NR-06","NR-18","NR-35"]) */
+  /** Rev. 4617 — rótulos de TODOS os treinamentos FEITOS (dedup, ex.: ["NR-06","NR-18","NR-35"]) */
   treinamentos?: string[];
 }
 

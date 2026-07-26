@@ -710,11 +710,14 @@ const aptidaoRouter = router({
       const nr35 = hasNr("NR35") || vigentes.some((t) => norm(t.nome).includes("ALTURA"));
       const nr10 = hasNr("NR10") || vigentes.some((t) => norm(t.nome).includes("ELETRIC") || norm(t.nome).includes("ELÉTRIC"));
 
-      // Rev. 4614 — lista de treinamentos VIGENTES p/ o crachá (dedup por tipo
-      // canônico; rótulo curto: norma padronizada "NR-XX" ou nome truncado)
+      // Rev. 4614/4617 — lista de treinamentos p/ o crachá (dedup por tipo
+      // canônico; rótulo curto: norma padronizada "NR-XX" ou nome truncado).
+      // REGRA DE OURO (usuário, 26/07/2026): TODOS os treinamentos FEITOS
+      // entram no crachá — inclusive vencidos e sem data de validade (antes
+      // só vigentes, o que sumia com treinamentos realizados).
       const vistos = new Set<string>();
       const treinamentosVigentes: string[] = [];
-      for (const t of vigentes) {
+      for (const t of empTreins) {
         // Mesma canonicalização da Rev. 4613 (controleDocumentos): remove TUDO
         // que não for A-Z0-9 (cobre "/", "_", parênteses, acentos separadores)
         const canon = (s: string | null | undefined) =>
