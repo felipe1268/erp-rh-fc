@@ -1,4 +1,25 @@
 /**
+ * Rev. 4598 - UX: CONTAS A PAGAR — PAGAMENTO COM CHEQUE PRÓPRIO SÓ LISTA CONTAS COM TALÃO
+ *
+ * PEDIDO DO USUÁRIO: no seletor de Conta Bancária dos diálogos "Pagar" e
+ * "Editar", quando a forma de pagamento é Cheque (próprio), só devem aparecer
+ * as contas que TÊM talão de cheque cadastrado — não faz sentido programar
+ * cheque de uma conta sem talão (ex.: Banco do Brasil, CAIXA INTERNO).
+ *
+ * COMO FUNCIONA (Poka-Yoke nível 3 — prevenção pelo design):
+ * - Diálogo "Pagar": com forma = cheque e subtipo = empresa, o seletor filtra
+ *   `temTalao === 1` (mesma regra do PagarConsolidadoDialog, Rev. anterior).
+ *   Cheque de terceiro NÃO filtra (o dinheiro não sai de talão próprio).
+ * - Diálogo "Editar": mesma regra quando formaPagamento = cheque.
+ * - Guarda extra: se a conta já selecionada NÃO tem talão e o usuário troca a
+ *   forma p/ cheque próprio, a seleção é limpa (junto com banco/agência/conta
+ *   auto-preenchidos da Rev. 4597) — evita seleção "fantasma" fora da lista.
+ * - `temTalao` já vem no getBankAccounts (financial.ts) — sem query nova.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroContasAPagar.tsx.
+ * ZERO schema/server change.
+ */
+/**
  * Rev. 4597 - UX: CONTAS A PAGAR — CONTA BANCÁRIA PREENCHE BANCO/AGÊNCIA/CONTA DO CHEQUE AUTOMATICAMENTE
  *
  * PEDIDO DO USUÁRIO: ao registrar baixa com cheque próprio, ele escolhia a

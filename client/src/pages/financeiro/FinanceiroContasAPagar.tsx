@@ -722,6 +722,24 @@ export default function FinanceiroContasAPagar() {
     setEditChequeAgencia(acc.agencia || "");
     setEditChequeConta(acc.conta || "");
   }, [editContaBancariaId, bankAccounts, showEdit?.id]);
+  // Rev. 4598 — Poka-Yoke: pagamento com cheque próprio só aceita conta COM
+  // talão cadastrado; se a conta selecionada não tem talão, limpa a seleção.
+  useEffect(() => {
+    if (!(formaPagamento === "cheque" && chequeSubtipo === "empresa") || contaBancariaId == null) return;
+    const acc = (bankAccounts ?? []).find((a: any) => a.id === contaBancariaId);
+    if (acc && Number(acc.temTalao) !== 1) {
+      setContaBancariaId(null);
+      setChequeBanco(""); setChequeAgencia(""); setChequeConta("");
+    }
+  }, [formaPagamento, chequeSubtipo, contaBancariaId, bankAccounts]);
+  useEffect(() => {
+    if (editForm.formaPagamento !== "cheque" || editContaBancariaId == null) return;
+    const acc = (bankAccounts ?? []).find((a: any) => a.id === editContaBancariaId);
+    if (acc && Number(acc.temTalao) !== 1) {
+      setEditContaBancariaId(null);
+      setEditChequeBanco(""); setEditChequeAgencia(""); setEditChequeConta("");
+    }
+  }, [editForm.formaPagamento, editContaBancariaId, bankAccounts]);
   // Rev. 4594 — dados da fatura de cartão vinculada ao título (identificação do
   // cartão + opções rápidas Total / Mínimo / Parcial no diálogo de pagamento).
   const { data: faturaCartao } = (trpc as any).cartao.faturaPorEntry.useQuery(
@@ -2984,7 +3002,7 @@ export default function FinanceiroContasAPagar() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">— Não informar —</SelectItem>
-                      {(bankAccounts ?? []).filter((a: any) => a.ativo).map((a: any) => (
+                      {(bankAccounts ?? []).filter((a: any) => a.ativo && (editForm.formaPagamento !== "cheque" || Number(a.temTalao) === 1)).map((a: any) => (
                         <SelectItem key={a.id} value={String(a.id)}>
                           {[a.descricao || a.banco, a.agencia ? `Ag ${a.agencia}` : null, a.conta ? `CC ${a.conta}` : null].filter(Boolean).join(" · ")}
                         </SelectItem>
@@ -3469,7 +3487,7 @@ export default function FinanceiroContasAPagar() {
                       <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">— Não informar —</SelectItem>
-                        {(bankAccounts ?? []).filter((a: any) => a.ativo).map((a: any) => (
+                        {(bankAccounts ?? []).filter((a: any) => a.ativo && (!(formaPagamento === "cheque" && chequeSubtipo === "empresa") || Number(a.temTalao) === 1)).map((a: any) => (
                           <SelectItem key={a.id} value={String(a.id)}>
                             {[a.descricao || a.banco, a.agencia ? `Ag ${a.agencia}` : null, a.conta ? `CC ${a.conta}` : null].filter(Boolean).join(" · ")}
                           </SelectItem>
