@@ -9,11 +9,17 @@
  * antes do gzipSync; com heap de 1GB (--max-old-space-size=1024), estourava.
  *
  * Fix (server/services/backupService.ts):
- * - Leitura por lotes de 2.000 linhas com keyset por ctid (estável, sem OFFSET);
+ * - Leitura por lotes ADAPTATIVOS (alvo ~8MB; 25–2.000 linhas conforme o peso
+ *   médio da linha via pg_table_size/reltuples) com keyset por ctid (TID Range
+ *   Scan, estável, sem OFFSET) — tabelas com linhas gigantes (fotos base64
+ *   ~190KB/linha) não estouram o driver;
  * - Escrita incremental num stream gzip em /tmp ({"tabelas":{...},"metadata":...});
  * - Só o arquivo COMPRIMIDO volta pra memória (S3 + snapshot Neon inalterados);
- * - uploaded_files continua só com metadata (sem base64);
- * - Erro no meio limpa o arquivo temporário. ZERO schema change.
+ * - uploaded_files: pg_column_size no lugar de LENGTH(data_base64) — LENGTH
+ *   detoastava os 5GB no servidor e travava 20+ min;
+ * - Log de tabela lenta (>15s) + erro no meio limpa o arquivo temporário.
+ * - VALIDADO em produção-dev: 526 tabelas, 703 mil registros, 319MB em ~7 min,
+ *   heap estável em 1GB. ZERO schema change.
  */
 /**
  * Rev. 4617 - FIX: CRACHÁS — PILLS COM TODOS OS TREINAMENTOS FEITOS (REGRA DE OURO)

@@ -175,12 +175,18 @@ export async function executarBackup(
 
     const gzip = createGzip({ level: 9 });
     const fileStream = fs.createWriteStream(tmpPath);
+    // Captura erro de I/O/compressão imediatamente (não só no end) —
+    // sem isso, falha de disco no meio vira unhandled error/hang.
+    let streamErro: Error | null = null;
+    gzip.on("error", (e) => { streamErro = e; });
+    fileStream.on("error", (e) => { streamErro = e; });
     gzip.pipe(fileStream);
     const write = (chunk: string) =>
       new Promise<void>((resolve, reject) => {
+        if (streamErro) return reject(streamErro);
         const ok = gzip.write(chunk, (err) => (err ? reject(err) : undefined));
         if (ok) resolve();
-        else gzip.once("drain", () => resolve());
+        else gzip.once("drain", () => (streamErro ? reject(streamErro) : resolve()));
       });
 
     let totalRegistros = 0;
@@ -296,7 +302,8 @@ export async function executarBackup(
       await write(`},"metadata":${JSON.stringify(metadata)}}`);
 
       await new Promise<void>((resolve, reject) => {
-        fileStream.on("finish", resolve);
+        if (streamErro) return reject(streamErro);
+        fileStream.on("finish", () => (streamErro ? reject(streamErro) : resolve()));
         fileStream.on("error", reject);
         gzip.on("error", reject);
         gzip.end();

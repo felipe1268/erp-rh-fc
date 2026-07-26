@@ -83,6 +83,7 @@
 - [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; mutações de conta precisam de tenant guard.
 - [Notification recipient tenancy](notification-recipient-tenancy.md) — notify queries must join `user_companies` (users has NO companyId; admin roles are global) or you leak across tenants.
 - [resolveCompanyIds trusts input](resolvecompanyids-no-intersect.md) — resolveCompanyIds/companyFilter don't intersect with user's allowed companies; per-company endpoints must call assert guard explicitly.
+- [Backup diário — streaming obrigatório](backup-streaming-oom.md) — nunca acumular tabelas em RAM (OOM derrubava o servidor); lote adaptativo por ctid; uploaded_files usa pg_column_size, nunca LENGTH.
 - [Migração export/import](migration-export-streaming.md) — export grande = rota GET streaming (archiver.pipe+ctid); import precisa whitelist de identificadores.
 - [Medição duplicada no Contas a Receber](medicao-receita-dupla-escrita.md) — medição é escrita 2x (planejamento_medicao + revenue→entries); dedup contra o par canônico.
 - [Recebíveis só entram manualmente](recebiveis-previstos-manual.md) — nenhum importer materializa receita em financial_entries; user lança via "Recebíveis Previstos"; dedup revenue ignora cancelado.
