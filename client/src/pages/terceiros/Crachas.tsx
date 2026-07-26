@@ -14,6 +14,9 @@ import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import logoCrachaWhite from "@assets/cracha_logo_white.png";
+// Rev. 4611 — crachá aparece p/ TODO funcionário empregado (Ativo/Férias/Afastado/Aviso/Recluso)
+// e some quando desligado (Desligado/Lista_Negra/Inativo) — fonte única de shared/modules
+import { EMPLOYEE_STATUS_DESLIGADOS } from "@shared/modules";
 import {
   CreditCard, Search, Download, Printer, User, Building2, HardHat,
   Eye, Filter, Users, CheckCircle, AlertTriangle, Camera, Palette, RotateCcw,
@@ -208,7 +211,7 @@ export default function Crachas() {
   const cltBadges: BadgeData[] = useMemo(() => {
     if (!employeesData) return [];
     return (employeesData as any[])
-      .filter((e: any) => e.tipoContrato === "CLT" && e.status === "Ativo")
+      .filter((e: any) => e.tipoContrato === "CLT" && !EMPLOYEE_STATUS_DESLIGADOS.includes(e.status))
       .map((e: any) => ({
         id: e.id,
         nome: e.nomeCompleto,
@@ -227,7 +230,7 @@ export default function Crachas() {
   const pjBadges: BadgeData[] = useMemo(() => {
     if (!employeesData) return [];
     return (employeesData as any[])
-      .filter((e: any) => e.tipoContrato === "PJ" && e.status === "Ativo")
+      .filter((e: any) => e.tipoContrato === "PJ" && !EMPLOYEE_STATUS_DESLIGADOS.includes(e.status))
       .map((e: any) => ({
         id: e.id,
         nome: e.nomeCompleto,

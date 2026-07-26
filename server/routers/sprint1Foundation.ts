@@ -650,7 +650,9 @@ const aptidaoRouter = router({
     }).from(employees)
       .where(and(
         companyFilter(employees.companyId, input),
-        eq(employees.status, 'Ativo'),
+        // Rev. 4611 — "ativo" = NÃO-desligado (inclui Férias/Afastado/Aviso/Licença),
+        // mesma regra da tela de Crachás — senão o crachá some p/ quem está de férias
+        sql`${employees.status} NOT IN ('Desligado','Lista_Negra','Inativo')`,
         isNull(employees.deletedAt),
       ));
     if (emps.length === 0) return [];
@@ -731,7 +733,8 @@ const aptidaoRouter = router({
     const emps = await db.select({ id: employees.id }).from(employees)
       .where(and(
         companyFilter(employees.companyId, input),
-        eq(employees.status, 'Ativo'),
+        // Rev. 4611 — mesma regra do badgeStatus: recalcula p/ todo NÃO-desligado
+        sql`${employees.status} NOT IN ('Desligado','Lista_Negra','Inativo')`,
         isNull(employees.deletedAt),
       ));
 

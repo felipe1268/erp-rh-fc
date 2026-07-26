@@ -1,4 +1,31 @@
 /**
+ * Rev. 4611 - FIX: EMISSÃO DE CRACHÁS — CONTAGEM BATE COM COLABORADORES (CRACHÁ P/ TODO EMPREGADO, SOME AO DESLIGAR)
+ *
+ * Problema relatado: Colaboradores mostrava 107 CLT / 14 PJ, mas a tela de
+ * Crachás listava só 87 CLT. Causa: filtro exigia status LITERAL "Ativo" e
+ * deixava de fora Férias (6), Afastado (4), Aviso (8) e Recluso (2) — todos
+ * ainda empregados e que PRECISAM de crachá.
+ *
+ * Regra nova (mesma fonte única do resto do sistema):
+ * - Crachá aparece p/ TODO funcionário NÃO-desligado (Ativo/Férias/Afastado/
+ *   Aviso/Recluso) — `!EMPLOYEE_STATUS_DESLIGADOS.includes(status)` de
+ *   `shared/modules.ts` (Desligado/Lista_Negra/Inativo).
+ * - Quando desligado, o crachá some automaticamente (o status muda e o
+ *   funcionário sai do filtro; mesma coisa p/ terceiros, que já usavam
+ *   status==="ativo" e batiam — 65 = 65, validado no Neon).
+ * - `sprint1.aptidao.badgeStatus` (backend) alinhado à MESMA regra (antes
+ *   status='Ativo'), senão os 20 crachás novos ficariam sem tag de
+ *   documentação.
+ *
+ * Validação: distribuição de status conferida direto no Neon (60002: CLT
+ * Ativo 87 + Férias 6 + Afastado 4 + Aviso 8 + Recluso 2 = 107 ✔; PJ 14 ✔;
+ * terceiros ativos não-excluídos 65 ✔).
+ *
+ * Arquivos: client/src/pages/terceiros/Crachas.tsx,
+ * server/routers/sprint1Foundation.ts. ZERO schema change.
+ */
+
+/**
  * Rev. 4610 - UI: EMISSÃO DE CRACHÁS — LAYOUT "OPÇÃO 5" (NOVA ARTE ENVIADA PELO USUÁRIO)
  *
  * Pedido do usuário: "Ajusta o layout pra ser exatamente igual a esse aqui.
