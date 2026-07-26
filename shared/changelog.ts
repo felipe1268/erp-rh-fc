@@ -1,4 +1,29 @@
 /**
+ * Rev. 4614 - FEAT: CRACHÁS — TODOS OS TREINAMENTOS VIGENTES NA FRENTE (PILLS SUTIS)
+ *
+ * Pedido do usuário: o crachá deve indicar TODOS os treinamentos do colaborador
+ * de forma sutil (ícone/bolinha), pra ficar claro o que a pessoa tem ou não.
+ *
+ * Backend (sprint1Foundation.ts, badgeStatus): passa a devolver
+ * `treinamentos: string[]` — rótulos dos treinamentos VIGENTES, deduplicados
+ * por tipo canônico (mesma chave UPPER-sem-separadores da Rev. 4613; NR-18 ==
+ * NR 18) e padronizados: normas viram "NR-XX" (zero-pad), demais nomes viram
+ * texto truncado a 14 chars. Ordenado alfabeticamente. LGPD-safe: só o rótulo
+ * da norma, sem datas/dados sensíveis.
+ *
+ * Frontend (Crachas.tsx):
+ * - Novo <TreinoPill>: pill pequena com contorno navy e fundo claro — sutil,
+ *   coerente com a arte "Opção 5".
+ * - FRENTE do crachá: fileira centralizada de pills logo após os selos
+ *   NR-35/NR-10 (que continuam como selos redondos e são EXCLUÍDOS das pills
+ *   pra não duplicar). Cap de 8 pills + "+N". Entra no cálculo do modo
+ *   compacto/denso da Rev. 4612 (blocosExtras) — nada estoura os 540px.
+ * - Lista de crachás (BadgeCard): mesmas pills (cap 4 + "+N" com tooltip).
+ *
+ * Vale também p/ o PNG baixado (mesmo DOM). ZERO schema change.
+ */
+
+/**
  * Rev. 4613 - FIX: CONTROLE DE DOCUMENTOS/DOSSIÊ — STATUS FIDEDIGNO + FILTRO "FALTA DOCUMENTO" + ZIP SÓ COM DOCS ATUAIS
  *
  * Contexto: a aba Dossiê é a base principal que vai pro CLIENTE — precisa ser

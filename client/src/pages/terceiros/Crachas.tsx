@@ -117,6 +117,28 @@ interface DocStatus {
   nr35: boolean;
   nr10: boolean;
   restricao: boolean;
+  /** Rev. 4614 — rótulos dos treinamentos VIGENTES (dedup, ex.: ["NR-06","NR-18","NR-35"]) */
+  treinamentos?: string[];
+}
+
+// Rev. 4614 — pill sutil de treinamento vigente (contorno navy, fundo claro)
+function TreinoPill({ rotulo, denso }: { rotulo: string; denso?: boolean }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-full font-bold leading-none"
+      style={{
+        color: CRACHA_NAVY,
+        border: `1.2px solid ${CRACHA_NAVY}`,
+        backgroundColor: "#f4f6fa",
+        fontSize: denso ? 8 : 9,
+        padding: denso ? "2px 5px" : "3px 6px",
+        letterSpacing: "0.03em",
+      }}
+      title={`Treinamento ${rotulo} vigente`}
+    >
+      {rotulo}
+    </span>
+  );
 }
 
 interface BadgeData {
@@ -644,6 +666,14 @@ function BadgeCard({ badge, color, label, onPreview }: { badge: BadgeData; color
             </span>
             {ds.nr35 && <SeloNR tipo="nr35" mini />}
             {ds.nr10 && <SeloNR tipo="nr10" mini />}
+            {(ds.treinamentos || []).slice(0, 4).map((r) => (
+              <TreinoPill key={r} rotulo={r} />
+            ))}
+            {(ds.treinamentos || []).length > 4 && (
+              <span className="text-[9px] font-bold text-muted-foreground" title={(ds.treinamentos || []).join(", ")}>
+                +{(ds.treinamentos || []).length - 4}
+              </span>
+            )}
             {ds.restricao && (
               <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-red-600 text-white" title="Restrição de atividade registrada no ASO — detalhe no Controle de Documentos">
                 ⚠ Restrição
@@ -769,9 +799,15 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
   // do cartão (antes o Setor/Admissão estouravam pra fora da frente).
   const temSelos = !!(badge.docStatus?.nr35 || badge.docStatus?.nr10);
   const temFaixa = !!badge.docStatus?.restricao;
-  const blocosExtras = (temSelos ? 1 : 0) + (temFaixa ? 1 : 0);
+  // Rev. 4614 — pills de treinamentos vigentes na frente (sem repetir NR-35/NR-10,
+  // que já aparecem como selos redondos)
+  const treinoPills = (badge.docStatus?.treinamentos || []).filter(
+    (r) => !(badge.docStatus?.nr35 && r === "NR-35") && !(badge.docStatus?.nr10 && r === "NR-10"),
+  );
+  const temPills = treinoPills.length > 0;
+  const blocosExtras = (temSelos ? 1 : 0) + (temFaixa ? 1 : 0) + (temPills ? 1 : 0);
   const compact = blocosExtras > 0 || detalhes.length >= 4;
-  const denso = blocosExtras === 2 || (blocosExtras >= 1 && detalhes.length >= 4);
+  const denso = blocosExtras >= 2 || (blocosExtras >= 1 && detalhes.length >= 4);
 
   const fotoH = denso ? 104 : compact ? 118 : 144;
   const fotoW = denso ? 118 : compact ? 132 : 158;
@@ -824,6 +860,20 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
         <div className={`flex justify-center gap-[8px] ${denso ? "mt-[6px]" : "mt-[8px]"} relative shrink-0`}>
           {badge.docStatus?.nr35 && <SeloNR tipo="nr35" size={denso ? 38 : 44} />}
           {badge.docStatus?.nr10 && <SeloNR tipo="nr10" size={denso ? 38 : 44} />}
+        </div>
+      )}
+
+      {/* Rev. 4614 — fileira sutil de treinamentos vigentes (pills navy) */}
+      {temPills && (
+        <div className={`flex flex-wrap justify-center gap-[4px] px-[26px] ${denso ? "mt-[5px]" : "mt-[7px]"} relative shrink-0`}>
+          {treinoPills.slice(0, 8).map((r) => (
+            <TreinoPill key={r} rotulo={r} denso={denso} />
+          ))}
+          {treinoPills.length > 8 && (
+            <span className="font-extrabold leading-none" style={{ color: CRACHA_NAVY, fontSize: denso ? 8 : 9 }}>
+              +{treinoPills.length - 8}
+            </span>
+          )}
         </div>
       )}
 

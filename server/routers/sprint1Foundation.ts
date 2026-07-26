@@ -710,6 +710,28 @@ const aptidaoRouter = router({
       const nr35 = hasNr("NR35") || vigentes.some((t) => norm(t.nome).includes("ALTURA"));
       const nr10 = hasNr("NR10") || vigentes.some((t) => norm(t.nome).includes("ELETRIC") || norm(t.nome).includes("ELÉTRIC"));
 
+      // Rev. 4614 — lista de treinamentos VIGENTES p/ o crachá (dedup por tipo
+      // canônico; rótulo curto: norma padronizada "NR-XX" ou nome truncado)
+      const vistos = new Set<string>();
+      const treinamentosVigentes: string[] = [];
+      for (const t of vigentes) {
+        // Mesma canonicalização da Rev. 4613 (controleDocumentos): remove TUDO
+        // que não for A-Z0-9 (cobre "/", "_", parênteses, acentos separadores)
+        const canon = (s: string | null | undefined) =>
+          String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+        const k = canon(t.norma) || canon(t.nome) || "SEMTIPO";
+        const m = k.match(/^NR0*(\d+)/);
+        const rotulo = m
+          ? `NR-${m[1].padStart(2, "0")}`
+          : String(t.norma || t.nome || "").trim().toUpperCase().slice(0, 14);
+        // Dedup pelo RÓTULO final (não só pela chave): "NR1" e "NR01" viram
+        // ambos "NR-01" — sem isso sairiam 2 pills idênticas no crachá
+        if (!rotulo || vistos.has(rotulo)) continue;
+        vistos.add(rotulo);
+        treinamentosVigentes.push(rotulo);
+      }
+      treinamentosVigentes.sort();
+
       const restricaoTxt = String(latestAso?.restricoes || "").trim();
       const aptoAlturaTxt = norm(latestAso?.aptoAltura);
       const restricao = restricaoTxt.length > 0 || aptoAlturaTxt.startsWith("INAPTO") || aptoAlturaTxt.startsWith("NAO") || aptoAlturaTxt.startsWith("NÃO");
@@ -721,6 +743,7 @@ const aptidaoRouter = router({
         nr35,
         nr10,
         restricao,
+        treinamentos: treinamentosVigentes,
       };
     });
   }),
