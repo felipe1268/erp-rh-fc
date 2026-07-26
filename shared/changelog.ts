@@ -1,4 +1,35 @@
 /**
+ * Rev. 4606 - UI: EMISSÃO DE CRACHÁS — NOVO MODELO DE ARTE (TODOS OS TIPOS)
+ *
+ * O usuário enviou uma nova arte de referência para o crachá e pediu o mesmo
+ * layout para TODOS os tipos (CLT, PJ e Terceiros). O componente BadgePreview
+ * (client/src/pages/terceiros/Crachas.tsx) foi redesenhado:
+ *
+ * FRENTE: cabeçalho na cor do tipo (personalizável em "Personalizar Cores")
+ * com o logo da empresa e curva dupla — faixa laranja da marca (ACCENT
+ * #F49D1F) + recorte branco; foto circular grande sobreposta à curva com anel
+ * branco e sombra; nome em caixa alta na cor do tipo com ponto laranja e
+ * função entre filetes; linhas de dados com ícone + rótulo à esquerda e valor
+ * em negrito à direita, sublinhadas (Nº INTERNO, SETOR, EMPRESA, OBRA,
+ * ADMISSÃO — cada linha só aparece se houver dado); QR pequeno + ID no rodapé;
+ * marca d'água de construção (prédios/guindaste em linhas leves, opacity .07).
+ *
+ * VERSO: logo no topo com sublinhado laranja; QR grande emoldurado em borda
+ * laranja + "Verifique a autenticidade deste crachá."; ícone de pessoas +
+ * slogan "Grandes obras começam com grandes pessoas." (destaque laranja) e
+ * "Compromisso que vira resultado."; rodapé na cor do tipo com ícone de
+ * telefone em círculo laranja e "Em caso de perda, entre em contato:" +
+ * telefone da empresa (companyObj.telefone/phone, fallback (12) 3133-5504).
+ *
+ * A cor principal por tipo continua personalizável (localStorage
+ * "cracha-colors"); só o laranja de destaque é fixo da marca. Tamanho do
+ * cartão mantido (340×540) — download PNG (toPng pixelRatio 3) e impressão
+ * continuam funcionando sem mudança. ZERO mudança de server/schema.
+ *
+ * Arquivos: client/src/pages/terceiros/Crachas.tsx.
+ */
+
+/**
  * Rev. 4605 - FIX: TRAVAS ANTI-DUPLICIDADE — CHEQUE RE-CONCILIADO NÃO CRIA GÊMEO + ÍNDICE ÚNICO NAS PROJEÇÕES DE FOLHA/PJ
  *
  * DOIS CASOS REPORTADOS PELO USUÁRIO, MESMA DOENÇA (duplicidade), DUAS TRAVAS:
