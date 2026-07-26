@@ -3583,10 +3583,16 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // ASO mais recente (mesma regra do recálculo do Controle de Documentos)
       const asosResult = await db.select({
         tipo: asos.tipo, dataExame: asos.dataExame, dataValidade: asos.dataValidade,
+        restricoes: asos.restricoes, aptoAltura: asos.aptoAltura,
       }).from(asos)
         .where(and(eq(asos.employeeId, emp.id), eq(asos.companyId, emp.companyId), isNull(asos.deletedAt)))
         .orderBy(desc(asos.dataExame));
       const asoAtual = asosResult[0] || null;
+      // Rev. 4609 — restrição de atividade: SOMENTE flag genérica (LGPD — o
+      // texto da restrição é dado de saúde e NUNCA sai na rota pública)
+      const aptoAlturaNorm = String(asoAtual?.aptoAltura || "").toUpperCase().replace(/[\s.\-]/g, "");
+      const restricaoAtividade = String(asoAtual?.restricoes || "").trim().length > 0
+        || aptoAlturaNorm.startsWith("INAPTO") || aptoAlturaNorm.startsWith("NAO") || aptoAlturaNorm.startsWith("NÃO");
       const asoVigente = !!(asoAtual && asoAtual.dataValidade && asoAtual.dataValidade >= hoje);
 
       // Treinamentos (lista pública LGPD-safe: nome, norma, datas, vigência)
@@ -3631,6 +3637,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         treinamentosOk,
         documentosOk: docsOk,
         nrOk,
+        restricaoAtividade,
         ultimaVerificacao: new Date().toISOString(),
         // Documentos pertinentes (LGPD-safe)
         aso: asoAtual ? { tipo: asoAtual.tipo, dataExame: asoAtual.dataExame, dataValidade: asoAtual.dataValidade, vigente: asoVigente } : null,

@@ -108,6 +108,15 @@ function saveColors(colors: Record<BadgeType, string>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(colors));
 }
 
+// Rev. 4609 — status de documentação/competências vindo de sprint1.aptidao.badgeStatus
+interface DocStatus {
+  pendencias: string[];
+  ok: boolean;
+  nr35: boolean;
+  nr10: boolean;
+  restricao: boolean;
+}
+
 interface BadgeData {
   id: number;
   nome: string;
@@ -121,6 +130,15 @@ interface BadgeData {
   obra?: string;
   matricula?: string;
   dataAdmissao?: string;
+  docStatus?: DocStatus | null;
+}
+
+// Texto da tag de documentação (Poka-Yoke: contagem explícita do que falta)
+function docTagLabel(ds: DocStatus): string {
+  if (ds.ok) return "Documentação OK";
+  if (ds.pendencias.length === 1) return "Falta 1 documento";
+  if (ds.pendencias.length === 2) return "Faltam 2 documentos";
+  return "Documentação pendente";
 }
 
 export default function Crachas() {
@@ -147,6 +165,18 @@ export default function Crachas() {
     { companyId: companyId ?? 0 },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
+
+  // Rev. 4609 — status de documentação ao vivo (mesmas regras do Controle de Documentos)
+  const { data: badgeStatusData } = trpc.sprint1.aptidao.badgeStatus.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: companyId > 0 || companyIds.length > 0 }
+  );
+  const statusByEmp = useMemo(() => {
+    const m = new Map<number, DocStatus>();
+    (badgeStatusData as any[] | undefined)?.forEach((s: any) => m.set(s.employeeId, s));
+    return m;
+  }, [badgeStatusData]);
+  const [docFilter, setDocFilter] = useState<"todos" | "ok" | "pendentes">("todos");
 
   // Fetch terceiros
   const { data: terceirosData, isLoading: loadingTerceiros } = trpc.terceiros.funcionarios.list.useQuery(
@@ -191,8 +221,9 @@ export default function Crachas() {
         empresa: companyName,
         matricula: e.codigoInterno || e.matricula,
         dataAdmissao: e.dataAdmissao,
+        docStatus: statusByEmp.get(e.id) || null,
       }));
-  }, [employeesData, companyName]);
+  }, [employeesData, companyName, statusByEmp]);
 
   const pjBadges: BadgeData[] = useMemo(() => {
     if (!employeesData) return [];
@@ -209,8 +240,9 @@ export default function Crachas() {
         empresa: companyName,
         matricula: e.codigoInterno || e.matricula,
         dataAdmissao: e.dataAdmissao,
+        docStatus: statusByEmp.get(e.id) || null,
       }));
-  }, [employeesData, companyName]);
+  }, [employeesData, companyName, statusByEmp]);
 
   const terceiroBadges: BadgeData[] = useMemo(() => {
     if (!terceirosData) return [];
@@ -233,14 +265,31 @@ export default function Crachas() {
   }, [terceirosData, empresasTerceiras, companyName]);
 
   const currentBadges = useMemo(() => {
-    const badges = activeTab === "clt" ? cltBadges : activeTab === "pj" ? pjBadges : terceiroBadges;
+    let badges = activeTab === "clt" ? cltBadges : activeTab === "pj" ? pjBadges : terceiroBadges;
+    // Filtro de documentação só se aplica onde há status (CLT/PJ) — na aba
+    // Terceiros a lista NUNCA é filtrada por documentação
+    if (docFilter !== "todos" && activeTab !== "terceiro") {
+      badges = badges.filter((b) => b.docStatus && (docFilter === "ok" ? b.docStatus.ok : !b.docStatus.ok));
+    }
     if (!search) return badges;
     return badges.filter((b) =>
       b.nome.toLowerCase().includes(search.toLowerCase()) ||
       b.cpf?.includes(search) ||
       b.funcao?.toLowerCase().includes(search.toLowerCase())
     );
-  }, [activeTab, cltBadges, pjBadges, terceiroBadges, search]);
+  }, [activeTab, cltBadges, pjBadges, terceiroBadges, search, docFilter]);
+
+  // Contadores de documentação da aba atual (só CLT/PJ têm docStatus)
+  const docCounts = useMemo(() => {
+    const badges = activeTab === "clt" ? cltBadges : activeTab === "pj" ? pjBadges : terceiroBadges;
+    const comStatus = badges.filter((b) => b.docStatus);
+    return {
+      total: badges.length,
+      ok: comStatus.filter((b) => b.docStatus!.ok).length,
+      pendentes: comStatus.filter((b) => !b.docStatus!.ok).length,
+      temStatus: comStatus.length > 0,
+    };
+  }, [activeTab, cltBadges, pjBadges, terceiroBadges]);
 
   const handleDownload = useCallback(async () => {
     if (!badgeRef.current) return;
@@ -405,6 +454,30 @@ export default function Crachas() {
             </div>
           </div>
 
+          {/* Rev. 4609 — filtro de documentação (só onde há status: CLT/PJ) */}
+          {docCounts.temStatus && (
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <button
+                onClick={() => setDocFilter("todos")}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${docFilter === "todos" ? "bg-foreground text-background border-foreground" : "bg-white text-muted-foreground hover:bg-gray-50"}`}
+              >
+                Todos ({docCounts.total})
+              </button>
+              <button
+                onClick={() => setDocFilter("ok")}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${docFilter === "ok" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50"}`}
+              >
+                <CheckCircle className="w-3.5 h-3.5 inline mr-1 -mt-px" />Documentação OK ({docCounts.ok})
+              </button>
+              <button
+                onClick={() => setDocFilter("pendentes")}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${docFilter === "pendentes" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-amber-700 border-amber-300 hover:bg-amber-50"}`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 inline mr-1 -mt-px" />Com pendência ({docCounts.pendentes})
+              </button>
+            </div>
+          )}
+
           {/* Content */}
           {["clt", "pj", "terceiro"].map((tab) => (
             <TabsContent key={tab} value={tab}>
@@ -495,8 +568,36 @@ export default function Crachas() {
   );
 }
 
+// Rev. 4609 — selos de competência (NR-35 azul / NR-10 amarelo)
+function SeloNR({ tipo, mini }: { tipo: "nr35" | "nr10"; mini?: boolean }) {
+  const cfg = tipo === "nr35"
+    ? { bg: "#1d4ed8", txt: "NR-35", rotulo: "ALTURA" }
+    : { bg: "#d97706", txt: "NR-10", rotulo: "ELÉTRICA" };
+  if (mini) {
+    return (
+      <span
+        className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-extrabold text-white leading-none"
+        style={{ backgroundColor: cfg.bg }}
+        title={`Treinamento ${cfg.txt} (${cfg.rotulo}) vigente`}
+      >
+        {cfg.txt}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex flex-col items-center justify-center rounded-full text-white shrink-0"
+      style={{ backgroundColor: cfg.bg, width: 46, height: 46 }}
+    >
+      <span className="text-[10px] font-extrabold leading-none">{cfg.txt}</span>
+      <span className="text-[6.5px] font-bold leading-none mt-[2px] tracking-wide">{cfg.rotulo}</span>
+    </span>
+  );
+}
+
 // Badge Card Component
 function BadgeCard({ badge, color, label, onPreview }: { badge: BadgeData; color: string; label: string; onPreview: () => void }) {
+  const ds = badge.docStatus;
   return (
     <div
       className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
@@ -527,6 +628,27 @@ function BadgeCard({ badge, color, label, onPreview }: { badge: BadgeData; color
             )}
           </div>
         </div>
+        {/* Rev. 4609 — tag de documentação + selos NR + restrição */}
+        {ds && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                ds.ok ? "bg-emerald-100 text-emerald-800" : ds.pendencias.length <= 2 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-700"
+              }`}
+              title={ds.ok ? "ASO, treinamentos, dados e foto em dia" : `Pendências: ${ds.pendencias.join("; ")}`}
+            >
+              {ds.ok ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+              {docTagLabel(ds)}
+            </span>
+            {ds.nr35 && <SeloNR tipo="nr35" mini />}
+            {ds.nr10 && <SeloNR tipo="nr10" mini />}
+            {ds.restricao && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-red-600 text-white" title="Restrição de atividade registrada no ASO — detalhe no Controle de Documentos">
+                ⚠ Restrição
+              </span>
+            )}
+          </div>
+        )}
         <div className="mt-2 flex items-center justify-between">
           <span className="text-xs text-muted-foreground">{badge.cpf ? `CPF: ${badge.cpf.substring(0, 7)}...` : ""}</span>
           <Button variant="ghost" size="sm" className="h-7 text-xs">
@@ -707,8 +829,27 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
         <p className="text-[13px] leading-tight truncate" style={{ color: NAVY }}>{badge.funcao || "—"}</p>
       </div>
 
-      {/* Linhas de dados: ícone + rótulo à esquerda, valor bold à direita, filete sob rótulo/valor */}
-      <div className="mt-[16px] pl-[38px] pr-[34px] relative">
+      {/* Rev. 4609 — selos de competência vigentes (NR-35 / NR-10) */}
+      {(badge.docStatus?.nr35 || badge.docStatus?.nr10) && (
+        <div className="flex justify-center gap-[8px] mt-[8px] relative">
+          {badge.docStatus?.nr35 && <SeloNR tipo="nr35" />}
+          {badge.docStatus?.nr10 && <SeloNR tipo="nr10" />}
+        </div>
+      )}
+
+      {/* Rev. 4609 — faixa de restrição de atividade (aviso genérico, LGPD-safe) */}
+      {badge.docStatus?.restricao && (
+        <div className="mx-[8px] mt-[8px] relative">
+          <div className="flex items-center justify-center gap-[6px] rounded-md py-[6px] px-2" style={{ backgroundColor: "#dc2626" }}>
+            <AlertTriangle className="w-[14px] h-[14px] text-white shrink-0" strokeWidth={2.5} />
+            <span className="text-white text-[11.5px] font-extrabold tracking-wide">RESTRIÇÃO DE ATIVIDADE</span>
+          </div>
+        </div>
+      )}
+
+      {/* Linhas de dados: ícone + rótulo à esquerda, valor bold à direita, filete sob rótulo/valor.
+          Rev. 4609 — espaçamento compacta quando há selos NR/faixa de restrição (cartão tem 540px fixos) */}
+      <div className={`${(badge.docStatus?.nr35 || badge.docStatus?.nr10 || badge.docStatus?.restricao) ? "mt-[8px]" : "mt-[16px]"} pl-[38px] pr-[34px] relative`}>
         {detalhes.map((d, i) => (
           <div key={i} className="flex items-center gap-[10px] pt-[9px]">
             <span className="shrink-0" style={{ color: NAVY }}>{d.icon}</span>

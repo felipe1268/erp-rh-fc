@@ -126,6 +126,14 @@ export default function VerificarAptidao() {
             )}
           </div>
 
+          {/* Rev. 4609 — restrição de atividade (aviso genérico, LGPD-safe) */}
+          {(data as any).restricaoAtividade && (
+            <div className="bg-red-600 rounded-xl p-3 flex items-center justify-center gap-2">
+              <Shield className="w-5 h-5 text-white shrink-0" />
+              <span className="text-white text-sm font-extrabold tracking-wide">⚠ RESTRIÇÃO DE ATIVIDADE</span>
+            </div>
+          )}
+
           {/* Status de aptidão detalhado (CLT/PJ) */}
           {tipo !== "terceiro" && (
             <div className={`${statusBg} ${statusBorder} border rounded-xl p-4 space-y-2`}>

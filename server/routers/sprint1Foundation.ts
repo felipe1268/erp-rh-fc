@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { eq, and, desc, isNull, sql, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
-import { getDb, createAuditLog } from "../db";
+import { getDb, createAuditLog, getUserCompanyLinks } from "../db";
 import { companyDocuments, convencaoColetiva, employeeAptidao, employees, asos, trainings, companies, obras } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
@@ -615,6 +615,112 @@ const aptidaoRouter = router({
     return db.select().from(employeeAptidao)
       .where(companyFilter(employeeAptidao.companyId, input))
       .orderBy(desc(employeeAptidao.updatedAt));
+  }),
+
+  // Rev. 4609 — Status de documentação p/ Emissão de Crachás (batch, ao vivo).
+  // Regras IDÊNTICAS ao recalcAll: ASO vigente + ≥1 treinamento vigente +
+  // dados pessoais + foto. Também sinaliza competências NR-35/NR-10 vigentes
+  // e restrição de atividade (campo "restricoes" do ASO mais recente).
+  badgeStatus: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+
+    // Guarda anti-IDOR (mesma regra do _assertCompanyAccess de Terceiros):
+    // admin/admin_master liberam; usuário COM vínculos em user_companies só
+    // acessa as empresas vinculadas; usuário SEM vínculos (config global) libera.
+    if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+      const links = await getUserCompanyLinks(ctx.user.id);
+      const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+      if (allowedIds.length > 0) {
+        const solicitadas = [input.companyId, ...(input.companyIds || [])].filter((v) => v > 0);
+        if (solicitadas.some((cid) => !allowedIds.includes(cid))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+        }
+      }
+    }
+
+    const hoje = new Date().toISOString().split('T')[0];
+
+    const emps = await db.select({
+      id: employees.id,
+      cpf: employees.cpf,
+      nomeCompleto: employees.nomeCompleto,
+      dataNascimento: employees.dataNascimento,
+      fotoUrl: employees.fotoUrl,
+    }).from(employees)
+      .where(and(
+        companyFilter(employees.companyId, input),
+        eq(employees.status, 'Ativo'),
+        isNull(employees.deletedAt),
+      ));
+    if (emps.length === 0) return [];
+
+    const allAsos = await db.select({
+      employeeId: asos.employeeId,
+      dataExame: asos.dataExame,
+      dataValidade: asos.dataValidade,
+      restricoes: asos.restricoes,
+      aptoAltura: asos.aptoAltura,
+    }).from(asos)
+      .where(and(companyFilter(asos.companyId, input), isNull(asos.deletedAt)));
+
+    const allTreins = await db.select({
+      employeeId: trainings.employeeId,
+      nome: trainings.nome,
+      norma: trainings.norma,
+      dataValidade: trainings.dataValidade,
+    }).from(trainings)
+      .where(and(companyFilter(trainings.companyId, input), isNull(trainings.deletedAt)));
+
+    const asosByEmp = new Map<number, typeof allAsos>();
+    for (const a of allAsos) {
+      const arr = asosByEmp.get(a.employeeId) || [];
+      arr.push(a);
+      asosByEmp.set(a.employeeId, arr);
+    }
+    const treinsByEmp = new Map<number, typeof allTreins>();
+    for (const t of allTreins) {
+      const arr = treinsByEmp.get(t.employeeId) || [];
+      arr.push(t);
+      treinsByEmp.set(t.employeeId, arr);
+    }
+
+    const norm = (s: string | null | undefined) =>
+      String(s || "").toUpperCase().replace(/[\s.\-]/g, "");
+
+    return emps.map((emp) => {
+      const empAsos = (asosByEmp.get(emp.id) || []).sort((a, b) => (a.dataExame < b.dataExame ? 1 : -1));
+      const latestAso = empAsos[0] || null;
+      const asoVigente = !!(latestAso && latestAso.dataValidade && latestAso.dataValidade >= hoje);
+
+      const empTreins = treinsByEmp.get(emp.id) || [];
+      const vigentes = empTreins.filter((t) => t.dataValidade && t.dataValidade >= hoje);
+      const treinamentosOk = vigentes.length > 0;
+      const docsOk = !!(emp.cpf && emp.nomeCompleto && emp.dataNascimento);
+
+      const pendencias: string[] = [];
+      if (!asoVigente) pendencias.push("ASO vencido ou inexistente");
+      if (!treinamentosOk) pendencias.push("Nenhum treinamento vigente");
+      if (!docsOk) pendencias.push("Dados pessoais incompletos");
+      if (!emp.fotoUrl) pendencias.push("Foto não cadastrada");
+
+      const hasNr = (tag: string) => vigentes.some((t) => norm(t.norma).includes(tag) || norm(t.nome).includes(tag));
+      const nr35 = hasNr("NR35") || vigentes.some((t) => norm(t.nome).includes("ALTURA"));
+      const nr10 = hasNr("NR10") || vigentes.some((t) => norm(t.nome).includes("ELETRIC") || norm(t.nome).includes("ELÉTRIC"));
+
+      const restricaoTxt = String(latestAso?.restricoes || "").trim();
+      const aptoAlturaTxt = norm(latestAso?.aptoAltura);
+      const restricao = restricaoTxt.length > 0 || aptoAlturaTxt.startsWith("INAPTO") || aptoAlturaTxt.startsWith("NAO") || aptoAlturaTxt.startsWith("NÃO");
+
+      return {
+        employeeId: emp.id,
+        pendencias,
+        ok: pendencias.length === 0,
+        nr35,
+        nr10,
+        restricao,
+      };
+    });
   }),
 
   // Recalcular aptidão de todos os colaboradores ativos de uma empresa

@@ -1,4 +1,43 @@
 /**
+ * Rev. 4609 - FEAT: EMISSÃO DE CRACHÁS — TAG DE DOCUMENTAÇÃO + SELOS NR-35/NR-10 + FAIXA DE RESTRIÇÃO (LGPD-SAFE)
+ *
+ * Pedido do usuário (plano validado antes de codar):
+ * 1. Garantir visão de que todos os funcionários estão habilitados;
+ * 2. Tag por card: "Documentação OK" / "Falta 1 documento" / "Faltam 2
+ *    documentos" / "Documentação pendente" (3+), com tooltip listando as
+ *    pendências exatas;
+ * 3. Diferenciação visual p/ treinamento de altura (NR-35, selo azul) e
+ *    elétrica (NR-10, selo âmbar) — nos cards E na FRENTE do crachá;
+ * 4. Restrição de atividade (ex.: vertigem/inapto p/ altura) em evidência na
+ *    frente do crachá — faixa vermelha "RESTRIÇÃO DE ATIVIDADE".
+ *
+ * BACKEND:
+ * - Novo `sprint1.aptidao.badgeStatus` (server/routers/sprint1Foundation.ts):
+ *   batch (3 queries), regras IDÊNTICAS ao recalcAll (ASO vigente + ≥1
+ *   treinamento vigente + dados pessoais + foto). NR-35/NR-10 detectados por
+ *   norma OU nome do treinamento vigente (normalização sem espaço/ponto/hífen
+ *   + palavras ALTURA/ELÉTRICA). Restrição = campo `restricoes` do ASO mais
+ *   recente preenchido OU `aptoAltura` começando com INAPTO/NÃO.
+ *   Guarda anti-IDOR: admin/admin_master liberam; usuário com vínculos em
+ *   user_companies só acessa empresas vinculadas (mesma regra do
+ *   _assertCompanyAccess de Terceiros).
+ * - `portalExterno.verificar.funcionario` devolve `restricaoAtividade`
+ *   (SOMENTE booleano — o texto da restrição é dado de saúde e NUNCA sai na
+ *   rota pública, decisão LGPD validada com o usuário).
+ *
+ * FRONTEND:
+ * - Crachas.tsx: tag colorida por card (verde OK / âmbar 1-2 / vermelho 3+),
+ *   pills de filtro Todos/Documentação OK/Com pendência com contadores (só
+ *   CLT/PJ — aba Terceiros NUNCA é filtrada por documentação), selos NR mini
+ *   nos cards, selos redondos NR-35/NR-10 + faixa vermelha "RESTRIÇÃO DE
+ *   ATIVIDADE" na frente do crachá (espaçamento compacta p/ caber nos 540px).
+ * - VerificarAptidao.tsx (página pública do QR): banner vermelho genérico
+ *   quando restricaoAtividade=true.
+ *
+ * ZERO schema change.
+ */
+
+/**
  * Rev. 4608 - UI: CONTROLE DE DOCUMENTOS — FOTO DOS FUNCIONÁRIOS NA LISTA DO DOSSIÊ
  *
  * Pedido do usuário: exibir a foto de cada funcionário na lista da aba
