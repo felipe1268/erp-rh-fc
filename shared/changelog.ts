@@ -1,4 +1,26 @@
 /**
+ * Rev. 4619 - FIX: SINCRONIZAÇÃO DE CÓDIGO (GITHUB) RECONECTADA + SNAPSHOT PARTICIONADO
+ *
+ * Sintoma: painel Configurações → Sincronização de Código mostrava "GitHub não
+ * conectado" e nada era enviado ao GitHub.
+ *
+ * Causas (duas):
+ * 1) O vínculo da integração GitHub com este ambiente tinha expirado (o endpoint
+ *    legado de connectors passou a devolver lista vazia). Reconectado pelo usuário
+ *    e o cliente migrado para o @replit/connectors-sdk (proxy autenticado com
+ *    refresh automático de token) em server/services/githubClient.ts.
+ * 2) O envio da cópia do código (.zip ~22MB) falhava com HTTP 413: o proxy da
+ *    integração limita o corpo a ~5MB. pushCodeSnapshotToGitHub agora fatia o
+ *    zip em partes de 4MB (erp-source-latest.zip.partNNN) + README.md com
+ *    SHA-256 e instruções de reconstituição (cat *.part* > zip).
+ *
+ * VALIDADO: status "github_atrasado" detectado corretamente e snapshot completo
+ * enviado à branch erp-code-snapshots (23MB, commit 63fd106).
+ * Obs.: o push do histórico git completo para main segue pendente por trava da
+ * plataforma (INDEX_LOCKED) — usar o painel Git do Replit para o push manual.
+ * ZERO schema change.
+ */
+/**
  * Rev. 4618 - FIX: BACKUP DIÁRIO EM STREAMING — FIM DO OOM QUE DERRUBAVA O SERVIDOR
  *
  * Sintoma: erro "The string did not match the expected pattern" no Safari/iPad

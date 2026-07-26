@@ -125,6 +125,7 @@
 - [Folha: relatórios secundários sem filtro CLT](folha-relatorios-secundarios-sem-filtro-clt.md) — `simularPagamento` já filtra CLT; vazamentos de PJ tendem a estar em relatórios SECUNDÁRIOS que cruzam folhaItens/employees sem checar tipoContrato.
 - [Decisão de folha sobrevive à regeneração](folha-decisao-sobrevive-regeneracao.md) — decisões de RH (pagar/não-pagar aviso, vale) precisam de tabela PRÓPRIA (não campo no snapshot) para persistir entre simulações.
 - [Print from a fixed-position container](print-dialog-fixed-clip.md) — window.print() on ANY `position:fixed` element clips/blanks; use self-contained HTML in window.open() instead.
+- [Integração GitHub — SDK proxy e limites](github-connector-proxy.md) — usar @replit/connectors-sdk (endpoint legado devolve vazio); proxy limita corpo ~5MB → uploads fatiados; token bruto inacessível.
 - [Stripe restricted key breaks stripe-replit-sync](stripe-restricted-key-permissions.md) — rk_test_/rk_live_ keys lack account-read scope; must use a standard sk_ secret key.
 - [Tenant isolation audit — recurring IDOR pattern](tenant-isolation-audit-idor-pattern.md) — lookup-by-id procedures often skip companyId check; `admin` role is intentionally global (SaaS painel mestre needs separate client-admin).
 - [Contas a Pagar — FD nunca consolida](contas-pagar-fd-exclusion.md) — Faturamento Direto deve ficar SEMPRE fora de agrupamento por ciclo de fechamento de fornecedor.

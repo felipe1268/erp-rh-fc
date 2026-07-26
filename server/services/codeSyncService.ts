@@ -295,18 +295,52 @@ export async function pushCodeSnapshotToGitHub(iniciadoPor: string): Promise<Sna
 
   const zip = await buildSourceZip();
 
-  // 1) blob com o conteúdo do zip (base64)
-  const blob = await ghJson(`/repos/${GITHUB_REPO}/git/blobs`, {
-    method: "POST",
-    body: JSON.stringify({ content: zip.toString("base64"), encoding: "base64" }),
-  });
+  // 1) blobs com o conteúdo do zip em PARTES de 4MB — o proxy da integração
+  //    rejeita corpos maiores que ~5MB (HTTP 413), então um zip de 20MB+
+  //    precisa ser fatiado. Reconstituir: cat erp-source-latest.zip.part* > erp-source-latest.zip
+  const PART_BYTES = 4 * 1024 * 1024;
+  const treeEntries: Array<{ path: string; mode: string; type: string; sha: string }> = [];
+  const totalPartes = Math.ceil(zip.length / PART_BYTES);
+  for (let i = 0; i < totalPartes; i++) {
+    const parte = zip.subarray(i * PART_BYTES, (i + 1) * PART_BYTES);
+    const blob = await ghJson(`/repos/${GITHUB_REPO}/git/blobs`, {
+      method: "POST",
+      body: JSON.stringify({ content: parte.toString("base64"), encoding: "base64" }),
+    });
+    treeEntries.push({
+      path: `${SNAPSHOT_FILE}.part${String(i + 1).padStart(3, "0")}`,
+      mode: "100644",
+      type: "blob",
+      sha: blob.sha,
+    });
+  }
 
-  // 2) árvore contendo apenas o zip
+  // manifest com instruções de reconstituição
+  const { createHash } = await import("crypto");
+  const manifesto = [
+    `# Cópia de segurança do código-fonte do ERP`,
+    ``,
+    `Arquivo: ${SNAPSHOT_FILE} (dividido em ${totalPartes} partes de até 4MB)`,
+    `Tamanho total: ${zip.length} bytes`,
+    `SHA-256 do zip completo: ${createHash("sha256").update(zip).digest("hex")}`,
+    ``,
+    `Para reconstituir:`,
+    "```",
+    `cat ${SNAPSHOT_FILE}.part* > ${SNAPSHOT_FILE}`,
+    `unzip ${SNAPSHOT_FILE}`,
+    "```",
+    ``,
+  ].join("\n");
+  const manifestBlob = await ghJson(`/repos/${GITHUB_REPO}/git/blobs`, {
+    method: "POST",
+    body: JSON.stringify({ content: Buffer.from(manifesto).toString("base64"), encoding: "base64" }),
+  });
+  treeEntries.push({ path: "README.md", mode: "100644", type: "blob", sha: manifestBlob.sha });
+
+  // 2) árvore contendo as partes do zip + manifesto
   const tree = await ghJson(`/repos/${GITHUB_REPO}/git/trees`, {
     method: "POST",
-    body: JSON.stringify({
-      tree: [{ path: SNAPSHOT_FILE, mode: "100644", type: "blob", sha: blob.sha }],
-    }),
+    body: JSON.stringify({ tree: treeEntries }),
   });
 
   // 3) parent = head atual da branch de snapshots (se existir)

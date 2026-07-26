@@ -8,38 +8,9 @@
  * Repositório alvo: env GITHUB_REPO (formato "owner/repo"), default felipe1268/erp-rh-fc.
  */
 
+import { ReplitConnectors } from "@replit/connectors-sdk";
+
 export const GITHUB_REPO = process.env.GITHUB_REPO || "felipe1268/erp-rh-fc";
-
-let cachedHostname: string | undefined;
-
-function getXReplitToken(): string | null {
-  if (process.env.REPL_IDENTITY) return "repl " + process.env.REPL_IDENTITY;
-  if (process.env.WEB_REPL_RENEWAL) return "depl " + process.env.WEB_REPL_RENEWAL;
-  return null;
-}
-
-/** Obtém o access_token do GitHub via connector. Retorna null se indisponível. */
-export async function getGithubToken(): Promise<string | null> {
-  const hostname = cachedHostname ?? process.env.REPLIT_CONNECTORS_HOSTNAME;
-  cachedHostname = hostname;
-  if (!hostname) return null;
-  const xReplitToken = getXReplitToken();
-  if (!xReplitToken) return null;
-
-  try {
-    const res = await fetch(
-      `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=github`,
-      { headers: { Accept: "application/json", X_REPLIT_TOKEN: xReplitToken } }
-    );
-    if (!res.ok) return null;
-    const data: any = await res.json();
-    const conn = (data.items || [])[0];
-    const s = conn?.settings || {};
-    return s.access_token || s.oauth?.credentials?.access_token || null;
-  } catch {
-    return null;
-  }
-}
 
 export class GitHubNotConnectedError extends Error {
   constructor() {
@@ -48,18 +19,35 @@ export class GitHubNotConnectedError extends Error {
   }
 }
 
-/** fetch autenticado contra api.github.com. Lança GitHubNotConnectedError se sem token. */
+/**
+ * fetch autenticado contra a API do GitHub via proxy do connector Replit.
+ * Rev. 4619 — migrado do endpoint legado /api/v2/connection (que passou a
+ * devolver lista vazia) para o @replit/connectors-sdk, que cuida de identidade,
+ * refresh e injeção do token automaticamente. NUNCA cachear cliente/token.
+ */
 export async function githubFetch(path: string, init?: RequestInit): Promise<Response> {
-  const token = await getGithubToken();
-  if (!token) throw new GitHubNotConnectedError();
-  return fetch(`https://api.github.com${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "User-Agent": "erp-fc-sync",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(init?.headers || {}),
-    },
-  });
+  try {
+    const connectors = new ReplitConnectors();
+    const res = await connectors.proxy("github", path, {
+      method: (init?.method as string) || "GET",
+      headers: {
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...(typeof init?.body === "string" ? { "Content-Type": "application/json" } : {}),
+        ...(init?.headers as Record<string, string> | undefined),
+      },
+      body: init?.body as any,
+    });
+    // 401/403 sem rate-limit = credencial indisponível/expirada → "não conectado"
+    if (res.status === 401 || (res.status === 403 && res.headers.get("x-ratelimit-remaining") !== "0")) {
+      throw new GitHubNotConnectedError();
+    }
+    return res as unknown as Response;
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    if (/not.?connected|no connection|unauthorized|401|credential/i.test(msg)) {
+      throw new GitHubNotConnectedError();
+    }
+    throw e;
+  }
 }
