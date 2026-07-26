@@ -275,29 +275,39 @@ PARÁGRAFO 3º: Dados bancários da CONTRATADA para pagamento: [DADOS_BANCARIOS_
 
 Cláusula 14ª. O não pagamento, no prazo, de parcela incontroversa devidamente medida e faturada acarretará multa de 10% (dez por cento) sobre o valor da parcela em atraso, incidindo ainda juros de mora e correção monetária, nos termos da legislação vigente.
 
+DOS NÍVEIS DE SERVIÇO (SLA)
+
+Cláusula 15ª. A qualidade dos serviços será aferida exclusivamente por indicadores objetivos de RESULTADO, definidos de comum acordo entre as partes no ANEXO I — NÍVEIS DE SERVIÇO (SLA), que integra o presente CONTRATO para todos os fins de direito.
+
+PARÁGRAFO 1º: Os indicadores do ANEXO I medem entregas, prazos e qualidade técnica, sendo expressamente vedada sua utilização para aferição de presença, jornada, horário ou frequência da CONTRATADA ou de seus sócios, prepostos e equipe.
+
+PARÁGRAFO 2º: O não atingimento dos níveis de serviço pactuados terá consequência exclusivamente comercial, na forma prevista no ANEXO I (glosa proporcional na medição do período e/ou refazimento às expensas da CONTRATADA), não configurando, em nenhuma hipótese, sanção de natureza disciplinar.
+
+PARÁGRAFO 3º: Os indicadores e metas do ANEXO I poderão ser revistos de comum acordo entre as partes, mediante Termo Aditivo.
+
 DA RESCISÃO
 
-Cláusula 15ª. O presente contrato poderá ser rescindido imotivadamente por qualquer das partes, mediante comunicação por escrito com antecedência mínima de 30 (trinta) dias, sem a incidência de qualquer multa ou ônus, sendo devidos à CONTRATADA apenas os valores das medições dos serviços efetivamente executados até a data da rescisão. Fica ressalvada a possibilidade de rescisão imediata pela parte inocente em caso de descumprimento de qualquer cláusula ou obrigação prevista neste instrumento pela outra parte.
+Cláusula 16ª. O presente contrato poderá ser rescindido imotivadamente por qualquer das partes, mediante comunicação por escrito com antecedência mínima de 30 (trinta) dias, sem a incidência de qualquer multa ou ônus, sendo devidos à CONTRATADA apenas os valores das medições dos serviços efetivamente executados até a data da rescisão. Fica ressalvada a possibilidade de rescisão imediata pela parte inocente em caso de descumprimento de qualquer cláusula ou obrigação prevista neste instrumento pela outra parte.
 
 DO PRAZO E DO REAJUSTE DO VALOR
 
-Cláusula 16ª. O presente contrato terá vigência de [PRAZO_VIGENCIA], com início em [DATA_INICIO] e término em [DATA_FIM], podendo ser prorrogado exclusivamente de forma expressa, mediante Termo Aditivo assinado pelas partes, com reavaliação do escopo, do prazo e do valor dos serviços a cada prorrogação.
+Cláusula 17ª. O presente contrato terá vigência de [PRAZO_VIGENCIA], com início em [DATA_INICIO] e término em [DATA_FIM], podendo ser prorrogado exclusivamente de forma expressa, mediante Termo Aditivo assinado pelas partes, com reavaliação do escopo, do prazo e do valor dos serviços a cada prorrogação.
 
-Cláusula 17ª. Em caso de prorrogação por período igual ou superior a 12 (doze) meses, o valor do contrato poderá ser reajustado anualmente, na data de aniversário de sua assinatura, pela variação do IGP-M/FGV ou, na sua falta, por índice oficial que o substitua.
+Cláusula 18ª. Em caso de prorrogação por período igual ou superior a 12 (doze) meses, o valor do contrato poderá ser reajustado anualmente, na data de aniversário de sua assinatura, pela variação do IGP-M/FGV ou, na sua falta, por índice oficial que o substitua.
 
 DAS CONDIÇÕES GERAIS
 
-Cláusula 18ª. A CONTRATADA poderá executar os serviços por meio de seus sócios, prepostos, empregados ou equipe própria devidamente qualificada, podendo substituí-los livremente, mediante simples comunicação à CONTRATANTE, desde que mantida a qualificação técnica necessária à execução do objeto. É vedada apenas a cessão ou transferência deste contrato a outra pessoa jurídica sem o prévio consentimento por escrito da CONTRATANTE.
+Cláusula 19ª. A CONTRATADA poderá executar os serviços por meio de seus sócios, prepostos, empregados ou equipe própria devidamente qualificada, podendo substituí-los livremente, mediante simples comunicação à CONTRATANTE, desde que mantida a qualificação técnica necessária à execução do objeto. É vedada apenas a cessão ou transferência deste contrato a outra pessoa jurídica sem o prévio consentimento por escrito da CONTRATANTE.
 
-Cláusula 19ª. Qualquer tolerância de uma das partes em relação ao não cumprimento das obrigações e deveres neste instrumento assumidos não importará em novação quanto aos seus termos, condições ou prazos, não devendo, sob quaisquer hipóteses, ser interpretada como renúncia ou desistência do cumprimento dos dispositivos do presente em seus estritos termos.
+Cláusula 20ª. Qualquer tolerância de uma das partes em relação ao não cumprimento das obrigações e deveres neste instrumento assumidos não importará em novação quanto aos seus termos, condições ou prazos, não devendo, sob quaisquer hipóteses, ser interpretada como renúncia ou desistência do cumprimento dos dispositivos do presente em seus estritos termos.
 
-Cláusula 20ª. Toda e qualquer alteração do objeto ou das condições do presente Contrato necessitará da concordância prévia e expressa de ambas as partes e será formalizada mediante Termo Aditivo.
+Cláusula 21ª. Toda e qualquer alteração do objeto ou das condições do presente Contrato necessitará da concordância prévia e expressa de ambas as partes e será formalizada mediante Termo Aditivo.
 
-Cláusula 21ª. A contratação da presente prestação de serviços se dá sob a égide do disposto no artigo 593 e seguintes do Código Civil Brasileiro, não configurando, em nenhuma hipótese, relação empregatícia entre as partes, seus sócios, prepostos ou empregados.
+Cláusula 22ª. A contratação da presente prestação de serviços se dá sob a égide do disposto no artigo 593 e seguintes do Código Civil Brasileiro, não configurando, em nenhuma hipótese, relação empregatícia entre as partes, seus sócios, prepostos ou empregados.
 
 DO FORO
 
-Cláusula 22ª. Para dirimir quaisquer controvérsias oriundas do presente CONTRATO, as partes elegem o foro da comarca de [FORO_COMARCA], com renúncia a qualquer outro, por mais privilegiado que seja.
+Cláusula 23ª. Para dirimir quaisquer controvérsias oriundas do presente CONTRATO, as partes elegem o foro da comarca de [FORO_COMARCA], com renúncia a qualquer outro, por mais privilegiado que seja.
 
 Por estarem assim justas e contratadas, firmam o presente instrumento, em duas vias de igual teor, juntamente com 2 (duas) testemunhas.
 
@@ -314,7 +324,15 @@ _____________________________
 TESTEMUNHAS:
 ___________________________ ___________________________
 Nome:                       Nome:
-RG:                         RG:`;
+RG:                         RG:
+
+ANEXO I — NÍVEIS DE SERVIÇO (SLA)
+
+Indicadores de resultado pactuados entre as partes, apurados por medição, nos termos da cláusula de Níveis de Serviço deste CONTRATO:
+
+[SLA_INDICADORES]
+
+O não atingimento das metas acima terá as consequências comerciais indicadas em cada indicador, apuradas na medição do período correspondente.`;
 
 // ---------------------------------------------------------------------------
 // Cruzamento prestador PJ × catálogo de Fornecedores (Rev. 3262)
