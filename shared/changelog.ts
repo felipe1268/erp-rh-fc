@@ -1,4 +1,42 @@
 /**
+ * Rev. 4595 - FEAT: CONTROLE DE CHEQUES — BLOQUEIO DE Nº DE CHEQUE DUPLICADO (POKA-YOKE) + LIMPEZA DE DUPLICATAS
+ *
+ * PEDIDO DO USUÁRIO: depois de encontrarmos 11 grupos de cheques duplicados
+ * na base de 2026 (zeros à esquerda "000531"×"531", relançamento em mês
+ * errado, importação 2× da mesma planilha), o usuário pediu: (1) excluir as
+ * duplicatas sem conciliação no extrato e sem vínculo com lançamento/OC,
+ * (2) corrigir a série 516–520 do J. Alves e criar o 520 faltante, e
+ * (3) criar uma REGRA que bloqueie lançar cheque com numeração repetida.
+ *
+ * LIMPEZA (dados, direto no Neon, soft-delete reversível com anotação):
+ * - 10 duplicatas excluídas (excluido_em) mantendo sempre a versão
+ *   compensada/conciliada ou de dado mais completo; PROPEL 397 manteve o
+ *   CONCILIADO (id c/ lancamento_id) e excluiu o solto.
+ * - Série J ALVES: 517 duplicado (venc. errado) excluído; 518→05/09 e
+ *   519→05/10 corrigidos (venc + mes_ref/ano_ref); 520 criado (05/11,
+ *   R$ 3.652,20, clonando conta/banco/fornecedor/obra do 519, com guard
+ *   NOT EXISTS anti-corrida). Varredura final: 0 grupos duplicados em 2026.
+ *
+ * REGRA NOVA (Poka-Yoke nível 2 — bloqueio, server-side em cheques.ts):
+ * - Helper `assertNumeroChequeDisponivel`: normaliza o número (só dígitos,
+ *   sem zeros à esquerda — pega "000531"×"531") e bloqueia com CONFLICT se
+ *   já existir cheque ATIVO na empresa com o mesmo número E mesmo contexto
+ *   de talão — mesma conta bancária OU mesmo fornecedor. NÃO bloqueia
+ *   globalmente por número: talões de contas/fornecedores diferentes repetem
+ *   numeração legitimamente (há casos reais na base).
+ * - Aplicado em: criarManual (antes do INSERT), criarManualLote (por parcela
+ *   + numeração única DENTRO do próprio lote) e atualizar (só quando o nº
+ *   MUDA; ignora o próprio id; contexto vem do input ou do registro atual).
+ * - Mensagem de erro diz QUAL cheque já existe (nº, fornecedor, valor BRL,
+ *   vencimento, status) — o cliente já exibe err.message em toast destrutivo
+ *   nos 2 fluxos (salvarManual/salvarEdicao), zero mudança de client.
+ * - Importação por planilha/IA NÃO mudou: mantém o dedup natural idempotente
+ *   (nº+valor+mês+ano) para não quebrar re-upload de histórico.
+ *
+ * ARQUIVOS: server/routers/cheques.ts (helper + 3 mutations). Dados: limpeza
+ * via SQL direto no Neon (sem migração). ZERO schema change.
+ */
+/**
  * Rev. 4594 - FEAT: CONTAS A PAGAR — FATURA DE CARTÃO IDENTIFICADA + OPÇÕES TOTAL / MÍNIMO / PARCIAL
  *
  * PEDIDO DO USUÁRIO: no Contas a Pagar, o título da fatura de cartão deve

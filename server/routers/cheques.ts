@@ -395,6 +395,63 @@ function chaveDedup(row: ChequeRow): string {
   return `${row.numeroCheque ?? ""}|${cents}|${row.ano}|${row.mes ?? ""}`;
 }
 
+// Rev. 4595 — Poka-Yoke (nível 2, bloqueio): número de cheque DUPLICADO.
+// Um cheque físico tem número único no talão; a base já sofreu duplicatas por
+// zeros à esquerda ("000531" × "531") e relançamentos em mês errado. Regra:
+// bloqueia lançamento/edição quando JÁ EXISTE cheque ativo (não excluído) na
+// empresa com o MESMO número normalizado (só dígitos, sem zeros à esquerda) E
+// mesmo contexto de talão — mesma conta bancária OU mesmo fornecedor. Cheques
+// de contas/fornecedores diferentes podem repetir numeração legitimamente
+// (talões distintos), então NÃO bloqueamos globalmente por número.
+const numChequeNorm = (s: unknown) => {
+  const digitos = String(s ?? "").replace(/[^0-9]/g, "");
+  if (!digitos) return "";
+  // "0000" normaliza para "0" (não para vazio) — senão cheques "só zeros" escapariam do bloqueio.
+  return digitos.replace(/^0+(?=.)/, "");
+};
+async function assertNumeroChequeDisponivel(db: any, companyId: number, numeroCheque: unknown, opts: {
+  contaBancariaId?: number | null;
+  fornecedorNome?: string | null;
+  ignoreId?: number | null;
+}): Promise<void> {
+  const num = numChequeNorm(numeroCheque);
+  if (!num) return; // sem número não há o que colidir
+  const res = await dbExecute(db,
+    `SELECT id, numero_cheque, fornecedor_nome, banco_nome, valor,
+            data_vencimento, status, conta_bancaria_id
+       FROM financial_cheques
+      WHERE company_id=$1 AND excluido_em IS NULL
+        AND regexp_replace(regexp_replace(COALESCE(numero_cheque,''),'[^0-9]','','g'),'^0+','') = $2`,
+    [companyId, num]);
+  const fornNorm = String(opts.fornecedorNome ?? "").trim().toUpperCase();
+  const conflito = res.rows.find((c: any) => {
+    if (opts.ignoreId != null && Number(c.id) === Number(opts.ignoreId)) return false;
+    const mesmaConta = opts.contaBancariaId != null && c.conta_bancaria_id != null
+      && Number(c.conta_bancaria_id) === Number(opts.contaBancariaId);
+    const mesmoForn = fornNorm !== ""
+      && String(c.fornecedor_nome ?? "").trim().toUpperCase() === fornNorm;
+    // Sem NENHUM contexto (nem conta nem fornecedor no novo lançamento),
+    // bloqueia conservadoramente qualquer número igual — o usuário resolve
+    // informando o fornecedor/conta ou ajustando o número.
+    const semContexto = opts.contaBancariaId == null && fornNorm === "";
+    return mesmaConta || mesmoForn || semContexto;
+  });
+  if (conflito) {
+    const venc = conflito.data_vencimento
+      ? (() => { const d = conflito.data_vencimento; const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10); const [a, m, dd] = s.split("-"); return `${dd}/${m}/${a}`; })()
+      : "sem vencimento";
+    const valorBR = conflito.valor != null
+      ? Number(conflito.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+      : "valor não informado";
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: `⚠️ Cheque duplicado: o nº ${conflito.numero_cheque} já existe na base — ` +
+        `${conflito.fornecedor_nome || "fornecedor não informado"}, ${valorBR}, venc. ${venc}, ` +
+        `status "${conflito.status}". Confira o número do cheque ou edite/exclua o registro existente.`,
+    });
+  }
+}
+
 // ─────────────────────────── Leitura por IA (PDF/imagem de cheque) ───────────────────────────
 // O usuário pode subir VÁRIOS PDFs/imagens de cheque; a IA lê CADA um, extrai os
 // cheques e o ERP deriva mês/ano da DATA do cheque. Mesmo padrão do Cartão de
@@ -1465,6 +1522,10 @@ export const chequesRouter = router({
     } else if (row.contaCorrenteRaw) {
       contaBancariaId = matchConta(row.contaCorrenteRaw, contasDaEmpresa);
     }
+    // Rev. 4595 — Poka-Yoke: bloqueia número de cheque já existente (mesma conta/fornecedor).
+    await assertNumeroChequeDisponivel(db, input.companyId, row.numeroCheque, {
+      contaBancariaId, fornecedorNome: row.fornecedorNome,
+    });
     const loteId = randomUUID();
     // dbExecute liga params por ORDEM DE APARIÇÃO — placeholders $1..$22 e array em sequência.
     const res = await dbExecute(db,
@@ -1533,6 +1594,7 @@ export const chequesRouter = router({
       contaBancariaId = matchConta(input.contaCorrenteRaw, contasDaEmpresa);
     }
     const existentes = await carregarExistentes(db, input.companyId);
+    const numerosDoLote = new Set<string>(); // Rev. 4595 — numeração única dentro do lote
     const loteId = randomUUID();
     const criados: number[] = [];
     let pulados = 0;
@@ -1550,6 +1612,19 @@ export const chequesRouter = router({
       if (row.valor == null || row.valor <= 0) { pulados++; continue; }
       const chave = chaveDedup(row);
       if (existentes.has(chave)) { pulados++; continue; }  // já existe (banco) ou repetido no próprio lote
+      // Rev. 4595 — Poka-Yoke: bloqueia o LOTE inteiro se alguma parcela repetir número
+      // de cheque já cadastrado (mesma conta/fornecedor) ou repetido dentro do próprio lote.
+      const numNormParcela = numChequeNorm(row.numeroCheque);
+      if (numNormParcela && numerosDoLote.has(numNormParcela)) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `⚠️ Cheque duplicado dentro do lote: o nº ${row.numeroCheque} aparece em mais de uma parcela. Cada cheque deve ter numeração única.`,
+        });
+      }
+      await assertNumeroChequeDisponivel(db, input.companyId, row.numeroCheque, {
+        contaBancariaId, fornecedorNome: row.fornecedorNome,
+      });
+      if (numNormParcela) numerosDoLote.add(numNormParcela);
       const res = await dbExecute(db,
         `INSERT INTO financial_cheques
            (company_id, conta_bancaria_id, conta_corrente_raw, banco_codigo, banco_nome,
@@ -1596,6 +1671,34 @@ export const chequesRouter = router({
     await assertCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Rev. 4595 — Poka-Yoke: na edição, bloqueia se o número (novo ou atual) passar a
+    // colidir com OUTRO cheque ativo. Roda quando o Nº muda E TAMBÉM quando só a
+    // conta/fornecedor mudam (trocar o contexto pode criar a colisão do mesmo jeito).
+    // Contexto (conta/fornecedor) vem do input quando enviado, senão do registro atual.
+    const mexeuEmCampoDeColisao =
+      input.numeroCheque !== undefined || input.contaBancariaId !== undefined || input.fornecedorNome !== undefined;
+    if (mexeuEmCampoDeColisao) {
+      const atual = await dbExecute(db,
+        `SELECT conta_bancaria_id, fornecedor_nome, numero_cheque FROM financial_cheques
+          WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
+        [input.id, input.companyId]);
+      const cur = atual.rows[0];
+      if (cur) {
+        const numeroFinal = input.numeroCheque !== undefined ? input.numeroCheque : cur.numero_cheque;
+        const mudouAlgo =
+          (input.numeroCheque !== undefined && numChequeNorm(input.numeroCheque) !== numChequeNorm(cur.numero_cheque)) ||
+          (input.contaBancariaId !== undefined && input.contaBancariaId !== cur.conta_bancaria_id) ||
+          (input.fornecedorNome !== undefined &&
+            String(input.fornecedorNome ?? "").trim().toUpperCase() !== String(cur.fornecedor_nome ?? "").trim().toUpperCase());
+        if (mudouAlgo && numChequeNorm(numeroFinal)) {
+          await assertNumeroChequeDisponivel(db, input.companyId, numeroFinal, {
+            contaBancariaId: input.contaBancariaId !== undefined ? input.contaBancariaId : cur.conta_bancaria_id,
+            fornecedorNome: input.fornecedorNome !== undefined ? input.fornecedorNome : cur.fornecedor_nome,
+            ignoreId: input.id,
+          });
+        }
+      }
+    }
     const sets: string[] = []; const params: unknown[] = [];
     let p = 1;
     const add = (col: string, val: unknown) => { sets.push(`${col}=$${p++}`); params.push(val); };
