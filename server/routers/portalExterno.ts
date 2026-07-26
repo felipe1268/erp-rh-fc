@@ -3561,21 +3561,60 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
 
   // ========== VERIFICAÇÃO PÚBLICA (QR CODE) ==========
   verificar: router({
-    // Verificar aptidão de funcionário CLT/PJ pelo QR Code
+    // Verificar aptidão de funcionário CLT/PJ pelo QR Code.
+    // Rev. 4607: cálculo AO VIVO direto de asos/trainings (a tabela-snapshot
+    // employee_aptidao ficava defasada e dizia "sem documentos" p/ quem tinha
+    // tudo em dia no Controle de Documentos). Devolve também a lista de
+    // documentos PERTINENTES (ASO + treinamentos/NRs com validade) — nada
+    // sensível/LGPD: sem RG, sem CPF completo, sem atestados médicos.
     funcionario: publicProcedure.input(z.object({
       id: z.number(),
       tipo: z.enum(["clt", "pj"]),
     })).query(async ({ input }) => {
       const db = (await getDb())!;
-      const [emp] = await db.select().from(employees).where(eq(employees.id, input.id)).limit(1);
+      const [emp] = await db.select().from(employees)
+        .where(and(eq(employees.id, input.id), isNull(employees.deletedAt))).limit(1);
       if (!emp) return { found: false, message: "Funcionário não encontrado" };
-      
-      // Get company name
+
       const [company] = await db.select().from(companies).where(eq(companies.id, emp.companyId)).limit(1);
-      
-      // Get aptidão
-      const [aptidao] = await db.select().from(employeeAptidao).where(eq(employeeAptidao.employeeId, emp.id)).limit(1);
-      
+
+      const hoje = new Date().toISOString().split("T")[0];
+
+      // ASO mais recente (mesma regra do recálculo do Controle de Documentos)
+      const asosResult = await db.select({
+        tipo: asos.tipo, dataExame: asos.dataExame, dataValidade: asos.dataValidade,
+      }).from(asos)
+        .where(and(eq(asos.employeeId, emp.id), eq(asos.companyId, emp.companyId), isNull(asos.deletedAt)))
+        .orderBy(desc(asos.dataExame));
+      const asoAtual = asosResult[0] || null;
+      const asoVigente = !!(asoAtual && asoAtual.dataValidade && asoAtual.dataValidade >= hoje);
+
+      // Treinamentos (lista pública LGPD-safe: nome, norma, datas, vigência)
+      const treinamentosResult = await db.select({
+        nome: trainings.nome, norma: trainings.norma, cargaHoraria: trainings.cargaHoraria,
+        dataRealizacao: trainings.dataRealizacao, dataValidade: trainings.dataValidade,
+      }).from(trainings)
+        .where(and(eq(trainings.employeeId, emp.id), eq(trainings.companyId, emp.companyId), isNull(trainings.deletedAt)))
+        .orderBy(desc(trainings.dataRealizacao));
+      const treinamentos = treinamentosResult.map((t) => ({
+        ...t,
+        vigente: !!(t.dataValidade && t.dataValidade >= hoje),
+      }));
+      const treinamentosVigentes = treinamentos.filter((t) => t.vigente);
+      const treinamentosOk = treinamentosVigentes.length > 0;
+      const nrsVigentes = treinamentosVigentes.filter((t) => (t.norma || "").toUpperCase().startsWith("NR"));
+      const nrOk = nrsVigentes.length > 0 || treinamentosOk;
+
+      // Documentos pessoais: só o booleano (nenhum dado exposto — LGPD)
+      const docsOk = !!(emp.cpf && emp.nomeCompleto && emp.dataNascimento);
+
+      const pendencias: string[] = [];
+      if (!asoVigente) pendencias.push("ASO vencido ou inexistente");
+      if (!treinamentosOk) pendencias.push("Nenhum treinamento vigente");
+      if (!docsOk) pendencias.push("Dados pessoais incompletos");
+      // Mesma semântica do recálculo oficial (recalcAll): apto | inapto
+      const aptidaoCalc = pendencias.length === 0 ? "apto" : "inapto";
+
       return {
         found: true,
         nome: emp.nomeCompleto,
@@ -3586,13 +3625,16 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         tipo: input.tipo.toUpperCase(),
         empresa: company?.nomeFantasia || company?.razaoSocial || "N/A",
         status: emp.status,
-        aptidao: aptidao?.status || "pendente",
-        motivoInapto: aptidao?.motivoInapto,
-        asoVigente: aptidao?.asoVigente === 1,
-        treinamentosOk: aptidao?.treinamentosObrigatoriosOk === 1,
-        documentosOk: aptidao?.documentosPessoaisOk === 1,
-        nrOk: aptidao?.nrObrigatoriasOk === 1,
-        ultimaVerificacao: aptidao?.ultimaVerificacao,
+        aptidao: aptidaoCalc,
+        motivoInapto: pendencias.length > 0 ? pendencias.join("; ") : undefined,
+        asoVigente,
+        treinamentosOk,
+        documentosOk: docsOk,
+        nrOk,
+        ultimaVerificacao: new Date().toISOString(),
+        // Documentos pertinentes (LGPD-safe)
+        aso: asoAtual ? { tipo: asoAtual.tipo, dataExame: asoAtual.dataExame, dataValidade: asoAtual.dataValidade, vigente: asoVigente } : null,
+        treinamentos,
       };
     }),
 

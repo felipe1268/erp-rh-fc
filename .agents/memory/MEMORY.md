@@ -1,5 +1,6 @@
 - [Fatura de cartão é cumulativa](cartao-fatura-cumulativa.md) — nunca somar histórico como "em aberto"; pagamentos negativo = crédito da fatura anterior; só vencimento >= hoje conta.
 - [Fatura de cartão ↔ Contas a Pagar](cartao-fatura-financeiro-link.md) — título único por fatura via índice parcial + ON CONFLICT; baixa faz fan-out p/ pagamentos; título com baixa ativa é intocável.
+- [QR Verificar Aptidão — live, não snapshot](qr-aptidao-live-not-snapshot.md) — employee_aptidao é snapshot manual defasado; leitores calculam ao vivo de asos/trainings (regras do recalcAll, apto|inapto).
 - [Aviso Prévio ↔ Contas a Pagar](aviso-previo-financeiro-link.md) — baixa manual e envio ao Financeiro são vias EXCLUSIVAS; advisory lock 477001 + índice único parcial (só no Neon); quitar baixa dispara conclusão/desligamento.
 - [DIXI group-key digit collision](dixi-groupkey-digit-collision.md) — relógio pode ter código "jfcNNN" no Nome; chave de agrupamento por pessoa deve PRESERVAR dígitos ou funde 2 funcionários.
 - [Equipamento utilização fonte de dados](equipamento-utilizacao-fonte-dados.md) — utilização diária vem de warehouse_loans (não equipamento_locado_eventos); link via almoxarifado_itens.equipamento_vinculado_id.

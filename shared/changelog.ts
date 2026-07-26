@@ -1,4 +1,36 @@
 /**
+ * Rev. 4607 - FIX: QR DO CRACHÁ — VERIFICAÇÃO DE APTIDÃO CALCULA AO VIVO + LISTA DE DOCUMENTOS (LGPD-SAFE)
+ *
+ * PROBLEMA: ao escanear o QR do crachá, funcionários com documentação em dia
+ * (ex.: Anderson Braga Silva — ASO válido até 22/10/2026 + 3 treinamentos
+ * vigentes NR-35/NR18/NR-01 no Controle de Documentos) apareciam como
+ * "PENDENTE" com TODOS os itens em vermelho (ASO, treinamentos, documentos,
+ * NRs). Causa-raiz: o endpoint público portalExterno.verificar.funcionario
+ * lia a tabela-SNAPSHOT employee_aptidao, que só é populada quando alguém
+ * roda o "recalcular aptidão" manualmente (sprint1Foundation.recalcAll) — na
+ * prática ficava vazia/defasada, enquanto o Controle de Documentos calcula
+ * ao vivo de asos/trainings. Link quebrado entre as duas fontes.
+ *
+ * FIX (server/routers/portalExterno.ts): o endpoint agora calcula AO VIVO,
+ * com as MESMAS regras do recálculo oficial: ASO mais recente não-deletado
+ * com dataValidade >= hoje; treinamentos não-deletados com validade vigente;
+ * documentosOk = cpf+nome+dataNascimento presentes (só booleano). Aptidão
+ * "apto" quando não há pendências; senão "pendente" com a lista de
+ * pendências no motivo. Guards: deletedAt IS NULL em employee/asos/trainings
+ * e companyId do PRÓPRIO funcionário nas subconsultas (nada cross-tenant).
+ *
+ * FEAT (pedido do usuário): a página pública agora exibe os documentos
+ * PERTINENTES da pessoa — card "ASO" (tipo, vigência, válido até) e card
+ * "Treinamentos (N)" (norma + nome + vigente/vencido + validade). NADA
+ * sensível/LGPD: sem RG, sem CPF completo (segue mascarado), sem data de
+ * nascimento, sem atestados médicos (dado de saúde), sem salários. Datas
+ * renderizadas com T12:00:00 p/ evitar off-by-one de fuso.
+ *
+ * Arquivos: server/routers/portalExterno.ts (verificar.funcionario),
+ * client/src/pages/VerificarAptidao.tsx. ZERO schema change.
+ */
+
+/**
  * Rev. 4606 - UI: EMISSÃO DE CRACHÁS — NOVO MODELO DE ARTE (TODOS OS TIPOS)
  *
  * O usuário enviou uma nova arte de referência para o crachá e pediu o mesmo

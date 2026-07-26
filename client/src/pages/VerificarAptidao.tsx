@@ -159,6 +159,40 @@ export default function VerificarAptidao() {
             </div>
           )}
 
+          {/* Documentos pertinentes (LGPD-safe): ASO + Treinamentos/NRs */}
+          {(data as any).aso && (
+            <div className="border border-gray-200 rounded-xl p-4">
+              <h3 className="font-semibold text-sm text-gray-700 flex items-center gap-2 mb-2">
+                <FileCheck className="w-4 h-4" /> ASO
+              </h3>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">{(data as any).aso.tipo}</span>
+                <span className={`font-semibold ${(data as any).aso.vigente ? "text-green-600" : "text-red-500"}`}>
+                  {(data as any).aso.vigente ? "Vigente" : "Vencido"} · válido até {(data as any).aso.dataValidade ? new Date((data as any).aso.dataValidade + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+                </span>
+              </div>
+            </div>
+          )}
+          {Array.isArray((data as any).treinamentos) && (data as any).treinamentos.length > 0 && (
+            <div className="border border-gray-200 rounded-xl p-4">
+              <h3 className="font-semibold text-sm text-gray-700 flex items-center gap-2 mb-2">
+                <BookOpen className="w-4 h-4" /> Treinamentos ({(data as any).treinamentos.length})
+              </h3>
+              <div className="space-y-1.5">
+                {(data as any).treinamentos.map((t: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-gray-600 truncate">
+                      {t.norma ? <strong className="text-gray-700">{t.norma}</strong> : null}{t.norma ? " · " : ""}{t.nome}
+                    </span>
+                    <span className={`shrink-0 font-semibold ${t.vigente ? "text-green-600" : "text-red-500"}`}>
+                      {t.vigente ? "Vigente" : "Vencido"}{t.dataValidade ? ` · ${new Date(t.dataValidade + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Última verificação */}
           {(data as any).ultimaVerificacao && (
             <div className="flex items-center gap-2 text-xs text-gray-400">
