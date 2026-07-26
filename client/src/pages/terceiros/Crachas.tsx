@@ -546,6 +546,8 @@ function BadgeCard({ badge, color, label, onPreview }: { badge: BadgeData; color
 // ícone de 3 pessoas. Paleta fixa da arte: navy #0A1E3C + laranja #EE9803.
 const CRACHA_NAVY = "#0A1E3C";
 const CRACHA_ORANGE = "#EE9803";
+// Telefone fixo do crachá (conforme arte/pedido do usuário 26/07/2026)
+const CRACHA_TELEFONE = "(12) 3133-5504";
 
 // Ícone de 3 pessoas (outline), igual ao da arte — lucide Users só tem 2
 const TresPessoas = ({ color }: { color: string }) => (
@@ -641,7 +643,7 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
               </div>
               <div className="text-white">
                 <p className="text-[10.5px] leading-[1.3] font-medium">Em caso de perda,<br />entre em contato:</p>
-                <p className="text-[17px] font-extrabold mt-[1px] whitespace-nowrap tracking-wide">{companyPhone || "(12) 3133-5504"}</p>
+                <p className="text-[17px] font-extrabold mt-[1px] whitespace-nowrap tracking-wide">{CRACHA_TELEFONE}</p>
               </div>
             </div>
           </div>
