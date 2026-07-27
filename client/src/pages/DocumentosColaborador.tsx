@@ -8,6 +8,8 @@
 // Rev. 4669/4672 — dossiê digital, campos extras, eventuais, dependentes.
 // ============================================================================
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
+import { popNavBack } from "@/lib/navHistory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +47,7 @@ function pctColor(p: number) {
 }
 
 export default function DocumentosColaborador() {
+  const [, setLocation] = useLocation();
   const { selectedCompanyId, getCompanyIdsForQuery } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
@@ -199,7 +202,8 @@ export default function DocumentosColaborador() {
     <DashboardLayout>
     <div className="p-4 space-y-4 max-w-6xl mx-auto">
       {/* Rev. 4674 — botão Voltar + página dentro do DashboardLayout (menu lateral fixo) */}
-      <Button variant="ghost" size="sm" className="-ml-2 gap-1 text-muted-foreground hover:text-foreground w-fit" onClick={() => window.history.back()}>
+      {/* Rev. 4680 — Voltar via pilha interna: volta UMA tela (ex.: Controle de Documentos) */}
+      <Button variant="ghost" size="sm" className="-ml-2 gap-1 text-muted-foreground hover:text-foreground w-fit" onClick={() => { const prev = popNavBack(); if (prev) setLocation(prev); else if (window.history.length > 1) window.history.back(); else setLocation("/"); }}>
         <ArrowLeft className="w-4 h-4" /> Voltar
       </Button>
       <div className="flex items-center gap-2">

@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
+import { popNavBack } from "@/lib/navHistory";
 import { trpc } from "@/lib/trpc";
 import { fmtNum } from "@/lib/formatters";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -20,6 +22,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 const MESES_LABEL = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 export default function PJMedicoes() {
+  const [, setLocation] = useLocation();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? Number(selectedCompanyId) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
@@ -153,7 +156,7 @@ export default function PJMedicoes() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4">
-        <Button variant="ghost" size="sm" className="-ml-2 gap-1 text-muted-foreground hover:text-foreground w-fit" onClick={() => window.history.back()}>
+        <Button variant="ghost" size="sm" className="-ml-2 gap-1 text-muted-foreground hover:text-foreground w-fit" onClick={() => { const prev = popNavBack(); if (prev) setLocation(prev); else if (window.history.length > 1) window.history.back(); else setLocation("/"); }}>
           <ArrowLeft className="w-4 h-4" /> Voltar
         </Button>
         

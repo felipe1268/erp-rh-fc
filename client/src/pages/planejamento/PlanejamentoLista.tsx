@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useLocation } from "wouter";
+import { popNavBack } from "@/lib/navHistory";
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { trpc } from "@/lib/trpc";
@@ -215,7 +216,7 @@ export default function PlanejamentoLista() {
             <Button
               variant="outline" size="sm"
               className="gap-1.5 text-slate-600"
-              onClick={() => window.history.back()}
+              onClick={() => { const prev = popNavBack(); if (prev) setLocation(prev); else if (window.history.length > 1) window.history.back(); else setLocation("/planejamento"); }}
             >
               <ArrowLeft className="h-4 w-4" />
               Voltar

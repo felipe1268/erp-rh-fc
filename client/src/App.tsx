@@ -8,6 +8,7 @@ import { ModuleProvider } from "./contexts/ModuleContext";
 import { ModuleConfigProvider } from "./contexts/ModuleConfigContext";
 import { PermissionsProvider, usePermissions } from "./contexts/PermissionsContext";
 import { lazy, Suspense, ComponentType, useEffect } from "react";
+import { recordNav } from "./lib/navHistory";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "./_core/hooks/useAuth";
 import DashboardLayout from "./components/DashboardLayout";
@@ -492,6 +493,10 @@ const AssinarDocumento = lazyWithRetry(() => import("./pages/AssinarDocumento"))
 
 // ============================================================
 function Router() {
+  // Rev. 4680 — registra cada rota na pilha de navegação interna (botão Voltar
+  // volta UMA tela do app, independente do histórico do navegador no iPad).
+  const [location] = useLocation();
+  useEffect(() => { recordNav(location); }, [location]);
   return (
     <Suspense fallback={<PageLoader />}>
       <Switch>

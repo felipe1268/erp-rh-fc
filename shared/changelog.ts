@@ -1,4 +1,15 @@
 /**
+ * Rev. 4680 - BOTAO VOLTAR: PILHA DE NAVEGACAO INTERNA (VOLTA 1 TELA)
+ *
+ * No Safari/iPad o window.history.back() pulava pra tela inicial em vez da
+ * tela anterior (historico do navegador nao reflete a navegacao interna).
+ * - Nova pilha de navegacao do app (client/src/lib/navHistory.ts) registra
+ *   cada rota visitada na sessao; Voltar desempilha exatamente UMA tela.
+ * - Aplicado no Voltar global do header (DashboardLayout) e nos botoes das
+ *   paginas Documentos do Colaborador, Planejamento, PJ Medicoes e Coleta.
+ * - Fallback: sem pilha (sessao comecou na tela) usa history.back()/home.
+ */
+/**
  * Rev. 4679 - DOCUMENTOS AUTOMATICOS: MODULOS GERAM DOCS NO DOSSIE (POKA-YOKE)
  *
  * Um lancamento no modulo = documento pronto no dossie p/ assinatura (pad ou

@@ -59,6 +59,7 @@ import { usePermissions } from "@/contexts/PermissionsContext";
 import { useModuleConfig } from "@/contexts/ModuleConfigContext";
 import { MODULE_DEFINITIONS, type ActiveModuleId } from "../../../shared/modules";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { popNavBack } from "@/lib/navHistory";
 
 // ========== MENU DEFINITIONS PER MODULE ==========
 // Each module has its own exclusive sections. No duplicity.
@@ -2123,12 +2124,17 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
     <div className="flex border-b h-14 items-center justify-between bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
       <div className="flex items-center gap-2">
         {isMobile ? <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" /> : null}
-        {/* Rev. 1813 — Botão Voltar (histórico do navegador) presente em
-            TODAS as telas, conforme pedido do usuário. Usa window.history.back()
-            para respeitar a navegação real do usuário (não cai sempre na home
-            do módulo). Desabilitado quando não há histórico (1ª página). */}
+        {/* Rev. 1813 — Botão Voltar presente em TODAS as telas.
+            Rev. 4680 — usa a pilha de navegação INTERNA do app (popNavBack):
+            volta exatamente UMA tela do sistema. No Safari/iPad o
+            window.history.back() pulava pra tela inicial em vez da anterior. */}
         <button
-          onClick={() => window.history.length > 1 ? window.history.back() : setLocation(MODULE_HOME_ROUTES[activeModule] || "/")}
+          onClick={() => {
+            const prev = popNavBack();
+            if (prev) setLocation(prev);
+            else if (window.history.length > 1) window.history.back();
+            else setLocation(MODULE_HOME_ROUTES[activeModule] || "/");
+          }}
           title="Voltar"
           aria-label="Voltar"
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground shrink-0"

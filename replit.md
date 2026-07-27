@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4680** — Botão Voltar agora usa pilha de navegação interna do app: volta exatamente uma tela (fix Safari/iPad que pulava pra tela inicial).
 - **Rev. 4679** — Poka-yoke documental: Férias, Aviso Prévio, Advertência, Dissídio, Seguro de Vida e Admissão geram automaticamente os documentos no dossiê p/ assinatura.
 - **Rev. 4678** — Documentos do Colaborador: moldura ISO (logo + código + revisão + emissão) e rodapé LGPD em todos os documentos.
 - **Rev. 4677** — Checklist Geral de Documentos: checkbox por funcionário + "Gerar selecionados"/"Gerar todos" em lote com progresso 0–100%.

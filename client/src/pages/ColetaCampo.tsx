@@ -4,6 +4,7 @@
 // (aprova → grava na ficha do employee; rejeita).
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { popNavBack } from "@/lib/navHistory";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { usePermissions } from "@/contexts/PermissionsContext";
@@ -362,7 +363,7 @@ export default function ColetaCampo() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation("/"); }}
+              onClick={() => { const prev = popNavBack(); if (prev) setLocation(prev); else if (window.history.length > 1) window.history.back(); else setLocation("/"); }}
               className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-1.5 text-sm font-medium transition"
               title="Voltar"
             >
