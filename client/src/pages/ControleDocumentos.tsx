@@ -21,7 +21,7 @@ import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight, Lock, Sparkles, ClipboardCheck, XCircle
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight, Lock, Sparkles, ClipboardCheck, XCircle, HardHat
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
 import { toast } from "sonner";
@@ -31,6 +31,7 @@ import RaioXFuncionario from "@/components/RaioXFuncionario";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
 import PersonPhoto from "@/components/PersonPhoto";
+import FichaEpiDialog from "@/components/FichaEpiDialog";
 import { CipaBadge } from "@/components/CipaBadge";
 import TermosResponsabilidadePanel from "@/components/controleDocumentos/TermosResponsabilidadePanel";
 import { TRAINING_RULES, TRAINING_CATEGORIES, calcularDataValidade, type TrainingRule } from "../../../shared/trainingRules";
@@ -647,6 +648,8 @@ function FichaDocumental({ employeeId, companyId, companyIds, onClose, onOpenRai
   onClose: () => void;
   onOpenRaioX: (id: number) => void;
 }) {
+  // Rev. 4644 — Ficha de EPI aberta de dentro da Ficha Documental
+  const [showFichaEpi, setShowFichaEpi] = useState(false);
   // Rev. 4642 — multi-empresa: companyId pode ser 0 quando só companyIds vem
   const queryEnabled = (!!companyId || (companyIds?.length ?? 0) > 0) && !!employeeId;
   const { data, isLoading } = trpc.docs.painelDossie.useQuery(
@@ -797,8 +800,17 @@ function FichaDocumental({ employeeId, companyId, companyIds, onClose, onOpenRai
 
             <DialogFooter className="gap-2 sm:gap-0">
               <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+              {/* Rev. 4644 — Ficha de EPI acessível pela Ficha Documental */}
+              <Button variant="outline" size="sm" onClick={() => setShowFichaEpi(true)} className="gap-1.5"><HardHat className="h-4 w-4" /> Ficha de EPI</Button>
               <Button size="sm" onClick={() => onOpenRaioX(f.id)}>Ver Raio-X completo</Button>
             </DialogFooter>
+            <FichaEpiDialog
+              employeeId={showFichaEpi ? f.id : null}
+              open={showFichaEpi}
+              onClose={() => setShowFichaEpi(false)}
+              companyId={companyId}
+              companyIds={companyIds}
+            />
           </>
         )}
       </DialogContent>

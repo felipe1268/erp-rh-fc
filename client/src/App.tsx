@@ -201,6 +201,7 @@ const RelogiosPonto = lazyWithRetry(() => import("./pages/RelogiosPonto"));
 const ConvencoesColetivas = lazyWithRetry(() => import("./pages/ConvencoesColetivas"));
 const ProcessosTrabalhistas = lazyWithRetry(() => import("./pages/ProcessosTrabalhistas"));
 const Epis = lazyWithRetry(() => import("./pages/Epis"));
+const EpiFichaFuncionario = lazyWithRetry(() => import("./pages/EpiFichaFuncionario"));
 const Lixeira = lazyWithRetry(() => import("./pages/Lixeira"));
 const AvisoPrevio = lazyWithRetry(() => import("./pages/AvisoPrevio"));
 const PedidoDemissao = lazyWithRetry(() => import("./pages/PedidoDemissao"));
@@ -526,6 +527,7 @@ function Router() {
         <Route path={"/processos-tributarios"} component={() => <RouteGuard component={ProcessosTributarios} route="/processos-tributarios" />} />
         <Route path={"/processos-civis"} component={() => <RouteGuard component={ProcessosCivis} route="/processos-civis" />} />
         <Route path={"/epis"} component={() => <RouteGuard component={Epis} route="/epis" />} />
+        <Route path={"/epis/ficha"} component={() => <RouteGuard component={EpiFichaFuncionario} route="/epis" />} />
         <Route path={"/oraculo"} component={() => <MasterOnlyGuard component={Oraculo} />} />
         <Route path={"/usuarios"} component={() => <UsuariosGuard component={Usuarios} />} />
         <Route path={"/grupos-usuarios"} component={() => <MasterOnlyGuard component={GruposUsuarios} />} />

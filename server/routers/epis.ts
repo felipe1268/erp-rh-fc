@@ -2452,9 +2452,14 @@ Exemplos de referência:
   // ============================================================
   fichaEpiResumo: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      // Rev. 4645 — guard anti-IDOR: INTERSECTA os companyIds do input com as
+      // empresas acessíveis do usuário (memória group-expansion-idor)
+      const allowed = new Set((await getCompaniesForUser(ctx.user.id, ctx.user.role)).map((c: any) => c.id));
+      const requested = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const ids = requested.filter(id => allowed.has(id));
+      if (ids.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à(s) empresa(s) informada(s)." });
       const rows = await db.execute(sql`
         SELECT e.id, e."nomeCompleto", e.funcao, e.cpf, e."fotoUrl", e.status,
                COUNT(d.id)::int AS total_entregas,
@@ -2472,9 +2477,13 @@ Exemplos de referência:
 
   fichaEpiFuncionario: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      // Rev. 4645 — guard anti-IDOR: interseção com empresas acessíveis do user
+      const allowed = new Set((await getCompaniesForUser(ctx.user.id, ctx.user.role)).map((c: any) => c.id));
+      const requested = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const ids = requested.filter(id => allowed.has(id));
+      if (ids.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à(s) empresa(s) informada(s)." });
 
       // Entregas do funcionário DENTRO das empresas informadas (guard de tenant:
       // a própria cláusula companyId IN (...) impede vazamento cross-tenant)

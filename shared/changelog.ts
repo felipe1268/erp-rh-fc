@@ -1,4 +1,33 @@
 /**
+ * Rev. 4645 - FICHA DE EPI: GUARD ANTI-IDOR NAS PROCEDURES NOVAS
+ *
+ * Correção do code review da Rev. 4644 (achado HIGH): fichaEpiResumo e
+ * fichaEpiFuncionario confiavam no companyId/companyIds do input. Agora
+ * INTERSECTAM com as empresas acessíveis do usuário (getCompaniesForUser)
+ * e retornam FORBIDDEN se a interseção for vazia — sem vazamento cross-tenant.
+ */
+/**
+ * Rev. 4644 - FICHA DE EPI POR FUNCIONÁRIO (NR-06 / CLT) — 100% INTEGRADA
+ *
+ * Pedido do usuário (IMG_4536/4537): documento consolidado por colaborador
+ * com TODAS as entregas de EPI e a assinatura digital de cada uma, no padrão
+ * do modelo físico "CONTROLE DE E.P.I.'s / Termo de Compromisso", p/ enviar
+ * a clientes (integração) ou ao Ministério do Trabalho.
+ * - Backend (server/routers/epis.ts): `fichaEpiResumo` (funcionários com
+ *   entregas + contagem assinadas) e `fichaEpiFuncionario` (empresa, dados
+ *   do colaborador, entregas com EPI/C.A./datas/assinatura + metadados de
+ *   autenticação de epi_assinaturas: data/hora, IP, hash SHA-256).
+ * - Componente REUTILIZÁVEL <FichaEpiDialog> (client/src/components/):
+ *   cabeçalho empresa/colaborador, Termo de Compromisso (texto configurável
+ *   do Config EPI), tabela Quant/Descrição/C.A./Entrega/Devolução/Assinatura
+ *   (imagem + autenticação), rodapé legal (MP 2.200-2/2001, art. 158/166 CLT,
+ *   NR-06) e Imprimir/PDF via window.open autocontido (esc() local).
+ * - 3 pontos de acesso (100% integrado): aba lateral SST "Ficha de EPI"
+ *   (nova página /epis/ficha com lista + busca), botão "Ficha EPI" no header
+ *   do Raio-X do colaborador, e botão "Ficha de EPI" na Ficha Documental do
+ *   Controle de Documentos.
+ */
+/**
  * Rev. 4643 - SEVERIDADE DE VENCIMENTO CORRIGIDA: ≤30d VERMELHO, 31–60d AMARELO
  *
  * Pedido do usuário (IMG_4534): "a legenda tinha que ser o contrário —

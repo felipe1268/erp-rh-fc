@@ -26,6 +26,7 @@ import { generateCertificadoIntegracaoSstPdf } from "@/lib/certificadoIntegracao
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import FichaEpiDialog from "@/components/FichaEpiDialog";
 import { Label } from "@/components/ui/label";
 
 function formatDate(d: string | null | undefined) {
@@ -361,6 +362,8 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   // Estado do lightbox da foto do colaborador (declarado antes do useEffect
   // de ESC para evitar TDZ ao avaliar o array de dependências).
   const [fotoAmpliada, setFotoAmpliada] = useState(false);
+  // Rev. 4644 — Ficha de EPI acessível pelo Raio-X (100% integrada)
+  const [showFichaEpi, setShowFichaEpi] = useState(false);
   const [acidenteDetalhe, setAcidenteDetalhe] = useState<any>(null);
 
   useEffect(() => {
@@ -1078,6 +1081,10 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
           </div>
         </div>
         <div className="flex items-center gap-1 sm:gap-2 ml-auto sm:ml-0">
+          {/* Rev. 4644 — Ficha de EPI integrada ao Raio-X */}
+          <Button variant="ghost" size="sm" onClick={() => setShowFichaEpi(true)} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+            <HardHat className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Ficha EPI</span>
+          </Button>
           <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
             <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Imprimir</span>
           </Button>
@@ -4897,6 +4904,14 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* Rev. 4644 — Ficha de EPI integrada ao Raio-X */}
+      <FichaEpiDialog
+        employeeId={employeeId}
+        open={showFichaEpi}
+        onClose={() => setShowFichaEpi(false)}
+        companyId={selectedCompany?.id || 0}
+      />
     </div>,
     document.body
   );
