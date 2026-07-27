@@ -956,4 +956,157 @@ export const homeDataRouter = router({
       );
       return lista.map((e) => ({ ...e, ...projectCipaFields(cipaMap, e.id) }));
     }),
+
+  /**
+   * Rev. 4688 — Alertas do dia (pop-ups ao entrar no módulo RH/Financeiro):
+   * 1. Contratos de experiência vencendo HOJE (ou no fim de semana/feriado
+   *    seguinte — o alerta antecipa para o último dia útil anterior);
+   * 2. Avisos prévios com prazo final de pagamento (art. 477: dataFim+10)
+   *    vencendo hoje ou no gap não-útil seguinte;
+   * 3. Aniversariantes de hoje; se o aniversário cai em dia não-útil, o
+   *    alerta aparece no último dia útil ANTERIOR e no primeiro POSTERIOR.
+   * Em dia não-útil (sáb/dom/feriado) não retorna nada.
+   */
+  getAlertasDia: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      // 'financeiro' recebe SÓ os avisos (escopo aplicado no servidor).
+      escopo: z.enum(['rh', 'financeiro']).optional().default('rh'),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const { getFeriadosSetForPeriod } = await import("./feriados");
+
+      // Guard de tenancy: intersecta os companyIds pedidos com as empresas
+      // acessíveis do usuário (admin/admin_master = todas).
+      const { getCompaniesForUser } = await import("../db");
+      const empresasDoUser = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const permitidas = new Set(empresasDoUser.map((c: any) => c.id));
+      const pedidas = (input.companyIds && input.companyIds.length ? input.companyIds : [input.companyId]);
+      const cids = pedidas.filter((id) => permitidas.has(id));
+      if (cids.length === 0)
+        return { hoje: '', diaUtil: false, contratos: [], avisos: [], aniversariantes: [] };
+      const inputSeguro = { companyId: cids[0], companyIds: cids };
+
+      // Hoje em Brasília
+      const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
+      const hojeStr = fmt.format(new Date()); // YYYY-MM-DD
+
+      const addDays = (d: string, n: number) => {
+        const dt = new Date(d + 'T12:00:00Z');
+        dt.setUTCDate(dt.getUTCDate() + n);
+        return dt.toISOString().slice(0, 10);
+      };
+      const feriadosSet = await getFeriadosSetForPeriod(db, cids, addDays(hojeStr, -10), addDays(hojeStr, 10));
+      const isBiz = (d: string) => {
+        const dow = new Date(d + 'T12:00:00Z').getUTCDay();
+        return dow !== 0 && dow !== 6 && !feriadosSet.has(d);
+      };
+
+      const vazio = { hoje: hojeStr, diaUtil: false, contratos: [] as any[], avisos: [] as any[], aniversariantes: [] as any[] };
+      if (!isBiz(hojeStr)) return vazio;
+
+      // Janela "para frente": hoje + dias não-úteis consecutivos seguintes
+      // (vencimentos nesse gap são alertados HOJE, o último dia útil anterior).
+      const janelaFrente = new Set<string>([hojeStr]);
+      for (let d = addDays(hojeStr, 1); !isBiz(d); d = addDays(d, 1)) janelaFrente.add(d);
+      // Gap "para trás": dias não-úteis entre o dia útil anterior e hoje
+      // (aniversários nesse gap são alertados hoje, o primeiro dia útil posterior).
+      const gapTras = new Set<string>();
+      for (let d = addDays(hojeStr, -1); !isBiz(d); d = addDays(d, -1)) gapTras.add(d);
+
+      const soFinanceiro = input.escopo === 'financeiro';
+      // Só as colunas necessárias (perf — endpoint roda a cada entrada no módulo)
+      const allEmps = await db.select({
+        id: employees.id, companyId: employees.companyId, nomeCompleto: employees.nomeCompleto,
+        funcao: employees.funcao, fotoUrl: employees.fotoUrl, status: employees.status,
+        listaNegra: employees.listaNegra, dataNascimento: employees.dataNascimento,
+        dataAdmissao: employees.dataAdmissao,
+        experienciaTipo: (employees as any).experienciaTipo,
+        experienciaStatus: (employees as any).experienciaStatus,
+        experienciaInicio: (employees as any).experienciaInicio,
+      }).from(employees)
+        .where(and(companyFilter(employees.companyId, inputSeguro), sql`${employees.deletedAt} IS NULL`));
+      const normStatus = (s: any) => String(s || '').toLowerCase().replace(/[\s_]/g, '');
+      const naoDesligado = (e: any) =>
+        e.listaNegra !== 1 && !['desligado', 'listanegra', 'inativo'].includes(normStatus(e.status));
+
+      // 1) Contratos de experiência (escopo RH)
+      const contratos = soFinanceiro ? [] : allEmps
+        .filter((e: any) => naoDesligado(e) && e.experienciaTipo &&
+          e.experienciaStatus !== 'efetivado' && e.experienciaStatus !== 'desligado_experiencia')
+        .map((e: any) => {
+          const inicioRaw = e.experienciaInicio || e.dataAdmissao;
+          if (!inicioRaw) return null;
+          const inicio = toDateStr(inicioRaw);
+          const dias1 = e.experienciaTipo === '30_30' ? 30 : 45;
+          const dias2 = e.experienciaTipo === '30_30' ? 60 : 90;
+          const fim1 = addDays(inicio, dias1 - 1);
+          const fim2 = addDays(inicio, dias2 - 1);
+          const vencimento = e.experienciaStatus === 'prorrogado' ? fim2 : fim1;
+          if (!janelaFrente.has(vencimento)) return null;
+          return {
+            id: e.id, companyId: e.companyId, nome: e.nomeCompleto, funcao: e.funcao,
+            fotoUrl: e.fotoUrl || null, tipo: e.experienciaTipo,
+            periodo: e.experienciaStatus === 'prorrogado' ? 2 : 1,
+            inicio, fim1, fim2, vencimento,
+            venceHoje: vencimento === hojeStr,
+          };
+        })
+        .filter(Boolean);
+
+      // 2) Avisos prévios — prazo final de pagamento (art. 477 CLT)
+      const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
+      let avisos: any[] = [];
+      if (canSeeAviso) {
+        const rows = await db.select().from(terminationNotices)
+          .where(and(
+            companyFilter(terminationNotices.companyId, inputSeguro),
+            sql`${terminationNotices.status} IN ('em_andamento', 'aguardando_pagamento')`,
+            sql`${terminationNotices.dataBaixa} IS NULL`,
+            sql`${terminationNotices.deletedAt} IS NULL`,
+          ));
+        const empMap = new Map(allEmps.map((e: any) => [e.id, e]));
+        avisos = rows.map((a: any) => {
+          // Prazo: dataLimitePagamento da previsão salva; fallback dataFim+10.
+          let prazo: string | null = null;
+          try {
+            const prev = a.previsaoRescisao ? JSON.parse(a.previsaoRescisao) : null;
+            if (prev?.dataLimitePagamento) prazo = toDateStr(prev.dataLimitePagamento);
+          } catch { /* fallback abaixo */ }
+          if (!prazo && a.dataFim) prazo = addDays(toDateStr(a.dataFim), 10);
+          if (!prazo || !janelaFrente.has(prazo)) return null;
+          const emp = empMap.get(a.employeeId);
+          return {
+            id: a.id, companyId: a.companyId, employeeId: a.employeeId,
+            nome: emp?.nomeCompleto || `Funcionário #${a.employeeId}`,
+            funcao: emp?.funcao || null, fotoUrl: emp?.fotoUrl || null,
+            tipo: a.tipo, dataFim: toDateStr(a.dataFim), prazoPagamento: prazo,
+            valorEstimado: a.valorEstimadoTotal ?? null,
+            enviadoFinanceiro: !!a.financeiroEntryId,
+            venceHoje: prazo === hojeStr,
+          };
+        }).filter(Boolean);
+      }
+
+      // 3) Aniversariantes (hoje, gap seguinte antecipado, gap anterior atrasado)
+      const mmddAlvo = new Map<string, 'hoje' | 'antecipado' | 'atrasado'>();
+      for (const d of gapTras) mmddAlvo.set(d.slice(5), 'atrasado');
+      for (const d of janelaFrente) mmddAlvo.set(d.slice(5), d === hojeStr ? 'hoje' : 'antecipado');
+      const aniversariantes = soFinanceiro ? [] : allEmps
+        .filter((e: any) => e.listaNegra !== 1 && e.status === 'Ativo' && e.dataNascimento)
+        .map((e: any) => {
+          const dn = toDateStr(e.dataNascimento);
+          const quando = mmddAlvo.get(dn.slice(5));
+          if (!quando) return null;
+          return {
+            id: e.id, companyId: e.companyId, nome: e.nomeCompleto, funcao: e.funcao,
+            fotoUrl: e.fotoUrl || null, dataNascimento: dn, quando,
+          };
+        })
+        .filter(Boolean);
+
+      return { hoje: hojeStr, diaUtil: true, contratos, avisos, aniversariantes };
+    }),
 });

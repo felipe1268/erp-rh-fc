@@ -1,4 +1,23 @@
 /**
+ * Rev. 4688 - ALERTAS DO DIA (POP-UPS RH + FINANCEIRO)
+ *
+ * Tres novos pop-ups no estilo do lembrete de ferias (endpoint
+ * home.getAlertasDia + componente AlertasDiaPrompt, montado no
+ * DashboardLayout):
+ * 1. CONTRATOS DE EXPERIENCIA vencendo hoje — se o vencimento cai em
+ *    sabado/domingo/feriado, o alerta antecipa para o ultimo dia util
+ *    anterior. Mensagem "N CONTRATOS ESTAO VENCENDO HOJE" + lista.
+ * 2. AVISOS PREVIOS no prazo final de pagamento (art. 477 — dataFim+10),
+ *    mesma antecipacao de dia nao-util. Aparece no RH E no Financeiro
+ *    (quem paga e o Financeiro). Link p/ Contas a Pagar no Financeiro.
+ * 3. ANIVERSARIANTES do dia — se o aniversario cai em dia nao-util, o
+ *    alerta aparece no ultimo dia util ANTERIOR e no primeiro POSTERIOR.
+ * Feriados: getFeriadosSetForPeriod (nacionais + moveis + cadastrados).
+ * Alerta de FERIAS tambem passou a aparecer no Financeiro (modo
+ * informativo, botao "Ciente", sem acoes de RH).
+ * Cada pop-up aparece 1x por sessao por dia/empresa (sessionStorage).
+ */
+/**
  * Rev. 4687 - AVISO PREVIO: BAIXA SOMENTE PELO FINANCEIRO + VALOR EDITAVEL
  *
  * A pedido do usuario: a baixa da rescisao deve vir SEMPRE do Financeiro

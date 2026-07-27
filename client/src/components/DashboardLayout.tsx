@@ -47,6 +47,7 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { ReservasAlertModal } from './compras/ReservasAlertModal';
 import FeriasGozoPrompt from './FeriasGozoPrompt';
+import AlertasDiaPrompt from './AlertasDiaPrompt';
 import { FCSignPendingAlertGlobal } from './FCSignPendingAlertGlobal';
 import { AuditoriaAlmoxPendingAlert } from './AuditoriaAlmoxPendingAlert';
 import { AlertaLocacoesVencendo } from './AlertaLocacoesVencendo';
@@ -994,6 +995,7 @@ export default function DashboardLayout({
       </DashboardLayoutContent>
       <ReservasAlertModalGlobal />
       <FeriasGozoPromptGlobal />
+      <AlertasDiaGlobal />
       <FCSignPendingAlertGlobal />
       <AuditoriaAlmoxPendingAlert />
       {/* Rev. 4554 — alerta global de locações a vencer (abre 1x por sessão após o login) */}
@@ -1004,10 +1006,22 @@ export default function DashboardLayout({
 
 // Rev. 2098 — Modal global de início de gozo de férias (RH/DP). Aparece em
 // QUALQUER tela do módulo RH, não só em /ferias.
+// Rev. 4688 — também no Financeiro (informativo: quem paga é o Financeiro).
 function FeriasGozoPromptGlobal() {
   const { activeModule } = useModule();
-  if (activeModule !== "rh-dp") return null;
-  return <FeriasGozoPrompt />;
+  if (activeModule === "rh-dp") return <FeriasGozoPrompt />;
+  if (activeModule === "financeiro") return <FeriasGozoPrompt informativo />;
+  return null;
+}
+
+// Rev. 4688 — Alertas do dia: contratos de experiência vencendo, avisos
+// prévios no prazo final de pagamento e aniversariantes (com antecipação
+// de fim de semana/feriado). RH vê os 3; Financeiro só o de avisos.
+function AlertasDiaGlobal() {
+  const { activeModule } = useModule();
+  if (activeModule === "rh-dp") return <AlertasDiaPrompt modulo="rh" />;
+  if (activeModule === "financeiro") return <AlertasDiaPrompt modulo="financeiro" />;
+  return null;
 }
 
 // Rev. 1386 — Modal global de aviso de Reservas Preventivas pendentes (perfis Compras).

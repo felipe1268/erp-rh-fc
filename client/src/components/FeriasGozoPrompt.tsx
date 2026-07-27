@@ -18,7 +18,9 @@ function formatDate(d: string | null | undefined) {
   return d as string;
 }
 
-export default function FeriasGozoPrompt() {
+// Rev. 4688 — `informativo`: modo somente-leitura para o módulo Financeiro
+// (alerta de férias iniciando; ações de RH ficam ocultas, só "Ciente").
+export default function FeriasGozoPrompt({ informativo = false }: { informativo?: boolean } = {}) {
   const [, setLocation] = useLocation();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = selectedCompanyId || 0;
@@ -187,8 +189,14 @@ export default function FeriasGozoPrompt() {
           </div>
         </div>
 
-        {/* Footer — 3 botões: Confirmar, Reagendar, Cancelar */}
+        {/* Footer — 3 botões: Confirmar, Reagendar, Cancelar (ou só "Ciente" no modo informativo) */}
         <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-blue-50/40 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
+          {informativo ? (
+            <Button className="h-10 bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-700 shadow-md font-semibold" onClick={() => fechar(true)}>
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              Ciente
+            </Button>
+          ) : (<>
           <Button
             variant="outline"
             className="h-10 border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
@@ -225,6 +233,7 @@ export default function FeriasGozoPrompt() {
               : <CheckCircle2 className="h-4 w-4 mr-2" />}
             Confirmar
           </Button>
+          </>)}
         </div>
       </DialogContent>
     </Dialog>
