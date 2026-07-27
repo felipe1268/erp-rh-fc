@@ -260,6 +260,10 @@ export function calcularDiasAvisoTotal(anosServico: number): number {
  * 36 dias de cumprimento — incorreto). */
 export function calcularDiasAviso(anosServico: number, tipo?: string): number {
   if (tipo === 'empregado_indenizado') return 0;
+  // Rev. 4686 — Justa causa (CLT Art. 482): dispensa imediata, SEM aviso prévio.
+  if (tipo === 'justa_causa') return 0;
+  // Rescisão indireta (CLT Art. 483): verbas plenas, aviso sempre INDENIZADO
+  // pelo empregador → período nominal = total proporcional (cai no return final).
   // Toda modalidade "trabalhada" (empregador OU empregado) cumpre 30 dias fixos.
   if (tipo && tipo.endsWith('_trabalhado')) return 30;
   // Indenizado pelo empregador: período NOMINAL (usado por dataFimAviso e
@@ -386,10 +390,17 @@ export function calcularRescisaoCompleta(params: {
   // 1. Saldo de salário
   const saldoSalario = salarioDia * diasTrabalhadosMes;
 
+  // Rev. 4686 — JUSTA CAUSA (CLT Art. 482): o empregado PERDE 13º proporcional,
+  // férias proporcionais, aviso prévio e multa 40% FGTS. Recebe apenas saldo de
+  // salário + férias VENCIDAS + 1/3 (+ acertos de banco de horas/VR dos dias
+  // trabalhados). RESCISÃO INDIRETA (Art. 483): verbas PLENAS, idênticas à
+  // dispensa sem justa causa com aviso indenizado.
+  const isJustaCausa = tipo === 'justa_causa';
+
   // 2. Férias proporcionais + 1/3 constitucional
   // CLT: médias de adicionais habituais (insalubridade, HE) integram a base de férias e 13º
   const baseFerias13 = salarioBase + totalMediasAdicionais;
-  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataProjecao);
+  const mesesFerias = isJustaCausa ? 0 : calcularMesesFeriasProporcionais(dataAdmissao, dataProjecao);
   const feriasProporcional = (baseFerias13 * mesesFerias) / 12;
   const tercoConstitucional = feriasProporcional / 3;
   const totalFerias = feriasProporcional + tercoConstitucional;
@@ -410,7 +421,7 @@ export function calcularRescisaoCompleta(params: {
   const feriasVencidas = feriasVencidasBase + feriasVencidasTerco;
 
   // 4. 13º proporcional — usa data real (não projeção fim-de-mês) para regra dos 15 dias
-  const meses13o = calcularMeses13o(dataAdmissao, dataFimAviso);
+  const meses13o = isJustaCausa ? 0 : calcularMeses13o(dataAdmissao, dataFimAviso);
   const decimoTerceiroProporcional = (baseFerias13 * meses13o) / 12;
 
   // 4b. SEPARAÇÃO GERENCIAL — incremento de férias/13º decorrente da PROJEÇÃO do aviso.
@@ -446,10 +457,13 @@ export function calcularRescisaoCompleta(params: {
 
   // 5. Aviso prévio indenizado
   let avisoPrevioIndenizado = 0;
-  if (tipo === 'empregador_indenizado') {
+  if (tipo === 'empregador_indenizado' || tipo === 'rescisao_indireta') {
     avisoPrevioIndenizado = salarioDia * diasAvisoTotal;
   } else if (tipo === 'empregador_trabalhado') {
     avisoPrevioIndenizado = salarioDia * diasExtrasAviso;
+  } else if (tipo === 'acordo_mutuo') {
+    // Art. 484-A, I, "a" CLT — acordo mútuo: aviso indenizado pago PELA METADE.
+    avisoPrevioIndenizado = (salarioDia * diasAvisoTotal) / 2;
   }
 
   // 6. VR proporcional
@@ -462,7 +476,13 @@ export function calcularRescisaoCompleta(params: {
   // 8. Multa 40% FGTS (Rev. 3036 — gated pelo critério "rescisao_aplicar_multa_fgts",
   // default ON. Quando o critério está desligado p/ a empresa, a multa é zerada.)
   const incluirMultaFgts = params.incluirMultaFgts !== false;
-  const multaFGTS = (incluirMultaFgts && tipo.includes('empregador')) ? fgtsEstimado * 0.4 : 0;
+  // Rescisão indireta equipara-se à dispensa sem justa causa (multa 40% devida);
+  // acordo mútuo (Art. 484-A, §1º) paga METADE da multa (20%); justa causa NÃO
+  // paga multa (não contém 'empregador' → cai no 0 naturalmente).
+  const multaFGTS = !incluirMultaFgts ? 0
+    : tipo === 'acordo_mutuo' ? fgtsEstimado * 0.2
+    : (tipo.includes('empregador') || tipo === 'rescisao_indireta') ? fgtsEstimado * 0.4
+    : 0;
 
   // 9. Desconto Art. 487 §2º CLT — empregado pediu demissão e não cumpriu o aviso.
   // Empregador pode descontar do acerto o valor do aviso não cumprido (1 salário cheio).
@@ -580,8 +600,11 @@ export function calcularRescisaoComplementar(params: {
   // 1. Saldo de Salário (proporcional aos dias trabalhados no mês)
   const saldoSalario = baseDia * diasTrabalhadosMes;
 
+  // Rev. 4686 — justa causa perde proporcionais também no complementar.
+  const isJustaCausaComp = tipo === 'justa_causa';
+
   // 2. Férias Proporcionais + 1/3
-  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataProjecao);
+  const mesesFerias = isJustaCausaComp ? 0 : calcularMesesFeriasProporcionais(dataAdmissao, dataProjecao);
   const feriasProporcional = (valorComplemento * mesesFerias) / 12;
   const tercoConstitucional = feriasProporcional / 3;
   const totalFerias = feriasProporcional + tercoConstitucional;
@@ -599,15 +622,18 @@ export function calcularRescisaoComplementar(params: {
   const feriasVencidas = feriasVencidasBase + feriasVencidasTerco;
 
   // 4. 13º Proporcional
-  const meses13o = calcularMeses13o(dataAdmissao, dataFimAviso);
+  const meses13o = isJustaCausaComp ? 0 : calcularMeses13o(dataAdmissao, dataFimAviso);
   const decimoTerceiroProporcional = (valorComplemento * meses13o) / 12;
 
   // 5. Aviso Prévio Indenizado (mesmo critério da oficial)
   let avisoPrevioIndenizado = 0;
-  if (tipo === 'empregador_indenizado') {
+  if (tipo === 'empregador_indenizado' || tipo === 'rescisao_indireta') {
     avisoPrevioIndenizado = baseDia * diasAvisoTotal;
   } else if (tipo === 'empregador_trabalhado') {
     avisoPrevioIndenizado = baseDia * diasExtrasAviso;
+  } else if (tipo === 'acordo_mutuo') {
+    // Art. 484-A, I, "a" — aviso indenizado pela metade.
+    avisoPrevioIndenizado = (baseDia * diasAvisoTotal) / 2;
   }
 
   // SEM FGTS, SEM multa 40%, SEM VR, SEM médias.

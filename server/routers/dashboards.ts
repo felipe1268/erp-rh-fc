@@ -3263,12 +3263,20 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
       const m13 = calcMeses13o(dataAdmissao, dataProj);
       const dec13 = (salarioBase * m13) / 12;
       let avisoInd = 0;
-      if (tipo === 'empregador_indenizado') avisoInd = salarioDia * diasTotal;
+      if (tipo === 'empregador_indenizado' || tipo === 'rescisao_indireta') avisoInd = salarioDia * diasTotal;
       else if (tipo === 'empregador_trabalhado') avisoInd = salarioDia * diasExtras;
+      // Rev. 4686 — acordo mútuo (Art. 484-A): aviso indenizado pela metade.
+      else if (tipo === 'acordo_mutuo') avisoInd = (salarioDia * diasTotal) / 2;
       const mServ = calcMesesServico(dataAdmissao, dataProj);
       const fgts = salarioBase * 0.08 * mServ;
-      const multa = (incluirMultaFgts && tipo.includes('empregador')) ? fgts * 0.4 : 0;
-      const total = saldoSalario + totalFerias + dec13 + avisoInd + multa;
+      // Rev. 4686 — multa: 40% (empregador/rescisão indireta), 20% (acordo mútuo), 0 (justa causa/pedido).
+      const multa = !incluirMultaFgts ? 0
+        : tipo === 'acordo_mutuo' ? fgts * 0.2
+        : (tipo.includes('empregador') || tipo === 'rescisao_indireta') ? fgts * 0.4
+        : 0;
+      // Rev. 4686 — justa causa perde férias proporcionais + 1/3 e 13º proporcional.
+      const isJC = tipo === 'justa_causa';
+      const total = saldoSalario + (isJC ? 0 : totalFerias) + (isJC ? 0 : dec13) + avisoInd + multa;
       return { total, saldoSalario, totalFerias, dec13, fgts, multa, avisoInd };
     }
     return { calcularRescisaoCompletaDash };

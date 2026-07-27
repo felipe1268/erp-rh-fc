@@ -1,4 +1,23 @@
 /**
+ * Rev. 4686 - AVISO PREVIO: JUSTA CAUSA, RESCISAO INDIRETA E ACORDO MUTUO
+ *
+ * Tres novos tipos de rescisao no modulo Aviso Previo:
+ * - JUSTA CAUSA (Art. 482 CLT): sem aviso previo (desligamento imediato,
+ *   status direto em Aguardando Baixa); verbas apenas saldo de salario +
+ *   ferias VENCIDAS + 1/3 (+ banco de horas); perde 13o e ferias
+ *   proporcionais, aviso e multa 40%. Exige inciso do Art. 482 + descricao
+ *   do fato (lastro documental, colunas motivo_legal/motivo_descricao).
+ * - RESCISAO INDIRETA (Art. 483 CLT): falta grave do empregador; verbas
+ *   plenas identicas a dispensa sem justa causa com aviso INDENIZADO
+ *   (30+3/ano) e multa 40%. Exige alinea do Art. 483 + descricao.
+ * - ACORDO MUTUO (Art. 484-A CLT): aviso indenizado pago PELA METADE e
+ *   multa FGTS de 20%; demais verbas integrais.
+ * Poka-yoke CIPA (Sumula 379 TST): cipeiro com estabilidade vigente tem os
+ * tipos empregador_* BLOQUEADOS no servidor; justa causa liberada.
+ * Categoria de desligamento propagada (demissao_justa_causa /
+ * rescisao_indireta / acordo_mutuo) e FGTS real recalcula multa 20%/40%.
+ */
+/**
  * Rev. 4685 - FIX AVISO PREVIO: "ENVIAR AO FINANCEIRO" DAVA "SEM ACESSO"
  *
  * A mutation enviarParaFinanceiro chamava getCompaniesForUser SEM o role

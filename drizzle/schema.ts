@@ -3435,6 +3435,10 @@ export const terminationNotices = pgTable("termination_notices", {
         // Rev. 4557 — Fluxo RH → Financeiro: RH valida e envia a rescisão para o
         // Contas a Pagar; quando o Financeiro dá a baixa, o aviso conclui e o
         // funcionário é desligado automaticamente.
+        // Rev. 4686 — enquadramento legal p/ justa_causa (Art. 482) e
+        // rescisao_indireta (Art. 483): inciso + descrição do fato.
+        motivoLegal: text("motivo_legal"),
+        motivoDescricao: text("motivo_descricao"),
         enviadoFinanceiroEm: timestamp("enviado_financeiro_em", { mode: 'string' }),
         enviadoFinanceiroPor: varchar("enviado_financeiro_por", { length: 255 }),
         financeiroEntryId: integer("financeiro_entry_id"),

@@ -94,8 +94,12 @@ export async function concluirAvisoPorBaixaFinanceira(opts: {
     const [empAntes] = await db.select({ status: employees.status, nomeCompleto: employees.nomeCompleto })
       .from(employees).where(eq(employees.id, aviso.employeeId));
     if (empAntes && empAntes.status !== 'Desligado' && empAntes.status !== 'Lista_Negra' && empAntes.status !== 'Inativo') {
-      const categoria = String(aviso.tipo || '').startsWith('empregador')
-        ? 'demissao_sem_justa_causa' : 'pedido_demissao';
+      // Rev. 4686 — categorias específicas p/ justa causa e rescisão indireta.
+      const _t = String(aviso.tipo || '');
+      const categoria = _t === 'justa_causa' ? 'demissao_justa_causa'
+        : _t === 'rescisao_indireta' ? 'rescisao_indireta'
+        : _t === 'acordo_mutuo' ? 'acordo_mutuo'
+        : _t.startsWith('empregador') ? 'demissao_sem_justa_causa' : 'pedido_demissao';
       await db.update(employees).set({
         status: 'Desligado',
         categoriaDesligamento: categoria,
@@ -523,7 +527,7 @@ export async function criarAvisoPrevioInterno(
   params: {
     companyId: number;
     companyIds?: number[];
-    tipo: 'empregador_trabalhado' | 'empregador_indenizado' | 'empregado_trabalhado' | 'empregado_indenizado';
+    tipo: 'empregador_trabalhado' | 'empregador_indenizado' | 'empregado_trabalhado' | 'empregado_indenizado' | 'justa_causa' | 'rescisao_indireta' | 'acordo_mutuo';
     dataInicio: string;
     dataDesligamento?: string;
     reducaoJornada?: '2h_dia' | '7_dias_corridos' | 'nenhuma';
@@ -531,6 +535,10 @@ export async function criarAvisoPrevioInterno(
     vrDiario?: number;
     diasTrabalhados?: number;
     descontarAvisoNaoCumprido?: boolean;
+    /** Rev. 4686 — enquadramento legal (inciso do Art. 482 ou 483 CLT) para
+     * justa_causa / rescisao_indireta. Lastro documental p/ eventual ação. */
+    motivoLegal?: string;
+    motivoDescricao?: string;
   },
   user: { id?: number | null; name?: string | null },
 ) {
@@ -548,9 +556,52 @@ export async function criarAvisoPrevioInterno(
     throw new TRPCError({ code: "CONFLICT", message: "Este colaborador já possui um aviso prévio em andamento. Conclua ou cancele o aviso existente antes de criar um novo." });
   }
 
+  // Rev. 4686 — poka-yoke CIPA (Súmula 379 TST): cipeiro com estabilidade
+  // vigente NÃO pode ser dispensado pelo empregador sem justa causa. Bloqueia
+  // os tipos empregador_* quando há estabilidade ativa; justa_causa é a única
+  // dispensa patronal permitida (pedido do empregado e rescisão indireta são
+  // iniciativa do trabalhador — liberados).
+  // Rev. 4686 — poka-yoke server-side: justa causa e rescisão indireta exigem
+  // enquadramento legal (inciso + descrição do fato) — lastro documental.
+  if (params.tipo === 'justa_causa' || params.tipo === 'rescisao_indireta') {
+    if (!params.motivoLegal || !(params.motivoDescricao || '').trim()) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: params.tipo === 'justa_causa'
+        ? 'Justa causa exige o inciso do Art. 482 CLT e a descrição do fato.'
+        : 'Rescisão indireta exige a alínea do Art. 483 CLT e a descrição do fato.' });
+    }
+  }
+
+  if (params.tipo.startsWith('empregador')) {
+    try {
+      const hoje = new Date().toISOString().split('T')[0];
+      const cipaRows = await db.select({
+        fimEstabilidade: cipaMembers.fimEstabilidade,
+        mandatoFim: cipaMembers.mandatoFim,
+      }).from(cipaMembers)
+        .innerJoin(cipaElections, eq(cipaElections.id, cipaMembers.eleicaoId))
+        .where(and(
+          eq(cipaMembers.employeeId, emp.id),
+          sql`${cipaMembers.statusMembro} != 'Encerrado'`,
+          sql`${cipaElections.statusEleicao} != 'Encerrado'`,
+        ));
+      const estavel = cipaRows.some(r => {
+        const fim = r.fimEstabilidade || r.mandatoFim || null;
+        return fim && fim >= hoje;
+      });
+      if (estavel) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Este colaborador é cipeiro com estabilidade provisória vigente (CLT Art. 165 / Súmula 379 TST) — dispensa pelo empregador só é permitida por JUSTA CAUSA. Use o tipo "Justa Causa (Art. 482)" ou aguarde o fim da estabilidade.' });
+      }
+    } catch (e) {
+      if (e instanceof TRPCError) throw e;
+      console.error('[AvisoPrevio] Falha ao checar estabilidade CIPA (não-bloqueante):', e);
+    }
+  }
+
   const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
   const dataDesligamento = params.dataDesligamento || params.dataInicio;
-  const isEmpregadoInd = params.tipo === 'empregado_indenizado';
+  // Justa causa = desligamento IMEDIATO (sem período de aviso), mesmas datas
+  // do empregado_indenizado (dataFim = data do desligamento, 0 dias de aviso).
+  const isEmpregadoInd = params.tipo === 'empregado_indenizado' || params.tipo === 'justa_causa';
   const dataInicioAviso = isEmpregadoInd ? dataDesligamento : calcularDataInicioAviso(params.dataInicio);
   const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
   const diasAviso = isEmpregadoInd ? 0 : calcularDiasAviso(anosServico, params.tipo);
@@ -607,7 +658,10 @@ export async function criarAvisoPrevioInterno(
     previsaoRescisao: JSON.stringify(previsao),
     previsaoRescisaoComplementar: previsaoComplementarCreate ? JSON.stringify(previsaoComplementarCreate) : null,
     valorEstimadoTotal: previsao.total,
-    status: 'em_andamento',
+    // Justa causa não tem período de aviso: nasce direto em "Aguardando Baixa".
+    status: params.tipo === 'justa_causa' ? 'aguardando_pagamento' : 'em_andamento',
+    motivoLegal: params.motivoLegal || null,
+    motivoDescricao: params.motivoDescricao || null,
     observacoes: params.observacoes || null,
     criadoPor: user.name ?? 'Sistema',
     criadoPorUserId: user.id ?? null,
@@ -956,8 +1010,9 @@ export const avisoPrevioFeriasRouter = router({
             let fgtsRealValor: number | null = null;
             if (row.fgtsReal) {
               fgtsRealValor = parseFloat(row.fgtsReal.replace(',', '.'));
-              if (incluirMultaFgtsById && !isNaN(fgtsRealValor) && row.tipo.includes('empregador')) {
-                const multaReal = fgtsRealValor * 0.4;
+              if (incluirMultaFgtsById && !isNaN(fgtsRealValor) && (row.tipo.includes('empregador') || row.tipo === 'rescisao_indireta' || row.tipo === 'acordo_mutuo')) {
+                // Acordo mútuo (Art. 484-A §1º): metade da multa → 20%.
+                const multaReal = fgtsRealValor * (row.tipo === 'acordo_mutuo' ? 0.2 : 0.4);
                 const multaAntiga = parseFloat(previsao.multaFGTS);
                 previsao.multaFGTS = multaReal.toFixed(2);
                 previsao.fgtsRealUsado = fgtsRealValor.toFixed(2);
@@ -1052,8 +1107,9 @@ export const avisoPrevioFeriasRouter = router({
         const diasAviso = calcularDiasAviso(anosServico, input.tipo);
         const diasExtras = calcularDiasExtrasAviso(anosServico);
         
-        // Empregado indenizado = não cumpre aviso, sai no dia do pedido
-        const isEmpregadoIndenizado = input.tipo === 'empregado_indenizado';
+        // Empregado indenizado = não cumpre aviso, sai no dia do pedido.
+        // Rev. 4686 — justa causa também é saída imediata (sem aviso).
+        const isEmpregadoIndenizado = input.tipo === 'empregado_indenizado' || input.tipo === 'justa_causa';
         const dataInicioAviso = calcularDataInicioAviso(dataDesligamento);
         const dataFimAviso = isEmpregadoIndenizado
           ? dataDesligamento
@@ -1774,7 +1830,7 @@ export const avisoPrevioFeriasRouter = router({
 
     create: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
-        tipo: z.enum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado']),
+        tipo: z.enum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado','justa_causa','rescisao_indireta','acordo_mutuo']),
         dataInicio: z.string(),
         dataDesligamento: z.string().optional(),
         reducaoJornada: z.enum(['2h_dia','7_dias_corridos','nenhuma']).default('nenhuma'),
@@ -1782,6 +1838,8 @@ export const avisoPrevioFeriasRouter = router({
         vrDiario: z.number().optional(),
         diasTrabalhados: z.number().optional(),
         descontarAvisoNaoCumprido: z.boolean().optional(),
+        motivoLegal: z.string().max(500).optional(),
+        motivoDescricao: z.string().max(4000).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
@@ -1799,7 +1857,7 @@ export const avisoPrevioFeriasRouter = router({
     update: protectedProcedure
       .input(z.object({
         id: z.number(),
-        tipo: z.enum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado']).optional(),
+        tipo: z.enum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado','justa_causa','rescisao_indireta','acordo_mutuo']).optional(),
         dataInicio: z.string().optional(),
         dataDesligamento: z.string().optional(),
         reducaoJornada: z.enum(['2h_dia','7_dias_corridos','nenhuma']).optional(),
@@ -1860,7 +1918,7 @@ export const avisoPrevioFeriasRouter = router({
           if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Funcionário não encontrado' });
 
           const tipo = input.tipo || aviso.tipo;
-          const isEmpInd = tipo === 'empregado_indenizado';
+          const isEmpInd = tipo === 'empregado_indenizado' || tipo === 'justa_causa';
           const dataDesligFinal = dataDesligamento || (input.dataInicio || aviso.dataInicio);
           const dataInicioFinal = isEmpInd
             ? dataDesligFinal
@@ -1984,7 +2042,7 @@ export const avisoPrevioFeriasRouter = router({
             if (!emp) { erros++; continue; }
 
             const tipo = aviso.tipo;
-            const isEmpIndRec = tipo === 'empregado_indenizado';
+            const isEmpIndRec = tipo === 'empregado_indenizado' || tipo === 'justa_causa';
             const dataDesligFinal = aviso.dataInicio;
             const dataInicioFinal = isEmpIndRec ? dataDesligFinal : aviso.dataInicio;
             const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
@@ -2079,7 +2137,9 @@ export const avisoPrevioFeriasRouter = router({
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'A baixa da rescisão complementar já foi registrada.' });
 
         const isPedidoDemissao = aviso.tipo === 'empregado_trabalhado' || aviso.tipo === 'empregado_indenizado';
-        const fgtsNaoAplica = isPedidoDemissao;
+        // Rev. 4686 — justa causa não tem multa FGTS (depósitos ficam na conta);
+        // a etapa "FGTS" da baixa não se aplica, como no pedido de demissão.
+        const fgtsNaoAplica = isPedidoDemissao || aviso.tipo === 'justa_causa';
         if (input.tipo === 'fgts' && fgtsNaoAplica)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Multa FGTS não se aplica a pedido de demissão.' });
 
@@ -2906,6 +2966,9 @@ export const avisoPrevioFeriasRouter = router({
           'empregador_indenizado': 'Aviso Prévio Indenizado (pelo Empregador)',
           'empregado_trabalhado': 'Aviso Prévio Trabalhado (pelo Empregado)',
           'empregado_indenizado': 'Aviso Prévio Indenizado (pelo Empregado)',
+          'justa_causa': 'Dispensa por Justa Causa (Art. 482 CLT)',
+          'rescisao_indireta': 'Rescisão Indireta (Art. 483 CLT)',
+          'acordo_mutuo': 'Rescisão por Acordo Mútuo (Art. 484-A CLT)',
         };
 
         const reducaoLabels: Record<string, string> = {

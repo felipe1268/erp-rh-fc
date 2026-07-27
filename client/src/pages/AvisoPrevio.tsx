@@ -46,7 +46,39 @@ const TIPO_LABELS: Record<string, { label: string; color: string; bg: string }> 
   empregador_indenizado: { label: "Empregador (Indenizado)", color: "text-purple-700", bg: "bg-purple-100" },
   empregado_trabalhado: { label: "Empregado (Trabalhado)", color: "text-amber-700", bg: "bg-amber-100" },
   empregado_indenizado: { label: "Empregado (Indenizado)", color: "text-orange-700", bg: "bg-orange-100" },
+  // Rev. 4686 — novos enquadramentos legais.
+  justa_causa: { label: "Justa Causa (Art. 482)", color: "text-red-700", bg: "bg-red-100" },
+  rescisao_indireta: { label: "Rescisão Indireta (Art. 483)", color: "text-violet-700", bg: "bg-violet-100" },
+  acordo_mutuo: { label: "Acordo Mútuo (Art. 484-A)", color: "text-teal-700", bg: "bg-teal-100" },
 };
+
+// Rev. 4686 — incisos do Art. 482 CLT (justa causa do EMPREGADO).
+const MOTIVOS_JUSTA_CAUSA: { value: string; label: string }[] = [
+  { value: "482_a", label: "a) Ato de improbidade" },
+  { value: "482_b", label: "b) Incontinência de conduta ou mau procedimento" },
+  { value: "482_c", label: "c) Negociação habitual por conta própria (concorrência/prejuízo ao serviço)" },
+  { value: "482_d", label: "d) Condenação criminal transitada em julgado" },
+  { value: "482_e", label: "e) Desídia no desempenho das funções" },
+  { value: "482_f", label: "f) Embriaguez habitual ou em serviço" },
+  { value: "482_g", label: "g) Violação de segredo da empresa" },
+  { value: "482_h", label: "h) Ato de indisciplina ou insubordinação" },
+  { value: "482_i", label: "i) Abandono de emprego" },
+  { value: "482_j", label: "j) Ato lesivo da honra/boa fama ou ofensas físicas em serviço" },
+  { value: "482_k", label: "k) Ato lesivo da honra ou ofensas físicas contra empregador/superiores" },
+  { value: "482_l", label: "l) Prática constante de jogos de azar" },
+  { value: "482_m", label: "m) Perda da habilitação/requisitos legais p/ o exercício da profissão (dolo)" },
+];
+
+// Rev. 4686 — alíneas do Art. 483 CLT (falta grave do EMPREGADOR).
+const MOTIVOS_RESCISAO_INDIRETA: { value: string; label: string }[] = [
+  { value: "483_a", label: "a) Exigência de serviços superiores às forças, proibidos por lei ou alheios ao contrato" },
+  { value: "483_b", label: "b) Tratamento com rigor excessivo" },
+  { value: "483_c", label: "c) Perigo manifesto de mal considerável" },
+  { value: "483_d", label: "d) Descumprimento de obrigações do contrato (ex.: atraso de salário/FGTS)" },
+  { value: "483_e", label: "e) Ato lesivo da honra e boa fama do empregado ou de sua família" },
+  { value: "483_f", label: "f) Ofensas físicas (salvo legítima defesa)" },
+  { value: "483_g", label: "g) Redução do trabalho por peça/tarefa afetando sensivelmente o salário" },
+];
 
 // Rev. 4132 — Contrato de Experiência: rescisão não tem aviso prévio nem multa
 // FGTS; o documento "comunicado de dispensa" gerado precisa de um dos 4 títulos
@@ -478,7 +510,15 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
       toast.error(`Data do aviso (${form.dataDesligamento.split("-").reverse().join("/")}) é anterior à admissão do colaborador (${admISO.split("-").reverse().join("/")}). Verifique a data.`);
       return;
     }
-    if (cipaCheckQ.data?.temEstabilidade) {
+    // Rev. 4686 — justa causa e rescisão indireta exigem enquadramento legal.
+    if ((form.tipo === 'justa_causa' || form.tipo === 'rescisao_indireta') && (!form.motivoLegal || !(form.motivoDescricao || '').trim())) {
+      toast.error("Informe o inciso legal e a descrição do fato — são o lastro documental da rescisão.");
+      return;
+    }
+    // Justa causa é a ÚNICA dispensa patronal permitida p/ cipeiro estável
+    // (Súmula 379 TST) — não precisa do alerta; o servidor bloqueia os tipos
+    // empregador_* automaticamente.
+    if (cipaCheckQ.data?.temEstabilidade && form.tipo !== 'justa_causa') {
       const cipaMembro = cipaCheckQ.data.membros[0];
       const msg = `⚠️ ATENÇÃO: CIPEIRO COM ESTABILIDADE!\n\n` +
         `Este colaborador é membro da CIPA (${cipaMembro?.cargoCipa}) ` +
@@ -514,6 +554,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         observacoes: form.observacoes,
         diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
         descontarAvisoNaoCumprido: !!form.descontarAvisoNaoCumprido,
+        motivoLegal: form.motivoLegal || undefined,
+        motivoDescricao: form.motivoDescricao || undefined,
       });
     }
   };
@@ -1744,7 +1786,7 @@ ${isExperiencia ? (() => {
                         <div className="mt-2 pt-1">
                           <div className="flex items-center justify-between mb-1">
                             <p className="text-[10px] text-gray-400 uppercase font-bold">FGTS (informativo)</p>
-                            {selectedItem.tipo?.includes('empregador') && (
+                            {(selectedItem.tipo?.includes('empregador') || selectedItem.tipo === 'rescisao_indireta' || selectedItem.tipo === 'acordo_mutuo') && (
                               <Button size="sm" variant="ghost" className="h-6 text-[10px] text-amber-600 hover:text-amber-700 px-2 gap-1" onClick={() => setFgtsEditDialog({ open: true, valor: selectedItem.fgtsReal || '' })}>
                                 <Edit2 className="h-3 w-3" />
                                 {selectedItem.fgtsEditadoManualmente ? 'Editar saldo real' : 'Informar saldo real'}
@@ -2781,6 +2823,8 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           Conforme <strong>CLT Art. 165</strong> e <strong>CF/88 Art. 10, II, "a" do ADCT</strong>,
                           o cipeiro eleito pelos empregados <strong>não pode ser dispensado sem justa causa</strong> desde
                           o registro da candidatura até <strong>1 ano após o término do mandato</strong>.
+                          Os tipos "Empregador" são <strong>bloqueados pelo sistema</strong> — apenas <strong>Justa Causa (Art. 482)</strong>,
+                          pedido do empregado ou rescisão indireta são permitidos.
                         </p>
                         <div className="mt-2 space-y-1">
                           {(cipaCheckQ.data?.membros ?? []).map((m: any, i: number) => (
@@ -2847,8 +2891,71 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           <SelectItem value="empregador_indenizado">Empregador (Indenizado)</SelectItem>
                           <SelectItem value="empregado_trabalhado">Empregado (Trabalhado)</SelectItem>
                           <SelectItem value="empregado_indenizado">Empregado (Indenizado)</SelectItem>
+                          <SelectItem value="justa_causa">
+                            <div className="flex flex-col">
+                              <span className="font-medium">Justa Causa — Art. 482 CLT</span>
+                              <span className="text-[10px] text-muted-foreground">Sem aviso prévio; só saldo + férias vencidas + 1/3</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="rescisao_indireta">
+                            <div className="flex flex-col">
+                              <span className="font-medium">Rescisão Indireta — Art. 483 CLT</span>
+                              <span className="text-[10px] text-muted-foreground">Falta grave do empregador; verbas plenas (aviso indenizado)</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="acordo_mutuo">
+                            <div className="flex flex-col">
+                              <span className="font-medium">Acordo Mútuo — Art. 484-A CLT</span>
+                              <span className="text-[10px] text-muted-foreground">Aviso indenizado pela metade; multa FGTS de 20%</span>
+                            </div>
+                          </SelectItem>
                         </SelectContent>
                       </Select>
+                    )}
+                    {!isPedidoDemissao && form.tipo === 'justa_causa' && (
+                      <div className="mt-2 space-y-2">
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+                          <strong>Art. 482 CLT:</strong> dispensa imediata, sem aviso prévio. O colaborador recebe apenas saldo de salário e férias vencidas + 1/3 — <strong>perde</strong> 13º e férias proporcionais, multa de 40%, saque do FGTS e seguro-desemprego. Se a Justiça reverter a justa causa, as diferenças são pagas com abatimento do que já foi quitado.
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-700 mb-1 block">Enquadramento legal (inciso do Art. 482) <span className="text-red-500">*</span></label>
+                          <Select value={form.motivoLegal || ""} onValueChange={v => setForm({ ...form, motivoLegal: v })}>
+                            <SelectTrigger className="h-10 border-2 border-gray-200"><SelectValue placeholder="Selecione o inciso..." /></SelectTrigger>
+                            <SelectContent>
+                              {MOTIVOS_JUSTA_CAUSA.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-700 mb-1 block">Descrição do fato (lastro documental) <span className="text-red-500">*</span></label>
+                          <Textarea rows={3} value={form.motivoDescricao || ""} onChange={e => setForm({ ...form, motivoDescricao: e.target.value })} placeholder="Descreva objetivamente o fato que motivou a justa causa (datas, advertências/suspensões anteriores, testemunhas...)" />
+                        </div>
+                      </div>
+                    )}
+                    {!isPedidoDemissao && form.tipo === 'rescisao_indireta' && (
+                      <div className="mt-2 space-y-2">
+                        <div className="p-3 bg-violet-50 border border-violet-200 rounded-lg text-xs text-violet-700">
+                          <strong>Art. 483 CLT:</strong> rescisão por falta grave do empregador. Verbas idênticas à dispensa sem justa causa: aviso indenizado (30 + 3/ano), 13º e férias proporcionais + 1/3, multa de 40% do FGTS. Em regra é reconhecida judicialmente — este registro serve de enquadramento e lastro.
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-700 mb-1 block">Enquadramento legal (alínea do Art. 483) <span className="text-red-500">*</span></label>
+                          <Select value={form.motivoLegal || ""} onValueChange={v => setForm({ ...form, motivoLegal: v })}>
+                            <SelectTrigger className="h-10 border-2 border-gray-200"><SelectValue placeholder="Selecione a alínea..." /></SelectTrigger>
+                            <SelectContent>
+                              {MOTIVOS_RESCISAO_INDIRETA.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-700 mb-1 block">Descrição do fato <span className="text-red-500">*</span></label>
+                          <Textarea rows={3} value={form.motivoDescricao || ""} onChange={e => setForm({ ...form, motivoDescricao: e.target.value })} placeholder="Descreva a falta grave do empregador que motivou a rescisão indireta" />
+                        </div>
+                      </div>
+                    )}
+                    {!isPedidoDemissao && form.tipo === 'acordo_mutuo' && (
+                      <div className="mt-2 p-3 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-700">
+                        <strong>Art. 484-A CLT (Reforma 2017):</strong> rescisão por acordo entre as partes. Aviso indenizado pago <strong>pela metade</strong>, multa do FGTS de <strong>20%</strong>, demais verbas integrais. O colaborador movimenta até 80% do FGTS e <strong>não</strong> tem direito ao seguro-desemprego.
+                      </div>
                     )}
                     {isPedidoDemissao && form.tipo === 'empregado_indenizado' && (
                       <>

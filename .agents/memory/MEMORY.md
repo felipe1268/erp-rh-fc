@@ -47,6 +47,7 @@
 - [AI output sanitization](ai-output-sanitization.md) — LLM output feeding a decision UI must be filtered server-side against the deterministic fact set (whitelist keys, clamp scores, enum-normalize).
 - [Mudança de obra na timeline](employee-obra-change-timeline.md) — troca de obra grava em `employee_site_history` (não `employee_history`); timeline raioX precisa ler AMBAS.
 - [valorEstimadoTotal fica defasado](valorEstimado-stale-column.md) — coluna persistida congela na criação do aviso; list/getById/homeData devem recalcular ao vivo.
+- [Rescisão tipos especiais](rescisao-tipos-especiais.md) — justa_causa/rescisao_indireta/acordo_mutuo não casam com includes('empregador'); todo branch por tipo precisa tratá-los explicitamente (3 motores paralelos).
 - [Rescisão Grupo A x Grupo B](rescisao-grupos-custo.md) — incremento da projeção do aviso = custo da demissão SÓ quando aviso.tipo começa com "empregador".
 - [Rescisão férias model](rescisao-ferias-model.md) — proporcional×vencidas com `-1`: último período completo vira 12/12 proporcional; regra dos 15 dias só no período incompleto.
 - [Central de Documentos ISO — gate](document-templates-iso-gate.md) — só consome template vigente; editar rebaixa p/ rascunho e limpa aprovação; auto-seed garante os 7 tipos.
