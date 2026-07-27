@@ -84,6 +84,7 @@ export const rhDocumentosRouter = router({
   }),
 
   // ── Gerar documento (snapshot renderizado) ────────────────────────────────
+  // (motor de renderização compartilhado com `preview` — ver montarHtmlDocumento no fim do arquivo)
   gerar: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -95,92 +96,7 @@ export const rhDocumentosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       await assertAccess(ctx.user.id, ctx.user.role, input.companyId);
-
-      const [emp] = await db.select().from(employees).where(and(
-        eq(employees.id, input.employeeId),
-        eq(employees.companyId, input.companyId),
-        isNull(employees.deletedAt),
-      ));
-      if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado nesta empresa." });
-
-      const [empresa] = await db.select().from(companies).where(eq(companies.id, input.companyId));
-
-      // Template: vigente da Central ISO > seed institucional (fallback)
-      const [tpl] = await db.select().from(systemDocumentTemplates).where(and(
-        eq(systemDocumentTemplates.tipo, input.tipo),
-        isNull(systemDocumentTemplates.deletedAt),
-      ));
-      const usaVigente = tpl && tpl.status === "vigente" && (tpl.conteudoHtml || "").trim();
-      const corpo = usaVigente ? tpl.conteudoHtml : SEED_BODIES[input.tipo as DocumentTemplateTipo];
-      const meta = DOCUMENT_TEMPLATES_META.find(m => m.tipo === input.tipo)!;
-
-      const hoje = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-      const cidade = String((empresa as any)?.endereco || "").split("-").slice(-2, -1)[0]?.trim();
-      const dados: Record<string, string> = {
-        empNome: emp.nomeCompleto || "",
-        empCpf: fmtCpf(emp.cpf),
-        empRg: (emp as any).rg || "",
-        empFuncao: emp.funcao || "",
-        empMatricula: (emp as any).matricula || "",
-        empAdmissao: fmtDateBr((emp as any).dataAdmissao),
-        empSalario: fmtSalario((emp as any).salarioBase),
-        empCtps: (emp as any).ctps || "",
-        empPis: (emp as any).pis || "",
-        empNascimento: fmtDateBr((emp as any).dataNascimento),
-        empEstadoCivil: (emp as any).estadoCivil || "",
-        empNomeMae: (emp as any).nomeMae || "",
-        empTelefone: (emp as any).telefone || "",
-        empBanco: (emp as any).bancoNome || (emp as any).banco || "",
-        empAgencia: (emp as any).agencia || "",
-        empConta: (emp as any).conta || "",
-        empPix: (emp as any).bancoPix || "",
-        empresaRazaoSocial: empresa?.razaoSocial || "",
-        empresaCnpj: (empresa as any)?.cnpj || "",
-        empresaEndereco: (empresa as any)?.endereco || "",
-        docData: hoje,
-        docLocal: cidade || "",
-        docNumero: "",
-      };
-
-      // Rev. 4672 — Férias: pré-preenche da última férias programada quando
-      // o usuário não informou os campos (extras têm precedência).
-      if (input.tipo === "solicitacao_ferias" || input.tipo === "recibo_ferias") {
-        const [vp] = await db.select().from(vacationPeriods).where(and(
-          eq(vacationPeriods.companyId, input.companyId),
-          eq(vacationPeriods.employeeId, input.employeeId),
-          isNull(vacationPeriods.deletedAt),
-          sql`${vacationPeriods.status} NOT IN ('cancelada', 'cancelado')`,
-        )).orderBy(desc(vacationPeriods.id)).limit(1);
-        if (vp) {
-          Object.assign(dados, {
-            feriasInicio: fmtDateBr((vp as any).dataInicio),
-            feriasFim: fmtDateBr((vp as any).dataFim),
-            feriasDias: String((vp as any).diasGozo ?? ""),
-            aquisitivoInicio: fmtDateBr((vp as any).periodoAquisitivoInicio),
-            aquisitivoFim: fmtDateBr((vp as any).periodoAquisitivoFim),
-            abonoPecuniario: (vp as any).abonoPecuniario ? "Sim" : "Não",
-            valorBruto: fmtSalario((vp as any).valorTotal),
-            valorLiquido: fmtSalario((vp as any).valorLiquido),
-            dataPagamento: fmtDateBr((vp as any).dataPagamento),
-          });
-        }
-      }
-
-      // extras digitados têm precedência sobre tudo (sanitizados contra HTML)
-      for (const [k, v] of Object.entries(input.extras || {})) {
-        if (/^[a-zA-Z0-9_]+$/.test(k)) dados[k] = String(v).replace(/[<>]/g, "");
-      }
-
-      // Placeholders não resolvidos viram vazio no snapshot (documento limpo)
-      let html = renderTemplate(corpo, dados).replace(/\{\{\s*[a-zA-Z0-9_]+\s*\}\}/g, "");
-
-      // Rev. 4672 — Ficha de Registro ganha a FOTO do cadastro (3x4 no topo).
-      if (input.tipo === "ficha_registro" && (emp as any).fotoUrl && String((emp as any).fotoUrl).startsWith("/uploads/")) {
-        const fotoSrc = String((emp as any).fotoUrl).split("?")[0];
-        html = `<div style="float:right;margin:0 0 10px 14px;text-align:center">
-<img src="${fotoSrc}" alt="Foto do colaborador" style="width:96px;height:128px;object-fit:cover;border:1px solid #0A1E3C;border-radius:4px"/>
-<div style="font-size:7pt;color:#555;margin-top:2px">Foto do cadastro</div></div>` + html;
-      }
+      const { html, meta, usaVigente, tpl, dados } = await montarHtmlDocumento(db, input);
 
       const [row] = await db.insert(rhDocumentos).values({
         companyId: input.companyId,
@@ -194,8 +110,8 @@ export const rhDocumentosRouter = router({
           if (input.tipo === "termo_aditivo" && ex.tipoAlteracao) return `${meta.titulo} — ${ex.tipoAlteracao}`.slice(0, 200);
           return meta.titulo;
         })(),
-        codigo: usaVigente ? (tpl.codigo || DEFAULT_CODIGOS[input.tipo as DocumentTemplateTipo]) : DEFAULT_CODIGOS[input.tipo as DocumentTemplateTipo],
-        versaoTemplate: usaVigente ? tpl.versaoAtual : null,
+        codigo: usaVigente ? (tpl!.codigo || DEFAULT_CODIGOS[input.tipo as DocumentTemplateTipo]) : DEFAULT_CODIGOS[input.tipo as DocumentTemplateTipo],
+        versaoTemplate: usaVigente ? tpl!.versaoAtual : null,
         conteudoHtml: html,
         status: "gerado",
         criadoPorId: ctx.user.id,
@@ -204,6 +120,21 @@ export const rhDocumentosRouter = router({
       return { id: row.id };
     }),
 
+  // ── Rev. 4675 — Pré-visualização (olhinho): renderiza o documento com os
+  //    dados do colaborador SEM salvar nada. Mesmo motor da geração. ─────────
+  preview: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      employeeId: z.number(),
+      tipo: tipoSchema,
+      extras: z.record(z.string()).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await assertAccess(ctx.user.id, ctx.user.role, input.companyId);
+      const { html, meta } = await montarHtmlDocumento(db, input);
+      return { titulo: meta.titulo, conteudoHtml: html };
+    }),
   // ── Listar documentos de um funcionário ───────────────────────────────────
   listar: protectedProcedure
     .input(z.object({ companyId: z.number(), employeeId: z.number() }))
@@ -431,3 +362,99 @@ export const rhDocumentosRouter = router({
       return { funcionarios, modelos: modelosMeta };
     }),
 });
+
+// ── Rev. 4675 — motor de renderização COMPARTILHADO entre `gerar` e `preview`.
+//    Monta o HTML do documento com os dados do colaborador/empresa/template.
+//    NÃO grava nada — quem persiste é o `gerar`.
+async function montarHtmlDocumento(
+  db: any,
+  input: { companyId: number; employeeId: number; tipo: string; extras?: Record<string, string> },
+) {
+  const [emp] = await db.select().from(employees).where(and(
+    eq(employees.id, input.employeeId),
+    eq(employees.companyId, input.companyId),
+    isNull(employees.deletedAt),
+  ));
+  if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado nesta empresa." });
+
+  const [empresa] = await db.select().from(companies).where(eq(companies.id, input.companyId));
+
+  // Template: vigente da Central ISO > seed institucional (fallback)
+  const [tpl] = await db.select().from(systemDocumentTemplates).where(and(
+    eq(systemDocumentTemplates.tipo, input.tipo),
+    isNull(systemDocumentTemplates.deletedAt),
+  ));
+  const usaVigente = !!(tpl && tpl.status === "vigente" && (tpl.conteudoHtml || "").trim());
+  const corpo = usaVigente ? tpl.conteudoHtml : SEED_BODIES[input.tipo as DocumentTemplateTipo];
+  const meta = DOCUMENT_TEMPLATES_META.find(m => m.tipo === input.tipo)!;
+
+  const hoje = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const cidade = String((empresa as any)?.endereco || "").split("-").slice(-2, -1)[0]?.trim();
+  const dados: Record<string, string> = {
+    empNome: emp.nomeCompleto || "",
+    empCpf: fmtCpf(emp.cpf),
+    empRg: (emp as any).rg || "",
+    empFuncao: emp.funcao || "",
+    empMatricula: (emp as any).matricula || "",
+    empAdmissao: fmtDateBr((emp as any).dataAdmissao),
+    empSalario: fmtSalario((emp as any).salarioBase),
+    empCtps: (emp as any).ctps || "",
+    empPis: (emp as any).pis || "",
+    empNascimento: fmtDateBr((emp as any).dataNascimento),
+    empEstadoCivil: (emp as any).estadoCivil || "",
+    empNomeMae: (emp as any).nomeMae || "",
+    empTelefone: (emp as any).telefone || "",
+    empBanco: (emp as any).bancoNome || (emp as any).banco || "",
+    empAgencia: (emp as any).agencia || "",
+    empConta: (emp as any).conta || "",
+    empPix: (emp as any).bancoPix || "",
+    empresaRazaoSocial: empresa?.razaoSocial || "",
+    empresaCnpj: (empresa as any)?.cnpj || "",
+    empresaEndereco: (empresa as any)?.endereco || "",
+    docData: hoje,
+    docLocal: cidade || "",
+    docNumero: "",
+  };
+
+  // Rev. 4672 — Férias: pré-preenche da última férias programada quando
+  // o usuário não informou os campos (extras têm precedência).
+  if (input.tipo === "solicitacao_ferias" || input.tipo === "recibo_ferias") {
+    const [vp] = await db.select().from(vacationPeriods).where(and(
+      eq(vacationPeriods.companyId, input.companyId),
+      eq(vacationPeriods.employeeId, input.employeeId),
+      isNull(vacationPeriods.deletedAt),
+      sql`${vacationPeriods.status} NOT IN ('cancelada', 'cancelado')`,
+    )).orderBy(desc(vacationPeriods.id)).limit(1);
+    if (vp) {
+      Object.assign(dados, {
+        feriasInicio: fmtDateBr((vp as any).dataInicio),
+        feriasFim: fmtDateBr((vp as any).dataFim),
+        feriasDias: String((vp as any).diasGozo ?? ""),
+        aquisitivoInicio: fmtDateBr((vp as any).periodoAquisitivoInicio),
+        aquisitivoFim: fmtDateBr((vp as any).periodoAquisitivoFim),
+        abonoPecuniario: (vp as any).abonoPecuniario ? "Sim" : "Não",
+        valorBruto: fmtSalario((vp as any).valorTotal),
+        valorLiquido: fmtSalario((vp as any).valorLiquido),
+        dataPagamento: fmtDateBr((vp as any).dataPagamento),
+      });
+    }
+  }
+
+  // extras digitados têm precedência sobre tudo (sanitizados contra HTML)
+  for (const [k, v] of Object.entries(input.extras || {})) {
+    if (/^[a-zA-Z0-9_]+$/.test(k)) dados[k] = String(v).replace(/[<>]/g, "");
+  }
+
+  // Placeholders não resolvidos viram vazio no snapshot (documento limpo)
+  let html = renderTemplate(corpo, dados).replace(/\{\{\s*[a-zA-Z0-9_]+\s*\}\}/g, "");
+
+  // Rev. 4672 — Ficha de Registro ganha a FOTO do cadastro (3x4 no topo).
+  if (input.tipo === "ficha_registro" && (emp as any).fotoUrl && String((emp as any).fotoUrl).startsWith("/uploads/")) {
+    const fotoSrc = String((emp as any).fotoUrl).split("?")[0];
+    html = `<div style="float:right;margin:0 0 10px 14px;text-align:center">
+<img src="${fotoSrc}" alt="Foto do colaborador" style="width:96px;height:128px;object-fit:cover;border:1px solid #0A1E3C;border-radius:4px"/>
+<div style="font-size:7pt;color:#555;margin-top:2px">Foto do cadastro</div></div>` + html;
+  }
+
+  return { html, meta, usaVigente, tpl, dados };
+}

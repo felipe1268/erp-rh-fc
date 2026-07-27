@@ -1,4 +1,31 @@
 /**
+ * Rev. 4677 - CHECKLIST GERAL DE DOCUMENTOS: GERACAO EM LOTE COM CHECKBOX
+ *
+ * - Checkbox por funcionário na matriz + "selecionar todos" no cabeçalho.
+ * - "Gerar selecionados": gera TODOS os documentos faltantes dos marcados.
+ * - Sem seleção, o botão vira "Gerar todos" (com confirmação) — todos os
+ *   faltantes de toda a lista visível (respeita busca/Só pendências).
+ * - Progresso 0–100% com nome do funcionário/documento em geração.
+ */
+/**
+ * Rev. 4676 - LOCACOES A VENCER: CARDS DO HEADER VIRAM FILTROS CLICAVEIS
+ *
+ * - Total / Vencidas / A vencer agora filtram a lista de equipamentos ao
+ *   clicar (clicar de novo volta pra "Total"); card ativo fica destacado.
+ * - Mensagem amigável quando o filtro não tem itens.
+ */
+/**
+ * Rev. 4675 - DOCUMENTOS DO COLABORADOR: OLHINHO DE PRE-VISUALIZACAO
+ *
+ * - Ícone de olho em CADA documento do checklist e dos eventuais: abre o
+ *   documento já PREENCHIDO com os dados do colaborador/empresa, SEM salvar
+ *   nada no dossiê — pra conferir antes de gerar/enviar pra assinatura.
+ * - No dialog de campos extras (contrato CLT, férias…) também dá pra
+ *   pré-visualizar com os valores digitados.
+ * - Backend: novo `rhDocumentos.preview` reutilizando o mesmo motor de
+ *   renderização do `gerar` (extraído p/ helper montarHtmlDocumento).
+ */
+/**
  * Rev. 4674 - DOCUMENTOS DO COLABORADOR: MENU LATERAL FIXO + BOTAO VOLTAR
  *
  * - Tela agora renderiza dentro do DashboardLayout (menu lateral fixo, como

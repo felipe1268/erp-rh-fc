@@ -32,6 +32,8 @@ export function AlertaLocacoesVencendo() {
   const [renId, setRenId] = useState<number | null>(null);
   const [renData, setRenData] = useState("");
   const [renValor, setRenValor] = useState("");
+  // Rev. 4676 — filtro clicável nos cards do header (Total / Vencidas / A vencer)
+  const [filtro, setFiltro] = useState<"todos" | "vencidas" | "avencer">("todos");
 
   const utils = trpc.useUtils();
   const criteriosQuery = trpc.criteria.getByCategory.useQuery(
@@ -82,6 +84,10 @@ export function AlertaLocacoesVencendo() {
 
   const vencidos = (itens as any[]).filter((i) => i.diasParaVencimento <= 0).length;
   const aVencer = itens.length - vencidos;
+  // Rev. 4676 — aplica o filtro escolhido no header
+  const itensFiltrados = (itens as any[]).filter((i) =>
+    filtro === "todos" ? true : filtro === "vencidas" ? i.diasParaVencimento <= 0 : i.diasParaVencimento > 0
+  );
 
   return (
     <div className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-sm">
@@ -105,19 +111,26 @@ export function AlertaLocacoesVencendo() {
                 <X className="h-5 w-5" />
               </button>
             </div>
+            {/* Rev. 4676 — cards clicáveis: filtram a lista abaixo */}
             <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3 max-w-md">
-              <div className="rounded-xl bg-white/10 ring-1 ring-white/10 px-3 py-2">
+              <button
+                onClick={() => setFiltro("todos")}
+                className={`text-left rounded-xl bg-white/10 px-3 py-2 transition ring-1 ${filtro === "todos" ? "ring-2 ring-white/80 bg-white/20" : "ring-white/10 hover:bg-white/15"}`}>
                 <p className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Total</p>
                 <p className="text-xl font-bold leading-tight">{itens.length}</p>
-              </div>
-              <div className="rounded-xl bg-red-500/15 ring-1 ring-red-400/30 px-3 py-2">
+              </button>
+              <button
+                onClick={() => setFiltro(filtro === "vencidas" ? "todos" : "vencidas")}
+                className={`text-left rounded-xl bg-red-500/15 px-3 py-2 transition ring-1 ${filtro === "vencidas" ? "ring-2 ring-red-300 bg-red-500/30" : "ring-red-400/30 hover:bg-red-500/25"}`}>
                 <p className="text-[10px] uppercase tracking-wider text-red-300 font-semibold">Vencidas</p>
                 <p className="text-xl font-bold leading-tight text-red-200">{vencidos}</p>
-              </div>
-              <div className="rounded-xl bg-amber-500/15 ring-1 ring-amber-400/30 px-3 py-2">
+              </button>
+              <button
+                onClick={() => setFiltro(filtro === "avencer" ? "todos" : "avencer")}
+                className={`text-left rounded-xl bg-amber-500/15 px-3 py-2 transition ring-1 ${filtro === "avencer" ? "ring-2 ring-amber-300 bg-amber-500/30" : "ring-amber-400/30 hover:bg-amber-500/25"}`}>
                 <p className="text-[10px] uppercase tracking-wider text-amber-300 font-semibold">A vencer</p>
                 <p className="text-xl font-bold leading-tight text-amber-200">{aVencer}</p>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -125,7 +138,10 @@ export function AlertaLocacoesVencendo() {
         {/* Grid de cards */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
-          {(itens as any[]).map((i) => {
+          {itensFiltrados.length === 0 ? (
+            <p className="col-span-full text-center text-sm text-slate-500 py-10">Nenhuma locação neste filtro.</p>
+          ) : null}
+          {itensFiltrados.map((i) => {
             const vencido = i.diasParaVencimento <= 0;
             const renov = Number(i.renovacoesCount) || 0;
             const emRenovacao = renId != null && renId === i.equipamentoLocadoId;

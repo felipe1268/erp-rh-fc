@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { removeAccents } from "@/lib/searchUtils";
@@ -41,6 +42,10 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
   const [busca, setBusca] = useState("");
   const [soPendencias, setSoPendencias] = useState(false);
   const [gerando, setGerando] = useState<string | null>(null); // `${empId}|${tipo}`
+  // Rev. 4677 — seleção de funcionários (checkbox) p/ geração em lote
+  const [selEmps, setSelEmps] = useState<Set<number>>(new Set());
+  const [lote, setLote] = useState<{ done: number; total: number; atual: string } | null>(null);
+  const gerarLoteMut = trpc.rhDocumentos.gerar.useMutation();
 
   const gerarMut = trpc.rhDocumentos.gerar.useMutation({
     onSuccess: () => {
@@ -73,6 +78,43 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
     if (!f.osAssinada) n++;
     return acc + n;
   }, 0), [data, modelos]);
+
+  // Rev. 4677 — geração em lote: gera TODOS os documentos faltantes dos
+  // funcionários selecionados, sequencial, com progresso 0–100%.
+  const pendentesDe = (f: any) => modelos.filter((m: any) => f.docs[m.tipo]?.situacao === "faltando");
+  const toggleEmp = (id: number) => setSelEmps(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+  const todosVisiveisSel = funcionarios.length > 0 && funcionarios.every((f: any) => selEmps.has(f.id));
+  const toggleTodos = () => setSelEmps(todosVisiveisSel ? new Set() : new Set(funcionarios.map((f: any) => f.id)));
+
+  const gerarLote = async (alvos: any[]) => {
+    if (lote) return;
+    const fila: { f: any; m: any }[] = [];
+    for (const f of alvos) for (const m of pendentesDe(f)) fila.push({ f, m });
+    if (fila.length === 0) { toast.info("Nenhum documento faltando nos funcionários selecionados."); return; }
+    let ok = 0, falhas = 0;
+    setLote({ done: 0, total: fila.length, atual: "" });
+    for (let i = 0; i < fila.length; i++) {
+      const { f, m } = fila[i];
+      setLote({ done: i, total: fila.length, atual: `${f.nomeCompleto} — ${m.titulo}` });
+      try {
+        await gerarLoteMut.mutateAsync({ companyId: f.companyId, employeeId: f.id, tipo: m.tipo } as any);
+        ok++;
+      } catch { falhas++; }
+    }
+    setLote({ done: fila.length, total: fila.length, atual: "" });
+    utils.rhDocumentos.checklistGeral.invalidate();
+    setSelEmps(new Set());
+    setTimeout(() => setLote(null), 1500);
+    if (falhas) toast.error(`${ok} documento(s) gerado(s) · ${falhas} falha(s).`);
+    else toast.success(`${ok} documento(s) gerado(s)!`);
+  };
+  const lotePct = lote ? Math.round((lote.done / Math.max(lote.total, 1)) * 100) : 0;
+  const pendSelecionados = funcionarios.filter((f: any) => selEmps.has(f.id)).reduce((a: number, f: any) => a + pendentesDe(f).length, 0);
+  const pendVisiveis = funcionarios.reduce((a: number, f: any) => a + pendentesDe(f).length, 0);
 
   const cell = (f: any, m: any) => {
     const d = f.docs[m.tipo];
@@ -126,10 +168,40 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
             </Link>
           </div>
         </div>
-        <div className="relative mt-2 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nome ou função..." value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9 h-9" />
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          <div className="relative max-w-sm flex-1 min-w-[180px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por nome ou função..." value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9 h-9" />
+          </div>
+          {/* Rev. 4677 — geração em lote */}
+          {selEmps.size > 0 ? (
+            <Button size="sm" className="h-9 gap-1 bg-[#EE9803] hover:bg-[#EE9803]/90 text-white" disabled={!!lote || pendSelecionados === 0}
+              onClick={() => gerarLote(funcionarios.filter((f: any) => selEmps.has(f.id)))}>
+              {lote ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              Gerar selecionados ({selEmps.size} func. · {pendSelecionados} doc.)
+            </Button>
+          ) : (
+            <Button size="sm" className="h-9 gap-1 bg-[#EE9803] hover:bg-[#EE9803]/90 text-white" disabled={!!lote || pendVisiveis === 0}
+              onClick={() => {
+                if (confirm(`Gerar TODOS os ${pendVisiveis} documento(s) faltante(s) dos ${funcionarios.length} funcionário(s) da lista?`)) gerarLote(funcionarios);
+              }}>
+              {lote ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              Gerar todos ({pendVisiveis} doc.)
+            </Button>
+          )}
         </div>
+        {lote ? (
+          <div className="rounded-lg border bg-slate-50 px-3 py-2 mt-2 space-y-1">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-600 truncate">{lote.atual ? `Gerando: ${lote.atual}…` : "Concluído!"}</span>
+              <span className="font-bold text-[#0A1E3C]">{lotePct}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div className="h-full rounded-full bg-[#EE9803] transition-all" style={{ width: `${lotePct}%` }} />
+            </div>
+            <span className="text-[10px] text-muted-foreground">{lote.done} de {lote.total} documento(s)</span>
+          </div>
+        ) : null}
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -141,7 +213,11 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-slate-50">
-                  <th className="text-left p-2 font-medium sticky left-0 bg-slate-50 z-10 min-w-[180px]">Funcionário</th>
+                  <th className="p-2 w-8 sticky left-0 bg-slate-50 z-10">
+                    <Checkbox checked={todosVisiveisSel} onCheckedChange={toggleTodos} disabled={!!lote}
+                      className="h-4 w-4 data-[state=checked]:bg-[#EE9803] data-[state=checked]:border-[#EE9803]" title="Selecionar todos" />
+                  </th>
+                  <th className="text-left p-2 font-medium sticky left-8 bg-slate-50 z-10 min-w-[180px]">Funcionário</th>
                   {modelos.map((m: any) => (
                     <th key={m.tipo} className="p-2 font-medium text-center text-[11px] whitespace-nowrap" title={m.titulo}>
                       {SHORT_LABELS[m.tipo] || m.titulo}
@@ -156,8 +232,12 @@ export default function ChecklistDocsPanel({ companyId, companyIds, onClickEmplo
               </thead>
               <tbody>
                 {funcionarios.map((f: any) => (
-                  <tr key={f.id} className="border-b hover:bg-muted/20">
-                    <td className="p-2 sticky left-0 bg-white z-10">
+                  <tr key={f.id} className={`border-b hover:bg-muted/20 ${selEmps.has(f.id) ? "bg-orange-50/50" : ""}`}>
+                    <td className="p-2 w-8 text-center sticky left-0 bg-white z-10">
+                      <Checkbox checked={selEmps.has(f.id)} onCheckedChange={() => toggleEmp(f.id)} disabled={!!lote}
+                        className="h-4 w-4 data-[state=checked]:bg-[#EE9803] data-[state=checked]:border-[#EE9803]" />
+                    </td>
+                    <td className="p-2 sticky left-8 bg-white z-10">
                       <div className="flex items-center gap-2 min-w-0">
                         <PersonPhoto src={f.fotoUrl} alt={f.nomeCompleto || ""} size="sm" />
                         <div className="min-w-0">

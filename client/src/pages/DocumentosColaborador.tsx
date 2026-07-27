@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import DOMPurify from "dompurify";
 import {
   Loader2, FileText, PenLine, Download, Search, CheckCircle2, AlertTriangle,
-  Circle, Plus, Trash2, ShieldCheck, FolderOpen, Layers, Send, ArrowLeft,
+  Circle, Plus, Trash2, ShieldCheck, FolderOpen, Layers, Send, ArrowLeft, Eye,
 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import RhDocAssinatura from "@/components/RhDocAssinatura";
@@ -63,6 +63,8 @@ export default function DocumentosColaborador() {
   const [lote, setLote] = useState<{ done: number; total: number; atual: string } | null>(null);
   // Rev. 4673 — FCSign
   const [fcsignDoc, setFcsignDoc] = useState<{ id: number; titulo: string; html: string } | null>(null);
+  // Rev. 4675 — olhinho: pré-visualização SEM salvar
+  const [previewReq, setPreviewReq] = useState<{ tipo: string; titulo: string; extras?: Record<string, string> } | null>(null);
 
   const utils = trpc.useUtils();
   // Rev. 4673 — lista com foto + situação documental de TODOS (1 query em lote)
@@ -99,6 +101,11 @@ export default function DocumentosColaborador() {
   const { data: docs = [] } = trpc.rhDocumentos.listar.useQuery(
     { companyId: empresaDoSel, employeeId: empSelId ?? 0 },
     { enabled: !!empSel }
+  );
+  // Rev. 4675 — preview sob demanda (não grava nada no dossiê)
+  const { data: previewData, isLoading: loadingPreview } = trpc.rhDocumentos.preview.useQuery(
+    { companyId: empresaDoSel, employeeId: empSelId ?? 0, tipo: (previewReq?.tipo ?? "ficha_registro") as any, extras: previewReq?.extras },
+    { enabled: !!previewReq && !!empSel }
   );
   const { data: docDetalhe, isLoading: loadingDoc } = trpc.rhDocumentos.get.useQuery(
     { id: docAberto ?? 0 },
@@ -323,6 +330,11 @@ export default function DocumentosColaborador() {
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {sit(m.situacao)}
+                        {/* Rev. 4675 — olhinho: vê o documento preenchido antes de gerar/enviar */}
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-500 hover:text-[#0A1E3C]" title="Pré-visualizar preenchido"
+                          onClick={() => setPreviewReq({ tipo: m.tipo, titulo: m.titulo })}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
                         {m.docId ? (
                           <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => setDocAberto(m.docId)}>Abrir</Button>
                         ) : (
@@ -376,11 +388,17 @@ export default function DocumentosColaborador() {
                     return (
                       <div key={tipo} className="flex items-center justify-between gap-2 border rounded px-2 py-1.5">
                         <span className="text-xs truncate" title={meta.titulo}>{meta.titulo}</span>
-                        <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1 shrink-0"
-                          disabled={gerarMut.isPending && gerandoTipo === tipo}
-                          onClick={() => iniciarGeracao(tipo, meta.titulo)}>
-                          {gerarMut.isPending && gerandoTipo === tipo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Gerar
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-500 hover:text-[#0A1E3C]" title="Pré-visualizar preenchido"
+                            onClick={() => setPreviewReq({ tipo, titulo: meta.titulo })}>
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1"
+                            disabled={gerarMut.isPending && gerandoTipo === tipo}
+                            onClick={() => iniciarGeracao(tipo, meta.titulo)}>
+                            {gerarMut.isPending && gerandoTipo === tipo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Gerar
+                          </Button>
+                        </div>
                       </div>
                     );
                   })}
@@ -434,9 +452,44 @@ export default function DocumentosColaborador() {
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" size="sm" onClick={() => setExtrasDoc(null)}>Cancelar</Button>
+            {/* Rev. 4675 — olhinho também aqui: vê com os valores digitados */}
+            <Button variant="outline" size="sm" className="gap-1"
+              onClick={() => { if (extrasDoc) setPreviewReq({ tipo: extrasDoc.tipo, titulo: extrasDoc.titulo, extras: { ...extrasVals } }); }}>
+              <Eye className="h-3.5 w-3.5" /> Pré-visualizar
+            </Button>
             <Button size="sm" className="bg-[#0A1E3C] hover:bg-[#0A1E3C]/90" disabled={gerarMut.isPending} onClick={confirmarGeracao}>
               {gerarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null} Gerar documento
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 4675 — Dialog do olhinho: documento preenchido, SEM salvar */}
+      <Dialog open={!!previewReq} onOpenChange={(o) => { if (!o) setPreviewReq(null); }}>
+        <DialogContent className="max-w-3xl w-[96vw] max-h-[92dvh] overflow-y-auto" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Eye className="h-5 w-5 text-[#0A1E3C]" /> {previewReq?.titulo}
+              <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50">Pré-visualização — nada foi salvo</Badge>
+            </DialogTitle>
+          </DialogHeader>
+          {loadingPreview || !previewData ? (
+            <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-[#0A1E3C]" /></div>
+          ) : (
+            <div
+              className="border rounded-lg p-4 text-[12px] leading-relaxed bg-white overflow-x-auto break-words"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewData.conteudoHtml) }}
+            />
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setPreviewReq(null)}>Fechar</Button>
+            {previewReq ? (
+              <Button size="sm" className="gap-1 bg-[#0A1E3C] hover:bg-[#0A1E3C]/90"
+                disabled={gerarMut.isPending}
+                onClick={() => { const p = previewReq; setPreviewReq(null); iniciarGeracao(p.tipo, p.titulo); }}>
+                <Plus className="h-3.5 w-3.5" /> Gerar este documento
+              </Button>
+            ) : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>
