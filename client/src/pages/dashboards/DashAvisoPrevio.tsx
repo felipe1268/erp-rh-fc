@@ -890,6 +890,12 @@ export default function DashAvisoPrevio() {
                       </div>
                     </details>
 
+                    {((cdm as any)?.fontesComFalha?.length ?? 0) > 0 && (
+                      /* Rev. 4681 — poka-yoke: componente de custo falhou no servidor → avisa dados parciais */
+                      <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 mb-3">
+                        ⚠️ Custo PARCIAL — falha ao consultar: {(cdm as any).fontesComFalha.join(", ")}. O total pode estar subestimado.
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                       <div className="rounded-xl border-2 border-red-200 bg-red-50/50 p-3 text-center">
                         <DollarSign className="h-5 w-5 text-red-500 mx-auto mb-1" />

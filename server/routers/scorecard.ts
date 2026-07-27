@@ -585,10 +585,15 @@ export const scorecardRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return null;
+      // Rev. 4681 — poka-yoke: falha de sub-query não pode virar "0 acidentes"
+      // silencioso. Coleta o nome das fontes que falharam e devolve no payload
+      // p/ a tela exibir aviso de dados parciais.
+      const falhasFontes: string[] = [];
       const safe = async (label: string, fn: () => Promise<any[]>) => {
         try { return await fn(); } catch (e: any) {
           const pg = (e?.cause as any)?.cause ?? (e?.cause as any) ?? e;
           console.warn(`[Scorecard.getSeguranca] ${label} ERROR:`, pg?.message ?? e?.message);
+          falhasFontes.push(label);
           return [];
         }
       };
@@ -1199,6 +1204,7 @@ export const scorecardRouter = router({
       const custoVrAtestados = atestados.reduce((s: number, a: any) => s + parseFloat(String(a.custo_vr ?? 0)), 0);
 
       return {
+        falhasFontes, // Rev. 4681 — fontes que falharam (dados parciais)
         clt, terceiros, treinamentosNorma,
         advertencias, advertenciasTerceiros,
         epiPorFuncionario, epiPorTipo, epiEstoque,

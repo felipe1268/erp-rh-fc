@@ -1,4 +1,17 @@
 /**
+ * Rev. 4681 - POKA-YOKE 1/6: FALHA NAO PODE PARECER "ZERO" OU "SEM DADOS"
+ *
+ * Varredura de falhas silenciosas — erro interno agora VIRA AVISO na tela:
+ * - Scorecard Seguranca: sub-consulta que falha entra em falhasFontes e a
+ *   tela mostra banner ambar "dados parciais" (antes: 0 acidentes falso).
+ * - Custo de Demissao em Massa: fonte que falha (VR, seguro, CIPA, ferias,
+ *   obras) entra em fontesComFalha + banner "custo PARCIAL/subestimado".
+ * - Importacao financeira (manual e retroacao): falha de importador vai p/
+ *   o retorno (falhas[]) e p/ a auditoria com "ATENCAO", nao vira TOTAL=0.
+ * - Scorecard Seguranca e Dash de Orcamentos: erro de query mostra mensagem
+ *   vermelha com "Tentar novamente" em vez de "Sem dados".
+ */
+/**
  * Rev. 4680 - BOTAO VOLTAR: PILHA DE NAVEGACAO INTERNA (VOLTA 1 TELA)
  *
  * No Safari/iPad o window.history.back() pulava pra tela inicial em vez da

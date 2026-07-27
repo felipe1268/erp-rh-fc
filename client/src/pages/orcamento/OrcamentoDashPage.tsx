@@ -254,7 +254,7 @@ function OrcamentoDashPageInner({ routeId }: { routeId: number }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Lista de orçamentos para o seletor
-  const { data: lista = [], isLoading: loadingLista } = trpc.orcamento.list.useQuery(
+  const { data: lista = [], isLoading: loadingLista, isError: erroLista, error: erroListaObj, refetch: refetchLista } = trpc.orcamento.list.useQuery(
     { companyId: companyId ?? 0 },
     { enabled: !!companyId }
   );
@@ -411,8 +411,8 @@ function OrcamentoDashPageInner({ routeId }: { routeId: number }) {
 
         {/* ── Conteúdo ──────────────────────────────────────────────── */}
 
-        {/* Estado vazio — lista sem orçamentos */}
-        {!loadingLista && lista.length === 0 && (
+        {/* Estado vazio — lista sem orçamentos (Rev. 4681: nunca junto com erro) */}
+        {!loadingLista && !erroLista && lista.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
             <DollarSign className="h-12 w-12 opacity-20" />
             <p className="text-lg font-medium">Nenhum orçamento cadastrado</p>
@@ -428,6 +428,15 @@ function OrcamentoDashPageInner({ routeId }: { routeId: number }) {
           <div className="flex items-center justify-center py-24 gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
             <span>Carregando orçamentos...</span>
+          </div>
+        )}
+
+        {/* Rev. 4681 — poka-yoke: erro NÃO pode parecer "sem orçamentos" */}
+        {erroLista && (
+          <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-1">
+            <p className="font-semibold">Erro ao carregar os orçamentos.</p>
+            <p className="text-xs">{erroListaObj?.message}</p>
+            <button className="text-xs underline" onClick={() => refetchLista()}>Tentar novamente</button>
           </div>
         )}
 

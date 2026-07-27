@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4681** — Poka-yoke 1/6 (falhas silenciosas): erro interno vira aviso na tela (banners de dados parciais no Scorecard Segurança e Custo de Demissão; importação financeira reporta fontes que falharam; erro ≠ "sem dados" no Dash de Orçamentos).
 - **Rev. 4680** — Botão Voltar agora usa pilha de navegação interna do app: volta exatamente uma tela (fix Safari/iPad que pulava pra tela inicial).
 - **Rev. 4679** — Poka-yoke documental: Férias, Aviso Prévio, Advertência, Dissídio, Seguro de Vida e Admissão geram automaticamente os documentos no dossiê p/ assinatura.
 - **Rev. 4678** — Documentos do Colaborador: moldura ISO (logo + código + revisão + emissão) e rodapé LGPD em todos os documentos.

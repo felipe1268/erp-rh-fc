@@ -1952,10 +1952,23 @@ export default function ScorecardTab({ proj }: { proj: any }) {
             <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
               <Loader2 className="w-5 h-5 animate-spin" />Carregando dados de segurança…
             </div>
+          ) : analiseSeguranca.isError ? (
+            /* Rev. 4681 — poka-yoke: erro NÃO pode parecer "sem dados" */
+            <div className="text-xs text-red-600 py-8 text-center space-y-2">
+              <p className="font-semibold">Erro ao carregar os dados de segurança.</p>
+              <p className="text-red-500">{analiseSeguranca.error?.message}</p>
+              <button className="underline" onClick={() => analiseSeguranca.refetch()}>Tentar novamente</button>
+            </div>
           ) : !analiseSeguranca.data ? (
             <p className="text-xs text-gray-400 py-8 text-center">Sem dados disponíveis.</p>
           ) : (
             <div className="space-y-3">
+              {((analiseSeguranca.data as any)?.falhasFontes?.length ?? 0) > 0 && (
+                /* Rev. 4681 — dados PARCIAIS: alguma fonte falhou no servidor */
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  ⚠️ Dados parciais — falha ao consultar: {(analiseSeguranca.data as any).falhasFontes.join(", ")}. Os números podem estar incompletos.
+                </div>
+              )}
               {(() => {
                 const d = analiseSeguranca.data!;
                 const r = d.resumo;

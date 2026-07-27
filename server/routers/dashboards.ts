@@ -2523,6 +2523,8 @@ async function getDashCustoDemissaoMassa(
   // simula com mais frequência). Mantém 'empregador_indenizado' como pior
   // cenário (pago tudo de uma vez, inclui aviso prévio indenizado completo).
   const tipo = tipoParam === 'empregador_indenizado' ? 'empregador_indenizado' : 'empregador_trabalhado';
+  // Rev. 4681 — poka-yoke: fontes que falharam (custo sai parcial) → a tela avisa
+  const fontesComFalha: string[] = [];
 
   const baseWhere = and(
     companyWhere(employees, companyId, companyIds),
@@ -2655,6 +2657,7 @@ async function getDashCustoDemissaoMassa(
       }
     } catch (e) {
       console.error('[getDashCustoDemissaoMassa] falha ao carregar obra_funcionarios (assumindo vazio):', (e as any)?.message ?? e);
+      fontesComFalha.push('Obras dos funcionários');
     }
   }
 
@@ -2710,6 +2713,7 @@ async function getDashCustoDemissaoMassa(
     }
   } catch (e) {
     console.error('[getDashCustoDemissaoMassa] falha meal_benefit_configs (assumindo VR=0):', (e as any)?.message ?? e);
+      fontesComFalha.push('VR/VA (benefícios)');
   }
 
   // Rev. 2959 — Seguro de vida mensal REAL por funcionário, vindo do MÓDULO
@@ -2741,6 +2745,7 @@ async function getDashCustoDemissaoMassa(
       }
     } catch (e) {
       console.error('[getDashCustoDemissaoMassa] falha seguro_vida_coberturas (assumindo 0):', (e as any)?.message ?? e);
+      fontesComFalha.push('Seguro de Vida');
     }
   }
 
@@ -2769,6 +2774,7 @@ async function getDashCustoDemissaoMassa(
       }
     } catch (e) {
       console.error('[getDashCustoDemissaoMassa] falha cipa_members (assumindo vazio):', (e as any)?.message ?? e);
+      fontesComFalha.push('Estabilidade CIPA');
     }
   }
 
@@ -2798,6 +2804,7 @@ async function getDashCustoDemissaoMassa(
       }
     } catch (e) {
       console.error('[getDashCustoDemissaoMassa] falha vacation_periods agendadas (assumindo 0):', (e as any)?.message ?? e);
+      fontesComFalha.push('Férias agendadas');
     }
   }
   // Helper espelha avisoPrevioFerias.ts `diasFeriasNoMesDaSaida` (L169-207).
@@ -2843,6 +2850,7 @@ async function getDashCustoDemissaoMassa(
       }
     } catch (e) {
       console.error('[getDashCustoDemissaoMassa] falha ao carregar vacation_periods (assumindo 0):', (e as any)?.message ?? e);
+      fontesComFalha.push('Períodos de férias');
     }
   }
 
@@ -3117,6 +3125,7 @@ async function getDashCustoDemissaoMassa(
     grandTotalFolha,
     mediaPorFuncionario: linhas.length > 0 ? grandTotal / linhas.length : 0,
     linhas,
+    fontesComFalha, // Rev. 4681 — dados parciais → banner na tela
   };
 }
 

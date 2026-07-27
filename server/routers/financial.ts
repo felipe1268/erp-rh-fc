@@ -12158,17 +12158,20 @@ export const financialRouter = router({
 
     let totalImportado = 0;
     const resultados: Record<string, number> = {};
+    const falhasImport: string[] = []; // Rev. 4681 — fontes que falharam
 
     const hoje = new Date();
     for (let i = 0; i < input.meses; i++) {
       const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
       const mes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
+      // Rev. 4681 — poka-yoke: falha de importador não pode virar "0 importado"
+      // silencioso; registra a fonte que falhou p/ devolver no resultado/auditoria.
       const [r1, r2] = await Promise.all([
-        autoImport(input.companyId, mes).catch(() => ({ folha: 0, pj: 0, parceiros: 0 })),
-        despImport(input.companyId, mes).catch(() => 0),
+        autoImport(input.companyId, mes).catch((e) => { falhasImport.push(`${mes}: folha/PJ/parceiros (${e?.message ?? e})`); return { folha: 0, pj: 0, parceiros: 0 }; }),
+        despImport(input.companyId, mes).catch((e) => { falhasImport.push(`${mes}: despesas (${e?.message ?? e})`); return 0; }),
       ]);
-      const r3 = await recImport(input.companyId, mes).catch(() => 0);
+      const r3 = await recImport(input.companyId, mes).catch((e) => { falhasImport.push(`${mes}: receitas (${e?.message ?? e})`); return 0; });
 
       const sub = r1.folha + r1.pj + r1.parceiros + (r2 as number) + r3;
       resultados[mes] = sub;
@@ -12179,10 +12182,10 @@ export const financialRouter = router({
       action: "financial_retroacao",
       userId: ctx.user?.id,
       companyId: input.companyId,
-      details: `Retroação ${input.meses} meses: ${totalImportado} lançamentos importados`,
+      details: `Retroação ${input.meses} meses: ${totalImportado} lançamentos importados${falhasImport.length ? ` — ATENÇÃO: ${falhasImport.length} fonte(s) falharam: ${falhasImport.slice(0, 5).join("; ")}` : ""}`,
     });
 
-    return { totalImportado, resultados };
+    return { totalImportado, resultados, falhas: falhasImport };
   }),
 
   // ─────────────────── IMPORTAÇÃO MANUAL ───────────────────
@@ -12195,10 +12198,12 @@ export const financialRouter = router({
     const { runAllAutoImports: autoImport } = await import("../services/financialAutoImport");
     const { runAllDespesasImport: despImport, runAllReceitasImport: recImport } = await import("../services/financialIntegrationBridge");
 
+    // Rev. 4681 — poka-yoke: falha de importador vira aviso explícito, não zero.
+    const falhasImport: string[] = [];
     const [r1, r2, r3] = await Promise.all([
-      autoImport(input.companyId, mes).catch(() => ({ folha: 0, pj: 0, parceiros: 0 })),
-      despImport(input.companyId, mes).catch(() => 0),
-      recImport(input.companyId, mes).catch(() => 0),
+      autoImport(input.companyId, mes).catch((e) => { falhasImport.push(`folha/PJ/parceiros (${e?.message ?? e})`); return { folha: 0, pj: 0, parceiros: 0 }; }),
+      despImport(input.companyId, mes).catch((e) => { falhasImport.push(`despesas (${e?.message ?? e})`); return 0; }),
+      recImport(input.companyId, mes).catch((e) => { falhasImport.push(`receitas (${e?.message ?? e})`); return 0; }),
     ]);
 
     const totalImportado = r1.folha + r1.pj + r1.parceiros + (r2 as number) + (r3 as number);
@@ -12207,7 +12212,7 @@ export const financialRouter = router({
       action: "financial_import_manual",
       userId: ctx.user?.id,
       companyId: input.companyId,
-      details: `Importação manual ${mes}: folha=${r1.folha} pj=${r1.pj} parceiros=${r1.parceiros} despesas=${r2} receitas=${r3} TOTAL=${totalImportado}`,
+      details: `Importação manual ${mes}: folha=${r1.folha} pj=${r1.pj} parceiros=${r1.parceiros} despesas=${r2} receitas=${r3} TOTAL=${totalImportado}${falhasImport.length ? ` — ATENÇÃO: falharam: ${falhasImport.join("; ")}` : ""}`,
     });
 
     return {
@@ -12217,6 +12222,7 @@ export const financialRouter = router({
       parceiros: r1.parceiros,
       despesas: r2 as number,
       receitas: r3 as number,
+      falhas: falhasImport, // Rev. 4681 — p/ a tela avisar dados parciais
     };
   }),
 
