@@ -1,4 +1,27 @@
 /**
+ * Rev. 4661 - FICHA DE EPI: BUSCA DIGITÁVEL DE EPI + MAXIMIZAR CONSERTADO
+ *
+ * Pedido do usuário (IMG_4566/4567/4568): dropdown de EPI cortava o texto no
+ * iPad e o botão de maximizar do diálogo "não fazia nada".
+ * - Select do Radix substituído por combobox digitável: Input que filtra por
+ *   nome/tamanho/CA (tokens AND), lista inline com texto completo
+ *   (break-words), toque seleciona e preenche o campo.
+ * - BUG GLOBAL em ui/dialog.tsx: dialog que passava `style` próprio (ex.:
+ *   background) sobrescrevia via spread o sizeStyle do maximizar → clique
+ *   alternava o estado mas o tamanho não mudava. Agora style externo é
+ *   mesclado; maximizado, o sizeStyle (tela cheia) prevalece.
+ */
+/**
+ * Rev. 4660 - ALOCAR FUNCIONÁRIOS: FOTO DOS FUNCIONÁRIOS NA LISTA
+ *
+ * Pedido do usuário (IMG_4565): a tela "Alocar Funcionários" mostrava só a
+ * inicial do nome num círculo azul.
+ * - Lista de seleção e painel "Selecionados" (ObraEfetivo.tsx) agora mostram
+ *   a foto do funcionário (fallback: inicial como antes).
+ * - Miniatura ?w=128 + lazy só em /uploads (memória uploads-thumbnails —
+ *   foto original quebra no Safari/iPad).
+ */
+/**
  * Rev. 4659 - FICHA DE EPI: REGISTRAR ENTREGA DIRETO DA FICHA
  *
  * Pedido do usuário (IMG_4564): quem está "Sem ficha" precisa poder receber

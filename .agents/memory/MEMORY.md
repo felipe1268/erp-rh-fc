@@ -27,6 +27,7 @@
 - [Dissídio — HE excluída da base retroativa](dissidio-he-excluded-from-base.md) — toda HE vira banco de horas, nunca é paga em dinheiro; nunca somar HE na base de diferença salarial retroativa/reajuste.
 - [VR/VT desconto de falta não misturado](folha-vr-vt-faltas-not-mixed.md) — VT de falta entra na Folha (coluna VT); VR/VA de falta NUNCA entra na Folha (só no Vale Alimentação).
 - [Meal benefit config vigência pattern](meal-benefit-vigencia.md) — annual dissídio readjustments close-old+insert-new (never UPDATE in-place); all reads go through a resolver with an explicit reference date.
+- [DialogContent style prop override](dialog-style-prop-override.md) — dialog que passa `style` próprio não pode apagar o sizeStyle do maximizar; merge obrigatório em ui/dialog.tsx; Select do Radix em dialog rolável corta texto no iPad → combobox digitável.
 - [Dialog no-truncate rule](dialog-no-truncate.md) — dialogs NUNCA truncam texto; use break-words/break-all; truncate só em linhas compactas de tabela com title= tooltip.
 - [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
 - [MSP %Previsto parity](msp-previsto-parity.md) — %PREVISTO must use baseline WITH TIME + minute-by-minute working-time engine (Fri shorter); date-only/day-granular diverge. Validate vs real XML.

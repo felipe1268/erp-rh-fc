@@ -12,7 +12,6 @@ import { trpc } from "@/lib/trpc";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Printer, ShieldCheck, PenLine, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/formatters";
@@ -52,6 +51,9 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
   // Rev. 4659 — registrar entrega direto da ficha (quem não tem ficha ainda)
   const [showNova, setShowNova] = useState(false);
   const [novaEpiId, setNovaEpiId] = useState<string>("");
+  // Rev. 4661 — busca digitável de EPI (Select do Radix cortava o texto no iPad)
+  const [epiBusca, setEpiBusca] = useState<string>("");
+  const [epiListaAberta, setEpiListaAberta] = useState(false);
   const [novaQtd, setNovaQtd] = useState<string>("1");
   const [novaData, setNovaData] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const { toast } = useToast();
@@ -79,7 +81,7 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
   const createDeliveryMut = trpc.epis.createDelivery.useMutation({
     onSuccess: () => {
       toast({ title: "Entrega registrada", description: "Agora colete a assinatura do colaborador." });
-      setShowNova(false); setNovaEpiId(""); setNovaQtd("1");
+      setShowNova(false); setNovaEpiId(""); setNovaQtd("1"); setEpiBusca(""); setEpiListaAberta(false);
       refetch();
       utils.epis.fichaEpiResumo.invalidate();
     },
@@ -262,18 +264,41 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
               <div className="rounded-lg border border-[#0A1E3C]/30 bg-blue-50/40 p-2.5 space-y-2">
                 <p className="text-[11px] font-bold text-[#0A1E3C]">Registrar entrega de EPI para {emp?.nomeCompleto}</p>
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <Select value={novaEpiId} onValueChange={setNovaEpiId}>
-                    <SelectTrigger className="h-9 flex-1 text-xs bg-white">
-                      <SelectValue placeholder={episQ.isLoading ? "Carregando EPIs..." : "Selecione o EPI"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {episList.map((ep: any) => (
-                        <SelectItem key={ep.id} value={String(ep.id)}>
-                          {ep.nome}{ep.tamanho ? ` (${ep.tamanho})` : ""}{ep.ca ? ` — CA ${ep.ca}` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* Rev. 4661 — combobox digitável (substitui o Select que cortava texto) */}
+                  <div className="relative flex-1">
+                    <Input
+                      value={epiBusca}
+                      onChange={e => { setEpiBusca(e.target.value); setNovaEpiId(""); setEpiListaAberta(true); }}
+                      onFocus={() => setEpiListaAberta(true)}
+                      placeholder={episQ.isLoading ? "Carregando EPIs..." : "Digite p/ buscar o EPI (nome, tamanho ou CA)"}
+                      className="h-9 w-full text-xs bg-white"
+                    />
+                    {epiListaAberta && !novaEpiId && (
+                      <div className="absolute z-50 mt-1 w-full max-h-52 overflow-y-auto rounded-md border bg-white shadow-lg">
+                        {(() => {
+                          const q = epiBusca.trim().toLowerCase();
+                          const filtrados = episList.filter((ep: any) => {
+                            if (!q) return true;
+                            const alvo = `${ep.nome || ""} ${ep.tamanho || ""} ${ep.ca || ""}`.toLowerCase();
+                            return q.split(/\s+/).every(t => alvo.includes(t));
+                          });
+                          if (episQ.isLoading) return <div className="px-3 py-2 text-xs text-muted-foreground">Carregando...</div>;
+                          if (filtrados.length === 0) return <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum EPI encontrado.</div>;
+                          return filtrados.slice(0, 60).map((ep: any) => (
+                            <button key={ep.id} type="button"
+                              className="block w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b last:border-b-0 break-words"
+                              onClick={() => {
+                                setNovaEpiId(String(ep.id));
+                                setEpiBusca(`${ep.nome}${ep.tamanho ? ` (${ep.tamanho})` : ""}${ep.ca ? ` — CA ${ep.ca}` : ""}`);
+                                setEpiListaAberta(false);
+                              }}>
+                              {ep.nome}{ep.tamanho ? ` (${ep.tamanho})` : ""}{ep.ca ? ` — CA ${ep.ca}` : ""}
+                            </button>
+                          ));
+                        })()}
+                      </div>
+                    )}
+                  </div>
                   <Input type="number" min={1} value={novaQtd} onChange={e => setNovaQtd(e.target.value)}
                     className="h-9 w-full sm:w-20 text-xs bg-white" placeholder="Qtd." />
                   <Input type="date" value={novaData} onChange={e => setNovaData(e.target.value)}

@@ -1305,9 +1305,16 @@ export default function ObraEfetivo() {
                           }`}>
                             {isSelected && <CheckCircle className="h-3.5 w-3.5 text-white" />}
                           </div>
-                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#1B2A4A] to-[#2d4a7a] flex items-center justify-center shrink-0">
-                            <span className="text-white text-[10px] font-bold">{(emp.nomeCompleto || '?')[0]}</span>
-                          </div>
+                          {/* Rev. 4660 — foto do funcionário na lista de alocação */}
+                          {emp.fotoUrl ? (
+                            <img src={`${emp.fotoUrl}${emp.fotoUrl.startsWith("/uploads") ? (emp.fotoUrl.includes("?") ? "&w=128" : "?w=128") : ""}`}
+                              alt={emp.nomeCompleto || ""} loading="lazy"
+                              className="h-8 w-8 rounded-full object-cover shrink-0 border border-slate-200" />
+                          ) : (
+                            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#1B2A4A] to-[#2d4a7a] flex items-center justify-center shrink-0">
+                              <span className="text-white text-[10px] font-bold">{(emp.nomeCompleto || '?')[0]}</span>
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{emp.nomeCompleto}</p>
                             <p className="text-[11px] text-muted-foreground truncate">
@@ -1385,9 +1392,16 @@ export default function ObraEfetivo() {
                       const emp = allEmps.find((e: any) => e.id === empId);
                       return (
                         <div key={empId} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 group">
-                          <div className="h-6 w-6 rounded-full bg-[#1B2A4A] flex items-center justify-center shrink-0">
-                            <span className="text-white text-[9px] font-bold">{(emp?.nomeCompleto || '?')[0]}</span>
-                          </div>
+                          {/* Rev. 4660 — foto no painel de selecionados */}
+                          {emp?.fotoUrl ? (
+                            <img src={`${emp.fotoUrl}${emp.fotoUrl.startsWith("/uploads") ? (emp.fotoUrl.includes("?") ? "&w=128" : "?w=128") : ""}`}
+                              alt={emp?.nomeCompleto || ""} loading="lazy"
+                              className="h-6 w-6 rounded-full object-cover shrink-0 border border-slate-200" />
+                          ) : (
+                            <div className="h-6 w-6 rounded-full bg-[#1B2A4A] flex items-center justify-center shrink-0">
+                              <span className="text-white text-[9px] font-bold">{(emp?.nomeCompleto || '?')[0]}</span>
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-medium truncate">{emp?.nomeCompleto || `#${empId}`}</p>
                             <p className="text-[10px] text-muted-foreground truncate">{emp?.funcao || ''}</p>

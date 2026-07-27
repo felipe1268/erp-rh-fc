@@ -213,6 +213,10 @@ function DialogContent({
     ? { transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))` }
     : undefined;
 
+  // Rev. 4661 — separa o style externo p/ merge controlado (senão o spread
+  // de props sobrescreve sizeStyle e o maximizar "não faz nada")
+  const { style: styleProp, ...restProps } = props as any;
+
   const sizeStyle = maximized
     ? {
         width: "calc(100vw - 1rem)",
@@ -234,14 +238,13 @@ function DialogContent({
           draggable && !maximized && "cursor-grab active:cursor-grabbing",
           className
         )}
-        style={{
-          ...sizeStyle,
-          ...dragStyle,
-        }}
+        style={maximized
+          ? { ...styleProp, ...sizeStyle }
+          : { ...sizeStyle, ...dragStyle, ...styleProp }}
         onEscapeKeyDown={handleEscapeKeyDown}
         onMouseDown={draggable && !maximized ? onDragStart : undefined}
         onAnimationEnd={draggable ? resetDrag : undefined}
-        {...props}
+        {...restProps}
       >
         {children}
         <div className="absolute top-4 right-4 flex items-center gap-1">
