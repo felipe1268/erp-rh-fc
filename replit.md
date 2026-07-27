@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4674** — Documentos do Colaborador: menu lateral fixo (DashboardLayout) + botão Voltar.
 - **Rev. 4673** — **Documentos do Colaborador: layout moderno** (fotos + % de completude por funcionário; geração em lote com checkbox e progresso 0–100%; assinatura via FCSign igual à ficha de EPI).
 - **Rev. 4672** — **Documentos do Colaborador Fases 2–4** (Ficha com foto; Contrato CLT; férias/folha/aditivo assináveis com campos extras; termos de benefícios; dependentes completos no dossiê; aba PDI & Feedback na Avaliação).
 - **Rev. 4671** — **Controle de Documentos: aba Checklist** (matriz funcionário × documento com todos os modelos de RH + ASO/OS/treinamentos/anexos; gera documento faltante direto na célula; link p/ dossiê com pré-seleção).

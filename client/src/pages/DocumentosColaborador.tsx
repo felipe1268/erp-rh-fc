@@ -20,8 +20,9 @@ import { toast } from "sonner";
 import DOMPurify from "dompurify";
 import {
   Loader2, FileText, PenLine, Download, Search, CheckCircle2, AlertTriangle,
-  Circle, Plus, Trash2, ShieldCheck, FolderOpen, Layers, Send,
+  Circle, Plus, Trash2, ShieldCheck, FolderOpen, Layers, Send, ArrowLeft,
 } from "lucide-react";
+import DashboardLayout from "@/components/DashboardLayout";
 import RhDocAssinatura from "@/components/RhDocAssinatura";
 import DependentesCard from "@/components/DependentesCard";
 import FCSignSendDialog from "@/components/FCSignSendDialog";
@@ -188,7 +189,12 @@ export default function DocumentosColaborador() {
     : <Badge variant="outline" className="text-[10px] text-red-600 border-red-300">Faltando</Badge>;
 
   return (
+    <DashboardLayout>
     <div className="p-4 space-y-4 max-w-6xl mx-auto">
+      {/* Rev. 4674 — botão Voltar + página dentro do DashboardLayout (menu lateral fixo) */}
+      <Button variant="ghost" size="sm" className="-ml-2 gap-1 text-muted-foreground hover:text-foreground w-fit" onClick={() => window.history.back()}>
+        <ArrowLeft className="w-4 h-4" /> Voltar
+      </Button>
       <div className="flex items-center gap-2">
         <FolderOpen className="h-6 w-6 text-[#0A1E3C]" />
         <div>
@@ -527,5 +533,6 @@ export default function DocumentosColaborador() {
         </div>
       ) : null}
     </div>
+    </DashboardLayout>
   );
 }

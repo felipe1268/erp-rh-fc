@@ -1,4 +1,11 @@
 /**
+ * Rev. 4674 - DOCUMENTOS DO COLABORADOR: MENU LATERAL FIXO + BOTAO VOLTAR
+ *
+ * - Tela agora renderiza dentro do DashboardLayout (menu lateral fixo, como
+ *   as demais telas do ERP) — antes abria "solta", sem a barra de comando.
+ * - Botao "Voltar" no topo da pagina (padrao das outras telas).
+ */
+/**
  * Rev. 4673 - DOCUMENTOS DO COLABORADOR: LAYOUT MODERNO + LOTE + FCSIGN
  *
  * - Lista de funcionários com FOTO (avatar clicável) e barra de completude
