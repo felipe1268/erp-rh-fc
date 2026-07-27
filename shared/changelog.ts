@@ -1,4 +1,16 @@
 /**
+ * Rev. 4643 - SEVERIDADE DE VENCIMENTO CORRIGIDA: ≤30d VERMELHO, 31–60d AMARELO
+ *
+ * Pedido do usuário (IMG_4534): "a legenda tinha que ser o contrário —
+ * acima de 30 dias amarelinho, abaixo de 30 dias vermelhinho".
+ * - Pop-up de treinamentos (Dossiê): badge/fundo ≤30d = vermelho, 31–60d =
+ *   amarelo; resumo ganhou faixa própria p/ urgentes ("reciclagem URGENTE");
+ *   ordenação vencidos → urgentes → a vencer → válidos.
+ * - TreinChip (coluna do Dossiê): VENCER30 = vermelho, VENCER60 = amarelo.
+ * - Ficha Documental: Item ganhou `urgent` (vermelho) — ASO ≤30d e
+ *   treinamentos ≤30d são urgent; 31–60d warn (amarelo).
+ */
+/**
  * Rev. 4642 - FICHA DOCUMENTAL: MULTI-EMPRESA + FALLBACK P/ RAIO-X
  *
  * Correções do code review da Rev. 4641:

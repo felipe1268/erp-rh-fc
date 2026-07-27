@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4643** — **SEVERIDADE DE VENCIMENTO: ≤30d VERMELHO, 31–60d AMARELO.** Pop-up de treinamentos, TreinChip e Ficha Documental corrigidos (antes ≤30d ficava amarelo). Arquivo: `client/src/pages/ControleDocumentos.tsx`.
 - **Rev. 4642** — **FICHA DOCUMENTAL: MULTI-EMPRESA + FALLBACK RAIO-X.** Query habilita com companyIds (companyId 0); colaborador fora do painel (desligado) abre Raio-X direto. Arquivo: `client/src/pages/ControleDocumentos.tsx`.
 - **Rev. 4641** — **FICHA DOCUMENTAL NO CLIQUE DO NOME (Controle de Documentos).** Clique no nome abre ficha-resumo (pendências em destaque + checklist ASO/treinamentos/integrações/documentos com selos EM DIA/A VENCER/PENDENTE); Raio-X via botão dentro da ficha. Client-only, reusa painelDossie. Arquivo: `client/src/pages/ControleDocumentos.tsx`.
 - **Rev. 4640** — **DOSSIÊ: CHIP DE TREINAMENTOS CLICÁVEL + POP-UP.** Clique no "⚠ N" abre Dialog com resumo do alerta e cada treinamento (badge VENCIDO/Vence em Xd/Válido, datas, certificado), vencidos primeiro. Client-only. Arquivo: `client/src/pages/ControleDocumentos.tsx`.

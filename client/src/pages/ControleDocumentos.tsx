@@ -665,13 +665,14 @@ function FichaDocumental({ employeeId, companyId, companyIds, onClose, onOpenRai
   }, [employeeId, isLoading, data, f]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Linha padrão do checklist: ok? verde : vermelho/amarelo
-  function Item({ ok, warn, titulo, detalhe, link }: { ok: boolean; warn?: boolean; titulo: string; detalhe?: string; link?: string | null }) {
-    const cls = ok ? (warn ? "bg-yellow-50 border-yellow-200" : "bg-green-50/60 border-green-200") : "bg-red-50 border-red-200";
+  // Rev. 4643 — urgent (≤30d p/ vencer) = vermelho; warn (31–60d) = amarelo
+  function Item({ ok, warn, urgent, titulo, detalhe, link }: { ok: boolean; warn?: boolean; urgent?: boolean; titulo: string; detalhe?: string; link?: string | null }) {
+    const cls = !ok ? "bg-red-50 border-red-200" : urgent ? "bg-red-50 border-red-200" : warn ? "bg-yellow-50 border-yellow-200" : "bg-green-50/60 border-green-200";
     return (
       <div className={`flex items-start justify-between gap-2 rounded-lg border px-3 py-2 ${cls}`}>
         <div className="min-w-0">
           <p className="text-xs font-semibold break-words flex items-center gap-1.5">
-            {ok ? (warn ? <AlertTriangle className="h-3.5 w-3.5 text-yellow-600 shrink-0" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />) : <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+            {!ok ? <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" /> : urgent ? <AlertTriangle className="h-3.5 w-3.5 text-red-600 shrink-0" /> : warn ? <AlertTriangle className="h-3.5 w-3.5 text-yellow-600 shrink-0" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />}
             {titulo}
           </p>
           {detalhe && <p className="text-[11px] text-muted-foreground mt-0.5 break-words">{detalhe}</p>}
@@ -681,8 +682,8 @@ function FichaDocumental({ employeeId, companyId, companyIds, onClose, onOpenRai
             </a>
           )}
         </div>
-        <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${ok ? (warn ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-700") : "bg-red-600 text-white"}`}>
-          {ok ? (warn ? "A VENCER" : "EM DIA") : "PENDENTE"}
+        <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${!ok ? "bg-red-600 text-white" : urgent ? "bg-red-100 text-red-700 border border-red-300" : warn ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-700"}`}>
+          {!ok ? "PENDENTE" : urgent || warn ? "A VENCER" : "EM DIA"}
         </span>
       </div>
     );
@@ -736,7 +737,7 @@ function FichaDocumental({ employeeId, companyId, companyIds, onClose, onOpenRai
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1"><Stethoscope className="h-3.5 w-3.5" /> ASO</p>
               {f.aso ? (
                 <Item
-                  ok={asoOk} warn={asoWarn}
+                  ok={asoOk} urgent={asoWarn}
                   titulo={f.aso.tipo || "ASO"}
                   detalhe={`Exame: ${formatDate(f.aso.dataExame)} · Validade: ${formatDate(f.aso.dataValidade)}${asoOk && f.aso.diasRestantes >= 0 ? ` (${f.aso.diasRestantes}d restantes)` : ""}`}
                   link={f.aso.documentoUrl}
@@ -753,7 +754,8 @@ function FichaDocumental({ employeeId, companyId, companyIds, onClose, onOpenRai
                     <Item
                       key={t.id}
                       ok={t.status !== "VENCIDO"}
-                      warn={t.status !== "VENCIDO" && t.diasRestantes >= 0 && t.diasRestantes <= 60}
+                      urgent={t.status !== "VENCIDO" && t.diasRestantes >= 0 && t.diasRestantes <= 30}
+                      warn={t.status !== "VENCIDO" && t.diasRestantes > 30 && t.diasRestantes <= 60}
                       titulo={t.norma || t.nome}
                       detalhe={`Validade: ${t.dataValidade ? formatDate(t.dataValidade) : "—"}${t.status !== "VENCIDO" && t.diasRestantes >= 0 && t.diasRestantes <= 60 ? ` (vence em ${t.diasRestantes}d)` : ""}`}
                       link={t.certificadoUrl}
@@ -892,11 +894,12 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
 
   function TreinChip({ pior, total, onClick }: { pior: string; total: number; onClick?: () => void }) {
     if (total === 0) return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-400 font-medium">— 0</span>;
+    // Rev. 4643 — severidade correta: ≤30d = vermelho, 31–60d = amarelo
     const configs: Record<string, string> = {
       SEM: "bg-gray-100 text-gray-400",
       VENCIDO: "bg-red-100 text-red-700",
-      VENCER30: "bg-yellow-100 text-yellow-800",
-      VENCER60: "bg-orange-100 text-orange-700",
+      VENCER30: "bg-red-100 text-red-700",
+      VENCER60: "bg-yellow-100 text-yellow-800",
       VALIDO: "bg-green-100 text-green-700",
     };
     const cls = configs[pior] || "bg-gray-100 text-gray-500";
@@ -915,10 +918,11 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
   }
 
   // Rev. 4640 — status individual de um treinamento no pop-up
+  // Rev. 4643 — severidade correta: ≤30d = VERMELHO (urgente), 31–60d = amarelo
   function treinStatusBadge(t: any) {
     if (t.status === "VENCIDO") return <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white">VENCIDO</span>;
-    if (t.diasRestantes >= 0 && t.diasRestantes <= 30) return <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-300">Vence em {t.diasRestantes}d</span>;
-    if (t.diasRestantes >= 0 && t.diasRestantes <= 60) return <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-300">Vence em {t.diasRestantes}d</span>;
+    if (t.diasRestantes >= 0 && t.diasRestantes <= 30) return <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300">Vence em {t.diasRestantes}d</span>;
+    if (t.diasRestantes >= 0 && t.diasRestantes <= 60) return <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-300">Vence em {t.diasRestantes}d</span>;
     return <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Válido</span>;
   }
 
@@ -1155,7 +1159,9 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
           {detalheTrein && (() => {
             const treins = (detalheTrein.treinamentos as any[]) || [];
             const vencidos = treins.filter(t => t.status === "VENCIDO");
-            const aVencer = treins.filter(t => t.status !== "VENCIDO" && t.diasRestantes >= 0 && t.diasRestantes <= 60);
+            // Rev. 4643 — severidade correta: ≤30d = vermelho (urgente), 31–60d = amarelo
+            const urgentes = treins.filter(t => t.status !== "VENCIDO" && t.diasRestantes >= 0 && t.diasRestantes <= 30);
+            const aVencer = treins.filter(t => t.status !== "VENCIDO" && t.diasRestantes > 30 && t.diasRestantes <= 60);
             const ok = treins.filter(t => t.status !== "VENCIDO" && t.diasRestantes > 60);
             return (
               <>
@@ -1165,16 +1171,18 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
                   </DialogTitle>
                 </DialogHeader>
                 {/* Resumo do porquê do alerta */}
-                <div className={`rounded-lg px-3 py-2 text-xs font-medium ${vencidos.length > 0 ? "bg-red-50 text-red-700 border border-red-200" : aVencer.length > 0 ? "bg-yellow-50 text-yellow-800 border border-yellow-200" : "bg-green-50 text-green-700 border border-green-200"}`}>
+                <div className={`rounded-lg px-3 py-2 text-xs font-medium ${vencidos.length > 0 || urgentes.length > 0 ? "bg-red-50 text-red-700 border border-red-200" : aVencer.length > 0 ? "bg-yellow-50 text-yellow-800 border border-yellow-200" : "bg-green-50 text-green-700 border border-green-200"}`}>
                   {vencidos.length > 0
                     ? `❌ ${vencidos.length} treinamento${vencidos.length > 1 ? "s" : ""} VENCIDO${vencidos.length > 1 ? "S" : ""} — colaborador com restrição até reciclar.`
-                    : aVencer.length > 0
-                      ? `⚠ ${aVencer.length} treinamento${aVencer.length > 1 ? "s" : ""} vencendo nos próximos 60 dias — programe a reciclagem.`
-                      : `✓ Todos os ${treins.length} treinamentos estão válidos.`}
+                    : urgentes.length > 0
+                      ? `⚠ ${urgentes.length} treinamento${urgentes.length > 1 ? "s vencem" : " vence"} em até 30 dias — reciclagem URGENTE.`
+                      : aVencer.length > 0
+                        ? `⚠ ${aVencer.length} treinamento${aVencer.length > 1 ? "s" : ""} vencendo entre 31 e 60 dias — programe a reciclagem.`
+                        : `✓ Todos os ${treins.length} treinamentos estão válidos.`}
                 </div>
                 <div className="space-y-1.5">
-                  {[...vencidos, ...aVencer, ...ok].map((t: any) => (
-                    <div key={t.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${t.status === "VENCIDO" ? "bg-red-50 border border-red-200" : t.diasRestantes <= 60 ? "bg-yellow-50 border border-yellow-200" : "bg-gray-50"}`}>
+                  {[...vencidos, ...urgentes, ...aVencer, ...ok].map((t: any) => (
+                    <div key={t.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${t.status === "VENCIDO" || (t.diasRestantes >= 0 && t.diasRestantes <= 30) ? "bg-red-50 border border-red-200" : t.diasRestantes <= 60 ? "bg-yellow-50 border border-yellow-200" : "bg-gray-50"}`}>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold break-words">{t.norma || t.nome}</p>
                         <p className="text-[11px] text-muted-foreground">
