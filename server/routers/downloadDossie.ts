@@ -24,9 +24,9 @@ const SUBPASTA_REGISTRO = new Set([
 ]);
 function subpastaDoc(tipo: string | null): string {
   const t = String(tipo || "").toLowerCase();
-  if (SUBPASTA_IDENTIFICACAO.has(t)) return "Identificação";
-  if (SUBPASTA_REGISTRO.has(t)) return "Registro";
-  return "Outros";
+  if (SUBPASTA_IDENTIFICACAO.has(t)) return "001.1 - Identificação";
+  if (SUBPASTA_REGISTRO.has(t)) return "001.2 - Registro";
+  return "001.3 - Outros";
 }
 
 // Rev. 4665 — OS (Ordem de Serviço / NR-01) sai de Treinamentos e vai p/ 001
@@ -195,7 +195,7 @@ export function registerDownloadDossieRoute(app: Express) {
             const nm = sanitize(t.norma || t.nome || "Treinamento");
             // Rev. 4665 — OS (NR-01) vai p/ 001/OS, não p/ Treinamentos
             const pasta = isOrdemServico(t)
-              ? `001 - DOCUMENTOS PESSOAIS/OS - Ordem de Serviço`
+              ? `001 - DOCUMENTOS PESSOAIS/001.4 - OS - Ordem de Serviço`
               : `003 - TREINAMENTOS`;
             files.push({ url: t.certificadoUrl!, path: `${nome}/${pasta}/${nm}_${data}.${ext}` });
           });
@@ -207,7 +207,7 @@ export function registerDownloadDossieRoute(app: Express) {
             const ext = extFromUrl(url);
             const data = String(i.dataRealizacao || "").slice(0, 10) || "sem-data";
             // Rev. 4665 — separa integração FC (interna) da integração do cliente
-            const sub = i.tipo === "interna" ? "Integração FC" : "Integração Cliente";
+            const sub = i.tipo === "interna" ? "004.1 - Integração FC" : "004.2 - Integração Cliente";
             const tp = sanitize(i.clienteNome || (i.tipo === "interna" ? "FC" : "Integracao"));
             files.push({ url, path: `${nome}/004 - INTEGRAÇÕES/${sub}/${tp}_${data}.${ext}` });
           });

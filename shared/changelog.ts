@@ -1,4 +1,12 @@
 /**
+ * Rev. 4666 - DOSSIÊ ZIP: SUBPASTAS NUMERADAS
+ *
+ * Pedido do usuário: numerar também as subpastas.
+ * - 001.1 - Identificação / 001.2 - Registro / 001.3 - Outros /
+ *   001.4 - OS - Ordem de Serviço
+ * - 004.1 - Integração FC / 004.2 - Integração Cliente
+ */
+/**
  * Rev. 4665 - DOSSIÊ ZIP: SUBPASTAS EM 001 + OS EM DOCUMENTOS + INTEGRAÇÃO FC/CLIENTE
  *
  * Reestruturação validada pelo usuário (pasta a pasta):
