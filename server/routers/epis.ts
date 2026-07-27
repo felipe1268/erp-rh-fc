@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getCompaniesForUser, userCanAccessObra, getEffectiveAllowedObraIds } from "../db";
-import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios, companies, comprasSolicitacoes, comprasSolicitacoesItens, epiEstoqueMinimo } from "../../drizzle/schema";
+import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios, companies, comprasSolicitacoes, comprasSolicitacoesItens, epiEstoqueMinimo, epiAssinaturas } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, gte, inArray, ilike, or, getTableColumns } from "drizzle-orm";
 import { getConstrutorasIds } from "../db";
 import { storagePut } from "../storage";
@@ -2442,5 +2442,139 @@ Exemplos de referência:
         await db.execute(sql`UPDATE epi_motivos SET ativo = ${input.ativo} WHERE id = ${input.id}`);
       }
       return { ok: true };
+    }),
+
+  // ============================================================
+  // Rev. 4644 — FICHA DE EPI (documento por funcionário, NR-06 /
+  // art. 158 + 166 CLT). Consolida TODAS as entregas do colaborador
+  // com assinatura digital + metadados de autenticação (hash SHA-256,
+  // IP, data/hora), p/ enviar a cliente ou Ministério do Trabalho.
+  // ============================================================
+  fichaEpiResumo: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const rows = await db.execute(sql`
+        SELECT e.id, e."nomeCompleto", e.funcao, e.cpf, e."fotoUrl", e.status,
+               COUNT(d.id)::int AS total_entregas,
+               COUNT(d.id) FILTER (WHERE d.assinatura_url IS NOT NULL)::int AS entregas_assinadas,
+               MAX(d."dataEntrega")::text AS ultima_entrega
+        FROM epi_deliveries d
+        JOIN employees e ON e.id = d."employeeId"
+        WHERE d."companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND d."deletedAt" IS NULL
+        GROUP BY e.id, e."nomeCompleto", e.funcao, e.cpf, e."fotoUrl", e.status
+        ORDER BY e."nomeCompleto" ASC
+      `);
+      return { funcionarios: ((rows as any)?.rows ?? rows ?? []) as any[] };
+    }),
+
+  fichaEpiFuncionario: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+
+      // Entregas do funcionário DENTRO das empresas informadas (guard de tenant:
+      // a própria cláusula companyId IN (...) impede vazamento cross-tenant)
+      const entregas = await db.select({
+        id: epiDeliveries.id,
+        companyId: epiDeliveries.companyId,
+        quantidade: epiDeliveries.quantidade,
+        dataEntrega: epiDeliveries.dataEntrega,
+        dataDevolucao: epiDeliveries.dataDevolucao,
+        dataValidade: epiDeliveries.dataValidade,
+        motivo: epiDeliveries.motivo,
+        assinaturaUrl: epiDeliveries.assinaturaUrl,
+        assinaturaResponsavelNome: epiDeliveries.assinaturaResponsavelNome,
+        createdAt: epiDeliveries.createdAt,
+        nomeEpi: epis.nome,
+        caEpi: epis.ca,
+        categoriaEpi: epis.categoria,
+        tamanhoEpi: epis.tamanho,
+      })
+        .from(epiDeliveries)
+        .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
+        .where(and(
+          inArray(epiDeliveries.companyId, ids),
+          eq(epiDeliveries.employeeId, input.employeeId),
+          isNull(epiDeliveries.deletedAt),
+        ))
+        .orderBy(desc(epiDeliveries.dataEntrega), desc(epiDeliveries.id));
+
+      if (entregas.length === 0) {
+        // Sem entregas nas empresas acessadas — ainda valida o funcionário
+        const [emp0] = await db.select({ id: employees.id, companyId: employees.companyId })
+          .from(employees).where(eq(employees.id, input.employeeId));
+        if (!emp0 || !ids.includes(emp0.companyId)) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado nesta empresa." });
+        }
+      }
+
+      const [emp] = await db.select({
+        id: employees.id,
+        companyId: employees.companyId,
+        nomeCompleto: employees.nomeCompleto,
+        cpf: employees.cpf,
+        funcao: employees.funcao,
+        fotoUrl: employees.fotoUrl,
+        codigoInterno: employees.codigoInterno,
+        matricula: employees.matricula,
+        dataAdmissao: employees.dataAdmissao,
+        status: employees.status,
+      }).from(employees).where(eq(employees.id, input.employeeId));
+
+      // Empresa da FICHA = empresa das entregas (ou do funcionário)
+      const fichaCompanyId = entregas[0]?.companyId ?? emp?.companyId ?? input.companyId;
+      const [empresa] = await db.select({
+        id: companies.id,
+        razaoSocial: companies.razaoSocial,
+        cnpj: companies.cnpj,
+        logoUrl: companies.logoUrl,
+        endereco: companies.endereco,
+        cidade: companies.cidade,
+        estado: companies.estado,
+      }).from(companies).where(eq(companies.id, fichaCompanyId));
+
+      // Metadados de autenticação das assinaturas (epi_assinaturas)
+      const deliveryIds = entregas.map(e => e.id);
+      let assinMap = new Map<number, any>();
+      if (deliveryIds.length > 0) {
+        const assins = await db.select({
+          deliveryId: epiAssinaturas.deliveryId,
+          tipo: epiAssinaturas.tipo,
+          assinadoEm: epiAssinaturas.assinadoEm,
+          ipAddress: epiAssinaturas.ipAddress,
+          hashSha256: epiAssinaturas.hashSha256,
+          entregadorNome: epiAssinaturas.entregadorNome,
+        })
+          .from(epiAssinaturas)
+          .where(and(
+            inArray(epiAssinaturas.deliveryId, deliveryIds),
+            eq(epiAssinaturas.employeeId, input.employeeId),
+          ));
+        for (const a of assins) {
+          if (a.deliveryId != null && !assinMap.has(a.deliveryId)) assinMap.set(a.deliveryId, a);
+        }
+      }
+
+      return {
+        empresa: empresa || null,
+        funcionario: emp ? {
+          id: emp.id,
+          nomeCompleto: emp.nomeCompleto,
+          cpf: emp.cpf,
+          funcao: emp.funcao,
+          fotoUrl: emp.fotoUrl,
+          numeroInterno: emp.codigoInterno || emp.matricula || null,
+          dataAdmissao: emp.dataAdmissao,
+          status: emp.status,
+        } : null,
+        entregas: entregas.map(e => ({
+          ...e,
+          autenticacao: assinMap.get(e.id) || null,
+        })),
+      };
     }),
 });
