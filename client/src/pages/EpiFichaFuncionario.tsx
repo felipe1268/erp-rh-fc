@@ -10,7 +10,8 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Loader2, Search, ShieldCheck, FileSignature, Users, CheckCircle2, AlertTriangle, X } from "lucide-react";
+import { Loader2, Search, ShieldCheck, FileSignature, Users, CheckCircle2, AlertTriangle, X, HardHat } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import FichaEpiDialog from "@/components/FichaEpiDialog";
 import { formatCPF } from "@/lib/formatters";
 
@@ -39,6 +40,8 @@ export default function EpiFichaFuncionario() {
 
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState<FiltroStatus>("todos");
+  // Rev. 4651 — filtro por obra (localizar onde o pessoal está)
+  const [obraFiltro, setObraFiltro] = useState<string>("todas");
   const [fichaEmpId, setFichaEmpId] = useState<number | null>(null);
   // Rev. 4648 — lightbox da foto (clique na foto amplia p/ identificar)
   const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string; funcao?: string | null } | null>(null);
@@ -54,14 +57,26 @@ export default function EpiFichaFuncionario() {
     return { colaboradores: all.length, completos, pendentes: all.length - completos };
   }, [all]);
 
+  // Obras presentes na lista (p/ montar o filtro)
+  const obras = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of all) {
+      if (f.obra_id) m.set(String(f.obra_id), f.obra_nome || `Obra ${f.obra_id}`);
+    }
+    return Array.from(m.entries()).map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [all]);
+  const temSemObra = useMemo(() => all.some(f => !f.obra_id), [all]);
+
   const funcionarios = useMemo(() => {
     let arr = all;
+    if (obraFiltro === "sem_obra") arr = arr.filter(f => !f.obra_id);
+    else if (obraFiltro !== "todas") arr = arr.filter(f => String(f.obra_id || "") === obraFiltro);
     if (filtro === "pendentes") arr = arr.filter(f => (f.entregas_assinadas || 0) < (f.total_entregas || 0));
     if (filtro === "completos") arr = arr.filter(f => (f.total_entregas || 0) > 0 && (f.entregas_assinadas || 0) >= (f.total_entregas || 0));
     const s = removeAccents(search.trim());
     if (!s) return arr;
-    return arr.filter(f => removeAccents(f.nomeCompleto || "").includes(s) || removeAccents(f.funcao || "").includes(s) || String(f.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, "") || "\u0000"));
-  }, [all, search, filtro]);
+    return arr.filter(f => removeAccents(f.nomeCompleto || "").includes(s) || removeAccents(f.funcao || "").includes(s) || removeAccents(f.obra_nome || "").includes(s) || String(f.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, "") || "\u0000"));
+  }, [all, search, filtro, obraFiltro]);
 
   return (
     <DashboardLayout>
@@ -90,10 +105,22 @@ export default function EpiFichaFuncionario() {
           </div>
         </div>
 
-        {/* Busca */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome, função ou CPF..." className="pl-9 h-10 rounded-lg" />
+        {/* Busca + filtro por obra */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome, função, obra ou CPF..." className="pl-9 h-10 rounded-lg" />
+          </div>
+          <Select value={obraFiltro} onValueChange={setObraFiltro}>
+            <SelectTrigger className="h-10 rounded-lg w-full sm:w-[240px]">
+              <span className="flex items-center gap-1.5 truncate"><HardHat className="h-4 w-4 text-[#EE9803] shrink-0" /><SelectValue placeholder="Todas as obras" /></span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas as obras</SelectItem>
+              {obras.map(o => <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>)}
+              {temSemObra ? <SelectItem value="sem_obra">Sem obra alocada</SelectItem> : null}
+            </SelectContent>
+          </Select>
         </div>
 
         {resumoQ.isLoading ? (
@@ -131,6 +158,10 @@ export default function EpiFichaFuncionario() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-[13px] sm:text-sm text-[#0A1E3C] leading-snug break-words">{f.nomeCompleto}</p>
                     <p className="text-[11px] text-muted-foreground truncate">{f.funcao || "—"} · {formatCPF(f.cpf)}</p>
+                    <p className="text-[10.5px] mt-0.5 flex items-center gap-1 truncate">
+                      <HardHat className="h-3 w-3 text-[#EE9803] shrink-0" />
+                      <span className={f.obra_nome ? "text-[#0A1E3C] font-medium truncate" : "text-muted-foreground italic"}>{f.obra_nome || "Sem obra alocada"}</span>
+                    </p>
 
                     {/* Progresso de assinaturas */}
                     <div className="mt-2 flex items-center gap-2">

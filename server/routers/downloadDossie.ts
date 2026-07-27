@@ -5,6 +5,7 @@ import { asos, trainings, employees, userCompanies, employeeIntegrations, employ
 import { eq, isNull, and, inArray, notInArray } from "drizzle-orm";
 import { sdk } from "../_core/sdk";
 import { dbRetrieve } from "../storage";
+import { gerarFichasEpiPdfLote } from "../services/fichaEpiPdf";
 
 const TIPO_DOC_LABEL: Record<string, string> = {
   rg: "RG", cnh: "CNH", ctps: "CTPS", comprovante_residencia: "Comprovante de Residencia",
@@ -199,8 +200,16 @@ export function registerDownloadDossieRoute(app: Express) {
       }
 
       if (files.length === 0) {
-        res.status(404).json({ error: "Nenhum arquivo encontrado para os funcionários selecionados. Anexe documentos primeiro." });
-        return;
+        // Rev. 4649 — funcionário pode não ter anexos mas ter entregas de EPI
+        // (a Ficha de EPI digital é gerada na hora, depois do pipe)
+        const { epiDeliveries } = await import("../../drizzle/schema");
+        const [temEpi] = await db.select({ id: epiDeliveries.id }).from(epiDeliveries)
+          .where(and(eq(epiDeliveries.companyId, companyId), inArray(epiDeliveries.employeeId, validIds), isNull(epiDeliveries.deletedAt)))
+          .limit(1);
+        if (!temEpi) {
+          res.status(404).json({ error: "Nenhum arquivo encontrado para os funcionários selecionados. Anexe documentos primeiro." });
+          return;
+        }
       }
 
       const ts = new Date().toISOString().slice(0, 10);
@@ -237,6 +246,20 @@ export function registerDownloadDossieRoute(app: Express) {
         } catch (e) {
           console.warn(`[DownloadDossie] Erro ao buscar ${file.url}:`, e);
         }
+      }
+
+      // Rev. 4649 — Ficha de EPI DIGITAL gerada na hora (assinaturas online,
+      // NR-06/CLT) entra no ZIP de cada funcionário com entregas de EPI.
+      // A ficha ANTIGA (upload em Documentos, ex. "Controle de EPI - X.pdf")
+      // é MANTIDA. Gerada APÓS o pipe (headers já enviados, ZIP streamando)
+      // e anexada ficha a ficha — nada acumula em RAM.
+      const nomePorId = new Map(empRows.map(e => [e.id, sanitize(e.nomeCompleto || `Funcionario_${e.id}`)]));
+      try {
+        await gerarFichasEpiPdfLote(companyId, validIds, (empId, buf) => {
+          archive.append(buf, { name: `${nomePorId.get(empId)}/EPI/Ficha_de_EPI_Digital.pdf` });
+        });
+      } catch (e) {
+        console.warn("[DownloadDossie] Falha ao gerar Fichas de EPI digitais:", e);
       }
 
       await archive.finalize();

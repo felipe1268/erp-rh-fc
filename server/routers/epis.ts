@@ -2460,16 +2460,39 @@ Exemplos de referência:
       const requested = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
       const ids = requested.filter(id => allowed.has(id));
       if (ids.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à(s) empresa(s) informada(s)." });
+      // Rev. 4650 — fallback de foto: cadastro duplicado em empresa irmã do
+      // grupo (mesmo CPF) pode ter a foto que o registro local não tem
+      // (memórias: employee-cross-company-group-duplication + cpf mixed format)
       const rows = await db.execute(sql`
-        SELECT e.id, e."nomeCompleto", e.funcao, e.cpf, e."fotoUrl", e.status,
+        SELECT e.id, e."nomeCompleto", e.funcao, e.cpf, e.status,
+               COALESCE(NULLIF(e."fotoUrl", ''), f2."fotoUrl") AS "fotoUrl",
+               ob."obraId" AS obra_id, ob.obra_nome,
                COUNT(d.id)::int AS total_entregas,
                COUNT(d.id) FILTER (WHERE d.assinatura_url IS NOT NULL)::int AS entregas_assinadas,
                MAX(d."dataEntrega")::text AS ultima_entrega
         FROM epi_deliveries d
         JOIN employees e ON e.id = d."employeeId"
+        LEFT JOIN LATERAL (
+          SELECT e2."fotoUrl" FROM employees e2
+          WHERE (e."fotoUrl" IS NULL OR e."fotoUrl" = '')
+            AND e2.id <> e.id
+            AND e2."fotoUrl" IS NOT NULL AND e2."fotoUrl" <> ''
+            AND e2."deletedAt" IS NULL
+            AND length(regexp_replace(COALESCE(e.cpf,''), '[^0-9]', '', 'g')) = 11
+            AND regexp_replace(COALESCE(e2.cpf,''), '[^0-9]', '', 'g') = regexp_replace(e.cpf, '[^0-9]', '', 'g')
+          ORDER BY e2.id DESC LIMIT 1
+        ) f2 ON true
+        LEFT JOIN LATERAL (
+          -- Rev. 4651 — obra atual do funcionário (alocação ativa)
+          SELECT of2."obraId", o.nome AS obra_nome
+          FROM obra_funcionarios of2
+          JOIN obras o ON o.id = of2."obraId"
+          WHERE of2."employeeId" = e.id AND of2."isActive" = 1
+          ORDER BY of2.id DESC LIMIT 1
+        ) ob ON true
         WHERE d."companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
           AND d."deletedAt" IS NULL
-        GROUP BY e.id, e."nomeCompleto", e.funcao, e.cpf, e."fotoUrl", e.status
+        GROUP BY e.id, e."nomeCompleto", e.funcao, e.cpf, e."fotoUrl", f2."fotoUrl", e.status, ob."obraId", ob.obra_nome
         ORDER BY e."nomeCompleto" ASC
       `);
       return { funcionarios: ((rows as any)?.rows ?? rows ?? []) as any[] };
@@ -2534,6 +2557,21 @@ Exemplos de referência:
         status: employees.status,
       }).from(employees).where(eq(employees.id, input.employeeId));
 
+      // Rev. 4650 — fallback de foto: puxa do cadastro irmão (mesmo CPF em
+      // empresa do grupo) quando o registro local não tem foto
+      if (emp && !(emp.fotoUrl || "").trim() && (emp.cpf || "").replace(/\D/g, "").length === 11) {
+        const fb = await db.execute(sql`
+          SELECT e2."fotoUrl" FROM employees e2
+          WHERE e2.id <> ${emp.id}
+            AND e2."fotoUrl" IS NOT NULL AND e2."fotoUrl" <> ''
+            AND e2."deletedAt" IS NULL
+            AND regexp_replace(COALESCE(e2.cpf,''), '[^0-9]', '', 'g') = ${(emp.cpf || "").replace(/\D/g, "")}
+          ORDER BY e2.id DESC LIMIT 1
+        `);
+        const fbRow = ((fb as any)?.rows ?? fb ?? [])[0];
+        if (fbRow?.fotoUrl) (emp as any).fotoUrl = fbRow.fotoUrl;
+      }
+
       // Empresa da FICHA = empresa das entregas (ou do funcionário)
       const fichaCompanyId = entregas[0]?.companyId ?? emp?.companyId ?? input.companyId;
       const [empresa] = await db.select({
@@ -2568,6 +2606,25 @@ Exemplos de referência:
         }
       }
 
+      // Rev. 4654 — assinaturas antigas (antes da persistência em uploaded_files)
+      // podem ter o ARQUIVO perdido; sinaliza p/ o front mostrar o registro de
+      // autenticação em vez de imagem quebrada ("?" azul no Safari/iPad)
+      const sigKeys = entregas
+        .map(e => (e.assinaturaUrl || "").match(/^\/uploads\/([^?]+)/)?.[1])
+        .filter(Boolean) as string[];
+      const okKeys = new Set<string>();
+      if (sigKeys.length > 0) {
+        const found = await db.execute(sql`
+          SELECT file_key FROM uploaded_files WHERE file_key IN (${sql.join(sigKeys.map(k => sql`${k}`), sql`,`)})
+        `);
+        for (const r of ((found as any)?.rows ?? found ?? [])) okKeys.add(r.file_key);
+      }
+      const arquivoOk = (u?: string | null) => {
+        const m = (u || "").match(/^\/uploads\/([^?]+)/);
+        if (!m) return !!u; // data:/http externo → considera ok
+        return okKeys.has(m[1]);
+      };
+
       return {
         empresa: empresa || null,
         funcionario: emp ? {
@@ -2583,6 +2640,7 @@ Exemplos de referência:
         entregas: entregas.map(e => ({
           ...e,
           autenticacao: assinMap.get(e.id) || null,
+          assinaturaArquivoOk: arquivoOk(e.assinaturaUrl),
         })),
       };
     }),

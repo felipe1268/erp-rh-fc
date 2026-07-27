@@ -796,7 +796,6 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
   if (side === "back") {
     // VERSO — layout "Opção 5": fundo branco, logo, QR em cartão com sombra,
     // "Verifique a autenticidade deste crachá", ID laranja e chevron navy no rodapé.
-    const idLabel = `${(badge.tipo || "").toUpperCase()}-${badge.id}`;
     return (
       <div className="w-[340px] h-[540px] rounded-2xl overflow-hidden shadow-xl mx-auto relative bg-white flex flex-col">
         <Watermark />
@@ -816,9 +815,7 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
           <p className="text-[13px] mt-[22px] text-center leading-snug font-medium" style={{ color: NAVY }}>
             Verifique a autenticidade<br />deste crachá
           </p>
-          <p className="text-[15px] mt-[16px] font-extrabold tracking-wide" style={{ color: OR }}>
-            ID: {idLabel}
-          </p>
+          {/* Rev. 4652 — ID removido a pedido do usuário (informação desnecessária) */}
         </div>
         {/* Rodapé navy em chevron + friso laranja (como na arte) */}
         <div className="mt-auto relative">
@@ -896,9 +893,10 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
       </div>
 
       {/* Nome + função laranja entre traços (— FUNÇÃO —) */}
-      {/* Rev. 4631 — nome/função recuados à área branca (ml-40/mr-34, mesmo recuo das
-          linhas de dados): o texto não pode invadir as listras diagonais da lateral */}
-      <div className={`text-center ${denso ? "mt-[8px]" : "mt-[12px]"} ml-[40px] mr-[34px] relative shrink-0`}>
+      {/* Rev. 4653 — na ALTURA do nome a listra laranja avança até ~65px (o recuo
+          de 40px da Rev. 4631 deixava o nome por cima da tarja, IMG_4553).
+          Recuo simétrico de 68px mantém o texto centralizado e na área branca. */}
+      <div className={`text-center ${denso ? "mt-[8px]" : "mt-[12px]"} ml-[68px] mr-[68px] relative shrink-0`}>
         <h2 className="font-extrabold uppercase leading-[1.12] tracking-wide line-clamp-2 overflow-hidden" style={{ color: NAVY, fontSize: nomePx }}>
           {badge.nome}
         </h2>

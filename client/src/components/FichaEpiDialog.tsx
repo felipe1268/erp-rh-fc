@@ -81,7 +81,9 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
         <td class="c">${fmtDate(e.dataEntrega)}</td>
         <td class="c">${fmtDate(e.dataDevolucao) === "—" ? "" : fmtDate(e.dataDevolucao)}</td>
         <td class="c sig">${e.assinaturaUrl
-          ? `<img src="${esc(abs(e.assinaturaUrl))}" alt="assinatura" /><div class="aut">${e.autenticacao ? `${esc(fmtDateTime(e.autenticacao.assinadoEm))}${e.autenticacao.ipAddress ? ` · IP ${esc(e.autenticacao.ipAddress)}` : ""}${e.autenticacao.hashSha256 ? `<br/>SHA-256 ${esc(String(e.autenticacao.hashSha256).slice(0, 16))}…` : ""}` : esc(fmtDateTime(e.createdAt))}</div>`
+          ? `${e.assinaturaArquivoOk === false
+              ? `<span class="selo">&#10003; ASSINADO DIGITALMENTE</span>`
+              : `<img src="${esc(abs(e.assinaturaUrl))}" alt="assinatura" />`}<div class="aut">${e.autenticacao ? `${esc(fmtDateTime(e.autenticacao.assinadoEm))}${e.autenticacao.ipAddress ? ` · IP ${esc(e.autenticacao.ipAddress)}` : ""}${e.autenticacao.hashSha256 ? `<br/>SHA-256 ${esc(String(e.autenticacao.hashSha256).slice(0, 16))}…` : ""}` : esc(fmtDateTime(e.createdAt))}</div>`
           : `<span class="pend">SEM ASSINATURA</span>`}</td>
       </tr>`).join("");
     w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Ficha de EPI — ${esc(emp.nomeCompleto)}</title>
@@ -110,6 +112,7 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
   td.sig img { height: 26px; max-width: 110px; object-fit: contain; display: block; margin: 0 auto; }
   .aut { font-size: 6.5px; color: #555; margin-top: 1px; line-height: 1.25; }
   .pend { color: #b91c1c; font-weight: bold; font-size: 8px; }
+  .selo { color: #15803d; border: 1px solid #16a34a; border-radius: 3px; padding: 1px 4px; font-weight: bold; font-size: 7.5px; white-space: nowrap; }
   .rodape { margin-top: 10px; font-size: 8.5px; color: #333; border: 1px solid #99a; padding: 6px 8px; background: #f8fafc; line-height: 1.5; }
   .footer { margin-top: 8px; display: flex; justify-content: space-between; font-size: 8px; color: #777; }
 </style></head><body>
@@ -233,7 +236,15 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
                       <td className="px-2 py-1.5 text-center">
                         {e.assinaturaUrl ? (
                           <div>
-                            <img src={e.assinaturaUrl} alt="assinatura" className="h-7 max-w-[110px] object-contain mx-auto" loading="lazy" />
+                            {/* Rev. 4654 — arquivo antigo perdido: mostra selo "Assinado
+                                digitalmente" no lugar da imagem quebrada ("?") */}
+                            {e.assinaturaArquivoOk === false ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-green-700 border border-green-600 rounded px-1.5 py-0.5">
+                                ✓ ASSINADO DIGITALMENTE
+                              </span>
+                            ) : (
+                              <img src={e.assinaturaUrl} alt="assinatura" className="h-7 max-w-[110px] object-contain mx-auto" loading="lazy" />
+                            )}
                             <p className="text-[8px] text-muted-foreground leading-tight mt-0.5">
                               {e.autenticacao ? (
                                 <>

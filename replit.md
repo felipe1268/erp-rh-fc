@@ -50,6 +50,12 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4654** — **FICHA DE EPI: selo "✓ Assinado digitalmente" p/ assinaturas antigas com arquivo de imagem perdido** (48 no banco, pré-persistência em uploaded_files); flag assinaturaArquivoOk na procedure; vale p/ tela, print e PDF do Dossiê.
+- **Rev. 4653** — **CRACHÁ: nome não invade mais a listra laranja** — recuo do bloco nome+função aumentado de 40px p/ 68px simétrico (na altura do nome a tarja avança até ~65px).
+- **Rev. 4652** — **CRACHÁ: removido "ID: XXX-N" do verso** (abaixo do QR) a pedido do usuário — informação desnecessária; QR já autentica.
+- **Rev. 4651** — **FICHA DE EPI: obra no card + filtro por obra.** fichaEpiResumo retorna obra atual (obra_funcionarios isActive=1 LATERAL); card mostra obra com ícone HardHat; Select de obras ao lado da busca (inclui "Sem obra alocada"); busca textual também acha por obra.
+- **Rev. 4650** — **FICHA DE EPI: fallback de foto do cadastro irmão (mesmo CPF).** fichaEpiResumo (LATERAL), fichaEpiFuncionario e fichaEpiPdf buscam a foto de outro cadastro do mesmo CPF quando o local está sem foto (duplicação cross-empresa do grupo).
+- **Rev. 4649** — **FICHA DE EPI DIGITAL NO DOSSIÊ ZIP.** Novo `server/services/fichaEpiPdf.ts` (PDF server-side via puppeteer, imagens em data URI, lote com 1 Chromium); `downloadDossie.ts` inclui `<Nome>/EPI/Ficha_de_EPI_Digital.pdf` p/ cada funcionário com entregas. Ficha antiga (upload) mantida.
 - **Rev. 4648** — **FICHA DE EPI: layout moderno em cards + foto ampliável.** /epis/ficha em grid de cards responsivo com KPIs-filtro no header navy, barra de progresso de assinaturas; clique na foto (card e ficha) abre lightbox grande. Arquivos: `client/src/pages/EpiFichaFuncionario.tsx`, `client/src/components/FichaEpiDialog.tsx`.
 - **Rev. 4647** — **FICHA DE EPI: logo formatado no cabeçalho.** Faixa navy em flex 3 colunas (logo em caixa branca contida, título centralizado); fim do vazamento sobre os dados. Arquivo: `client/src/components/FichaEpiDialog.tsx`.
 - **Rev. 4646** — **FICHA DE EPI: coleta de assinatura pendente + logo da empresa + foto do colaborador (tela e impressão).** Botão "Coletar assinatura" nas entregas sem assinatura (fluxo oficial EpiAssinatura), logo no cabeçalho, foto 3x4 grande no header e no PDF. Arquivo: `client/src/components/FichaEpiDialog.tsx`.

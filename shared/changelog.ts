@@ -1,4 +1,76 @@
 /**
+ * Rev. 4654 - FICHA DE EPI: SELO P/ ASSINATURA COM ARQUIVO PERDIDO
+ *
+ * Pedido do usuário (IMG_4554): trecho da ficha aparecia sem a assinatura
+ * ("?" azul = imagem quebrada no Safari/iPad). Causa: 48 assinaturas antigas
+ * (coletadas antes da persistência em uploaded_files) tiveram o ARQUIVO de
+ * imagem perdido — a entrega está assinada (data/hora, IP, hash SHA-256 em
+ * epi_assinaturas), só a imagem se foi. Irrecuperável (verificado no banco).
+ * - fichaEpiFuncionario retorna assinaturaArquivoOk (EXISTS em uploaded_files
+ *   em lote) por entrega.
+ * - Tela, Imprimir/PDF e Ficha do Dossiê ZIP: quando o arquivo não existe,
+ *   mostram selo verde "✓ ASSINADO DIGITALMENTE" + metadados de autenticação
+ *   no lugar da imagem quebrada.
+ */
+/**
+ * Rev. 4653 - CRACHÁ: NOME NÃO INVADE MAIS A LISTRA LARANJA
+ *
+ * Pedido do usuário (IMG_4553): o nome estava por cima da tarja laranja
+ * diagonal. Na altura do nome a listra avança até ~65px; o recuo de 40px
+ * (Rev. 4631) não bastava. Bloco nome+função agora com recuo simétrico de
+ * 68px — texto centralizado e sempre na área branca.
+ */
+/**
+ * Rev. 4652 - CRACHÁ: REMOVIDO "ID: XXX-N" DO VERSO
+ *
+ * Pedido do usuário: o ID abaixo do QR no verso do crachá é informação
+ * desnecessária. Removido (o QR já leva à verificação de autenticidade).
+ * Vale p/ tela, Baixar PNG e Imprimir (mesmo componente renderizado).
+ */
+/**
+ * Rev. 4651 - FICHA DE EPI: OBRA NO CARD + FILTRO POR OBRA
+ *
+ * Pedido do usuário: mostrar em qual obra cada colaborador está e filtrar
+ * por obra p/ fácil localização.
+ * - fichaEpiResumo: LEFT JOIN LATERAL em obra_funcionarios (isActive=1) +
+ *   obras → retorna obra_id/obra_nome (padrão canônico do getEmployees).
+ * - Card: linha com ícone HardHat laranja + nome da obra (ou "Sem obra
+ *   alocada" em itálico).
+ * - Filtro: Select de obras (derivado da própria lista) ao lado da busca,
+ *   com opção "Sem obra alocada"; busca por texto também acha por obra.
+ */
+/**
+ * Rev. 4650 - FICHA DE EPI: FALLBACK DE FOTO DO CADASTRO IRMÃO (mesmo CPF)
+ *
+ * Pedido do usuário: funcionário sem foto na Ficha de EPI "não pode acontecer
+ * jamais". Causa: cadastros duplicados em empresa irmã do grupo — a foto
+ * existe no registro da outra empresa (mesmo CPF), o local está sem.
+ * - fichaEpiResumo: LEFT JOIN LATERAL busca fotoUrl de outro employees com
+ *   MESMO CPF (normalizado via regexp_replace, memória cpf mixed format)
+ *   quando o registro local não tem foto.
+ * - fichaEpiFuncionario e fichaEpiPdf.ts (PDF do Dossiê ZIP): mesmo fallback.
+ * - Verificado com dados reais: Douglas Felippe, Geraldo Candido e Marcos
+ *   Roberto agora resolvem a foto do cadastro irmão.
+ */
+/**
+ * Rev. 4649 - FICHA DE EPI DIGITAL ENTRA NO DOSSIÊ ZIP (Controle de Documentos)
+ *
+ * Pedido do usuário: ao baixar o dossiê p/ encaminhar ao cliente, a Ficha de
+ * EPI digital JÁ vai junto. A ficha ANTIGA (upload em Documentos, ex.
+ * "Controle de EPI - X.pdf") é MANTIDA — as duas convivem até o usuário
+ * dispensar a antiga.
+ * - Novo service server/services/fichaEpiPdf.ts: gera o MESMO documento da
+ *   FichaEpiDialog (logo, foto 3x4, termo, entregas com assinatura + data/IP/
+ *   hash SHA-256) como PDF via puppeteer; imagens embutidas em data URI e
+ *   requests externos bloqueados (memória: sanitize no Puppeteer).
+ * - gerarFichasEpiPdfLote(): 1 único Chromium p/ N funcionários (dossiê em
+ *   lote não derruba o servidor); falha individual não aborta o ZIP.
+ * - downloadDossie.ts: cada funcionário com entregas ganha
+ *   "<Nome>/EPI/Ficha_de_EPI_Digital.pdf" no ZIP.
+ * - Acessos existentes mantidos: aba lateral /epis/ficha, Raio-X ("Ficha
+ *   EPI") e Ficha Documental do Controle de Documentos.
+ */
+/**
  * Rev. 4648 - FICHA DE EPI: LAYOUT MODERNO EM CARDS + FOTO AMPLIÁVEL
  *
  * Pedido do usuário (iPad): leitura fácil e fluida + clique na foto AMPLIA
