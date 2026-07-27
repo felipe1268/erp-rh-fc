@@ -2479,6 +2479,8 @@ Exemplos de referência:
           SELECT e2."fotoUrl" FROM employees e2
           WHERE (e."fotoUrl" IS NULL OR e."fotoUrl" = '')
             AND e2.id <> e.id
+            -- Rev. 4658 — tenant guard: fallback só em empresas ACESSÍVEIS ao user
+            AND e2."companyId" IN (${sql.join(Array.from(allowed).map(id => sql`${id}`), sql`,`)})
             AND e2."fotoUrl" IS NOT NULL AND e2."fotoUrl" <> ''
             AND e2."deletedAt" IS NULL
             AND length(regexp_replace(COALESCE(e.cpf,''), '[^0-9]', '', 'g')) = 11
@@ -2574,6 +2576,8 @@ Exemplos de referência:
         const fb = await db.execute(sql`
           SELECT e2."fotoUrl" FROM employees e2
           WHERE e2.id <> ${emp.id}
+            -- Rev. 4658 — tenant guard: fallback só em empresas ACESSÍVEIS ao user
+            AND e2."companyId" IN (${sql.join(Array.from(allowed).map(id => sql`${id}`), sql`,`)})
             AND e2."fotoUrl" IS NOT NULL AND e2."fotoUrl" <> ''
             AND e2."deletedAt" IS NULL
             AND regexp_replace(COALESCE(e2.cpf,''), '[^0-9]', '', 'g') = ${(emp.cpf || "").replace(/\D/g, "")}

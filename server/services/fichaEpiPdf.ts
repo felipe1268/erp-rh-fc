@@ -55,7 +55,7 @@ async function imgDataUri(url?: string | null): Promise<string> {
 }
 
 // Monta o HTML da ficha de um funcionário; null se sem entregas.
-async function montarHtmlFicha(companyId: number, employeeId: number): Promise<string | null> {
+async function montarHtmlFicha(companyId: number, employeeId: number, fotoScopeIds?: number[]): Promise<string | null> {
   const db = (await getDb())!;
 
   const entregas = await db.select({
@@ -90,9 +90,12 @@ async function montarHtmlFicha(companyId: number, employeeId: number): Promise<s
   // Rev. 4650 — fallback de foto: cadastro irmão (mesmo CPF) pode ter a foto
   const cpfDigits = (emp.cpf || "").replace(/\D/g, "");
   if (!(emp.fotoUrl || "").trim() && cpfDigits.length === 11) {
+    // Rev. 4658 — tenant guard: fallback restrito ao escopo de empresas autorizado
+    const scope = (fotoScopeIds && fotoScopeIds.length > 0) ? fotoScopeIds : [companyId];
     const fb = await db.execute(sql`
       SELECT e2."fotoUrl" FROM employees e2
       WHERE e2.id <> ${employeeId}
+        AND e2."companyId" IN (${sql.join(scope.map(id => sql`${id}`), sql`,`)})
         AND e2."fotoUrl" IS NOT NULL AND e2."fotoUrl" <> ''
         AND e2."deletedAt" IS NULL
         AND regexp_replace(COALESCE(e2.cpf,''), '[^0-9]', '', 'g') = ${cpfDigits}
@@ -233,8 +236,8 @@ async function pdfFromHtml(browser: any, html: string): Promise<Buffer> {
  * Gera o PDF da Ficha de EPI digital de UM funcionário.
  * Retorna null se não houver entregas. Guard de tenant é do CHAMADOR.
  */
-export async function gerarFichaEpiPdf(companyId: number, employeeId: number): Promise<Buffer | null> {
-  const html = await montarHtmlFicha(companyId, employeeId);
+export async function gerarFichaEpiPdf(companyId: number, employeeId: number, fotoScopeIds?: number[]): Promise<Buffer | null> {
+  const html = await montarHtmlFicha(companyId, employeeId, fotoScopeIds);
   if (!html) return null;
   const browser = await launchBrowser();
   try {
@@ -254,13 +257,15 @@ export async function gerarFichasEpiPdfLote(
   companyId: number,
   employeeIds: number[],
   onPdf: (employeeId: number, buf: Buffer) => void | Promise<void>,
+  // Rev. 4658 — escopo autorizado p/ o fallback de foto por CPF (tenant guard)
+  fotoScopeIds?: number[],
 ): Promise<void> {
   if (employeeIds.length === 0) return;
   let browser: any = null;
   try {
     for (const id of employeeIds) {
       try {
-        const html = await montarHtmlFicha(companyId, id);
+        const html = await montarHtmlFicha(companyId, id, fotoScopeIds);
         if (!html) continue;
         if (!browser) browser = await launchBrowser(); // lazy: só abre se houver ficha
         await onPdf(id, await pdfFromHtml(browser, html));

@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import archiver from "archiver";
-import { getDb } from "../db";
+import { getDb, getCompaniesForUser } from "../db";
 import { asos, trainings, employees, userCompanies, employeeIntegrations, employeeDocuments } from "../../drizzle/schema";
 import { eq, isNull, and, inArray, notInArray } from "drizzle-orm";
 import { sdk } from "../_core/sdk";
@@ -36,20 +36,14 @@ async function fetchFileBuffer(url: string): Promise<Buffer | null> {
   const urlStr = (url || "").trim();
   if (!urlStr) return null;
 
-  // Tenta DB primeiro (chave extraída de /uploads/...)
-  const match = urlStr.match(/\/uploads\/(.+)$/);
-  if (match) {
-    try {
-      const result = await dbRetrieve(match[1]);
-      if (result) return result.buffer;
-    } catch { /* cai no fallback */ }
-  }
-
-  // Fallback: fetch HTTP
+  // Rev. 4658 — SSRF guard: URL vinda do banco (gravável pelo cliente) NUNCA
+  // vai p/ fetch genérico (memória comprovante-fetch-ssrf). Só resolve chave
+  // interna /uploads/<key> (relativa OU absoluta) via dbRetrieve.
+  const match = urlStr.match(/^(?:https?:\/\/[^/]+)?\/uploads\/([^?#]+)/);
+  if (!match) return null;
   try {
-    const res = await fetch(urlStr);
-    if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
+    const result = await dbRetrieve(decodeURIComponent(match[1]));
+    return result ? result.buffer : null;
   } catch {
     return null;
   }
@@ -255,9 +249,11 @@ export function registerDownloadDossieRoute(app: Express) {
       // e anexada ficha a ficha — nada acumula em RAM.
       const nomePorId = new Map(empRows.map(e => [e.id, sanitize(e.nomeCompleto || `Funcionario_${e.id}`)]));
       try {
+        // Rev. 4658 — escopo do fallback de foto = empresas acessíveis ao user
+        const fotoScope = (await getCompaniesForUser(user.id, user.role)).map((c: any) => c.id);
         await gerarFichasEpiPdfLote(companyId, validIds, (empId, buf) => {
           archive.append(buf, { name: `${nomePorId.get(empId)}/005 - EPI/Ficha_de_EPI_Digital.pdf` });
-        });
+        }, fotoScope);
       } catch (e) {
         console.warn("[DownloadDossie] Falha ao gerar Fichas de EPI digitais:", e);
       }

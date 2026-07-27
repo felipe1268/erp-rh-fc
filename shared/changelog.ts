@@ -1,4 +1,28 @@
 /**
+ * Rev. 4659 - FICHA DE EPI: REGISTRAR ENTREGA DIRETO DA FICHA
+ *
+ * Pedido do usuário (IMG_4564): quem está "Sem ficha" precisa poder receber
+ * a 1ª entrega direto pela ficha.
+ * - Botão "Nova entrega" no FichaEpiDialog abre mini-form (EPI do catálogo +
+ *   quantidade + data, default hoje) usando epis.createDelivery (baixa no
+ *   estoque central, origemEntrega='central').
+ * - Após salvar: refetch da ficha + invalidate do resumo; toast orienta a
+ *   coletar a assinatura na linha nova ("Coletar assinatura" já existia).
+ */
+/**
+ * Rev. 4658 - SEGURANÇA: TENANT GUARD NO FALLBACK DE FOTO + SSRF NO DOSSIÊ
+ *
+ * Achados do code review (Rev. 4650/4649):
+ * - Fallback de foto por CPF (fichaEpiResumo, fichaEpiFuncionario e
+ *   fichaEpiPdf) buscava em employees SEM restrição de empresa → podia vazar
+ *   foto de tenant alheio com CPF coincidente. Agora restrito às empresas
+ *   ACESSÍVEIS ao usuário (getCompaniesForUser); no PDF em lote o escopo é
+ *   passado pelo chamador (downloadDossie) — default seguro [companyId].
+ * - downloadDossie.fetchFileBuffer tinha fallback de fetch HTTP genérico em
+ *   URL gravável pelo cliente (SSRF — memória comprovante-fetch-ssrf).
+ *   Agora só resolve /uploads/<key> (relativo ou absoluto) via dbRetrieve.
+ */
+/**
  * Rev. 4657 - FICHA DE EPI: LISTA 100% DO EFETIVO (INCLUI QUEM NÃO TEM FICHA)
  *
  * Pedido do usuário (IMG_4561/4562): 107 CLT mas só 97 na Ficha de EPI —

@@ -11,7 +11,10 @@ import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Printer, ShieldCheck, PenLine } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, Printer, ShieldCheck, PenLine, Plus, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/formatters";
 import EpiAssinatura from "@/pages/EpiAssinatura";
 
@@ -46,6 +49,13 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
 }) {
   // Rev. 4646 — coleta de assinatura pendente direto da ficha
   const [signDelivery, setSignDelivery] = useState<any | null>(null);
+  // Rev. 4659 — registrar entrega direto da ficha (quem não tem ficha ainda)
+  const [showNova, setShowNova] = useState(false);
+  const [novaEpiId, setNovaEpiId] = useState<string>("");
+  const [novaQtd, setNovaQtd] = useState<string>("1");
+  const [novaData, setNovaData] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const { toast } = useToast();
+  const utils = trpc.useUtils();
   // Rev. 4648 — clique na foto amplia
   const [fotoZoom, setFotoZoom] = useState(false);
   const enabled = open && !!employeeId && (!!companyId || (companyIds?.length ?? 0) > 0);
@@ -58,6 +68,38 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
     { enabled: enabled && !!(data?.empresa?.id || companyId) }
   );
   const termo = termoQ.data?.texto || "";
+
+  // Rev. 4659 — catálogo de EPIs p/ o mini-form de nova entrega (só carrega ao abrir)
+  const entregaCompanyId = data?.empresa?.id || companyId || 0;
+  const episQ = trpc.epis.list.useQuery(
+    { companyId: entregaCompanyId, companyIds, limit: 500, offset: 0 },
+    { enabled: enabled && showNova && !!entregaCompanyId }
+  );
+  const episList = (episQ.data?.items ?? []) as any[];
+  const createDeliveryMut = trpc.epis.createDelivery.useMutation({
+    onSuccess: () => {
+      toast({ title: "Entrega registrada", description: "Agora colete a assinatura do colaborador." });
+      setShowNova(false); setNovaEpiId(""); setNovaQtd("1");
+      refetch();
+      utils.epis.fichaEpiResumo.invalidate();
+    },
+    onError: (e: any) => toast({ title: "Erro ao registrar entrega", description: e.message, variant: "destructive" }),
+  });
+  const salvarNova = () => {
+    const epiId = parseInt(novaEpiId, 10);
+    const qtd = parseInt(novaQtd, 10);
+    if (!epiId) { toast({ title: "Selecione o EPI", variant: "destructive" }); return; }
+    if (!qtd || qtd < 1) { toast({ title: "Quantidade inválida", variant: "destructive" }); return; }
+    if (!novaData) { toast({ title: "Informe a data de entrega", variant: "destructive" }); return; }
+    createDeliveryMut.mutate({
+      companyId: entregaCompanyId,
+      epiId,
+      employeeId: employeeId!,
+      quantidade: qtd,
+      dataEntrega: novaData,
+      origemEntrega: "central",
+    });
+  };
 
   const entregas = data?.entregas || [];
   const assinadas = useMemo(() => entregas.filter((e: any) => !!e.assinaturaUrl).length, [entregas]);
@@ -208,7 +250,42 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
               {entregas.length > 0 && assinadas < entregas.length && (
                 <span className="text-red-600 font-medium">{entregas.length - assinadas} sem assinatura</span>
               )}
+              {/* Rev. 4659 — registrar entrega direto da ficha */}
+              <Button variant="outline" size="sm" className="ml-auto h-7 px-2 text-[11px] gap-1 border-[#0A1E3C] text-[#0A1E3C]"
+                onClick={() => setShowNova(v => !v)}>
+                {showNova ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {showNova ? "Cancelar" : "Nova entrega"}
+              </Button>
             </div>
+
+            {/* Rev. 4659 — mini-form de nova entrega (EPI + qtd + data) */}
+            {showNova && (
+              <div className="rounded-lg border border-[#0A1E3C]/30 bg-blue-50/40 p-2.5 space-y-2">
+                <p className="text-[11px] font-bold text-[#0A1E3C]">Registrar entrega de EPI para {emp?.nomeCompleto}</p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Select value={novaEpiId} onValueChange={setNovaEpiId}>
+                    <SelectTrigger className="h-9 flex-1 text-xs bg-white">
+                      <SelectValue placeholder={episQ.isLoading ? "Carregando EPIs..." : "Selecione o EPI"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {episList.map((ep: any) => (
+                        <SelectItem key={ep.id} value={String(ep.id)}>
+                          {ep.nome}{ep.tamanho ? ` (${ep.tamanho})` : ""}{ep.ca ? ` — CA ${ep.ca}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input type="number" min={1} value={novaQtd} onChange={e => setNovaQtd(e.target.value)}
+                    className="h-9 w-full sm:w-20 text-xs bg-white" placeholder="Qtd." />
+                  <Input type="date" value={novaData} onChange={e => setNovaData(e.target.value)}
+                    className="h-9 w-full sm:w-40 text-xs bg-white" />
+                  <Button size="sm" className="h-9 gap-1 bg-[#0A1E3C] hover:bg-[#0A1E3C]/90"
+                    disabled={createDeliveryMut.isPending} onClick={salvarNova}>
+                    {createDeliveryMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Registrar
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">A baixa sai do estoque central. Após registrar, use "Coletar assinatura" na linha da entrega.</p>
+              </div>
+            )}
 
             {/* Tabela de entregas */}
             <div className="overflow-x-auto rounded-lg border">
