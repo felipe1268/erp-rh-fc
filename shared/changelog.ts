@@ -1,4 +1,11 @@
 /**
+ * Rev. 4684 - FIX PUBLICACAO: BUILD ESTOURAVA MEMORIA (OOM)
+ *
+ * O vite build passou a estourar o heap de 3840MB do Node durante a
+ * publicacao (app cresceu). Heap do build elevado para 4608MB (maquina
+ * de build tem 8GB). Build local validado em ~1m30s.
+ */
+/**
  * Rev. 4683 - FIX PERMISSAO: DOCUMENTOS DO COLABORADOR P/ USUARIO RH
  *
  * Usuaria RH (Kellen) caia em "Acesso Restrito" ao abrir Documentos do
