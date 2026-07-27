@@ -1,4 +1,13 @@
 /**
+ * Rev. 4655 - DOSSIÊ ZIP: PASTAS NUMERADAS EM MAIÚSCULAS
+ *
+ * Pedido do usuário (aprovado via formulário): pastas do ZIP numeradas com
+ * 3 casas + tracinho + nome em MAIÚSCULAS.
+ * - 001 - DOCUMENTOS / 002 - ASO / 003 - TREINAMENTOS / 004 - INTEGRACOES
+ *   (sem acento: acento em pasta de ZIP corrompe no Windows) / 005 - EPI.
+ * - Só aparecem as pastas com arquivo; numeração fixa p/ todos.
+ */
+/**
  * Rev. 4654 - FICHA DE EPI: SELO P/ ASSINATURA COM ARQUIVO PERDIDO
  *
  * Pedido do usuário (IMG_4554): trecho da ficha aparecia sem a assinatura

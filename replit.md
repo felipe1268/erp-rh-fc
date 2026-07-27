@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4655** — **DOSSIÊ ZIP: pastas numeradas em maiúsculas** — 001 - DOCUMENTOS, 002 - ASO, 003 - TREINAMENTOS, 004 - INTEGRACOES, 005 - EPI (aprovado pelo usuário).
 - **Rev. 4654** — **FICHA DE EPI: selo "✓ Assinado digitalmente" p/ assinaturas antigas com arquivo de imagem perdido** (48 no banco, pré-persistência em uploaded_files); flag assinaturaArquivoOk na procedure; vale p/ tela, print e PDF do Dossiê.
 - **Rev. 4653** — **CRACHÁ: nome não invade mais a listra laranja** — recuo do bloco nome+função aumentado de 40px p/ 68px simétrico (na altura do nome a tarja avança até ~65px).
 - **Rev. 4652** — **CRACHÁ: removido "ID: XXX-N" do verso** (abaixo do QR) a pedido do usuário — informação desnecessária; QR já autentica.

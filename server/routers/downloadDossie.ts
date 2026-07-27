@@ -167,7 +167,7 @@ export function registerDownloadDossieRoute(app: Express) {
             const ext = extFromUrl(a.documentoUrl!);
             const data = String(a.dataExame || "").slice(0, 10) || "sem-data";
             const tipo = sanitize(a.tipo || "ASO");
-            files.push({ url: a.documentoUrl!, path: `${nome}/ASO/${tipo}_${data}.${ext}` });
+            files.push({ url: a.documentoUrl!, path: `${nome}/002 - ASO/${tipo}_${data}.${ext}` });
           });
 
         treinRows
@@ -176,7 +176,7 @@ export function registerDownloadDossieRoute(app: Express) {
             const ext = extFromUrl(t.certificadoUrl!);
             const data = String(t.dataRealizacao || "").slice(0, 10) || "sem-data";
             const nm = sanitize(t.norma || t.nome || "Treinamento");
-            files.push({ url: t.certificadoUrl!, path: `${nome}/Treinamentos/${nm}_${data}.${ext}` });
+            files.push({ url: t.certificadoUrl!, path: `${nome}/003 - TREINAMENTOS/${nm}_${data}.${ext}` });
           });
 
         intRows
@@ -186,7 +186,7 @@ export function registerDownloadDossieRoute(app: Express) {
             const ext = extFromUrl(url);
             const data = String(i.dataRealizacao || "").slice(0, 10) || "sem-data";
             const tp = sanitize(i.clienteNome || (i.tipo === "interna" ? "Interna" : "Integracao"));
-            files.push({ url, path: `${nome}/Integracoes/${tp}_${data}.${ext}` });
+            files.push({ url, path: `${nome}/004 - INTEGRACOES/${tp}_${data}.${ext}` });
           });
 
         docRows
@@ -195,7 +195,7 @@ export function registerDownloadDossieRoute(app: Express) {
             const ext = extFromUrl(d.fileUrl!);
             const tp = sanitize(TIPO_DOC_LABEL[d.tipo] || d.tipo || "Documento");
             const nm = sanitize(d.nome || tp);
-            files.push({ url: d.fileUrl!, path: `${nome}/Documentos/${tp}_${nm}.${ext}` });
+            files.push({ url: d.fileUrl!, path: `${nome}/001 - DOCUMENTOS/${tp}_${nm}.${ext}` });
           });
       }
 
@@ -256,7 +256,7 @@ export function registerDownloadDossieRoute(app: Express) {
       const nomePorId = new Map(empRows.map(e => [e.id, sanitize(e.nomeCompleto || `Funcionario_${e.id}`)]));
       try {
         await gerarFichasEpiPdfLote(companyId, validIds, (empId, buf) => {
-          archive.append(buf, { name: `${nomePorId.get(empId)}/EPI/Ficha_de_EPI_Digital.pdf` });
+          archive.append(buf, { name: `${nomePorId.get(empId)}/005 - EPI/Ficha_de_EPI_Digital.pdf` });
         });
       } catch (e) {
         console.warn("[DownloadDossie] Falha ao gerar Fichas de EPI digitais:", e);
