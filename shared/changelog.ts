@@ -1,4 +1,10 @@
 /**
+ * Rev. 4656 - DOSSIÊ ZIP: "004 - INTEGRAÇÕES" COM ACENTO
+ *
+ * Pedido do usuário: manter acentuação correta. ZIP sai com flag UTF-8
+ * (archiver), legível em iPad/Mac/Windows 10+.
+ */
+/**
  * Rev. 4655 - DOSSIÊ ZIP: PASTAS NUMERADAS EM MAIÚSCULAS
  *
  * Pedido do usuário (aprovado via formulário): pastas do ZIP numeradas com

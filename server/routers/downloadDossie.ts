@@ -186,7 +186,7 @@ export function registerDownloadDossieRoute(app: Express) {
             const ext = extFromUrl(url);
             const data = String(i.dataRealizacao || "").slice(0, 10) || "sem-data";
             const tp = sanitize(i.clienteNome || (i.tipo === "interna" ? "Interna" : "Integracao"));
-            files.push({ url, path: `${nome}/004 - INTEGRACOES/${tp}_${data}.${ext}` });
+            files.push({ url, path: `${nome}/004 - INTEGRAÇÕES/${tp}_${data}.${ext}` });
           });
 
         docRows
