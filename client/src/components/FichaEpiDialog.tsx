@@ -286,13 +286,20 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
                           if (filtrados.length === 0) return <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum EPI encontrado.</div>;
                           return filtrados.slice(0, 60).map((ep: any) => (
                             <button key={ep.id} type="button"
-                              className="block w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b last:border-b-0 break-words"
+                              className="flex w-full items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-blue-50 border-b last:border-b-0"
                               onClick={() => {
                                 setNovaEpiId(String(ep.id));
                                 setEpiBusca(`${ep.nome}${ep.tamanho ? ` (${ep.tamanho})` : ""}${ep.ca ? ` — CA ${ep.ca}` : ""}`);
                                 setEpiListaAberta(false);
                               }}>
-                              {ep.nome}{ep.tamanho ? ` (${ep.tamanho})` : ""}{ep.ca ? ` — CA ${ep.ca}` : ""}
+                              {/* Rev. 4662 — foto do EPI facilita a identificação */}
+                              {ep.fotoUrl ? (
+                                <img src={thumb(ep.fotoUrl, 128)} alt="" loading="lazy"
+                                  className="h-9 w-9 rounded border border-gray-200 object-cover shrink-0 bg-white" />
+                              ) : (
+                                <div className="h-9 w-9 rounded border border-gray-200 bg-gray-50 flex items-center justify-center shrink-0 text-[9px] text-gray-400">EPI</div>
+                              )}
+                              <span className="break-words">{ep.nome}{ep.tamanho ? ` (${ep.tamanho})` : ""}{ep.ca ? ` — CA ${ep.ca}` : ""}</span>
                             </button>
                           ));
                         })()}

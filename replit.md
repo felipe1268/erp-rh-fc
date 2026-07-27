@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4662** — **Ficha de EPI: foto do EPI nos itens da busca de entrega** (miniatura ?w=128, fallback "EPI").
 - **Rev. 4661** — **Ficha de EPI: busca digitável de EPI (combobox, texto completo) + fix GLOBAL do maximizar** (dialog com `style` próprio anulava o sizeStyle).
 - **Rev. 4660** — **Alocar Funcionários: foto dos funcionários** na lista de seleção e no painel "Selecionados" (miniatura ?w=128, fallback inicial).
 - **Rev. 4659** — **FICHA DE EPI: registrar entrega direto da ficha** — botão "Nova entrega" no dialog (EPI + qtd + data → epis.createDelivery, estoque central); depois é só coletar a assinatura na linha.

@@ -1,4 +1,12 @@
 /**
+ * Rev. 4662 - FICHA DE EPI: FOTO DO EPI NA BUSCA DE ENTREGA
+ *
+ * Pedido do usuário (IMG_4571): foto do EPI na lista do combobox facilita a
+ * identificação na hora da entrega.
+ * - Cada item da busca mostra a miniatura da foto do EPI (epis.fotoUrl,
+ *   thumb ?w=128 + lazy — memória uploads-thumbnails) com fallback "EPI".
+ */
+/**
  * Rev. 4661 - FICHA DE EPI: BUSCA DIGITÁVEL DE EPI + MAXIMIZAR CONSERTADO
  *
  * Pedido do usuário (IMG_4566/4567/4568): dropdown de EPI cortava o texto no
