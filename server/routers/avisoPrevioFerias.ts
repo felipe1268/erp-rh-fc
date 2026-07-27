@@ -2586,7 +2586,9 @@ export const avisoPrevioFeriasRouter = router({
      * é desligado automaticamente (ver concluirAvisoPorBaixaFinanceira).
      */
     enviarParaFinanceiro: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      // Rev. 4687 — `valor` opcional: RH pode ajustar o valor da rescisão antes
+      // de lançar no Contas a Pagar (a previsão do sistema é só sugestão).
+      .input(z.object({ id: z.number(), valor: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const [aviso] = await db.select().from(terminationNotices).where(and(
@@ -2607,9 +2609,38 @@ export const avisoPrevioFeriasRouter = router({
         if ((aviso as any).baixaRescisaoData || (aviso as any).dataBaixa)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Este aviso já tem baixa manual registrada — não é possível enviar ao Financeiro (risco de pagamento em duplicidade).' });
 
-        const valor = parseFloat(String(aviso.valorEstimadoTotal ?? '0').replace(',', '.'));
+        // Valor: usa o editado pelo RH se veio; senão, a previsão do sistema.
+        // Aceita formato BR ("5.035,16") e US ("5035.16").
+        // Parser estrito (rejeita lixo tipo "123abc" e ambiguidade de milhar):
+        // - "5.035,16" / "5035,16"  → BR (vírgula decimal)
+        // - "5,035.16" / "5035.16"  → US (ponto decimal)
+        // - "1.234" (só grupos de 3 sem decimal) → milhar BR = 1234
+        // - "R$ " prefixo e espaços tolerados; qualquer outro formato = erro.
+        const parseValor = (raw: string): number | null => {
+          const t = raw.trim().replace(/^R\$\s*/i, '').replace(/\s+/g, '');
+          if (/^\d{1,3}(\.\d{3})*,\d{1,2}$/.test(t) || /^\d+,\d{1,2}$/.test(t))
+            return parseFloat(t.replace(/\./g, '').replace(',', '.'));           // BR decimal
+          if (/^\d{1,3}(\.\d{3})+$/.test(t)) return parseFloat(t.replace(/\./g, '')); // milhar BR sem decimal
+          if (/^\d{1,3}(,\d{3})*(\.\d{1,2})?$/.test(t) || /^\d+(\.\d{1,2})?$/.test(t))
+            return parseFloat(t.replace(/,/g, ''));                              // US
+          if (/^\d+$/.test(t)) return parseFloat(t);                             // inteiro puro
+          return null; // formato não reconhecido
+        };
+        let valorEditado: number | null = null;
+        if (input.valor?.trim()) {
+          valorEditado = parseValor(input.valor);
+          if (valorEditado === null || !isFinite(valorEditado) || valorEditado <= 0)
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `Valor informado inválido ("${input.valor.trim()}"). Use o formato 5.035,16 ou 5035,16.` });
+        }
+        const valorPrevisto = parseFloat(String(aviso.valorEstimadoTotal ?? '0').replace(',', '.'));
+        const valor = valorEditado ?? valorPrevisto;
         if (!isFinite(valor) || valor <= 0)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Valor estimado da rescisão inválido — recalcule o aviso antes de enviar.' });
+        // Marca como "editado" sempre que o RH mandou valor e ele difere da
+        // previsão — ou quando a previsão nem era válida (rastreabilidade).
+        const valorFoiEditado = valorEditado !== null &&
+          (!isFinite(valorPrevisto) || Math.abs(valorEditado - valorPrevisto) >= 0.005);
+        const previsaoTxt = isFinite(valorPrevisto) ? `R$ ${valorPrevisto.toFixed(2)}` : 'indisponível';
 
         const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees)
           .where(eq(employees.id, aviso.employeeId));
@@ -2693,7 +2724,8 @@ export const avisoPrevioFeriasRouter = router({
             enviadoFinanceiroPor: ctx.user.name ?? 'Sistema',
             financeiroEntryId: newId || null,
             observacoes: (aviso.observacoes || '') +
-              `\n[Enviado ao Financeiro em ${new Date().toISOString().split('T')[0]} por ${ctx.user.name}]: rescisão de R$ ${valor.toFixed(2)} lançada no Contas a Pagar (#${newId}), vencimento ${vencStr}.`,
+              `\n[Enviado ao Financeiro em ${new Date().toISOString().split('T')[0]} por ${ctx.user.name}]: rescisão de R$ ${valor.toFixed(2)} lançada no Contas a Pagar (#${newId}), vencimento ${vencStr}.` +
+              (valorFoiEditado ? ` Valor EDITADO pelo RH (previsão do sistema: ${previsaoTxt}).` : ''),
             updatedAt: sql`NOW()`,
           } as any).where(eq(terminationNotices.id, aviso.id));
 
@@ -2707,7 +2739,7 @@ export const avisoPrevioFeriasRouter = router({
           module: 'aviso_previo',
           entityType: 'terminationNotices',
           entityId: aviso.id,
-          details: `Rescisão de ${nome} (R$ ${valor.toFixed(2)}) enviada ao Contas a Pagar (lançamento #${entryId}, venc. ${vencStr}).`,
+          details: `Rescisão de ${nome} (R$ ${valor.toFixed(2)}) enviada ao Contas a Pagar (lançamento #${entryId}, venc. ${vencStr}).${valorFoiEditado ? ` Valor editado pelo RH (previsão: ${previsaoTxt}).` : ''}`,
         });
         return { success: true, entryId, valor: valor.toFixed(2), vencimento: vencStr };
       }),

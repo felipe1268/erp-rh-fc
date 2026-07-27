@@ -1,4 +1,19 @@
 /**
+ * Rev. 4687 - AVISO PREVIO: BAIXA SOMENTE PELO FINANCEIRO + VALOR EDITAVEL
+ *
+ * A pedido do usuario: a baixa da rescisao deve vir SEMPRE do Financeiro
+ * (o RH nao tem como saber se o pagamento foi efetuado). Mudancas:
+ * - Botao "Dar Baixa" REMOVIDO da tela de Aviso Previo (modal, handler e
+ *   mutation do client). A procedure server darBaixa foi mantida por
+ *   compatibilidade, mas nao ha mais caminho de UI para baixa manual.
+ * - "Enviar ao Financeiro" agora abre modal com VALOR EDITAVEL, pre-
+ *   preenchido com a previsao do sistema. O RH pode ajustar antes de
+ *   lancar no Contas a Pagar (aceita formato BR "5.035,16" e US).
+ * - Valor editado fica registrado nas observacoes do aviso e no audit log
+ *   (com a previsao original do sistema para rastreabilidade).
+ * - Reenvio (apos cancelamento no Financeiro) usa o mesmo modal.
+ */
+/**
  * Rev. 4686 - AVISO PREVIO: JUSTA CAUSA, RESCISAO INDIRETA E ACORDO MUTUO
  *
  * Tres novos tipos de rescisao no modulo Aviso Previo:

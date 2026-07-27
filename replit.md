@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4687** — Aviso Prévio: botão "Dar Baixa" removido (baixa da rescisão vem SEMPRE do Financeiro via Contas a Pagar); "Enviar ao Financeiro" agora abre modal com valor editável (previsão do sistema como sugestão; edição registrada em observações + audit log).
 - **Rev. 4686** — Aviso Prévio: novos tipos Justa Causa (Art. 482, sem aviso, só saldo + férias vencidas), Rescisão Indireta (Art. 483, verbas plenas) e Acordo Mútuo (Art. 484-A, aviso metade + multa 20%); motivo legal obrigatório (inciso + descrição); bloqueio server de dispensa empregador_* p/ cipeiro estável (Súmula 379 TST).
 - **Rev. 4685** — Fix Aviso Prévio: "Enviar ao Financeiro" dava "Sem acesso a esta empresa" p/ todos (guard comparava objetos com número e faltava o role).
 - **Rev. 4684** — Fix publicação: heap do vite build 3840→4608MB (build estourava memória e a publicação falhava).

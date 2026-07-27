@@ -145,19 +145,6 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  // Modal "Dar Baixa"
-  const [darBaixaModal, setDarBaixaModal] = useState<{ open: boolean; avisoId: number | null; funcionarioNome: string; avisoData: any }>({ open: false, avisoId: null, funcionarioNome: '', avisoData: null });
-  const [darBaixaForm, setDarBaixaForm] = useState({
-    tipo: 'rescisao' as 'rescisao' | 'fgts' | 'complementar',
-    valor: '',
-    observacoes: '',
-    desligarFuncionario: false,
-    categoriaDesligamento: '',
-    motivoDesligamento: '',
-    incluirListaNegra: false,
-    motivoListaNegra: '',
-  });
-
   const isMaster = user?.role === 'admin_master';
 
   const [editarBaixaDialog, setEditarBaixaDialog] = useState<{ open: boolean; avisoId: number | null; tipo: 'rescisao' | 'fgts' | 'complementar'; valorAtual: string; obs: string }>({ open: false, avisoId: null, tipo: 'rescisao', valorAtual: '', obs: '' });
@@ -233,7 +220,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     onSuccess: () => {
       refetch();
       utils.obras.efetivoPorObra.invalidate();
-      toast.success("Todos os avisos foram reativados — aguardando baixa manual.");
+      toast.success("Todos os avisos foram reativados — use \"Enviar ao Financeiro\" para lançar cada rescisão no Contas a Pagar.");
       setStatusFilter("aguardando_pagamento");
     },
     onError: (err) => { toast.error(err.message || "Erro ao reativar avisos"); },
@@ -261,29 +248,19 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const enviarParaFinanceiro = trpc.avisoPrevio.avisoPrevio.enviarParaFinanceiro.useMutation({
     onSuccess: (res: any) => {
       refetch();
+      setEnviarFinModal({ open: false, avisoId: null, funcionarioNome: '', valor: '', valorPrevisto: '', reenvio: false });
       toast.success(`Rescisão enviada ao Contas a Pagar (lançamento #${res?.entryId}, venc. ${res?.vencimento ? res.vencimento.split('-').reverse().join('/') : '—'}). Quando o Financeiro der a baixa, o funcionário será desligado automaticamente.`);
     },
     onError: (err) => toast.error(err.message || "Erro ao enviar ao Financeiro"),
   });
-  const darBaixa = trpc.avisoPrevio.avisoPrevio.darBaixa.useMutation({
-    onSuccess: (res: any) => {
-      refetch();
-      utils.obras.efetivoPorObra.invalidate();
-      utils.employees.list.invalidate();
-      if (res?.concluido) {
-        const msg = res?.desligouFuncionario
-          ? "Baixa registrada e funcionário desligado com sucesso!"
-          : "Processo concluído! Todas as baixas registradas.";
-        toast.success(msg);
-        setDarBaixaModal({ open: false, avisoId: null, funcionarioNome: '', avisoData: null });
-      } else {
-        toast.success(`Baixa da ${darBaixaForm.tipo === 'rescisao' ? 'rescisão' : darBaixaForm.tipo === 'fgts' ? 'multa FGTS' : 'rescisão complementar'} registrada! Aguardando demais baixas.`);
-        setDarBaixaModal({ open: false, avisoId: null, funcionarioNome: '', avisoData: null });
-      }
-      setDarBaixaForm({ tipo: 'rescisao', valor: '', observacoes: '', desligarFuncionario: false, categoriaDesligamento: '', motivoDesligamento: '', incluirListaNegra: false, motivoListaNegra: '' });
-    },
-    onError: (err) => { toast.error(err.message || "Erro ao dar baixa"); },
-  });
+
+  // Rev. 4687 — Modal "Enviar ao Financeiro" com valor editável (a previsão
+  // do sistema é só sugestão; o RH pode ajustar antes de lançar no Contas a Pagar).
+  const [enviarFinModal, setEnviarFinModal] = useState<{ open: boolean; avisoId: number | null; funcionarioNome: string; valor: string; valorPrevisto: string; reenvio: boolean }>({ open: false, avisoId: null, funcionarioNome: '', valor: '', valorPrevisto: '', reenvio: false });
+  const handleEnviarFinanceiro = (a: any, reenvio: boolean) => {
+    const prev = String(a.valorEstimadoTotal ?? '0');
+    setEnviarFinModal({ open: true, avisoId: a.id, funcionarioNome: a.funcionarioNome ?? a.employeeName ?? '', valor: prev, valorPrevisto: prev, reenvio });
+  };
 
   // Novos: FGTS Real, Acerto, Novo Emprego
   const [fgtsEditDialog, setFgtsEditDialog] = useState<{ open: boolean; valor: string }>({ open: false, valor: '' });
@@ -1001,49 +978,6 @@ ${isExperiencia ? (() => {
     setConfirmEncerrar({ open: false, avisoId: null });
   };
 
-  const handleDarBaixa = (id: number, funcionarioNome: string, avisoData?: any) => {
-    const rescisaoJaFeita = !!(avisoData?.baixaRescisaoData);
-    const fgtsJaFeita = !!(avisoData?.baixaFgtsData);
-    const complementarJaFeita = !!(avisoData?.baixaComplementarData);
-    // Default: primeira pendência na ordem rescisão → FGTS → complementar.
-    const defaultTipo: 'rescisao' | 'fgts' | 'complementar' = !rescisaoJaFeita
-      ? 'rescisao'
-      : !fgtsJaFeita
-        ? 'fgts'
-        : !complementarJaFeita
-          ? 'complementar'
-          : 'rescisao';
-    setDarBaixaForm({ tipo: defaultTipo, valor: '', observacoes: '', desligarFuncionario: false, categoriaDesligamento: '', motivoDesligamento: '', incluirListaNegra: false, motivoListaNegra: '' });
-    setDarBaixaModal({ open: true, avisoId: id, funcionarioNome, avisoData: avisoData || null });
-  };
-
-  const handleConfirmarBaixa = () => {
-    if (!darBaixaModal.avisoId) return;
-    if (!darBaixaForm.valor.trim()) {
-      toast.error("Informe o valor da baixa.");
-      return;
-    }
-    if (darBaixaForm.desligarFuncionario && !darBaixaForm.categoriaDesligamento) {
-      toast.error("Selecione a categoria do desligamento.");
-      return;
-    }
-    if (darBaixaForm.incluirListaNegra && !darBaixaForm.motivoListaNegra.trim()) {
-      toast.error("Informe o motivo da inclusão na blacklist.");
-      return;
-    }
-    darBaixa.mutate({
-      id: darBaixaModal.avisoId,
-      tipo: darBaixaForm.tipo,
-      valor: darBaixaForm.valor,
-      observacoes: darBaixaForm.observacoes || undefined,
-      desligarFuncionario: darBaixaForm.desligarFuncionario,
-      categoriaDesligamento: darBaixaForm.categoriaDesligamento || undefined,
-      motivoDesligamento: darBaixaForm.motivoDesligamento || undefined,
-      incluirListaNegra: darBaixaForm.incluirListaNegra,
-      motivoListaNegra: darBaixaForm.motivoListaNegra || undefined,
-    });
-  };
-
   const handleCancelar = (id: number, nomeFunc?: string) => {
     setCancelarMotivo('');
     setConfirmCancelar({ open: true, avisoId: id, nomeFunc: nomeFunc || '' });
@@ -1221,7 +1155,7 @@ ${isExperiencia ? (() => {
                 Estes colaboradores já cumpriram integralmente o período de aviso prévio e <strong>não estão mais em atividade</strong>.
                 Estão aguardando o pagamento das verbas rescisórias. Use <strong>"Enviar ao Financeiro"</strong> para lançar a rescisão
                 no Contas a Pagar — quando o Financeiro registrar a baixa do pagamento, o aviso será concluído e o funcionário
-                desligado <strong>automaticamente</strong>. Se preferir, ainda é possível dar baixa manualmente pelo botão <strong>"Dar Baixa"</strong>.
+                desligado <strong>automaticamente</strong>. O valor pode ser ajustado antes do envio, caso a previsão do sistema precise de correção.
               </p>
             </div>
           </div>
@@ -1239,12 +1173,12 @@ ${isExperiencia ? (() => {
               </p>
               <p className="text-rose-800 text-xs mt-1 leading-relaxed">
                 Estes colaboradores <strong>não tiveram a baixa registrada</strong> — foram marcados como concluídos antes da confirmação do pagamento.
-                Reative-os para <strong>"Aguardando Baixa"</strong> e então dê baixa manualmente em cada um após o pagamento ser confirmado.
+                Reative-os para <strong>"Aguardando Baixa"</strong> e use <strong>"Enviar ao Financeiro"</strong> — a baixa do pagamento é registrada no Contas a Pagar pelo Financeiro.
               </p>
             </div>
             <button
               onClick={() => {
-                if (confirm(`Reativar ${stats.concluidosSemBaixa} aviso${stats.concluidosSemBaixa !== 1 ? 's' : ''} para "Aguardando Baixa"?\n\nIsso permitirá dar baixa manualmente em cada um.`)) {
+                if (confirm(`Reativar ${stats.concluidosSemBaixa} aviso${stats.concluidosSemBaixa !== 1 ? 's' : ''} para "Aguardando Baixa"?\n\nDepois, use "Enviar ao Financeiro" para lançar cada rescisão no Contas a Pagar.`)) {
                   revertAllConcluidos.mutate({ companyId });
                 }
               }}
@@ -1414,43 +1348,23 @@ ${isExperiencia ? (() => {
                                       variant="ghost"
                                       className="h-7 w-7 text-blue-500"
                                       title="Reenviar ao Financeiro — só funciona se o lançamento vinculado foi CANCELADO no Contas a Pagar"
-                                      onClick={() => {
-                                        if (confirm(`Reenviar a rescisão de ${a.funcionarioNome ?? a.employeeName ?? ''} ao Contas a Pagar?\n\nSó é permitido se o lançamento anterior (#${(a as any).financeiroEntryId}) foi cancelado no Financeiro.`)) {
-                                          enviarParaFinanceiro.mutate({ id: a.id });
-                                        }
-                                      }}
+                                      onClick={() => handleEnviarFinanceiro(a, true)}
                                       disabled={enviarParaFinanceiro.isPending}
                                     >
                                       <RotateCcw className="h-3.5 w-3.5" />
                                     </Button>
                                   </>
                                 ) : (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="default"
-                                      className="h-7 px-2 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                                      title="Enviar ao Financeiro — lança a rescisão no Contas a Pagar; a baixa do Financeiro conclui o aviso e desliga o funcionário automaticamente"
-                                      onClick={() => {
-                                        if (confirm(`Enviar a rescisão de ${a.funcionarioNome ?? a.employeeName ?? ''} (R$ ${a.valorEstimadoTotal ?? '0'}) ao Contas a Pagar?\n\nQuando o Financeiro registrar a baixa do pagamento, o aviso será concluído e o funcionário desligado automaticamente.`)) {
-                                          enviarParaFinanceiro.mutate({ id: a.id });
-                                        }
-                                      }}
-                                      disabled={enviarParaFinanceiro.isPending}
-                                    >
-                                      Enviar ao Financeiro
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="default"
-                                      className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
-                                      title="Dar Baixa — confirmar valores e registrar pagamento"
-                                      onClick={() => handleDarBaixa(a.id, a.funcionarioNome ?? a.employeeName ?? '', a)}
-                                      disabled={darBaixa.isPending}
-                                    >
-                                      Dar Baixa
-                                    </Button>
-                                  </>
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    className="h-7 px-2 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                    title="Enviar ao Financeiro — lança a rescisão no Contas a Pagar (valor editável); a baixa do Financeiro conclui o aviso e desliga o funcionário automaticamente"
+                                    onClick={() => handleEnviarFinanceiro(a, false)}
+                                    disabled={enviarParaFinanceiro.isPending}
+                                  >
+                                    Enviar ao Financeiro
+                                  </Button>
                                 )}
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-slate-500" title="Reverter para Em Andamento" onClick={() => {
                                   if (confirm('Reverter para Em Andamento?')) revertConcluido.mutate({ id: a.id });
@@ -3796,369 +3710,54 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Dar Baixa no Aviso Prévio */}
-      <Dialog open={darBaixaModal.open} onOpenChange={(v) => { if (!darBaixa.isPending) setDarBaixaModal(s => ({ ...s, open: v })); }}>
-        {/* Rev. 1831 — modal "Dar Baixa": largura 3xl + altura cap 92dvh + body
-            interno com scroll próprio (footer e header sempre visíveis sem
-            barra de rolagem global no DialogContent). Resolve UX reportada na
-            screenshot (modal ~470px de largura forçava scroll vertical). */}
-        <DialogContent className="sm:max-w-3xl max-h-[92dvh] flex flex-col p-0 gap-0">
-          <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
-            <DialogTitle className="flex items-center gap-2 text-green-700">
-              <CheckCircle2 className="h-5 w-5" />
-              Dar Baixa no Aviso Prévio
+      {/* Rev. 4687 — Modal: Enviar ao Financeiro (valor editável) */}
+      <Dialog open={enviarFinModal.open} onOpenChange={(v) => { if (!enviarParaFinanceiro.isPending) setEnviarFinModal(s => ({ ...s, open: v })); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-700">
+              {enviarFinModal.reenvio ? 'Reenviar ao Financeiro' : 'Enviar ao Financeiro'}
             </DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-4 px-6 py-4 flex-1 overflow-y-auto min-h-0">
-            {darBaixaModal.funcionarioNome && (
+          <div className="space-y-4">
+            {enviarFinModal.funcionarioNome && (
               <p className="text-sm text-slate-600">
-                Funcionário: <span className="font-semibold text-slate-800">{darBaixaModal.funcionarioNome}</span>
+                Funcionário: <span className="font-semibold text-slate-800 break-words">{enviarFinModal.funcionarioNome}</span>
               </p>
             )}
-
-            {(() => {
-              const ad = darBaixaModal.avisoData;
-              const rescisaoJaFeita = !!(ad?.baixaRescisaoData);
-              const fgtsJaFeita = !!(ad?.baixaFgtsData);
-              const complementarJaFeita = !!(ad?.baixaComplementarData);
-              const isPedidoDemissaoModal = ad?.tipo === 'empregado_trabalhado' || ad?.tipo === 'empregado_indenizado';
-              const fgtsNaoAplica = isPedidoDemissaoModal;
-              let prev: any = null;
-              try { prev = ad?.previsaoRescisao ? JSON.parse(ad.previsaoRescisao) : null; } catch {}
-              // Rev. 1639 — Complementar (uso interno, "por fora").
-              let prevComplementar: any = null;
-              try { prevComplementar = ad?.previsaoRescisaoComplementar ? JSON.parse(ad.previsaoRescisaoComplementar) : null; } catch {}
-              const totalComplementar = parseFloat(String(prevComplementar?.total ?? '0'));
-              // Rev. 1719 — A 3ª tag "Rescisão Complementar" agora aparece SEMPRE
-              // (antes só quando havia previsão pré-calculada > 0). Motivo: muitos
-              // casos pagos "por fora" não têm previsão registrada, e ainda assim
-              // o RH precisa dar baixa do valor real depois. Quando já existe baixa
-              // gravada, prioriza esse valor pra exibir como sugerido.
-              const temComplementar = true;
-              const temPrevComplementar = totalComplementar > 0;
-              const valorRescisaoSugerido = prev ? (prev.totalLiquido || prev.total || '0') : (ad?.valorEstimadoTotal || '0');
-              const valorFgtsSugerido = prev ? (prev.multaFGTS || '0') : '0';
-              const valorComplementarSugerido = complementarJaFeita
-                ? String(parseFloat(String(ad?.baixaComplementarValor || '0')).toFixed(2))
-                : (temPrevComplementar ? String(totalComplementar.toFixed(2)) : '0');
-
-              return (
-                <>
-                  {(rescisaoJaFeita || fgtsJaFeita || complementarJaFeita) && (
-                    <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-1.5">
-                      <p className="text-xs font-semibold text-green-700 uppercase">Baixas já registradas:</p>
-                      {/* Rev. 1823 — botões Editar/Estornar ao lado de cada baixa */}
-                      {rescisaoJaFeita && (
-                        <div className="flex items-center justify-between gap-2 text-xs text-green-700">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">Rescisão: <strong>{formatMoeda(ad.baixaRescisaoValor)}</strong> em {formatDate(ad.baixaRescisaoData)} por {ad.baixaRescisaoPor}</span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-700 hover:bg-blue-100" title="Editar valor"
-                              onClick={() => setEditarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'rescisao', valorAtual: String(ad.baixaRescisaoValor || ''), obs: '' })}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-700 hover:bg-red-100" title="Estornar baixa"
-                              onClick={() => setEstornarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'rescisao', valor: String(ad.baixaRescisaoValor || ''), motivo: '' })}>
-                              <RotateCcw className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                      {fgtsJaFeita && (
-                        <div className="flex items-center justify-between gap-2 text-xs text-green-700">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">Multa FGTS: <strong>{formatMoeda(ad.baixaFgtsValor)}</strong> em {formatDate(ad.baixaFgtsData)} por {ad.baixaFgtsPor}</span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-700 hover:bg-blue-100" title="Editar valor"
-                              onClick={() => setEditarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'fgts', valorAtual: String(ad.baixaFgtsValor || ''), obs: '' })}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-700 hover:bg-red-100" title="Estornar baixa"
-                              onClick={() => setEstornarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'fgts', valor: String(ad.baixaFgtsValor || ''), motivo: '' })}>
-                              <RotateCcw className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                      {complementarJaFeita && (
-                        <div className="flex items-center justify-between gap-2 text-xs text-green-700">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">Rescisão Complementar: <strong>{formatMoeda(ad.baixaComplementarValor)}</strong> em {formatDate(ad.baixaComplementarData)} por {ad.baixaComplementarPor}</span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-700 hover:bg-blue-100" title="Editar valor"
-                              onClick={() => setEditarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'complementar', valorAtual: String(ad.baixaComplementarValor || ''), obs: '' })}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-700 hover:bg-red-100" title="Estornar baixa"
-                              onClick={() => setEstornarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'complementar', valor: String(ad.baixaComplementarValor || ''), motivo: '' })}>
-                              <RotateCcw className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-3">
-                    <p className="text-xs font-semibold text-blue-700 uppercase">Tipo da Baixa</p>
-                    {!fgtsNaoAplica ? (
-                      // Rev. 1719 — 3 cards SEMPRE: Rescisão + Multa FGTS + Rescisão Complementar.
-                      // Antes (Rev. 1639) o 3º só aparecia quando havia previsão pré-calculada > 0,
-                      // mas pagamentos "por fora" sem previsão também precisam de baixa.
-                      <div className="grid gap-2 grid-cols-3">
-                        <button
-                          type="button"
-                          disabled={rescisaoJaFeita}
-                          className={`p-3 rounded-lg border-2 text-left transition-all ${
-                            darBaixaForm.tipo === 'rescisao' && !rescisaoJaFeita
-                              ? 'border-green-500 bg-green-50 shadow-sm'
-                              : rescisaoJaFeita
-                                ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                                : 'border-gray-200 hover:border-blue-300 cursor-pointer'
-                          }`}
-                          onClick={() => { if (!rescisaoJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'rescisao', valor: '' })); }}
-                        >
-                          <div className="text-sm font-semibold text-slate-800">Rescisão</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">Pago ao colaborador</div>
-                          {prev && <div className="text-xs text-green-700 font-semibold mt-1">Estimado: {formatMoeda(valorRescisaoSugerido)}</div>}
-                          {rescisaoJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={fgtsJaFeita}
-                          className={`p-3 rounded-lg border-2 text-left transition-all ${
-                            darBaixaForm.tipo === 'fgts' && !fgtsJaFeita
-                              ? 'border-amber-500 bg-amber-50 shadow-sm'
-                              : fgtsJaFeita
-                                ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                                : 'border-gray-200 hover:border-blue-300 cursor-pointer'
-                          }`}
-                          onClick={() => { if (!fgtsJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'fgts', valor: '' })); }}
-                        >
-                          <div className="text-sm font-semibold text-slate-800">Multa FGTS</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">Pago à Caixa Econômica</div>
-                          {prev && <div className="text-xs text-amber-700 font-semibold mt-1">Estimado: {formatMoeda(valorFgtsSugerido)}</div>}
-                          {fgtsJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={complementarJaFeita}
-                          className={`p-3 rounded-lg border-2 text-left transition-all ${
-                            darBaixaForm.tipo === 'complementar' && !complementarJaFeita
-                              ? 'border-violet-500 bg-violet-50 shadow-sm'
-                              : complementarJaFeita
-                                ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                                : 'border-gray-200 hover:border-blue-300 cursor-pointer'
-                          }`}
-                          onClick={() => { if (!complementarJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'complementar', valor: '' })); }}
-                        >
-                          <div className="text-sm font-semibold text-slate-800">Rescisão Complementar</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">Uso interno — pago "por fora"</div>
-                          {temPrevComplementar ? (
-                            <div className="text-xs text-violet-700 font-semibold mt-1">Estimado: {formatMoeda(valorComplementarSugerido)}</div>
-                          ) : (
-                            <div className="text-[10px] text-violet-600 mt-1 italic">Sem previsão — informar valor pago</div>
-                          )}
-                          {complementarJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
-                        </button>
-                      </div>
-                    ) : (
-                      // Pedido de demissão: rescisão + complementar (sempre).
-                      <div className="grid gap-2 grid-cols-2">
-                        <button
-                          type="button"
-                          disabled={rescisaoJaFeita}
-                          className={`p-3 rounded-lg border-2 text-left transition-all ${
-                            darBaixaForm.tipo === 'rescisao' && !rescisaoJaFeita
-                              ? 'border-green-500 bg-green-50 shadow-sm'
-                              : rescisaoJaFeita
-                                ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                                : 'border-gray-200 hover:border-blue-300 cursor-pointer'
-                          }`}
-                          onClick={() => { if (!rescisaoJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'rescisao', valor: '' })); }}
-                        >
-                          <div className="text-sm font-semibold text-slate-800">Rescisão (pago ao colaborador)</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">Pedido de demissão — multa FGTS não se aplica</div>
-                          {prev && <div className="text-xs text-green-700 font-semibold mt-1">Estimado: {formatMoeda(valorRescisaoSugerido)}</div>}
-                          {rescisaoJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={complementarJaFeita}
-                          className={`p-3 rounded-lg border-2 text-left transition-all ${
-                            darBaixaForm.tipo === 'complementar' && !complementarJaFeita
-                              ? 'border-violet-500 bg-violet-50 shadow-sm'
-                              : complementarJaFeita
-                                ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                                : 'border-gray-200 hover:border-blue-300 cursor-pointer'
-                          }`}
-                          onClick={() => { if (!complementarJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'complementar', valor: '' })); }}
-                        >
-                          <div className="text-sm font-semibold text-slate-800">Rescisão Complementar</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">Uso interno — pago "por fora"</div>
-                          {temPrevComplementar ? (
-                            <div className="text-xs text-violet-700 font-semibold mt-1">Estimado: {formatMoeda(valorComplementarSugerido)}</div>
-                          ) : (
-                            <div className="text-[10px] text-violet-600 mt-1 italic">Sem previsão — informar valor pago</div>
-                          )}
-                          {complementarJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-slate-700">
-                      Valor efetivo da {darBaixaForm.tipo === 'rescisao' ? 'rescisão' : darBaixaForm.tipo === 'fgts' ? 'multa FGTS' : 'rescisão complementar'} *
-                    </label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-sm font-semibold text-slate-500">R$</span>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0,00"
-                        value={darBaixaForm.valor}
-                        onChange={e => setDarBaixaForm(f => ({ ...f, valor: e.target.value }))}
-                        className="h-9 text-sm flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 text-xs whitespace-nowrap"
-                        onClick={() => {
-                          const sugerido = darBaixaForm.tipo === 'rescisao'
-                            ? valorRescisaoSugerido
-                            : darBaixaForm.tipo === 'fgts'
-                              ? valorFgtsSugerido
-                              : valorComplementarSugerido;
-                          setDarBaixaForm(f => ({ ...f, valor: parseFloat(String(sugerido || '0')).toFixed(2) }));
-                        }}
-                      >
-                        Usar Estimado
-                      </Button>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      {darBaixaForm.tipo === 'rescisao'
-                        ? 'Valor final pago ao colaborador (pode diferir do estimado por faltas, descontos de farmácia, etc.)'
-                        : darBaixaForm.tipo === 'fgts'
-                          ? 'Valor da multa 40% FGTS depositado na Caixa Econômica Federal'
-                          : 'Valor pago "por fora" calculado sobre o complemento salarial — não substitui o TRCT oficial.'}
-                    </p>
-                  </div>
-                </>
-              );
-            })()}
-
-            <div>
-              <label className="text-xs font-medium text-slate-700">Observações <span className="text-slate-400">(opcional)</span></label>
-              <Textarea
-                className="mt-1 text-sm"
-                rows={2}
-                placeholder="Descontos extras, faltas, farmácia, ajustes..."
-                value={darBaixaForm.observacoes}
-                onChange={e => setDarBaixaForm(f => ({ ...f, observacoes: e.target.value }))}
-              />
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 leading-relaxed">
+              A rescisão será lançada no <strong>Contas a Pagar</strong> como conta em aberto (vencimento: 10 dias após o último dia, art. 477 da CLT).
+              Quando o Financeiro registrar a baixa do pagamento, o aviso será concluído e o funcionário desligado <strong>automaticamente</strong>.
+              {enviarFinModal.reenvio && <span className="block mt-1 font-semibold">Reenvio: só é permitido se o lançamento anterior foi CANCELADO no Financeiro.</span>}
             </div>
-
-            <div className="border rounded-lg p-3 bg-slate-50 space-y-3">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300 text-red-600"
-                  checked={darBaixaForm.desligarFuncionario}
-                  onChange={e => setDarBaixaForm(f => ({ ...f, desligarFuncionario: e.target.checked, categoriaDesligamento: '', incluirListaNegra: false, motivoListaNegra: '' }))}
-                />
-                <span className="flex items-center gap-1 text-sm font-medium text-slate-700">
-                  <UserX className="h-4 w-4 text-red-500" />
-                  Desligar funcionário agora
-                </span>
-              </label>
-
-              {darBaixaForm.desligarFuncionario && (
-                <div className="space-y-3 pl-6 border-l-2 border-red-200">
-                  <div>
-                    <label className="text-xs font-medium text-red-700">Categoria do desligamento *</label>
-                    <Select value={darBaixaForm.categoriaDesligamento || 'none'} onValueChange={v => setDarBaixaForm(f => ({ ...f, categoriaDesligamento: v === 'none' ? '' : v }))}>
-                      <SelectTrigger className="mt-1 bg-white border-red-300 text-sm">
-                        <SelectValue placeholder="Selecione..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Selecione...</SelectItem>
-                        <SelectItem value="Término de contrato">Término de contrato</SelectItem>
-                        <SelectItem value="Fim do período de experiência">Fim do período de experiência (Art. 479/480 CLT)</SelectItem>
-                        <SelectItem value="Rescisão antecipada - empregador">Rescisão antecipada pelo empregador (Art. 479 CLT)</SelectItem>
-                        <SelectItem value="Rescisão antecipada - empregado">Rescisão antecipada pelo empregado (Art. 480 CLT)</SelectItem>
-                        <SelectItem value="Justa causa">Justa causa</SelectItem>
-                        <SelectItem value="Pedido de demissão">Pedido de demissão</SelectItem>
-                        <SelectItem value="Acordo mútuo">Acordo mútuo (Art. 484-A CLT)</SelectItem>
-                        <SelectItem value="Fim de obra">Fim de obra</SelectItem>
-                        <SelectItem value="Baixo desempenho">Baixo desempenho</SelectItem>
-                        <SelectItem value="Indisciplina">Indisciplina</SelectItem>
-                        <SelectItem value="Outros">Outros</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-slate-600">Motivo / Observações do desligamento <span className="text-slate-400">(opcional)</span></label>
-                    <Textarea
-                      className="mt-1 text-sm"
-                      rows={2}
-                      placeholder="Detalhes adicionais sobre o desligamento..."
-                      value={darBaixaForm.motivoDesligamento}
-                      onChange={e => setDarBaixaForm(f => ({ ...f, motivoDesligamento: e.target.value }))}
-                    />
-                  </div>
-
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-slate-300 text-red-700"
-                      checked={darBaixaForm.incluirListaNegra}
-                      onChange={e => setDarBaixaForm(f => ({ ...f, incluirListaNegra: e.target.checked, motivoListaNegra: '' }))}
-                    />
-                    <span className="flex items-center gap-1 text-sm font-medium text-red-700">
-                      <ShieldAlert className="h-4 w-4" />
-                      Incluir na Blacklist
-                    </span>
-                  </label>
-
-                  {darBaixaForm.incluirListaNegra && (
-                    <div>
-                      <label className="text-xs font-medium text-red-700">Motivo da blacklist *</label>
-                      <Textarea
-                        className="mt-1 text-sm border-red-300"
-                        rows={2}
-                        placeholder="Informe o motivo para inclusão na lista negra..."
-                        value={darBaixaForm.motivoListaNegra}
-                        onChange={e => setDarBaixaForm(f => ({ ...f, motivoListaNegra: e.target.value }))}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
+            <div>
+              <label className="text-sm font-medium text-slate-700">Valor da rescisão (R$)</label>
+              <Input
+                inputMode="decimal"
+                value={enviarFinModal.valor}
+                onChange={(e) => setEnviarFinModal(s => ({ ...s, valor: e.target.value }))}
+                placeholder="Ex: 5035,16"
+                className="mt-1"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Previsão do sistema: <strong>{formatMoeda(enviarFinModal.valorPrevisto)}</strong>. Ajuste se necessário — o valor editado fica registrado no histórico do aviso.
+              </p>
             </div>
           </div>
-
-          <DialogFooter className="gap-2 px-6 py-4 border-t shrink-0 bg-white">
-            <Button variant="outline" onClick={() => setDarBaixaModal(s => ({ ...s, open: false }))} disabled={darBaixa.isPending}>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEnviarFinModal(s => ({ ...s, open: false }))} disabled={enviarParaFinanceiro.isPending}>
               Cancelar
             </Button>
             <Button
-              className="bg-green-600 hover:bg-green-700 text-white"
-              onClick={handleConfirmarBaixa}
-              disabled={darBaixa.isPending}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={enviarParaFinanceiro.isPending}
+              onClick={() => {
+                if (!enviarFinModal.avisoId) return;
+                const v = enviarFinModal.valor.trim();
+                if (!v) { toast.error('Informe o valor da rescisão.'); return; }
+                enviarParaFinanceiro.mutate({ id: enviarFinModal.avisoId, valor: v });
+              }}
             >
-              {darBaixa.isPending ? "Processando..." : `Confirmar Baixa ${darBaixaForm.tipo === 'rescisao' ? 'Rescisão' : darBaixaForm.tipo === 'fgts' ? 'Multa FGTS' : 'Rescisão Complementar'}`}
+              {enviarParaFinanceiro.isPending ? 'Enviando...' : 'Confirmar Envio'}
             </Button>
           </DialogFooter>
         </DialogContent>
