@@ -29,7 +29,7 @@ function initials(nome?: string | null): string {
   return ((p[0]?.[0] || "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase() || "?";
 }
 
-type FiltroStatus = "todos" | "pendentes" | "completos";
+type FiltroStatus = "todos" | "pendentes" | "completos" | "sem_ficha";
 
 export default function EpiFichaFuncionario() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
@@ -54,7 +54,9 @@ export default function EpiFichaFuncionario() {
   const all = (resumoQ.data?.funcionarios || []) as any[];
   const totais = useMemo(() => {
     const completos = all.filter(f => (f.total_entregas || 0) > 0 && (f.entregas_assinadas || 0) >= (f.total_entregas || 0)).length;
-    return { colaboradores: all.length, completos, pendentes: all.length - completos };
+    // Rev. 4657 — sem NENHUMA entrega = sem ficha de EPI (precisa providenciar)
+    const semFicha = all.filter(f => (f.total_entregas || 0) === 0).length;
+    return { colaboradores: all.length, completos, semFicha, pendentes: all.length - completos - semFicha };
   }, [all]);
 
   // Obras presentes na lista (p/ montar o filtro)
@@ -71,8 +73,9 @@ export default function EpiFichaFuncionario() {
     let arr = all;
     if (obraFiltro === "sem_obra") arr = arr.filter(f => !f.obra_id);
     else if (obraFiltro !== "todas") arr = arr.filter(f => String(f.obra_id || "") === obraFiltro);
-    if (filtro === "pendentes") arr = arr.filter(f => (f.entregas_assinadas || 0) < (f.total_entregas || 0));
+    if (filtro === "pendentes") arr = arr.filter(f => (f.total_entregas || 0) > 0 && (f.entregas_assinadas || 0) < (f.total_entregas || 0));
     if (filtro === "completos") arr = arr.filter(f => (f.total_entregas || 0) > 0 && (f.entregas_assinadas || 0) >= (f.total_entregas || 0));
+    if (filtro === "sem_ficha") arr = arr.filter(f => (f.total_entregas || 0) === 0);
     const s = removeAccents(search.trim());
     if (!s) return arr;
     return arr.filter(f => removeAccents(f.nomeCompleto || "").includes(s) || removeAccents(f.funcao || "").includes(s) || removeAccents(f.obra_nome || "").includes(s) || String(f.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, "") || "\u0000"));
@@ -90,11 +93,12 @@ export default function EpiFichaFuncionario() {
             Ficha consolidada por colaborador — entregas com assinatura digital autenticada (NR-06 / CLT), pronta p/ clientes ou Ministério do Trabalho.
           </p>
           {/* KPIs */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-3">
             {[
               { k: "todos" as FiltroStatus, label: "Colaboradores", val: totais.colaboradores, icon: Users, cls: "text-white" },
               { k: "completos" as FiltroStatus, label: "Fichas completas", val: totais.completos, icon: CheckCircle2, cls: "text-green-400" },
               { k: "pendentes" as FiltroStatus, label: "Com pendência", val: totais.pendentes, icon: AlertTriangle, cls: "text-[#EE9803]" },
+              { k: "sem_ficha" as FiltroStatus, label: "Sem ficha", val: totais.semFicha, icon: FileSignature, cls: "text-red-400" },
             ].map(({ k, label, val, icon: Icon, cls }) => (
               <button key={k} type="button" onClick={() => setFiltro(filtro === k ? "todos" : k)}
                 className={`rounded-lg px-2 py-2 sm:px-3 text-left transition-colors ${filtro === k ? "bg-white/20 ring-1 ring-white/50" : "bg-white/10 hover:bg-white/15"}`}>
@@ -177,7 +181,9 @@ export default function EpiFichaFuncionario() {
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                         Última: {f.ultima_entrega ? f.ultima_entrega.split("-").reverse().join("/") : "—"}
                       </span>
-                      {pend > 0 ? (
+                      {total === 0 ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600"><AlertTriangle className="h-3 w-3" /> Sem ficha de EPI</span>
+                      ) : pend > 0 ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600"><AlertTriangle className="h-3 w-3" /> {pend} sem assinatura</span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600"><CheckCircle2 className="h-3 w-3" /> Completa</span>

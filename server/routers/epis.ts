@@ -2470,8 +2470,11 @@ Exemplos de referência:
                COUNT(d.id)::int AS total_entregas,
                COUNT(d.id) FILTER (WHERE d.assinatura_url IS NOT NULL)::int AS entregas_assinadas,
                MAX(d."dataEntrega")::text AS ultima_entrega
-        FROM epi_deliveries d
-        JOIN employees e ON e.id = d."employeeId"
+        FROM employees e
+        LEFT JOIN epi_deliveries d
+          ON d."employeeId" = e.id
+         AND d."companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+         AND d."deletedAt" IS NULL
         LEFT JOIN LATERAL (
           SELECT e2."fotoUrl" FROM employees e2
           WHERE (e."fotoUrl" IS NULL OR e."fotoUrl" = '')
@@ -2490,8 +2493,16 @@ Exemplos de referência:
           WHERE of2."employeeId" = e.id AND of2."isActive" = 1
           ORDER BY of2.id DESC LIMIT 1
         ) ob ON true
-        WHERE d."companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
-          AND d."deletedAt" IS NULL
+        WHERE e."companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          -- Rev. 4657 — base = TODO CLT não-desligado (mesmo sem nenhuma entrega:
+          -- precisa aparecer como "Sem ficha" p/ providenciar) + qualquer um que
+          -- já tenha entrega de EPI (PJ etc.)
+          AND (
+            (e."tipoContrato" = 'CLT'
+              AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+              AND e."deletedAt" IS NULL)
+            OR d.id IS NOT NULL
+          )
         GROUP BY e.id, e."nomeCompleto", e.funcao, e.cpf, e."fotoUrl", f2."fotoUrl", e.status, ob."obraId", ob.obra_nome
         ORDER BY e."nomeCompleto" ASC
       `);

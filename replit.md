@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4657** — **FICHA DE EPI: lista 100% do efetivo** — base agora é employees (todo CLT não-desligado, mesmo sem entrega) + quem tem entrega; novo KPI/filtro "Sem ficha" e badge no card.
 - **Rev. 4656** — **DOSSIÊ ZIP: "004 - INTEGRAÇÕES" com acento** (pedido do usuário; ZIP em UTF-8).
 - **Rev. 4655** — **DOSSIÊ ZIP: pastas numeradas em maiúsculas** — 001 - DOCUMENTOS, 002 - ASO, 003 - TREINAMENTOS, 004 - INTEGRACOES, 005 - EPI (aprovado pelo usuário).
 - **Rev. 4654** — **FICHA DE EPI: selo "✓ Assinado digitalmente" p/ assinaturas antigas com arquivo de imagem perdido** (48 no banco, pré-persistência em uploaded_files); flag assinaturaArquivoOk na procedure; vale p/ tela, print e PDF do Dossiê.

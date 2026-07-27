@@ -1,4 +1,15 @@
 /**
+ * Rev. 4657 - FICHA DE EPI: LISTA 100% DO EFETIVO (INCLUI QUEM NÃO TEM FICHA)
+ *
+ * Pedido do usuário (IMG_4561/4562): 107 CLT mas só 97 na Ficha de EPI —
+ * a listagem partia de epi_deliveries, então quem nunca recebeu EPI sumia.
+ * - fichaEpiResumo agora parte de employees: TODO CLT não-desligado
+ *   (Ativo/Ferias/Afastado/Aviso/Recluso) aparece mesmo com 0 entregas,
+ *   + qualquer um com entrega (PJ etc.).
+ * - Página: 4º KPI "Sem ficha" (vermelho, clicável p/ filtrar) e badge
+ *   "Sem ficha de EPI" no card de quem tem 0 entregas.
+ */
+/**
  * Rev. 4656 - DOSSIÊ ZIP: "004 - INTEGRAÇÕES" COM ACENTO
  *
  * Pedido do usuário: manter acentuação correta. ZIP sai com flag UTF-8
