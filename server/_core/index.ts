@@ -5882,7 +5882,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4605-2026-07-26-trava-duplicidade-projecoes";
+    const COLFIX_VERSION = "v4689-2026-07-27-fgts-contas-pagar";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7825,6 +7825,24 @@ REGRAS DE EXTRAÇÃO:
           throw inner;
         }
       } catch (e: any) { console.error("[ColFix Rev.4605] FALHA trava projeções (colfix_version NÃO será marcada — retry no próximo boot):", e?.message ?? e); }
+
+      // Rev. 4689 — Enviar ao Financeiro agora gera TAMBÉM o lançamento da multa
+      // FGTS (separado da rescisão). Coluna de vínculo + índice único parcial
+      // anti-duplicidade (mesmo padrão do lançamento de rescisão). Bloco isolado
+      // (colfix-do-block-silent-rollback): falha aqui não derruba os anteriores.
+      try {
+        const db4689 = await getDb();
+        if (db4689) {
+          const { sql: sql4689 } = await import("drizzle-orm");
+          await db4689.execute(sql4689`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS financeiro_fgts_entry_id integer`);
+          await db4689.execute(sql4689`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_entries_aviso_previo_fgts
+              ON financial_entries (origem_modulo, origem_id)
+              WHERE origem_modulo = 'aviso_previo_fgts' AND status <> 'cancelado'
+          `);
+          console.log("[ColFix Rev.4689] financeiro_fgts_entry_id + índice uq_fin_entries_aviso_previo_fgts garantidos.");
+        }
+      } catch (e: any) { console.error("[ColFix Rev.4689] FALHA coluna/índice FGTS:", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos.
       // Rev. 4605: só marca se o bloco crítico (índice único de projeções) passou.

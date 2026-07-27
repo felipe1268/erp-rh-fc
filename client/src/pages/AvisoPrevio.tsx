@@ -248,18 +248,28 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const enviarParaFinanceiro = trpc.avisoPrevio.avisoPrevio.enviarParaFinanceiro.useMutation({
     onSuccess: (res: any) => {
       refetch();
-      setEnviarFinModal({ open: false, avisoId: null, funcionarioNome: '', valor: '', valorPrevisto: '', reenvio: false });
-      toast.success(`Rescisão enviada ao Contas a Pagar (lançamento #${res?.entryId}, venc. ${res?.vencimento ? res.vencimento.split('-').reverse().join('/') : '—'}). Quando o Financeiro der a baixa, o funcionário será desligado automaticamente.`);
+      setEnviarFinModal({ open: false, avisoId: null, funcionarioNome: '', valor: '', valorPrevisto: '', valorFgts: '', valorFgtsPrevisto: '', fgtsAplica: false, reenvio: false });
+      toast.success(`Rescisão enviada ao Contas a Pagar (lançamento #${res?.entryId}${res?.fgtsEntryId ? ` + multa FGTS #${res.fgtsEntryId}` : ''}, venc. ${res?.vencimento ? res.vencimento.split('-').reverse().join('/') : '—'}). Quando o Financeiro quitar ${res?.fgtsEntryId ? 'os dois lançamentos' : 'o lançamento'}, o funcionário será desligado automaticamente.`);
     },
     onError: (err) => toast.error(err.message || "Erro ao enviar ao Financeiro"),
   });
 
   // Rev. 4687 — Modal "Enviar ao Financeiro" com valor editável (a previsão
   // do sistema é só sugestão; o RH pode ajustar antes de lançar no Contas a Pagar).
-  const [enviarFinModal, setEnviarFinModal] = useState<{ open: boolean; avisoId: number | null; funcionarioNome: string; valor: string; valorPrevisto: string; reenvio: boolean }>({ open: false, avisoId: null, funcionarioNome: '', valor: '', valorPrevisto: '', reenvio: false });
+  const [enviarFinModal, setEnviarFinModal] = useState<{ open: boolean; avisoId: number | null; funcionarioNome: string; valor: string; valorPrevisto: string; valorFgts: string; valorFgtsPrevisto: string; fgtsAplica: boolean; reenvio: boolean }>({ open: false, avisoId: null, funcionarioNome: '', valor: '', valorPrevisto: '', valorFgts: '', valorFgtsPrevisto: '', fgtsAplica: false, reenvio: false });
   const handleEnviarFinanceiro = (a: any, reenvio: boolean) => {
-    const prev = String(a.valorEstimadoTotal ?? '0');
-    setEnviarFinModal({ open: true, avisoId: a.id, funcionarioNome: a.funcionarioNome ?? a.employeeName ?? '', valor: prev, valorPrevisto: prev, reenvio });
+    // Rev. 4689 — a multa FGTS vai em lançamento SEPARADO no Contas a Pagar.
+    // Rescisão sugerida = total previsto MENOS a multa embutida nele.
+    const tipo = String(a.tipo || '');
+    const fgtsAplica = tipo.startsWith('empregador') || tipo === 'rescisao_indireta' || tipo === 'acordo_mutuo';
+    let multa = 0;
+    if (fgtsAplica) {
+      try { multa = parseFloat(String(JSON.parse(a.previsaoRescisao || '{}')?.multaFGTS ?? '0').replace(',', '.')) || 0; } catch { multa = 0; }
+    }
+    const total = parseFloat(String(a.valorEstimadoTotal ?? '0').replace(',', '.')) || 0;
+    const rescisao = Math.max(0, total - multa).toFixed(2);
+    const multaStr = multa > 0 ? multa.toFixed(2) : '';
+    setEnviarFinModal({ open: true, avisoId: a.id, funcionarioNome: a.funcionarioNome ?? a.employeeName ?? '', valor: rescisao, valorPrevisto: rescisao, valorFgts: multaStr, valorFgtsPrevisto: multaStr, fgtsAplica: fgtsAplica && multa > 0, reenvio });
   };
 
   // Novos: FGTS Real, Acerto, Novo Emprego
@@ -3742,6 +3752,21 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                 Previsão do sistema: <strong>{formatMoeda(enviarFinModal.valorPrevisto)}</strong>. Ajuste se necessário — o valor editado fica registrado no histórico do aviso.
               </p>
             </div>
+            {enviarFinModal.fgtsAplica && (
+              <div>
+                <label className="text-sm font-medium text-slate-700">Multa FGTS (R$) — lançamento separado</label>
+                <Input
+                  inputMode="decimal"
+                  value={enviarFinModal.valorFgts}
+                  onChange={(e) => setEnviarFinModal(s => ({ ...s, valorFgts: e.target.value }))}
+                  placeholder="Ex: 1200,00"
+                  className="mt-1"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Serão criados <strong>2 lançamentos</strong> no Contas a Pagar: RESCISÃO e FGTS. Previsão da multa: <strong>{formatMoeda(enviarFinModal.valorFgtsPrevisto)}</strong>.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setEnviarFinModal(s => ({ ...s, open: false }))} disabled={enviarParaFinanceiro.isPending}>
@@ -3754,7 +3779,8 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                 if (!enviarFinModal.avisoId) return;
                 const v = enviarFinModal.valor.trim();
                 if (!v) { toast.error('Informe o valor da rescisão.'); return; }
-                enviarParaFinanceiro.mutate({ id: enviarFinModal.avisoId, valor: v });
+                if (enviarFinModal.fgtsAplica && !enviarFinModal.valorFgts.trim()) { toast.error('Informe o valor da multa FGTS.'); return; }
+                enviarParaFinanceiro.mutate({ id: enviarFinModal.avisoId, valor: v, ...(enviarFinModal.fgtsAplica ? { valorFgts: enviarFinModal.valorFgts.trim() } : {}) });
               }}
             >
               {enviarParaFinanceiro.isPending ? 'Enviando...' : 'Confirmar Envio'}

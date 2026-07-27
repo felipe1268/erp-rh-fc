@@ -60,6 +60,28 @@ export async function concluirAvisoPorBaixaFinanceira(opts: {
   ));
   if (!aviso || aviso.status === 'concluido' || aviso.status === 'cancelado') return;
 
+  // Rev. 4689 — o aviso pode ter DOIS lançamentos no Contas a Pagar (rescisão +
+  // multa FGTS). Só conclui quando TODOS os lançamentos ativos estiverem pagos.
+  try {
+    const ids = [(aviso as any).financeiroEntryId, (aviso as any).financeiroFgtsEntryId]
+      .filter((v: any) => Number(v) > 0).map(Number);
+    if (ids.length > 0) {
+      const pend: any = await db.execute(sql`
+        SELECT id FROM financial_entries
+        WHERE id IN (${sql.join(ids.map(i => sql`${i}`), sql`, `)})
+          AND status NOT IN ('cancelado', 'pago', 'recebido')
+        LIMIT 1
+      `);
+      const pendRow = (Array.isArray(pend) ? pend[0] : pend?.rows?.[0]) as any;
+      if (pendRow) return; // ainda há lançamento em aberto (ex.: FGTS não pago)
+    }
+  } catch (e: any) {
+    // Fail-safe: se não conseguimos VERIFICAR as pendências, NÃO concluímos
+    // (concluir com título em aberto desligaria o funcionário indevidamente).
+    console.error(`[concluirAvisoPorBaixaFinanceira] aviso #${opts.avisoId}: falha ao verificar lançamentos pendentes — conclusão adiada:`, e?.message ?? e);
+    return;
+  }
+
   const hoje = opts.dataPagamento;
   const porLabel = `Financeiro (${opts.userName})`;
 
@@ -793,6 +815,7 @@ export const avisoPrevioFeriasRouter = router({
           enviadoFinanceiroEm: terminationNotices.enviadoFinanceiroEm,
           enviadoFinanceiroPor: terminationNotices.enviadoFinanceiroPor,
           financeiroEntryId: terminationNotices.financeiroEntryId,
+          financeiroFgtsEntryId: terminationNotices.financeiroFgtsEntryId,
           baixaRescisaoValor: terminationNotices.baixaRescisaoValor,
           baixaRescisaoData: terminationNotices.baixaRescisaoData,
           baixaRescisaoPor: terminationNotices.baixaRescisaoPor,
@@ -2476,6 +2499,11 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
         const [aviso] = await db.select().from(terminationNotices).where(eq(terminationNotices.id, input.id));
         if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+        // Rev. 4689 — tenant guard (IDOR): reverter cancela lançamentos no
+        // Financeiro; só quem tem acesso à empresa do aviso pode fazê-lo.
+        const empresasRevert = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        if (!empresasRevert.some(c => c.id === aviso.companyId))
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a esta empresa' });
         if (aviso.status !== 'concluido' && aviso.status !== 'aguardando_pagamento')
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas avisos Concluídos ou Aguardando Pagamento podem ser revertidos' });
 
@@ -2483,21 +2511,30 @@ export const avisoPrevioFeriasRouter = router({
         // ABERTO (a_pagar), cancela o lançamento e desfaz o vínculo — evita
         // pagável órfão no Financeiro. Lançamento já pago/parcial NÃO é tocado.
         let obsExtra = '';
-        const feId = (aviso as any).financeiroEntryId as number | null;
-        if (feId) {
+        // Rev. 4689 — pode haver DOIS lançamentos vinculados (rescisão + multa
+        // FGTS). Valida os dois ANTES de cancelar qualquer um (atomicidade da
+        // regra: se um deles já foi pago, nada é cancelado).
+        const idsVinculados = [
+          { id: (aviso as any).financeiroEntryId as number | null, label: 'rescisão' },
+          { id: (aviso as any).financeiroFgtsEntryId as number | null, label: 'multa FGTS' },
+        ].filter(v => Number(v.id) > 0);
+        const feRows: { id: number; label: string; status: string }[] = [];
+        for (const v of idsVinculados) {
           const fe: any = await db.execute(sql`
-            SELECT id, status FROM financial_entries WHERE id = ${feId}
+            SELECT id, status FROM financial_entries WHERE id = ${v.id} AND company_id = ${aviso.companyId}
           `);
           const feRow = (Array.isArray(fe) ? fe[0] : fe?.rows?.[0]) as any;
-          if (feRow && feRow.status === 'a_pagar') {
-            await db.execute(sql`
-              UPDATE financial_entries SET status = 'cancelado', updated_at = NOW()
-              WHERE id = ${feId} AND status = 'a_pagar'
-            `);
-            obsExtra = `\n[Reversão em ${new Date().toISOString().split('T')[0]} por ${ctx.user.name}]: lançamento #${feId} do Contas a Pagar foi CANCELADO automaticamente.`;
-          } else if (feRow && feRow.status !== 'cancelado') {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: `Não é possível reverter: o lançamento #${feId} no Contas a Pagar já tem pagamento registrado (status ${feRow.status}). Estorne a baixa no Financeiro primeiro.` });
-          }
+          if (feRow) feRows.push({ id: feRow.id, label: v.label, status: feRow.status });
+        }
+        const pago = feRows.find(r => r.status !== 'a_pagar' && r.status !== 'cancelado');
+        if (pago)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `Não é possível reverter: o lançamento #${pago.id} (${pago.label}) no Contas a Pagar já tem pagamento registrado (status ${pago.status}). Estorne a baixa no Financeiro primeiro.` });
+        for (const r of feRows.filter(r => r.status === 'a_pagar')) {
+          await db.execute(sql`
+            UPDATE financial_entries SET status = 'cancelado', updated_at = NOW()
+            WHERE id = ${r.id} AND status = 'a_pagar' AND company_id = ${aviso.companyId}
+          `);
+          obsExtra += `\n[Reversão em ${new Date().toISOString().split('T')[0]} por ${ctx.user.name}]: lançamento #${r.id} (${r.label}) do Contas a Pagar foi CANCELADO automaticamente.`;
         }
 
         await db.update(terminationNotices).set({
@@ -2507,6 +2544,7 @@ export const avisoPrevioFeriasRouter = router({
           enviadoFinanceiroEm: null,
           enviadoFinanceiroPor: null,
           financeiroEntryId: null,
+          financeiroFgtsEntryId: null,
           ...(obsExtra ? { observacoes: (aviso.observacoes || '') + obsExtra } : {}),
           revertidoManualmente: 1,
           baixaRescisaoValor: null,
@@ -2588,7 +2626,10 @@ export const avisoPrevioFeriasRouter = router({
     enviarParaFinanceiro: protectedProcedure
       // Rev. 4687 — `valor` opcional: RH pode ajustar o valor da rescisão antes
       // de lançar no Contas a Pagar (a previsão do sistema é só sugestão).
-      .input(z.object({ id: z.number(), valor: z.string().optional() }))
+      // Rev. 4689 — gera TAMBÉM o lançamento da multa FGTS (separado), quando o
+      // tipo do aviso a gera (empregador_*, rescisão indireta, acordo mútuo).
+      // `valorFgts` opcional permite ajustar a multa antes do envio.
+      .input(z.object({ id: z.number(), valor: z.string().optional(), valorFgts: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const [aviso] = await db.select().from(terminationNotices).where(and(
@@ -2632,7 +2673,31 @@ export const avisoPrevioFeriasRouter = router({
           if (valorEditado === null || !isFinite(valorEditado) || valorEditado <= 0)
             throw new TRPCError({ code: 'BAD_REQUEST', message: `Valor informado inválido ("${input.valor.trim()}"). Use o formato 5.035,16 ou 5035,16.` });
         }
-        const valorPrevisto = parseFloat(String(aviso.valorEstimadoTotal ?? '0').replace(',', '.'));
+        // Rev. 4689 — Multa FGTS: lançamento SEPARADO no Contas a Pagar.
+        // Só se aplica quando o tipo gera multa (justa causa e pedido de
+        // demissão NÃO geram). Base: multaFGTS da previsão salva; se o RH
+        // informou o saldo REAL do FGTS, recalcula (40% — ou 20% no acordo).
+        const tipoAviso = String(aviso.tipo || '');
+        const fgtsAplica = tipoAviso.startsWith('empregador') || tipoAviso === 'rescisao_indireta' || tipoAviso === 'acordo_mutuo';
+        let multaJson = 0;      // multa embutida no total salvo (valorEstimadoTotal)
+        let multaPrevista = 0;  // multa sugerida p/ o lançamento (ajustada pelo FGTS real)
+        if (fgtsAplica) {
+          try {
+            const prevJson = aviso.previsaoRescisao ? JSON.parse(aviso.previsaoRescisao) : null;
+            multaJson = parseFloat(String(prevJson?.multaFGTS ?? '0').replace(',', '.')) || 0;
+          } catch { multaJson = 0; }
+          multaPrevista = multaJson;
+          const fgtsRealRaw = (aviso as any).fgtsReal ? parseFloat(String((aviso as any).fgtsReal).replace(',', '.')) : NaN;
+          // multaJson > 0 = critério "aplicar multa FGTS" estava LIGADO no cálculo;
+          // com saldo real informado, a multa real substitui a estimada.
+          if (multaJson > 0 && isFinite(fgtsRealRaw) && fgtsRealRaw > 0)
+            multaPrevista = fgtsRealRaw * (tipoAviso === 'acordo_mutuo' ? 0.2 : 0.4);
+        }
+
+        // Previsão da RESCISÃO = total salvo MENOS a multa FGTS embutida nele
+        // (a multa agora vai em lançamento próprio — sem isso, dupla contagem).
+        const totalSalvo = parseFloat(String(aviso.valorEstimadoTotal ?? '0').replace(',', '.'));
+        const valorPrevisto = isFinite(totalSalvo) ? Math.max(0, totalSalvo - multaJson) : NaN;
         const valor = valorEditado ?? valorPrevisto;
         if (!isFinite(valor) || valor <= 0)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Valor estimado da rescisão inválido — recalcule o aviso antes de enviar.' });
@@ -2641,6 +2706,17 @@ export const avisoPrevioFeriasRouter = router({
         const valorFoiEditado = valorEditado !== null &&
           (!isFinite(valorPrevisto) || Math.abs(valorEditado - valorPrevisto) >= 0.005);
         const previsaoTxt = isFinite(valorPrevisto) ? `R$ ${valorPrevisto.toFixed(2)}` : 'indisponível';
+        let valorFgtsEditado: number | null = null;
+        if (input.valorFgts?.trim()) {
+          if (!fgtsAplica)
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Multa FGTS não se aplica a este tipo de desligamento.' });
+          valorFgtsEditado = parseValor(input.valorFgts);
+          if (valorFgtsEditado === null || !isFinite(valorFgtsEditado) || valorFgtsEditado <= 0)
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `Valor da multa FGTS inválido ("${input.valorFgts.trim()}"). Use o formato 5.035,16 ou 5035,16.` });
+        }
+        const valorFgts = valorFgtsEditado ?? multaPrevista;
+        const gerarFgts = fgtsAplica && isFinite(valorFgts) && valorFgts > 0;
+        const fgtsFoiEditado = valorFgtsEditado !== null && Math.abs(valorFgtsEditado - multaPrevista) >= 0.005;
 
         const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees)
           .where(eq(employees.id, aviso.employeeId));
@@ -2695,10 +2771,10 @@ export const avisoPrevioFeriasRouter = router({
           }
 
           // Guarda extra contra duplicidade: nenhum lançamento ATIVO do módulo
-          // aviso_previo pode existir para este aviso.
+          // aviso_previo (rescisão OU multa FGTS) pode existir para este aviso.
           const dup: any = await tx.execute(sql`
             SELECT id FROM financial_entries
-            WHERE origem_modulo = 'aviso_previo' AND origem_id = ${aviso.id}
+            WHERE origem_modulo IN ('aviso_previo', 'aviso_previo_fgts') AND origem_id = ${aviso.id}
               AND status <> 'cancelado' AND company_id = ${aviso.companyId}
             LIMIT 1
           `);
@@ -2719,17 +2795,37 @@ export const avisoPrevioFeriasRouter = router({
           `);
           const newId = Number((Array.isArray(res) ? res[0] : res?.rows?.[0])?.id);
 
+          // Rev. 4689 — Lançamento SEPARADO da multa FGTS (quando aplicável).
+          let fgtsId: number | null = null;
+          if (gerarFgts) {
+            const descFgts = `Multa FGTS — ${nome} (Aviso Prévio #${aviso.id})`;
+            const resFgts: any = await tx.execute(sql`
+              INSERT INTO financial_entries (
+                company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+                valor_previsto, data_competencia, data_vencimento, status,
+                origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at
+              ) VALUES (
+                ${aviso.companyId}, ${obraId}, ${obraNome}, ${'FGTS - MÃO DE OBRA'}, 'despesa', 'variavel',
+                ${valorFgts.toFixed(2)}, ${aviso.dataFim}, ${vencStr}, 'a_pagar',
+                'aviso_previo_fgts', ${aviso.id}, ${descFgts}, ${descFgts}, NOW(), NOW()
+              ) RETURNING id
+            `);
+            fgtsId = Number((Array.isArray(resFgts) ? resFgts[0] : resFgts?.rows?.[0])?.id) || null;
+          }
+
           await tx.update(terminationNotices).set({
             enviadoFinanceiroEm: sql`NOW()`,
             enviadoFinanceiroPor: ctx.user.name ?? 'Sistema',
             financeiroEntryId: newId || null,
+            financeiroFgtsEntryId: fgtsId,
             observacoes: (aviso.observacoes || '') +
               `\n[Enviado ao Financeiro em ${new Date().toISOString().split('T')[0]} por ${ctx.user.name}]: rescisão de R$ ${valor.toFixed(2)} lançada no Contas a Pagar (#${newId}), vencimento ${vencStr}.` +
-              (valorFoiEditado ? ` Valor EDITADO pelo RH (previsão do sistema: ${previsaoTxt}).` : ''),
+              (valorFoiEditado ? ` Valor EDITADO pelo RH (previsão do sistema: ${previsaoTxt}).` : '') +
+              (fgtsId ? ` Multa FGTS de R$ ${valorFgts.toFixed(2)} lançada em separado (#${fgtsId}).${fgtsFoiEditado ? ` Valor da multa EDITADO pelo RH (previsão: R$ ${multaPrevista.toFixed(2)}).` : ''}` : ''),
             updatedAt: sql`NOW()`,
           } as any).where(eq(terminationNotices.id, aviso.id));
 
-          return newId;
+          return { newId, fgtsId };
         });
 
         await createAuditLog({
@@ -2739,9 +2835,9 @@ export const avisoPrevioFeriasRouter = router({
           module: 'aviso_previo',
           entityType: 'terminationNotices',
           entityId: aviso.id,
-          details: `Rescisão de ${nome} (R$ ${valor.toFixed(2)}) enviada ao Contas a Pagar (lançamento #${entryId}, venc. ${vencStr}).${valorFoiEditado ? ` Valor editado pelo RH (previsão: ${previsaoTxt}).` : ''}`,
+          details: `Rescisão de ${nome} (R$ ${valor.toFixed(2)}) enviada ao Contas a Pagar (lançamento #${entryId.newId}, venc. ${vencStr}).${valorFoiEditado ? ` Valor editado pelo RH (previsão: ${previsaoTxt}).` : ''}${entryId.fgtsId ? ` Multa FGTS de R$ ${valorFgts.toFixed(2)} lançada em separado (#${entryId.fgtsId}).` : ''}`,
         });
-        return { success: true, entryId, valor: valor.toFixed(2), vencimento: vencStr };
+        return { success: true, entryId: entryId.newId, fgtsEntryId: entryId.fgtsId, valor: valor.toFixed(2), valorFgts: entryId.fgtsId ? valorFgts.toFixed(2) : null, vencimento: vencStr };
       }),
 
     /** Editar o saldo real do FGTS manualmente (Súmula 276 / correção TR) */

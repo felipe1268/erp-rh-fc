@@ -10834,7 +10834,9 @@ export const financialRouter = router({
         }
         // Rev. 4557 — Fluxo RH → Financeiro: baixa TOTAL de rescisão enviada pelo
         // Aviso Prévio conclui o aviso e desliga o funcionário automaticamente.
-        if (meta?.origem_modulo === 'aviso_previo' && meta?.origem_id) {
+        // Rev. 4689 — também dispara na baixa da multa FGTS (a conclusão só
+        // acontece quando TODOS os lançamentos do aviso estiverem pagos).
+        if ((meta?.origem_modulo === 'aviso_previo' || meta?.origem_modulo === 'aviso_previo_fgts') && meta?.origem_id) {
           const { concluirAvisoPorBaixaFinanceira } = await import("./avisoPrevioFerias");
           await concluirAvisoPorBaixaFinanceira({
             avisoId: Number(meta.origem_id),

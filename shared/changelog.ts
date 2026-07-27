@@ -1,4 +1,21 @@
 /**
+ * Rev. 4689 - ENVIAR AO FINANCEIRO: MULTA FGTS EM LANCAMENTO SEPARADO
+ *
+ * "Enviar ao Financeiro" agora gera DOIS lancamentos no Contas a Pagar
+ * quando o tipo do desligamento gera multa FGTS (empregador_*, rescisao
+ * indireta, acordo mutuo 20%): um de RESCISAO (verbas, sem a multa) e um
+ * de FGTS (multa 40%/20%, conta "FGTS - MAO DE OBRA"). Justa causa e
+ * pedido de demissao continuam gerando so a RESCISAO.
+ * - Valor da rescisao sugerido = total previsto MENOS a multa embutida
+ *   (evita dupla contagem); multa usa o saldo REAL do FGTS se informado.
+ * - Modal ganhou campo editavel da multa FGTS (2 valores, ambos auditados).
+ * - Conclusao automatica do aviso (e desligamento) so acontece quando
+ *   TODOS os lancamentos vinculados forem quitados (rescisao E FGTS).
+ * - Reversao do aviso cancela/valida os DOIS lancamentos atomicamente.
+ * - Nova coluna termination_notices.financeiro_fgts_entry_id + indice
+ *   unico parcial uq_fin_entries_aviso_previo_fgts (anti-duplicidade).
+ */
+/**
  * Rev. 4688 - ALERTAS DO DIA (POP-UPS RH + FINANCEIRO)
  *
  * Tres novos pop-ups no estilo do lembrete de ferias (endpoint

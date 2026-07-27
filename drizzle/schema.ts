@@ -3442,6 +3442,8 @@ export const terminationNotices = pgTable("termination_notices", {
         enviadoFinanceiroEm: timestamp("enviado_financeiro_em", { mode: 'string' }),
         enviadoFinanceiroPor: varchar("enviado_financeiro_por", { length: 255 }),
         financeiroEntryId: integer("financeiro_entry_id"),
+        // Rev. 4689 — lançamento separado da multa FGTS no Contas a Pagar
+        financeiroFgtsEntryId: integer("financeiro_fgts_entry_id"),
         baixaRescisaoValor: varchar("baixa_rescisao_valor", { length: 20 }),
         baixaRescisaoData: date("baixa_rescisao_data", { mode: 'string' }),
         baixaRescisaoPor: varchar("baixa_rescisao_por", { length: 255 }),
