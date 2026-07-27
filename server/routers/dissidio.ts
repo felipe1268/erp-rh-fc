@@ -355,6 +355,8 @@ export const dissidioRouter = router({
     let excluídosCount = 0;
     let naoAplicadosMesBase = 0;
     const hojeStr = new Date().toISOString();
+    // Rev. 4679 — coleta p/ gerar Termos Aditivos automáticos após o loop
+    const aplicadosDocs: { id: number; funcao: string; salarioNovo: number }[] = [];
     
     for (const func of funcs) {
       if (excluidos.has(func.id)) {
@@ -430,8 +432,34 @@ export const dissidioRouter = router({
         salarioBase: salarioNovo.toFixed(2),
         valorHora,
       }).where(eq(employees.id, func.id));
-      
+
+      aplicadosDocs.push({ id: func.id, funcao: func.funcao || "", salarioNovo });
       aplicados++;
+    }
+
+    // Rev. 4679 — poka-yoke: dissídio aplicado → Termo Aditivo nasce
+    // automaticamente no dossiê de CADA funcionário reajustado (fire-and-
+    // forget sequencial; falha individual não afeta os demais).
+    if (aplicadosDocs.length > 0) {
+      const dataVigencia = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+      const criadoPorId = ctx.user.id, criadoPorNome = ctx.user.name;
+      (async () => {
+        const { gerarRhDocumentoAutomatico } = await import("./rhDocumentos");
+        for (const f of aplicadosDocs) {
+          await gerarRhDocumentoAutomatico({
+            companyId: input.companyId, employeeId: f.id, tipo: "termo_aditivo",
+            refTitulo: `Dissídio ${mesBaseNome}/${dissidio.anoReferencia}`,
+            extras: {
+              tipoAlteracao: `Reajuste salarial — Dissídio ${mesBaseNome}/${dissidio.anoReferencia}`,
+              descricaoAlteracao: `Reajuste coletivo de ${percentual.toFixed(2)}% conforme convenção coletiva da categoria${pisoNovo > 0 ? `, respeitado o piso salarial de ${pisoNovo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : ""}.`,
+              novaFuncao: f.funcao,
+              novoSalario: f.salarioNovo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
+              dataVigencia,
+            },
+            criadoPorId, criadoPorNome,
+          });
+        }
+      })().catch((e) => console.warn("[DissidioDocAuto]", e));
     }
     
     // Marcar dissídio como aplicado

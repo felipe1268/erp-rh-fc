@@ -1365,6 +1365,9 @@ export const RH_DOCS_EVENTUAIS: { tipo: DocumentTemplateTipo }[] = [
   { tipo: "recibo_ferias" },
   { tipo: "recibo_folha" },
   { tipo: "termo_aditivo" },
+  // Rev. 4679 — gerados automaticamente pelos módulos (Aviso Prévio, Advertências)
+  { tipo: "aviso_previo" },
+  { tipo: "advertencia" },
 ];
 
 /** Campos extras pedidos na geração (variáveis que não vêm do cadastro).
@@ -1426,6 +1429,19 @@ export const RH_DOC_CAMPOS_EXTRAS: Partial<Record<DocumentTemplateTipo, CampoExt
     { chave: "seguradora",    rotulo: "Seguradora" },
     { chave: "apolice",       rotulo: "Apólice" },
     { chave: "beneficiarios", rotulo: "Beneficiários", placeholder: "Cônjuge e filhos" },
+  ],
+  // Rev. 4679 — gerados automaticamente pelos módulos; extras p/ geração manual
+  aviso_previo: [
+    { chave: "modalidade",       rotulo: "Modalidade", placeholder: "TRABALHADO / INDENIZADO", obrigatorio: true },
+    { chave: "dataAviso",        rotulo: "Data do aviso (dd/mm/aaaa)", obrigatorio: true },
+    { chave: "dataDesligamento", rotulo: "Data do desligamento (dd/mm/aaaa)", obrigatorio: true },
+    { chave: "diasAviso",        rotulo: "Dias de aviso", placeholder: "30" },
+  ],
+  advertencia: [
+    { chave: "tipoAdv",        rotulo: "Tipo", placeholder: "VERBAL / ESCRITA / SUSPENSÃO", obrigatorio: true },
+    { chave: "ocorrenciaData", rotulo: "Data da ocorrência (dd/mm/aaaa)", obrigatorio: true },
+    { chave: "motivo",         rotulo: "Motivo", obrigatorio: true },
+    { chave: "baseLegal",      rotulo: "Base legal", placeholder: "Art. 482 da CLT" },
   ],
 };
 

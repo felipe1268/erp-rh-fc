@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4679** — Poka-yoke documental: Férias, Aviso Prévio, Advertência, Dissídio, Seguro de Vida e Admissão geram automaticamente os documentos no dossiê p/ assinatura.
 - **Rev. 4678** — Documentos do Colaborador: moldura ISO (logo + código + revisão + emissão) e rodapé LGPD em todos os documentos.
 - **Rev. 4677** — Checklist Geral de Documentos: checkbox por funcionário + "Gerar selecionados"/"Gerar todos" em lote com progresso 0–100%.
 - **Rev. 4676** — Locações a Vencer: cards Total/Vencidas/A vencer viram filtros clicáveis da lista.

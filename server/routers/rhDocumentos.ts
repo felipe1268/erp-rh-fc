@@ -478,6 +478,60 @@ async function montarHtmlDocumento(
   return { html, meta, usaVigente, tpl, dados };
 }
 
+// ============================================================================
+// Rev. 4679 — GERAÇÃO AUTOMÁTICA (poka-yoke): os módulos (Férias, Aviso Prévio,
+// Advertências, Dissídio, Seguro de Vida, Admissão) chamam este helper após o
+// lançamento — o documento nasce no dossiê "Aguardando assinatura" sem
+// redigitação. NUNCA lança erro (não pode quebrar a mutation do módulo) e
+// deduplica por (empresa, funcionário, tipo, título) — 1 doc por evento.
+// ============================================================================
+export async function gerarRhDocumentoAutomatico(opts: {
+  companyId: number;
+  employeeId: number;
+  tipo: string;
+  extras?: Record<string, string>;
+  /** Sufixo do título que identifica o EVENTO (ex.: data de início do gozo) — é a chave de dedup. */
+  refTitulo?: string;
+  criadoPorId?: number | null;
+  criadoPorNome?: string | null;
+}): Promise<number | null> {
+  try {
+    if (!TIPOS_VALIDOS.includes(opts.tipo)) return null;
+    const db = (await getDb())!;
+    const { html, meta, usaVigente, tpl } = await montarHtmlDocumento(db, {
+      companyId: opts.companyId, employeeId: opts.employeeId, tipo: opts.tipo, extras: opts.extras,
+    });
+    const titulo = (opts.refTitulo ? `${meta.titulo} — ${opts.refTitulo}` : meta.titulo).slice(0, 200);
+    const [dup] = await db.select({ id: rhDocumentos.id }).from(rhDocumentos).where(and(
+      eq(rhDocumentos.companyId, opts.companyId),
+      eq(rhDocumentos.employeeId, opts.employeeId),
+      eq(rhDocumentos.tipo, opts.tipo),
+      eq(rhDocumentos.titulo, titulo),
+      isNull(rhDocumentos.deletedAt),
+    )).limit(1);
+    if (dup) return null; // já existe doc deste evento — não duplica
+    const [row] = await db.insert(rhDocumentos).values({
+      companyId: opts.companyId,
+      employeeId: opts.employeeId,
+      tipo: opts.tipo,
+      titulo,
+      codigo: usaVigente ? (tpl!.codigo || DEFAULT_CODIGOS[opts.tipo as DocumentTemplateTipo]) : DEFAULT_CODIGOS[opts.tipo as DocumentTemplateTipo],
+      versaoTemplate: usaVigente ? tpl!.versaoAtual : null,
+      conteudoHtml: html,
+      status: "gerado",
+      criadoPorId: opts.criadoPorId ?? null,
+      criadoPorNome: opts.criadoPorNome ? `${opts.criadoPorNome} (automático)` : "Automático (módulo)",
+    }).returning({ id: rhDocumentos.id });
+    return row.id;
+  } catch (e) {
+    console.warn(`[RhDocsAuto] Falha ao gerar ${opts.tipo} p/ emp=${opts.employeeId}:`, e);
+    return null;
+  }
+}
+
+/** dd/mm/aaaa a partir de YYYY-MM-DD (helper p/ os módulos chamadores). */
+export function fmtDateBrDoc(v?: string | null): string { return fmtDateBr(v); }
+
 /** Escapa texto p/ interpolação segura no HTML da moldura. */
 function escHtml(s: string): string {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

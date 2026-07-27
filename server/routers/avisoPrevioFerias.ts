@@ -510,6 +510,13 @@ function buildPrevisaoComplementar(emp: any, params: {
  * o caller em lote intercepta esse código p/ PULAR o funcionário (não aborta o
  * lote inteiro).
  */
+/** Rev. 4679 — formata valor gravado com ponto decimal (toFixed) em BRL. */
+function fmtBRLDoc(v?: string | number | null): string {
+  if (v === null || v === undefined || v === "") return "";
+  const n = Number(v);
+  return isNaN(n) ? String(v) : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 export async function criarAvisoPrevioInterno(
   db: any,
   emp: any,
@@ -640,6 +647,24 @@ export async function criarAvisoPrevioInterno(
 
   // Corrige automaticamente registros de ponto já lançados no período
   corrigirPontoFuncionario(params.companyId, emp.id).catch(() => {});
+
+  // Rev. 4679 — poka-yoke: criou o aviso → documento de Aviso Prévio nasce
+  // automaticamente no dossiê p/ colher o "CIENTE" (pad ou FCSign).
+  (async () => {
+    const { gerarRhDocumentoAutomatico, fmtDateBrDoc } = await import("./rhDocumentos");
+    await gerarRhDocumentoAutomatico({
+      companyId: params.companyId, employeeId: emp.id, tipo: "aviso_previo",
+      refTitulo: fmtDateBrDoc(dataInicioAviso),
+      extras: {
+        modalidade: params.tipo.replace(/_/g, " ").toUpperCase(),
+        dataAviso: fmtDateBrDoc(dataInicioAviso),
+        dataDesligamento: fmtDateBrDoc(dataFim),
+        diasAviso: String(diasAviso),
+      },
+      criadoPorId: user.id, criadoPorNome: user.name,
+    });
+  })().catch((e) => console.warn("[AvisoPrevioDocAuto]", e));
+
   return { success: true, id: result.id, diasAviso, dataFim, previsao };
 }
 
@@ -3655,6 +3680,27 @@ export const avisoPrevioFeriasRouter = router({
         if (input.dataInicio) {
           corrigirPontoFuncionario(input.companyId, input.employeeId).catch(() => {});
         }
+
+        // Rev. 4679 — poka-yoke: agendou férias → Solicitação/Aviso de Férias
+        // nasce automaticamente no dossiê p/ assinatura (pad ou FCSign).
+        if (input.dataInicio) {
+          (async () => {
+            const { gerarRhDocumentoAutomatico, fmtDateBrDoc } = await import("./rhDocumentos");
+            await gerarRhDocumentoAutomatico({
+              companyId: input.companyId, employeeId: input.employeeId, tipo: "solicitacao_ferias",
+              refTitulo: fmtDateBrDoc(input.dataInicio),
+              extras: {
+                feriasInicio: fmtDateBrDoc(input.dataInicio),
+                feriasFim: fmtDateBrDoc(input.dataFim),
+                feriasDias: String(diasGozo),
+                aquisitivoInicio: fmtDateBrDoc(input.periodoAquisitivoInicio),
+                aquisitivoFim: fmtDateBrDoc(input.periodoAquisitivoFim),
+                abonoPecuniario: input.abonoPecuniario ? "Sim" : "Não",
+              },
+              criadoPorId: ctx.user.id, criadoPorNome: ctx.user.name,
+            });
+          })().catch((e) => console.warn("[FeriasDocAuto] create:", e));
+        }
         return { success: true };
       }),
 
@@ -3746,6 +3792,48 @@ export const avisoPrevioFeriasRouter = router({
         // Corrige ponto automaticamente se datas ou status mudaram
         if (periodo && (input.dataInicio || input.dataFim || input.periodo2Inicio || input.periodo3Inicio || input.status)) {
           corrigirPontoFuncionario(periodo.companyId, periodo.employeeId).catch(() => {});
+        }
+
+        // Rev. 4679 — poka-yoke: agendou/iniciou gozo → Solicitação de Férias;
+        // registrou pagamento/valores → Recibo de Férias. Tudo automático,
+        // com dedup por período (título carrega a data de início do gozo).
+        if (periodo) {
+          (async () => {
+            const [vp] = await db.select().from(vacationPeriods).where(eq(vacationPeriods.id, id));
+            if (!vp || !(vp as any).dataInicio) return;
+            const { gerarRhDocumentoAutomatico, fmtDateBrDoc } = await import("./rhDocumentos");
+            const base = {
+              companyId: periodo.companyId, employeeId: periodo.employeeId,
+              criadoPorId: ctx.user?.id, criadoPorNome: ctx.user?.name,
+            };
+            const extrasFerias = {
+              feriasInicio: fmtDateBrDoc((vp as any).dataInicio),
+              feriasFim: fmtDateBrDoc((vp as any).dataFim),
+              feriasDias: String((vp as any).diasGozo ?? ""),
+              aquisitivoInicio: fmtDateBrDoc((vp as any).periodoAquisitivoInicio),
+              aquisitivoFim: fmtDateBrDoc((vp as any).periodoAquisitivoFim),
+              abonoPecuniario: (vp as any).abonoPecuniario ? "Sim" : "Não",
+            };
+            if (input.status === "agendada" || input.status === "em_gozo" || input.dataInicio) {
+              await gerarRhDocumentoAutomatico({
+                ...base, tipo: "solicitacao_ferias",
+                refTitulo: fmtDateBrDoc((vp as any).dataInicio), extras: extrasFerias,
+              });
+            }
+            if ((input.dataPagamento || input.valorLiquido || input.status === "concluida") && (vp as any).valorLiquido) {
+              await gerarRhDocumentoAutomatico({
+                ...base, tipo: "recibo_ferias",
+                refTitulo: fmtDateBrDoc((vp as any).dataInicio),
+                extras: {
+                  ...extrasFerias,
+                  // valores gravados com ponto decimal (toFixed) → formata BRL
+                  valorBruto: fmtBRLDoc((vp as any).valorTotal),
+                  valorLiquido: fmtBRLDoc((vp as any).valorLiquido),
+                  dataPagamento: fmtDateBrDoc((vp as any).dataPagamento),
+                },
+              });
+            }
+          })().catch((e) => console.warn("[FeriasDocAuto] update:", e));
         }
 
         return { success: true };

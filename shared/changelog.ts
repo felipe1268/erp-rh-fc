@@ -1,4 +1,20 @@
 /**
+ * Rev. 4679 - DOCUMENTOS AUTOMATICOS: MODULOS GERAM DOCS NO DOSSIE (POKA-YOKE)
+ *
+ * Um lancamento no modulo = documento pronto no dossie p/ assinatura (pad ou
+ * FCSign), sem redigitacao. Dedup por evento (nao duplica). Conexoes:
+ * - Ferias: agendar/iniciar gozo → Solicitacao de Ferias; pagamento/conclusao
+ *   → Recibo de Ferias (valores do periodo).
+ * - Aviso Previo: criar aviso → documento de Aviso Previo (modalidade/datas).
+ * - Advertencia: lancar → termo de Advertencia (tipo, motivo, data).
+ * - Dissidio: aplicar → Termo Aditivo p/ CADA funcionario reajustado.
+ * - Seguro de Vida: cobertura ativa → Termo de Adesao.
+ * - Admissao CLT: cadastro → kit admissional (Ficha, Contrato Exp.,
+ *   Regulamento, Etica, LGPD).
+ * - Aviso Previo e Advertencia entram nos "Documentos eventuais" do dossie.
+ * - Geracao automatica nunca quebra a mutation do modulo (fire-and-forget).
+ */
+/**
  * Rev. 4678 - DOCUMENTOS DO COLABORADOR: MOLDURA ISO + LGPD EM TODOS OS DOCS
  *
  * - Todos os documentos gerados/pre-visualizados ganham cabeçalho padrão

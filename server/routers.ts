@@ -956,6 +956,22 @@ export const appRouter = router({
           } catch (e) { console.error("[Notificação] Erro ao disparar contratação:", e); }
         })();
       }
+      // Rev. 4679 — poka-yoke: admissão CLT → kit admissional (Ficha de
+      // Registro, Contrato de Experiência, Regulamento, Código de Ética e
+      // LGPD) nasce automaticamente no dossiê p/ assinatura.
+      if (input.companyId && result?.id && String(input.tipoContrato || "").toUpperCase() !== "PJ") {
+        const kitCompanyId = input.companyId, kitEmpId = result.id;
+        const kitUser = { id: ctx.user.id, name: ctx.user.name };
+        (async () => {
+          const { gerarRhDocumentoAutomatico } = await import("./routers/rhDocumentos");
+          for (const tipo of ["ficha_registro", "contrato_experiencia", "regulamento_interno", "codigo_etica", "termo_lgpd"]) {
+            await gerarRhDocumentoAutomatico({
+              companyId: kitCompanyId, employeeId: kitEmpId, tipo,
+              criadoPorId: kitUser.id, criadoPorNome: kitUser.name,
+            });
+          }
+        })().catch((e) => console.warn("[KitAdmissionalAuto]", e));
+      }
       memCache.invalidatePrefix('emp:');
       memCache.invalidatePrefix('dash:func:');
       return result;

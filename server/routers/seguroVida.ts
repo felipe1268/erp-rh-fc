@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb, userCanSeeAvisoStatus } from "../db";
+import { getDb, userCanSeeAvisoStatus, getUserCompanyLinks } from "../db";
 import { sql, SQL } from "drizzle-orm";
 import { resolveCompanyIds } from "../companyHelper";
 
@@ -920,6 +920,15 @@ export const seguroVidaRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      // Rev. 4679 — guard de empresa (o hook de doc automático escreve no
+      // dossiê usando input.companyId; não pode confiar cegamente no input).
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+        const links = await getUserCompanyLinks(ctx.user.id);
+        const ids = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+        if (ids.length > 0 && !ids.includes(input.companyId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+        }
+      }
       const agora = new Date().toISOString();
 
       if (input.coberturaId) {
@@ -948,6 +957,24 @@ export const seguroVidaRouter = router({
              ${input.status}, ${input.dataAdesao ?? null}, ${input.dataCancelamento ?? null},
              ${input.motivoCancelamento ?? null}, ${input.observacoes ?? null}, ${ctx.user.name ?? ""})
         `);
+      }
+
+      // Rev. 4679 — poka-yoke: cobertura ativa vinculada a funcionário →
+      // Termo de Adesão ao Seguro de Vida nasce automaticamente no dossiê.
+      if (input.employeeId && (input.status === "ativo" || input.status === "pendente_inclusao")) {
+        const empId = input.employeeId, compId = input.companyId;
+        const apolices = [input.apoliceVG, input.apoliceAPC].filter(Boolean).join(" / ");
+        (async () => {
+          const { gerarRhDocumentoAutomatico } = await import("./rhDocumentos");
+          const { fmtDateBrDoc } = await import("./rhDocumentos");
+          await gerarRhDocumentoAutomatico({
+            companyId: compId, employeeId: empId, tipo: "adesao_seguro_vida",
+            // data de adesão/apolice na chave → nova adesão futura gera novo termo
+            refTitulo: [fmtDateBrDoc(input.dataAdesao), apolices].filter(Boolean).join(" · ") || undefined,
+            extras: { apolice: apolices, seguradora: "", beneficiarios: "" },
+            criadoPorId: ctx.user.id, criadoPorNome: ctx.user.name,
+          });
+        })().catch((e) => console.warn("[SeguroVidaDocAuto]", e));
       }
 
       return { success: true };

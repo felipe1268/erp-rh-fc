@@ -1574,8 +1574,17 @@ export const controleDocumentosRouter = router({
           origemId: z.number().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
+        // Rev. 4679 — guard de empresa (o hook de doc automático escreve no
+        // dossiê usando input.companyId; não pode confiar cegamente no input).
+        if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+          const acessiveis = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+          const ids = (acessiveis as any[]).map((c: any) => c.id ?? c.companyId);
+          if (ids.length > 0 && !ids.includes(input.companyId)) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+          }
+        }
         // Calcular sequência automática
         const existentes = await db.select({ id: warnings.id }).from(warnings)
           .where(and(eq(warnings.employeeId, input.employeeId), companyFilter(warnings.companyId, input), isNull(warnings.deletedAt)));
@@ -1595,7 +1604,26 @@ export const controleDocumentosRouter = router({
           origemModulo: input.origemModulo || null,
           origemId: input.origemId || null,
         });
-        
+
+        // Rev. 4679 — poka-yoke: lançou advertência → termo de Advertência
+        // nasce automaticamente no dossiê p/ assinatura do colaborador.
+        (async () => {
+          const { gerarRhDocumentoAutomatico, fmtDateBrDoc } = await import("./rhDocumentos");
+          const LABEL: Record<string, string> = { Verbal: "VERBAL", Escrita: "ESCRITA", Suspensao: "SUSPENSÃO", JustaCausa: "JUSTA CAUSA", OSS: "OSS" };
+          await gerarRhDocumentoAutomatico({
+            companyId: input.companyId, employeeId: input.employeeId, tipo: "advertencia",
+            // nº de sequência na chave → 2 advertências no mesmo dia não colidem
+            refTitulo: `Nº ${sequencia} — ${LABEL[input.tipoAdvertencia] || input.tipoAdvertencia} ${fmtDateBrDoc(input.dataOcorrencia)}`,
+            extras: {
+              tipoAdv: LABEL[input.tipoAdvertencia] || input.tipoAdvertencia.toUpperCase(),
+              ocorrenciaData: fmtDateBrDoc(input.dataOcorrencia),
+              motivo: [input.motivo, input.descricao].filter(Boolean).join(" — "),
+              baseLegal: "Art. 482 da CLT",
+            },
+            criadoPorNome: input.aplicadoPor || null,
+          });
+        })().catch((e) => console.warn("[AdvertenciaDocAuto]", e));
+
         // Retornar contagem e alerta
         const totalAdv = sequencia;
         let alerta = null;
