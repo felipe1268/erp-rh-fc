@@ -1,4 +1,14 @@
 /**
+ * Rev. 4678 - DOCUMENTOS DO COLABORADOR: MOLDURA ISO + LGPD EM TODOS OS DOCS
+ *
+ * - Todos os documentos gerados/pre-visualizados ganham cabeçalho padrão
+ *   ISO 9001: logo da empresa (ou razão social), título, e caixa de controle
+ *   com Código (FC-RH-xxx), Revisão (versão do template vigente) e Emissão.
+ * - Rodapé com cláusula LGPD (Lei 13.709/2018) e aviso de documento
+ *   controlado ("cópia fora do sistema = não controlada").
+ * - Aplica-se a preview, geração (snapshot), PDF e FCSign (mesmo HTML).
+ */
+/**
  * Rev. 4677 - CHECKLIST GERAL DE DOCUMENTOS: GERACAO EM LOTE COM CHECKBOX
  *
  * - Checkbox por funcionário na matriz + "selecionar todos" no cabeçalho.

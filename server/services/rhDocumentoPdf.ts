@@ -65,6 +65,10 @@ async function montarHtmlDoc(doc: RhDocRow): Promise<string> {
     imgDataUri(doc.assinaturaUrl),
   ]);
 
+  // Rev. 4678 — snapshots novos já trazem a moldura ISO própria (sentinela
+  // <!--fc-moldura-iso-->); nesses, o PDF NÃO repete o cabeçalho legado.
+  const temMolduraIso = String(doc.conteudoHtml || "").includes("<!--fc-moldura-iso-->");
+
   const assinado = doc.status === "assinado" && sigUri;
   const assinaturaBloco = assinado
     ? `<img src="${sigUri}" alt="assinatura" style="height:44px;max-width:220px;object-fit:contain;display:block;margin:0 auto"/>
@@ -84,12 +88,12 @@ async function montarHtmlDoc(doc: RhDocRow): Promise<string> {
   .rodape { margin-top:14px;font-size:8pt;color:#333;border:1px solid #99a;padding:6px 8px;background:#f8fafc;line-height:1.5 }
   .footer { margin-top:8px;display:flex;justify-content:space-between;font-size:7.5pt;color:#777 }
 </style></head><body>
-<div class="cab">
+${temMolduraIso ? "" : `<div class="cab">
   <div class="logobox">${logoUri ? `<img src="${logoUri}" alt="logo"/>` : ""}</div>
   <div class="t">${esc(doc.titulo).toUpperCase()}<small>${esc(empresa?.razaoSocial || "")} — CNPJ ${esc(empresa?.cnpj || "")}</small></div>
   <div class="cod">${doc.codigo ? `${esc(doc.codigo)}${doc.versaoTemplate ? ` · Rev. ${doc.versaoTemplate}` : ""}` : ""}</div>
-</div>
-<div class="corpo">${await inlineUploadsImgs(doc.conteudoHtml)}</div>
+</div>`}
+<div class="corpo"${temMolduraIso ? ` style="margin-top:0"` : ""}>${await inlineUploadsImgs(doc.conteudoHtml)}</div>
 <div class="assin">
   <div>${assinaturaBloco}</div>
   <div><div style="border-top:1px solid #333;margin-top:44px;padding-top:3px">${esc(empresa?.razaoSocial || "Empregadora")}</div></div>

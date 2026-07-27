@@ -456,5 +456,66 @@ async function montarHtmlDocumento(
 <div style="font-size:7pt;color:#555;margin-top:2px">Foto do cadastro</div></div>` + html;
   }
 
+  // ── Rev. 4678 — Moldura ISO: cabeçalho com logo + controle de revisão +
+  //    rodapé LGPD em TODOS os documentos do colaborador (padrão ISO 9001).
+  const codigo = usaVigente
+    ? (tpl!.codigo || DEFAULT_CODIGOS[input.tipo as DocumentTemplateTipo])
+    : DEFAULT_CODIGOS[input.tipo as DocumentTemplateTipo];
+  const revisao = usaVigente ? (tpl!.versaoAtual ?? 1) : 1;
+  // idempotência: se o template já embute a moldura (sentinela), não duplica
+  if (!html.includes("<!--fc-moldura-iso-->")) html = montarMolduraIso({
+    corpo: html,
+    titulo: meta.titulo,
+    codigo,
+    revisao,
+    dataEmissao: hoje,
+    empresaNome: empresa?.razaoSocial || "",
+    empresaCnpj: (empresa as any)?.cnpj || "",
+    logoUrl: (empresa as any)?.logoUrl && String((empresa as any).logoUrl).startsWith("/uploads/")
+      ? String((empresa as any).logoUrl).split("?")[0] : null,
+  });
+
   return { html, meta, usaVigente, tpl, dados };
+}
+
+/** Escapa texto p/ interpolação segura no HTML da moldura. */
+function escHtml(s: string): string {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/**
+ * Rev. 4678 — Moldura padrão ISO 9001 (controle de documentos) + LGPD.
+ * Cabeçalho: logo da empresa · título · caixa de controle (código/rev/data).
+ * Rodapé: aviso de documento controlado + cláusula LGPD (Lei 13.709/2018).
+ * Inline styles apenas (o HTML vai pra preview, PDF via Puppeteer e FCSign).
+ */
+function montarMolduraIso(p: {
+  corpo: string; titulo: string; codigo: string; revisao: number;
+  dataEmissao: string; empresaNome: string; empresaCnpj: string; logoUrl: string | null;
+}): string {
+  const logo = p.logoUrl
+    ? `<img src="${escHtml(p.logoUrl)}" alt="Logo" style="max-height:52px;max-width:150px;object-fit:contain"/>`
+    : `<div style="font-weight:800;font-size:13pt;color:#0A1E3C;letter-spacing:.5px">${escHtml(p.empresaNome)}</div>`;
+  return `<!--fc-moldura-iso-->
+<table style="width:100%;border-collapse:collapse;border:1.5px solid #0A1E3C;margin-bottom:14px;font-family:Arial,Helvetica,sans-serif" role="presentation">
+  <tr>
+    <td style="border-right:1px solid #0A1E3C;padding:8px 12px;width:170px;text-align:center;vertical-align:middle">${logo}</td>
+    <td style="border-right:1px solid #0A1E3C;padding:8px 12px;text-align:center;vertical-align:middle">
+      <div style="font-size:12pt;font-weight:800;color:#0A1E3C;text-transform:uppercase;letter-spacing:.3px">${escHtml(p.titulo)}</div>
+      <div style="font-size:7.5pt;color:#555;margin-top:2px">${escHtml(p.empresaNome)}${p.empresaCnpj ? " · CNPJ " + escHtml(p.empresaCnpj) : ""}</div>
+    </td>
+    <td style="padding:0;width:150px;vertical-align:middle">
+      <table style="width:100%;border-collapse:collapse;font-size:7.5pt;color:#0A1E3C" role="presentation">
+        <tr><td style="border-bottom:1px solid #0A1E3C;padding:3px 8px"><strong>Código:</strong> ${escHtml(p.codigo)}</td></tr>
+        <tr><td style="border-bottom:1px solid #0A1E3C;padding:3px 8px"><strong>Revisão:</strong> ${String(p.revisao).padStart(2, "0")}</td></tr>
+        <tr><td style="padding:3px 8px"><strong>Emissão:</strong> ${escHtml(p.dataEmissao)}</td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+${p.corpo}
+<div style="margin-top:22px;border-top:1.5px solid #0A1E3C;padding-top:8px;font-family:Arial,Helvetica,sans-serif">
+  <p style="font-size:7pt;color:#555;text-align:justify;margin:0 0 4px 0"><strong>LGPD — Lei nº 13.709/2018:</strong> os dados pessoais contidos neste documento são tratados exclusivamente para o cumprimento de obrigações legais, contratuais e trabalhistas, com acesso restrito ao pessoal autorizado, pelo prazo exigido pela legislação. O titular pode exercer seus direitos (acesso, correção, eliminação) junto ao setor de Recursos Humanos da empresa.</p>
+  <p style="font-size:7pt;color:#888;text-align:center;margin:0">${escHtml(p.codigo)} · Rev. ${String(p.revisao).padStart(2, "0")} · Documento controlado pelo Sistema de Gestão — cópia impressa ou digital fora do sistema é considerada NÃO CONTROLADA.</p>
+</div>`;
 }
