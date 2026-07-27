@@ -1,4 +1,89 @@
 /**
+ * Rev. 4673 - DOCUMENTOS DO COLABORADOR: LAYOUT MODERNO + LOTE + FCSIGN
+ *
+ * - Lista de funcionários com FOTO (avatar clicável) e barra de completude
+ *   documental 0–100% por pessoa (verde 100% / laranja ≥60% / vermelho).
+ * - Cabeçalho do dossiê com foto grande + percentual de assinados.
+ * - Geração em LOTE: checkbox nos documentos faltantes, botão "Selecionar
+ *   faltantes" e "Gerar selecionados" com barra de progresso percentual
+ *   (0–100%) durante a geração sequencial.
+ * - Assinatura digital via FCSIGN (igual à ficha de EPI): botão "FCSign" no
+ *   preview cria sessão com links únicos (empregado/empregador/testemunhas)
+ *   p/ envio por WhatsApp; ao completar todas as assinaturas, o documento do
+ *   dossiê é marcado como assinado automaticamente (hash + IP + imagem da
+ *   assinatura do empregado). Sessões rastreadas por 'rh_documento:{id}',
+ *   com dedup por documento e validação de ownership.
+ * - Pad presencial ("Assinar agora") continua disponível.
+ */
+/**
+ * Rev. 4672 - DOCUMENTOS DO COLABORADOR: FASES 2-4 (CONTRATO CLT, FÉRIAS,
+ * FOLHA, BENEFÍCIOS, ADITIVO, DEPENDENTES, PDI/FEEDBACK)
+ *
+ * Fase 2: Ficha de Registro agora sai com a FOTO do cadastro (3x4 no topo,
+ * inline no PDF via data-URI) + novo Contrato de Trabalho CLT (FC-RH-016)
+ * com variáveis do cadastro e jornada/horário digitáveis.
+ * Fase 3: 9 novos modelos assináveis — Solicitação e Recibo de Férias
+ * (pré-preenchidos da última férias programada), Recibo de Folha (holerite/
+ * 13º/adiantamento), Termo Aditivo (promoção/salário/função) e termos de
+ * benefícios (adesão plano de saúde, VT, recusa de VT, VA, seguro de vida).
+ * Documentos com contexto abrem dialog de campos extras antes de gerar;
+ * eventuais ficam fora do checklist e ganham referência no título.
+ * Fase 4: cadastro completo de DEPENDENTES no dossiê (parentesco, nascimento,
+ * CPF, IRRF, salário-família, anexos de certidão/vacinação — tabela
+ * employee_dependentes) + aba "PDI & Feedback" na Avaliação de Desempenho
+ * (planos com prazo/progresso e feedbacks positivo/construtivo/1:1 —
+ * tabelas avaliacao_pdis/avaliacao_feedbacks). Guards anti-IDOR em todas
+ * as rotas novas (getCompaniesForUser + load-guarded por id).
+ */
+/**
+ * Rev. 4671 - CONTROLE DE DOCUMENTOS: ABA CHECKLIST GERAL (MATRIZ)
+ *
+ * Nova aba "Checklist" no Controle de Documentos: matriz funcionário ×
+ * documento com TODOS os modelos de RH (Ficha de Registro, Contrato de
+ * Experiência, Equipamentos, Confidencialidade, Regulamento, Ética, LGPD,
+ * Banco de Horas, Compensação) campo a campo + colunas ASO vigente, OS
+ * assinada, treinamentos vigentes e anexos.
+ * - Verde = assinado · Âmbar = gerado (falta assinar) · Vermelho = faltando;
+ *   quem não tem o documento aparece com botão "+" que GERA na hora.
+ * - Filtro "Só pendências", busca por nome/função, contador de pendências.
+ * - Célula gerada/assinada abre o dossiê (/documentos-colaborador?emp=ID —
+ *   página agora aceita pré-seleção via query param).
+ * - Backend: rhDocumentos.checklistGeral em consultas por LOTE (sem N+1),
+ *   com interseção de empresas acessíveis (anti-IDOR).
+ */
+/**
+ * Rev. 4670 - CONTROLE DE DOCUMENTOS: FOTOS DOS FUNCIONÁRIOS
+ *
+ * Fotos (avatar ?w=128) adicionadas nas 3 listas que ainda não tinham:
+ * - Painel de Validade de Documentos (aba Validade);
+ * - Funcionários Ativos Sem ASO (aba Sem ASO);
+ * - Documentos dos Colaboradores (aba Documentos).
+ * Backend: painelValidade e listSemASO passam a devolver fotoUrl.
+ * As demais abas (ASO, Treinamentos, Atestados, Advertências, Mapeamento,
+ * Dossiê, Integrações) já tinham foto.
+ */
+/**
+ * Rev. 4669 - DOCUMENTOS DO COLABORADOR (FASE 1 — DOSSIÊ DIGITAL)
+ *
+ * Nova página RH/DP → Operacional → "Documentos do Colaborador":
+ * - 8 novos modelos na Central de Documentos ISO (FC-RH-008…015): Ficha de
+ *   Registro, Termo de Equipamentos, Confidencialidade (NDA), Regulamento
+ *   Interno, Código de Ética, LGPD, Acordo de Banco de Horas e Acordo de
+ *   Compensação — editáveis em Configurações, com seed institucional.
+ * - Geração por funcionário: template vigente (ou seed) renderizado com os
+ *   dados do cadastro (snapshot imutável em rh_documentos).
+ * - Assinatura digital própria (canvas + geo + termo + hash SHA-256 + IP),
+ *   mesmo padrão auditável da Ficha de EPI.
+ * - Checklist documental por funcionário: modelos (obrigatório/aplicável),
+ *   ASO vigente, OS assinada, EPIs, treinamentos e anexos.
+ * - PDF em papel timbrado navy via GET /api/download/rh-documento-pdf?id=
+ *   (puppeteer, JS off, requests bloqueados); documentos ASSINADOS entram
+ *   automaticamente no Dossiê ZIP (ficha_registro → 001.2 - Registro; demais
+ *   → 002 - DOCUMENTOS TRABALHISTAS).
+ * - Doc assinado não pode ser excluído (só Admin Master).
+ * - Tabela rh_documentos garantida via [SyncSchema+] (dev e produção).
+ */
+/**
  * Rev. 4668 - OS DIGITAL: AJUSTES DO CODE REVIEW
  *
  * - salvarAssinatura valida combinação tipo × deliveryId: entrega/devolução

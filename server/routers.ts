@@ -156,6 +156,9 @@ import { acidentesRouter } from "./routers/acidentes";
 import { scorecardRouter } from "./routers/scorecard";
 import { avaliacaoFuncionariosRouter } from "./routers/avaliacaoFuncionarios";
 import { systemDocumentTemplatesRouter } from "./routers/systemDocumentTemplates";
+import { rhDocumentosRouter } from "./routers/rhDocumentos";
+import { rhDependentesRouter } from "./routers/rhDependentes";
+import { avaliacaoPdiRouter } from "./routers/avaliacaoPdi";
 import { fiscalNotesRouter } from "./routers/fiscalNotes";
 import { contabilidadeRouter } from "./routers/contabilidade";
 import { sefazRouter } from "./routers/sefaz";
@@ -269,6 +272,9 @@ export const appRouter = router({
   scorecard: scorecardRouter,
   avaliacaoFuncionarios: avaliacaoFuncionariosRouter,
   systemDocumentTemplates: systemDocumentTemplatesRouter,
+  rhDocumentos: rhDocumentosRouter,
+  rhDependentes: rhDependentesRouter,
+  avaliacaoPdi: avaliacaoPdiRouter,
   bankStatementTemplates: bankStatementTemplatesRouter,
   auth: router({
     me: publicProcedure.query(async opts => {

@@ -7,6 +7,8 @@ import { sdk } from "../_core/sdk";
 import { dbRetrieve } from "../storage";
 import { gerarFichasEpiPdfLote } from "../services/fichaEpiPdf";
 import { gerarOrdensServicoPdfLote, gerarOrdemServicoPdf } from "../services/ordemServicoPdf";
+import { gerarRhDocumentoPdf, gerarRhDocumentosPdfLote } from "../services/rhDocumentoPdf";
+import { rhDocumentos } from "../../drizzle/schema";
 
 const TIPO_DOC_LABEL: Record<string, string> = {
   rg: "RG", cnh: "CNH", ctps: "CTPS", comprovante_residencia: "Comprovante de Residencia",
@@ -300,9 +302,58 @@ export function registerDownloadDossieRoute(app: Express) {
         console.warn("[DownloadDossie] Falha ao gerar Ordens de Serviço digitais:", e);
       }
 
+      // Rev. 4669 — Documentos do Colaborador ASSINADOS (ficha de registro,
+      // NDA, LGPD, regulamento, acordos…) gerados na hora, entram em
+      // "002 - DOCUMENTOS TRABALHISTAS" (ficha_registro vai p/ 001.2).
+      try {
+        await gerarRhDocumentosPdfLote(companyId, validIds, (empId, tipo, titulo, buf) => {
+          const pasta = tipo === "ficha_registro"
+            ? "001 - DOCUMENTOS PESSOAIS/001.2 - Registro"
+            : "002 - DOCUMENTOS TRABALHISTAS";
+          archive.append(buf, { name: `${nomePorId.get(empId)}/${pasta}/${sanitize(titulo)}.pdf` });
+        });
+      } catch (e) {
+        console.warn("[DownloadDossie] Falha ao gerar Documentos do Colaborador:", e);
+      }
+
       await archive.finalize();
     } catch (err) {
       console.error("[DownloadDossie] Erro geral:", err);
+      if (!res.headersSent) res.status(500).json({ error: "Erro interno" });
+    }
+  });
+
+  // Rev. 4669 — GET /api/download/rh-documento-pdf?id=N
+  // Baixa UM Documento do Colaborador (gerado/assinado) em PDF.
+  app.get("/api/download/rh-documento-pdf", async (req: Request, res: Response) => {
+    try {
+      let user: { id: number; role: string };
+      try {
+        const authUser = await sdk.authenticateRequest(req);
+        user = { id: (authUser as any).id, role: (authUser as any).role };
+      } catch {
+        res.status(401).json({ error: "Não autenticado" });
+        return;
+      }
+      const id = parseInt(String(req.query.id || ""));
+      if (isNaN(id)) { res.status(400).json({ error: "Parâmetro inválido" }); return; }
+
+      const db = await getDb();
+      const [doc] = await db.select().from(rhDocumentos)
+        .where(and(eq(rhDocumentos.id, id), isNull(rhDocumentos.deletedAt)));
+      if (!doc) { res.status(404).json({ error: "Documento não encontrado" }); return; }
+      if (user.role !== "admin_master" && user.role !== "admin") {
+        const [uc] = await db.select().from(userCompanies)
+          .where(and(eq(userCompanies.userId, user.id), eq(userCompanies.companyId, doc.companyId))).limit(1);
+        if (!uc) { res.status(403).json({ error: "Sem permissão" }); return; }
+      }
+
+      const buf = await gerarRhDocumentoPdf(doc);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${sanitize(doc.titulo)}.pdf"`);
+      res.send(buf);
+    } catch (err) {
+      console.error("[RhDocumentoPdf] Erro:", err);
       if (!res.headersSent) res.status(500).json({ error: "Erro interno" });
     }
   });

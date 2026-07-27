@@ -1,7 +1,7 @@
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, getCompaniesForUser } from "../db";
-import { signatureSessions, signatureSigners, employees, companies, employeeDocuments, employeeContracts, users, pjContracts } from "../../drizzle/schema";
+import { signatureSessions, signatureSigners, employees, companies, employeeDocuments, employeeContracts, users, pjContracts, rhDocumentos } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -196,7 +196,10 @@ export const signaturesRouter = router({
       // novo contrato com `contratoAnteriorId`). A dedup por employeeId+tipo
       // bloquearia falsamente o envio de um 2º contrato. A unicidade real é
       // por contrato (id), validada na camada PJ.
-      if (input.tipo !== "termo_responsabilidade" && input.tipo !== "contrato_pj") {
+      // Rev. 4673 — `rh_documento` também é EXCEÇÃO: cada documento do dossiê
+      // (ficha, contrato CLT, termos…) gera sua PRÓPRIA sessão, rastreada por
+      // `observacoes='rh_documento:{id}'`. Dedup real é por documento (abaixo).
+      if (input.tipo !== "termo_responsabilidade" && input.tipo !== "contrato_pj" && input.tipo !== "rh_documento") {
         const [dup] = await db.select({ id: signatureSessions.id, status: signatureSessions.status })
           .from(signatureSessions)
           .where(and(
@@ -213,6 +216,38 @@ export const signaturesRouter = router({
             message: dup.status === "completo"
               ? "Já existe um documento deste tipo assinado pra este colaborador. Apague o anterior (admin master) pra emitir um novo."
               : "Já existe uma sessão FCSign em andamento pra este documento.",
+          });
+        }
+      } else if (input.tipo === "rh_documento") {
+        // Rev. 4673 — exige referência ao documento e valida ownership + estado.
+        const m = (input.observacoes || "").match(/^rh_documento:(\d+)$/);
+        if (!m) throw new TRPCError({ code: "BAD_REQUEST", message: "Referência do documento RH ausente." });
+        const rhDocId = Number(m[1]);
+        const [rhDoc] = await db.select({ id: rhDocumentos.id, companyId: rhDocumentos.companyId, employeeId: rhDocumentos.employeeId, status: rhDocumentos.status })
+          .from(rhDocumentos).where(and(eq(rhDocumentos.id, rhDocId), isNull(rhDocumentos.deletedAt))).limit(1);
+        if (!rhDoc || Number(rhDoc.companyId) !== Number(input.companyId) || Number(rhDoc.employeeId) !== Number(input.employeeId)) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Documento RH não encontrado nesta empresa/colaborador." });
+        }
+        if (rhDoc.status === "assinado") {
+          throw new TRPCError({ code: "CONFLICT", message: "Este documento já está assinado. Gere um novo para colher outra assinatura." });
+        }
+        // Dedup por DOCUMENTO: bloqueia 2ª sessão não-cancelada do mesmo doc.
+        const [dup] = await db.select({ id: signatureSessions.id, status: signatureSessions.status })
+          .from(signatureSessions)
+          .where(and(
+            eq(signatureSessions.companyId, input.companyId),
+            eq(signatureSessions.tipo, "rh_documento"),
+            eq(signatureSessions.observacoes, input.observacoes!),
+            sql`${signatureSessions.status} <> 'cancelado'`,
+          ))
+          .orderBy(desc(signatureSessions.createdAt))
+          .limit(1);
+        if (dup) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: dup.status === "completo"
+              ? "Este documento já foi assinado via FCSign."
+              : "Já existe uma sessão FCSign em andamento para este documento.",
           });
         }
       } else if (input.tipo === "contrato_pj" && input.observacoes) {
@@ -491,6 +526,23 @@ export const signaturesRouter = router({
       if (session.status === "cancelado") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta solicitação foi cancelada." });
       if (session.status === "completo") throw new TRPCError({ code: "BAD_REQUEST", message: "Documento já está completo." });
 
+      // Rev. 4673 — sessão de documento RH: se o doc já foi assinado por OUTRO
+      // canal (pad presencial) enquanto a sessão andava, bloqueia novas
+      // assinaturas — evita envelope "completo" duplicando a evidência.
+      if (session.tipo === "rh_documento" && session.observacoes) {
+        const mDoc = session.observacoes.match(/^rh_documento:(\d+)$/);
+        if (mDoc) {
+          const [rhDoc] = await db.select({ status: rhDocumentos.status, deletedAt: rhDocumentos.deletedAt })
+            .from(rhDocumentos).where(eq(rhDocumentos.id, Number(mDoc[1]))).limit(1);
+          if (!rhDoc || rhDoc.deletedAt) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "O documento vinculado a esta sessão foi excluído. Solicite um novo envio." });
+          }
+          if (rhDoc.status === "assinado") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Este documento já foi assinado presencialmente no sistema. Esta sessão não é mais necessária." });
+          }
+        }
+      }
+
       // Rev. 2119 — VALIDA ORDEM: só permite assinar se TODOS com `ordem` menor
       // já assinaram. Garante o fluxo sequencial definido na criação da sessão
       // (ex: colaborador 1º → empregador 2º → testemunhas 3ª/4ª).
@@ -579,6 +631,37 @@ export const signaturesRouter = router({
             finalDocumentUrl: url,
             finalEmployeeDocumentId: doc.id,
           }).where(eq(signatureSessions.id, session.id));
+
+          // Rev. 4673 — Documento RH (dossiê): quando a sessão FCSign completa,
+          // marca o rh_documento como assinado (guarda a assinatura do
+          // EMPREGADO como imagem, igual ao pad presencial, p/ o PDF do dossiê).
+          if (session.tipo === "rh_documento" && session.observacoes) {
+            try {
+              const m = session.observacoes.match(/^rh_documento:(\d+)$/);
+              if (m) {
+                const rhDocId = Number(m[1]);
+                const empSig = allSigners.find((s) => s.role === "empregado" && s.signatureDataUrl);
+                let sigUrl: string | null = null; let sigKey: string | null = null;
+                if (empSig?.signatureDataUrl) {
+                  const b64 = empSig.signatureDataUrl.replace(/^data:image\/\w+;base64,/, "");
+                  sigKey = `rh-doc-assinaturas/${rhDocId}-fcsign-${session.id}.png`;
+                  const put = await storagePut(sigKey, Buffer.from(b64, "base64"), "image/png");
+                  sigUrl = put.url;
+                }
+                await db.update(rhDocumentos).set({
+                  status: "assinado",
+                  assinadoEm: nowIso,
+                  assinaturaHash: session.documentHash,
+                  assinaturaIp: empSig?.ip || null,
+                  ...(sigUrl ? { assinaturaUrl: sigUrl, assinaturaKey: sigKey } : {}),
+                  termoAceito: 1,
+                  updatedAt: nowIso,
+                }).where(and(eq(rhDocumentos.id, rhDocId), sql`${rhDocumentos.status} <> 'assinado'`));
+              }
+            } catch (e) {
+              console.error("[FCSign.complete] falha ao marcar rh_documento assinado:", e);
+            }
+          }
 
           // Contrato PJ: atualiza pj_contracts.contratoAssinadoUrl com o HTML
           // final assinado (idempotente — não bloqueia se falhar).

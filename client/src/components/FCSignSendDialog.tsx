@@ -16,6 +16,9 @@ type Props = {
   documentHtml: string;
   empregadoNome: string;
   empregadoCpf?: string;
+  // Rev. 4673 — referência opcional gravada em signature_sessions.observacoes
+  // (ex.: 'rh_documento:{id}' liga a sessão ao documento do dossiê).
+  observacoes?: string;
 };
 
 // REGRA DE NEGÓCIO (definida pelo user em 2026-05-18):
@@ -37,7 +40,7 @@ function maskCpf(v: string): string {
 // controlada pelo state `roleOrder` (default: colaborador 1º, empregador 2º).
 type CoreRole = "empregado" | "empregador";
 
-export default function FCSignSendDialog({ open, onOpenChange, companyId, employeeId, tipo, documentTitle, documentHtml, empregadoNome, empregadoCpf }: Props) {
+export default function FCSignSendDialog({ open, onOpenChange, companyId, employeeId, tipo, documentTitle, documentHtml, empregadoNome, empregadoCpf, observacoes }: Props) {
   const [t1Nome, setT1Nome] = useState("");
   const [t1Cpf, setT1Cpf] = useState("");
   const [t2Nome, setT2Nome] = useState("");
@@ -94,6 +97,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
         documentTitle,
         documentHtml,
         signers,
+        ...(observacoes ? { observacoes } : {}),
       });
       setResult(r);
       toast.success("Sessão FCSign criada! Copie os links e envie pelo WhatsApp.");

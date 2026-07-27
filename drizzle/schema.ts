@@ -10702,3 +10702,88 @@ export const gestorSubstituicaoSolicitacoes = pgTable("gestor_substituicao_solic
   criadoPorNome:      varchar("criado_por_nome", { length: 255 }),
   criadoEm:           timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 });
+
+// ============================================================================
+// Rev. 4669 — DOCUMENTOS DO COLABORADOR (dossiê digital com assinatura)
+// Documento gerado por funcionário a partir dos templates da Central ISO
+// (tipos RH_COLAB_DOCS em shared/documentTemplates.ts). O conteudoHtml é um
+// SNAPSHOT renderizado (placeholders já substituídos) — editar o template
+// depois NÃO altera documentos já gerados. Assinatura digital embutida
+// (mesmo padrão de epi_assinaturas: hash SHA-256 + IP + geo + termo).
+// ============================================================================
+export const rhDocumentos = pgTable("rh_documentos", {
+  id:              serial().primaryKey(),
+  companyId:       integer("company_id").notNull(),
+  employeeId:      integer("employee_id").notNull(),
+  tipo:            varchar({ length: 60 }).notNull(),           // ex: "ficha_registro"
+  titulo:          varchar({ length: 255 }).notNull(),
+  codigo:          varchar({ length: 30 }),                      // código ISO do template (FC-RH-008…)
+  versaoTemplate:  integer("versao_template"),                   // versão do template usada
+  conteudoHtml:    text("conteudo_html").notNull(),              // snapshot renderizado
+  status:          varchar({ length: 20 }).notNull().default("gerado"), // "gerado" | "assinado"
+  // Assinatura digital do colaborador
+  assinaturaUrl:   text("assinatura_url"),
+  assinaturaKey:   text("assinatura_key"),
+  assinaturaHash:  varchar("assinatura_hash", { length: 64 }),
+  assinadoEm:      timestamp("assinado_em", { mode: "string" }),
+  assinaturaIp:    varchar("assinatura_ip", { length: 64 }),
+  assinaturaGeo:   text("assinatura_geo"),
+  termoAceito:     integer("termo_aceito").default(0),
+  criadoPorId:     integer("criado_por_id"),
+  criadoPorNome:   varchar("criado_por_nome", { length: 255 }),
+  createdAt:       timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:       timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt:       timestamp("deleted_at", { mode: "string" }),
+});
+
+// ============================================================================
+// Rev. 4672 — FASE 4: Dependentes do colaborador + PDI e Feedbacks (Avaliação)
+// ============================================================================
+export const employeeDependentes = pgTable("employee_dependentes", {
+  id:             serial("id").primaryKey().notNull(),
+  companyId:      integer("company_id").notNull(),
+  employeeId:     integer("employee_id").notNull(),
+  nome:           varchar("nome", { length: 255 }).notNull(),
+  parentesco:     varchar("parentesco", { length: 40 }).notNull(),   // filho|conjuge|enteado|outro
+  dataNascimento: date("data_nascimento", { mode: "string" }),
+  cpf:            varchar("cpf", { length: 14 }),
+  certidaoUrl:    text("certidao_url"),      // certidão de nascimento/casamento
+  vacinacaoUrl:   text("vacinacao_url"),     // caderneta de vacinação (menores de 7)
+  irrf:           smallint("irrf").default(0),            // declarado p/ dedução IRRF
+  salarioFamilia: smallint("salario_familia").default(0), // elegível salário-família
+  observacoes:    text("observacoes"),
+  createdAt:      timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:      timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt:      timestamp("deleted_at", { mode: "string" }),
+});
+
+export const avaliacaoPdis = pgTable("avaliacao_pdis", {
+  id:            serial("id").primaryKey().notNull(),
+  companyId:     integer("company_id").notNull(),
+  employeeId:    integer("employee_id").notNull(),
+  titulo:        varchar("titulo", { length: 255 }).notNull(),
+  objetivo:      text("objetivo"),
+  acoes:         text("acoes"),
+  prazo:         date("prazo", { mode: "string" }),
+  status:        varchar("status", { length: 20 }).default("em_andamento").notNull(), // em_andamento|concluido|cancelado
+  progresso:     integer("progresso").default(0), // 0-100
+  criadoPorId:   integer("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  createdAt:     timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:     timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt:     timestamp("deleted_at", { mode: "string" }),
+});
+
+export const avaliacaoFeedbacks = pgTable("avaliacao_feedbacks", {
+  id:         serial("id").primaryKey().notNull(),
+  companyId:  integer("company_id").notNull(),
+  employeeId: integer("employee_id").notNull(),
+  data:       date("data", { mode: "string" }).notNull(),
+  tipo:       varchar("tipo", { length: 30 }).default("one_on_one").notNull(), // positivo|construtivo|one_on_one
+  resumo:     text("resumo").notNull(),
+  autorId:    integer("autor_id"),
+  autorNome:  varchar("autor_nome", { length: 255 }),
+  createdAt:  timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:  timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt:  timestamp("deleted_at", { mode: "string" }),
+});

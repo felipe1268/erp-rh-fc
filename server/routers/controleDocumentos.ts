@@ -1846,6 +1846,7 @@ export const controleDocumentosRouter = router({
       const db = (await getDb())!;
       const rows = ((await db.execute(sql`
         SELECT e.id, e."nomeCompleto", e.cpf, e.funcao, e."dataAdmissao", e.status,
+          e."fotoUrl",
           ob.nome as "obraNome"
         FROM employees e
         LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
@@ -3125,6 +3126,7 @@ export const controleDocumentosRouter = router({
           nomeCompleto: employees.nomeCompleto,
           cpf: employees.cpf,
           funcao: employees.funcao,
+          fotoUrl: employees.fotoUrl,
           tipo: asos.tipo,
           dataExame: asos.dataExame,
           dataValidade: asos.dataValidade,
@@ -3144,6 +3146,7 @@ export const controleDocumentosRouter = router({
           nomeCompleto: employees.nomeCompleto,
           cpf: employees.cpf,
           funcao: employees.funcao,
+          fotoUrl: employees.fotoUrl,
           nome: trainings.nome,
           norma: trainings.norma,
           dataRealizacao: trainings.dataRealizacao,

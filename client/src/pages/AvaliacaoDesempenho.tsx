@@ -6,7 +6,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   LayoutDashboard, ClipboardCheck, Users, Star, Settings, FileText,
-  TrendingUp, Shield, UserCheck, Layers
+  TrendingUp, Shield, UserCheck, Layers, Target
 } from "lucide-react";
 
 // Sub-modules
@@ -19,12 +19,14 @@ import AvalCriterios from "./avaliacao/AvalCriterios";
 import AvalPesquisas from "./avaliacao/AvalPesquisas";
 import AvalClima from "./avaliacao/AvalClima";
 import AvalAuditoria from "./avaliacao/AvalAuditoria";
+import AvalPdi from "./avaliacao/AvalPdi";
 
 const TABS_ADMIN = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "avaliar", label: "Avaliar", icon: ClipboardCheck },
   { id: "avaliacoes", label: "Avaliações", icon: Star },
   { id: "raio-x", label: "Raio-X", icon: UserCheck },
+  { id: "pdi", label: "PDI & Feedback", icon: Target },
   { id: "avaliadores", label: "Avaliadores", icon: Users },
   { id: "criterios", label: "Critérios", icon: Layers },
   { id: "pesquisas", label: "Pesquisas", icon: FileText },
@@ -105,6 +107,10 @@ export default function AvaliacaoDesempenho() {
 
             <TabsContent value="raio-x" className="mt-0">
               <RaioXFuncionario />
+            </TabsContent>
+
+            <TabsContent value="pdi" className="mt-0">
+              <AvalPdi />
             </TabsContent>
 
             <TabsContent value="avaliadores" className="mt-0">

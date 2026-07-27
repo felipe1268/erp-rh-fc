@@ -959,6 +959,101 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3743: tabela financial_entry_baixas garantida (baixa parcial Contas a Pagar/Receber).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_entry_baixas:`, e?.message || e); }
 
+        // Rev. 4669 — DOCUMENTOS DO COLABORADOR (dossiê digital com assinatura).
+        // CREATE TABLE IF NOT EXISTS — aditivo, seguro em dev e produção.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS rh_documentos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              employee_id INTEGER NOT NULL,
+              tipo VARCHAR(60) NOT NULL,
+              titulo VARCHAR(255) NOT NULL,
+              codigo VARCHAR(30),
+              versao_template INTEGER,
+              conteudo_html TEXT NOT NULL,
+              status VARCHAR(20) DEFAULT 'gerado' NOT NULL,
+              assinatura_url TEXT,
+              assinatura_key TEXT,
+              assinatura_hash VARCHAR(64),
+              assinado_em TIMESTAMP,
+              assinatura_ip VARCHAR(64),
+              assinatura_geo TEXT,
+              termo_aceito INTEGER DEFAULT 0,
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_rhdoc_emp ON rh_documentos(company_id, employee_id)`);
+          console.log(`[SyncSchema+] Rev. 4669: tabela rh_documentos garantida (Documentos do Colaborador).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA rh_documentos:`, e?.message || e); }
+
+        // Rev. 4672 — FASE 4: dependentes do colaborador + PDI/feedbacks da Avaliação.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS employee_dependentes (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              employee_id INTEGER NOT NULL,
+              nome VARCHAR(255) NOT NULL,
+              parentesco VARCHAR(40) NOT NULL,
+              data_nascimento DATE,
+              cpf VARCHAR(14),
+              certidao_url TEXT,
+              vacinacao_url TEXT,
+              irrf SMALLINT DEFAULT 0,
+              salario_familia SMALLINT DEFAULT 0,
+              observacoes TEXT,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_empdep_emp ON employee_dependentes(company_id, employee_id)`);
+          console.log(`[SyncSchema+] Rev. 4672: tabela employee_dependentes garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA employee_dependentes:`, e?.message || e); }
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS avaliacao_pdis (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              employee_id INTEGER NOT NULL,
+              titulo VARCHAR(255) NOT NULL,
+              objetivo TEXT,
+              acoes TEXT,
+              prazo DATE,
+              status VARCHAR(20) DEFAULT 'em_andamento' NOT NULL,
+              progresso INTEGER DEFAULT 0,
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_avpdi_emp ON avaliacao_pdis(company_id, employee_id)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS avaliacao_feedbacks (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              employee_id INTEGER NOT NULL,
+              data DATE NOT NULL,
+              tipo VARCHAR(30) DEFAULT 'one_on_one' NOT NULL,
+              resumo TEXT NOT NULL,
+              autor_id INTEGER,
+              autor_nome VARCHAR(255),
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_avfb_emp ON avaliacao_feedbacks(company_id, employee_id)`);
+          console.log(`[SyncSchema+] Rev. 4672: tabelas avaliacao_pdis e avaliacao_feedbacks garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA pdi/feedbacks:`, e?.message || e); }
+
         // Rev. 3747 — VÍNCULO de cheque devolvido ↔ pagamento(s) substituto(s) (PIX/TED).
         // Ancorado na linha de DÉBITO do cheque no extrato (estável, funciona sem número).
         // Suporta 1→N vínculos parciais + estorno por vínculo. NUNCA cria linha no extrato.

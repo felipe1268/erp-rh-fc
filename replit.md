@@ -50,6 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4673** — **Documentos do Colaborador: layout moderno** (fotos + % de completude por funcionário; geração em lote com checkbox e progresso 0–100%; assinatura via FCSign igual à ficha de EPI).
+- **Rev. 4672** — **Documentos do Colaborador Fases 2–4** (Ficha com foto; Contrato CLT; férias/folha/aditivo assináveis com campos extras; termos de benefícios; dependentes completos no dossiê; aba PDI & Feedback na Avaliação).
+- **Rev. 4671** — **Controle de Documentos: aba Checklist** (matriz funcionário × documento com todos os modelos de RH + ASO/OS/treinamentos/anexos; gera documento faltante direto na célula; link p/ dossiê com pré-seleção).
+- **Rev. 4670** — **Controle de Documentos: fotos dos funcionários** (avatares nas listas Validade, Sem ASO e Documentos — demais abas já tinham).
+- **Rev. 4669** — **Documentos do Colaborador (Fase 1)** (página nova RH/DP: 8 modelos ISO FC-RH-008…015, geração por funcionário, assinatura digital auditável, checklist documental, PDF timbrado e dossiê ZIP).
 - **Rev. 4668** — **OS Digital: ajustes do code review** (salvarAssinatura valida tipo × deliveryId; dialog com estado de erro).
 - **Rev. 4667** — **OS (NR-01) Digital**: gerada por colaborador (texto da função + EPIs c/ CA + treinamentos), assinatura digital (epi_assinaturas tipo ordem_servico), botão "OS (NR-01)" na Ficha de EPI, PDF via /api/download/ordem-servico-pdf e automática no Dossiê ZIP (001.4).
 - **Rev. 4666** — **Dossiê ZIP: subpastas numeradas** (001.1 Identificação, 001.2 Registro, 001.3 Outros, 001.4 OS; 004.1 Integração FC, 004.2 Integração Cliente).

@@ -227,7 +227,7 @@ ${d.assinatura ? `<div class="rodape"><b>AUTENTICAÇÃO DIGITAL:</b> A assinatur
 </body></html>`;
 }
 
-async function launchBrowser() {
+export async function launchBrowser() {
   const puppeteer = await import("puppeteer");
   return puppeteer.default.launch({
     headless: true,
@@ -236,7 +236,7 @@ async function launchBrowser() {
   });
 }
 
-async function pdfFromHtml(browser: any, html: string): Promise<Buffer> {
+export async function pdfFromHtml(browser: any, html: string): Promise<Buffer> {
   const page = await browser.newPage();
   try {
     await page.setRequestInterception(true);

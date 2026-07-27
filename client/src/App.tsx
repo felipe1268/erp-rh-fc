@@ -206,6 +206,7 @@ const Lixeira = lazyWithRetry(() => import("./pages/Lixeira"));
 const AvisoPrevio = lazyWithRetry(() => import("./pages/AvisoPrevio"));
 const PedidoDemissao = lazyWithRetry(() => import("./pages/PedidoDemissao"));
 const Ferias = lazyWithRetry(() => import("./pages/Ferias"));
+const DocumentosColaborador = lazyWithRetry(() => import("./pages/DocumentosColaborador"));
 const SeguroVida = lazyWithRetry(() => import("./pages/SeguroVida"));
 const CipaCompleta = lazyWithRetry(() => import("./pages/CipaCompleta"));
 const CipaVotacao = lazyWithRetry(() => import("./pages/CipaVotacao"));
@@ -551,6 +552,7 @@ function Router() {
         <Route path={"/aviso-previo"} component={() => <RouteGuard component={AvisoPrevio} route="/aviso-previo" />} />
         <Route path={"/pedido-demissao"} component={() => <RouteGuard component={PedidoDemissao} route="/pedido-demissao" />} />
         <Route path={"/ferias"} component={() => <RouteGuard component={Ferias} route="/ferias" />} />
+        <Route path={"/documentos-colaborador"} component={() => <RouteGuard component={DocumentosColaborador} route="/documentos-colaborador" />} />
         <Route path={"/seguro-vida"} component={() => <RouteGuard component={SeguroVida} route="/seguro-vida" />} />
         <Route path={"/cipa"} component={() => <RouteGuard component={CipaCompleta} route="/cipa" />} />
         <Route path={"/programas-sst"} component={() => <RouteGuard component={ProgramasSST} route="/programas-sst" />} />

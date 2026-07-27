@@ -5,6 +5,13 @@ description: Why adding a column to drizzle/schema.ts can silently break a list 
 
 # Adding a column to a Drizzle table → must also guarantee it in Neon
 
+**Tabelas NOVAS idem:** o SyncSchema automático NÃO cria tabela nova. Toda tabela
+adicionada a `drizzle/schema.ts` precisa de um bloco `[SyncSchema+] Rev. N` manual
+em `server/_core/index.ts` (~linha 960+) com `CREATE TABLE IF NOT EXISTS` + índices,
+em try/catch isolado. Confirmado nas Rev. 4669 (rh_documentos) e 4672
+(employee_dependentes, avaliacao_pdis, avaliacao_feedbacks). Verifique a criação
+via pg direto no Neon — o log [SyncSchema+] é capado (~49 linhas).
+
 Adding a column to a table in `drizzle/schema.ts` is NOT enough for this app. The
 generic `[SyncSchema]` startup step does NOT cover every table (e.g. it does not
 cover `clientes`). When it skips a table, the new column never gets created in

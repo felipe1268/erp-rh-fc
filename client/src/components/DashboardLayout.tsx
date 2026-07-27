@@ -108,6 +108,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: CreditCard, label: "Crachás", path: "/crachas" },
       { icon: ClipboardPlus, label: "Lançar Atestados", path: "/controle-documentos?tab=atestados" },
       { icon: ShieldAlert, label: "Advertências", path: "/controle-documentos?tab=advertencias" },
+      { icon: FolderOpen, label: "Documentos do Colaborador", path: "/documentos-colaborador" },
     ],
   },
   {

@@ -20,6 +20,26 @@ export type DocumentTemplateTipo =
   | "aviso_previo"
   | "termo_rescisao"
   | "carta_mdo"
+  // RH — Documentos do Colaborador (Rev. 4669)
+  | "ficha_registro"
+  | "termo_equipamentos"
+  | "termo_confidencialidade"
+  | "regulamento_interno"
+  | "codigo_etica"
+  | "termo_lgpd"
+  | "acordo_banco_horas"
+  | "acordo_compensacao"
+  // RH — Fases 2/3 (Rev. 4672): contrato CLT, férias, folha, benefícios, aditivo
+  | "contrato_trabalho_clt"
+  | "solicitacao_ferias"
+  | "recibo_ferias"
+  | "recibo_folha"
+  | "termo_aditivo"
+  | "adesao_plano_saude"
+  | "adesao_vt"
+  | "recusa_vt"
+  | "adesao_va"
+  | "adesao_seguro_vida"
   // Financeiro
   | "recibo_pagamento"
   | "comprovante_pagamento"
@@ -253,6 +273,228 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
     ],
   },
   // ── Financeiro ──────────────────────────────────────────────────────────────
+  // ── Rev. 4669 — Documentos do Colaborador (dossiê digital com assinatura) ──
+  {
+    tipo: "ficha_registro",
+    titulo: "Ficha de Registro do Empregado",
+    descricao: "Ficha de registro com dados pessoais, contratuais e bancários do colaborador.",
+    icone: "IdCard",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "empCtps",        rotulo: "CTPS",               exemplo: "1234567 / 001-SP",  grupo: "Colaborador" },
+      { chave: "empPis",         rotulo: "PIS/PASEP",          exemplo: "123.45678.90-1",    grupo: "Colaborador" },
+      { chave: "empNascimento",  rotulo: "Data de Nascimento", exemplo: "10/03/1990",        grupo: "Colaborador" },
+      { chave: "empEstadoCivil", rotulo: "Estado Civil",       exemplo: "Casado(a)",          grupo: "Colaborador" },
+      { chave: "empNomeMae",     rotulo: "Nome da Mãe",        exemplo: "MARIA DA SILVA",     grupo: "Colaborador" },
+      { chave: "empTelefone",    rotulo: "Telefone",           exemplo: "(12) 99999-0000",    grupo: "Colaborador" },
+      { chave: "empBanco",       rotulo: "Banco",              exemplo: "Itaú",               grupo: "Colaborador" },
+      { chave: "empPix",         rotulo: "Chave PIX",          exemplo: "362.506.888-54",     grupo: "Colaborador" },
+    ],
+  },
+  {
+    tipo: "termo_equipamentos",
+    titulo: "Termo de Responsabilidade por Equipamentos",
+    descricao: "Responsabilidade por equipamentos e ferramentas entregues ao colaborador (Art. 462 CLT).",
+    icone: "Wrench",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "equipamentos", rotulo: "Equipamentos entregues", exemplo: "1 Notebook Dell, 1 Celular Samsung", grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "termo_confidencialidade",
+    titulo: "Termo de Confidencialidade (NDA)",
+    descricao: "Compromisso de sigilo sobre informações da empresa, clientes e projetos.",
+    icone: "Lock",
+    categoria: "rh",
+    placeholders: [...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO],
+  },
+  {
+    tipo: "regulamento_interno",
+    titulo: "Ciência do Regulamento Interno",
+    descricao: "Declaração de recebimento e ciência do regulamento interno da empresa.",
+    icone: "BookOpen",
+    categoria: "rh",
+    placeholders: [...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO],
+  },
+  {
+    tipo: "codigo_etica",
+    titulo: "Ciência do Código de Ética e Conduta",
+    descricao: "Declaração de recebimento e compromisso com o código de ética e conduta.",
+    icone: "Scale",
+    categoria: "rh",
+    placeholders: [...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO],
+  },
+  {
+    tipo: "termo_lgpd",
+    titulo: "Termo de Consentimento LGPD",
+    descricao: "Consentimento para tratamento de dados pessoais (Lei 13.709/2018).",
+    icone: "ShieldCheck",
+    categoria: "rh",
+    placeholders: [...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO],
+  },
+  {
+    tipo: "acordo_banco_horas",
+    titulo: "Acordo de Banco de Horas",
+    descricao: "Acordo individual de banco de horas (Art. 59, §5º da CLT).",
+    icone: "Clock",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "prazoCompensacao", rotulo: "Prazo de compensação", exemplo: "6 (seis) meses", grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "acordo_compensacao",
+    titulo: "Acordo de Compensação de Jornada",
+    descricao: "Acordo individual de compensação de jornada de trabalho (Art. 59-A/59-B da CLT).",
+    icone: "CalendarClock",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "jornadaDescricao", rotulo: "Descrição da jornada", exemplo: "Seg a Qui 07h-17h, Sex 07h-16h", grupo: "Específicos" },
+    ],
+  },
+  // ── Rev. 4672 — Fases 2/3: contrato CLT, férias, folha, benefícios, aditivo ──
+  {
+    tipo: "contrato_trabalho_clt",
+    titulo: "Contrato de Trabalho (CLT)",
+    descricao: "Contrato individual de trabalho por prazo indeterminado, com variáveis do cadastro.",
+    icone: "FileSignature",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "empCtps",         rotulo: "CTPS",                exemplo: "1234567 / 001-SP",              grupo: "Colaborador" },
+      { chave: "jornadaSemanal",  rotulo: "Jornada semanal",     exemplo: "44 horas semanais",             grupo: "Específicos" },
+      { chave: "horarioTrabalho", rotulo: "Horário de trabalho", exemplo: "Seg a Qui 07h-17h, Sex 07h-16h", grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "solicitacao_ferias",
+    titulo: "Solicitação de Férias",
+    descricao: "Solicitação/aviso de férias com período de gozo e aquisitivo, assinável pelo colaborador.",
+    icone: "Plane",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "feriasInicio",     rotulo: "Início do gozo",       exemplo: "01/09/2026", grupo: "Específicos" },
+      { chave: "feriasFim",        rotulo: "Fim do gozo",          exemplo: "30/09/2026", grupo: "Específicos" },
+      { chave: "feriasDias",       rotulo: "Dias de gozo",         exemplo: "30",         grupo: "Específicos" },
+      { chave: "aquisitivoInicio", rotulo: "Aquisitivo — início",  exemplo: "01/02/2025", grupo: "Específicos" },
+      { chave: "aquisitivoFim",    rotulo: "Aquisitivo — fim",     exemplo: "31/01/2026", grupo: "Específicos" },
+      { chave: "abonoPecuniario",  rotulo: "Abono pecuniário",     exemplo: "Não",        grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "recibo_ferias",
+    titulo: "Recibo de Férias",
+    descricao: "Recibo de pagamento e gozo de férias (quitação), assinável pelo colaborador.",
+    icone: "Receipt",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "feriasInicio",     rotulo: "Início do gozo",      exemplo: "01/09/2026",  grupo: "Específicos" },
+      { chave: "feriasFim",        rotulo: "Fim do gozo",         exemplo: "30/09/2026",  grupo: "Específicos" },
+      { chave: "feriasDias",       rotulo: "Dias de gozo",        exemplo: "30",          grupo: "Específicos" },
+      { chave: "aquisitivoInicio", rotulo: "Aquisitivo — início", exemplo: "01/02/2025",  grupo: "Específicos" },
+      { chave: "aquisitivoFim",    rotulo: "Aquisitivo — fim",    exemplo: "31/01/2026",  grupo: "Específicos" },
+      { chave: "valorBruto",       rotulo: "Valor bruto",         exemplo: "R$ 8.000,00", grupo: "Específicos" },
+      { chave: "valorLiquido",     rotulo: "Valor líquido",       exemplo: "R$ 7.100,00", grupo: "Específicos" },
+      { chave: "dataPagamento",    rotulo: "Data de pagamento",   exemplo: "29/08/2026",  grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "recibo_folha",
+    titulo: "Recibo de Pagamento de Salário",
+    descricao: "Recibo de folha (holerite, 13º ou adiantamento) como comprovante assinável.",
+    icone: "Banknote",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "tipoRecibo",    rotulo: "Tipo do recibo",     exemplo: "Holerite (salário mensal)", grupo: "Específicos" },
+      { chave: "mesRef",        rotulo: "Competência",        exemplo: "Julho/2026",                grupo: "Específicos" },
+      { chave: "valorLiquido",  rotulo: "Valor líquido",      exemplo: "R$ 4.350,00",               grupo: "Específicos" },
+      { chave: "dataPagamento", rotulo: "Data de pagamento",  exemplo: "05/08/2026",                grupo: "Específicos" },
+      { chave: "observacoes",   rotulo: "Observações",        exemplo: "—",                          grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "termo_aditivo",
+    titulo: "Termo Aditivo ao Contrato de Trabalho",
+    descricao: "Aditivo contratual: promoção, mudança de salário, função ou jornada.",
+    icone: "FilePlus2",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "tipoAlteracao",      rotulo: "Tipo de alteração",  exemplo: "Promoção com aumento salarial", grupo: "Específicos" },
+      { chave: "descricaoAlteracao", rotulo: "Descrição",          exemplo: "Promovido a Encarregado de Obras", grupo: "Específicos" },
+      { chave: "novaFuncao",         rotulo: "Nova função",        exemplo: "ENCARREGADO DE OBRAS", grupo: "Específicos" },
+      { chave: "novoSalario",        rotulo: "Novo salário",       exemplo: "R$ 4.500,00",          grupo: "Específicos" },
+      { chave: "dataVigencia",       rotulo: "Vigência a partir",  exemplo: "01/08/2026",           grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "adesao_plano_saude",
+    titulo: "Termo de Adesão — Plano de Saúde",
+    descricao: "Adesão ao plano de saúde com autorização de desconto (Art. 462 CLT).",
+    icone: "HeartPulse",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "operadora",      rotulo: "Operadora",             exemplo: "Unimed",         grupo: "Específicos" },
+      { chave: "plano",          rotulo: "Plano",                 exemplo: "Nacional Apto.", grupo: "Específicos" },
+      { chave: "coparticipacao", rotulo: "Coparticipação/desconto", exemplo: "R$ 120,00/mês", grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "adesao_vt",
+    titulo: "Termo de Adesão — Vale-Transporte",
+    descricao: "Opção pelo vale-transporte com autorização de desconto de até 6% (Lei 7.418/85).",
+    icone: "Bus",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "linhas",   rotulo: "Linhas/percurso",       exemplo: "Linha 010 — Centro ↔ Pedregulho (ida e volta)", grupo: "Específicos" },
+      { chave: "valorDia", rotulo: "Valor diário (R$)",     exemplo: "R$ 9,00", grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "recusa_vt",
+    titulo: "Termo de Recusa — Vale-Transporte",
+    descricao: "Declaração de NÃO opção pelo vale-transporte (Decreto 95.247/87).",
+    icone: "BusFront",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "motivo", rotulo: "Motivo da recusa", exemplo: "Utilizo veículo próprio", grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "adesao_va",
+    titulo: "Termo de Adesão — Vale-Alimentação/Refeição",
+    descricao: "Adesão ao vale-alimentação/refeição (PAT) com ciência das regras de desconto.",
+    icone: "UtensilsCrossed",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "valorMensal", rotulo: "Valor mensal (R$)", exemplo: "R$ 550,00", grupo: "Específicos" },
+    ],
+  },
+  {
+    tipo: "adesao_seguro_vida",
+    titulo: "Termo de Adesão — Seguro de Vida",
+    descricao: "Ciência/adesão ao seguro de vida em grupo e indicação de beneficiários.",
+    icone: "Umbrella",
+    categoria: "rh",
+    placeholders: [
+      ...PH_COLABORADOR, ...PH_EMPRESA, ...PH_DOCUMENTO,
+      { chave: "seguradora",    rotulo: "Seguradora",    exemplo: "Porto Seguro",     grupo: "Específicos" },
+      { chave: "apolice",       rotulo: "Apólice",       exemplo: "0982.123.456",     grupo: "Específicos" },
+      { chave: "beneficiarios", rotulo: "Beneficiários", exemplo: "Cônjuge e filhos", grupo: "Específicos" },
+    ],
+  },
   {
     tipo: "recibo_pagamento",
     titulo: "Recibo de Pagamento",
@@ -494,6 +736,26 @@ export const DEFAULT_CODIGOS: Record<DocumentTemplateTipo, string> = {
   aviso_previo:           "FC-RH-005",
   termo_rescisao:         "FC-RH-006",
   carta_mdo:              "FC-RH-007",
+  // RH — Documentos do Colaborador (Rev. 4669)
+  ficha_registro:         "FC-RH-008",
+  termo_equipamentos:     "FC-RH-009",
+  termo_confidencialidade:"FC-RH-010",
+  regulamento_interno:    "FC-RH-011",
+  codigo_etica:           "FC-RH-012",
+  termo_lgpd:             "FC-RH-013",
+  acordo_banco_horas:     "FC-RH-014",
+  acordo_compensacao:     "FC-RH-015",
+  // RH — Fases 2/3 (Rev. 4672)
+  contrato_trabalho_clt:  "FC-RH-016",
+  solicitacao_ferias:     "FC-RH-017",
+  recibo_ferias:          "FC-RH-018",
+  recibo_folha:           "FC-RH-019",
+  termo_aditivo:          "FC-RH-020",
+  adesao_plano_saude:     "FC-RH-021",
+  adesao_vt:              "FC-RH-022",
+  recusa_vt:              "FC-RH-023",
+  adesao_va:              "FC-RH-024",
+  adesao_seguro_vida:     "FC-RH-025",
   // Financeiro
   recibo_pagamento:       "FC-FIN-001",
   comprovante_pagamento:  "FC-FIN-002",
@@ -815,6 +1077,224 @@ const SEED_PROPOSTA_COMERCIAL = `
 <p><strong>{{empresaRazaoSocial}}</strong></p>
 `;
 
+// ── Rev. 4669 — Seeds: Documentos do Colaborador ─────────────────────────────
+const SEED_FICHA_REGISTRO = `
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:4px 0 8px">DADOS PESSOAIS</h3>
+<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:10.5pt">
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold;width:35%">Nome Completo</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empNome}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">CPF</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empCpf}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">RG</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empRg}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">Data de Nascimento</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empNascimento}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">Estado Civil</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empEstadoCivil}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">Nome da Mãe</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empNomeMae}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">Telefone</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empTelefone}}</td></tr>
+</table>
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:14px 0 8px">DADOS CONTRATUAIS</h3>
+<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:10.5pt">
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold;width:35%">Matrícula</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empMatricula}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">Função</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empFuncao}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">Data de Admissão</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empAdmissao}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">Salário Base</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empSalario}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">CTPS</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empCtps}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">PIS/PASEP</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empPis}}</td></tr>
+</table>
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:14px 0 8px">DADOS BANCÁRIOS</h3>
+<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:10.5pt">
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold;width:35%">Banco</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empBanco}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">Agência / Conta</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empAgencia}} / {{empConta}}</td></tr>
+  <tr><td style="border:1px solid #D0D5DD;padding:6px 12px;background:#F8FAFC;font-weight:bold">Chave PIX</td><td style="border:1px solid #D0D5DD;padding:6px 12px">{{empPix}}</td></tr>
+</table>
+<p style="margin-top:14px;text-align:justify">Declaro que as informações acima são verdadeiras e me comprometo a comunicar ao setor de Recursos Humanos qualquer alteração nos dados cadastrais.</p>
+<p style="margin-top:10px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_TERMO_EQUIPAMENTOS = `
+<p style="margin-bottom:10px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, {{empFuncao}}, colaborador(a) da empresa <strong>{{empresaRazaoSocial}}</strong> (CNPJ {{empresaCnpj}}), declaro ter recebido, em perfeito estado de conservação e funcionamento, os equipamentos abaixo relacionados, de propriedade da empresa:</p>
+<p style="margin:10px 0;padding:10px 12px;border:1px solid #D0D5DD;background:#F8FAFC"><strong>Equipamentos:</strong> {{equipamentos}}</p>
+<p style="margin-bottom:8px;text-align:justify">Comprometo-me a:</p>
+<ol style="margin:0 0 10px 20px;text-align:justify">
+  <li>Utilizar os equipamentos exclusivamente no exercício das minhas funções;</li>
+  <li>Zelar pela guarda e conservação, comunicando imediatamente qualquer defeito, perda, roubo ou extravio;</li>
+  <li>Devolvê-los quando solicitado pela empresa ou ao término do contrato de trabalho, no estado em que se encontrarem, ressalvado o desgaste natural de uso;</li>
+  <li>Autorizar, nos termos do Art. 462, §1º da CLT, o desconto salarial do valor correspondente em caso de dano ou perda decorrente de dolo ou negligência comprovada.</li>
+</ol>
+<p style="margin-top:10px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_TERMO_CONFIDENCIALIDADE = `
+<p style="margin-bottom:10px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, colaborador(a) da empresa <strong>{{empresaRazaoSocial}}</strong> (CNPJ {{empresaCnpj}}), comprometo-me a manter absoluto sigilo sobre toda e qualquer informação confidencial a que tiver acesso em razão do meu contrato de trabalho, incluindo, mas não se limitando a:</p>
+<ol style="margin:0 0 10px 20px;text-align:justify">
+  <li>Informações técnicas, comerciais, financeiras e estratégicas da empresa;</li>
+  <li>Dados de clientes, fornecedores, propostas, contratos e orçamentos;</li>
+  <li>Projetos, metodologias, processos construtivos e documentos internos;</li>
+  <li>Dados pessoais de colaboradores e terceiros tratados pela empresa.</li>
+</ol>
+<p style="margin-bottom:8px;text-align:justify">Estou ciente de que a obrigação de confidencialidade permanece válida mesmo após o término do contrato de trabalho, e de que sua violação poderá caracterizar justa causa (Art. 482, "g", da CLT), sem prejuízo da responsabilização civil e criminal cabível.</p>
+<p style="margin-top:10px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_REGULAMENTO_INTERNO = `
+<p style="margin-bottom:10px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, colaborador(a) da empresa <strong>{{empresaRazaoSocial}}</strong>, declaro que <strong>recebi, li e compreendi o Regulamento Interno</strong> da empresa, comprometendo-me a cumpri-lo integralmente.</p>
+<p style="margin-bottom:8px;text-align:justify">Estou ciente de que:</p>
+<ol style="margin:0 0 10px 20px;text-align:justify">
+  <li>O regulamento estabelece normas de conduta, horários, uso de uniformes e equipamentos, e procedimentos internos;</li>
+  <li>O descumprimento das normas poderá acarretar as sanções disciplinares previstas (advertência, suspensão e demissão por justa causa, conforme Art. 482 da CLT);</li>
+  <li>O regulamento poderá ser atualizado, sendo minha responsabilidade manter-me informado(a) das alterações divulgadas pela empresa.</li>
+</ol>
+<p style="margin-top:10px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_CODIGO_ETICA = `
+<p style="margin-bottom:10px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, colaborador(a) da empresa <strong>{{empresaRazaoSocial}}</strong>, declaro que <strong>recebi, li e compreendi o Código de Ética e Conduta</strong> da empresa, e me comprometo a:</p>
+<ol style="margin:0 0 10px 20px;text-align:justify">
+  <li>Agir com honestidade, integridade e respeito nas relações com colegas, clientes, fornecedores e comunidade;</li>
+  <li>Não praticar nem tolerar qualquer forma de assédio, discriminação ou violência no ambiente de trabalho;</li>
+  <li>Não oferecer, prometer ou receber vantagens indevidas (Lei Anticorrupção — Lei 12.846/2013);</li>
+  <li>Zelar pelo patrimônio, pela imagem e pelas informações da empresa;</li>
+  <li>Reportar violações a este código pelos canais indicados pela empresa.</li>
+</ol>
+<p style="margin-bottom:8px;text-align:justify">Estou ciente de que o descumprimento deste código sujeita o colaborador às sanções disciplinares cabíveis, nos termos da CLT.</p>
+<p style="margin-top:10px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_TERMO_LGPD = `
+<p style="margin-bottom:10px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, na qualidade de colaborador(a) da empresa <strong>{{empresaRazaoSocial}}</strong> (CNPJ {{empresaCnpj}}), declaro estar ciente e de acordo com o tratamento dos meus dados pessoais pela empresa, nos termos da Lei Geral de Proteção de Dados — Lei nº 13.709/2018 (LGPD), conforme abaixo:</p>
+<ol style="margin:0 0 10px 20px;text-align:justify">
+  <li><strong>Finalidade:</strong> cumprimento de obrigações trabalhistas, previdenciárias e fiscais; gestão de pessoal (folha, benefícios, saúde e segurança do trabalho, controle de jornada, treinamentos e crachás); e atendimento a exigências de clientes e órgãos fiscalizadores;</li>
+  <li><strong>Dados tratados:</strong> dados cadastrais, documentos pessoais, dados bancários, dados de saúde ocupacional (ASO), biometria/fotografia e geolocalização quando aplicável às ferramentas de trabalho;</li>
+  <li><strong>Compartilhamento:</strong> os dados poderão ser compartilhados com contadores, operadoras de benefícios, clientes (integração em obra), e órgãos públicos, sempre limitado ao necessário;</li>
+  <li><strong>Direitos:</strong> posso solicitar acesso, correção ou informação sobre o tratamento dos meus dados pelo canal de RH da empresa;</li>
+  <li><strong>Retenção:</strong> os dados serão mantidos pelos prazos legais aplicáveis, mesmo após o término do contrato.</li>
+</ol>
+<p style="margin-top:10px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_ACORDO_BANCO_HORAS = `
+<p style="margin-bottom:10px;text-align:justify">Pelo presente instrumento, a empresa <strong>{{empresaRazaoSocial}}</strong>, CNPJ <strong>{{empresaCnpj}}</strong>, doravante EMPREGADORA, e o(a) colaborador(a) <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, {{empFuncao}}, doravante EMPREGADO(A), celebram o presente <strong>Acordo Individual de Banco de Horas</strong>, nos termos do Art. 59, §5º da CLT:</p>
+<ol style="margin:0 0 10px 20px;text-align:justify">
+  <li>As horas extraordinárias trabalhadas serão lançadas em banco de horas, para compensação com folgas ou redução de jornada;</li>
+  <li>A compensação ocorrerá no prazo máximo de <strong>{{prazoCompensacao}}</strong>, contado do mês de apuração;</li>
+  <li>Não havendo compensação no prazo, as horas serão pagas como extras, com o adicional legal ou convencional;</li>
+  <li>Em caso de rescisão contratual, o saldo credor será pago com o adicional de horas extras e o saldo devedor poderá ser descontado, na forma da lei;</li>
+  <li>O controle do saldo estará disponível ao empregado por meio do sistema de ponto/ERP da empresa.</li>
+</ol>
+<p style="margin-top:10px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_ACORDO_COMPENSACAO = `
+<p style="margin-bottom:10px;text-align:justify">Pelo presente instrumento, a empresa <strong>{{empresaRazaoSocial}}</strong>, CNPJ <strong>{{empresaCnpj}}</strong>, doravante EMPREGADORA, e o(a) colaborador(a) <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, {{empFuncao}}, doravante EMPREGADO(A), celebram o presente <strong>Acordo Individual de Compensação de Jornada</strong>, nos termos dos Arts. 59, §6º, e 59-B da CLT:</p>
+<ol style="margin:0 0 10px 20px;text-align:justify">
+  <li>A jornada semanal de trabalho será cumprida da seguinte forma: <strong>{{jornadaDescricao}}</strong>;</li>
+  <li>A prorrogação diária destina-se à compensação (ex.: supressão ou redução do trabalho aos sábados), respeitado o limite legal;</li>
+  <li>A eventual prestação de horas extras não descaracteriza o presente acordo (Art. 59-B, parágrafo único, da CLT);</li>
+  <li>Este acordo vigora por prazo indeterminado, podendo ser alterado mediante novo instrumento.</li>
+</ol>
+<p style="margin-top:10px">{{docLocal}}, {{docData}}.</p>
+`;
+
+// ── Rev. 4672 — Seeds Fases 2/3 ──────────────────────────────────────────────
+const SEED_CONTRATO_TRABALHO_CLT = `
+<p style="margin-bottom:12px;text-align:justify"><strong>{{empresaRazaoSocial}}</strong>, CNPJ <strong>{{empresaCnpj}}</strong>, com sede em <strong>{{empresaEndereco}}</strong>, doravante <strong>EMPREGADORA</strong>, e <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, CTPS <strong>{{empCtps}}</strong>, doravante <strong>EMPREGADO(A)</strong>, celebram o presente CONTRATO INDIVIDUAL DE TRABALHO POR PRAZO INDETERMINADO, regido pela CLT.</p>
+<p style="margin-top:14px"><strong>1. DA FUNÇÃO</strong></p>
+<p style="margin-top:6px;text-align:justify">O(A) EMPREGADO(A) exercerá a função de <strong>{{empFuncao}}</strong>, obrigando-se a executar os serviços com zelo e dedicação, podendo a EMPREGADORA determinar a prestação de serviços compatíveis com sua condição pessoal.</p>
+<p style="margin-top:14px"><strong>2. DA REMUNERAÇÃO</strong></p>
+<p style="margin-top:6px;text-align:justify">Salário mensal de <strong>{{empSalario}}</strong>, pago até o 5º dia útil do mês subsequente, com os descontos legais (INSS, IRRF e demais autorizados).</p>
+<p style="margin-top:14px"><strong>3. DA JORNADA</strong></p>
+<p style="margin-top:6px;text-align:justify">Jornada de <strong>{{jornadaSemanal}}</strong>, no horário <strong>{{horarioTrabalho}}</strong>, com intervalo para refeição e descanso na forma da lei, ficando facultada a compensação de jornada e o banco de horas mediante acordo individual.</p>
+<p style="margin-top:14px"><strong>4. DO LOCAL DE TRABALHO</strong></p>
+<p style="margin-top:6px;text-align:justify">O(A) EMPREGADO(A) prestará serviços nas obras e estabelecimentos da EMPREGADORA, concordando com transferências na forma do art. 469 da CLT, quando decorrentes de real necessidade de serviço.</p>
+<p style="margin-top:14px"><strong>5. DAS DISPOSIÇÕES GERAIS</strong></p>
+<p style="margin-top:6px;text-align:justify">Aplicam-se as normas internas da EMPREGADORA, o regulamento interno, o código de ética e as normas de segurança do trabalho, das quais o(a) EMPREGADO(A) declara ter ciência. Este contrato sucede, quando existente, o contrato de experiência anteriormente firmado.</p>
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_SOLICITACAO_FERIAS = `
+<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, função <strong>{{empFuncao}}</strong>, venho solicitar/confirmar o gozo de férias conforme abaixo:</p>
+<table style="width:100%;border-collapse:collapse;margin:10px 0" border="1" cellpadding="6">
+<tr><td><strong>Período aquisitivo</strong></td><td>{{aquisitivoInicio}} a {{aquisitivoFim}}</td></tr>
+<tr><td><strong>Período de gozo</strong></td><td>{{feriasInicio}} a {{feriasFim}} ({{feriasDias}} dias)</td></tr>
+<tr><td><strong>Abono pecuniário (venda de 1/3)</strong></td><td>{{abonoPecuniario}}</td></tr>
+</table>
+<p style="margin-top:10px;text-align:justify">Declaro ciência de que o pagamento das férias será efetuado até 2 (dois) dias antes do início do gozo (art. 145 da CLT) e de que devo retornar ao trabalho no primeiro dia útil seguinte ao término do período.</p>
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_RECIBO_FERIAS = `
+<p style="margin-bottom:12px;text-align:justify">Recebi de <strong>{{empresaRazaoSocial}}</strong>, CNPJ <strong>{{empresaCnpj}}</strong>, a importância líquida de <strong>{{valorLiquido}}</strong> (bruto: {{valorBruto}}), paga em <strong>{{dataPagamento}}</strong>, referente às minhas férias:</p>
+<table style="width:100%;border-collapse:collapse;margin:10px 0" border="1" cellpadding="6">
+<tr><td><strong>Período aquisitivo</strong></td><td>{{aquisitivoInicio}} a {{aquisitivoFim}}</td></tr>
+<tr><td><strong>Período de gozo</strong></td><td>{{feriasInicio}} a {{feriasFim}} ({{feriasDias}} dias)</td></tr>
+</table>
+<p style="margin-top:10px;text-align:justify">O valor compreende a remuneração das férias acrescida do terço constitucional (art. 7º, XVII, CF), com os descontos legais. Pelo presente, dou plena e geral quitação do período acima.</p>
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_RECIBO_FOLHA = `
+<p style="margin-bottom:12px;text-align:justify">Recebi de <strong>{{empresaRazaoSocial}}</strong>, CNPJ <strong>{{empresaCnpj}}</strong>, a importância líquida de <strong>{{valorLiquido}}</strong>, paga em <strong>{{dataPagamento}}</strong>, a título de <strong>{{tipoRecibo}}</strong>, competência <strong>{{mesRef}}</strong>.</p>
+<p style="margin-top:10px;text-align:justify">Observações: {{observacoes}}</p>
+<p style="margin-top:10px;text-align:justify">Para clareza, firmo o presente recibo dando quitação do valor acima, ressalvado o direito a eventuais diferenças que venham a ser apuradas.</p>
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_TERMO_ADITIVO = `
+<p style="margin-bottom:12px;text-align:justify"><strong>{{empresaRazaoSocial}}</strong>, CNPJ <strong>{{empresaCnpj}}</strong>, e <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, admitido(a) em <strong>{{empAdmissao}}</strong>, celebram o presente TERMO ADITIVO ao contrato de trabalho:</p>
+<p style="margin-top:14px"><strong>1. DA ALTERAÇÃO</strong></p>
+<p style="margin-top:6px;text-align:justify">Tipo: <strong>{{tipoAlteracao}}</strong>. {{descricaoAlteracao}}</p>
+<table style="width:100%;border-collapse:collapse;margin:10px 0" border="1" cellpadding="6">
+<tr><td><strong>Nova função</strong></td><td>{{novaFuncao}}</td></tr>
+<tr><td><strong>Novo salário</strong></td><td>{{novoSalario}}</td></tr>
+<tr><td><strong>Vigência a partir de</strong></td><td>{{dataVigencia}}</td></tr>
+</table>
+<p style="margin-top:14px"><strong>2. DA RATIFICAÇÃO</strong></p>
+<p style="margin-top:6px;text-align:justify">Permanecem inalteradas as demais cláusulas do contrato de trabalho, que ficam ratificadas. A presente alteração não implica prejuízo ao(à) empregado(a) (art. 468 da CLT).</p>
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_ADESAO_PLANO_SAUDE = `
+<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, declaro minha ADESÃO ao plano de saúde oferecido por <strong>{{empresaRazaoSocial}}</strong>:</p>
+<table style="width:100%;border-collapse:collapse;margin:10px 0" border="1" cellpadding="6">
+<tr><td><strong>Operadora</strong></td><td>{{operadora}}</td></tr>
+<tr><td><strong>Plano</strong></td><td>{{plano}}</td></tr>
+<tr><td><strong>Coparticipação/desconto mensal</strong></td><td>{{coparticipacao}}</td></tr>
+</table>
+<p style="margin-top:10px;text-align:justify">AUTORIZO, nos termos do art. 462 da CLT, o desconto em folha da coparticipação/mensalidade indicada, bem como das utilizações previstas em contrato. Estou ciente das regras de carência, rede credenciada e cancelamento.</p>
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_ADESAO_VT = `
+<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, nos termos da Lei 7.418/85 e do Decreto 95.247/87, declaro que OPTO pelo recebimento de vale-transporte:</p>
+<table style="width:100%;border-collapse:collapse;margin:10px 0" border="1" cellpadding="6">
+<tr><td><strong>Linhas/percurso</strong></td><td>{{linhas}}</td></tr>
+<tr><td><strong>Valor diário</strong></td><td>{{valorDia}}</td></tr>
+</table>
+<p style="margin-top:10px;text-align:justify">AUTORIZO o desconto de até 6% (seis por cento) do meu salário-base, na forma da lei. Comprometo-me a utilizar o benefício exclusivamente para deslocamento residência-trabalho e a comunicar qualquer alteração de endereço ou percurso, ciente de que declaração falsa constitui falta grave.</p>
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_RECUSA_VT = `
+<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, empregado(a) de <strong>{{empresaRazaoSocial}}</strong>, declaro, nos termos do Decreto 95.247/87, que <strong>NÃO OPTO</strong> pelo recebimento do vale-transporte.</p>
+<p style="margin-top:10px;text-align:justify">Motivo: <strong>{{motivo}}</strong>.</p>
+<p style="margin-top:10px;text-align:justify">Declaro que esta recusa é feita de forma livre e espontânea, isentando a empresa de qualquer obrigação relativa ao benefício enquanto perdurar esta opção, que poderei rever a qualquer tempo mediante nova declaração por escrito.</p>
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_ADESAO_VA = `
+<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, declaro minha ADESÃO ao vale-alimentação/refeição oferecido por <strong>{{empresaRazaoSocial}}</strong> no âmbito do PAT — Programa de Alimentação do Trabalhador, no valor mensal de <strong>{{valorMensal}}</strong>.</p>
+<p style="margin-top:10px;text-align:justify">Estou ciente de que: (i) o benefício não integra o salário para nenhum efeito (art. 457, §2º, CLT); (ii) faltas não justificadas geram desconto proporcional do benefício, conforme política interna; (iii) o crédito é pessoal e intransferível.</p>
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
+
+const SEED_ADESAO_SEGURO_VIDA = `
+<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, CPF <strong>{{empCpf}}</strong>, declaro ciência e ADESÃO ao seguro de vida em grupo contratado por <strong>{{empresaRazaoSocial}}</strong>:</p>
+<table style="width:100%;border-collapse:collapse;margin:10px 0" border="1" cellpadding="6">
+<tr><td><strong>Seguradora</strong></td><td>{{seguradora}}</td></tr>
+<tr><td><strong>Apólice</strong></td><td>{{apolice}}</td></tr>
+<tr><td><strong>Beneficiários indicados</strong></td><td>{{beneficiarios}}</td></tr>
+</table>
+<p style="margin-top:10px;text-align:justify">Estou ciente das coberturas, capitais segurados e condições gerais da apólice, disponíveis no RH, e de que devo manter atualizada a indicação de beneficiários.</p>
+<p style="margin-top:20px">{{docLocal}}, {{docData}}.</p>
+`;
+
 export const SEED_BODIES: Record<DocumentTemplateTipo, string> = {
   // RH
   contrato_experiencia:   SEED_CONTRATO_EXPERIENCIA.trim(),
@@ -824,6 +1304,26 @@ export const SEED_BODIES: Record<DocumentTemplateTipo, string> = {
   aviso_previo:           SEED_AVISO_PREVIO.trim(),
   termo_rescisao:         SEED_TERMO_RESCISAO.trim(),
   carta_mdo:              SEED_CARTA_MDO.trim(),
+  // RH — Documentos do Colaborador (Rev. 4669)
+  ficha_registro:          SEED_FICHA_REGISTRO.trim(),
+  termo_equipamentos:      SEED_TERMO_EQUIPAMENTOS.trim(),
+  termo_confidencialidade: SEED_TERMO_CONFIDENCIALIDADE.trim(),
+  regulamento_interno:     SEED_REGULAMENTO_INTERNO.trim(),
+  codigo_etica:            SEED_CODIGO_ETICA.trim(),
+  termo_lgpd:              SEED_TERMO_LGPD.trim(),
+  acordo_banco_horas:      SEED_ACORDO_BANCO_HORAS.trim(),
+  acordo_compensacao:      SEED_ACORDO_COMPENSACAO.trim(),
+  // RH — Fases 2/3 (Rev. 4672)
+  contrato_trabalho_clt:   SEED_CONTRATO_TRABALHO_CLT.trim(),
+  solicitacao_ferias:      SEED_SOLICITACAO_FERIAS.trim(),
+  recibo_ferias:           SEED_RECIBO_FERIAS.trim(),
+  recibo_folha:            SEED_RECIBO_FOLHA.trim(),
+  termo_aditivo:           SEED_TERMO_ADITIVO.trim(),
+  adesao_plano_saude:      SEED_ADESAO_PLANO_SAUDE.trim(),
+  adesao_vt:               SEED_ADESAO_VT.trim(),
+  recusa_vt:               SEED_RECUSA_VT.trim(),
+  adesao_va:               SEED_ADESAO_VA.trim(),
+  adesao_seguro_vida:      SEED_ADESAO_SEGURO_VIDA.trim(),
   // Financeiro
   recibo_pagamento:       SEED_RECIBO_PAGAMENTO.trim(),
   comprovante_pagamento:  SEED_COMPROVANTE_PAGAMENTO.trim(),
@@ -834,6 +1334,99 @@ export const SEED_BODIES: Record<DocumentTemplateTipo, string> = {
   ordem_servico:              SEED_ORDEM_SERVICO.trim(),
   proposta_comercial:         SEED_PROPOSTA_COMERCIAL.trim(),
   aviso_encerramento_pj:      SEED_AVISO_ENCERRAMENTO_PJ.trim(),
+};
+
+// ── Rev. 4669 — Documentos do Colaborador: tipos geráveis por funcionário ────
+// Ordem = ordem de exibição no checklist. `obrigatorio` = entra como pendência
+// no checklist quando não assinado; os demais aparecem como "quando aplicável".
+export const RH_COLAB_DOCS: { tipo: DocumentTemplateTipo; obrigatorio: boolean }[] = [
+  { tipo: "ficha_registro",          obrigatorio: true },
+  { tipo: "contrato_experiencia",    obrigatorio: true },
+  { tipo: "regulamento_interno",     obrigatorio: true },
+  { tipo: "codigo_etica",            obrigatorio: true },
+  { tipo: "termo_lgpd",              obrigatorio: true },
+  { tipo: "termo_confidencialidade", obrigatorio: false },
+  { tipo: "termo_equipamentos",      obrigatorio: false },
+  { tipo: "acordo_banco_horas",      obrigatorio: false },
+  { tipo: "acordo_compensacao",      obrigatorio: false },
+  // Rev. 4672 — Fases 2/3
+  { tipo: "contrato_trabalho_clt",   obrigatorio: false },
+  { tipo: "adesao_plano_saude",      obrigatorio: false },
+  { tipo: "adesao_vt",               obrigatorio: false },
+  { tipo: "recusa_vt",               obrigatorio: false },
+  { tipo: "adesao_va",               obrigatorio: false },
+  { tipo: "adesao_seguro_vida",      obrigatorio: false },
+];
+
+// ── Rev. 4672 — Documentos EVENTUAIS (por evento, não entram no checklist) ──
+// Gerados sob demanda no dossiê: férias, folha e alterações contratuais.
+export const RH_DOCS_EVENTUAIS: { tipo: DocumentTemplateTipo }[] = [
+  { tipo: "solicitacao_ferias" },
+  { tipo: "recibo_ferias" },
+  { tipo: "recibo_folha" },
+  { tipo: "termo_aditivo" },
+];
+
+/** Campos extras pedidos na geração (variáveis que não vêm do cadastro).
+ *  `auto: "ferias"` = pré-preenchido da última férias programada do funcionário. */
+export type CampoExtraDef = { chave: string; rotulo: string; placeholder?: string; obrigatorio?: boolean };
+export const RH_DOC_CAMPOS_EXTRAS: Partial<Record<DocumentTemplateTipo, CampoExtraDef[]>> = {
+  contrato_trabalho_clt: [
+    { chave: "jornadaSemanal",  rotulo: "Jornada semanal",     placeholder: "44 horas semanais" },
+    { chave: "horarioTrabalho", rotulo: "Horário de trabalho", placeholder: "Seg a Qui 07h-17h, Sex 07h-16h" },
+  ],
+  solicitacao_ferias: [
+    { chave: "feriasInicio",     rotulo: "Início do gozo (dd/mm/aaaa)", obrigatorio: true },
+    { chave: "feriasFim",        rotulo: "Fim do gozo (dd/mm/aaaa)",    obrigatorio: true },
+    { chave: "feriasDias",       rotulo: "Dias de gozo",                obrigatorio: true },
+    { chave: "aquisitivoInicio", rotulo: "Aquisitivo — início" },
+    { chave: "aquisitivoFim",    rotulo: "Aquisitivo — fim" },
+    { chave: "abonoPecuniario",  rotulo: "Abono pecuniário", placeholder: "Não" },
+  ],
+  recibo_ferias: [
+    { chave: "feriasInicio",     rotulo: "Início do gozo (dd/mm/aaaa)", obrigatorio: true },
+    { chave: "feriasFim",        rotulo: "Fim do gozo (dd/mm/aaaa)",    obrigatorio: true },
+    { chave: "feriasDias",       rotulo: "Dias de gozo",                obrigatorio: true },
+    { chave: "aquisitivoInicio", rotulo: "Aquisitivo — início" },
+    { chave: "aquisitivoFim",    rotulo: "Aquisitivo — fim" },
+    { chave: "valorBruto",       rotulo: "Valor bruto (R$)" },
+    { chave: "valorLiquido",     rotulo: "Valor líquido (R$)", obrigatorio: true },
+    { chave: "dataPagamento",    rotulo: "Data de pagamento" },
+  ],
+  recibo_folha: [
+    { chave: "tipoRecibo",    rotulo: "Tipo", placeholder: "Holerite / 13º 1ª parcela / 13º 2ª parcela / Adiantamento", obrigatorio: true },
+    { chave: "mesRef",        rotulo: "Competência", placeholder: "Julho/2026", obrigatorio: true },
+    { chave: "valorLiquido",  rotulo: "Valor líquido (R$)", obrigatorio: true },
+    { chave: "dataPagamento", rotulo: "Data de pagamento" },
+    { chave: "observacoes",   rotulo: "Observações", placeholder: "—" },
+  ],
+  termo_aditivo: [
+    { chave: "tipoAlteracao",      rotulo: "Tipo de alteração", placeholder: "Promoção / Mudança de salário / Mudança de função", obrigatorio: true },
+    { chave: "descricaoAlteracao", rotulo: "Descrição da alteração", obrigatorio: true },
+    { chave: "novaFuncao",         rotulo: "Nova função", placeholder: "(mantém atual se vazio)" },
+    { chave: "novoSalario",        rotulo: "Novo salário (R$)", placeholder: "(mantém atual se vazio)" },
+    { chave: "dataVigencia",       rotulo: "Vigência a partir de", obrigatorio: true },
+  ],
+  adesao_plano_saude: [
+    { chave: "operadora",      rotulo: "Operadora", obrigatorio: true },
+    { chave: "plano",          rotulo: "Plano", obrigatorio: true },
+    { chave: "coparticipacao", rotulo: "Coparticipação/desconto mensal" },
+  ],
+  adesao_vt: [
+    { chave: "linhas",   rotulo: "Linhas/percurso", obrigatorio: true },
+    { chave: "valorDia", rotulo: "Valor diário (R$)" },
+  ],
+  recusa_vt: [
+    { chave: "motivo", rotulo: "Motivo da recusa", placeholder: "Utilizo veículo próprio", obrigatorio: true },
+  ],
+  adesao_va: [
+    { chave: "valorMensal", rotulo: "Valor mensal (R$)" },
+  ],
+  adesao_seguro_vida: [
+    { chave: "seguradora",    rotulo: "Seguradora" },
+    { chave: "apolice",       rotulo: "Apólice" },
+    { chave: "beneficiarios", rotulo: "Beneficiários", placeholder: "Cônjuge e filhos" },
+  ],
 };
 
 /** Seed completo (código ISO + corpo) de um tipo, p/ seedDefaults idempotente. */

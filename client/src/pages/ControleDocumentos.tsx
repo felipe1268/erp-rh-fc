@@ -34,6 +34,7 @@ import PersonPhoto from "@/components/PersonPhoto";
 import FichaEpiDialog from "@/components/FichaEpiDialog";
 import { CipaBadge } from "@/components/CipaBadge";
 import TermosResponsabilidadePanel from "@/components/controleDocumentos/TermosResponsabilidadePanel";
+import ChecklistDocsPanel from "@/components/controleDocumentos/ChecklistDocsPanel";
 import { TRAINING_RULES, TRAINING_CATEGORIES, calcularDataValidade, type TrainingRule } from "../../../shared/trainingRules";
 
 // ============ HELPERS ============
@@ -1385,10 +1386,15 @@ function ValidadePanel({ companyId, companyIds, onClickEmployee, forceTipo, forc
                           </span>
                         </td>
                         <td className="p-2">
-                          <button className="text-blue-600 hover:underline font-medium text-left" onClick={() => onClickEmployee(doc.employeeId)}>
-                            {doc.nomeCompleto}
-                          </button>
-                          <div className="text-[10px] text-muted-foreground">{doc.funcao || "-"}</div>
+                          <div className="flex items-center gap-2">
+                            <PersonPhoto src={doc.fotoUrl} alt={doc.nomeCompleto || ""} size="sm" />
+                            <div>
+                              <button className="text-blue-600 hover:underline font-medium text-left" onClick={() => onClickEmployee(doc.employeeId)}>
+                                {doc.nomeCompleto}
+                              </button>
+                              <div className="text-[10px] text-muted-foreground">{doc.funcao || "-"}</div>
+                            </div>
+                          </div>
                         </td>
                         <td className="p-2 text-xs">{doc.tipoDoc === "ASO" ? formatTipoASO(doc.descricao) : doc.descricao}</td>
                         <td className="p-2 text-xs font-mono">{formatDate(doc.dataValidade)}</td>
@@ -1473,9 +1479,12 @@ function SemASOPanel({ companyId, companyIds, onClickEmployee, onCreateAso }: { 
                 {filtered.map((emp: any) => (
                   <tr key={emp.id} className="border-b hover:bg-muted/20">
                     <td className="p-2">
-                      <button className="text-blue-600 hover:underline font-medium text-left" onClick={() => onClickEmployee(emp.id)}>
-                        {emp.nomeCompleto}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <PersonPhoto src={emp.fotoUrl} alt={emp.nomeCompleto || ""} size="sm" />
+                        <button className="text-blue-600 hover:underline font-medium text-left" onClick={() => onClickEmployee(emp.id)}>
+                          {emp.nomeCompleto}
+                        </button>
+                      </div>
                     </td>
                     <td className="p-2 text-xs font-mono">{emp.cpf ? formatCPF(emp.cpf) : "-"}</td>
                     <td className="p-2 text-xs">{emp.funcao || "-"}</td>
@@ -2535,9 +2544,12 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
                   return (
                     <tr key={d.id} className="border-b hover:bg-muted/20">
                       <td className="p-2">
-                        <button className="text-blue-600 hover:underline text-left" onClick={() => onClickEmployee(d.employeeId)}>
-                          {emp?.nomeCompleto || "Desconhecido"}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <PersonPhoto src={emp?.fotoUrl} alt={emp?.nomeCompleto || ""} size="sm" />
+                          <button className="text-blue-600 hover:underline text-left" onClick={() => onClickEmployee(d.employeeId)}>
+                            {emp?.nomeCompleto || "Desconhecido"}
+                          </button>
+                        </div>
                       </td>
                       <td className="p-2"><Badge variant="outline">{TIPOS_DOC_LABELS[d.tipo] || d.tipo}</Badge></td>
                       <td className="p-2">
@@ -3658,7 +3670,15 @@ export default function ControleDocumentos() {
             <TabsTrigger value="dossie" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "dossie" ? "border-cyan-600 bg-cyan-50 text-cyan-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-cyan-50/50 hover:text-cyan-600"}`}>
               <FileDown className="h-4 w-4" /> Dossiê
             </TabsTrigger>
+            <TabsTrigger value="checklist" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "checklist" ? "border-[#0A1E3C] bg-slate-100 text-[#0A1E3C] shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-slate-100/70 hover:text-[#0A1E3C]"}`}>
+              <ClipboardCheck className="h-4 w-4" /> Checklist
+            </TabsTrigger>
           </TabsList>
+
+          {/* ===================== ABA CHECKLIST GERAL (Rev. 4671) ===================== */}
+          <TabsContent value="checklist">
+            <ChecklistDocsPanel companyId={companyId} companyIds={companyIds} onClickEmployee={setFichaEmployeeId} />
+          </TabsContent>
 
           {/* ===================== ABA SEM ASO ===================== */}
           <TabsContent value="semASO">
