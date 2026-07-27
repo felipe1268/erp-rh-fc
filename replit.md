@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4685** — Fix Aviso Prévio: "Enviar ao Financeiro" dava "Sem acesso a esta empresa" p/ todos (guard comparava objetos com número e faltava o role).
 - **Rev. 4684** — Fix publicação: heap do vite build 3840→4608MB (build estourava memória e a publicação falhava).
 - **Rev. 4683** — Fix permissão: rota /documentos-colaborador registrada no módulo RH & DP (usuário RH comum caía em "Acesso Restrito").
 - **Rev. 4682** — Poka-yoke 2/6: Central de Divergências (Financeiro › Dashboards) — 9 cruzamentos só-leitura entre módulos (aviso×status, desligado×obra/EPI/seguro, cheque×título, medição dupla, OC×financeiro, férias×ponto).

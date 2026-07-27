@@ -1,4 +1,13 @@
 /**
+ * Rev. 4685 - FIX AVISO PREVIO: "ENVIAR AO FINANCEIRO" DAVA "SEM ACESSO"
+ *
+ * A mutation enviarParaFinanceiro chamava getCompaniesForUser SEM o role
+ * e comparava array de OBJETOS empresa com o companyId numerico
+ * (includes sempre false) — TODO usuario, inclusive admin, recebia
+ * "Sem acesso a esta empresa". Corrigido p/ o padrao das demais chamadas
+ * (role + .some(c => c.id === companyId)).
+ */
+/**
  * Rev. 4684 - FIX PUBLICACAO: BUILD ESTOURAVA MEMORIA (OOM)
  *
  * O vite build passou a estourar o heap de 3840MB do Node durante a

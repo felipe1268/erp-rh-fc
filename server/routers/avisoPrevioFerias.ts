@@ -2534,8 +2534,11 @@ export const avisoPrevioFeriasRouter = router({
           isNull(terminationNotices.deletedAt),
         ));
         if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
-        const empresasDoUser = await getCompaniesForUser(ctx.user.id);
-        if (empresasDoUser !== null && !empresasDoUser.includes(aviso.companyId))
+        // Rev. 4685 — bug: faltava o `role` e comparava OBJETOS com número
+        // (`includes(companyId)` em array de empresas), então TODO usuário
+        // (inclusive admin) caía em "Sem acesso a esta empresa".
+        const empresasDoUser = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        if (!empresasDoUser.some(c => c.id === aviso.companyId))
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a esta empresa' });
         if (aviso.status !== 'aguardando_pagamento')
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Só é possível enviar ao Financeiro avisos em "Aguardando Baixa".' });
