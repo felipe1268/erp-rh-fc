@@ -96,6 +96,9 @@ export const asos = pgTable("asos", {
         aptoAltura: text(),
         aptoEspacoConfinado: text(),
         restricoes: text(),
+        // Rev. 4622 — restrições OPERACIONAIS estruturadas (JSON array de keys
+        // do dicionário shared/restricoesOperacionais.ts), definidas pelo RH.
+        restricoesOperacionais: text(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         deletedAt: timestamp({ mode: 'string' }),

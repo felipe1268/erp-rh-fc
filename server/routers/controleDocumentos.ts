@@ -11,6 +11,14 @@ import { invokeGeminiVision } from "../_core/llm";
 import { asoExtracaoIa } from "../../drizzle/schema";
 import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
 import { logStatusChange } from "../lib/employeeStatusHelper";
+import { RESTRICOES_OPERACIONAIS_KEYS } from "../../shared/restricoesOperacionais";
+
+// Rev. 4622 — só keys do dicionário canônico entram no banco (deny-by-default).
+function sanitizeRestricoesOperacionais(arr: string[] | undefined): string | null {
+  if (!arr) return null;
+  const validas = Array.from(new Set(arr.map(String))).filter((k) => RESTRICOES_OPERACIONAIS_KEYS.includes(k));
+  return validas.length > 0 ? JSON.stringify(validas) : null;
+}
 import { sendEmail } from "../services/smtpService";
 
 const LIMITE_DIAS_INSS = 15;
@@ -640,6 +648,7 @@ export const controleDocumentosRouter = router({
             clinica: asos.clinica,
             observacoes: asos.observacoes,
             documentoUrl: asos.documentoUrl,
+            restricoesOperacionais: (asos as any).restricoesOperacionais,
             createdAt: asos.createdAt,
           })
           .from(asos)
@@ -722,6 +731,8 @@ export const controleDocumentosRouter = router({
           examesRealizados: z.string().optional(),
           clinica: z.string().optional(),
           observacoes: z.string().optional(),
+          // Rev. 4622 — keys do dicionário canônico (shared/restricoesOperacionais)
+          restricoesOperacionais: z.array(z.string()).optional(),
         })
       )
       .mutation(async ({ input }) => {
@@ -744,7 +755,8 @@ export const controleDocumentosRouter = router({
           examesRealizados: input.examesRealizados || null,
           clinica: input.clinica || null,
           observacoes: input.observacoes || null,
-        }).returning();
+          restricoesOperacionais: sanitizeRestricoesOperacionais(input.restricoesOperacionais),
+        } as any).returning();
         return { success: true, id: Number((result as any).id) };
       }),
 
@@ -761,12 +773,16 @@ export const controleDocumentosRouter = router({
           examesRealizados: z.string().optional(),
           clinica: z.string().optional(),
           observacoes: z.string().optional(),
+          restricoesOperacionais: z.array(z.string()).optional(),
         })
       )
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
-        const { id, dataExame, validadeDias, ...rest } = input;
+        const { id, dataExame, validadeDias, restricoesOperacionais, ...rest } = input;
         const updateData: any = { ...rest };
+        if (restricoesOperacionais !== undefined) {
+          updateData.restricoesOperacionais = sanitizeRestricoesOperacionais(restricoesOperacionais);
+        }
 
         if (dataExame) updateData.dataExame = dataExame;
         if (dataExame && validadeDias) {

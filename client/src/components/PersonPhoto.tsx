@@ -65,6 +65,14 @@ export function PersonPhoto({
   const sizeCls = className ?? SIZE_PRESET[size];
   const initials = useMemo(() => getInitials(alt), [alt]);
 
+  // Rev. 4639 — avatar usa miniatura ?w=128 (fotos de cadastro são originais
+  // de câmera, até 5.7MB; grades de avatares quebram no Safari/iPad). O
+  // lightbox ampliado continua usando o original (qualidade).
+  const thumbSrc = useMemo(() => {
+    if (!src) return src;
+    return src.startsWith("/uploads/") && !src.includes("?") ? `${src}?w=128` : src;
+  }, [src]);
+
   const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
@@ -94,8 +102,9 @@ export function PersonPhoto({
       >
         {hasPhoto ? (
           <img
-            src={src as string}
+            src={thumbSrc as string}
             alt={alt}
+            loading="lazy"
             className="h-full w-full object-cover object-top"
             onError={() => setImgError(true)}
             draggable={false}

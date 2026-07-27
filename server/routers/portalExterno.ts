@@ -3584,6 +3584,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       const asosResult = await db.select({
         tipo: asos.tipo, dataExame: asos.dataExame, dataValidade: asos.dataValidade,
         restricoes: asos.restricoes, aptoAltura: asos.aptoAltura,
+        restricoesOperacionaisRaw: (asos as any).restricoesOperacionais,
       }).from(asos)
         .where(and(eq(asos.employeeId, emp.id), eq(asos.companyId, emp.companyId), isNull(asos.deletedAt)))
         .orderBy(desc(asos.dataExame));
@@ -3592,8 +3593,109 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // texto da restrição é dado de saúde e NUNCA sai na rota pública)
       const aptoAlturaNorm = String(asoAtual?.aptoAltura || "").toUpperCase().replace(/[\s.\-]/g, "");
       const restricaoAtividade = String(asoAtual?.restricoes || "").trim().length > 0
+        || String((asoAtual as any)?.restricoesOperacionaisRaw || "").trim().length > 2 // "[]" não conta
         || aptoAlturaNorm.startsWith("INAPTO") || aptoAlturaNorm.startsWith("NAO") || aptoAlturaNorm.startsWith("NÃO");
+
+      // Rev. 4620 — restrição OPERACIONAL no QR público (LGPD, minimização):
+      // mostramos apenas O QUE a pessoa não pode fazer (instrução de segurança,
+      // base legal: proteção da vida / NRs), NUNCA o porquê médico. Sanitizador
+      // conservador: qualquer indício de dado de saúde (código CID, termos de
+      // diagnóstico) bloqueia a linha inteira e mantém só o aviso genérico.
+      // SAÍDA CANÔNICA (deny-by-default): o QR NUNCA exibe texto do ASO. A linha
+      // do texto livre apenas DISPARA uma frase fixa deste dicionário quando
+      // (a) tem cara de instrução ("não pode…", "proibido…", "evitar…") e
+      // (b) cita uma atividade conhecida. Vazamento de dado de saúde é
+      // impossível por construção — nada fora do dicionário sai na rota pública.
+      const restricoesOperacionais: string[] = [];
+      {
+        // Rev. 4622 — PRIORIDADE: checkboxes estruturadas do RH (asos.restricoesOperacionais,
+        // keys do dicionário canônico) — fonte explícita, sem depender do texto do médico.
+        const { parseRestricoesOperacionais, labelRestricaoOperacional } = await import("../../shared/restricoesOperacionais");
+        for (const key of parseRestricoesOperacionais((asoAtual as any)?.restricoesOperacionaisRaw)) {
+          const label = labelRestricaoOperacional(key);
+          if (label && !restricoesOperacionais.includes(label)) restricoesOperacionais.push(label);
+        }
+        const OPERACIONAL_RE = /(n[ãa]o\s+(pode|deve|permitid|autorizad|realizar|executar|trabalhar)|proibid|vedad|restri[çc][ãa]o\s+(de|para|a)|restrit[oa]\s+(de|para|a)|evitar|sem\s+(trabalho|exposi[çc]|levantamento|esfor[çc])|inapt[oa]\s+para)/i;
+        const CANONICOS: Array<[RegExp, string]> = [
+          [/altura/i, "Trabalho em altura: NÃO permitido"],
+          [/espa[çc]o\s*confinado/i, "Espaço confinado: NÃO permitido"],
+          [/(peso|carga|levantamento|esfor[çc]o\s*f[íi]sic)/i, "Levantamento de peso / esforço físico: restrito"],
+          [/ru[íi]do/i, "Exposição a ruído: restrita"],
+          [/(calor|temperatura)/i, "Exposição a calor: restrita"],
+          [/(eletricidade|el[ée]tric)/i, "Trabalho com eletricidade: NÃO permitido"],
+          [/noturno/i, "Trabalho noturno: NÃO permitido"],
+          [/(m[áa]quina|equipamento)/i, "Operação de máquinas/equipamentos: restrita"],
+          [/(qu[íi]mic|poeira|solvente)/i, "Exposição a agentes químicos/poeira: restrita"],
+          [/(dirigir|ve[íi]culo|condu[çc][ãa]o)/i, "Condução de veículos: NÃO permitida"],
+          [/(soldag|solda\b)/i, "Atividades de soldagem: restritas"],
+          [/(escava[çc]|subsolo)/i, "Trabalho em escavação/subsolo: restrito"],
+        ];
+        const raw = String(asoAtual?.restricoes || "");
+        for (const parte of raw.split(/[;\n•.]+/)) {
+          const txt = parte.trim().replace(/\s+/g, " ");
+          if (!txt || !OPERACIONAL_RE.test(txt)) continue; // não é instrução → ignora
+          for (const [re, frase] of CANONICOS) {
+            if (re.test(txt) && !restricoesOperacionais.includes(frase)) restricoesOperacionais.push(frase);
+          }
+        }
+        if (aptoAlturaNorm.startsWith("INAPTO") || aptoAlturaNorm.startsWith("NAO") || aptoAlturaNorm.startsWith("NÃO")) {
+          const fraseAltura = "Trabalho em altura: NÃO permitido";
+          if (!restricoesOperacionais.includes(fraseAltura)) restricoesOperacionais.unshift(fraseAltura);
+        }
+      }
       const asoVigente = !!(asoAtual && asoAtual.dataValidade && asoAtual.dataValidade >= hoje);
+
+      // Rev. 4638 — parse robusto de data (aceita YYYY-MM-DD, timestamp ISO e
+      // DD/MM/YYYY; senão null) — nunca comparação lexicográfica de texto cru
+      const parseDia = (v: any): string | null => {
+        const s = String(v || "").trim();
+        let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+        m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+        return null;
+      };
+
+      // Rev. 4637 — integrações de cliente (ex.: Santuário): quem escaneia o QR
+      // na portaria precisa ver se a integração está vigente. LGPD-safe: só
+      // cliente, tipo e datas (mesma regra de status do módulo Integrações).
+      const integracoesRows = await db.select({
+        tipo: employeeIntegrations.tipo,
+        clienteNome: employeeIntegrations.clienteNome,
+        dataRealizacao: employeeIntegrations.dataRealizacao,
+        dataVencimento: employeeIntegrations.dataVencimento,
+      }).from(employeeIntegrations)
+        .where(and(eq(employeeIntegrations.employeeId, emp.id), eq(employeeIntegrations.companyId, emp.companyId)))
+        .orderBy(desc(employeeIntegrations.dataRealizacao));
+      const integracoes = integracoesRows.map((r) => {
+        const venc = parseDia(r.dataVencimento);
+        return {
+          tipo: r.tipo,
+          cliente: r.clienteNome || "—",
+          dataRealizacao: parseDia(r.dataRealizacao),
+          dataVencimento: venc,
+          // sem vencimento (ou data ilegível) = vigente, mesma regra do módulo
+          vigente: !venc || venc >= hoje,
+        };
+      });
+
+      // Rev. 4638 — tempo de empresa calculado no SERVIDOR (minimização LGPD:
+      // a data de admissão exata não sai na rota pública, só o texto derivado)
+      let tempoEmpresa: string | undefined;
+      {
+        const adm = parseDia((emp as any).dataAdmissao);
+        if (adm) {
+          const [ay, am, ad] = adm.split("-").map(Number);
+          const hj = new Date();
+          let meses = (hj.getFullYear() - ay) * 12 + (hj.getMonth() + 1 - am);
+          if (hj.getDate() < ad) meses--;
+          if (meses >= 0) {
+            const anos = Math.floor(meses / 12), resto = meses % 12;
+            tempoEmpresa = anos === 0 && resto === 0 ? "Menos de 1 mês"
+              : [anos > 0 ? `${anos} ano${anos > 1 ? "s" : ""}` : "", resto > 0 ? `${resto} ${resto > 1 ? "meses" : "mês"}` : ""].filter(Boolean).join(" e ");
+          }
+        }
+      }
 
       // Treinamentos (lista pública LGPD-safe: nome, norma, datas, vigência)
       const treinamentosResult = await db.select({
@@ -3624,12 +3726,18 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       return {
         found: true,
         nome: emp.nomeCompleto,
-        cpf: emp.cpf ? `***${emp.cpf.substring(3, 9)}***` : undefined,
+        // Rev. 4635 — sem CPF na rota pública (pedido do usuário); identificação
+        // pelo número interno (mesma fonte do crachá: codigoInterno || matricula)
+        numeroInterno: (emp as any).codigoInterno || (emp as any).matricula || undefined,
+        // Rev. 4638 — só o texto derivado (a data exata de admissão não sai)
+        tempoEmpresa,
         funcao: emp.funcao || emp.cargo,
         setor: emp.setor,
         foto: emp.fotoUrl,
         tipo: input.tipo.toUpperCase(),
         empresa: company?.nomeFantasia || company?.razaoSocial || "N/A",
+        // Rev. 4634 — logo da empresa no cartão público (só a URL, nada sensível)
+        logoEmpresa: (company as any)?.logoUrl || undefined,
         status: emp.status,
         aptidao: aptidaoCalc,
         motivoInapto: pendencias.length > 0 ? pendencias.join("; ") : undefined,
@@ -3638,10 +3746,14 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         documentosOk: docsOk,
         nrOk,
         restricaoAtividade,
+        // Rev. 4620 — instruções de segurança (sanitizadas; nunca o motivo médico)
+        restricoesOperacionais: restricoesOperacionais.length > 0 ? restricoesOperacionais : undefined,
         ultimaVerificacao: new Date().toISOString(),
         // Documentos pertinentes (LGPD-safe)
         aso: asoAtual ? { tipo: asoAtual.tipo, dataExame: asoAtual.dataExame, dataValidade: asoAtual.dataValidade, vigente: asoVigente } : null,
         treinamentos,
+        // Rev. 4637 — integrações de cliente (realização + vencimento + vigência)
+        integracoes: integracoes.length > 0 ? integracoes : undefined,
       };
     }),
 
@@ -3662,11 +3774,26 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       return {
         found: true,
         nome: func.nome || (func as any).nomeCompleto || "N/A",
-        cpf: func.cpf ? `***${func.cpf.substring(3, 9)}***` : undefined,
+        // Rev. 4635 — sem CPF na rota pública; número interno (ex. FEL-00054)
+        numeroInterno: (func as any).numeroInterno || undefined,
+        // Rev. 4638 — só o texto derivado (a data exata de admissão não sai)
+        tempoEmpresa: (() => {
+          const m = String((func as any).dataAdmissao || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if (!m) return undefined;
+          const hj = new Date();
+          let meses = (hj.getFullYear() - Number(m[1])) * 12 + (hj.getMonth() + 1 - Number(m[2]));
+          if (hj.getDate() < Number(m[3])) meses--;
+          if (meses < 0) return undefined;
+          const anos = Math.floor(meses / 12), resto = meses % 12;
+          return anos === 0 && resto === 0 ? "Menos de 1 mês"
+            : [anos > 0 ? `${anos} ano${anos > 1 ? "s" : ""}` : "", resto > 0 ? `${resto} ${resto > 1 ? "meses" : "mês"}` : ""].filter(Boolean).join(" e ");
+        })(),
         funcao: func.funcao,
         foto: (func as any).fotoUrl,
         tipo: "TERCEIRO",
         empresa: company?.nomeFantasia || company?.razaoSocial || "N/A",
+        // Rev. 4634 — logo da empresa no cartão público (só a URL, nada sensível)
+        logoEmpresa: (company as any)?.logoUrl || undefined,
         empresaTerceira: empTerceira?.razaoSocial || "N/A",
         status: func.status,
         aptidao: func.statusAptidao || "pendente",

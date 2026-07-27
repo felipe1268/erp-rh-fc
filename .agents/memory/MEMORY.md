@@ -1,6 +1,7 @@
 - [Fatura de cartão é cumulativa](cartao-fatura-cumulativa.md) — nunca somar histórico como "em aberto"; pagamentos negativo = crédito da fatura anterior; só vencimento >= hoje conta.
 - [Fatura de cartão ↔ Contas a Pagar](cartao-fatura-financeiro-link.md) — título único por fatura via índice parcial + ON CONFLICT; baixa faz fan-out p/ pagamentos; título com baixa ativa é intocável.
 - [QR Verificar Aptidão — live, não snapshot](qr-aptidao-live-not-snapshot.md) — employee_aptidao é snapshot manual defasado; leitores calculam ao vivo de asos/trainings (regras do recalcAll, apto|inapto).
+- [QR restrição operacional — saída canônica](qr-restricao-canonica-lgpd.md) — rota pública nunca faz pass-through de asos.restricoes; só frases fixas do dicionário canônico (blacklist de texto livre vaza — LGPD).
 - [Aviso Prévio ↔ Contas a Pagar](aviso-previo-financeiro-link.md) — baixa manual e envio ao Financeiro são vias EXCLUSIVAS; advisory lock 477001 + índice único parcial (só no Neon); quitar baixa dispara conclusão/desligamento.
 - [DIXI group-key digit collision](dixi-groupkey-digit-collision.md) — relógio pode ter código "jfcNNN" no Nome; chave de agrupamento por pessoa deve PRESERVAR dígitos ou funde 2 funcionários.
 - [Equipamento utilização fonte de dados](equipamento-utilizacao-fonte-dados.md) — utilização diária vem de warehouse_loans (não equipamento_locado_eventos); link via almoxarifado_itens.equipamento_vinculado_id.
@@ -152,4 +153,5 @@
 - [Banco de Horas gotchas](rescisao-banco-horas-integration.md) — rescisão: positivo=provento×1,5, negativo=valor cheio ([detalhe](rescisao-banco-horas-integration.md)); [saldo list `<> 0`](banco-horas-saldo-list-filter.md); [tipos de débito discriminados](banco-horas-debito-tipos.md).
 - [ColFix gotchas](colfix-version-gate.md) — novo ALTER precisa de COLFIX_VERSION bump ([gate](colfix-version-gate.md)) e bloco isolado próprio ou falha é engolida ([silent rollback](colfix-do-block-silent-rollback.md)).
 - [Cheque devolvido/estorno](cheque-devolvido-forma-pagamento.md) — vínculo 'ajuste' exige forma_pagamento; [pareamento débito×devolução heurístico exige unicidade](cheque-estorno-pairing-false-positive.md).
+- [Miniaturas de /uploads (?w=NN)](uploads-thumbnails.md) — listas de avatares DEVEM usar ?w=128+lazy; fotos originais (até 5.7MB) quebram no Safari/iPad ("?" azul = imagem quebrada, não dado faltando).
 - [Casing das tabelas (camelCase quirks)](orcamentos-employees-camelcase.md) — obras/orcamentos/obra_funcionarios/payroll/HR camelCase; employees sem obra_id ([obras](obras-orcamento-schema-quirks.md), [payroll/HR](payroll-hr-tables-camelcase.md)); seguro_vida_coberturas é snake.

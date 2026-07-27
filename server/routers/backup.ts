@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { executarBackup, listarBackups, obterConfigBackup, salvarConfigBackup, getBackupHealth } from "../services/backupService";
-import { getCodeSyncStatus, pushCodeSnapshotToGitHub } from "../services/codeSyncService";
+import { getCodeSyncStatus, startCodeSnapshotAsync, getSnapshotProgress } from "../services/codeSyncService";
 import { TRPCError } from "@trpc/server";
 
 function assertAdmin(ctx: any) {
@@ -59,8 +59,16 @@ export const backupRouter = router({
   }),
 
   // Redundância: envia uma cópia do código-fonte para a branch dedicada no GitHub.
+  // Rev. 4625 — dispara em BACKGROUND e retorna já (iPad/Safari aborta fetch
+  // longo); a UI acompanha via snapshotProgress, que traz o resultado final.
   pushCodeSnapshot: protectedProcedure.mutation(async ({ ctx }) => {
     assertAdmin(ctx);
-    return pushCodeSnapshotToGitHub(ctx.user.name || "Admin");
+    return startCodeSnapshotAsync(ctx.user.name || "Admin");
+  }),
+
+  // Rev. 4620 — progresso (0–100%) do envio da cópia do código, para a UI.
+  snapshotProgress: protectedProcedure.query(async ({ ctx }) => {
+    assertAdmin(ctx);
+    return getSnapshotProgress();
   }),
 });

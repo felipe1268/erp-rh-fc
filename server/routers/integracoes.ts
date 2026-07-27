@@ -33,6 +33,7 @@ export const integracoesRouter = router({
           nomeCompleto: employees.nomeCompleto,
           matricula:    employees.matricula,
           funcao:       employees.funcao,
+          fotoUrl:      employees.fotoUrl, // Rev. 4639 — foto na listagem
         })
         .from(employeeIntegrations)
         .leftJoin(employees, eq(employees.id, employeeIntegrations.employeeId))
@@ -51,6 +52,7 @@ export const integracoesRouter = router({
           nomeCompleto: r.nomeCompleto,
           matricula:    r.matricula,
           funcao:       r.funcao,
+          fotoUrl:      r.fotoUrl,
           statusCalc:   status,
           diasRestantes,
         };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -3442,17 +3442,57 @@ function BackupTab() {
   const healthQuery = (trpc as any).backup.health.useQuery(undefined, { refetchOnWindowFocus: false });
   const githubQuery = (trpc as any).backup.githubStatus.useQuery(undefined, { refetchOnWindowFocus: false });
   const [enviandoSnapshot, setEnviandoSnapshot] = useState(false);
+  const [snapshotRunId, setSnapshotRunId] = useState<string | null>(null);
+  const snapshotMismatchRef = useRef(0);
+  // Rev. 4620 — progresso do envio (0–100%), consultado a cada 1s enquanto envia
+  const snapshotProgressQuery = (trpc as any).backup.snapshotProgress.useQuery(undefined, {
+    enabled: enviandoSnapshot,
+    refetchInterval: enviandoSnapshot ? 1000 : false,
+    refetchOnWindowFocus: false,
+  });
+  // Rev. 4625 — a mutation só DISPARA o envio (retorna na hora; iPad/Safari
+  // abortava o fetch longo). A conclusão/erro chega pelo polling do progresso.
   const pushSnapshotMut = (trpc as any).backup.pushCodeSnapshot.useMutation({
     onSuccess: (data: any) => {
-      toast.success(`Cópia do código enviada ao GitHub (${data.shortSha}) — ${formatBytes(data.tamanhoBytes)}`);
-      setEnviandoSnapshot(false);
-      githubQuery.refetch();
+      // runId correlaciona ESTE envio: só reagimos ao progresso dele
+      setSnapshotRunId(data?.runId || null);
+      snapshotMismatchRef.current = 0;
     },
     onError: (err: any) => {
       toast.error("Erro ao enviar código: " + err.message);
       setEnviandoSnapshot(false);
+      setSnapshotRunId(null);
     },
   });
+  useEffect(() => {
+    if (!enviandoSnapshot || !snapshotRunId) return;
+    const p = snapshotProgressQuery.data as any;
+    if (!p) return;
+    if (p.runId === snapshotRunId) {
+      snapshotMismatchRef.current = 0;
+      if (p.ativo) return;
+      if (p.resultado) {
+        toast.success(`Cópia do código enviada ao GitHub (${p.resultado.shortSha}) — ${formatBytes(p.resultado.tamanhoBytes)}`);
+        githubQuery.refetch();
+      } else if (p.erro) {
+        toast.error("Erro ao enviar código: " + p.erro);
+      } else {
+        return; // terminal ainda sem resultado/erro: aguarda próximo poll
+      }
+      setEnviandoSnapshot(false);
+      setSnapshotRunId(null);
+    } else if (!p.ativo) {
+      // progresso sem o nosso runId e inativo = servidor reiniciou no meio
+      // (estado em memória zerado). 3 polls seguidos confirmam antes de desistir.
+      snapshotMismatchRef.current += 1;
+      if (snapshotMismatchRef.current >= 3) {
+        toast.error("O envio foi interrompido (o servidor reiniciou). Tente novamente.");
+        setEnviandoSnapshot(false);
+        setSnapshotRunId(null);
+        snapshotMismatchRef.current = 0;
+      }
+    }
+  }, [enviandoSnapshot, snapshotRunId, snapshotProgressQuery.data]);
 
   useEffect(() => {
     const d = configQuery.data as any;
@@ -3742,7 +3782,7 @@ function BackupTab() {
                     className="gap-1.5 h-8"
                   >
                     {enviandoSnapshot
-                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</>
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando... {snapshotRunId && (snapshotProgressQuery.data as any)?.runId === snapshotRunId ? Math.max(0, Math.min(100, Number((snapshotProgressQuery.data as any)?.pct ?? 0))) : 0}%</>
                       : <><Upload className="w-4 h-4" /> Enviar cópia do código agora</>}
                   </Button>
                 </div>

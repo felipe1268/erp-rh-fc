@@ -170,7 +170,8 @@ export default function Crachas() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
-  const [activeTab, setActiveTab] = useState<"clt" | "pj" | "terceiro">("clt");
+  // Rev. 4624 — aba PJ eliminada: PJ e terceiros são uma coisa única no crachá
+  const [activeTab, setActiveTab] = useState<"clt" | "terceiro">("clt");
   const [search, setSearch] = useState("");
   const [selectedBadge, setSelectedBadge] = useState<BadgeData | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -228,6 +229,9 @@ export default function Crachas() {
 
   // Labels por tipo
   const LABELS: Record<BadgeType, string> = { clt: "CLT", pj: "PJ", terceiro: "TERCEIRO" };
+  // Rev. 4624 — PJ exibe visual de TERCEIRO (cor + rótulo); o tipo interno "pj"
+  // permanece só para o QR (/verificar/pj/:id, que lê da tabela employees)
+  const displayTipo = (t: BadgeType): BadgeType => (t === "pj" ? "terceiro" : t);
 
   // Transform data into BadgeData
   const cltBadges: BadgeData[] = useMemo(() => {
@@ -270,10 +274,35 @@ export default function Crachas() {
 
   const terceiroBadges: BadgeData[] = useMemo(() => {
     if (!terceirosData) return [];
+    // Rev. 4627 — status de documentação do TERCEIRO calculado dos campos do
+    // próprio cadastro (ASO, treinamento NR, integração, ficha de EPI), no
+    // mesmo formato do badgeStatus de CLT/PJ → habilita filtro OK/pendente
+    const hoje = new Date().toISOString().split("T")[0];
+    // validade pode chegar como Date (timestamp via superjson) ou string —
+    // String(Date) vira "Fri May 15..." e quebra a comparação
+    const isoDia = (v: any) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
+    const vigente = (validade: any) => !!validade && isoDia(validade) >= hoje;
     return (terceirosData as any[])
       .filter((f: any) => f.status === "ativo")
       .map((f: any) => {
         const emp = empresasTerceiras?.find((e: any) => e.id === f.empresaTerceiraId);
+        const pendencias: string[] = [];
+        if (!f.asoUrl && !f.asoValidade) pendencias.push("ASO ausente");
+        else if (!f.asoValidade) pendencias.push("ASO sem data de validade"); // espelha o "sem_data" do módulo Terceiros
+        else if (!vigente(f.asoValidade)) pendencias.push("ASO vencido");
+        const nr35 = vigente(f.nr35Validade);
+        const nr10 = vigente(f.nr10Validade);
+        const algumTreinoVigente = vigente(f.treinamentoNrValidade) || nr10 || vigente(f.nr33Validade) || nr35;
+        if (!algumTreinoVigente) pendencias.push("Nenhum treinamento NR vigente");
+        // Integração/ficha de EPI NÃO bloqueiam (campos quase não preenchidos
+        // na base — exigi-los zeraria o "Documentação OK" e mataria o filtro);
+        // critério = mesmo par de conformidade usado no módulo Terceiros (ASO+NR)
+        const treinamentos: string[] = [];
+        if (vigente(f.treinamentoNrValidade)) treinamentos.push("NR");
+        if (nr10) treinamentos.push("NR-10");
+        if (vigente(f.nr33Validade)) treinamentos.push("NR-33");
+        if (nr35) treinamentos.push("NR-35");
+        const docStatus: DocStatus = { pendencias, ok: pendencias.length === 0, nr35, nr10, restricao: false, treinamentos };
         return {
           id: f.id,
           nome: f.nome,
@@ -282,17 +311,22 @@ export default function Crachas() {
           foto: f.fotoUrl,
           tipo: "terceiro" as BadgeType,
           empresa: companyName,
+          matricula: f.numeroInterno, // Rev. 4628 — código interno (ex. FEL-00054) no crachá
           empresaTerceira: emp?.razaoSocial || `Empresa #${f.empresaTerceiraId}`,
           obra: f.obraNome,
+          docStatus,
         };
       });
   }, [terceirosData, empresasTerceiras, companyName]);
 
   const currentBadges = useMemo(() => {
-    let badges = activeTab === "clt" ? cltBadges : activeTab === "pj" ? pjBadges : terceiroBadges;
-    // Filtro de documentação só se aplica onde há status (CLT/PJ) — na aba
-    // Terceiros a lista NUNCA é filtrada por documentação
-    if (docFilter !== "todos" && activeTab !== "terceiro") {
+    // Rev. 4624 — aba Terceiros unifica terceiros + PJ (ordenados por nome)
+    let badges = activeTab === "clt"
+      ? cltBadges
+      : [...terceiroBadges, ...pjBadges].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+    // Rev. 4627 — filtro de documentação nas DUAS abas (terceiros agora têm
+    // status calculado do próprio cadastro; PJ já tinha via badgeStatus)
+    if (docFilter !== "todos") {
       badges = badges.filter((b) => b.docStatus && (docFilter === "ok" ? b.docStatus.ok : !b.docStatus.ok));
     }
     if (!search) return badges;
@@ -305,12 +339,13 @@ export default function Crachas() {
 
   // Contadores de documentação da aba atual (só CLT/PJ têm docStatus)
   const docCounts = useMemo(() => {
-    const badges = activeTab === "clt" ? cltBadges : activeTab === "pj" ? pjBadges : terceiroBadges;
+    const badges = activeTab === "clt" ? cltBadges : [...terceiroBadges, ...pjBadges];
     const comStatus = badges.filter((b) => b.docStatus);
     return {
       total: badges.length,
       ok: comStatus.filter((b) => b.docStatus!.ok).length,
       pendentes: comStatus.filter((b) => !b.docStatus!.ok).length,
+      // Rev. 4627 — filtro nas duas abas (terceiros ganharam status próprio)
       temStatus: comStatus.length > 0,
     };
   }, [activeTab, cltBadges, pjBadges, terceiroBadges]);
@@ -357,7 +392,7 @@ export default function Crachas() {
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <CreditCard className="w-7 h-7 text-orange-500" /> Emissão de Crachás
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">Gere crachás com QR Code para colaboradores CLT, PJ e terceiros</p>
+            <p className="text-sm text-muted-foreground mt-1">Gere crachás com QR Code para colaboradores CLT e terceiros (inclui PJ)</p>
           </div>
           <Button
             variant={showColorPanel ? "default" : "outline"}
@@ -383,8 +418,8 @@ export default function Crachas() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {(["clt", "pj", "terceiro"] as BadgeType[]).map((tipo) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {(["clt", "terceiro"] as BadgeType[]).map((tipo) => (
                 <div key={tipo} className="border rounded-lg p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-sm">{LABELS[tipo]}</span>
@@ -442,68 +477,71 @@ export default function Crachas() {
           </div>
         )}
 
-        {/* Color Legend */}
-        <div className="flex flex-wrap gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: badgeColors.clt }}></div>
-            <span className="text-sm">CLT ({cltBadges.length})</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: badgeColors.pj }}></div>
-            <span className="text-sm">PJ ({pjBadges.length})</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: badgeColors.terceiro }}></div>
-            <span className="text-sm">Terceiros ({terceiroBadges.length})</span>
-          </div>
-        </div>
-
-        {/* Tabs */}
+        {/* Rev. 4632 — barra única de controles: abas (com contagem e cor), busca
+            e filtros de documentação num só card. Legenda separada foi absorvida
+            pelas abas; alvos de toque maiores p/ tablet. */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <TabsList>
-              <TabsTrigger value="clt" className="flex items-center gap-1">
-                <User className="w-4 h-4" /> CLT
-              </TabsTrigger>
-              <TabsTrigger value="pj" className="flex items-center gap-1">
-                <Building2 className="w-4 h-4" /> PJ
-              </TabsTrigger>
-              <TabsTrigger value="terceiro" className="flex items-center gap-1">
-                <HardHat className="w-4 h-4" /> Terceiros
-              </TabsTrigger>
-            </TabsList>
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Buscar por nome, CPF ou função..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <TabsList className="h-11 p-1 rounded-xl w-full sm:w-auto">
+                <TabsTrigger value="clt" className="flex-1 sm:flex-none flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-semibold">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: badgeColors.clt }} />
+                  CLT
+                  <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-slate-200/70 text-slate-600">{cltBadges.length}</span>
+                </TabsTrigger>
+                <TabsTrigger value="terceiro" className="flex-1 sm:flex-none flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-semibold">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: badgeColors.terceiro }} />
+                  Terceiros
+                  <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-slate-200/70 text-slate-600">{terceiroBadges.length + pjBadges.length}</span>
+                </TabsTrigger>
+              </TabsList>
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome, CPF ou função..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10 h-11 rounded-xl bg-slate-50 focus:bg-white"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100"
+                    aria-label="Limpar busca"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Rev. 4609 — filtro de documentação (só onde há status: CLT/PJ) */}
-          {docCounts.temStatus && (
-            <div className="flex flex-wrap items-center gap-2 mt-3">
-              <button
-                onClick={() => setDocFilter("todos")}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${docFilter === "todos" ? "bg-foreground text-background border-foreground" : "bg-white text-muted-foreground hover:bg-gray-50"}`}
-              >
-                Todos ({docCounts.total})
-              </button>
-              <button
-                onClick={() => setDocFilter("ok")}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${docFilter === "ok" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50"}`}
-              >
-                <CheckCircle className="w-3.5 h-3.5 inline mr-1 -mt-px" />Documentação OK ({docCounts.ok})
-              </button>
-              <button
-                onClick={() => setDocFilter("pendentes")}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${docFilter === "pendentes" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-amber-700 border-amber-300 hover:bg-amber-50"}`}
-              >
-                <AlertTriangle className="w-3.5 h-3.5 inline mr-1 -mt-px" />Com pendência ({docCounts.pendentes})
-              </button>
-            </div>
-          )}
+            {/* Rev. 4609 — filtro de documentação (só onde há status: CLT/PJ) */}
+            {docCounts.temStatus && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setDocFilter("todos")}
+                  className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-colors ${docFilter === "todos" ? "bg-foreground text-background border-foreground" : "bg-white text-muted-foreground hover:bg-gray-50"}`}
+                >
+                  Todos ({docCounts.total})
+                </button>
+                <button
+                  onClick={() => setDocFilter("ok")}
+                  className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-colors ${docFilter === "ok" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50"}`}
+                >
+                  <CheckCircle className="w-3.5 h-3.5 inline mr-1 -mt-px" />Documentação OK ({docCounts.ok})
+                </button>
+                <button
+                  onClick={() => setDocFilter("pendentes")}
+                  className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-colors ${docFilter === "pendentes" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-amber-700 border-amber-300 hover:bg-amber-50"}`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 inline mr-1 -mt-px" />Com pendência ({docCounts.pendentes})
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Content */}
-          {["clt", "pj", "terceiro"].map((tab) => (
+          {["clt", "terceiro"].map((tab) => (
             <TabsContent key={tab} value={tab}>
               {isLoading ? (
                 <div className="text-center py-12 text-muted-foreground">
@@ -513,16 +551,16 @@ export default function Crachas() {
               ) : currentBadges.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>Nenhum {tab === "clt" ? "colaborador CLT" : tab === "pj" ? "prestador PJ" : "funcionário terceiro"} ativo encontrado</p>
+                  <p>Nenhum {tab === "clt" ? "colaborador CLT" : "funcionário terceiro/PJ"} ativo encontrado</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mt-4">
                   {currentBadges.map((badge) => (
                     <BadgeCard
                       key={`${badge.tipo}-${badge.id}`}
                       badge={badge}
-                      color={badgeColors[badge.tipo]}
-                      label={LABELS[badge.tipo]}
+                      color={badgeColors[displayTipo(badge.tipo)]}
+                      label={LABELS[displayTipo(badge.tipo)]}
                       onPreview={() => { setSelectedBadge(badge); setPreviewOpen(true); }}
                     />
                   ))}
@@ -540,7 +578,7 @@ export default function Crachas() {
           subtitle={selectedBadge?.nome || ""}
           icon={<CreditCard className="w-5 h-5" />}
           headerColor={selectedBadge ? `bg-gradient-to-r` : undefined}
-          headerStyle={selectedBadge ? { background: makeGradient(badgeColors[selectedBadge.tipo]) } : undefined}
+          headerStyle={selectedBadge ? { background: makeGradient(badgeColors[displayTipo(selectedBadge.tipo)]) } : undefined}
           headerActions={
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={handleDownload} className="bg-white/10 border-white/30 text-white hover:bg-white/20">
@@ -565,8 +603,8 @@ export default function Crachas() {
                       companyLogo={companyLogo}
                       companyPhone={companyPhone}
                       side="front"
-                      color={badgeColors[selectedBadge.tipo]}
-                      label={LABELS[selectedBadge.tipo]}
+                      color={badgeColors[displayTipo(selectedBadge.tipo)]}
+                      label={LABELS[displayTipo(selectedBadge.tipo)]}
                     />
                   </div>
                 </div>
@@ -579,8 +617,8 @@ export default function Crachas() {
                     companyLogo={companyLogo}
                     companyPhone={companyPhone}
                     side="back"
-                    color={badgeColors[selectedBadge.tipo]}
-                    label={LABELS[selectedBadge.tipo]}
+                    color={badgeColors[displayTipo(selectedBadge.tipo)]}
+                    label={LABELS[displayTipo(selectedBadge.tipo)]}
                   />
                 </div>
               </div>
@@ -622,33 +660,48 @@ function SeloNR({ tipo, mini, size = 46 }: { tipo: "nr35" | "nr10"; mini?: boole
 // Badge Card Component
 function BadgeCard({ badge, color, label, onPreview }: { badge: BadgeData; color: string; label: string; onPreview: () => void }) {
   const ds = badge.docStatus;
+  // Rev. 4632 — card moderno: sem faixa colorida pesada no topo; filete lateral
+  // com a cor do tipo, foto maior, nome sem corte (line-clamp-2), tipo em pill
+  // discreta e rodapé com botão de ação claro. Card inteiro é clicável.
   return (
     <div
-      className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-      style={{ backgroundColor: makeBgColor(color) }}
+      className="relative bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:border-slate-300 active:scale-[0.99] transition-all cursor-pointer"
       onClick={onPreview}
     >
-      <div className="px-3 py-2 flex items-center justify-between" style={{ background: makeGradient(color) }}>
-        <span className="text-white text-xs font-bold tracking-wider">{label}</span>
-        <CreditCard className="w-4 h-4 text-white/70" />
-      </div>
-      <div className="p-3">
-        <div className="flex items-center gap-3">
+      <div className="absolute inset-y-0 left-0 w-1.5" style={{ background: makeGradient(color) }} />
+      <div className="p-3.5 pl-5">
+        <div className="flex items-start gap-3">
           <div
-            className="w-12 h-12 rounded-full bg-white border-2 flex items-center justify-center overflow-hidden shrink-0"
+            className="w-14 h-14 rounded-full bg-slate-50 border-2 flex items-center justify-center overflow-hidden shrink-0"
             style={{ borderColor: color }}
           >
             {badge.foto ? (
-              <img src={badge.foto} alt="" className="w-full h-full object-cover" />
+              // Rev. 4626 — miniatura 128px (?w=128) + lazy: originais de câmera
+              // (até 5.7MB) em ~80 cards derrubavam o Safari/iPad ("?" quebrado)
+              <img
+                src={badge.foto.startsWith("/uploads/") ? `${badge.foto}?w=128` : badge.foto}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-cover"
+              />
             ) : (
               <User className="w-6 h-6 text-muted-foreground" />
             )}
           </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-sm truncate" style={{ color }}>{badge.nome}</p>
-            <p className="text-xs text-muted-foreground truncate">{badge.funcao || "Sem função"}</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-bold text-sm text-slate-800 leading-snug break-words line-clamp-2">{badge.nome}</p>
+              <span
+                className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded-md shrink-0 mt-0.5"
+                style={{ color, backgroundColor: makeBgColor(color) }}
+              >
+                {label}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground truncate mt-0.5">{badge.funcao || "Sem função"}</p>
             {badge.empresaTerceira && (
-              <p className="text-xs text-muted-foreground truncate">{badge.empresaTerceira}</p>
+              <p className="text-[11px] text-muted-foreground/80 truncate">{badge.empresaTerceira}</p>
             )}
           </div>
         </div>
@@ -681,11 +734,11 @@ function BadgeCard({ badge, color, label, onPreview }: { badge: BadgeData; color
             )}
           </div>
         )}
-        <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">{badge.cpf ? `CPF: ${badge.cpf.substring(0, 7)}...` : ""}</span>
-          <Button variant="ghost" size="sm" className="h-7 text-xs">
-            <Eye className="w-3.5 h-3.5 mr-1" /> Ver Crachá
-          </Button>
+        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+          <span className="text-[11px] text-muted-foreground/80">{badge.cpf ? `CPF: ${badge.cpf.substring(0, 7)}...` : ""}</span>
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color }}>
+            <Eye className="w-3.5 h-3.5" /> Ver Crachá
+          </span>
         </div>
       </div>
     </div>
@@ -812,7 +865,8 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
   const fotoH = denso ? 104 : compact ? 118 : 144;
   const fotoW = denso ? 118 : compact ? 132 : 158;
   const logoH = denso ? 40 : compact ? 46 : 54;
-  const nomePx = denso ? 16 : compact ? 18 : 21;
+  // Rev. 4629 — nome menor (pedido do usuário, IMG_4516)
+  const nomePx = denso ? 13.5 : compact ? 15 : 17;
 
   return (
     <div className="w-[340px] h-[540px] rounded-2xl overflow-hidden shadow-xl mx-auto relative bg-white flex flex-col">
@@ -842,13 +896,16 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
       </div>
 
       {/* Nome + função laranja entre traços (— FUNÇÃO —) */}
-      <div className={`text-center ${denso ? "mt-[8px]" : "mt-[12px]"} px-6 relative shrink-0`}>
+      {/* Rev. 4631 — nome/função recuados à área branca (ml-40/mr-34, mesmo recuo das
+          linhas de dados): o texto não pode invadir as listras diagonais da lateral */}
+      <div className={`text-center ${denso ? "mt-[8px]" : "mt-[12px]"} ml-[40px] mr-[34px] relative shrink-0`}>
         <h2 className="font-extrabold uppercase leading-[1.12] tracking-wide line-clamp-2 overflow-hidden" style={{ color: NAVY, fontSize: nomePx }}>
           {badge.nome}
         </h2>
         <div className={`flex items-center justify-center gap-[8px] ${denso ? "mt-[4px]" : "mt-[6px]"}`}>
           <span className="h-[2px] w-[18px] rounded-full shrink-0" style={{ backgroundColor: OR }} />
-          <p className="font-extrabold uppercase tracking-[0.08em] leading-tight truncate max-w-[190px]" style={{ color: OR, fontSize: denso ? 11 : 12.5 }}>
+          {/* Rev. 4628 — função completa (2 linhas), sem "..." */}
+          <p className="font-extrabold uppercase tracking-[0.08em] leading-tight line-clamp-2 break-words max-w-[210px]" style={{ color: OR, fontSize: denso ? 11 : 12.5 }}>
             {badge.funcao || "—"}
           </p>
           <span className="h-[2px] w-[18px] rounded-full shrink-0" style={{ backgroundColor: OR }} />
@@ -878,8 +935,11 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
       )}
 
       {/* Rev. 4609 — faixa de restrição de atividade (aviso genérico, LGPD-safe) */}
+      {/* Rev. 4633 — faixa mais ESTREITA (ml-70/mr-64): na altura dela a listra
+          laranja ainda é larga; o recuo de 40px deixava a tarja vermelha por cima
+          da faixa amarela (pedido do usuário, IMG_4525) */}
       {temFaixa && (
-        <div className={`mx-[10px] ${denso ? "mt-[6px]" : "mt-[8px]"} relative shrink-0`}>
+        <div className={`ml-[70px] mr-[64px] ${denso ? "mt-[6px]" : "mt-[8px]"} relative shrink-0`}>
           <div className={`flex items-center justify-center gap-[6px] rounded-md ${denso ? "py-[4px]" : "py-[6px]"} px-2`} style={{ backgroundColor: "#dc2626" }}>
             <AlertTriangle className="w-[13px] h-[13px] text-white shrink-0" strokeWidth={2.5} />
             <span className="text-white text-[11px] font-extrabold tracking-wide">RESTRIÇÃO DE ATIVIDADE</span>
@@ -896,7 +956,13 @@ function BadgePreview({ badge, companyName, companyLogo, companyPhone, side, col
             <span className={`shrink-0 ${denso ? "w-[22px] h-[22px]" : "w-[26px] h-[26px]"} rounded-[7px] flex items-center justify-center`} style={{ color: NAVY, border: `1.5px solid ${NAVY}` }}>{d.icon}</span>
             <div className={`flex-1 flex items-center border-b ${denso ? "pb-[4px]" : "pb-[6px]"}`} style={{ borderColor: "#c9d1dd" }}>
               <span className="text-[10px] font-semibold tracking-[0.13em]" style={{ color: NAVY }}>{d.rotulo}</span>
-              <span className={`ml-auto ${denso ? "text-[12px]" : "text-[13px]"} font-extrabold text-right max-w-[145px] truncate`} style={{ color: NAVY }}>{d.valor}</span>
+              {/* Rev. 4628 — valor completo em até 2 linhas (empresa/obra não podem sair cortadas) */}
+              <span
+                className={`ml-auto font-extrabold text-right leading-tight break-words line-clamp-2 max-w-[190px]`}
+                style={{ color: NAVY, fontSize: d.valor.length > 26 ? (denso ? 10.5 : 11) : denso ? 12 : 13 }}
+              >
+                {d.valor}
+              </span>
             </div>
           </div>
         ))}

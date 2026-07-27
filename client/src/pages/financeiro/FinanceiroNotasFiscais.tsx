@@ -1680,6 +1680,8 @@ export default function FinanceiroNotasFiscais() {
                   if (s === "rate_limit") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">⏱ Rate Limit</span>;
                   if (s === "erro")       return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">✗ Erro</span>;
                   if (s === "rodando")    return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700 animate-pulse">⟳ Rodando</span>;
+                  {/* Rev. 4630 — sync abortado por restart do servidor (self-heal no server) */}
+                  if (s === "interrompido") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-600">⏹ Interrompido</span>;
                   return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">{s}</span>;
                 };
                 return (

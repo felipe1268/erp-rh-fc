@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { RESTRICOES_OPERACIONAIS, parseRestricoesOperacionais } from "@shared/restricoesOperacionais";
 import { useDocumentMargins } from "@/hooks/useDocumentMargins";
 import { renderTemplate } from "@shared/documentTemplates";
 import { formatCPF, fmtNum } from "@/lib/formatters";
@@ -20,7 +21,7 @@ import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight, Lock, Sparkles, ClipboardCheck
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight, Lock, Sparkles, ClipboardCheck, XCircle
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
 import { toast } from "sonner";
@@ -292,17 +293,23 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                     return (
                       <tr key={i.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                         <td className="p-3">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <button onClick={() => onClickEmployee(i.employeeId)} className="font-medium text-left hover:text-indigo-600 hover:underline text-sm">
-                              {i.nomeCompleto || "-"}
-                            </button>
-                            {i.funcao && (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                                {i.funcao}
-                              </span>
-                            )}
+                          {/* Rev. 4639 — foto do colaborador na listagem */}
+                          <div className="flex items-center gap-2.5">
+                            <PersonPhoto src={i.fotoUrl} alt={i.nomeCompleto || ""} size="sm" />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button onClick={() => onClickEmployee(i.employeeId)} className="font-medium text-left hover:text-indigo-600 hover:underline text-sm">
+                                  {i.nomeCompleto || "-"}
+                                </button>
+                                {i.funcao && (
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                    {i.funcao}
+                                  </span>
+                                )}
+                              </div>
+                              {i.matricula && <p className="text-[10px] text-muted-foreground">{i.matricula}</p>}
+                            </div>
                           </div>
-                          {i.matricula && <p className="text-[10px] text-muted-foreground">{i.matricula}</p>}
                         </td>
                         <td className="p-3">
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${i.tipo === "interna" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
@@ -627,6 +634,176 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
 }
 
 // ============ PAINEL DOSSIÊ (Componente) ============
+// ============================================================================
+// Rev. 4641 — FICHA DOCUMENTAL: resumo prático de pendências / em dia por
+// colaborador (abre no clique do nome em todas as abas, no lugar do Raio-X;
+// o Raio-X completo fica num botão dentro da ficha). Reusa docs.painelDossie
+// (mesma query/cache do Dossiê — sem novo endpoint).
+// ============================================================================
+function FichaDocumental({ employeeId, companyId, companyIds, onClose, onOpenRaioX }: {
+  employeeId: number | null;
+  companyId: number;
+  companyIds?: number[];
+  onClose: () => void;
+  onOpenRaioX: (id: number) => void;
+}) {
+  // Rev. 4642 — multi-empresa: companyId pode ser 0 quando só companyIds vem
+  const queryEnabled = (!!companyId || (companyIds?.length ?? 0) > 0) && !!employeeId;
+  const { data, isLoading } = trpc.docs.painelDossie.useQuery(
+    { companyId, companyIds },
+    { enabled: queryEnabled }
+  );
+  const f: any = useMemo(
+    () => (data?.funcionarios || []).find((x: any) => x.id === employeeId) || null,
+    [data, employeeId]
+  );
+
+  // Rev. 4642 — fallback: colaborador fora do escopo do painel (ex.: desligado)
+  // não tem ficha → abre o Raio-X completo direto, sem beco sem saída
+  useEffect(() => {
+    if (employeeId && !isLoading && data && !f) onOpenRaioX(employeeId);
+  }, [employeeId, isLoading, data, f]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Linha padrão do checklist: ok? verde : vermelho/amarelo
+  function Item({ ok, warn, titulo, detalhe, link }: { ok: boolean; warn?: boolean; titulo: string; detalhe?: string; link?: string | null }) {
+    const cls = ok ? (warn ? "bg-yellow-50 border-yellow-200" : "bg-green-50/60 border-green-200") : "bg-red-50 border-red-200";
+    return (
+      <div className={`flex items-start justify-between gap-2 rounded-lg border px-3 py-2 ${cls}`}>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold break-words flex items-center gap-1.5">
+            {ok ? (warn ? <AlertTriangle className="h-3.5 w-3.5 text-yellow-600 shrink-0" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />) : <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+            {titulo}
+          </p>
+          {detalhe && <p className="text-[11px] text-muted-foreground mt-0.5 break-words">{detalhe}</p>}
+          {link && (
+            <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-0.5">
+              <ExternalLink className="h-3 w-3" /> Ver arquivo
+            </a>
+          )}
+        </div>
+        <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${ok ? (warn ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-700") : "bg-red-600 text-white"}`}>
+          {ok ? (warn ? "A VENCER" : "EM DIA") : "PENDENTE"}
+        </span>
+      </div>
+    );
+  }
+
+  const pend = (f?.pendencias as string[]) || [];
+  const treins = (f?.treinamentos as any[]) || [];
+  const ints = (f?.integracoes as any[]) || [];
+  const docs = (f?.documentos as any[]) || [];
+  const asoOk = !!f?.aso && f.aso.status !== "VENCIDO";
+  const asoWarn = asoOk && f.aso.diasRestantes >= 0 && f.aso.diasRestantes <= 30;
+  const hojeYmd = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const intVigente = (i: any) => !i.dataVencimento || String(i.dataVencimento).slice(0, 10) >= hojeYmd;
+
+  return (
+    <Dialog open={!!employeeId} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg w-[94vw] max-h-[90vh] overflow-y-auto" style={{ background: "#fff", color: "#111" }}>
+        {isLoading || !f ? (
+          <div className="flex items-center justify-center h-40 text-muted-foreground">
+            {isLoading ? <><Loader2 className="animate-spin mr-2 h-5 w-5" /> Carregando ficha...</> : "Colaborador não encontrado no painel."}
+          </div>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="sr-only">Ficha Documental</DialogTitle>
+            </DialogHeader>
+            {/* Cabeçalho da ficha */}
+            <div className="flex items-center gap-3">
+              <PersonPhoto src={f.fotoUrl} alt={f.nomeCompleto} size="lg" />
+              <div className="min-w-0 flex-1">
+                <h2 className="text-base font-bold leading-snug break-words">{f.nomeCompleto}</h2>
+                <p className="text-xs text-muted-foreground">{f.funcao || "—"}{f.cpf ? ` · ${formatCPF(f.cpf)}` : ""}</p>
+                <span className={`inline-flex mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${pend.length === 0 ? "bg-green-100 text-green-700" : "bg-red-600 text-white"}`}>
+                  {pend.length === 0 ? "✓ DOCUMENTAÇÃO EM DIA" : `${pend.length} PENDÊNCIA${pend.length > 1 ? "S" : ""}`}
+                </span>
+              </div>
+            </div>
+
+            {/* Pendências em destaque */}
+            {pend.length > 0 && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2">
+                <p className="text-xs font-bold text-red-700 mb-1">O que está faltando:</p>
+                <ul className="space-y-0.5">
+                  {pend.map((p, i) => <li key={i} className="text-xs text-red-700 flex items-center gap-1.5"><XCircle className="h-3 w-3 shrink-0" /> {p}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {/* ASO */}
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1"><Stethoscope className="h-3.5 w-3.5" /> ASO</p>
+              {f.aso ? (
+                <Item
+                  ok={asoOk} warn={asoWarn}
+                  titulo={f.aso.tipo || "ASO"}
+                  detalhe={`Exame: ${formatDate(f.aso.dataExame)} · Validade: ${formatDate(f.aso.dataValidade)}${asoOk && f.aso.diasRestantes >= 0 ? ` (${f.aso.diasRestantes}d restantes)` : ""}`}
+                  link={f.aso.documentoUrl}
+                />
+              ) : <Item ok={false} titulo="Sem ASO cadastrado" />}
+            </div>
+
+            {/* Treinamentos */}
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1"><GraduationCap className="h-3.5 w-3.5" /> Treinamentos ({treins.length})</p>
+              {treins.length === 0 ? <Item ok={false} titulo="Nenhum treinamento cadastrado" /> : (
+                <div className="space-y-1.5">
+                  {[...treins].sort((a, b) => (a.status === "VENCIDO" ? -1 : 1) - (b.status === "VENCIDO" ? -1 : 1) || (a.diasRestantes ?? 9999) - (b.diasRestantes ?? 9999)).map((t: any) => (
+                    <Item
+                      key={t.id}
+                      ok={t.status !== "VENCIDO"}
+                      warn={t.status !== "VENCIDO" && t.diasRestantes >= 0 && t.diasRestantes <= 60}
+                      titulo={t.norma || t.nome}
+                      detalhe={`Validade: ${t.dataValidade ? formatDate(t.dataValidade) : "—"}${t.status !== "VENCIDO" && t.diasRestantes >= 0 && t.diasRestantes <= 60 ? ` (vence em ${t.diasRestantes}d)` : ""}`}
+                      link={t.certificadoUrl}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Integrações */}
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> Integrações ({ints.length})</p>
+              {ints.length === 0 ? <Item ok={false} titulo="Nenhuma integração registrada" /> : (
+                <div className="space-y-1.5">
+                  {ints.map((i: any) => (
+                    <Item
+                      key={i.id}
+                      ok={intVigente(i)}
+                      titulo={i.clienteNome || (i.tipo === "interna" ? "Interna" : "Externa")}
+                      detalhe={`Realizada: ${formatDate(i.dataRealizacao)}${i.dataVencimento ? ` · Vence: ${formatDate(i.dataVencimento)}` : " · Sem vencimento"}`}
+                      link={i.evidencia && /^\/uploads\//.test(String(i.evidencia)) ? i.evidencia : null}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Documentos anexados */}
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> Documentos ({docs.length})</p>
+              {docs.length === 0 ? <p className="text-xs text-muted-foreground italic">Nenhum documento anexado.</p> : (
+                <div className="space-y-1.5">
+                  {docs.map((d: any) => (
+                    <Item key={d.id} ok={true} titulo={TIPOS_DOC_LABELS[d.tipo] || d.tipo} detalhe={d.nome || undefined} link={d.fileUrl} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+              <Button size="sm" onClick={() => onOpenRaioX(f.id)}>Ver Raio-X completo</Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: number; companyIds?: number[]; onClickEmployee: (id: number) => void }) {
   const { data, isLoading } = trpc.docs.painelDossie.useQuery(
     { companyId, companyIds },
@@ -638,6 +815,8 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
   const [isDownloading, setIsDownloading] = useState(false);
   const [dlProgress, setDlProgress] = useState(0);
   const [filtroPend, setFiltroPend] = useState<"todos" | "pendencia" | "emdia">("todos");
+  // Rev. 4640 — pop-up de detalhe dos treinamentos (clique no chip ⚠/❌)
+  const [detalheTrein, setDetalheTrein] = useState<any | null>(null);
 
   const contadores = useMemo(() => {
     const funcs = data?.funcionarios || [];
@@ -711,7 +890,7 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
     return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 font-medium">✓ VÁLIDO</span>;
   }
 
-  function TreinChip({ pior, total }: { pior: string; total: number }) {
+  function TreinChip({ pior, total, onClick }: { pior: string; total: number; onClick?: () => void }) {
     if (total === 0) return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-400 font-medium">— 0</span>;
     const configs: Record<string, string> = {
       SEM: "bg-gray-100 text-gray-400",
@@ -722,7 +901,25 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
     };
     const cls = configs[pior] || "bg-gray-100 text-gray-500";
     const icon = pior === "VENCIDO" ? "❌" : pior === "VENCER30" || pior === "VENCER60" ? "⚠" : "✓";
-    return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{icon} {total}</span>;
+    // Rev. 4640 — chip clicável abre o pop-up explicando o que está vencendo
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title="Ver detalhe dos treinamentos"
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-slate-300 transition-shadow ${cls}`}
+      >
+        {icon} {total}
+      </button>
+    );
+  }
+
+  // Rev. 4640 — status individual de um treinamento no pop-up
+  function treinStatusBadge(t: any) {
+    if (t.status === "VENCIDO") return <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white">VENCIDO</span>;
+    if (t.diasRestantes >= 0 && t.diasRestantes <= 30) return <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-300">Vence em {t.diasRestantes}d</span>;
+    if (t.diasRestantes >= 0 && t.diasRestantes <= 60) return <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-300">Vence em {t.diasRestantes}d</span>;
+    return <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Válido</span>;
   }
 
   if (isLoading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="animate-spin mr-2 h-5 w-5" /> Carregando dossiê...</div>;
@@ -823,7 +1020,7 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
                     </td>
                     <td className="p-2 text-muted-foreground text-xs hidden md:table-cell">{f.funcao || "—"}</td>
                     <td className="p-2 text-center"><AsoChip aso={f.aso} /></td>
-                    <td className="p-2 text-center"><TreinChip pior={f.piorStatusTrein} total={f.totais.treinamentos} /></td>
+                    <td className="p-2 text-center"><TreinChip pior={f.piorStatusTrein} total={f.totais.treinamentos} onClick={() => setDetalheTrein(f)} /></td>
                     <td className="p-2 text-center">
                       {f.totais.integracoes === 0 ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-400 font-medium">— Sem</span>
@@ -951,6 +1148,55 @@ function DossiePanel({ companyId, companyIds, onClickEmployee }: { companyId: nu
           </Button>
         </div>
       )}
+
+      {/* Rev. 4640 — pop-up de detalhe dos treinamentos (clique no chip da coluna) */}
+      <Dialog open={!!detalheTrein} onOpenChange={(o) => { if (!o) setDetalheTrein(null); }}>
+        <DialogContent className="max-w-md w-[94vw] max-h-[85vh] overflow-y-auto" style={{ background: "#fff", color: "#111" }}>
+          {detalheTrein && (() => {
+            const treins = (detalheTrein.treinamentos as any[]) || [];
+            const vencidos = treins.filter(t => t.status === "VENCIDO");
+            const aVencer = treins.filter(t => t.status !== "VENCIDO" && t.diasRestantes >= 0 && t.diasRestantes <= 60);
+            const ok = treins.filter(t => t.status !== "VENCIDO" && t.diasRestantes > 60);
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <GraduationCap className="h-5 w-5" /> Treinamentos — {detalheTrein.nomeCompleto}
+                  </DialogTitle>
+                </DialogHeader>
+                {/* Resumo do porquê do alerta */}
+                <div className={`rounded-lg px-3 py-2 text-xs font-medium ${vencidos.length > 0 ? "bg-red-50 text-red-700 border border-red-200" : aVencer.length > 0 ? "bg-yellow-50 text-yellow-800 border border-yellow-200" : "bg-green-50 text-green-700 border border-green-200"}`}>
+                  {vencidos.length > 0
+                    ? `❌ ${vencidos.length} treinamento${vencidos.length > 1 ? "s" : ""} VENCIDO${vencidos.length > 1 ? "S" : ""} — colaborador com restrição até reciclar.`
+                    : aVencer.length > 0
+                      ? `⚠ ${aVencer.length} treinamento${aVencer.length > 1 ? "s" : ""} vencendo nos próximos 60 dias — programe a reciclagem.`
+                      : `✓ Todos os ${treins.length} treinamentos estão válidos.`}
+                </div>
+                <div className="space-y-1.5">
+                  {[...vencidos, ...aVencer, ...ok].map((t: any) => (
+                    <div key={t.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${t.status === "VENCIDO" ? "bg-red-50 border border-red-200" : t.diasRestantes <= 60 ? "bg-yellow-50 border border-yellow-200" : "bg-gray-50"}`}>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold break-words">{t.norma || t.nome}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {t.dataRealizacao && <>Realizado: {formatDate(t.dataRealizacao)} · </>}
+                          Validade: {t.dataValidade ? formatDate(t.dataValidade) : "—"}
+                        </p>
+                        {t.certificadoUrl && (
+                          <a href={t.certificadoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                            <ExternalLink className="h-3 w-3" /> Ver certificado
+                          </a>
+                        )}
+                      </div>
+                      {treinStatusBadge(t)}
+                    </div>
+                  ))}
+                  {treins.length === 0 && <p className="text-xs text-muted-foreground italic">Nenhum treinamento cadastrado.</p>}
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2639,6 +2885,8 @@ export default function ControleDocumentos() {
   const [showAdvDialog, setShowAdvDialog] = useState(false);
   const [showImportAso, setShowImportAso] = useState(false);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  // Rev. 4641 — Ficha Documental: clique no nome abre resumo de pendências/em dia
+  const [fichaEmployeeId, setFichaEmployeeId] = useState<number | null>(null);
   const [atestPreviewDoc, setAtestPreviewDoc] = useState<{ url: string; name: string; title: string } | null>(null);
 
   // ============ EDIT MODE (null = criação, number = edição) ============
@@ -2878,7 +3126,7 @@ export default function ControleDocumentos() {
   const openNewAso = () => { setEditingAsoId(null); setAsoForm({}); setShowAsoDialog(true); };
   const openEditAso = (a: any) => {
     setEditingAsoId(a.id);
-    setAsoForm({ employeeId: a.employeeId, tipo: a.tipo, dataExame: a.dataExame, validadeDias: a.validadeDias || 365, resultado: a.resultado || "Apto", medico: a.medico || "", crm: a.crm || "", clinica: a.clinica || "", examesRealizados: a.examesRealizados || "", observacoes: a.observacoes || "" });
+    setAsoForm({ employeeId: a.employeeId, tipo: a.tipo, dataExame: a.dataExame, validadeDias: a.validadeDias || 365, resultado: a.resultado || "Apto", medico: a.medico || "", crm: a.crm || "", clinica: a.clinica || "", examesRealizados: a.examesRealizados || "", observacoes: a.observacoes || "", restricoesOperacionais: parseRestricoesOperacionais(a.restricoesOperacionais) });
     setShowAsoDialog(true);
   };
 
@@ -3394,22 +3642,22 @@ export default function ControleDocumentos() {
 
           {/* ===================== ABA SEM ASO ===================== */}
           <TabsContent value="semASO">
-            <SemASOPanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} onCreateAso={(empId: number) => { setEditingAsoId(null); setAsoForm({ employeeId: empId }); setShowAsoDialog(true); }} />
+            <SemASOPanel companyId={companyId} companyIds={companyIds} onClickEmployee={setFichaEmployeeId} onCreateAso={(empId: number) => { setEditingAsoId(null); setAsoForm({ employeeId: empId }); setShowAsoDialog(true); }} />
           </TabsContent>
 
           {/* ===================== ABA MAPEAMENTO / COBERTURA ===================== */}
           <TabsContent value="mapeamento">
-            <MapeamentoPanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} empresaNome={nomeEmpresaCompleto} />
+            <MapeamentoPanel companyId={companyId} companyIds={companyIds} onClickEmployee={setFichaEmployeeId} empresaNome={nomeEmpresaCompleto} />
           </TabsContent>
 
           {/* ===================== ABA PAINEL DE VALIDADE ===================== */}
           <TabsContent value="validade">
-            <ValidadePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} forceTipo={validadeForceTipo} forceStatus={validadeForceStatus} />
+            <ValidadePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setFichaEmployeeId} forceTipo={validadeForceTipo} forceStatus={validadeForceStatus} />
           </TabsContent>
 
           {/* ===================== ABA DOCUMENTOS DO FUNCIONÁRIO ===================== */}
           <TabsContent value="documentos">
-            <DocumentosPanel companyId={companyId} companyIds={companyIds} employees={allEmployees as any[]} onClickEmployee={setRaioXEmployeeId} EmployeeSelect={EmployeeSelect} />
+            <DocumentosPanel companyId={companyId} companyIds={companyIds} employees={allEmployees as any[]} onClickEmployee={setFichaEmployeeId} EmployeeSelect={EmployeeSelect} />
           </TabsContent>
 
           {/* ===================== ABA ASO ===================== */}
@@ -3462,7 +3710,7 @@ export default function ControleDocumentos() {
                                     <div className="text-xs text-muted-foreground italic flex items-center gap-1"><Clock className="h-3 w-3" /> Histórico</div>
                                   ) : (
                                     <>
-                                      <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
+                                      <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setFichaEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
                                       <div className="text-xs text-muted-foreground">{formatCPF(a.cpf)}</div>
                                       {opts.toggle && ocultos.length > 0 && (
                                         <button type="button" onClick={() => toggleAsoEmp(g.employeeId)} className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-blue-700">
@@ -3559,7 +3807,7 @@ export default function ControleDocumentos() {
                             <div className="flex items-center gap-2.5">
                               <PersonPhoto src={t.fotoUrl} alt={t.nomeCompleto} size="sm" />
                               <div className="min-w-0">
-                                <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(t.employeeId)}>{t.nomeCompleto}</span><CipaBadge ativo={t.cipaAtivo} estabilidade={t.cipaEstabilidade} fim={t.cipaFimEstabilidade} cargo={t.cipaCargo} /></div>
+                                <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setFichaEmployeeId(t.employeeId)}>{t.nomeCompleto}</span><CipaBadge ativo={t.cipaAtivo} estabilidade={t.cipaEstabilidade} fim={t.cipaFimEstabilidade} cargo={t.cipaCargo} /></div>
                                 <div className="text-xs text-muted-foreground">{t.funcao || "-"}</div>
                               </div>
                             </div>
@@ -3664,7 +3912,7 @@ export default function ControleDocumentos() {
                           <td className="py-2">
                             <div className="flex items-center gap-2.5">
                               <PersonPhoto src={a.fotoUrl} alt={a.nomeCompleto} size="sm" />
-                              <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
+                              <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setFichaEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
                             </div>
                           </td>
                           <td className="py-2">{formatCPF(a.cpf)}</td>
@@ -3770,7 +4018,7 @@ export default function ControleDocumentos() {
                           <td className="py-2">
                             <div className="flex items-center gap-2.5">
                               <PersonPhoto src={a.fotoUrl} alt={a.nomeCompleto} size="sm" />
-                              <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
+                              <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setFichaEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
                             </div>
                           </td>
                           <td className="py-2">{formatCPF(a.cpf)}</td>
@@ -3978,17 +4226,17 @@ export default function ControleDocumentos() {
 
           {/* ===================== ABA INTEGRAÇÕES ===================== */}
           <TabsContent value="integracoes" className="mt-4">
-            <IntegracoesPanel companyId={companyId} onClickEmployee={setRaioXEmployeeId} />
+            <IntegracoesPanel companyId={companyId} onClickEmployee={setFichaEmployeeId} />
           </TabsContent>
 
           {/* ===================== ABA TERMO DE RECEBIMENTO (Rev. 2146) ===================== */}
           <TabsContent value="termos-responsabilidade" className="mt-4">
-            <TermosResponsabilidadePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} />
+            <TermosResponsabilidadePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setFichaEmployeeId} />
           </TabsContent>
 
           {/* ===================== ABA DOSSIÊ ===================== */}
           <TabsContent value="dossie" className="mt-4">
-            <DossiePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} />
+            <DossiePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setFichaEmployeeId} />
           </TabsContent>
 
         </Tabs>
@@ -4110,6 +4358,35 @@ export default function ControleDocumentos() {
               <h3 className="text-sm font-semibold text-gray-800">Exames Realizados</h3>
             </div>
             <ExamesRealizadosField value={asoForm.examesRealizados || ""} onChange={v => setAsoForm({ ...asoForm, examesRealizados: v })} companyId={companyId} companyIds={companyIds} />
+          </div>
+
+          {/* Rev. 4622 — Restrições operacionais estruturadas (aparecem no QR do crachá) */}
+          <div className="rounded-xl border bg-gradient-to-r from-red-50 to-orange-50 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="h-7 w-7 rounded-lg bg-red-600 flex items-center justify-center"><Shield className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-red-900">Restrições Operacionais</h3>
+            </div>
+            <p className="text-[11px] text-red-800/70 mb-3">Marque o que o colaborador NÃO pode fazer. Estas restrições aparecem na leitura do QR code do crachá — apenas a instrução de segurança, nunca o motivo médico (LGPD).</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+              {RESTRICOES_OPERACIONAIS.map((r) => {
+                const marcadas: string[] = Array.isArray(asoForm.restricoesOperacionais) ? asoForm.restricoesOperacionais : [];
+                const checked = marcadas.includes(r.key);
+                return (
+                  <label key={r.key} className="flex items-start gap-2 text-xs text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 accent-red-600"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = e.target.checked ? [...marcadas, r.key] : marcadas.filter((k) => k !== r.key);
+                        setAsoForm({ ...asoForm, restricoesOperacionais: next });
+                      }}
+                    />
+                    <span className="break-words leading-snug">{r.label}</span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
 
           <div className="rounded-xl border bg-white p-4">
@@ -5031,6 +5308,14 @@ export default function ControleDocumentos() {
 
       {/* ===================== RAIO-X DO FUNCIONÁRIO ===================== */}
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+      {/* Rev. 4641 — Ficha Documental (resumo de pendências) */}
+      <FichaDocumental
+        employeeId={fichaEmployeeId}
+        companyId={companyId}
+        companyIds={companyIds}
+        onClose={() => setFichaEmployeeId(null)}
+        onOpenRaioX={(id) => { setFichaEmployeeId(null); setRaioXEmployeeId(id); }}
+      />
 
       {/* ===================== ASSINATURAS DIGITAIS — ADVERTÊNCIA ===================== */}
       {showAdvAssinaturas && advAssinaturasData && (

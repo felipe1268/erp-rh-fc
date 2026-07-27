@@ -1275,6 +1275,20 @@ export const sefazRouter = router({
     .query(async ({ input, ctx }) => {
       if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
+      // Rev. 4630 — self-heal: linha 'rodando' há >30min = sync interrompido por
+      // restart/deploy no meio (o finalize nunca rodou). Marca como 'interrompido'
+      // para o log não mostrar "Rodando" eterno (confundia o usuário).
+      try {
+        await db.execute(sql`
+          UPDATE nfe_sync_log
+          SET status = 'interrompido', finalizado_em = COALESCE(finalizado_em, iniciado_em),
+              observacao = COALESCE(NULLIF(observacao, ''), 'Sync interrompido (servidor reiniciou no meio) — sem efeito; a próxima sincronização retoma do mesmo NSU.')
+          WHERE company_id = ${input.companyId} AND status = 'rodando'
+            AND iniciado_em < NOW() - INTERVAL '30 minutes'
+        `);
+      } catch (e: any) {
+        console.warn(`[SefazSync] sweep de logs 'rodando' falhou (não-fatal):`, e?.message);
+      }
       const rows = (await db.execute(sql`
         SELECT id, company_id,
           TO_CHAR(iniciado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI:SS') AS iniciado_brt,

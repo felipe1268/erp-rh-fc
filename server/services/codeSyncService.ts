@@ -282,17 +282,41 @@ export interface SnapshotResult {
   url: string;
 }
 
+// Rev. 4620 — progresso do envio (0–100%) para a UI acompanhar ao vivo.
+// Estado em memória (um envio por vez; o botão da UI já impede concorrência).
+// Rev. 4625 — o envio roda em BACKGROUND (Safari/iPad aborta fetch longo);
+// o resultado/erro final viaja pelo próprio progresso, consumido pelo polling.
+// runId correlaciona cada envio: o client só reage ao progresso do SEU run
+// (evita toastar resultado/erro de um envio anterior).
+let _snapshotProgress: { ativo: boolean; pct: number; etapa: string; runId?: string; erro?: string | null; resultado?: SnapshotResult | null } = { ativo: false, pct: 0, etapa: "" };
+export function getSnapshotProgress() {
+  return _snapshotProgress;
+}
+function setProgresso(pct: number, etapa: string) {
+  _snapshotProgress = { ativo: true, pct: Math.min(100, Math.max(0, Math.round(pct))), etapa, runId: _snapshotProgress.runId };
+}
+
 /**
  * Compacta o código-fonte e o envia (como .zip) para a branch dedicada no GitHub,
  * usando a Git Data API (blob → tree → commit → ref). Não usa o `.git` local.
  */
-export async function pushCodeSnapshotToGitHub(iniciadoPor: string): Promise<SnapshotResult> {
+export async function pushCodeSnapshotToGitHub(iniciadoPor: string, jaTravado = false): Promise<SnapshotResult> {
+  // Trava de envio ÚNICO (single-flight): se já há um envio em andamento
+  // (inclusive iniciado por outro admin), rejeita em vez de disputar a branch.
+  if (!jaTravado) {
+    if (_snapshotProgress.ativo) {
+      throw new Error("Já existe um envio de cópia do código em andamento. Aguarde a conclusão.");
+    }
+    setProgresso(1, "Iniciando…");
+  }
+  try {
   if (!sourcePresente()) {
     throw new Error(
       "O código-fonte completo não está disponível neste ambiente (provavelmente o app publicado, que roda apenas o build). Envie a cópia a partir do ambiente de desenvolvimento."
     );
   }
 
+  setProgresso(2, "Compactando o código-fonte…");
   const zip = await buildSourceZip();
 
   // 1) blobs com o conteúdo do zip em PARTES de 4MB — o proxy da integração
@@ -302,6 +326,8 @@ export async function pushCodeSnapshotToGitHub(iniciadoPor: string): Promise<Sna
   const treeEntries: Array<{ path: string; mode: string; type: string; sha: string }> = [];
   const totalPartes = Math.ceil(zip.length / PART_BYTES);
   for (let i = 0; i < totalPartes; i++) {
+    // 10% após compactar → 85% ao terminar as partes (proporcional ao enviado)
+    setProgresso(10 + (i / totalPartes) * 75, `Enviando parte ${i + 1} de ${totalPartes}…`);
     const parte = zip.subarray(i * PART_BYTES, (i + 1) * PART_BYTES);
     const blob = await ghJson(`/repos/${GITHUB_REPO}/git/blobs`, {
       method: "POST",
@@ -316,6 +342,7 @@ export async function pushCodeSnapshotToGitHub(iniciadoPor: string): Promise<Sna
   }
 
   // manifest com instruções de reconstituição
+  setProgresso(86, "Enviando manifesto…");
   const { createHash } = await import("crypto");
   const manifesto = [
     `# Cópia de segurança do código-fonte do ERP`,
@@ -338,6 +365,7 @@ export async function pushCodeSnapshotToGitHub(iniciadoPor: string): Promise<Sna
   treeEntries.push({ path: "README.md", mode: "100644", type: "blob", sha: manifestBlob.sha });
 
   // 2) árvore contendo as partes do zip + manifesto
+  setProgresso(90, "Gravando no GitHub…");
   const tree = await ghJson(`/repos/${GITHUB_REPO}/git/trees`, {
     method: "POST",
     body: JSON.stringify({ tree: treeEntries }),
@@ -378,11 +406,36 @@ export async function pushCodeSnapshotToGitHub(iniciadoPor: string): Promise<Sna
     });
   }
 
-  return {
+  const resultado: SnapshotResult = {
     success: true,
     branch: SNAPSHOT_BRANCH,
     shortSha: String(commit.sha || "").slice(0, 7),
     tamanhoBytes: zip.length,
     url: `https://github.com/${GITHUB_REPO}/tree/${SNAPSHOT_BRANCH}`,
   };
+  _snapshotProgress = { ativo: false, pct: 100, etapa: "Concluído", runId: _snapshotProgress.runId, resultado };
+  return resultado;
+  } catch (e: any) {
+    _snapshotProgress = { ativo: false, pct: 0, etapa: "", runId: _snapshotProgress.runId, erro: e?.message || "Erro desconhecido no envio" };
+    throw e;
+  }
+}
+
+/**
+ * Rev. 4625 — dispara o envio em background e retorna IMEDIATAMENTE.
+ * O iPad/Safari aborta fetchs longos ("Fetch is aborted"); a UI acompanha
+ * pelo polling de getSnapshotProgress(), que carrega o resultado/erro final.
+ */
+export function startCodeSnapshotAsync(iniciadoPor: string): { iniciado: boolean; runId: string } {
+  if (_snapshotProgress.ativo) {
+    throw new Error("Já existe um envio de cópia do código em andamento. Aguarde a conclusão.");
+  }
+  // marca síncrono ANTES do async (single-flight sem corrida); runId novo
+  // zera resultado/erro do run anterior atomicamente
+  const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  _snapshotProgress = { ativo: true, pct: 1, etapa: "Iniciando…", runId };
+  pushCodeSnapshotToGitHub(iniciadoPor, /* jaTravado */ true).catch((e) => {
+    console.error("[CodeSync] Envio em background falhou:", e?.message || e);
+  });
+  return { iniciado: true, runId };
 }

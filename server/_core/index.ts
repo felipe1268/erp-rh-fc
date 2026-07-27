@@ -608,6 +608,54 @@ Regras:
     };
     return map[ext] || null;
   };
+  // Rev. 4626 — miniaturas sob demanda (?w=NN): fotos de cadastro são originais
+  // de câmera (média ~865KB, até 5.7MB); grades com dezenas de avatares
+  // derrubavam o Safari/iPad (imagens quebradas "?"). Redimensiona com sharp,
+  // cacheia em uploads/.thumbs/<w>/<key>.webp e serve ~5-15KB por foto.
+  const THUMB_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif"]);
+  app.use("/uploads", async (req: any, res: any, next: any) => {
+    try {
+      if (req.method !== "GET" || !req.query?.w) return next();
+      // só larguras do conjunto fixo (evita ?w=abc virar 32 e caller público
+      // gerar centenas de variantes por chave)
+      const w = parseInt(String(req.query.w), 10);
+      if (![64, 96, 128, 256, 512].includes(w)) return next();
+      const key = decodeURIComponent(req.path.replace(/^\/+/, ""));
+      const ext = (key.split(".").pop() || "").toLowerCase();
+      if (!THUMB_EXTS.has(ext)) return next();
+      const thumbPath = path.resolve(UPLOADS_DIR, ".thumbs", String(w), key + ".webp");
+      const thumbsRoot = path.join(UPLOADS_DIR, ".thumbs");
+      if (!thumbPath.startsWith(thumbsRoot + path.sep)) return next(); // traversal → original
+      const serve = (buf: Buffer) => {
+        res.setHeader("Content-Type", "image/webp");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        res.setHeader("Content-Length", String(buf.length));
+        res.end(buf);
+      };
+      try { return serve(fsMod.readFileSync(thumbPath)); } catch { /* ainda não gerada */ }
+      // original: disco → fallback DB (mesma fonte do handler final)
+      let orig: Buffer | null = null;
+      const origPath = path.join(UPLOADS_DIR, key);
+      if (origPath.startsWith(UPLOADS_DIR + path.sep)) {
+        try { orig = fsMod.readFileSync(origPath); } catch { /* off-disk */ }
+      }
+      if (!orig) {
+        const { dbRetrieve } = await import("../storage");
+        const r = await dbRetrieve(key);
+        if (r) orig = r.buffer;
+      }
+      if (!orig) return next(); // deixa o fluxo normal responder 404
+      const sharpMod = (await import("sharp")).default;
+      const thumb = await sharpMod(orig).rotate().resize(w, w, { fit: "cover" }).webp({ quality: 78 }).toBuffer();
+      try {
+        fsMod.mkdirSync(path.dirname(thumbPath), { recursive: true });
+        fsMod.writeFileSync(thumbPath, thumb);
+      } catch { /* cache é best-effort */ }
+      return serve(thumb);
+    } catch {
+      return next(); // qualquer falha → serve o original
+    }
+  });
   app.use("/uploads", (req: any, _res: any, next: any) => {
     try {
       if (req.method !== "GET") return next(); // HEAD/etc: sem corpo grande
@@ -1678,6 +1726,8 @@ REGRAS DE EXTRAÇÃO:
           await db.execute(sql`ALTER TABLE asos ADD COLUMN IF NOT EXISTS "aptoAltura" TEXT`);
           await db.execute(sql`ALTER TABLE asos ADD COLUMN IF NOT EXISTS "aptoEspacoConfinado" TEXT`);
           await db.execute(sql`ALTER TABLE asos ADD COLUMN IF NOT EXISTS "restricoes" TEXT`);
+          // Rev. 4622 — restrições operacionais estruturadas (checkboxes do RH)
+          await db.execute(sql`ALTER TABLE asos ADD COLUMN IF NOT EXISTS "restricoesOperacionais" TEXT`);
           await db.execute(sql`
             CREATE TABLE IF NOT EXISTS aso_extracao_ia (
               id SERIAL PRIMARY KEY,

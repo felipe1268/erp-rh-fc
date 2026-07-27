@@ -1,4 +1,312 @@
 /**
+ * Rev. 4642 - FICHA DOCUMENTAL: MULTI-EMPRESA + FALLBACK P/ RAIO-X
+ *
+ * Correções do code review da Rev. 4641:
+ * - Query da ficha habilita também no modo multi-empresa (companyId 0 +
+ *   companyIds preenchido) — antes ficava "Colaborador não encontrado".
+ * - Colaborador fora do escopo do painelDossie (ex.: desligado, histórico)
+ *   → abre o Raio-X completo direto (useEffect fallback), sem beco sem saída.
+ */
+/**
+ * Rev. 4641 - CONTROLE DE DOCUMENTOS: FICHA DOCUMENTAL NO CLIQUE DO NOME
+ *
+ * Pedido do usuário (IMG_4533): clicar no nome do funcionário deve abrir uma
+ * FICHA-RESUMO da documentação (pendente × em dia), não o Raio-X.
+ * - Novo <FichaDocumental>: reusa docs.painelDossie (mesma query/cache do
+ *   Dossiê, sem endpoint novo). Cabeçalho com foto/nome/função/CPF + badge
+ *   "DOCUMENTAÇÃO EM DIA" ou "N PENDÊNCIAS"; box vermelho "O que está
+ *   faltando"; checklist com linha por item (ASO, cada treinamento, cada
+ *   integração, cada documento anexado) com selo EM DIA / A VENCER /
+ *   PENDENTE e link do arquivo.
+ * - TODOS os cliques de nome nas abas (Validade, Documentos, ASO, Mapeamento,
+ *   Treinamentos, Atestados, Advertências, Sem ASO, Integrações, Termos,
+ *   Dossiê) passaram de Raio-X → Ficha; o Raio-X completo continua acessível
+ *   pelo botão "Ver Raio-X completo" dentro da ficha.
+ */
+/**
+ * Rev. 4640 - DOSSIÊ: CHIP DE TREINAMENTOS CLICÁVEL COM POP-UP EXPLICATIVO
+ *
+ * Pedido do usuário (IMG_4532): clicar no chip "⚠ 4" da coluna Treinamentos
+ * e ver num pop-up O QUE está faltando/vencendo (a restrição).
+ * - TreinChip virou botão (hover ring); clique abre Dialog com:
+ *   resumo do alerta (vermelho = N vencidos → restrição até reciclar;
+ *   amarelo = N vencendo em 60d → programar reciclagem; verde = tudo ok)
+ *   + lista de cada treinamento (norma, realizado, validade, badge
+ *   VENCIDO/Vence em Xd/Válido, link do certificado), ordenada:
+ *   vencidos → a vencer → válidos. Dados já vinham no painelDossie
+ *   (client-only, sem mudança de backend).
+ */
+/**
+ * Rev. 4639 - INTEGRAÇÕES (CONTROLE DE DOCUMENTOS): FOTO DO COLABORADOR
+ *
+ * Pedido do usuário (IMG_4531): fotos de todos na listagem de Integrações.
+ * - integracoes.listar devolve fotoUrl (join com employees já existia).
+ * - Linha da tabela: <PersonPhoto size="sm"> ao lado do nome.
+ * - PersonPhoto.tsx: avatar agora usa miniatura ?w=128 + loading="lazy"
+ *   automaticamente para /uploads/ (originais de câmera até 5.7MB quebravam
+ *   grades no Safari/iPad); lightbox ampliado continua com o original.
+ *   Benefício global: TODAS as listas que usam PersonPhoto.
+ */
+/**
+ * Rev. 4638 - VERIFICAR APTIDÃO: HARDENING LGPD + PARSE DE DATA ROBUSTO
+ *
+ * Correções apontadas pelo code review das Revs 4636/4637:
+ * - Minimização LGPD: a rota pública NÃO devolve mais dataAdmissao crua;
+ *   o tempo de empresa é calculado no servidor e sai só como texto
+ *   ("3 anos e 2 meses") em tempoEmpresa (CLT e terceiro).
+ * - Vigência de integração: parseDia() aceita YYYY-MM-DD, timestamp ISO e
+ *   DD/MM/YYYY (comparação lexicográfica de texto cru podia errar status e
+ *   quebrar a renderização com Invalid Date). Datas ilegíveis → sem
+ *   vencimento (vigente), mesma regra do módulo Integrações.
+ */
+/**
+ * Rev. 4637 - VERIFICAR APTIDÃO: INTEGRAÇÕES DE CLIENTE (REALIZAÇÃO + VENCIMENTO)
+ *
+ * Pedido do usuário: se o colaborador tem integração de cliente (ex.:
+ * Santuário), o QR deve mostrar quando foi feita e quando vence — quem
+ * escaneia na portaria decide na hora.
+ * - Backend (verificar.funcionario): devolve integracoes[] de
+ *   employee_integrations (cliente, tipo, dataRealizacao, dataVencimento,
+ *   vigente — sem vencimento conta como vigente, mesma regra do módulo).
+ *   LGPD-safe: só cliente e datas.
+ * - Client: card "Integrações (N)" com cliente, pill Vigente/VENCIDA
+ *   (vencida = fundo vermelho) e datas de realização/vencimento.
+ */
+/**
+ * Rev. 4636 - VERIFICAR APTIDÃO: TEMPO DE EMPRESA
+ *
+ * Pedido do usuário: mostrar o tempo de empresa no cartão público.
+ * - Backend: endpoints públicos devolvem dataAdmissao (CLT: employees;
+ *   terceiro: funcionarios_terceiros).
+ * - Client: tile "Tempo de Empresa" ("X anos e Y meses"); parse manual
+ *   YYYY-MM-DD (Date() com timestamp-string quebra no iOS/Safari).
+ */
+/**
+ * Rev. 4635 - VERIFICAR APTIDÃO: CORES DA MARCA + Nº INTERNO (SEM CPF)
+ *
+ * Feedback do usuário (IMG_4529): "péssimo — sem CPF, apenas o número interno,
+ * use nossas cores, seja inovador".
+ * - Backend: cpf REMOVIDO da rota pública (funcionario + terceiro); devolve
+ *   numeroInterno (CLT: codigoInterno||matricula, mesma fonte do crachá;
+ *   terceiro: numero_interno).
+ * - VerificarAptidao.tsx: paleta da marca (navy #0A1E3C + laranja #EE9803,
+ *   a mesma do crachá) — header navy com listras diagonais laranja (SVG),
+ *   logo em pill branca, status num SELO colorido compacto (única área
+ *   verde/vermelha/âmbar), foto com anel laranja, nome em navy, pill
+ *   "Nº XXXX" âmbar no lugar do CPF. Lógica de aptidão/LGPD intocada.
+ */
+/**
+ * Rev. 4634 - VERIFICAR APTIDÃO (QR PÚBLICO): LAYOUT MODERNIZADO + LOGO DA EMPRESA
+ *
+ * Pedido do usuário (IMG_4526): layout melhor e inovador, com o logo da empresa.
+ * - Backend (portalExterno.verificar funcionario/terceiro): devolve logoEmpresa
+ *   (companies.logoUrl — só a URL do logo, nada sensível/LGPD).
+ * - VerificarAptidao.tsx: fundo com tint do status, logo da empresa em pill
+ *   branca no topo do header (fallback: escudo + nome), status com anel e
+ *   texto ao lado, FOTO SOBREPOSTA ao header (efeito crachá digital, ring
+ *   branco + outline na cor do status), nome centralizado, tiles de info em
+ *   bg-gray-50, footer com escudo. Lógica de aptidão/restrição INTOCADA
+ *   (cálculo ao vivo + saída canônica LGPD preservados).
+ */
+/**
+ * Rev. 4633 - CRACHÁ: TARJA VERMELHA MAIS ESTREITA (FORA DA LISTRA LARANJA)
+ *
+ * Pedido do usuário (IMG_4525): a faixa "RESTRIÇÃO DE ATIVIDADE" cobria a
+ * listra laranja diagonal. Na altura da tarja a listra ainda é larga (~60px),
+ * então o recuo de 40px não bastava. Fix: ml-[70px] mr-[64px] (largura ~206px
+ * no cartão de 340) — a tarja fica só na área branca, centrada. Crachas.tsx,
+ * client-only.
+ */
+/**
+ * Rev. 4632 - EMISSÃO DE CRACHÁS: LISTAGEM MODERNIZADA (LAYOUT PRÁTICO)
+ *
+ * Pedido do usuário (IMG_4522): layout prático, moderno e fácil de usar.
+ * Em Crachas.tsx (listagem, não o crachá em si):
+ * - Barra única de controles: abas CLT/Terceiros (com bolinha da cor e
+ *   contagem em pill), busca larga (h-11, com botão ✕ limpar) e filtros de
+ *   documentação, tudo num só card branco. Legenda separada removida
+ *   (absorvida pelas abas). Alvos de toque maiores (tablet).
+ * - Cards: removida a faixa colorida pesada do topo; card branco com filete
+ *   lateral de 1.5 na cor do tipo, foto 56px, nome em slate-800 sem corte
+ *   (line-clamp-2), tipo em pill discreta, rodapé com divisor + "Ver Crachá"
+ *   na cor do tipo. Card inteiro clicável com active:scale.
+ * Client-only, zero mudança de dados/backend.
+ */
+/**
+ * Rev. 4631 - CRACHÁ: NOME/FUNÇÃO NÃO INVADEM AS LISTRAS DIAGONAIS
+ *
+ * Pedido do usuário (IMG_4519/4520): o nome "AILTON NASCIMENTO S. COSTA"
+ * passava por cima da faixa laranja diagonal da lateral esquerda. O bloco
+ * nome+função usava px-6 (24px), insuficiente na altura das listras (SVG vai
+ * até y=412). Fix: mesmo recuo da área branca já usado pelas linhas de dados
+ * e pela faixa de restrição — ml-[40px] mr-[34px] (Crachas.tsx). Client-only.
+ */
+/**
+ * Rev. 4630 - LOG SEFAZ: "RODANDO" ETERNO VIRA "INTERROMPIDO" (SELF-HEAL)
+ *
+ * Diagnóstico do screenshot IMG_4518 ("não sincroniza, só dá erro ou fica
+ * rodando"): a sync das 20:12 BRT de 26/07 na verdade FUNCIONOU (29 notas
+ * importadas, NSU 9.765→9.842, rateLimitConsecutive=0 — confirmado no Neon,
+ * nfe_sync_log id=83 status ok). O que confundia:
+ * - Linhas 'rodando' órfãs: quando o servidor reinicia/deploya no meio de um
+ *   sync, finalizeSyncLog nunca roda e a linha fica "Rodando" para sempre
+ *   (3 no banco). Fix: sweep no sefaz.syncLog (list) — 'rodando' há >30min →
+ *   status 'interrompido' + observação explicativa (try/catch não-fatal).
+ * - Badge novo "⏹ Interrompido" (slate) no log da FinanceiroNotasFiscais.
+ * Os "Rate Limit" do histórico são passado (backoff funcionou; sync diária
+ * às 23:00 está OK desde então). Sem schema change.
+ */
+/**
+ * Rev. 4629 - CRACHÁ: NOME DO FUNCIONÁRIO MENOR
+ *
+ * Pedido do usuário (screenshot IMG_4516): nome ocupava 2 linhas grandes na
+ * frente do crachá. Em client/src/pages/terceiros/Crachas.tsx, nomePx reduzido
+ * de 21/18/16 (normal/compact/denso) para 17/15/13.5. Client-only.
+ */
+/**
+ * Rev. 4628 - CRACHÁS: EMPRESA/OBRA/FUNÇÃO SEM CORTE + CÓDIGO INTERNO DO TERCEIRO
+ *
+ * Pedido do usuário (screenshot IMG_4515, crachá TERCEIRO-58): o nome da
+ * empresa saía cortado ("DIDAQUE ELECTRIC ...") e o código interno não
+ * aparecia. Em client/src/pages/terceiros/Crachas.tsx:
+ * - Linhas de dados da frente (EMPRESA/OBRA/etc.): valor deixa de truncar
+ *   com "..." e passa a quebrar em até 2 linhas (break-words + line-clamp-2,
+ *   max-w 190px); valores longos (>26 chars) reduzem a fonte (13→11px /
+ *   denso 12→10.5px) para caber sem estourar o cartão de 540px (as linhas
+ *   usam flex justify-evenly e absorvem a altura extra).
+ * - Função entre traços: truncate → line-clamp-2 (max-w 210px).
+ * - Crachás de terceiros ganham a linha "Nº INTERNO" com
+ *   funcionarios_terceiros.numero_interno (ex. FEL-00054) — o list já
+ *   devolvia a coluna; só faltava mapear matricula no terceiroBadges.
+ * Client-only; sem schema change. Segue a regra dialog-no-truncate.
+ */
+/**
+ * Rev. 4627 - CRACHÁS: FILTRO DOCUMENTAÇÃO OK/PENDENTE NA ABA TERCEIROS
+ *
+ * O filtro "Documentação OK / Com pendência" existia só na aba CLT. Agora:
+ * - Terceiros ganham status de documentação calculado do próprio cadastro
+ *   (funcionarios_terceiros): ASO (ausente/vencido) + pelo menos um
+ *   treinamento NR vigente (NR genérico/10/33/35). Integração e ficha de EPI
+ *   NÃO bloqueiam (campos quase não preenchidos na base — exigi-los zeraria o
+ *   "OK"); critério espelha a conformidade ASO+NR já usada no módulo Terceiros.
+ * - Filtro habilitado nas duas abas; contadores por aba; PJ segue com o
+ *   badgeStatus de employees.
+ * - Cards de terceiros ganham a mesma tag ("Documentação OK"/"Faltam N
+ *   documentos") e selos/pills de NR vigentes.
+ * - Validades de terceiro chegam como Date (timestamp) — comparação via
+ *   toISOString().slice(0,10), nunca String(Date).
+ */
+/**
+ * Rev. 4626 - MINIATURAS DE FOTOS (?w=NN) — FIX FOTOS QUEBRADAS NOS CRACHÁS
+ *
+ * As fotos de cadastro são originais de câmera (média ~865KB, até 5.7MB).
+ * A Emissão de Crachás pedia ~80+ de uma vez (~70MB) e o Safari/iPad desistia
+ * no meio, mostrando o ícone de imagem quebrada ("?") na maioria dos cards.
+ *
+ * - Nova rota de miniatura: qualquer imagem de /uploads aceita ?w=NN (32–512);
+ *   redimensiona com sharp (rotate+cover+webp q78), cacheia em
+ *   uploads/.thumbs/<w>/<key>.webp e serve ~2-15KB por foto.
+ * - Fonte da miniatura: disco → fallback uploaded_files (mesma fonte do
+ *   handler normal); qualquer falha cai no fluxo original (sem regressão).
+ * - Grade de crachás usa ?w=128 + loading=lazy + decoding=async.
+ * - 179 miniaturas pré-geradas (média 2.4KB; 0.4MB no total vs ~70MB antes).
+ */
+/**
+ * Rev. 4625 - ENVIO DA CÓPIA DO CÓDIGO EM BACKGROUND (FIX "FETCH IS ABORTED")
+ *
+ * O envio da cópia do código ao GitHub (~23MB, ~2min) mantinha o fetch da
+ * mutation aberto até o fim; o Safari/iPad aborta fetchs longos → toast
+ * "Erro ao enviar código: Fetch is aborted" mesmo com o envio em andamento.
+ *
+ * - backup.pushCodeSnapshot agora só DISPARA o envio (startCodeSnapshotAsync)
+ *   e retorna imediatamente; o trabalho roda em background no servidor.
+ * - O progresso (polling de 1s já existente) passou a carregar também o
+ *   resultado final (shortSha/tamanho) ou o erro; a UI toasta ao concluir.
+ * - Trava single-flight marcada SINCRONAMENTE antes do async (sem corrida).
+ * - Validado com envio real: retorno imediato, 1→100% em ~106s, commit gravado.
+ */
+/**
+ * Rev. 4624 - CRACHÁS: ABA PJ ELIMINADA — PJ UNIFICADO COM TERCEIROS
+ *
+ * Pedido do usuário: "Crachá PJ não existe. PJ e terceiros serão uma coisa
+ * única em relação a crachá."
+ *
+ * - Aba "PJ" removida da Emissão de Crachás; a aba "Terceiros" agora lista
+ *   terceiros + prestadores PJ juntos, ordenados por nome.
+ * - Crachás de PJ usam o visual de TERCEIRO (cor e rótulo); o tipo interno
+ *   "pj" permanece apenas no QR (/verificar/pj/:id, que lê de employees).
+ * - Legenda de cores e painel "Personalizar Cores" reduzidos a CLT + Terceiros.
+ * - Filtro de documentação agora só na aba CLT (na aba unificada seria
+ *   enganoso: terceiros não têm status de documentação).
+ * - Aproveitado: corrigido comentário JSX inválido introduzido na Rev. 4623
+ *   (quebrava o build do componente).
+ */
+/**
+ * Rev. 4623 - CRACHÁ: FAIXA DE RESTRIÇÃO CENTRALIZADA NA ÁREA BRANCA
+ *
+ * A faixa vermelha "RESTRIÇÃO DE ATIVIDADE" invadia as listras diagonais da
+ * lateral esquerda do crachá. Agora usa o mesmo recuo das linhas de dados
+ * (ml-40px / mr-34px), ficando centralizada só na área branca.
+ */
+/**
+ * Rev. 4622 - ASO: RESTRIÇÕES OPERACIONAIS ESTRUTURADAS (CHECKBOXES DO RH)
+ *
+ * Continuação da Rev. 4620: o RH agora define explicitamente as restrições
+ * operacionais no formulário de ASO (Controle de Documentos), sem depender do
+ * texto do médico.
+ *
+ * - Novo dicionário canônico compartilhado shared/restricoesOperacionais.ts
+ *   (12 restrições: altura, espaço confinado, peso, ruído, calor, eletricidade,
+ *   noturno, máquinas, químicos, veículos, solda, escavação).
+ * - Nova coluna asos."restricoesOperacionais" (TEXT, JSON array de keys) +
+ *   self-heal ADD COLUMN IF NOT EXISTS.
+ * - asos.create/update aceitam o campo; server valida keys contra o dicionário
+ *   (deny-by-default — nada fora do dicionário entra no banco).
+ * - Formulário de ASO ganhou o card "Restrições Operacionais" (checkboxes) com
+ *   aviso LGPD; edição pré-carrega as marcadas.
+ * - QR público: checkboxes têm PRIORIDADE sobre a detecção por texto da Rev.
+ *   4620 (união deduplicada); flag restricaoAtividade também considera o campo.
+ * - Validado ponta a ponta: coluna criada no Neon, keys marcadas viram frases
+ *   canônicas na rota pública; dado de teste revertido.
+ */
+/**
+ * Rev. 4621 - SINCRONIZAÇÃO DE CÓDIGO: PERCENTUAL DE 0% A 100% NO ENVIO
+ *
+ * Pedido do usuário: o botão "Enviando..." da cópia do código (GitHub) agora
+ * mostra o progresso real de 0% a 100%.
+ *
+ * - Servidor: pushCodeSnapshotToGitHub reporta progresso em memória
+ *   (compactação 2% → partes do zip 10–85% proporcional → manifesto 86% →
+ *   gravação no GitHub 90% → 100%). Erro em qualquer fase zera o estado.
+ * - Novo endpoint backup.snapshotProgress (admin) devolve {ativo, pct, etapa}.
+ * - Frontend: enquanto envia, consulta a cada 1s e exibe "Enviando... N%".
+ * - Validado com envio real: 23MB em 6 partes, progresso 2→10→23→48→73→90→100,
+ *   commit 6333c2c na branch erp-code-snapshots.
+ */
+/**
+ * Rev. 4620 - QR VERIFICAR APTIDÃO: RESTRIÇÃO OPERACIONAL NA PÁGINA PÚBLICA (LGPD)
+ *
+ * Pedido do usuário: ao ler o QR code do crachá, mostrar QUAL é a restrição de
+ * atividade — sem ferir a LGPD.
+ *
+ * Solução (minimização de dados, art. 6º/11 LGPD):
+ * - A rota pública passa a devolver `restricoesOperacionais`: somente instruções
+ *   de segurança ("Não pode: trabalho em altura"), NUNCA o motivo médico.
+ * - Sanitizador em DUAS camadas no servidor:
+ *   1) Lista-BRANCA: só passa linha com cara de instrução ("não pode…",
+ *      "proibido…", "evitar…", "restrição para…"). Recomendações médicas
+ *      ("recomenda acompanhamento…") nunca passam.
+ *   2) Lista-NEGRA: mesmo instrução é bloqueada se citar CID, diagnóstico,
+ *      parte do corpo, doença, medicamento etc. (linha inteira suprimida).
+ * - aptoAltura negativo gera linha determinística "Trabalho em altura: NÃO
+ *   permitido" (sem duplicar se o texto já cita altura).
+ * - Se nada passar no filtro, permanece só o aviso genérico "RESTRIÇÃO DE
+ *   ATIVIDADE" (comportamento da Rev. 4609).
+ * - Frontend: banner vermelho lista as instruções em bullets.
+ * - Validado com dado real: restrição médica do banco foi 100% bloqueada;
+ *   bateria de 9 casos sintéticos confirmou a separação mostra/bloqueia.
+ */
+/**
  * Rev. 4619 - FIX: SINCRONIZAÇÃO DE CÓDIGO (GITHUB) RECONECTADA + SNAPSHOT PARTICIONADO
  *
  * Sintoma: painel Configurações → Sincronização de Código mostrava "GitHub não
