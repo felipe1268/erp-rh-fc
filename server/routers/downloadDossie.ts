@@ -14,6 +14,29 @@ const TIPO_DOC_LABEL: Record<string, string> = {
   diploma: "Diploma", certificado: "Certificado", outros: "Outros",
 };
 
+// Rev. 4665 — subpastas dentro de 001 - DOCUMENTOS PESSOAIS por tipo do documento
+const SUBPASTA_IDENTIFICACAO = new Set([
+  "rg", "cnh", "cpf", "ctps", "certidao_nascimento", "titulo_eleitor",
+  "reservista", "pis", "foto_3x4",
+]);
+const SUBPASTA_REGISTRO = new Set([
+  "comprovante_residencia", "diploma", "certificado",
+]);
+function subpastaDoc(tipo: string | null): string {
+  const t = String(tipo || "").toLowerCase();
+  if (SUBPASTA_IDENTIFICACAO.has(t)) return "Identificação";
+  if (SUBPASTA_REGISTRO.has(t)) return "Registro";
+  return "Outros";
+}
+
+// Rev. 4665 — OS (Ordem de Serviço / NR-01) sai de Treinamentos e vai p/ 001
+function isOrdemServico(t: { norma: string | null; nome: string | null }): boolean {
+  const norma = String(t.norma || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (norma === "NR01" || norma === "NR1") return true;
+  const nome = String(t.nome || "").toLowerCase();
+  return nome.includes("ordem de servi");
+}
+
 function sanitize(name: string): string {
   return (name || "")
     .replace(/[/\\:*?"<>|]/g, "_")
@@ -170,7 +193,11 @@ export function registerDownloadDossieRoute(app: Express) {
             const ext = extFromUrl(t.certificadoUrl!);
             const data = String(t.dataRealizacao || "").slice(0, 10) || "sem-data";
             const nm = sanitize(t.norma || t.nome || "Treinamento");
-            files.push({ url: t.certificadoUrl!, path: `${nome}/003 - TREINAMENTOS/${nm}_${data}.${ext}` });
+            // Rev. 4665 — OS (NR-01) vai p/ 001/OS, não p/ Treinamentos
+            const pasta = isOrdemServico(t)
+              ? `001 - DOCUMENTOS PESSOAIS/OS - Ordem de Serviço`
+              : `003 - TREINAMENTOS`;
+            files.push({ url: t.certificadoUrl!, path: `${nome}/${pasta}/${nm}_${data}.${ext}` });
           });
 
         intRows
@@ -179,8 +206,10 @@ export function registerDownloadDossieRoute(app: Express) {
             const url = i.evidencia!.trim();
             const ext = extFromUrl(url);
             const data = String(i.dataRealizacao || "").slice(0, 10) || "sem-data";
-            const tp = sanitize(i.clienteNome || (i.tipo === "interna" ? "Interna" : "Integracao"));
-            files.push({ url, path: `${nome}/004 - INTEGRAÇÕES/${tp}_${data}.${ext}` });
+            // Rev. 4665 — separa integração FC (interna) da integração do cliente
+            const sub = i.tipo === "interna" ? "Integração FC" : "Integração Cliente";
+            const tp = sanitize(i.clienteNome || (i.tipo === "interna" ? "FC" : "Integracao"));
+            files.push({ url, path: `${nome}/004 - INTEGRAÇÕES/${sub}/${tp}_${data}.${ext}` });
           });
 
         docRows
@@ -189,7 +218,8 @@ export function registerDownloadDossieRoute(app: Express) {
             const ext = extFromUrl(d.fileUrl!);
             const tp = sanitize(TIPO_DOC_LABEL[d.tipo] || d.tipo || "Documento");
             const nm = sanitize(d.nome || tp);
-            files.push({ url: d.fileUrl!, path: `${nome}/001 - DOCUMENTOS/${tp}_${nm}.${ext}` });
+            // Rev. 4665 — subpasta por tipo (Identificação / Registro / Outros)
+            files.push({ url: d.fileUrl!, path: `${nome}/001 - DOCUMENTOS PESSOAIS/${subpastaDoc(d.tipo)}/${tp}_${nm}.${ext}` });
           });
       }
 

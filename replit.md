@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4665** — **Dossiê ZIP reestruturado**: 001 - DOCUMENTOS PESSOAIS com subpastas (Identificação/Registro/Outros/OS - Ordem de Serviço); NR-01 sai de Treinamentos; 004 separa Integração FC × Integração Cliente.
 - **Rev. 4664** — **SEGURANÇA: tenant guard em createDelivery/updateDelivery/deleteDelivery** (empresa/funcionário/EPI no escopo do user; delete devolve estoque com valores do banco, não do cliente).
 - **Rev. 4663** — **Ficha de EPI: alterar/excluir entrega antes da assinatura** (botões na linha sem assinatura; update ajusta estoque, delete devolve ao estoque; assinada segue intocável).
 - **Rev. 4662** — **Ficha de EPI: foto do EPI nos itens da busca de entrega** (miniatura ?w=128, fallback "EPI").

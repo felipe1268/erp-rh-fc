@@ -1,4 +1,17 @@
 /**
+ * Rev. 4665 - DOSSIÊ ZIP: SUBPASTAS EM 001 + OS EM DOCUMENTOS + INTEGRAÇÃO FC/CLIENTE
+ *
+ * Reestruturação validada pelo usuário (pasta a pasta):
+ * - "001 - DOCUMENTOS" vira "001 - DOCUMENTOS PESSOAIS" com subpastas por
+ *   tipo: Identificação (RG/CNH/CTPS/PIS/etc), Registro (compr. residência,
+ *   diploma, certificado) e Outros.
+ * - OS (Ordem de Serviço / NR-01) SAI de 003 - TREINAMENTOS e entra em
+ *   "001 - DOCUMENTOS PESSOAIS/OS - Ordem de Serviço" (match por norma NR-01
+ *   ou nome contendo "ordem de servi").
+ * - "004 - INTEGRAÇÕES" ganha subpastas "Integração FC" (tipo interna) e
+ *   "Integração Cliente" (externa).
+ */
+/**
  * Rev. 4664 - SEGURANÇA: TENANT GUARD NAS ENTREGAS DE EPI (create/update/delete)
  *
  * Code review das Revs 4659-4663 (falhas PRÉ-EXISTENTES nos endpoints):
