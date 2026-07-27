@@ -120,9 +120,11 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
   const data = await pdfParse(buf);
   const text: string = data?.text || "";
 
-  const isSantander =
-    /EXTRATO CONSOLIDADO INTELIGENTE/i.test(text) &&
-    !/Internet Banking Empresarial|IBPJ/i.test(text);
+  // Rev. 4692 — o marcador "EXTRATO CONSOLIDADO INTELIGENTE" é autoritativo.
+  // PDFs novos do Consolidado trazem página de marketing citando "Internet
+  // Banking Empresarial" (PAGFOR etc.), o que fazia o gate antigo rejeitar
+  // o extrato e cair no fallback de IA (que estoura em extratos grandes).
+  const isSantander = /EXTRATO CONSOLIDADO INTELIGENTE/i.test(text);
   if (!isSantander) return { lines: [], isSantander: false };
 
   const rawLines = text.split(/\r?\n/);
@@ -183,7 +185,7 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
   const endMovement =
     /Saldos por Per[ií]odo|Produtos e Servi|Pacote de Servi[çc]os|[ÍI]ndices Econ[oô]micos|Valores Praticados|Resumo das Tarifas/i;
   const noise =
-    /^Cr[ée]ditos\s*D[ée]bitos$|Cr[ée]ditos\s+D[ée]bitos|EXTRATO CONSOLIDADO INTELIGENTE|^Extrato_PJ|^BALP_|^P[áa]gina:|^SALDO\b|SALDO ANTERIOR|^Conta Corrente$|^Movimenta[çc][aã]o$|Se\s+sua\s+empresa\s+n[aã]o\s+tiver|sujeito\s+[aà]\s+cobran/i;
+    /^Cr[ée]ditos\s*D[ée]bitos$|Cr[ée]ditos\s+D[ée]bitos|EXTRATO CONSOLIDADO INTELIGENTE|^Extrato_PJ|^BALP_|^P[áa]gina:|^SALDO\b|SALDO ANTERIOR|^Conta Corrente$|^Movimenta[çc][aã]o$|Se\s+sua\s+empresa\s+n[aã]o\s+tiver|sujeito\s+[aà]\s+cobran|juros\s+morat[óo]rios|^saldo\s+devedor\s+no\s+mesmo\s+dia|Desconsidere\s+esta\s+informa/i;
 
   for (const raw of rawLines) {
     const t = raw.trim();

@@ -116,11 +116,14 @@ export async function parseSantanderIbpjPdf(base64: string): Promise<IbpjParseRe
   const data = await pdfParse(buf);
   const text: string = data?.text || "";
 
-  // Identificação: deve conter marcas do Internet Banking PJ (ausente no Consolidado).
+  // Identificação: deve conter marcas do Internet Banking PJ. Rev. 4692 —
+  // o Consolidado Inteligente pode CITAR "Internet Banking Empresarial" na
+  // página de marketing; se o PDF for do Consolidado, NÃO é IBPJ.
   const isIbpj =
-    /Internet Banking Empresarial/i.test(text) ||
-    /IBPJ/i.test(text) ||
-    /Internet\s+Banking\s+PJ/i.test(text);
+    !/EXTRATO CONSOLIDADO INTELIGENTE/i.test(text) &&
+    (/Internet Banking Empresarial/i.test(text) ||
+      /IBPJ/i.test(text) ||
+      /Internet\s+Banking\s+PJ/i.test(text));
 
   if (!isIbpj) return { lines: [], isIbpj: false };
 

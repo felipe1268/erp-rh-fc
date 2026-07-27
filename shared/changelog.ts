@@ -1,4 +1,18 @@
 /**
+ * Rev. 4692 - CONCILIACAO: EXTRATO SANTANDER CONSOLIDADO VOLTA A IMPORTAR
+ *
+ * Bug: extratos "Consolidado Inteligente" do Santander de jan/fev 2026 (Hotel)
+ * falhavam na importacao ("Nao consegui interpretar o JSON da IA").
+ * Causa: esses PDFs trazem pagina de marketing citando "Internet Banking
+ * Empresarial" (PAGFOR etc.); o gate do parser deterministico excluia
+ * qualquer PDF com essa frase, entao caia no fallback de IA, que estoura
+ * em extratos grandes (450+ lancamentos).
+ * Fix: marcador "EXTRATO CONSOLIDADO INTELIGENTE" e autoritativo no parser
+ * do Consolidado; o parser IBPJ agora se exclui quando esse marcador existe.
+ * Extra: rodape juridico ("juros moratorios...") nao vaza mais para a
+ * descricao do ultimo lancamento.
+ */
+/**
  * Rev. 4691 - FOLHA: DECISAO "PAGAR/NAO PAGAR" DO AVISO PREVIO NAO REAPARECE
  *
  * Bug: no card "Aviso Previo Encerrando no Mes - Decisao Necessaria", o RH
