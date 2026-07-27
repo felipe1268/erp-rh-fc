@@ -695,8 +695,23 @@ export const episRouter = router({
       grupoEntregaId: z.string().optional(),
       foraDoKit: z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+
+      // Rev. 4664 — guard de tenant (code review): empresa, funcionário e EPI
+      // precisam estar no escopo do usuário (antes aceitava ids arbitrários)
+      const allowedCreate = new Set((await getCompaniesForUser(ctx.user.id, ctx.user.role)).map((c: any) => c.id));
+      if (!allowedCreate.has(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso à empresa informada.' });
+      }
+      const [empGuard] = await db.select({ companyId: employees.companyId }).from(employees).where(eq(employees.id, input.employeeId));
+      if (!empGuard || !allowedCreate.has(empGuard.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Funcionário fora do seu escopo de empresas.' });
+      }
+      const [epiGuard] = await db.select({ companyId: epis.companyId }).from(epis).where(eq(epis.id, input.epiId));
+      if (!epiGuard || !allowedCreate.has(epiGuard.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'EPI fora do seu escopo de empresas.' });
+      }
 
       if (input.motivoTroca && ['desgaste_normal', 'mau_uso'].includes(input.motivoTroca) && !input.fotoEstadoBase64) {
         const motivoLabel = input.motivoTroca === 'desgaste_normal' ? 'desgaste normal' : 'mau uso';
@@ -911,7 +926,21 @@ export const episRouter = router({
         origemEntrega: epiDeliveries.origemEntrega,
         obraId: epiDeliveries.obraId,
         companyId: epiDeliveries.companyId,
+        epiId: epiDeliveries.epiId,
+        quantidade: epiDeliveries.quantidade,
+        deletedAt: epiDeliveries.deletedAt,
       }).from(epiDeliveries).where(eq(epiDeliveries.id, input.id));
+      // Rev. 4664 — guard de tenant + anti-tampering (code review): valida a
+      // empresa da ENTREGA e usa epiId/quantidade do BANCO, não do cliente
+      // (input manipulado podia inflar/desviar estoque de outro tenant).
+      if (!delivery) throw new TRPCError({ code: 'NOT_FOUND', message: 'Entrega não encontrada.' });
+      if (delivery.deletedAt) return { success: true }; // idempotente
+      const allowedDel = new Set((await getCompaniesForUser(ctx.user.id, ctx.user.role)).map((c: any) => c.id));
+      if (!allowedDel.has(delivery.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso à empresa desta entrega.' });
+      }
+      const realEpiId = delivery.epiId;
+      const realQtd = delivery.quantidade;
       await db.update(epiDeliveries).set({
         deletedAt: sql`NOW()`,
         deletedBy: ctx.user.name ?? 'Sistema',
@@ -921,26 +950,26 @@ export const episRouter = router({
       if (delivery?.origemEntrega === 'obra' && delivery?.obraId) {
         // Devolver ao estoque da obra
         const [estoqueObra] = await db.select().from(epiEstoqueObra)
-          .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, delivery.obraId)));
+          .where(and(eq(epiEstoqueObra.epiId, realEpiId), eq(epiEstoqueObra.obraId, delivery.obraId)));
         if (estoqueObra) {
           await db.update(epiEstoqueObra)
-            .set({ quantidade: sql`${epiEstoqueObra.quantidade} + ${input.quantidade}` })
+            .set({ quantidade: sql`${epiEstoqueObra.quantidade} + ${realQtd}` })
             .where(eq(epiEstoqueObra.id, estoqueObra.id));
         } else {
           // Se não existe mais o registro de estoque da obra, criar
           await db.insert(epiEstoqueObra).values({
             companyId: delivery.companyId,
-            epiId: input.epiId,
+            epiId: realEpiId,
             obraId: delivery.obraId,
-            quantidade: input.quantidade,
+            quantidade: realQtd,
             criadoPor: ctx.user?.name || 'Sistema',
           });
         }
       } else {
         // Devolver ao estoque central
         await db.update(epis)
-          .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${input.quantidade}` })
-          .where(eq(epis.id, input.epiId));
+          .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${realQtd}` })
+          .where(eq(epis.id, realEpiId));
       }
       // Cancel any pending discount alerts linked to this delivery
       await db.update(epiDiscountAlerts).set({
@@ -974,6 +1003,24 @@ export const episRouter = router({
       if (!existing) throw new Error("Entrega não encontrada");
       if ((existing as any).assinaturaUrl) {
         throw new Error("Entrega já assinada pelo funcionário — não pode ser editada.");
+      }
+      // Rev. 4664 — guard de tenant (code review): entrega, novo EPI e novo
+      // funcionário precisam estar no escopo de empresas do usuário
+      const allowedUpd = new Set((await getCompaniesForUser(ctx.user.id, ctx.user.role)).map((c: any) => c.id));
+      if (!allowedUpd.has(existing.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso à empresa desta entrega.' });
+      }
+      if (input.epiId !== undefined && input.epiId !== existing.epiId) {
+        const [epiNovo] = await db.select({ companyId: epis.companyId }).from(epis).where(eq(epis.id, input.epiId));
+        if (!epiNovo || !allowedUpd.has(epiNovo.companyId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'EPI fora do seu escopo de empresas.' });
+        }
+      }
+      if (input.employeeId !== undefined && input.employeeId !== existing.employeeId) {
+        const [empNovo] = await db.select({ companyId: employees.companyId }).from(employees).where(eq(employees.id, input.employeeId));
+        if (!empNovo || !allowedUpd.has(empNovo.companyId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Funcionário fora do seu escopo de empresas.' });
+        }
       }
 
       const updates: any = {};
@@ -2526,6 +2573,7 @@ Exemplos de referência:
       const entregas = await db.select({
         id: epiDeliveries.id,
         companyId: epiDeliveries.companyId,
+        epiId: epiDeliveries.epiId, // Rev. 4663 — p/ editar/excluir da ficha
         quantidade: epiDeliveries.quantidade,
         dataEntrega: epiDeliveries.dataEntrega,
         dataDevolucao: epiDeliveries.dataDevolucao,

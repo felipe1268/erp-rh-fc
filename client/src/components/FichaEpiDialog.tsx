@@ -12,7 +12,7 @@ import { trpc } from "@/lib/trpc";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Printer, ShieldCheck, PenLine, Plus, X } from "lucide-react";
+import { Loader2, Printer, ShieldCheck, PenLine, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/formatters";
 import EpiAssinatura from "@/pages/EpiAssinatura";
@@ -87,12 +87,46 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
     },
     onError: (e: any) => toast({ title: "Erro ao registrar entrega", description: e.message, variant: "destructive" }),
   });
+  // Rev. 4663 — alterar/excluir entrega ANTES da assinatura
+  const [editId, setEditId] = useState<number | null>(null);
+  const updateDeliveryMut = trpc.epis.updateDelivery.useMutation({
+    onSuccess: () => {
+      toast({ title: "Entrega alterada" });
+      setShowNova(false); setEditId(null); setNovaEpiId(""); setNovaQtd("1"); setEpiBusca(""); setEpiListaAberta(false);
+      refetch();
+      utils.epis.fichaEpiResumo.invalidate();
+    },
+    onError: (e: any) => toast({ title: "Erro ao alterar entrega", description: e.message, variant: "destructive" }),
+  });
+  const deleteDeliveryMut = trpc.epis.deleteDelivery.useMutation({
+    onSuccess: (_d: any, vars: any) => {
+      toast({ title: "Entrega excluída", description: "Quantidade devolvida ao estoque." });
+      // Rev. 4664 — se a entrega excluída estava em edição, fecha o form
+      if (vars?.id === editId) { setShowNova(false); setEditId(null); setNovaEpiId(""); setNovaQtd("1"); setEpiBusca(""); setEpiListaAberta(false); }
+      refetch();
+      utils.epis.fichaEpiResumo.invalidate();
+    },
+    onError: (e: any) => toast({ title: "Erro ao excluir entrega", description: e.message, variant: "destructive" }),
+  });
+  const abrirEdicao = (e: any) => {
+    setEditId(e.id);
+    setNovaEpiId(e.epiId ? String(e.epiId) : "");
+    setEpiBusca(`${e.nomeEpi || ""}${e.tamanhoEpi ? ` (${e.tamanhoEpi})` : ""}${e.caEpi ? ` — CA ${e.caEpi}` : ""}`);
+    setNovaQtd(String(e.quantidade ?? 1));
+    setNovaData(String(e.dataEntrega || "").slice(0, 10) || new Date().toISOString().slice(0, 10));
+    setEpiListaAberta(false);
+    setShowNova(true);
+  };
   const salvarNova = () => {
     const epiId = parseInt(novaEpiId, 10);
     const qtd = parseInt(novaQtd, 10);
     if (!epiId) { toast({ title: "Selecione o EPI", variant: "destructive" }); return; }
     if (!qtd || qtd < 1) { toast({ title: "Quantidade inválida", variant: "destructive" }); return; }
     if (!novaData) { toast({ title: "Informe a data de entrega", variant: "destructive" }); return; }
+    if (editId) {
+      updateDeliveryMut.mutate({ id: editId, epiId, quantidade: qtd, dataEntrega: novaData });
+      return;
+    }
     createDeliveryMut.mutate({
       companyId: entregaCompanyId,
       epiId,
@@ -254,7 +288,10 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
               )}
               {/* Rev. 4659 — registrar entrega direto da ficha */}
               <Button variant="outline" size="sm" className="ml-auto h-7 px-2 text-[11px] gap-1 border-[#0A1E3C] text-[#0A1E3C]"
-                onClick={() => setShowNova(v => !v)}>
+                onClick={() => {
+                  if (showNova) { setShowNova(false); setEditId(null); setNovaEpiId(""); setNovaQtd("1"); setEpiBusca(""); setEpiListaAberta(false); }
+                  else setShowNova(true);
+                }}>
                 {showNova ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {showNova ? "Cancelar" : "Nova entrega"}
               </Button>
             </div>
@@ -262,7 +299,7 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
             {/* Rev. 4659 — mini-form de nova entrega (EPI + qtd + data) */}
             {showNova && (
               <div className="rounded-lg border border-[#0A1E3C]/30 bg-blue-50/40 p-2.5 space-y-2">
-                <p className="text-[11px] font-bold text-[#0A1E3C]">Registrar entrega de EPI para {emp?.nomeCompleto}</p>
+                <p className="text-[11px] font-bold text-[#0A1E3C]">{editId ? "Alterar entrega de EPI de" : "Registrar entrega de EPI para"} {emp?.nomeCompleto}</p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   {/* Rev. 4661 — combobox digitável (substitui o Select que cortava texto) */}
                   <div className="relative flex-1">
@@ -311,8 +348,8 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
                   <Input type="date" value={novaData} onChange={e => setNovaData(e.target.value)}
                     className="h-9 w-full sm:w-40 text-xs bg-white" />
                   <Button size="sm" className="h-9 gap-1 bg-[#0A1E3C] hover:bg-[#0A1E3C]/90"
-                    disabled={createDeliveryMut.isPending} onClick={salvarNova}>
-                    {createDeliveryMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Registrar
+                    disabled={createDeliveryMut.isPending || updateDeliveryMut.isPending} onClick={salvarNova}>
+                    {(createDeliveryMut.isPending || updateDeliveryMut.isPending) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {editId ? "Salvar alterações" : "Registrar"}
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground">A baixa sai do estoque central. Após registrar, use "Coletar assinatura" na linha da entrega.</p>
@@ -370,6 +407,22 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
                               onClick={() => setSignDelivery(e)}>
                               <PenLine className="h-3 w-3" /> Coletar assinatura
                             </Button>
+                            {/* Rev. 4663 — antes da assinatura pode alterar/excluir */}
+                            <div className="flex gap-1">
+                              <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1"
+                                onClick={() => abrirEdicao(e)}>
+                                <Pencil className="h-3 w-3" /> Alterar
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                                disabled={deleteDeliveryMut.isPending}
+                                onClick={() => {
+                                  if (window.confirm(`Excluir a entrega de ${e.quantidade}x ${e.nomeEpi || "EPI"}? A quantidade volta ao estoque.`)) {
+                                    deleteDeliveryMut.mutate({ id: e.id, epiId: e.epiId, quantidade: e.quantidade });
+                                  }
+                                }}>
+                                <Trash2 className="h-3 w-3" /> Excluir
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </td>

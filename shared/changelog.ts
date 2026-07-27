@@ -1,4 +1,29 @@
 /**
+ * Rev. 4664 - SEGURANÇA: TENANT GUARD NAS ENTREGAS DE EPI (create/update/delete)
+ *
+ * Code review das Revs 4659-4663 (falhas PRÉ-EXISTENTES nos endpoints):
+ * - createDelivery: valida empresa, funcionário E epi contra as empresas
+ *   acessíveis do usuário (antes aceitava ids arbitrários e movia estoque).
+ * - updateDelivery: valida a empresa da entrega; troca de epiId/employeeId
+ *   também é validada contra o escopo do usuário.
+ * - deleteDelivery: valida a empresa da entrega, idempotente (já-excluída) e
+ *   devolve ao estoque o epiId/quantidade DO BANCO — input do cliente era
+ *   usado antes e permitia inflar/desviar estoque.
+ * - FichaEpiDialog: excluir a entrega em edição fecha o mini-form (estado).
+ */
+/**
+ * Rev. 4663 - FICHA DE EPI: ALTERAR/EXCLUIR ENTREGA ANTES DA ASSINATURA
+ *
+ * Pedido do usuário (IMG_4572): entregas ainda SEM assinatura precisam poder
+ * ser corrigidas ou removidas direto da ficha.
+ * - Linha sem assinatura ganha botões "Alterar" (reabre o mini-form
+ *   pré-preenchido; salva via epis.updateDelivery, que já ajusta estoque e
+ *   recusa entrega assinada no servidor) e "Excluir" (confirmação +
+ *   epis.deleteDelivery — soft delete e devolução ao estoque).
+ * - fichaEpiFuncionario passa a retornar epiId (necessário p/ editar/excluir).
+ * - Entrega assinada continua intocável (só o selo/assinatura aparece).
+ */
+/**
  * Rev. 4662 - FICHA DE EPI: FOTO DO EPI NA BUSCA DE ENTREGA
  *
  * Pedido do usuário (IMG_4571): foto do EPI na lista do combobox facilita a
