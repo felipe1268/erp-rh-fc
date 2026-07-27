@@ -6,6 +6,7 @@ import { eq, isNull, and, inArray, notInArray } from "drizzle-orm";
 import { sdk } from "../_core/sdk";
 import { dbRetrieve } from "../storage";
 import { gerarFichasEpiPdfLote } from "../services/fichaEpiPdf";
+import { gerarOrdensServicoPdfLote, gerarOrdemServicoPdf } from "../services/ordemServicoPdf";
 
 const TIPO_DOC_LABEL: Record<string, string> = {
   rg: "RG", cnh: "CNH", ctps: "CTPS", comprovante_residencia: "Comprovante de Residencia",
@@ -288,9 +289,58 @@ export function registerDownloadDossieRoute(app: Express) {
         console.warn("[DownloadDossie] Falha ao gerar Fichas de EPI digitais:", e);
       }
 
+      // Rev. 4667 — OS (Ordem de Serviço / NR-01) DIGITAL gerada na hora,
+      // igual à Ficha de EPI: texto da OS da função + EPIs entregues com CA +
+      // treinamentos + assinatura digital. Entra em 001.4.
+      try {
+        await gerarOrdensServicoPdfLote(companyId, validIds, (empId, buf) => {
+          archive.append(buf, { name: `${nomePorId.get(empId)}/001 - DOCUMENTOS PESSOAIS/001.4 - OS - Ordem de Serviço/OS_Digital.pdf` });
+        });
+      } catch (e) {
+        console.warn("[DownloadDossie] Falha ao gerar Ordens de Serviço digitais:", e);
+      }
+
       await archive.finalize();
     } catch (err) {
       console.error("[DownloadDossie] Erro geral:", err);
+      if (!res.headersSent) res.status(500).json({ error: "Erro interno" });
+    }
+  });
+
+  // Rev. 4667 — GET /api/download/ordem-servico-pdf?companyId=1&employeeId=2
+  // Baixa a OS Digital (NR-01) de UM funcionário.
+  app.get("/api/download/ordem-servico-pdf", async (req: Request, res: Response) => {
+    try {
+      let user: { id: number; role: string };
+      try {
+        const authUser = await sdk.authenticateRequest(req);
+        user = { id: (authUser as any).id, role: (authUser as any).role };
+      } catch {
+        res.status(401).json({ error: "Não autenticado" });
+        return;
+      }
+      const companyId = parseInt(String(req.query.companyId || ""));
+      const employeeId = parseInt(String(req.query.employeeId || ""));
+      if (isNaN(companyId) || isNaN(employeeId)) { res.status(400).json({ error: "Parâmetros inválidos" }); return; }
+
+      const db = await getDb();
+      if (user.role !== "admin_master" && user.role !== "admin") {
+        const [uc] = await db.select().from(userCompanies)
+          .where(and(eq(userCompanies.userId, user.id), eq(userCompanies.companyId, companyId))).limit(1);
+        if (!uc) { res.status(403).json({ error: "Sem permissão" }); return; }
+      }
+      const [emp] = await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto })
+        .from(employees)
+        .where(and(eq(employees.companyId, companyId), eq(employees.id, employeeId), isNull(employees.deletedAt)));
+      if (!emp) { res.status(404).json({ error: "Funcionário não encontrado" }); return; }
+
+      const buf = await gerarOrdemServicoPdf(companyId, employeeId);
+      if (!buf) { res.status(404).json({ error: "Sem conteúdo para gerar a OS (função sem texto de OS e sem EPIs entregues)." }); return; }
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="OS_${sanitize(emp.nomeCompleto || String(employeeId))}.pdf"`);
+      res.send(buf);
+    } catch (err) {
+      console.error("[OrdemServicoPdf] Erro:", err);
       if (!res.headersSent) res.status(500).json({ error: "Erro interno" });
     }
   });

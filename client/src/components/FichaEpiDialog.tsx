@@ -12,7 +12,8 @@ import { trpc } from "@/lib/trpc";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Printer, ShieldCheck, PenLine, Plus, X, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Printer, ShieldCheck, PenLine, Plus, X, Pencil, Trash2, FileText } from "lucide-react";
+import OrdemServicoDialog from "@/components/OrdemServicoDialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/formatters";
 import EpiAssinatura from "@/pages/EpiAssinatura";
@@ -60,6 +61,7 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
   const utils = trpc.useUtils();
   // Rev. 4648 — clique na foto amplia
   const [fotoZoom, setFotoZoom] = useState(false);
+  const [osOpen, setOsOpen] = useState(false); // Rev. 4667 — OS Digital (NR-01)
   const enabled = open && !!employeeId && (!!companyId || (companyIds?.length ?? 0) > 0);
   const { data, isLoading, refetch } = trpc.epis.fichaEpiFuncionario.useQuery(
     { companyId, companyIds, employeeId: employeeId! },
@@ -438,6 +440,10 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
 
             <DialogFooter className="gap-2 sm:gap-0">
               <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+              {/* Rev. 4667 — OS Digital (NR-01) do colaborador */}
+              <Button variant="outline" size="sm" onClick={() => setOsOpen(true)} disabled={!emp} className="gap-1.5 border-[#0A1E3C] text-[#0A1E3C]">
+                <FileText className="h-4 w-4" /> OS (NR-01)
+              </Button>
               <Button size="sm" onClick={handlePrint} disabled={!emp || !empresa} className="gap-1.5">
                 <Printer className="h-4 w-4" /> Imprimir / PDF
               </Button>
@@ -477,6 +483,17 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
           </div>
         ) : null}
       </DialogContent>
+
+      {/* Rev. 4667 — OS Digital (NR-01) do colaborador */}
+      {osOpen ? (
+        <OrdemServicoDialog
+          employeeId={employeeId}
+          open={osOpen}
+          onClose={() => setOsOpen(false)}
+          companyId={companyId}
+          companyIds={companyIds}
+        />
+      ) : null}
     </Dialog>
   );
 }

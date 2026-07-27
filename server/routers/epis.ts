@@ -2558,6 +2558,27 @@ Exemplos de referência:
       return { funcionarios: ((rows as any)?.rows ?? rows ?? []) as any[] };
     }),
 
+  // Rev. 4667 — dados da OS Digital (NR-01) de um funcionário
+  ordemServicoFuncionario: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const allowed = new Set((await getCompaniesForUser(ctx.user.id, ctx.user.role)).map((c: any) => c.id));
+      const requested = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const ids = requested.filter(id => allowed.has(id));
+      if (ids.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à(s) empresa(s) informada(s)." });
+      const [emp0] = await db.select({ companyId: employees.companyId })
+        .from(employees).where(and(eq(employees.id, input.employeeId), isNull(employees.deletedAt)));
+      if (!emp0 || !ids.includes(emp0.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Funcionário fora do seu escopo de empresas." });
+      }
+      const { coletarDadosOs } = await import("../services/ordemServicoPdf");
+      const dados = await coletarDadosOs(emp0.companyId, input.employeeId);
+      if (!dados) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado." });
+      const { _logoUrl, ...rest } = dados as any;
+      return { ...rest, companyId: emp0.companyId };
+    }),
+
   fichaEpiFuncionario: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
     .query(async ({ input, ctx }) => {

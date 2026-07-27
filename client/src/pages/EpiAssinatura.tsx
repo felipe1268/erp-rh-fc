@@ -14,11 +14,14 @@ const TERMO_DEVOLUCAO = `Declaro que devolvi o(s) Equipamento(s) de Proteção I
 
 const TERMO_RESPONSAVEL = `Declaro, na qualidade de responsável pela entrega, que entreguei os Equipamentos de Proteção Individual (EPIs) descritos neste documento ao funcionário identificado, orientei quanto ao uso correto, finalidade e obrigações legais pertinentes à NR-6 do MTE, e que o mesmo recebeu os itens em perfeitas condições de uso.`;
 
+// Rev. 4667 — termo de ciência da Ordem de Serviço (NR-01)
+const TERMO_OS = `Recebi a Ordem de Serviço referente às minhas funções, elaborada atendendo à legislação trabalhista em vigor (NR-01, item 1.7, letra "b", da Portaria 3.214/78), a qual cumprirei. Tomo ciência de que esta OS poderá sofrer alterações e revisões, e que o não cumprimento de qualquer item implica em punição de acordo com a legislação trabalhista e as normas da empresa.`;
+
 interface EpiAssinaturaProps {
   employeeId: number;
   employeeName: string;
   deliveryId?: number;
-  tipo: "entrega" | "devolucao";
+  tipo: "entrega" | "devolucao" | "ordem_servico";
   tipoAssinante?: "funcionario" | "responsavel";
   epiNome?: string;
   onComplete?: (url: string) => void;
@@ -38,9 +41,11 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
   const [geoLocation, setGeoLocation] = useState<{ lat: string; lng: string; accuracy: string } | null>(null);
   const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "success" | "denied" | "error">("idle");
 
-  const textoTermo = tipoAssinante === "responsavel"
-    ? TERMO_RESPONSAVEL
-    : tipo === "entrega" ? TERMO_ENTREGA : TERMO_DEVOLUCAO;
+  const textoTermo = tipo === "ordem_servico"
+    ? TERMO_OS
+    : tipoAssinante === "responsavel"
+      ? TERMO_RESPONSAVEL
+      : tipo === "entrega" ? TERMO_ENTREGA : TERMO_DEVOLUCAO;
 
   const salvarMut = trpc.epiAvancado.salvarAssinatura.useMutation({
     onSuccess: (data: any) => {
@@ -214,9 +219,11 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
       <CardHeader className="pb-2 shrink-0">
         <CardTitle className="text-sm flex items-center gap-2">
           <PenTool className={`h-4 w-4 ${tipoAssinante === "responsavel" ? "text-orange-600" : "text-blue-600"}`} />
-          {tipoAssinante === "responsavel"
-            ? `Assinatura do Responsável — ${tipo === "entrega" ? "Entrega" : "Devolução"} de EPI`
-            : `Assinatura Digital — ${tipo === "entrega" ? "Recebimento" : "Devolução"} de EPI`}
+          {tipo === "ordem_servico"
+            ? "Assinatura Digital — Ordem de Serviço (NR-01)"
+            : tipoAssinante === "responsavel"
+              ? `Assinatura do Responsável — ${tipo === "entrega" ? "Entrega" : "Devolução"} de EPI`
+              : `Assinatura Digital — ${tipo === "entrega" ? "Recebimento" : "Devolução"} de EPI`}
         </CardTitle>
         <div className="flex items-center gap-2 mt-1">
           <Badge variant="outline" className="text-[9px] gap-1">
@@ -235,7 +242,7 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
             ? <p><strong>Assinante:</strong> Responsável pela Entrega</p>
             : <p><strong>Funcionário:</strong> {employeeName}</p>}
           {epiNome && <p><strong>EPI:</strong> {epiNome}</p>}
-          <p><strong>Tipo:</strong> <Badge variant="outline" className="text-[10px]">{tipo === "entrega" ? tipoAssinante === "responsavel" ? "Entrega (Responsável)" : "Recebimento" : "Devolução"}</Badge></p>
+          <p><strong>Tipo:</strong> <Badge variant="outline" className="text-[10px]">{tipo === "ordem_servico" ? "Ordem de Serviço" : tipo === "entrega" ? tipoAssinante === "responsavel" ? "Entrega (Responsável)" : "Recebimento" : "Devolução"}</Badge></p>
           <p><strong>Data:</strong> {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR")}</p>
           {geoLocation && (
             <p className="text-green-700"><strong>Localização:</strong> {geoLocation.lat}, {geoLocation.lng} (±{geoLocation.accuracy}m)</p>

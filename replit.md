@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4668** — **OS Digital: ajustes do code review** (salvarAssinatura valida tipo × deliveryId; dialog com estado de erro).
+- **Rev. 4667** — **OS (NR-01) Digital**: gerada por colaborador (texto da função + EPIs c/ CA + treinamentos), assinatura digital (epi_assinaturas tipo ordem_servico), botão "OS (NR-01)" na Ficha de EPI, PDF via /api/download/ordem-servico-pdf e automática no Dossiê ZIP (001.4).
 - **Rev. 4666** — **Dossiê ZIP: subpastas numeradas** (001.1 Identificação, 001.2 Registro, 001.3 Outros, 001.4 OS; 004.1 Integração FC, 004.2 Integração Cliente).
 - **Rev. 4665** — **Dossiê ZIP reestruturado**: 001 - DOCUMENTOS PESSOAIS com subpastas (Identificação/Registro/Outros/OS - Ordem de Serviço); NR-01 sai de Treinamentos; 004 separa Integração FC × Integração Cliente.
 - **Rev. 4664** — **SEGURANÇA: tenant guard em createDelivery/updateDelivery/deleteDelivery** (empresa/funcionário/EPI no escopo do user; delete devolve estoque com valores do banco, não do cliente).

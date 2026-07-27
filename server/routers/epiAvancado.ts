@@ -787,7 +787,7 @@ export const epiAvancadoRouter = router({
   salvarAssinatura: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), deliveryId: z.number().optional(),
       employeeId: z.number(),
-      tipo: z.enum(["entrega", "devolucao"]),
+      tipo: z.enum(["entrega", "devolucao", "ordem_servico"]),
       tipoAssinante: z.enum(["funcionario", "responsavel"]).default("funcionario"),
       assinaturaBase64: z.string(),
       ipAddress: z.string().optional(),
@@ -807,6 +807,15 @@ export const epiAvancadoRouter = router({
       // Rev. 4646 — guard anti-IDOR na ESCRITA da assinatura: a entrega alvo
       // precisa (a) pertencer ao MESMO funcionário do input e (b) estar em
       // empresa acessível ao usuário (não confiar no companyId do client).
+      // Rev. 4668 — integridade (code review): entrega/devolução EXIGE deliveryId
+      // (senão nasce assinatura solta sem rastreio); OS não pode ter deliveryId.
+      if (input.tipo === "ordem_servico" && input.deliveryId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Assinatura de Ordem de Serviço não é vinculada a entrega." });
+      }
+      if (input.tipo !== "ordem_servico" && !input.deliveryId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Assinatura de entrega/devolução exige a entrega vinculada." });
+      }
+
       const allowedCos = new Set((await getCompaniesForUser(ctx.user.id, ctx.user.role)).map((c: any) => c.id));
       if (input.deliveryId) {
         const [dlv] = await db.select({ id: epiDeliveries.id, companyId: epiDeliveries.companyId, employeeId: epiDeliveries.employeeId })

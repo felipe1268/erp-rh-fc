@@ -1,4 +1,29 @@
 /**
+ * Rev. 4668 - OS DIGITAL: AJUSTES DO CODE REVIEW
+ *
+ * - salvarAssinatura valida combinação tipo × deliveryId: entrega/devolução
+ *   EXIGE entrega vinculada (senão nascia assinatura solta sem rastreio);
+ *   ordem_servico não pode ter deliveryId.
+ * - OrdemServicoDialog ganha estado de erro (antes erro do tRPC virava
+ *   spinner infinito).
+ */
+/**
+ * Rev. 4667 - OS (ORDEM DE SERVIÇO / NR-01) DIGITAL
+ *
+ * Mesmo modelo da Ficha de EPI Digital (Rev. 4649):
+ * - server/services/ordemServicoPdf.ts: gera a OS por colaborador juntando
+ *   texto da OS da FUNÇÃO (job_functions.ordemServico) + descrição/CBO +
+ *   EPIs realmente entregues (com C.A.) + treinamentos (mais recente por
+ *   norma) + assinatura digital; puppeteer, imagens data-URI, SSRF-safe.
+ * - Assinatura digital reusa epi_assinaturas com tipo 'ordem_servico'
+ *   (deliveryId NULL) — hash SHA-256, IP, geo, termo de ciência próprio.
+ * - epis.ordemServicoFuncionario (tRPC) + GET /api/download/ordem-servico-pdf.
+ * - OrdemServicoDialog (client) com botão "OS (NR-01)" na FichaEpiDialog:
+ *   preview, coleta de assinatura (EpiAssinatura) e download do PDF.
+ * - Dossiê ZIP: OS_Digital.pdf entra automático em
+ *   "001 - DOCUMENTOS PESSOAIS/001.4 - OS - Ordem de Serviço/".
+ */
+/**
  * Rev. 4666 - DOSSIÊ ZIP: SUBPASTAS NUMERADAS
  *
  * Pedido do usuário: numerar também as subpastas.
