@@ -1,12 +1,36 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, getCompaniesForUser } from "../db";
-import { notificationRecipients, notificationLogs, menuLabels, companies, notificationViews, heSolicitacoes, smoSolicitacoes, obras, employees, fieldNotes, recontratacaoSolicitacoes } from "../../drizzle/schema";
+import { notificationRecipients, notificationLogs, menuLabels, companies, notificationViews, heSolicitacoes, smoSolicitacoes, obras, employees, fieldNotes, recontratacaoSolicitacoes, userAlerts } from "../../drizzle/schema";
 import { eq, and, desc, sql, inArray, isNull, gt } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { dispararNotificacao, gerarTextoNotificacao } from "../services/emailNotification";
 
 export const notificationsRouter = router({
+  // ============================================================
+  // Rev. 4690 — ALERTAS IN-APP POR USUÁRIO (pop-up "seu registro foi reprovado")
+  // ============================================================
+  meusAlertas: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    try {
+      return await db.select().from(userAlerts)
+        .where(and(eq(userAlerts.userId, ctx.user.id), isNull(userAlerts.lidoEm)))
+        .orderBy(desc(userAlerts.createdAt)).limit(20);
+    } catch { return []; } // tabela pode ainda não existir no 1º boot
+  }),
+
+  marcarAlertasLidos: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+      // Só marca alertas do PRÓPRIO usuário (tenancy).
+      await db.update(userAlerts).set({ lidoEm: sql`NOW()` })
+        .where(and(eq(userAlerts.userId, ctx.user.id), inArray(userAlerts.id, input.ids), isNull(userAlerts.lidoEm)));
+      return { success: true };
+    }),
+
   // ============================================================
   // DESTINATÁRIOS
   // ============================================================

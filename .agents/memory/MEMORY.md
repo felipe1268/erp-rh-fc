@@ -2,6 +2,7 @@
 - [Fatura de cartão ↔ Contas a Pagar](cartao-fatura-financeiro-link.md) — título único por fatura via índice parcial + ON CONFLICT; baixa faz fan-out p/ pagamentos; título com baixa ativa é intocável.
 - [QR Verificar Aptidão — live, não snapshot](qr-aptidao-live-not-snapshot.md) — employee_aptidao é snapshot manual defasado; leitores calculam ao vivo de asos/trainings (regras do recalcAll, apto|inapto).
 - [QR restrição operacional — saída canônica](qr-restricao-canonica-lgpd.md) — rota pública nunca faz pass-through de asos.restricoes; só frases fixas do dicionário canônico (blacklist de texto livre vaza — LGPD).
+- [Alertas pessoais in-app](user-alerts-inapp.md) — user_alerts + pop-up global; reprovação/rejeição avisa o criador via criarUserAlert; nunca zerar faltas de linha compartilhada no ponto.
 - [Aviso Prévio ↔ Contas a Pagar](aviso-previo-financeiro-link.md) — baixa manual e envio ao Financeiro são vias EXCLUSIVAS; advisory lock 477001 + índice único parcial (só no Neon); quitar baixa dispara conclusão/desligamento.
 - [DIXI group-key digit collision](dixi-groupkey-digit-collision.md) — relógio pode ter código "jfcNNN" no Nome; chave de agrupamento por pessoa deve PRESERVAR dígitos ou funde 2 funcionários.
 - [Equipamento utilização fonte de dados](equipamento-utilizacao-fonte-dados.md) — utilização diária vem de warehouse_loans (não equipamento_locado_eventos); link via almoxarifado_itens.equipamento_vinculado_id.
@@ -134,10 +135,7 @@
 - [Contas a Pagar — FD nunca consolida](contas-pagar-fd-exclusion.md) — Faturamento Direto deve ficar SEMPRE fora de agrupamento por ciclo de fechamento de fornecedor.
 - [SIAP GEO NFSe ISS informado vs retido](nfse-siapgeo-issretido-vs-informado.md) — bulk NFSe import format has no retention flag; never map "ISS due" into `iss_retido`.
 - [Espelho de Ponto read-surface](espelho-ponto-read-surface.md) — espelho lê `time_records` + projeções; abono de atestado escreve em `timecard_daily`/`ponto_descontos` (NÃO lidos) → não aparece. Projete no retorno.
-- [Controle de Cheques dedup](financial-cheques-dedup.md) — chave de dedup inclui mes_ref; parser começa em i=3 (validado); valor/data via SERIAL.
-- [Conciliação interno×externo](conciliacao-interno-classificacao.md) — 3 camadas (texto+CNPJ+override por linha); SQL predicate e JS `_isLancInterno` DEVEM espelhar; read-only.
-- [Desconsiderar cheque devolvido do %](conciliacao-desconsiderar-cheque.md) — flag `desconsiderado_em` tira par do % sem apagar; mutation precisa de guard de elegibilidade.
-- [Conciliar cheque do Controle de Cheques](conciliar-cheque-controle-atomicity.md) — conciliar linha×cheque cria despesa+concilia linha+baixa cheque; reservar o CHEQUE primeiro (RETURNING+rows-check) ou corrida concilia 2×.
+- [Cheques × Conciliação gotchas](conciliar-cheque-controle-atomicity.md) — [reservar o CHEQUE primeiro ou corrida concilia 2×](conciliar-cheque-controle-atomicity.md); [dedup c/ mes_ref](financial-cheques-dedup.md); [desconsiderado_em](conciliacao-desconsiderar-cheque.md); [interno×externo 3 camadas](conciliacao-interno-classificacao.md).
 - [Batch VALUES date<text silent-zero](batch-values-date-cast.md) — `(VALUES('YYYY-MM-DD')) AS p(...,data_fim)` compared to a DATE col throws; try/catch zeroes ALL counts. Cast `p.data_fim::date`.
 - [Fetch server-side de URL do cliente = SSRF](comprovante-fetch-ssrf.md) — baixar anexo a partir de coluna *_url gravável pelo cliente NÃO pode usar fetch genérico; só resolver /uploads/<key> interno.
 - [VARCHAR BR decimal cast](varchar-br-decimal-cast.md) — colunas numéricas VARCHAR guardam "680,75" (vírgula BR); `::numeric` direto falha → Promise.all rejeita → UI mostra "Sem dados" silenciosamente. Use `REPLACE(col,',','.')::numeric`.
@@ -145,10 +143,8 @@
 - [Almox leitura global, escrita por obra](almox-global-read-obra-write.md) — reads globais por empresa exigem guard de empresa explícito; writes validam obra do RECURSO via getAlmoxAllowedObraIdSet.
 - [Renovação de locação — vencimento da parcela](locacao-renovacao-parcela-vencimento.md) — parcela vence no FIM do novo ciclo; usar o início gera entry vencida no passado que "some" do Contas a Pagar.
 - [CONTAMAX é sweep de liquidez diária](contamax-sweep-neutral.md) — aplica/resgata o MESMO dinheiro todo dia; fora de Saídas e da linha azul; classificador exige %CONTAMAX%+APLIC/RESGAT.
-- [Fluxo de Caixa baldes por plano de contas](fluxo-caixa-bucket-conta-rules.md) — origem_modulo NULL na conciliação; fallback CONTA_RULES sobre conta_nome, ordem específico→genérico.
+- [Fluxo de Caixa gotchas](fluxo-caixa-bucket-conta-rules.md) — [baldes CONTA_RULES](fluxo-caixa-bucket-conta-rules.md); [cheque float informativo, nunca nas Saídas](fluxo-caixa-cheque-float.md); [aplicação financeira fora das Saídas](aplicacao-financeira-nao-e-despesa.md).
 - [Fluxo público identify anti-enum + Puppeteer sanitize](public-token-identify-antienum.md) — falha genérica + rate-limit token+IP em identify público; HTML de usuário no Puppeteer exige DOMPurify server-side + JS off + requests bloqueados.
-- [Fluxo de Caixa cheque float](fluxo-caixa-cheque-float.md) — cheques pendentes são linha INFORMATIVA (pago ≠ liquidado); nunca somar nas Saídas (dupla contagem); falha não derruba a tela.
-- [Aplicação financeira não é despesa](aplicacao-financeira-nao-e-despesa.md) — extrato APLICACAO* deve ter origem 'aplicacao_financeira' e ficar fora das Saídas; sweep CONTAMAX também fora da linha azul (ver contamax-sweep-neutral.md).
 - [Desconciliar desfaz o que a conciliação criou](desconciliar-releases-created-artifacts.md) — estorno deve cancelar entries origem cheque_conciliacao e liberar cheques com lancamento_id revertido; senão duplicidades + cheque preso.
 - [Neon template republish tx](neon-template-republish-tx.md) — erro em statement dentro de BEGIN aborta a tx; COMMIT vira ROLLBACK silencioso após RETURNING "de sucesso"; sempre re-verificar com SELECT pós-commit.
 - [Scorecard MO gotchas](scorecard-mo-multi-obra.md) — [equipe duplicada multi-obra](scorecard-mo-multi-obra.md); [floor de período](scorecard-mo-site-periods-floor.md); [isActive fallback](site-periods-isactive-fallback.md).

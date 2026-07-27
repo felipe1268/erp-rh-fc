@@ -537,6 +537,72 @@ async function sanitizarValeSnapshotNaoClt(db: any, jsonStr: string | null, mesR
   }
 }
 
+/**
+ * Rev. 4691 — Sanitiza o snapshot de pagamento (`pagamentoResultJson`) NA LEITURA
+ * contra as decisões de aviso prévio já registradas (payroll_folha_decisoes).
+ * O snapshot é gerado ANTES da decisão do RH; sem esta sanitização, ao reabrir a
+ * tela o card "Aviso Prévio Encerrando no Mês" reaparecia com funcionários já
+ * decididos (Pagar/Não Pagar). Read-only: não persiste, só corrige a exibição —
+ * a próxima simulação regrava o snapshot já consistente.
+ */
+async function sanitizarPagamentoSnapshotDecisoesAviso(
+  db: any, jsonStr: string | null, companyId: number, mesReferencia: string,
+): Promise<string | null> {
+  if (!jsonStr) return jsonStr;
+  try {
+    const json = typeof jsonStr === "string" ? JSON.parse(jsonStr) : jsonStr;
+    if (!json || !Array.isArray(json.alertasAvisoEncerrado) || json.alertasAvisoEncerrado.length === 0) return jsonStr;
+    const decRows = ((await db.execute(sql`
+      SELECT DISTINCT ON ("employeeId") "employeeId", decisao
+      FROM payroll_folha_decisoes
+      WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}
+      ORDER BY "employeeId", "decididoEm" DESC
+    `)) as any).rows || [];
+    if (decRows.length === 0) return jsonStr;
+    const decMap = new Map<number, string>();
+    for (const r of decRows as any[]) decMap.set(Number(r.employeeId), r.decisao);
+
+    const decididos = (json.alertasAvisoEncerrado as any[]).filter(a => decMap.has(Number(a.employeeId)));
+    if (decididos.length === 0) return jsonStr;
+
+    // Remove do card quem já foi decidido
+    json.alertasAvisoEncerrado = (json.alertasAvisoEncerrado as any[]).filter(a => !decMap.has(Number(a.employeeId)));
+
+    const funcionarios: any[] = Array.isArray(json.funcionarios) ? json.funcionarios : [];
+    const naoPagarIds = new Set<number>();
+    for (const a of decididos) {
+      const empId = Number(a.employeeId);
+      if (decMap.get(empId) === 'nao_pagar') {
+        naoPagarIds.add(empId);
+        if (!Array.isArray(json.excluidosPorDecisaoAviso)) json.excluidosPorDecisaoAviso = [];
+        if (!(json.excluidosPorDecisaoAviso as any[]).some((e: any) => Number(e.employeeId) === empId)) {
+          json.excluidosPorDecisaoAviso.push({ employeeId: empId, nome: a.nome });
+        }
+      }
+    }
+    json.funcionarios = funcionarios
+      .filter((f: any) => !naoPagarIds.has(Number(f.employeeId)))
+      .map((f: any) => (decMap.get(Number(f.employeeId)) === 'pagar' ? { ...f, alertaAvisoEncerrado: false } : f));
+
+    // Recalcula totais espelhando a simulação: quem segue com alerta pendente fica FORA.
+    let totalBruto = 0, totalDescontos = 0, totalLiquido = 0;
+    for (const f of json.funcionarios as any[]) {
+      if (f.alertaAvisoEncerrado) continue;
+      totalBruto += Number(f.salarioBruto) || 0;
+      totalDescontos += Number(f.totalDescontos) || 0;
+      totalLiquido += Number(f.salarioLiquido) || 0;
+    }
+    json.totalFuncionarios = (json.funcionarios as any[]).length;
+    json.totalBruto = Math.round(totalBruto * 100) / 100;
+    json.totalDescontos = Math.round(totalDescontos * 100) / 100;
+    json.totalLiquido = Math.round(totalLiquido * 100) / 100;
+    return JSON.stringify(json);
+  } catch (e) {
+    console.error("[sanitizarPagamentoSnapshotDecisoesAviso] erro:", e);
+    return jsonStr;
+  }
+}
+
 export const payrollEngineRouter = router({
   // ============================================================
   // 1. ABRIR / LISTAR COMPETÊNCIAS
@@ -571,6 +637,14 @@ export const payrollEngineRouter = router({
       // PJ/Sócio/excluído pode aparecer (cura snapshots gerados quando era CLT).
       if (period.valeResultJson) {
         period.valeResultJson = await sanitizarValeSnapshotNaoClt(db, period.valeResultJson, input.mesReferencia);
+      }
+      // Rev. 4691 — aplica na leitura as decisões de aviso prévio já tomadas
+      // (senão o card "Decisão Necessária" reaparece a cada reabertura da tela).
+      // Folha CONSOLIDADA é registro fechado: não reescrever totais na leitura.
+      if (period.pagamentoResultJson && !period.pagamentoConsolidadoEm) {
+        period.pagamentoResultJson = await sanitizarPagamentoSnapshotDecisoesAviso(
+          db, period.pagamentoResultJson, input.companyId, input.mesReferencia,
+        );
       }
       return period;
     }),

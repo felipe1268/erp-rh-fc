@@ -278,7 +278,7 @@ export const fieldNotesRouter = router({
       id: z.number(),
       respostaRH: z.string().min(1),
       acaoTomada: acaoTomadaEnum,
-      status: z.enum(['resolvido', 'arquivado']).default('resolvido'),
+      status: z.enum(['resolvido', 'arquivado', 'reprovado']).default('resolvido'),
       entrada1: z.string().optional(),
       saida1: z.string().optional(),
       entrada2: z.string().optional(),
@@ -318,8 +318,13 @@ export const fieldNotesRouter = router({
       const tiposComHorario = ['atraso', 'saida_antecipada', 'esqueceu_bater', 'outro'];
       const temHorarioResolvido = !!(resolveEntrada1 || resolveSaida1 || resolveEntrada2 || resolveSaida2);
 
+      // Rev. 4690 — REPROVADO: o apontamento é considerado improcedente. NADA é
+      // gravado no ponto (nem marcador disciplinar, nem batidas) e o marcador
+      // eventualmente criado na ABERTURA do apontamento é desfeito abaixo.
+      const isReprovado = input.status === 'reprovado';
+
       // O marcador disciplinar (falta/atraso) respeita a acaoTomada.
-      const deveMarcarDisciplina = !!note.data
+      const deveMarcarDisciplina = !isReprovado && !!note.data
         && tiposVinculaveis.includes(note.tipoOcorrencia)
         && !acoesNaoVinculam.includes(input.acaoTomada);
       // As BATIDAS do ponto são FATO (horário real), não ação disciplinar: quando o RH
@@ -327,7 +332,7 @@ export const fieldNotesRouter = router({
       // de ponto MESMO com acaoTomada='nenhuma'. (Antes, atraso/saída antecipada nunca
       // gravavam entrada/saída no time_records e 'nenhuma' pulava a vinculação inteira,
       // então a correção do horário ficava só no field_notes e o espelho exibia o valor antigo.)
-      const deveSincronizarHorario = !!note.data
+      const deveSincronizarHorario = !isReprovado && !!note.data
         && tiposComHorario.includes(note.tipoOcorrencia)
         && temHorarioResolvido;
 
@@ -502,13 +507,69 @@ export const fieldNotesRouter = router({
         }
       }
 
+      // Rev. 4690 — REPROVADO: desfaz o marcador criado na ABERTURA do apontamento
+      // (create grava falta/batidas no ponto imediatamente para alguns tipos).
+      if (isReprovado && note.data) {
+        try {
+          const marker = `[Apontamento #${note.id} -`;
+          const recs = await db.select().from(timeRecords).where(and(
+            eq(timeRecords.companyId, note.companyId),
+            eq(timeRecords.employeeId, note.employeeId),
+            eq(timeRecords.data, note.data),
+          ));
+          for (const r of recs) {
+            if (!r.justificativa || !r.justificativa.includes(marker)) continue;
+            if (r.fonte === 'apontamento') {
+              // Registro criado SÓ pelo apontamento → remove por inteiro.
+              await db.delete(timeRecords).where(eq(timeRecords.id, r.id));
+            } else {
+              // Registro compartilhado (dixi/manual) → só limpa o texto do marcador.
+              // NÃO mexe em faltas/batidas: numa linha compartilhada não dá para saber
+              // se a falta veio deste apontamento ou de outra fonte legítima (DIXI/manual);
+              // zerar aqui poderia apagar uma falta verdadeira. Ajuste fica a cargo do RH.
+              const novaJust = r.justificativa.split(' | ').filter((s: string) => !s.startsWith(marker)).join(' | ') || null;
+              await db.update(timeRecords).set({ justificativa: novaJust }).where(eq(timeRecords.id, r.id));
+            }
+          }
+        } catch (e) { console.error('[FieldNotes] Falha ao desfazer vínculo de ponto do apontamento reprovado:', e); }
+      }
+
+      // Rev. 4690 — Alerta in-app para o CRIADOR quando o apontamento é reprovado.
+      if (isReprovado && note.solicitanteId) {
+        try {
+          const { criarUserAlert } = await import("../db");
+          const { users } = await import("../../drizzle/schema");
+          // openId é imutável/único → preferir; e-mail só como fallback (legado).
+          let [criador] = await db.select({ id: users.id }).from(users).where(and(
+            eq(users.openId, note.solicitanteId), isNull(users.deletedAt),
+          )).limit(1);
+          if (!criador) {
+            [criador] = await db.select({ id: users.id }).from(users).where(and(
+              eq(users.email, note.solicitanteId), isNull(users.deletedAt),
+            )).limit(1);
+          }
+          if (criador?.id && criador.id !== ctx.user.id) {
+            const [empAl] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, note.employeeId));
+            await criarUserAlert({
+              userId: criador.id,
+              companyId: note.companyId,
+              tipo: 'apontamento_reprovado',
+              titulo: 'Apontamento de campo reprovado',
+              mensagem: `Seu apontamento #${note.id} (${note.tipoOcorrencia.replace(/_/g, ' ')} — ${empAl?.nome ?? `Func. #${note.employeeId}`}, ${note.data.split('-').reverse().join('/')}) foi REPROVADO por ${resolvidoPor}. Motivo: ${input.respostaRH}`,
+              linkUrl: '/apontamentos-campo',
+            });
+          }
+        } catch (e) { console.error('[FieldNotes] Falha ao alertar criador do apontamento reprovado:', e); }
+      }
+
       return { success: true, vinculadoPonto: !!(deveMarcarDisciplina || deveSincronizarHorario) };
     }),
 
   setEmAnalise: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await assertObraAccessForFieldNote(db, input.id, ctx.user.id, ctx.user.role);
       await db.update(fieldNotes).set({ status: 'em_analise' }).where(eq(fieldNotes.id, input.id));
       return { success: true };
     }),
@@ -517,6 +578,7 @@ export const fieldNotesRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await assertObraAccessForFieldNote(db, input.id, ctx.user.id, ctx.user.role);
       await db.update(fieldNotes).set({
         status: 'pendente',
         respostaRH: null,

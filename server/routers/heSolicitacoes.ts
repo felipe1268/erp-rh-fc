@@ -716,6 +716,21 @@ export const heSolicitacoesRouter = router({
         : `Solicitação de HE #${input.id} rejeitada: ${input.motivoRejeicao}`,
     });
 
+    // Rev. 4690 — Alerta in-app para quem CRIOU a solicitação.
+    if (sol.solicitadoPorId && sol.solicitadoPorId !== ctx.user.id) {
+      try {
+        const { criarUserAlert } = await import("../db");
+        await criarUserAlert({
+          userId: sol.solicitadoPorId,
+          companyId: sol.companyId,
+          tipo: 'he_rejeitada',
+          titulo: isReversao ? 'Aprovação de hora extra revertida (rejeitada)' : 'Solicitação de hora extra rejeitada',
+          mensagem: `Sua solicitação de HE #${input.id} (${String(sol.dataSolicitacao).split('-').reverse().join('/')}${sol.horaInicio ? `, ${sol.horaInicio}–${sol.horaFim ?? ''}` : ''}) foi REJEITADA por ${ctx.user.name || 'Admin'}. Motivo: ${input.motivoRejeicao}`,
+          linkUrl: '/solicitacao-he',
+        });
+      } catch (e) { console.error('[HE] Falha ao alertar solicitante da rejeição:', e); }
+    }
+
     return { success: true, reversao: isReversao };
   }),
 

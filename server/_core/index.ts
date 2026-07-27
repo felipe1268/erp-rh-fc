@@ -5882,7 +5882,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4689-2026-07-27-fgts-contas-pagar";
+    const COLFIX_VERSION = "v4690-2026-07-27-user-alerts";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7843,6 +7843,30 @@ REGRAS DE EXTRAÇÃO:
           console.log("[ColFix Rev.4689] financeiro_fgts_entry_id + índice uq_fin_entries_aviso_previo_fgts garantidos.");
         }
       } catch (e: any) { console.error("[ColFix Rev.4689] FALHA coluna/índice FGTS:", e?.message ?? e); }
+
+      // Rev. 4690 — Alertas in-app por usuário (pop-up p/ criador de apontamento
+      // de campo / solicitação de HE quando o registro é REPROVADO). Bloco isolado.
+      try {
+        const db4690 = await getDb();
+        if (db4690) {
+          const { sql: sql4690 } = await import("drizzle-orm");
+          await db4690.execute(sql4690`
+            CREATE TABLE IF NOT EXISTS user_alerts (
+              id serial PRIMARY KEY,
+              user_id integer NOT NULL,
+              company_id integer,
+              tipo varchar(50) NOT NULL,
+              titulo varchar(255) NOT NULL,
+              mensagem text NOT NULL,
+              link_url varchar(255),
+              lido_em timestamp,
+              created_at timestamp DEFAULT now() NOT NULL
+            )
+          `);
+          await db4690.execute(sql4690`CREATE INDEX IF NOT EXISTS ua_user_unread ON user_alerts (user_id, lido_em)`);
+          console.log("[ColFix Rev.4690] tabela user_alerts garantida.");
+        }
+      } catch (e: any) { console.error("[ColFix Rev.4690] FALHA tabela user_alerts:", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos.
       // Rev. 4605: só marca se o bloco crítico (índice único de projeções) passou.

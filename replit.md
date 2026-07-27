@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4691** — Folha: decisões "Pagar/Não Pagar" do card de aviso prévio encerrando no mês não reaparecem mais ao reabrir a tela (getPeriod aplica as decisões gravadas na leitura do snapshot).
+- **Rev. 4690** — Botão "Reprovar" no Apontamento de Campo (não grava ponto e desfaz o marcador da abertura) e alerta in-app ao criador quando apontamento é reprovado ou HE é rejeitada (tabela user_alerts + pop-up global "Ciente"/"Ver registro").
 - **Rev. 4689** — Enviar ao Financeiro gera 2 lançamentos quando há multa FGTS (RESCISÃO sem a multa + FGTS separado, 40%/20% acordo); ambos editáveis no modal; aviso só conclui/desliga quando os DOIS forem quitados; reversão cancela os dois.
 - **Rev. 4688** — Alertas do dia (pop-ups estilo lembrete de férias): contratos de experiência vencendo, avisos prévios no prazo final de pagamento (RH + Financeiro) e aniversariantes; antecipação de fim de semana/feriado (último dia útil anterior; aniversário também no 1º dia útil posterior); alerta de férias agora também no Financeiro (informativo).
 - **Rev. 4687** — Aviso Prévio: botão "Dar Baixa" removido (baixa da rescisão vem SEMPRE do Financeiro via Contas a Pagar); "Enviar ao Financeiro" agora abre modal com valor editável (previsão do sistema como sugestão; edição registrada em observações + audit log).

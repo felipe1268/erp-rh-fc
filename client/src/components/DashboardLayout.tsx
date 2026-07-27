@@ -48,6 +48,7 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { ReservasAlertModal } from './compras/ReservasAlertModal';
 import FeriasGozoPrompt from './FeriasGozoPrompt';
 import AlertasDiaPrompt from './AlertasDiaPrompt';
+import UserAlertsPrompt from './UserAlertsPrompt';
 import { FCSignPendingAlertGlobal } from './FCSignPendingAlertGlobal';
 import { AuditoriaAlmoxPendingAlert } from './AuditoriaAlmoxPendingAlert';
 import { AlertaLocacoesVencendo } from './AlertaLocacoesVencendo';
@@ -996,6 +997,8 @@ export default function DashboardLayout({
       <ReservasAlertModalGlobal />
       <FeriasGozoPromptGlobal />
       <AlertasDiaGlobal />
+      {/* Rev. 4690 — alertas pessoais (ex.: apontamento reprovado / HE rejeitada) */}
+      <UserAlertsPrompt />
       <FCSignPendingAlertGlobal />
       <AuditoriaAlmoxPendingAlert />
       {/* Rev. 4554 — alerta global de locações a vencer (abre 1x por sessão após o login) */}

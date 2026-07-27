@@ -3625,6 +3625,25 @@ export const userProfiles = pgTable("user_profiles", {
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 });
 
+/**
+ * Rev. 4690 — Alertas por usuário (in-app). Usado para avisar o CRIADOR de um
+ * apontamento de campo / solicitação de HE quando o registro é REPROVADO.
+ * O usuário vê um pop-up ao entrar no sistema; "Ciente" marca lido_em.
+ */
+export const userAlerts = pgTable("user_alerts", {
+        id: serial().primaryKey().notNull(),
+        userId: integer("user_id").notNull(),
+        companyId: integer("company_id"),
+        tipo: varchar({ length: 50 }).notNull(), // ex: 'apontamento_reprovado' | 'he_rejeitada'
+        titulo: varchar({ length: 255 }).notNull(),
+        mensagem: text().notNull(),
+        linkUrl: varchar("link_url", { length: 255 }),
+        lidoEm: timestamp("lido_em", { mode: 'string' }),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+        index("ua_user_unread").on(table.userId, table.lidoEm),
+]);
+
 export const users = pgTable("users", {
         id: serial().notNull(),
         openId: varchar({ length: 64 }).notNull(),

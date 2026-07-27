@@ -1330,6 +1330,35 @@ export async function createAuditLog(data: Omit<InsertAuditLog, "module"> & { mo
   }
 }
 
+// ============================================================
+// USER ALERTS (Rev. 4690) — alertas in-app por usuário (pop-up ao entrar)
+// ============================================================
+
+export async function criarUserAlert(data: {
+  userId: number;
+  companyId?: number | null;
+  tipo: string;
+  titulo: string;
+  mensagem: string;
+  linkUrl?: string | null;
+}) {
+  const db = await getDb();
+  if (!db || !data.userId) return;
+  try {
+    const { userAlerts } = await import("../drizzle/schema");
+    await db.insert(userAlerts).values({
+      userId: data.userId,
+      companyId: data.companyId ?? null,
+      tipo: data.tipo,
+      titulo: data.titulo,
+      mensagem: data.mensagem,
+      linkUrl: data.linkUrl ?? null,
+    });
+  } catch (e) {
+    console.error("[UserAlert] Falha ao criar alerta:", e);
+  }
+}
+
 export async function getAuditLogs(companyId?: number, limit = 100) {
   const db = await getDb();
   if (!db) return [];

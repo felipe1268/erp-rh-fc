@@ -100,6 +100,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   em_analise: { label: "Em Análise", color: "bg-blue-100 text-blue-700 border-blue-300" },
   resolvido: { label: "Resolvido", color: "bg-green-100 text-green-700 border-green-300" },
   arquivado: { label: "Arquivado", color: "bg-gray-100 text-gray-500 border-gray-300" },
+  reprovado: { label: "Reprovado", color: "bg-red-100 text-red-700 border-red-300" },
 };
 
 const PRIORIDADE_LABELS: Record<string, { label: string; color: string }> = {
@@ -509,7 +510,7 @@ export default function ApontamentosCampo() {
                                 <Pencil className="h-3.5 w-3.5 mr-2 text-amber-600" /> Editar
                               </DropdownMenuItem>
                             )}
-                            {(note.status === 'resolvido' || note.status === 'arquivado') && (
+                            {(note.status === 'resolvido' || note.status === 'arquivado' || note.status === 'reprovado') && (
                               <DropdownMenuItem onClick={() => {
                                 if (confirm(`Reabrir apontamento #${note.id}? O status voltará para Pendente.`)) {
                                   reopenMut.mutate({ id: note.id });
@@ -822,6 +823,21 @@ export default function ApontamentosCampo() {
                 }}>
                 <Archive className="h-3.5 w-3.5 mr-1" /> Arquivar
               </Button>
+              {/* Rev. 4690 — Reprovar: apontamento improcedente. NÃO grava nada no
+                  ponto, desfaz o marcador criado na abertura e ALERTA quem criou. */}
+              <Button variant="outline" className="border-red-300 text-red-600 hover:bg-red-50"
+                disabled={resolveMut.isPending}
+                onClick={() => {
+                  if (!resolverResposta.trim()) { toast.error("Informe o motivo da reprovação no campo Resposta / Parecer do RH"); return; }
+                  resolveMut.mutate({
+                    id: selectedNote.id,
+                    respostaRH: resolverResposta.trim(),
+                    acaoTomada: 'nenhuma' as any,
+                    status: 'reprovado',
+                  });
+                }}>
+                Reprovar
+              </Button>
               <Button className="bg-green-600 hover:bg-green-700"
                 disabled={!resolverResposta.trim() || resolveMut.isPending}
                 onClick={() => {
@@ -851,7 +867,7 @@ export default function ApontamentosCampo() {
           <DialogContent resizable={false} className="w-[min(1100px,96vw)] sm:max-w-[min(1100px,96vw)] max-h-[94dvh] overflow-y-auto overflow-x-hidden p-0 gap-0">
             {selectedNote && (() => {
               const isPendente = selectedNote.status === 'pendente' || selectedNote.status === 'em_analise';
-              const isResolvido = selectedNote.status === 'resolvido' || selectedNote.status === 'arquivado';
+              const isResolvido = selectedNote.status === 'resolvido' || selectedNote.status === 'arquivado' || selectedNote.status === 'reprovado';
               const iniciais = (selectedNote.nomeFunc || "?").split(" ").filter(Boolean).slice(0, 2).map((s: string) => s[0]).join("").toUpperCase();
               const dataFmt = selectedNote.data ? new Date(selectedNote.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "—";
               const temBatidas = selectedNote.entrada1 || selectedNote.saida1 || selectedNote.entrada2 || selectedNote.saida2;

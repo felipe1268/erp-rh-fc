@@ -969,8 +969,9 @@ export const homeDataRouter = router({
    */
   getAlertasDia: protectedProcedure
     .input(z.object({
-      companyId: z.number(),
-      companyIds: z.array(z.number()).optional(),
+      // coerce: alguns clients mandam companyId como string (localStorage).
+      companyId: z.coerce.number(),
+      companyIds: z.array(z.coerce.number()).optional(),
       // 'financeiro' recebe SÓ os avisos (escopo aplicado no servidor).
       escopo: z.enum(['rh', 'financeiro']).optional().default('rh'),
     }))

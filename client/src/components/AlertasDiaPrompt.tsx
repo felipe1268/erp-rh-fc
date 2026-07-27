@@ -31,8 +31,10 @@ type Categoria = "contratos" | "avisos" | "aniversariantes";
 export default function AlertasDiaPrompt({ modulo }: { modulo: "rh" | "financeiro" }) {
   const [, setLocation] = useLocation();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
-  const companyId = selectedCompanyId || 0;
-  const companyIds = getCompanyIdsForQuery();
+  // Number(): selectedCompanyId pode vir de localStorage como STRING — sem a
+  // coerção o servidor rejeita ("expected number, received string").
+  const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery().map(Number).filter(n => Number.isFinite(n) && n > 0);
   const enabled = isConstrutoras ? companyIds.length > 0 : companyId > 0;
 
   const { data } = trpc.home.getAlertasDia.useQuery(

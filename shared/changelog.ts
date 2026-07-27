@@ -1,4 +1,29 @@
 /**
+ * Rev. 4691 - FOLHA: DECISAO "PAGAR/NAO PAGAR" DO AVISO PREVIO NAO REAPARECE
+ *
+ * Bug: no card "Aviso Previo Encerrando no Mes - Decisao Necessaria", o RH
+ * clicava Pagar/Nao Pagar, mas ao reabrir a Folha os nomes REAPARECIAM.
+ * Causa: a decisao era gravada (payroll_folha_decisoes) e respeitada pela
+ * simulacao, mas o snapshot salvo (pagamentoResultJson) — gerado ANTES da
+ * decisao — era devolvido cru na reabertura da tela.
+ * Fix: getPeriod agora sanitiza o snapshot na leitura contra as decisoes ja
+ * registradas: decididos saem do card, "nao pagar" sai da folha, "pagar"
+ * entra nos totais. Recalcular a folha continua regravando tudo.
+ */
+/**
+ * Rev. 4690 - REPROVAR APONTAMENTO DE CAMPO E HE + ALERTA AO CRIADOR
+ *
+ * - Apontamentos de Campo: novo botao "Reprovar" no dialog de resolucao
+ *   (motivo obrigatorio no parecer do RH). Reprovar NAO grava nada no
+ *   ponto e DESFAZ o marcador (falta/batidas) criado na abertura do
+ *   apontamento; status novo 'reprovado' (badge vermelho, reabrivel).
+ * - Solicitacao de HE: a rejeicao (ja existente) agora tambem alerta.
+ * - Novo sistema de ALERTAS PESSOAIS in-app (tabela user_alerts): quem
+ *   CRIOU o apontamento/solicitacao recebe um pop-up ao entrar em
+ *   qualquer modulo, com motivo da reprovacao, botao "Ver registro" e
+ *   "Ciente" (marca como lido). Endpoint notifications.meusAlertas.
+ */
+/**
  * Rev. 4689 - ENVIAR AO FINANCEIRO: MULTA FGTS EM LANCAMENTO SEPARADO
  *
  * "Enviar ao Financeiro" agora gera DOIS lancamentos no Contas a Pagar
