@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4648** — **FICHA DE EPI: layout moderno em cards + foto ampliável.** /epis/ficha em grid de cards responsivo com KPIs-filtro no header navy, barra de progresso de assinaturas; clique na foto (card e ficha) abre lightbox grande. Arquivos: `client/src/pages/EpiFichaFuncionario.tsx`, `client/src/components/FichaEpiDialog.tsx`.
+- **Rev. 4647** — **FICHA DE EPI: logo formatado no cabeçalho.** Faixa navy em flex 3 colunas (logo em caixa branca contida, título centralizado); fim do vazamento sobre os dados. Arquivo: `client/src/components/FichaEpiDialog.tsx`.
 - **Rev. 4646** — **FICHA DE EPI: coleta de assinatura pendente + logo da empresa + foto do colaborador (tela e impressão).** Botão "Coletar assinatura" nas entregas sem assinatura (fluxo oficial EpiAssinatura), logo no cabeçalho, foto 3x4 grande no header e no PDF. Arquivo: `client/src/components/FichaEpiDialog.tsx`.
 - **Rev. 4645** — **FICHA DE EPI: GUARD ANTI-IDOR.** fichaEpiResumo/fichaEpiFuncionario intersectam companyIds com as empresas do usuário (FORBIDDEN se vazio). Arquivo: `server/routers/epis.ts`.
 - **Rev. 4644** — **FICHA DE EPI POR FUNCIONÁRIO (NR-06/CLT), 100% INTEGRADA.** Novo `<FichaEpiDialog>` (todas as entregas + assinatura digital autenticada com data/IP/hash SHA-256, Termo de Compromisso, Imprimir/PDF) acessível por: aba lateral SST "Ficha de EPI" (/epis/ficha), Raio-X e Ficha Documental. Backend: `epis.fichaEpiResumo`/`fichaEpiFuncionario`. Arquivos: `client/src/components/FichaEpiDialog.tsx`, `client/src/pages/EpiFichaFuncionario.tsx`, `server/routers/epis.ts`.

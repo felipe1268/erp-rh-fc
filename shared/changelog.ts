@@ -1,4 +1,24 @@
 /**
+ * Rev. 4648 - FICHA DE EPI: LAYOUT MODERNO EM CARDS + FOTO AMPLIÁVEL
+ *
+ * Pedido do usuário (iPad): leitura fácil e fluida + clique na foto AMPLIA
+ * p/ identificar o colaborador.
+ * - Página /epis/ficha redesenhada: header navy com KPIs clicáveis (todos /
+ *   fichas completas / com pendência — funcionam como filtro), grid de cards
+ *   responsivo (1/2/3 colunas), foto grande 64px (?w=128), barra de progresso
+ *   de assinaturas (verde=completa, laranja=pendente) e última entrega.
+ * - Clique na FOTO (no card e no cabeçalho da ficha) abre lightbox com a
+ *   imagem grande (?w=1024) + nome/função — sem abrir a ficha por engano.
+ */
+/**
+ * Rev. 4647 - FICHA DE EPI: LOGO FORMATADO NO CABEÇALHO (fix layout)
+ *
+ * O logo estava posicionado com absolute e vazava sobre a linha "EMPRESA".
+ * Agora a faixa navy usa flex de 3 colunas (caixa branca do logo à esquerda
+ * com max 24px de altura + overflow-hidden, título centralizado, espaçador
+ * simétrico) — mesma estrutura na tela e na impressão/PDF.
+ */
+/**
  * Rev. 4646 - FICHA DE EPI: COLETA DE ASSINATURA PENDENTE + LOGO + FOTO
  *
  * 4 melhorias pedidas pelo usuário (prints do iPad):

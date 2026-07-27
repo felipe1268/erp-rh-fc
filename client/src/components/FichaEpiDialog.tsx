@@ -46,6 +46,8 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
 }) {
   // Rev. 4646 — coleta de assinatura pendente direto da ficha
   const [signDelivery, setSignDelivery] = useState<any | null>(null);
+  // Rev. 4648 — clique na foto amplia
+  const [fotoZoom, setFotoZoom] = useState(false);
   const enabled = open && !!employeeId && (!!companyId || (companyIds?.length ?? 0) > 0);
   const { data, isLoading, refetch } = trpc.epis.fichaEpiFuncionario.useQuery(
     { companyId, companyIds, employeeId: employeeId! },
@@ -87,8 +89,11 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
   @page { size: A4 portrait; margin: 12mm; }
   * { box-sizing: border-box; } body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #111; margin: 0; }
   .top { border: 1.5px solid #0A1E3C; }
-  .titulo { background: #0A1E3C; color: #fff; font-size: 14px; font-weight: bold; padding: 6px 10px; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 10px; position: relative; min-height: 30px; }
-  .titulo .logo { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); height: 26px; max-width: 110px; object-fit: contain; background: #fff; border-radius: 3px; padding: 2px 4px; }
+  .titulo { background: #0A1E3C; color: #fff; font-size: 14px; font-weight: bold; padding: 4px 8px; letter-spacing: 1px; display: flex; align-items: center; min-height: 32px; }
+  .titulo .logobox { width: 110px; flex: 0 0 110px; display: flex; align-items: center; }
+  .titulo .logobox .logo { background: #fff; border-radius: 3px; padding: 2px 5px; max-height: 24px; max-width: 100px; width: auto; height: auto; object-fit: contain; display: block; }
+  .titulo span.t { flex: 1; text-align: center; }
+  .titulo .sp { width: 110px; flex: 0 0 110px; }
   .cab { display: flex; align-items: stretch; }
   .cab .grid { flex: 1; }
   .foto { width: 88px; border-left: 1px solid #0A1E3C; display: flex; align-items: center; justify-content: center; padding: 4px; }
@@ -110,8 +115,9 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
 </style></head><body>
 <div class="top">
   <div class="titulo">
-    ${empresa.logoUrl ? `<img class="logo" src="${esc(abs(empresa.logoUrl))}" alt="logo" />` : ""}
-    <span>CONTROLE DE E.P.I.'S</span>
+    <div class="logobox">${empresa.logoUrl ? `<img class="logo" src="${esc(abs(empresa.logoUrl))}" alt="logo" />` : ""}</div>
+    <span class="t">CONTROLE DE E.P.I.'S</span>
+    <div class="sp"></div>
   </div>
   <div class="cab">
     <div class="grid">
@@ -156,11 +162,16 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
 
             {/* Cabeçalho do documento — com logo da empresa e foto do colaborador */}
             <div className="rounded-lg border-2 border-[#0A1E3C] overflow-hidden text-xs">
-              <div className="bg-[#0A1E3C] text-white flex items-center justify-center gap-2 px-2 py-1.5 relative min-h-[34px]">
-                {empresa?.logoUrl ? (
-                  <img src={thumb(empresa.logoUrl, 128)} alt="logo" className="absolute left-2 top-1/2 -translate-y-1/2 h-6 max-w-[100px] object-contain bg-white rounded px-1 py-0.5" />
-                ) : null}
-                <span className="font-bold tracking-wider text-[13px]">CONTROLE DE E.P.I.'S</span>
+              <div className="bg-[#0A1E3C] text-white flex items-center px-2 py-1 min-h-[38px]">
+                <div className="w-[110px] shrink-0 flex items-center">
+                  {empresa?.logoUrl ? (
+                    <span className="inline-flex items-center justify-center bg-white rounded px-1.5 py-0.5 h-[28px] max-w-[106px] overflow-hidden">
+                      <img src={thumb(empresa.logoUrl, 256)} alt="logo" className="max-h-[24px] max-w-[96px] w-auto h-auto object-contain" />
+                    </span>
+                  ) : null}
+                </div>
+                <span className="flex-1 text-center font-bold tracking-wider text-[13px]">CONTROLE DE E.P.I.'S</span>
+                <div className="w-[110px] shrink-0" />
               </div>
               <div className="flex items-stretch">
                 <div className="grid grid-cols-1 sm:grid-cols-2 flex-1">
@@ -173,7 +184,9 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
                 </div>
                 {emp?.fotoUrl ? (
                   <div className="w-[92px] border-l border-[#0A1E3C] flex items-center justify-center p-1.5 shrink-0">
-                    <img src={thumb(emp.fotoUrl, 256)} alt={emp?.nomeCompleto || "foto"} className="w-[80px] h-[100px] object-cover rounded border border-gray-300" loading="lazy" />
+                    <button type="button" title="Ampliar foto" onClick={() => setFotoZoom(true)}>
+                      <img src={thumb(emp.fotoUrl, 256)} alt={emp?.nomeCompleto || "foto"} className="w-[80px] h-[100px] object-cover rounded border border-gray-300" loading="lazy" />
+                    </button>
                   </div>
                 ) : null}
               </div>
@@ -258,6 +271,19 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
             </DialogFooter>
           </>
         )}
+
+        {/* Rev. 4648 — Lightbox da foto do colaborador */}
+        {fotoZoom && emp?.fotoUrl ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4" onClick={() => setFotoZoom(false)}>
+            <div className="max-w-md w-full">
+              <img src={thumb(emp.fotoUrl, 1024)} alt={emp?.nomeCompleto || "foto"} className="w-full max-h-[70vh] object-contain rounded-t-lg bg-black" />
+              <div className="bg-[#0A1E3C] text-white px-4 py-2.5 rounded-b-lg">
+                <p className="font-semibold text-sm">{emp?.nomeCompleto}</p>
+                {emp?.funcao ? <p className="text-xs text-white/70">{emp.funcao}</p> : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* Rev. 4646 — Overlay de coleta de assinatura pendente (mesmo fluxo da entrega) */}
         {signDelivery && emp ? (
