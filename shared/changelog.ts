@@ -1,4 +1,18 @@
 /**
+ * Rev. 4646 - FICHA DE EPI: COLETA DE ASSINATURA PENDENTE + LOGO + FOTO
+ *
+ * 4 melhorias pedidas pelo usuário (prints do iPad):
+ * 1. Entrega SEM ASSINATURA agora tem botão "Coletar assinatura" direto na
+ *    ficha — abre o mesmo fluxo oficial <EpiAssinatura> (termo, geolocalização,
+ *    hash SHA-256, memorial de assinatura) e a ficha recarrega ao concluir.
+ * 2. Logo da empresa (companies.logoUrl) no cabeçalho do documento — na tela
+ *    e na impressão (faixa navy "CONTROLE DE E.P.I.'S" com logo à esquerda).
+ * 3. Foto do colaborador GRANDE (estilo 3x4, 80×100px) no canto direito do
+ *    cabeçalho da ficha, com miniatura ?w= (Safari/iPad não quebra).
+ * 4. Foto sai TAMBÉM na impressão/PDF (?w=512), com delay maior (1,2s) para
+ *    imagens carregarem antes do print.
+ */
+/**
  * Rev. 4645 - FICHA DE EPI: GUARD ANTI-IDOR NAS PROCEDURES NOVAS
  *
  * Correção do code review da Rev. 4644 (achado HIGH): fichaEpiResumo e

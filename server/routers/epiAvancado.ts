@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, getCompaniesForUser } from "../db";
 import { assertAiModuleEnabled } from "../_core/aiConfig";
 import {
   epiKits, epiKitItems, epiCoresCapacete, epiVidaUtil,
@@ -803,7 +803,27 @@ export const epiAvancadoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const crypto = await import("crypto");
-      
+
+      // Rev. 4646 — guard anti-IDOR na ESCRITA da assinatura: a entrega alvo
+      // precisa (a) pertencer ao MESMO funcionário do input e (b) estar em
+      // empresa acessível ao usuário (não confiar no companyId do client).
+      const allowedCos = new Set((await getCompaniesForUser(ctx.user.id, ctx.user.role)).map((c: any) => c.id));
+      if (input.deliveryId) {
+        const [dlv] = await db.select({ id: epiDeliveries.id, companyId: epiDeliveries.companyId, employeeId: epiDeliveries.employeeId })
+          .from(epiDeliveries).where(eq(epiDeliveries.id, input.deliveryId));
+        if (!dlv) throw new TRPCError({ code: "NOT_FOUND", message: "Entrega não encontrada." });
+        if (dlv.employeeId !== input.employeeId) throw new TRPCError({ code: "BAD_REQUEST", message: "Entrega não pertence a este funcionário." });
+        if (!allowedCos.has(dlv.companyId)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à empresa desta entrega." });
+        // Escopo canônico da assinatura = empresa da própria entrega
+        input.companyId = dlv.companyId;
+      } else {
+        // Sem entrega vinculada: valida funcionário × empresas acessíveis
+        const [emp0] = await db.select({ companyId: employees.companyId })
+          .from(employees).where(eq(employees.id, input.employeeId));
+        if (!emp0 || !allowedCos.has(emp0.companyId)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este funcionário." });
+        input.companyId = emp0.companyId;
+      }
+
       // Upload signature image to S3
       const buffer = Buffer.from(input.assinaturaBase64.replace(/^data:image\/\w+;base64,/, ""), "base64");
       const key = `assinaturas-epi/${input.companyId}/${input.employeeId}-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;

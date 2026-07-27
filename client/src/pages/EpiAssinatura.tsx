@@ -23,12 +23,14 @@ interface EpiAssinaturaProps {
   epiNome?: string;
   onComplete?: (url: string) => void;
   onCancel?: () => void;
+  /** Rev. 4646 — override do escopo de empresa (ficha aberta fora do contexto global) */
+  companyIdOverride?: number;
 }
 
-export default function EpiAssinatura({ employeeId, employeeName, deliveryId, tipo, tipoAssinante = "funcionario", epiNome, onComplete, onCancel }: EpiAssinaturaProps) {
+export default function EpiAssinatura({ employeeId, employeeName, deliveryId, tipo, tipoAssinante = "funcionario", epiNome, onComplete, onCancel, companyIdOverride }: EpiAssinaturaProps) {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
-  const companyIds = getCompanyIdsForQuery();
+  const companyId = companyIdOverride || (selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0);
+  const companyIds = companyIdOverride ? undefined : getCompanyIdsForQuery();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);

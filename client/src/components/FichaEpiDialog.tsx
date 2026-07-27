@@ -7,12 +7,21 @@
 // quantidade, C.A., datas e a ASSINATURA DIGITAL de cada entrega, com
 // autenticação (data/hora, IP e hash SHA-256) p/ envio a cliente ou MTE.
 // ============================================================================
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Printer, ShieldCheck } from "lucide-react";
+import { Loader2, Printer, ShieldCheck, PenLine } from "lucide-react";
 import { formatCPF } from "@/lib/formatters";
+import EpiAssinatura from "@/pages/EpiAssinatura";
+
+// Miniatura de /uploads (memória: fotos originais quebram no Safari/iPad — usar ?w=)
+// Só anexa ?w= em caminhos internos /uploads — URL externa/pré-assinada quebraria.
+function thumb(u?: string | null, w = 256): string {
+  if (!u) return "";
+  if (!u.startsWith("/uploads")) return u;
+  return u.includes("?") ? `${u}&w=${w}` : `${u}?w=${w}`;
+}
 
 function fmtDate(v?: string | null): string {
   if (!v) return "—";
@@ -35,8 +44,10 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
   companyId: number;
   companyIds?: number[];
 }) {
+  // Rev. 4646 — coleta de assinatura pendente direto da ficha
+  const [signDelivery, setSignDelivery] = useState<any | null>(null);
   const enabled = open && !!employeeId && (!!companyId || (companyIds?.length ?? 0) > 0);
-  const { data, isLoading } = trpc.epis.fichaEpiFuncionario.useQuery(
+  const { data, isLoading, refetch } = trpc.epis.fichaEpiFuncionario.useQuery(
     { companyId, companyIds, employeeId: employeeId! },
     { enabled }
   );
@@ -57,7 +68,7 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
   const handlePrint = () => {
     if (!emp || !empresa) return;
     const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    const abs = (u?: string | null) => !u ? "" : (/^https?:\/\//.test(u) ? u : window.location.origin + u);
+    const abs = (u?: string | null) => !u ? "" : (/^(https?:|data:|blob:)/.test(u) ? u : window.location.origin + u);
     const w = window.open("", "_blank");
     if (!w) return;
     const rows = entregas.map((e: any) => `
@@ -76,7 +87,12 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
   @page { size: A4 portrait; margin: 12mm; }
   * { box-sizing: border-box; } body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #111; margin: 0; }
   .top { border: 1.5px solid #0A1E3C; }
-  .titulo { background: #0A1E3C; color: #fff; text-align: center; font-size: 14px; font-weight: bold; padding: 6px; letter-spacing: 1px; }
+  .titulo { background: #0A1E3C; color: #fff; font-size: 14px; font-weight: bold; padding: 6px 10px; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 10px; position: relative; min-height: 30px; }
+  .titulo .logo { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); height: 26px; max-width: 110px; object-fit: contain; background: #fff; border-radius: 3px; padding: 2px 4px; }
+  .cab { display: flex; align-items: stretch; }
+  .cab .grid { flex: 1; }
+  .foto { width: 88px; border-left: 1px solid #0A1E3C; display: flex; align-items: center; justify-content: center; padding: 4px; }
+  .foto img { width: 78px; height: 96px; object-fit: cover; border: 1px solid #99a; border-radius: 3px; }
   .sub { text-align: center; font-weight: bold; font-size: 11px; padding: 3px; border-bottom: 1px solid #0A1E3C; background: #f4f6fa; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; }
   .grid div { padding: 4px 6px; border-bottom: 1px solid #ccd; font-size: 10px; }
@@ -93,14 +109,20 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
   .footer { margin-top: 8px; display: flex; justify-content: space-between; font-size: 8px; color: #777; }
 </style></head><body>
 <div class="top">
-  <div class="titulo">CONTROLE DE E.P.I.'S</div>
-  <div class="grid">
-    <div><b>EMPRESA:</b> ${esc(empresa.razaoSocial)}</div>
-    <div><b>CNPJ:</b> ${esc(empresa.cnpj)}</div>
-    <div><b>NOME:</b> ${esc(emp.nomeCompleto)}</div>
-    <div><b>CPF:</b> ${esc(formatCPF(emp.cpf))}</div>
-    <div><b>FUNÇÃO:</b> ${esc(emp.funcao || "—")}</div>
-    <div><b>Nº INTERNO:</b> ${esc(emp.numeroInterno || "—")}${emp.dataAdmissao ? ` &nbsp; <b>ADMISSÃO:</b> ${fmtDate(emp.dataAdmissao)}` : ""}</div>
+  <div class="titulo">
+    ${empresa.logoUrl ? `<img class="logo" src="${esc(abs(empresa.logoUrl))}" alt="logo" />` : ""}
+    <span>CONTROLE DE E.P.I.'S</span>
+  </div>
+  <div class="cab">
+    <div class="grid">
+      <div><b>EMPRESA:</b> ${esc(empresa.razaoSocial)}</div>
+      <div><b>CNPJ:</b> ${esc(empresa.cnpj)}</div>
+      <div><b>NOME:</b> ${esc(emp.nomeCompleto)}</div>
+      <div><b>CPF:</b> ${esc(formatCPF(emp.cpf))}</div>
+      <div><b>FUNÇÃO:</b> ${esc(emp.funcao || "—")}</div>
+      <div><b>Nº INTERNO:</b> ${esc(emp.numeroInterno || "—")}${emp.dataAdmissao ? ` &nbsp; <b>ADMISSÃO:</b> ${fmtDate(emp.dataAdmissao)}` : ""}</div>
+    </div>
+    ${emp.fotoUrl ? `<div class="foto"><img src="${esc(abs(thumb(emp.fotoUrl, 512)))}" alt="foto" /></div>` : ""}
   </div>
   <div class="sub">TERMO DE COMPROMISSO</div>
   <div class="termo">${esc(termo)}</div>
@@ -113,7 +135,8 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
 <div class="footer"><span>ERP Gestão Integrada — Ficha de EPI</span><span>Emitido em ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR").slice(0, 5)}</span></div>
 </body></html>`);
     w.document.close();
-    setTimeout(() => w.print(), 600);
+    // Rev. 4646 — espera foto/logo/assinaturas carregarem antes de imprimir
+    setTimeout(() => w.print(), 1200);
   };
 
   return (
@@ -131,15 +154,28 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
               </DialogTitle>
             </DialogHeader>
 
-            {/* Cabeçalho do documento */}
+            {/* Cabeçalho do documento — com logo da empresa e foto do colaborador */}
             <div className="rounded-lg border-2 border-[#0A1E3C] overflow-hidden text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2">
-                <div className="px-3 py-1.5 border-b border-gray-200"><b className="text-[#0A1E3C]">EMPRESA:</b> {empresa?.razaoSocial}</div>
-                <div className="px-3 py-1.5 border-b border-gray-200"><b className="text-[#0A1E3C]">CNPJ:</b> {empresa?.cnpj}</div>
-                <div className="px-3 py-1.5 border-b border-gray-200 break-words"><b className="text-[#0A1E3C]">NOME:</b> {emp?.nomeCompleto}</div>
-                <div className="px-3 py-1.5 border-b border-gray-200"><b className="text-[#0A1E3C]">CPF:</b> {formatCPF(emp?.cpf)}</div>
-                <div className="px-3 py-1.5 border-b border-gray-200"><b className="text-[#0A1E3C]">FUNÇÃO:</b> {emp?.funcao || "—"}</div>
-                <div className="px-3 py-1.5 border-b border-gray-200"><b className="text-[#0A1E3C]">Nº INTERNO:</b> {emp?.numeroInterno || "—"}</div>
+              <div className="bg-[#0A1E3C] text-white flex items-center justify-center gap-2 px-2 py-1.5 relative min-h-[34px]">
+                {empresa?.logoUrl ? (
+                  <img src={thumb(empresa.logoUrl, 128)} alt="logo" className="absolute left-2 top-1/2 -translate-y-1/2 h-6 max-w-[100px] object-contain bg-white rounded px-1 py-0.5" />
+                ) : null}
+                <span className="font-bold tracking-wider text-[13px]">CONTROLE DE E.P.I.'S</span>
+              </div>
+              <div className="flex items-stretch">
+                <div className="grid grid-cols-1 sm:grid-cols-2 flex-1">
+                  <div className="px-3 py-1.5 border-b border-gray-200"><b className="text-[#0A1E3C]">EMPRESA:</b> {empresa?.razaoSocial}</div>
+                  <div className="px-3 py-1.5 border-b border-gray-200"><b className="text-[#0A1E3C]">CNPJ:</b> {empresa?.cnpj}</div>
+                  <div className="px-3 py-1.5 border-b border-gray-200 break-words"><b className="text-[#0A1E3C]">NOME:</b> {emp?.nomeCompleto}</div>
+                  <div className="px-3 py-1.5 border-b border-gray-200"><b className="text-[#0A1E3C]">CPF:</b> {formatCPF(emp?.cpf)}</div>
+                  <div className="px-3 py-1.5 border-b border-gray-200"><b className="text-[#0A1E3C]">FUNÇÃO:</b> {emp?.funcao || "—"}</div>
+                  <div className="px-3 py-1.5 border-b border-gray-200"><b className="text-[#0A1E3C]">Nº INTERNO:</b> {emp?.numeroInterno || "—"}</div>
+                </div>
+                {emp?.fotoUrl ? (
+                  <div className="w-[92px] border-l border-[#0A1E3C] flex items-center justify-center p-1.5 shrink-0">
+                    <img src={thumb(emp.fotoUrl, 256)} alt={emp?.nomeCompleto || "foto"} className="w-[80px] h-[100px] object-cover rounded border border-gray-300" loading="lazy" />
+                  </div>
+                ) : null}
               </div>
               <div className="bg-gray-50 px-3 py-2 text-[11px] text-justify leading-relaxed border-t border-[#0A1E3C]">
                 <p className="font-bold text-center text-[#0A1E3C] mb-1">TERMO DE COMPROMISSO</p>
@@ -195,7 +231,13 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
                             </p>
                           </div>
                         ) : (
-                          <span className="text-[9px] font-bold text-red-600">SEM ASSINATURA</span>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-[9px] font-bold text-red-600">SEM ASSINATURA</span>
+                            <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1 border-[#0A1E3C] text-[#0A1E3C]"
+                              onClick={() => setSignDelivery(e)}>
+                              <PenLine className="h-3 w-3" /> Coletar assinatura
+                            </Button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -216,6 +258,25 @@ export default function FichaEpiDialog({ employeeId, open, onClose, companyId, c
             </DialogFooter>
           </>
         )}
+
+        {/* Rev. 4646 — Overlay de coleta de assinatura pendente (mesmo fluxo da entrega) */}
+        {signDelivery && emp ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+            <div className="max-w-lg w-full my-auto">
+              <EpiAssinatura
+                employeeId={emp.id}
+                employeeName={emp.nomeCompleto || ""}
+                deliveryId={signDelivery.id}
+                tipo="entrega"
+                tipoAssinante="funcionario"
+                epiNome={signDelivery.nomeEpi || undefined}
+                companyIdOverride={signDelivery.companyId || undefined}
+                onComplete={() => { setSignDelivery(null); refetch(); }}
+                onCancel={() => setSignDelivery(null)}
+              />
+            </div>
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
