@@ -256,6 +256,7 @@ const DashConciliacao         = lazyWithRetry(() => import("./pages/financeiro/d
 const DashCheques             = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashCheques"));
 const DashCartao              = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashCartao"));
 const DashNotasFiscais        = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashNotasFiscais"));
+const DashDivergencias        = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashDivergencias"));
 const ApontamentosCampo = lazyWithRetry(() => import("./pages/ApontamentosCampo"));
 const Feriados = lazyWithRetry(() => import("./pages/Feriados"));
 const ComunicadosInternos = lazyWithRetry(() => import("./pages/ComunicadosInternos"));
@@ -582,6 +583,7 @@ function Router() {
         <Route path="/financeiro/dashboards/pagar" component={() => <RouteGuard component={DashPagar} route="/financeiro/contas-a-pagar" />} />
         <Route path="/financeiro/dashboards/conciliacao" component={() => <RouteGuard component={DashConciliacao} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/dashboards/cheques" component={() => <RouteGuard component={DashCheques} route="/financeiro/cheques" />} />
+        <Route path="/financeiro/dashboards/divergencias" component={() => <RouteGuard component={DashDivergencias} route="/financeiro" />} />
         <Route path="/financeiro/dashboards/cartao" component={() => <RouteGuard component={DashCartao} route="/financeiro/cartao" />} />
         <Route path="/financeiro/dashboards/notas-fiscais" component={() => <RouteGuard component={DashNotasFiscais} route="/financeiro/notas-fiscais" />} />
         <Route path="/financeiro/lancamentos" component={() => <RouteGuard component={FinanceiroLancamentos} route="/financeiro/lancamentos" />} />

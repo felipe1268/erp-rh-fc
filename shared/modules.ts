@@ -151,6 +151,10 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "fechamento-ponto", label: "Fechamento de Ponto", route: "/fechamento-ponto", icon: "Clock" },
       { key: "folha-pagamento", label: "Folha de Pagamento", route: "/folha-pagamento", icon: "FileText" },
       { key: "controle-documentos", label: "Controle de Documentos", route: "/controle-documentos", icon: "FileCheck" },
+      // Rev. 4683 — rota existia no App/menu mas NÃO estava registrada aqui,
+      // então usuário RH comum caía em "Acesso Restrito" (poka-yoke: toda
+      // rota nova do App precisa estar em shared/modules.ts).
+      { key: "documentos-colaborador", label: "Documentos do Colaborador", route: "/documentos-colaborador", icon: "FolderOpen" },
       { key: "vale-alimentacao", label: "Vale Alimentação", route: "/vale-alimentacao", icon: "UtensilsCrossed" },
       { key: "solicitacao-he", label: "Solicitação de HE", route: "/solicitacao-he", icon: "ClipboardList" },
       { key: "apontamentos-campo", label: "Apontamentos de Campo", route: "/apontamentos-campo", icon: "ClipboardList" },

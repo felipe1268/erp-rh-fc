@@ -163,6 +163,7 @@ import { fiscalNotesRouter } from "./routers/fiscalNotes";
 import { contabilidadeRouter } from "./routers/contabilidade";
 import { sefazRouter } from "./routers/sefaz";
 import { nfseEmitidasRouter } from "./routers/nfseEmitidas";
+import { divergenciasRouter } from "./routers/divergencias";
 import { omieRouter } from "./routers/omie";
 import { efdIcmsIpiRouter } from "./routers/efdIcmsIpi";
 import { efdContribuicoesRouter } from "./routers/efdContribuicoes";
@@ -2112,6 +2113,7 @@ export const appRouter = router({
   fiscalNotes: fiscalNotesRouter,
   sefaz: sefazRouter,
   nfseEmitidas: nfseEmitidasRouter,
+  divergencias: divergenciasRouter,
   contabilidade: contabilidadeRouter,
   omie: omieRouter,
   efdIcmsIpi:       efdIcmsIpiRouter,

@@ -1,4 +1,28 @@
 /**
+ * Rev. 4683 - FIX PERMISSAO: DOCUMENTOS DO COLABORADOR P/ USUARIO RH
+ *
+ * Usuaria RH (Kellen) caia em "Acesso Restrito" ao abrir Documentos do
+ * Colaborador: a rota /documentos-colaborador existia no App e no menu,
+ * mas NAO estava registrada em shared/modules.ts (RouteGuard nega rota
+ * desconhecida p/ nao-admin). Registrada no modulo RH & DP — quem tem
+ * acesso ao modulo RH acessa a tela normalmente.
+ */
+/**
+ * Rev. 4682 - POKA-YOKE 2/6: CENTRAL DE DIVERGENCIAS ENTRE MODULOS
+ *
+ * Nova tela Financeiro > Dashboards > Central de Divergencias: cruzamento
+ * automatico SO DE LEITURA entre modulos, listando registros desencontrados
+ * (nada e corrigido sem o usuario). 9 verificacoes:
+ * - Funcionario "Ativo" com aviso previo em andamento (RH x Aviso Previo)
+ * - Desligado ainda alocado em obra / com EPI nao devolvido / seguro ativo
+ * - Cheque x titulo desencontrados (2 sentidos)
+ * - Medicao duplicada no Contas a Receber
+ * - OC entregue sem financeiro + financeiro orfao de OC cancelada
+ * - Ferias com ponto batido no periodo (12 meses)
+ * Check que falha vira aviso "resultado parcial" (regra da Rev. 4681).
+ * Router novo server/routers/divergencias.ts com tenant guard.
+ */
+/**
  * Rev. 4681 - POKA-YOKE 1/6: FALHA NAO PODE PARECER "ZERO" OU "SEM DADOS"
  *
  * Varredura de falhas silenciosas — erro interno agora VIRA AVISO na tela:

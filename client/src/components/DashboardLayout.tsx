@@ -508,6 +508,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
       { icon: Banknote,       label: "Controle de Cheques", path: "/financeiro/dashboards/cheques" },
       { icon: CreditCard,     label: "Cartão de Crédito",   path: "/financeiro/dashboards/cartao" },
       { icon: FileText,       label: "Notas Fiscais",        path: "/financeiro/dashboards/notas-fiscais" },
+      { icon: AlertTriangle,  label: "Central de Divergências", path: "/financeiro/dashboards/divergencias" },
     ],
   },
   {
@@ -1475,6 +1476,7 @@ function DashboardLayoutContent({
         '/financeiro/dashboards/conciliacao': '/financeiro/conciliacao',
         '/financeiro/dashboards/cheques': '/financeiro/cheques',
         '/financeiro/dashboards/cartao': '/financeiro/cartao',
+        '/financeiro/dashboards/divergencias': '/financeiro',
       };
       const filterWithChildren = (items: MenuItem[], checkFn: (item: MenuItem) => boolean): MenuItem[] => {
         return items.map(item => {
