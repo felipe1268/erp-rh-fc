@@ -1,4 +1,33 @@
 /**
+ * Rev. 4701 - PORTAL DO PARCEIRO: CORES FC + TELA DE BOAS-VINDAS DEDICADA
+ *
+ * Feedback do usuario: roxo nao e a cor da FC; queria tela de boas-vindas
+ * SEM lancamentos, so instrucoes + botao "Acessar Sistema".
+ * - Paleta trocada para o padrao FC: azul-marinho (slate-900) + amarelo
+ *   (amber-400), casando com o logo branco/amarelo; header escuro com
+ *   filete amarelo e logo contido (h-9 object-contain).
+ * - Agora sao 3 telas: (1) Boas-vindas: logo, "Bem-vindo, {parceiro}",
+ *   3 cards de instrucoes (cadastro das compras no dia, datas/fechamento
+ *   ciclo 16->15 com exemplo, fluxo de pagamento RH->folha->repasse) e
+ *   botao "Acessar Sistema"; (2) Sistema: KPIs + historico + Novo
+ *   Lancamento; (3) Novo lancamento (mesma UX poka-yoke da Rev. 4698).
+ */
+/**
+ * Rev. 4700 - TELA PORTAL EXTERNO REDESENHADA + CREDENCIAIS COPIAVEIS
+ *
+ * Pedido do usuario: tela "muito ruim e feia" -> redesign moderno; campinhos
+ * de login e senha copiaveis por parceiro.
+ * - Hero gradiente roxo/fuchsia com acoes (Portal do Parceiro, Copiar Link,
+ *   Senha Padrao) e 4 mini-stats (parceiros ativos, com acesso, lancamentos
+ *   e total do mes).
+ * - Barra de filtros em card branco (busca + competencia).
+ * - Cards de parceiro em grid 2 colunas (xl) com avatar de iniciais em
+ *   gradiente e caixa de CREDENCIAIS: Login (CNPJ limpo) e Senha padrao,
+ *   ambos copiam com 1 toque; quando o parceiro ja trocou a senha
+ *   (primeiroAcesso=0) mostra "Definida pelo parceiro" (nao copiavel).
+ * - ultimoLogin formatado via slice (sem new Date(string) - quirk iOS).
+ */
+/**
  * Rev. 4699 - BOTAO "PORTAL DO PARCEIRO" NA TELA ADMIN
  *
  * Pedido do usuario: acesso em 1 clique ao portal publico a partir da tela

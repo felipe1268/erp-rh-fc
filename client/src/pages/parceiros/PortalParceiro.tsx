@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import {
   Globe, Store, Search, Building2, DollarSign, Calendar, User, FileText,
   Plus, Send, Eye, CheckCircle, Clock, XCircle, Upload, ShoppingCart,
-  Shield, Key, Pencil, Trash2, AlertTriangle
+  Shield, Key, Pencil, Trash2, AlertTriangle, Copy
 } from "lucide-react";
 
 // Calcula a competência do desconto a partir da data da compra.
@@ -117,6 +117,16 @@ export default function PortalParceiro() {
     },
     onError: (e) => toast.error(e.message || "Erro ao enviar convite"),
   });
+
+  // Rev. 4700 — copiar credenciais (login/senha padrão) com 1 toque
+  const copiarTexto = async (texto: string, msg: string) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast.success(msg);
+    } catch {
+      toast.info(texto);
+    }
+  };
 
   const copiarLinkPortal = async () => {
     try {
@@ -241,62 +251,57 @@ export default function PortalParceiro() {
   return (
     <DashboardLayout>
       <div className="w-full max-w-[1400px] mx-auto p-4 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <Globe className="w-7 h-7 text-purple-500" /> Portal Externo do Parceiro
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">Gestão de acesso externo para parceiros conveniados lançarem consumo</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              className="bg-purple-600 hover:bg-purple-700"
-              onClick={() => window.open("/portal/login", "_blank")}
-            >
-              <Globe className="w-4 h-4 mr-1.5" /> Portal do Parceiro
-            </Button>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Competência:</label>
-              <Input type="month" value={competencia} onChange={(e) => setCompetencia(e.target.value)} className="w-[180px]" />
+        {/* Rev. 4700 — HERO gradiente */}
+        <div className="rounded-2xl bg-gradient-to-r from-purple-800 via-purple-600 to-fuchsia-600 text-white p-5 sm:p-6 shadow-lg">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold flex items-center gap-2.5">
+                <span className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0"><Globe className="w-6 h-6" /></span>
+                Portal Externo do Parceiro
+              </h1>
+              <p className="text-sm text-purple-100 mt-1.5 break-words">
+                Cada parceiro tem <strong>um acesso único</strong> (login = CNPJ). Ao gerar ou resetar, a senha volta
+                para a padrão <strong className="font-mono bg-white/15 px-1.5 py-0.5 rounded">{senhaPadrao}</strong> com troca obrigatória no 1º acesso.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <Button className="bg-white text-purple-700 hover:bg-purple-50 font-semibold shadow" onClick={() => window.open("/portal/login", "_blank")}>
+                <Globe className="w-4 h-4 mr-1.5" /> Portal do Parceiro
+              </Button>
+              <Button variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20" onClick={copiarLinkPortal}>
+                <Copy className="w-4 h-4 mr-1.5" /> Copiar Link
+              </Button>
+              <Button variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20" onClick={() => { setNovaSenhaPadrao(senhaPadrao); setSenhaPadraoOpen(true); }}>
+                <Key className="w-4 h-4 mr-1.5" /> Senha Padrão
+              </Button>
             </div>
           </div>
-        </div>
-
-        {/* Info Banner — Rev. 4696: senha padrão dinâmica + controle geral */}
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-start gap-3">
-          <Shield className="w-5 h-5 text-purple-500 mt-0.5 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-purple-800">Portal de Acesso para Parceiros</p>
-            <p className="text-xs text-purple-600 mt-1 break-words">
-              Cada parceiro tem <strong>um acesso único</strong> (login = CNPJ). Ao gerar ou resetar, a senha volta para a
-              senha padrão <strong className="font-mono">{senhaPadrao}</strong> e o parceiro é obrigado a trocá-la no primeiro acesso.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-purple-300 text-purple-700 hover:bg-purple-100"
-              onClick={copiarLinkPortal}
-            >
-              <Globe className="w-4 h-4 mr-1" /> Copiar Link do Portal
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-purple-300 text-purple-700 hover:bg-purple-100"
-              onClick={() => { setNovaSenhaPadrao(senhaPadrao); setSenhaPadraoOpen(true); }}
-            >
-              <Key className="w-4 h-4 mr-1" /> Alterar Senha Padrão
-            </Button>
+          {/* Mini-stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-5">
+            {[
+              { label: "Parceiros ativos", value: (parceiros as any[]).filter((p: any) => p.status === "ativo").length, icon: Store },
+              { label: "Com acesso ao portal", value: (parceiros as any[]).filter((p: any) => getAcessoParceiro(p.id)).length, icon: Key },
+              { label: "Lançamentos no mês", value: (lancamentosData as any[] | undefined)?.length ?? 0, icon: ShoppingCart },
+              { label: "Total do mês", value: formatCurrency(((lancamentosData as any[]) || []).reduce((s: number, l: any) => s + parseFloat(l.valor || "0"), 0)), icon: DollarSign },
+            ].map((k: any) => (
+              <div key={k.label} className="rounded-xl bg-white/10 backdrop-blur px-3 py-2.5">
+                <div className="flex items-center gap-1.5 text-purple-100 text-[11px]"><k.icon className="w-3.5 h-3.5" /> {k.label}</div>
+                <p className="text-lg font-bold mt-0.5 break-words leading-tight">{k.value}</p>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Search */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Buscar parceiro..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+        {/* Filtros */}
+        <div className="bg-card border rounded-2xl p-3.5 flex flex-col sm:flex-row gap-3 sm:items-center">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Buscar parceiro por nome ou CNPJ..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 h-10" />
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <label className="text-sm font-medium text-muted-foreground">Competência:</label>
+            <Input type="month" value={competencia} onChange={(e) => setCompetencia(e.target.value)} className="w-[170px] h-10" />
+          </div>
         </div>
 
         {/* Parceiro List */}
@@ -311,103 +316,109 @@ export default function PortalParceiro() {
             Nenhum parceiro conveniado encontrado
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {(parceiros as any[]).map((parceiro: any) => {
               const lancamentos = getLancamentosParceiro(parceiro.id);
               const totalMes = lancamentos.reduce((sum: number, l: any) => sum + parseFloat(l.valor || "0"), 0);
               const pendentes = lancamentos.filter((l: any) => l.status === "pendente").length;
               const acesso = getAcessoParceiro(parceiro.id);
+              const iniciais = String(parceiro.nomeFantasia || parceiro.razaoSocial || "?").split(" ").filter(Boolean).slice(0, 2).map((w: string) => w[0]).join("").toUpperCase();
+              const senhaPropria = acesso && acesso.primeiroAcesso !== 1;
 
               return (
-                <div key={parceiro.id} className="bg-card border rounded-lg p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
+                <div key={parceiro.id} className="bg-card border rounded-2xl shadow-sm overflow-hidden flex flex-col">
+                  {/* Cabeçalho do card */}
+                  <div className="p-4 sm:p-5 flex items-start gap-3">
+                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-500 text-white font-bold flex items-center justify-center text-base shrink-0">
+                      {iniciais}
+                    </div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-foreground">{parceiro.nomeFantasia || parceiro.razaoSocial}</h3>
+                        <h3 className="font-bold text-foreground break-words">{parceiro.nomeFantasia || parceiro.razaoSocial}</h3>
                         <Badge variant="outline" className="text-xs">{tipoLabel(parceiro.tipoConvenio)}</Badge>
-                        <Badge variant={parceiro.status === "ativo" ? "default" : "secondary"}
-                          className={`text-xs ${parceiro.status === "ativo" ? "bg-green-100 text-green-700 border-green-200" : ""}`}>
-                          {parceiro.status === "ativo" ? "Ativo" : parceiro.status}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">CNPJ: {parceiro.cnpj} | {parceiro.emailPrincipal || "Sem e-mail"}</p>
-
-                      {/* Stats */}
-                      <div className="flex flex-wrap gap-4 mt-2 text-xs">
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <ShoppingCart className="w-3.5 h-3.5" /> {lancamentos.length} lançamentos
-                        </span>
-                        <span className="flex items-center gap-1 text-purple-600 font-medium">
-                          <DollarSign className="w-3.5 h-3.5" /> {formatCurrency(totalMes)}
-                        </span>
-                        {pendentes > 0 && (
-                          <span className="flex items-center gap-1 text-yellow-600">
-                            <Clock className="w-3.5 h-3.5" /> {pendentes} pendentes
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Acesso Info */}
-                      <div className="mt-3">
                         {acesso ? (
-                          <div className="flex items-center gap-2 text-xs">
-                            <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">
-                              <Key className="w-3 h-3 mr-1" /> Acesso Ativo
-                            </Badge>
-                            <span className="text-muted-foreground">Login: {acesso.cnpj}</span>
-                            {acesso.ultimoLogin && (
-                              <span className="text-muted-foreground">| Último acesso: {new Date(acesso.ultimoLogin).toLocaleDateString("pt-BR")}</span>
-                            )}
-                          </div>
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs"><Key className="w-3 h-3 mr-1" /> Acesso Ativo</Badge>
                         ) : (
-                          <Badge variant="secondary" className="text-xs">
-                            <XCircle className="w-3 h-3 mr-1" /> Sem acesso ao portal
-                          </Badge>
+                          <Badge variant="secondary" className="text-xs"><XCircle className="w-3 h-3 mr-1" /> Sem acesso</Badge>
                         )}
                       </div>
+                      <p className="text-xs text-muted-foreground mt-1 break-words">{parceiro.emailPrincipal || "Sem e-mail cadastrado"}</p>
+                      <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                        <span className="flex items-center gap-1 text-muted-foreground"><ShoppingCart className="w-3.5 h-3.5" /> {lancamentos.length} lançamentos</span>
+                        <span className="flex items-center gap-1 text-purple-600 font-semibold"><DollarSign className="w-3.5 h-3.5" /> {formatCurrency(totalMes)}</span>
+                        {pendentes > 0 && <span className="flex items-center gap-1 text-amber-600"><Clock className="w-3.5 h-3.5" /> {pendentes} pendentes</span>}
+                        {acesso?.ultimoLogin && <span className="text-muted-foreground">Último acesso: {String(acesso.ultimoLogin).slice(0, 10).split("-").reverse().join("/")}</span>}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2 shrink-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => acesso ? setResetConfirm(parceiro) : handleGerarAcesso(parceiro)}
-                        disabled={gerarAcessoMutation.isPending}
+                  </div>
+
+                  {/* Rev. 4700 — Credenciais copiáveis */}
+                  <div className="px-4 sm:px-5 pb-3">
+                    <div className="rounded-xl bg-purple-50/70 border border-purple-100 p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        onClick={() => copiarTexto(String(parceiro.cnpj || "").replace(/\D/g, ""), "Login (CNPJ) copiado")}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-white border border-purple-200 px-3 py-2 hover:border-purple-400 hover:bg-purple-50 transition text-left"
                       >
-                        <Key className="w-4 h-4 mr-1" /> {acesso ? "Resetar Senha" : "Gerar Acesso"}
-                      </Button>
-                      {acesso && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setEditAcesso(acesso);
-                            setEditAcessoForm({
-                              nomeResponsavel: acesso.nomeResponsavel || "",
-                              emailResponsavel: acesso.emailResponsavel || "",
-                            });
-                          }}
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase tracking-wide text-purple-500 font-semibold">Login (CNPJ)</p>
+                          <p className="text-sm font-mono font-medium text-foreground break-all">{String(parceiro.cnpj || "").replace(/\D/g, "") || "—"}</p>
+                        </div>
+                        <Copy className="w-4 h-4 text-purple-400 shrink-0" />
+                      </button>
+                      {senhaPropria ? (
+                        <div className="flex items-center justify-between gap-2 rounded-lg bg-white border border-emerald-200 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-emerald-600 font-semibold">Senha</p>
+                            <p className="text-sm font-medium text-emerald-700">Definida pelo parceiro</p>
+                          </div>
+                          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => copiarTexto(senhaPadrao, "Senha padrão copiada")}
+                          className="flex items-center justify-between gap-2 rounded-lg bg-white border border-purple-200 px-3 py-2 hover:border-purple-400 hover:bg-purple-50 transition text-left"
                         >
-                          <Pencil className="w-4 h-4 mr-1" /> Editar
-                        </Button>
+                          <div className="min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-purple-500 font-semibold">{acesso ? "Senha (1º acesso)" : "Senha padrão"}</p>
+                            <p className="text-sm font-mono font-medium text-foreground break-all">{senhaPadrao}</p>
+                          </div>
+                          <Copy className="w-4 h-4 text-purple-400 shrink-0" />
+                        </button>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-purple-300 text-purple-700 hover:bg-purple-50"
-                        onClick={() => {
-                          setConviteParceiro(parceiro);
-                          setConviteForm({
-                            email: acesso?.emailResponsavel || parceiro.emailPrincipal || "",
-                            nomeResponsavel: acesso?.nomeResponsavel || parceiro.responsavelNome || "",
-                          });
-                        }}
-                      >
-                        <Send className="w-4 h-4 mr-1" /> Enviar Convite
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => { setSimulacaoParceiro(parceiro); setSimulacaoOpen(true); }}>
-                        <Eye className="w-4 h-4 mr-1" /> Simular Portal
-                      </Button>
                     </div>
+                  </div>
+
+                  {/* Ações */}
+                  <div className="mt-auto px-4 sm:px-5 py-3 border-t bg-muted/30 flex flex-wrap gap-2">
+                    <Button
+                      variant="outline" size="sm"
+                      onClick={() => acesso ? setResetConfirm(parceiro) : handleGerarAcesso(parceiro)}
+                      disabled={gerarAcessoMutation.isPending}
+                    >
+                      <Key className="w-4 h-4 mr-1" /> {acesso ? "Resetar Senha" : "Gerar Acesso"}
+                    </Button>
+                    {acesso && (
+                      <Button variant="outline" size="sm"
+                        onClick={() => {
+                          setEditAcesso(acesso);
+                          setEditAcessoForm({ nomeResponsavel: acesso.nomeResponsavel || "", emailResponsavel: acesso.emailResponsavel || "" });
+                        }}>
+                        <Pencil className="w-4 h-4 mr-1" /> Editar
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                      onClick={() => {
+                        setConviteParceiro(parceiro);
+                        setConviteForm({
+                          email: acesso?.emailResponsavel || parceiro.emailPrincipal || "",
+                          nomeResponsavel: acesso?.nomeResponsavel || parceiro.responsavelNome || "",
+                        });
+                      }}>
+                      <Send className="w-4 h-4 mr-1" /> Enviar Convite
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => { setSimulacaoParceiro(parceiro); setSimulacaoOpen(true); }}>
+                      <Eye className="w-4 h-4 mr-1" /> Simular Portal
+                    </Button>
                   </div>
                 </div>
               );

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4701** — Portal do Parceiro nas cores FC (azul-marinho + amarelo): tela de boas-vindas dedicada (instruções de cadastro, datas/fechamento e fluxo de pagamento + "Acessar Sistema") separada da tela de lançamentos.
+- **Rev. 4700** — Tela Portal Externo redesenhada: hero gradiente com mini-stats, cards de parceiro em grid com credenciais copiáveis (login CNPJ + senha padrão em 1 toque; "definida pelo parceiro" após a troca).
 - **Rev. 4699** — Botão "Portal do Parceiro" no header da tela Portal Externo (abre /portal/login em nova aba).
 - **Rev. 4698** — Portal do Parceiro repaginado: 2 páginas touch-first (boas-vindas com hero FC + KPIs; lançamento com galeria de fotos dos colaboradores, anexo de qualquer arquivo e confirmação poka-yoke); fotoUrl no buscarFuncionarios; guard de ownership no uploadNotaFiscal.
 - **Rev. 4697** — Portal do Parceiro: convite de boas-vindas por e-mail (cadastra responsável, cria acesso com senha padrão se faltar, passo a passo + link) e botão Copiar Link do Portal.
