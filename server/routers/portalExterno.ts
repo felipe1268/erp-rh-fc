@@ -1989,8 +1989,18 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
+      // Rev. 4698 — guard: o lançamento precisa pertencer ao PRÓPRIO parceiro (antes: update por id puro = IDOR)
+      const [lanc] = await db.select({ id: lancamentosParceiros.id }).from(lancamentosParceiros).where(and(
+        eq(lancamentosParceiros.id, input.lancamentoId),
+        eq(lancamentosParceiros.parceiroId, decoded.parceiroId),
+      ));
+      if (!lanc) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
+      // Limite de 10MB também no servidor (base64 ≈ 4/3 do tamanho real)
+      if (input.fileBase64.length > 14 * 1024 * 1024) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo muito grande (máx. 10MB)" });
+      }
       const buffer = Buffer.from(input.fileBase64, "base64");
-      const ext = input.fileName.split(".").pop() || "pdf";
+      const ext = (input.fileName.split(".").pop() || "pdf").replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "pdf";
       const fileKey = `parceiros/notas/${decoded.parceiroId}/${input.lancamentoId}-${Date.now()}.${ext}`;
       const { url } = await storagePut(fileKey, buffer, input.contentType);
       await db.update(lancamentosParceiros).set({ comprovanteUrl: url }).where(eq(lancamentosParceiros.id, input.lancamentoId));
@@ -2057,6 +2067,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         funcao: employees.funcao,
         cargo: employees.cargo,
         status: employees.status,
+        fotoUrl: employees.fotoUrl, // Rev. 4698 — foto no portal do parceiro
       }).from(employees).where(and(
         eq(employees.companyId, decoded.companyId),
         eq(employees.status, "Ativo")

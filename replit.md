@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4698** — Portal do Parceiro repaginado: 2 páginas touch-first (boas-vindas com hero FC + KPIs; lançamento com galeria de fotos dos colaboradores, anexo de qualquer arquivo e confirmação poka-yoke); fotoUrl no buscarFuncionarios; guard de ownership no uploadNotaFiscal.
 - **Rev. 4697** — Portal do Parceiro: convite de boas-vindas por e-mail (cadastra responsável, cria acesso com senha padrão se faltar, passo a passo + link) e botão Copiar Link do Portal.
 - **Rev. 4696** — Portal Externo do Parceiro: senha padrão configurável por empresa (default mudar123, troca obrigatória no 1º acesso), reset com confirmação, botão Editar acesso (nome/e-mail) e tenant guard no gerarAcesso.
 - **Rev. 4695** — Dashboard Parceiros: KPIs, gráficos e drill-down agora agrupam pela competência do ciclo de desconto (16→15), igual à tela de Lançamentos; antes agrupava por mês-calendário e os números divergiam. Auditoria confirmou dados 100% corretos no banco.

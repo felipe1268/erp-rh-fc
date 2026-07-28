@@ -1,4 +1,24 @@
 /**
+ * Rev. 4698 - PORTAL DO PARCEIRO REPAGINADO (2 PAGINAS, TOUCH-FIRST)
+ *
+ * Pedido do usuario: pagina "muito pobre" -> redesign moderno com o padrao
+ * FC (roxo/fuchsia, logo FC no header) e sistema poka-yoke.
+ * - Novo componente PortalParceiroApp.tsx (PortalDashboard delega quando
+ *   tipo="parceiro"; lado terceiro intocado).
+ * - Pagina 1 (boas-vindas): hero com logo FC, KPIs do mes, "Como funciona"
+ *   em 4 passos, lista de lancamentos com status e dialog de detalhe.
+ * - Pagina 2 (lancamento): galeria de TODOS os colaboradores ativos com
+ *   FOTO (?w=128 lazy, fallback iniciais) + busca instantanea por nome/CPF;
+ *   dados da compra com competencia do desconto exibida (regra 16->15);
+ *   anexo de QUALQUER arquivo (max 10MB); barra fixa com total.
+ * - Poka-yoke: data futura bloqueada, valor>0 obrigatorio, botao so ativa
+ *   completo, dialog de CONFIRMACAO com resumo (foto, valor, competencia,
+ *   comprovante) e aviso quando sem comprovante; isPending guards.
+ * - Backend: buscarFuncionarios agora devolve fotoUrl; uploadNotaFiscal
+ *   ganhou guard de ownership (lancamento do proprio parceiro; antes IDOR)
+ *   e sanitizacao da extensao do arquivo.
+ */
+/**
  * Rev. 4697 - PORTAL DO PARCEIRO: CONVITE POR E-MAIL + LINK DO PORTAL
  *
  * Pedido do usuario: onboarding completo do parceiro. O portal independente
