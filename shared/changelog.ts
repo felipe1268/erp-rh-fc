@@ -1,4 +1,22 @@
 /**
+ * Rev. 4711 - FERIAS AGENDADA GERA TITULO AUTOMATICO NO CONTAS A PAGAR
+ *
+ * Pedido do usuario: ferias agendada precisa aparecer no Financeiro (caso
+ * real: Caio Matheus saiu de ferias e o pagamento de R$ 3.068,97 nao
+ * existia no Contas a Pagar).
+ * - Novo motor sincronizarFinanceiroFerias (avisoPrevioFerias.ts): ao
+ *   agendar/atualizar ferias (status agendada/em_gozo com valor salvo),
+ *   gera titulo 'a_pagar' origem_modulo='ferias' (FERIAS - MAO DE OBRA),
+ *   vencimento = dataPagamento (senao inicio-2d, art. 145 CLT), obra do
+ *   colaborador como centro de custo. Se titulo a_pagar ja existe,
+ *   SINCRONIZA valor/vencimento (nunca duplica); titulo com baixa e
+ *   intocavel. Parse de valor BR-aware (varchar guarda "3.068,97").
+ * - Cancelar agendamento / excluir periodo cancela o titulo (se a_pagar).
+ * - Anti-duplicidade: vacation_periods.financeiro_entry_id + indice unico
+ *   parcial uq_fin_entries_ferias (ColFix Rev. 4711).
+ * - Backfill: 39 ferias agendadas/em gozo existentes ganharam titulo.
+ */
+/**
  * Rev. 4710 - REGRA DE OURO: DINHEIRO E DATA EM FORMATO BR (MODULO PARCEIROS)
  *
  * Pedido do usuario: todo valor em dinheiro separado por ponto (milhar) e

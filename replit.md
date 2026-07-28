@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4711** — Férias agendada gera título automático no Contas a Pagar (FÉRIAS - MÃO DE OBRA, venc. = data de pagamento), sincroniza valor/vencimento em edição, cancela junto com o agendamento; backfill das férias já agendadas.
 - **Rev. 4710** — Regra de ouro formato BR: máscara de dinheiro (6.000,00) nos valores de Parceiros (cadastro + lançamentos), edição interna normaliza valor BR, reprocessa competência ao mudar data e revalida crédito.
 - **Rev. 4709** — Formulário de parceiro redesenhado: abas em pills, cards por seção, aba Convênio com motor de crédito visual (badge Ligado/Desligado, toggle, resumo "como vai funcionar"), barra de salvar fixa.
 - **Rev. 4708** — Lançamento manual de convênio gera alerta informativo (pop-up ao logar) para os usuários master — não bloqueia o fluxo, só dá ciência.

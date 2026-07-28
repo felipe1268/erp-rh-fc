@@ -4,6 +4,7 @@
 - [QR Verificar Aptidão — live, não snapshot](qr-aptidao-live-not-snapshot.md) — employee_aptidao é snapshot manual defasado; leitores calculam ao vivo de asos/trainings (regras do recalcAll, apto|inapto).
 - [QR restrição operacional — saída canônica](qr-restricao-canonica-lgpd.md) — rota pública nunca faz pass-through de asos.restricoes; só frases fixas do dicionário canônico (blacklist de texto livre vaza — LGPD).
 - [Alertas pessoais in-app](user-alerts-inapp.md) — user_alerts + pop-up global; reprovação/rejeição avisa o criador via criarUserAlert; nunca zerar faltas de linha compartilhada no ponto.
+- [Férias ↔ Contas a Pagar](ferias-financeiro-link.md) — férias agendada gera título automático; toda mutation que muda status de vacationPeriods deve reconciliar o título; parse de valor SEMPRE BR-aware.
 - [Aviso Prévio ↔ Contas a Pagar](aviso-previo-financeiro-link.md) — baixa manual e envio ao Financeiro são vias EXCLUSIVAS; advisory lock 477001 + índice único parcial (só no Neon); quitar baixa dispara conclusão/desligamento.
 - [DIXI group-key digit collision](dixi-groupkey-digit-collision.md) — relógio pode ter código "jfcNNN" no Nome; chave de agrupamento por pessoa deve PRESERVAR dígitos ou funde 2 funcionários.
 - [Equipamento utilização fonte de dados](equipamento-utilizacao-fonte-dados.md) — utilização diária vem de warehouse_loans (não equipamento_locado_eventos); link via almoxarifado_itens.equipamento_vinculado_id.

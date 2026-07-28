@@ -7868,6 +7868,23 @@ REGRAS DE EXTRAÇÃO:
         }
       } catch (e: any) { console.error("[ColFix Rev.4690] FALHA tabela user_alerts:", e?.message ?? e); }
 
+      // Rev. 4711 — Férias agendada gera título automático no Contas a Pagar.
+      // Coluna de vínculo + índice único parcial anti-duplicidade (mesmo padrão
+      // do Aviso Prévio). Bloco isolado (colfix-do-block-silent-rollback).
+      try {
+        const db4711 = await getDb();
+        if (db4711) {
+          const { sql: sql4711 } = await import("drizzle-orm");
+          await db4711.execute(sql4711`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS financeiro_entry_id integer`);
+          await db4711.execute(sql4711`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_entries_ferias
+              ON financial_entries (origem_modulo, origem_id)
+              WHERE origem_modulo = 'ferias' AND status <> 'cancelado'
+          `);
+          console.log("[ColFix Rev.4711] vacation_periods.financeiro_entry_id + índice uq_fin_entries_ferias garantidos.");
+        }
+      } catch (e: any) { console.error("[ColFix Rev.4711] FALHA coluna/índice férias:", e?.message ?? e); }
+
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos.
       // Rev. 4605: só marca se o bloco crítico (índice único de projeções) passou.
       if (colFix4605Ok) {

@@ -3733,6 +3733,8 @@ export const vacationPeriods = pgTable("vacation_periods", {
         numeroPeriodo: integer().default(1),
         faltasInjustificadas: integer("faltas_injustificadas"),
         diasDireitoOriginal: integer("dias_direito_original"),
+        // Rev. 4711 — vínculo com o título automático no Contas a Pagar
+        financeiroEntryId: integer("financeiro_entry_id"),
 },
 (table) => [
         index("vp_company").on(table.companyId),

@@ -167,6 +167,136 @@ export async function concluirAvisoPorBaixaFinanceira(opts: {
 }
 
 /**
+ * Rev. 4711 — Férias agendada → título automático no Contas a Pagar.
+ *
+ * Regras (mesmo padrão do Aviso Prévio ↔ Financeiro):
+ * - Chamado quando a férias passa a agendada/em_gozo ou tem valores/datas alterados.
+ * - Valor = valorLiquido (se calculado) senão valorTotal. Sem valor > 0 = não gera.
+ * - Vencimento = dataPagamento (senão dataInicio − 2 dias, art. 145 CLT).
+ * - Dedup: vínculo vacation_periods.financeiro_entry_id + índice único parcial
+ *   uq_fin_entries_ferias (origem_modulo='ferias' AND status<>'cancelado').
+ * - Se já existe título 'a_pagar', SINCRONIZA valor/vencimento (não duplica).
+ * - Título com baixa/pago é intocável (não sobrescreve nem cancela).
+ * - Never-throw: falha aqui não pode derrubar o fluxo de RH (loga e segue).
+ */
+export async function sincronizarFinanceiroFerias(periodoId: number, userName: string): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const [p] = await db.select().from(vacationPeriods).where(eq(vacationPeriods.id, periodoId));
+    if (!p || p.deletedAt) return;
+    if (!['agendada', 'em_gozo', 'concluida'].includes(p.status) || !p.dataInicio) return;
+
+    // BR-aware: valores gravados ora "3068.97" ora "3.068,97" (varchar-br-decimal-cast)
+    const parse = (v: any) => {
+      let s = String(v ?? '').trim();
+      if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+      const n = parseFloat(s);
+      return isFinite(n) ? n : 0;
+    };
+    const valor = parse((p as any).valorLiquido) > 0 ? parse((p as any).valorLiquido) : parse(p.valorTotal);
+    if (valor <= 0) return; // sem cálculo salvo ainda — gera quando o RH salvar os valores
+
+    let venc = p.dataPagamento as string | null;
+    if (!venc) {
+      const dt = new Date(p.dataInicio + 'T12:00:00');
+      dt.setDate(dt.getDate() - 2);
+      venc = dt.toISOString().split('T')[0];
+    }
+
+    const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, p.employeeId));
+    const nome = emp?.nome ?? `Funcionário #${p.employeeId}`;
+    const fmtBr = (d: string | null) => d ? d.split('-').reverse().join('/') : '';
+    const desc = `Férias — ${nome} (${fmtBr(p.dataInicio)} a ${fmtBr(p.dataFim)})`;
+
+    // Obra atual (se alocado) para centro de custo
+    let obraId: number | null = null; let obraNome: string | null = null;
+    try {
+      const [aloc] = await db.select({ obraId: obraFuncionarios.obraId, obraNome: obras.nome })
+        .from(obraFuncionarios)
+        .leftJoin(obras, eq(obras.id, obraFuncionarios.obraId))
+        .where(and(eq(obraFuncionarios.employeeId, p.employeeId), eq(obraFuncionarios.isActive, 1)))
+        .orderBy(desc2Ferias()).limit(1);
+      if (aloc) { obraId = aloc.obraId; obraNome = aloc.obraNome ?? null; }
+    } catch { /* sem obra = lançamento sem centro de custo */ }
+
+    // Título ativo já existente? (vínculo OU varredura por origem — cobre vínculo perdido)
+    const existRes: any = await db.execute(sql`
+      SELECT id, status FROM financial_entries
+      WHERE origem_modulo = 'ferias' AND origem_id = ${p.id} AND company_id = ${p.companyId} AND status <> 'cancelado'
+      ORDER BY id DESC LIMIT 1
+    `);
+    const exist = (Array.isArray(existRes) ? existRes[0] : existRes?.rows?.[0]) as any;
+
+    if (exist?.id) {
+      if (exist.status === 'a_pagar') {
+        await db.execute(sql`
+          UPDATE financial_entries
+          SET valor_previsto = ${valor.toFixed(2)}, data_vencimento = ${venc},
+              data_competencia = ${p.dataInicio}, descricao = ${desc}, origem_descricao = ${desc},
+              obra_id = COALESCE(obra_id, ${obraId}), obra_nome = COALESCE(obra_nome, ${obraNome}),
+              updated_at = NOW()
+          WHERE id = ${exist.id} AND company_id = ${p.companyId} AND status = 'a_pagar'
+        `);
+      }
+      if (!(p as any).financeiroEntryId) {
+        await db.update(vacationPeriods).set({ financeiroEntryId: Number(exist.id) } as any).where(eq(vacationPeriods.id, p.id));
+      }
+      return;
+    }
+
+    const res: any = await db.execute(sql`
+      INSERT INTO financial_entries (
+        company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+        valor_previsto, data_competencia, data_vencimento, status,
+        origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at
+      ) VALUES (
+        ${p.companyId}, ${obraId}, ${obraNome}, ${'FÉRIAS - MÃO DE OBRA'}, 'despesa', 'variavel',
+        ${valor.toFixed(2)}, ${p.dataInicio}, ${venc}, 'a_pagar',
+        'ferias', ${p.id}, ${desc}, ${desc}, NOW(), NOW()
+      )
+      ON CONFLICT DO NOTHING
+      RETURNING id
+    `);
+    const newId = Number((Array.isArray(res) ? res[0] : res?.rows?.[0])?.id) || null;
+    if (newId) {
+      await db.update(vacationPeriods).set({ financeiroEntryId: newId } as any).where(eq(vacationPeriods.id, p.id));
+      console.log(`[FeriasFinanceiro] Férias #${p.id} (${nome}): título #${newId} de R$ ${valor.toFixed(2)} gerado no Contas a Pagar (venc. ${venc}) por ${userName}.`);
+    }
+  } catch (e: any) {
+    console.error(`[FeriasFinanceiro] Falha ao gerar/sincronizar título da férias #${periodoId}:`, e?.message ?? e);
+  }
+}
+// desc() de drizzle já está importado como `desc`; alias p/ evitar sombra em escopo local
+function desc2Ferias() { return desc(obraFuncionarios.id); }
+
+/**
+ * Rev. 4711 — Cancela o título do Contas a Pagar vinculado à férias quando o
+ * agendamento é cancelado ou o período é excluído. Só cancela título 'a_pagar';
+ * título com baixa ativa é intocável (fica para o Financeiro resolver).
+ */
+export async function cancelarFinanceiroFerias(periodoId: number, motivo: string): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    // Defesa em profundidade (anti-IDOR): amarra o cancelamento ao tenant do período
+    const [per] = await db.select({ companyId: vacationPeriods.companyId }).from(vacationPeriods).where(eq(vacationPeriods.id, periodoId));
+    if (!per) return;
+    const res: any = await db.execute(sql`
+      UPDATE financial_entries
+      SET status = 'cancelado', observacoes = CONCAT(COALESCE(observacoes,''), ${'\n[Cancelado automaticamente: ' + motivo + ']'}), updated_at = NOW()
+      WHERE origem_modulo = 'ferias' AND origem_id = ${periodoId} AND company_id = ${per.companyId} AND status = 'a_pagar'
+      RETURNING id
+    `);
+    const rows = Array.isArray(res) ? res : (res?.rows ?? []);
+    if (rows.length) console.log(`[FeriasFinanceiro] Férias #${periodoId}: título(s) ${rows.map((r: any) => '#' + r.id).join(', ')} cancelado(s) — ${motivo}.`);
+    await db.update(vacationPeriods).set({ financeiroEntryId: null } as any).where(eq(vacationPeriods.id, periodoId));
+  } catch (e: any) {
+    console.error(`[FeriasFinanceiro] Falha ao cancelar título da férias #${periodoId}:`, e?.message ?? e);
+  }
+}
+
+/**
  * Rev. 3977 — Lê o saldo (em minutos) do Banco de Horas do empregado, usado para
  * compor o acerto rescisório (provento se positivo, desconto se negativo). Sem
  * linha na tabela = saldo 0 (empregado nunca usou banco de horas).
@@ -3842,7 +3972,7 @@ export const avisoPrevioFeriasRouter = router({
           dataPagamento = dt.toISOString().split("T")[0];
         }
         
-        await db.insert(vacationPeriods).values({
+        const criadoFerias = await db.insert(vacationPeriods).values({
           companyId: input.companyId,
           employeeId: input.employeeId,
           periodoAquisitivoInicio: input.periodoAquisitivoInicio,
@@ -3868,11 +3998,14 @@ export const avisoPrevioFeriasRouter = router({
           aprovadoPor: ctx.user.name ?? 'Sistema',
           aprovadoPorUserId: ctx.user.id,
           observacoes: input.observacoes || null,
-        });
+        }).returning({ id: vacationPeriods.id });
 
         // Corrige ponto automaticamente se já há período de gozo definido
         if (input.dataInicio) {
           corrigirPontoFuncionario(input.companyId, input.employeeId).catch(() => {});
+          // Rev. 4711 — férias já nasce agendada → gera título no Contas a Pagar
+          const novoId = criadoFerias?.[0]?.id;
+          if (novoId) sincronizarFinanceiroFerias(novoId, ctx.user.name ?? 'Sistema').catch(() => {});
         }
 
         // Rev. 4679 — poka-yoke: agendou férias → Solicitação/Aviso de Férias
@@ -3936,6 +4069,12 @@ export const avisoPrevioFeriasRouter = router({
         // Rev. 3273 — ao passar a "agendada", carimba a data de agendamento preservando a 1ª (COALESCE)
         if (updateData.status === 'agendada') updateData.dataAgendamento = sql`COALESCE("dataAgendamento", NOW())`;
         await db.update(vacationPeriods).set(updateData).where(eq(vacationPeriods.id, id));
+
+        // Rev. 4711 — agendou ou mexeu em valores/datas → gera/sincroniza o
+        // título no Contas a Pagar (never-throw, não bloqueia o RH)
+        if (input.status || input.dataInicio || input.dataPagamento || input.valorTotal || input.valorLiquido) {
+          sincronizarFinanceiroFerias(id, ctx.user.name ?? 'Sistema').catch(() => {});
+        }
 
         // Busca companyId e employeeId para sincronização de status e correção de ponto
         const [periodo] = await db.select({ companyId: vacationPeriods.companyId, employeeId: vacationPeriods.employeeId })
@@ -4042,6 +4181,8 @@ export const avisoPrevioFeriasRouter = router({
           deletedBy: ctx.user.name ?? 'Sistema',
           deletedByUserId: ctx.user.id,
         } as any).where(eq(vacationPeriods.id, input.id));
+        // Rev. 4711 — excluiu o período → cancela o título do Contas a Pagar (se a_pagar)
+        cancelarFinanceiroFerias(input.id, `período de férias excluído por ${ctx.user.name}`).catch(() => {});
         return { success: true };
       }),
 
@@ -4217,6 +4358,8 @@ export const avisoPrevioFeriasRouter = router({
           } as any).where(eq(vacationPeriods.id, id));
           if (p) employeeIdsProcessados.add(p.employeeId);
           confirmados++;
+          // Rev. 4711 — confirmada como paga fora do Contas a Pagar → cancela título a_pagar (evita pagamento em dobro)
+          cancelarFinanceiroFerias(id, `férias confirmadas como pagas por ${ctx.user.name} (fora do Contas a Pagar)`).catch(() => {});
         }
         for (const empId of employeeIdsProcessados) {
           const outrasEmGozo = await db.select({ id: vacationPeriods.id }).from(vacationPeriods)
@@ -4264,6 +4407,8 @@ export const avisoPrevioFeriasRouter = router({
             aprovadoPorUserId: ctx.user.id,
           } as any).where(eq(vacationPeriods.id, v.id));
           confirmados++;
+          // Rev. 4711 — confirmada como paga fora do Contas a Pagar → cancela título a_pagar
+          cancelarFinanceiroFerias(v.id, `férias confirmadas como pagas por ${ctx.user.name} (fora do Contas a Pagar)`).catch(() => {});
         }
         const outrasEmGozo2 = await db.select({ id: vacationPeriods.id }).from(vacationPeriods)
           .where(and(eq(vacationPeriods.employeeId, input.employeeId), eq(vacationPeriods.status, 'em_gozo'), isNull(vacationPeriods.deletedAt)));
@@ -4315,6 +4460,8 @@ export const avisoPrevioFeriasRouter = router({
           observacoes: novaObs,
           vencida: novoStatus === 'vencida' ? 1 : 0,
         } as any).where(eq(vacationPeriods.id, input.id));
+        // Rev. 4711 — conclusão cancelada volta p/ pendente/vencida → título a_pagar não faz mais sentido
+        cancelarFinanceiroFerias(input.id, `conclusão de férias cancelada por ${ctx.user.name}`).catch(() => {});
         return { success: true, novoStatus };
       }),
 
@@ -4382,6 +4529,10 @@ export const avisoPrevioFeriasRouter = router({
             details: `Férias revertidas de Em Gozo para ${novoStatus}. Motivo: ${input.motivo}`,
           });
 
+          // Rev. 4711 — agendada mantém/sincroniza o título; pendente (sem data) cancela
+          if (novoStatus === 'agendada') sincronizarFinanceiroFerias(input.id, ctx.user.name ?? 'Sistema').catch(() => {});
+          else cancelarFinanceiroFerias(input.id, `férias revertidas para pendente por ${ctx.user.name}`).catch(() => {});
+
           return { success: true, novoStatus };
         } catch (err: any) {
           console.error('[reverterEmGozo] Erro:', err);
@@ -4431,6 +4582,9 @@ export const avisoPrevioFeriasRouter = router({
           // Limpa eventual projeção de ponto criada pelo agendamento
           corrigirPontoFuncionario(periodo.companyId, periodo.employeeId).catch(() => {});
 
+          // Rev. 4711 — cancela o título do Contas a Pagar (se ainda a_pagar)
+          cancelarFinanceiroFerias(input.id, `agendamento de férias cancelado por ${ctx.user.name}`).catch(() => {});
+
           await createAuditLog({
             userId: ctx.user.id,
             userName: ctx.user.name ?? 'Sistema',
@@ -4469,6 +4623,8 @@ export const avisoPrevioFeriasRouter = router({
           status: 'em_gozo',
           observacoes: novaObs,
         } as any).where(eq(vacationPeriods.id, input.id));
+        // Rev. 4711 — voltou p/ em_gozo → garante título no Contas a Pagar (se não houver)
+        sincronizarFinanceiroFerias(input.id, ctx.user.name ?? 'Sistema').catch(() => {});
         return { success: true };
       }),
 
@@ -4602,6 +4758,9 @@ export const avisoPrevioFeriasRouter = router({
         } as any).where(eq(vacationPeriods.id, input.id));
 
         corrigirPontoFuncionario(periodo.companyId, periodo.employeeId).catch(() => {});
+
+        // Rev. 4711 — férias agendada pelo RH → gera/sincroniza título no Contas a Pagar
+        sincronizarFinanceiroFerias(input.id, ctx.user.name ?? 'Sistema').catch(() => {});
 
         return {
           success: true,
