@@ -1,9 +1,10 @@
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb, detectarInconsistenciaPonto } from "../db";
+import { getDb, detectarInconsistenciaPonto, allocateEmployeeToObra } from "../db";
 import {
   dixiAfdImportacoes, dixiAfdMarcacoes, employees, obras, obraSns, dixiDevices,
   timeRecords, timeInconsistencies, unmatchedDixiRecords, dixiNameMappings,
   obraHorasRateio, systemCriteria, terminationNotices, obraFuncionarios,
+  obraPontoInconsistencies,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray, isNull, like, or, between } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -789,18 +790,21 @@ export const dixiPontoRouter = router({
       // Para cada funcionário que bateu ponto nesta obra, verificar se é a obra principal dele
       const uniqueEmpIds = Array.from(new Set(timeRecordsToInsert.map(r => r.employeeId)));
       let obraInconsistenciasCount = 0;
+      let autoTransferidos = 0; // Rev. 4712 — transferências automáticas pelo ponto
       if (obraId && uniqueEmpIds.length > 0) {
         // Buscar alocações ativas dos funcionários
         const alocacoes = await db.select({
           employeeId: obraFuncionarios.employeeId,
           obraId: obraFuncionarios.obraId,
+          dataInicio: obraFuncionarios.dataInicio,
         }).from(obraFuncionarios)
           .where(and(
             companyFilter(obraFuncionarios.companyId, input),
             eq(obraFuncionarios.isActive, 1),
             sql`${obraFuncionarios.employeeId} IN (${sql.raw(uniqueEmpIds.join(","))})`,
           ));
-        const alocMap = Object.fromEntries(alocacoes.map(a => [a.employeeId, a.obraId]));
+        const alocMap: Record<number, { obraId: number; dataInicio: string | null }> =
+          Object.fromEntries(alocacoes.map(a => [a.employeeId, { obraId: a.obraId, dataInicio: a.dataInicio }]));
         // Agrupar datas por funcionário
         const empDatas: Record<number, Set<string>> = {};
         for (const rec of timeRecordsToInsert) {
@@ -808,20 +812,73 @@ export const dixiPontoRouter = router({
           empDatas[rec.employeeId].add(rec.data);
         }
         for (const empId of uniqueEmpIds) {
-          const obraAlocada = alocMap[empId];
+          const aloc = alocMap[empId];
           // Se funcionário tem obra alocada diferente da obra do ponto, ou não tem obra alocada
-          if (obraAlocada && obraAlocada !== obraId) {
-            const datas = empDatas[empId];
-            if (datas) {
-              for (const dataPonto of Array.from(datas)) {
-                await detectarInconsistenciaPonto({
-                  companyId: input.companyId,
+          if (aloc && aloc.obraId !== obraId) {
+            const datas = Array.from(empDatas[empId] ?? []).sort();
+            for (const dataPonto of datas) {
+              await detectarInconsistenciaPonto({
+                companyId: input.companyId,
+                employeeId: empId,
+                obraPontoId: obraId,
+                dataPonto,
+                snRelogio: header.sn,
+              });
+              obraInconsistenciasCount++;
+            }
+            // ===== Rev. 4712 — TRANSFERÊNCIA AUTOMÁTICA PELO PONTO =====
+            // O ponto é a prova de onde a pessoa trabalhou: se o funcionário
+            // bateu ponto no relógio DESTA obra e a alocação ativa é outra,
+            // transferimos automaticamente (o encarregado esquecia de fazer a
+            // transferência manual). Salvaguardas:
+            //  1. Só transfere se a batida mais RECENTE do arquivo for >= ao
+            //     início da alocação atual (batida atrasada de arquivo antigo
+            //     não desfaz uma transferência manual mais nova).
+            //  2. Se no MESMO dia houver batida em outra obra (2 obras no dia),
+            //     transfere mesmo assim, mas o alerta fica PENDENTE p/ o RH
+            //     decidir. Sem conflito, o alerta é resolvido como
+            //     "transferido" automaticamente (rastreio completo).
+            const maxData = datas[datas.length - 1];
+            if (maxData && !(aloc.dataInicio && aloc.dataInicio > maxData)) {
+              try {
+                // Datas DESTE import em que o funcionário também tem batida em
+                // OUTRA obra (conflito de 2 obras no mesmo dia) — esses alertas
+                // ficam PENDENTES para o RH; os demais são resolvidos.
+                const conflitos = await db.select({ data: timeRecords.data }).from(timeRecords)
+                  .where(and(
+                    companyFilter(timeRecords.companyId, input),
+                    eq(timeRecords.employeeId, empId),
+                    inArray(timeRecords.data, datas),
+                    sql`${timeRecords.obraId} <> ${obraId}`,
+                  ));
+                const datasComConflito = new Set(conflitos.map(c => String(c.data)));
+                await allocateEmployeeToObra({
+                  obraId: obraId!,
                   employeeId: empId,
-                  obraPontoId: obraId,
-                  dataPonto,
-                  snRelogio: header.sn,
+                  companyId: input.companyId,
+                  dataInicio: maxData,
+                  motivo: `Transferência automática pelo ponto (relógio SN ${header.sn}, batida de ${maxData})`,
+                  registradoPor: "Sistema — transferência automática pelo ponto",
                 });
-                obraInconsistenciasCount++;
+                autoTransferidos++;
+                const datasSemConflito = datas.filter(d => !datasComConflito.has(d));
+                if (datasSemConflito.length > 0) {
+                  await db.update(obraPontoInconsistencies).set({
+                    status: 'transferido',
+                    resolvidoPor: 'Sistema — transferência automática pelo ponto',
+                    resolvidoEm: sql`NOW()` as any,
+                    observacoes: `Transferido automaticamente para a obra do relógio (batida de ${maxData}).`,
+                  } as any).where(and(
+                    eq(obraPontoInconsistencies.companyId, input.companyId),
+                    eq(obraPontoInconsistencies.employeeId, empId),
+                    eq(obraPontoInconsistencies.obraPontoId, obraId),
+                    eq(obraPontoInconsistencies.status, 'pendente'),
+                    inArray(obraPontoInconsistencies.dataPonto, datasSemConflito),
+                  ));
+                }
+              } catch (e: any) {
+                // Nunca derrubar o import por falha na transferência automática
+                console.warn(`[DixiImport] Transferência automática falhou (emp ${empId} → obra ${obraId}):`, e?.message);
               }
             }
           }
@@ -853,6 +910,7 @@ export const dixiPontoRouter = router({
         obraNome,
         snRelogio: header.sn,
         obraInconsistencias: obraInconsistenciasCount,
+        autoTransferidos,
       };
     }),
 

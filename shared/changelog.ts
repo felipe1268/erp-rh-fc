@@ -1,4 +1,19 @@
 /**
+ * Rev. 4712 - TRANSFERENCIA AUTOMATICA DE OBRA PELO PONTO (IMPORT DIXI)
+ *
+ * Pedido do usuario: a batida do ponto e sempre mais relevante que a obra
+ * de alocacao (encarregado esquecia de transferir manualmente). Ao importar
+ * o AFD, se o funcionario bateu ponto no relogio de OUTRA obra, o sistema
+ * agora transfere automaticamente a alocacao (obra_funcionarios +
+ * employee_site_history com origem "transferencia automatica pelo ponto").
+ * Salvaguardas: batida atrasada nao desfaz transferencia manual mais nova
+ * (compara com dataInicio da alocacao); ida e volta seguem o ponto; se
+ * houver batida em 2 obras no MESMO dia, transfere mas o alerta fica
+ * PENDENTE para o RH decidir — sem conflito, o alerta e resolvido como
+ * "transferido" automaticamente (rastreio completo). Falha na transferencia
+ * nunca derruba o import.
+ */
+/**
  * Rev. 4711 - FERIAS AGENDADA GERA TITULO AUTOMATICO NO CONTAS A PAGAR
  *
  * Pedido do usuario: ferias agendada precisa aparecer no Financeiro (caso

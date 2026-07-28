@@ -7,7 +7,7 @@
 - [Recorrências — gap permanente](recorrencias-gap-proximo-vencimento.md) — materializeRecorrentes só anda pra frente; parcelas passadas excluídas nunca regeneram sozinhas; regenerar via INSERT dedup sem mexer no proximo_vencimento.
 - [Férias ↔ Contas a Pagar](ferias-financeiro-link.md) — férias agendada gera título automático; toda mutation que muda status de vacationPeriods deve reconciliar o título; parse de valor SEMPRE BR-aware.
 - [Aviso Prévio ↔ Contas a Pagar](aviso-previo-financeiro-link.md) — baixa manual e envio ao Financeiro são vias EXCLUSIVAS; advisory lock 477001 + índice único parcial (só no Neon); quitar baixa dispara conclusão/desligamento.
-- [DIXI group-key digit collision](dixi-groupkey-digit-collision.md) — relógio pode ter código "jfcNNN" no Nome; chave de agrupamento por pessoa deve PRESERVAR dígitos ou funde 2 funcionários.
+- [DIXI gotchas](dixi-auto-transfer-obra.md) — [transferência automática pelo ponto](dixi-auto-transfer-obra.md) (ponto > alocação; batida velha não desfaz manual; 2 obras no dia = alerta pendente); [group-key deve preservar dígitos](dixi-groupkey-digit-collision.md) ou funde 2 funcionários.
 - [Equipamento utilização fonte de dados](equipamento-utilizacao-fonte-dados.md) — utilização diária vem de warehouse_loans (não equipamento_locado_eventos); link via almoxarifado_itens.equipamento_vinculado_id.
 - [Scorecard month-end date construction](scorecard-month-end-date.md) — `|| '-31'` rejeita junho/abr/set/nov/fev; sempre usar `|| '-01')::date + INTERVAL '1 month' - 1 day`.
 - [Férias custo via JOIN cross-company](ferias-custo-join-cross-company.md) — empSalarioMap filtrado por companyFilter perde funcionários de empresa irmã; fix: incluir salarioBase no SELECT do JOIN que já existe.
@@ -20,8 +20,7 @@
 - [Cross-company-group employee duplication](employee-cross-company-group-duplication.md) — sibling companies sharing recursos already share employees; re-registering the same CPF in the other company creates status-drifting duplicates.
 - [Poka-Yoke em toda revisão](poka-yoke-rule.md) — regra de ouro: toda revisão aplica mistake-proofing (design > bloqueio > aviso); validar valor/data no server, isPending nos botões.
 - [Crachá: pills = TODOS os treinamentos feitos](cracha-treinamentos-todos-feitos.md) — regra de ouro: pills sem filtro de vigência (histórico); selos NR e pendências continuam só vigentes (aptidão).
-- [Period selector golden rule](period-selector-golden-rule.md) — SEMPRE usar `<PeriodSelectorCard>` para filtro mês/ano; estado `number|null`; NUNCA seletor inline. Regra de ouro do usuário (13/07/2026).
-- [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
+- [Period selector golden rules](period-selector-golden-rule.md) — SEMPRE `<PeriodSelectorCard>` (estado `number|null`, nunca inline); [dashboard = white-card PanoramaFiscal, nunca DashHeader gradiente](dashboard-period-selector-standard.md).
 - [Marketing screenshot fictional data](marketing-screenshot-fictional-data.md) — public marketing screenshots of authenticated screens must use 100% fictional seed data, never real tenant PII; revert any temp auth bypass fully.
 - [Unguarded tRPC endpoints](unguarded-trpc-endpoints.md) — frontend route gating ≠ backend authorization; verify role/tenant checks live IN the procedure, not just behind the UI route guard.
 - [Contas a Pagar — base da janela de fechamento](contas-pagar-ciclo-window-basis.md) — agrupar por ciclo de fornecedor usa data da COMPRA (competência), nunca vencimento (varia por OC).
