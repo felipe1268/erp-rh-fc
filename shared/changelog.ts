@@ -1,4 +1,43 @@
 /**
+ * Rev. 4708 - ALERTA AO MASTER EM LANCAMENTO MANUAL DE CONVENIO
+ *
+ * Pedido do usuario: lancamento manual (interno, pelo RH) pode existir,
+ * mas o usuario master deve receber um ALERTA informativo ao logar —
+ * sem bloquear nem validar, so ciencia.
+ * - parceiros.lancamentos.create: apos inserir, cria user_alert (pop-up
+ *   global ao entrar, Rev. 4690) para TODOS os admin_master (exceto quem
+ *   lancou), tipo 'parceiro_lancamento_manual', com quem lancou, valor,
+ *   colaborador e data; linkUrl /parceiros/lancamentos.
+ * - Nao-bloqueante: falha no alerta so loga (try/catch).
+ */
+/**
+ * Rev. 4707 - MOTOR DE CREDITO DO CONVENIO (LIMITE POR COLABORADOR, POKA-YOKE)
+ *
+ * Pedido do usuario: limitar gasto mensal por colaborador nos parceiros
+ * (ex.: Multfarma R$200), como sistema de credito consignado — usa,
+ * desconta na folha, so libera o proximo mes apos o desconto. Regras
+ * anti-prejuizo automaticas; em caso de erro, BLOQUEIA (fail-safe).
+ * - Config no cadastro do parceiro (aba Convenio): limite mensal (campo
+ *   ja existia, agora VALE), carencia em dias (novo, padrao 30) e toggle
+ *   "travar por debito anterior" (novo, padrao ligado). Limite vazio =
+ *   sem travas (parceiro fora do motor).
+ * - Motor server-side (server/utils/creditoConvenio.ts): 1) situacao —
+ *   desligados/Afastado bloqueiam, Ferias libera; 2) carencia por
+ *   dataAdmissao (sem data cadastrada = bloqueado); 3) debito anterior —
+ *   consumo aprovado na competencia anterior + folha (payroll_periods.
+ *   pagamentoConsolidadoEm) nao consolidada = bloqueado; 4) limite —
+ *   pendente+aprovado do parceiro na competencia + valor novo > limite.
+ * - Enforcement: portal criarLancamento e editarLancamento (revalida ao
+ *   mudar valor/data/colaborador, descontando o proprio valor) e tambem
+ *   parceiros.lancamentos.create (lado interno).
+ * - Portal grava competenciaDesconto na criacao (antes ficava nulo).
+ * - buscarFuncionarios agora inclui Ferias e devolve credito por
+ *   colaborador (badge "Disponivel R$x" / "Bloqueado — motivo"); cards
+ *   bloqueados nao selecionaveis; total acima do disponivel trava envio.
+ * - Colunas novas carencia_dias/travar_debito_anterior via syncSchema
+ *   automatico (drizzle vs Neon).
+ */
+/**
  * Rev. 4706 - PORTAL DO PARCEIRO: VARIOS ITENS COM VALORES INDIVIDUAIS + TOTAL AUTOMATICO
  *
  * Pedido do usuario: adicionar varios itens, cada um com seu valor, e o

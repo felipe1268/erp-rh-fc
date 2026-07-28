@@ -416,7 +416,25 @@ export default function CadastroParceiros() {
                   <div>
                     <Label>Limite Mensal por Colaborador</Label>
                     <Input value={form.limiteMensalPorColaborador || ""} onChange={(e) => setForm({ ...form, limiteMensalPorColaborador: e.target.value })} placeholder="Ex: 500.00" />
-                    <p className="text-xs text-muted-foreground mt-1">Valor máximo por colaborador/mês (deixe vazio se sem limite)</p>
+                    <p className="text-xs text-muted-foreground mt-1">Valor máximo por colaborador/mês. Preenchido, ativa o motor de crédito (carência, situação, débito anterior). Vazio = sem travas.</p>
+                  </div>
+                  <div>
+                    <Label>Carência (dias de casa)</Label>
+                    <Input type="number" min={0} max={365} value={form.carenciaDias ?? 30} onChange={(e) => setForm({ ...form, carenciaDias: e.target.value === "" ? 0 : parseInt(e.target.value) || 0 })} placeholder="30" />
+                    <p className="text-xs text-muted-foreground mt-1">Dias mínimos de admissão para liberar o benefício (0 = sem carência)</p>
+                  </div>
+                  <div className="md:col-span-2 flex items-start gap-3 rounded-lg border p-3 bg-slate-50">
+                    <input
+                      type="checkbox"
+                      id="travarDebito"
+                      className="mt-0.5 h-4 w-4 accent-slate-900"
+                      checked={(form.travarDebitoAnterior ?? 1) === 1}
+                      onChange={(e) => setForm({ ...form, travarDebitoAnterior: e.target.checked ? 1 : 0 })}
+                    />
+                    <label htmlFor="travarDebito" className="text-sm cursor-pointer">
+                      <span className="font-medium">Travar por débito anterior</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">Bloqueia novo consumo enquanto o mês anterior não for descontado na folha (recomendado — evita prejuízo)</p>
+                    </label>
                   </div>
                 </div>
               </div>

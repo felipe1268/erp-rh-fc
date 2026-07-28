@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4708** — Lançamento manual de convênio gera alerta informativo (pop-up ao logar) para os usuários master — não bloqueia o fluxo, só dá ciência.
+- **Rev. 4707** — Motor de crédito do convênio: limite mensal por colaborador (config no parceiro + carência 30d + trava por débito anterior não descontado na folha); validação fail-safe no servidor (portal e interno); portal mostra saldo disponível/bloqueio por colaborador.
 - **Rev. 4706** — Portal do Parceiro: lançamento com vários itens (descrição + valor individual, adicionar/remover) e total somado automaticamente; descrição enviada com valores por item.
 - **Rev. 4705** — Portal do Parceiro: botão "Ler nota com IA" ao lado da descrição — sobe JPG/PDF, a IA preenche valor/data/itens automaticamente e o arquivo já fica salvo como comprovante (gate do módulo IA financeiro).
 - **Rev. 4704** — Portal do Parceiro: Data e Valor em linhas independentes (fim da sobreposição no iPad); valor em dinheiro BR (1.234,56) estilo caixa eletrônico com R$ fixo; data default no fuso local (Brasília) e exibida dd/mm/aaaa.

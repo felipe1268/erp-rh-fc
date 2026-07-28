@@ -1,3 +1,4 @@
+- [Motor de crédito do convênio](convenio-credito-engine.md) — limite>0 ativa regras fail-safe (erro=bloqueia); todo write em lancamentos_parceiros valida crédito + grava competência; edição não desconta o próprio valor se mudar competência.
 - [Fatura de cartão é cumulativa](cartao-fatura-cumulativa.md) — nunca somar histórico como "em aberto"; pagamentos negativo = crédito da fatura anterior; só vencimento >= hoje conta.
 - [Fatura de cartão ↔ Contas a Pagar](cartao-fatura-financeiro-link.md) — título único por fatura via índice parcial + ON CONFLICT; baixa faz fan-out p/ pagamentos; título com baixa ativa é intocável.
 - [QR Verificar Aptidão — live, não snapshot](qr-aptidao-live-not-snapshot.md) — employee_aptidao é snapshot manual defasado; leitores calculam ao vivo de asos/trainings (regras do recalcAll, apto|inapto).

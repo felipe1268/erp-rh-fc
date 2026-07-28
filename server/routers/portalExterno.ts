@@ -14,6 +14,7 @@ import { sendEmail } from "../services/smtpService";
 import crypto from "crypto";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { assertAiModuleEnabled } from "../_core/aiConfig";
+import { avaliarCreditoColaborador, montarContextoCredito, avaliarCredito, competenciaDaData, hojeBrasilia } from "../utils/creditoConvenio";
 
 // ── Helpers idênticos aos do server/routers/planejamento.ts ─────────────────
 // Mantemos cópias locais para garantir que o Portal do Cliente produza
@@ -2057,6 +2058,25 @@ Regras:
         const [emp] = await db.select().from(employees).where(eq(employees.id, data.employeeId)).limit(1);
         empNome = emp?.nomeCompleto || "Funcionário";
       }
+      // Rev. 4707 — motor de crédito (poka-yoke): valida limite/carência/situação/débito
+      // anterior no SERVIDOR. Qualquer erro na avaliação = bloqueado.
+      const valorNum = parseFloat(String(data.valor).replace(",", ".")) || 0;
+      if (!(valorNum > 0)) throw new TRPCError({ code: "BAD_REQUEST", message: "Valor inválido" });
+      const [parc] = await db.select().from(parceirosConveniados).where(and(
+        eq(parceirosConveniados.id, decoded.parceiroId),
+        eq(parceirosConveniados.companyId, decoded.companyId),
+      )).limit(1);
+      if (!parc) throw new TRPCError({ code: "FORBIDDEN" });
+      const credito = await avaliarCreditoColaborador(db, {
+        companyId: decoded.companyId,
+        parceiro: parc,
+        employeeId: data.employeeId,
+        dataCompra: data.dataCompra,
+        valorNovo: valorNum,
+      });
+      if (!credito.liberado) {
+        throw new TRPCError({ code: "FORBIDDEN", message: `Lançamento bloqueado: ${credito.motivo}` });
+      }
       const [result] = await db.insert(lancamentosParceiros).values({
         employeeId: data.employeeId,
         employeeNome: empNome,
@@ -2066,7 +2086,9 @@ Regras:
         parceiroId: decoded.parceiroId,
         companyId: decoded.companyId,
         status: "pendente",
-      });
+        // Rev. 4707 — competência gravada já na criação (regra 16→15)
+        competenciaDesconto: competenciaDaData(data.dataCompra),
+      } as any);
       return { id: result[0].id, success: true };
     }),
 
@@ -2106,7 +2128,7 @@ Regras:
       employeeId: z.number().optional(),
       employeeNome: z.string().optional(),
       dataCompra: z.string().optional(),
-      descricaoItens: z.string().optional(),
+      descricaoItens: z.string().max(2000).optional(),
       valor: z.string().optional(),
     })).mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -2121,9 +2143,32 @@ Regras:
       const updateData: any = {};
       if (input.employeeId) updateData.employeeId = input.employeeId;
       if (input.employeeNome) updateData.employeeNome = input.employeeNome;
-      if (input.dataCompra) updateData.dataCompra = input.dataCompra;
+      if (input.dataCompra) { updateData.dataCompra = input.dataCompra; updateData.competenciaDesconto = competenciaDaData(input.dataCompra); }
       if (input.descricaoItens !== undefined) updateData.descricaoItens = input.descricaoItens;
       if (input.valor) updateData.valor = input.valor;
+      // Rev. 4707 — poka-yoke: mudança de valor/data/colaborador revalida o crédito
+      if (input.valor || input.dataCompra || input.employeeId) {
+        const [parc] = await db.select().from(parceirosConveniados).where(and(
+          eq(parceirosConveniados.id, decoded.parceiroId),
+          eq(parceirosConveniados.companyId, decoded.companyId),
+        )).limit(1);
+        if (!parc) throw new TRPCError({ code: "FORBIDDEN" });
+        const empId = input.employeeId || (lanc as any).employeeId;
+        const dataC = input.dataCompra || (lanc as any).dataCompra;
+        const novoValor = parseFloat(String(input.valor ?? (lanc as any).valor).replace(",", ".")) || 0;
+        // O próprio lançamento pendente já conta no "usado" — desconta ele da soma,
+        // mas SÓ se ele está no MESMO colaborador e na MESMA competência do novo
+        // cenário (mudar a data para outra competência não pode "liberar" crédito).
+        const compAntiga = (lanc as any).competenciaDesconto || competenciaDaData((lanc as any).dataCompra);
+        const compNova = competenciaDaData(dataC);
+        const mesmoCenario = empId === (lanc as any).employeeId && compAntiga === compNova;
+        const valorAtual = mesmoCenario ? (parseFloat(String((lanc as any).valor).replace(",", ".")) || 0) : 0;
+        const credito = await avaliarCreditoColaborador(db, {
+          companyId: decoded.companyId, parceiro: parc, employeeId: empId,
+          dataCompra: dataC, valorNovo: Math.max(0, novoValor - valorAtual),
+        });
+        if (!credito.liberado) throw new TRPCError({ code: "FORBIDDEN", message: `Edição bloqueada: ${credito.motivo}` });
+      }
       await db.update(lancamentosParceiros).set(updateData).where(eq(lancamentosParceiros.id, input.lancamentoId));
       return { success: true };
     }),
@@ -2153,18 +2198,42 @@ Regras:
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
-      const allEmps = await db.select({
+      // Rev. 4707 — inclui Férias (pode usar; continua recebendo) e devolve o
+      // crédito de cada colaborador (limite/saldo/bloqueio) quando o parceiro
+      // tem limite configurado. Erro no motor de crédito = todos bloqueados.
+      const allEmpsRaw = await db.select({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
         cpf: employees.cpf,
         funcao: employees.funcao,
         cargo: employees.cargo,
         status: employees.status,
+        dataAdmissao: employees.dataAdmissao,
         fotoUrl: employees.fotoUrl, // Rev. 4698 — foto no portal do parceiro
       }).from(employees).where(and(
         eq(employees.companyId, decoded.companyId),
-        eq(employees.status, "Ativo")
+        inArray(employees.status, ["Ativo", "Ferias", "Férias"])
       ));
+      let allEmps: any[];
+      try {
+        const [parc] = await db.select().from(parceirosConveniados).where(and(
+          eq(parceirosConveniados.id, decoded.parceiroId),
+          eq(parceirosConveniados.companyId, decoded.companyId),
+        )).limit(1);
+        const ctxCred = parc ? await montarContextoCredito(db, { companyId: decoded.companyId, parceiro: parc }) : null;
+        allEmps = allEmpsRaw.map((e: any) => {
+          const { dataAdmissao, ...pub } = e;
+          if (!ctxCred || !(ctxCred.limite > 0)) return { ...pub, credito: null };
+          const c = avaliarCredito(ctxCred, e, 0);
+          return { ...pub, credito: { liberado: c.liberado, motivo: c.motivo, codigo: c.codigo, limite: c.limite, disponivel: c.disponivel } };
+        });
+      } catch (err) {
+        console.error("[portal.buscarFuncionarios] motor de crédito falhou — bloqueando por segurança:", err);
+        allEmps = allEmpsRaw.map((e: any) => {
+          const { dataAdmissao, ...pub } = e;
+          return { ...pub, credito: { liberado: false, motivo: "Validação de crédito indisponível — tente novamente", codigo: "erro", limite: 0, disponivel: 0 } };
+        });
+      }
       if (!input.busca) return allEmps;
       const term = input.busca.toLowerCase().replace(/\D/g, "") || input.busca.toLowerCase();
       return allEmps.filter((e: any) => {

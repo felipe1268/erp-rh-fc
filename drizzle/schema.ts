@@ -4588,6 +4588,9 @@ export const parceirosConveniados = pgTable("parceiros_conveniados", {
   diaFechamento: integer(),
   prazoPagamento: integer(),
   limiteMensalPorColaborador: numeric("limite_mensal_por_colaborador", { precision: 10, scale: 2 }),
+  // Rev. 4707 — motor de crédito do convênio (regras anti-prejuízo)
+  carenciaDias: integer("carencia_dias").default(30),
+  travarDebitoAnterior: integer("travar_debito_anterior").default(1),
   // Documentos
   contratoConvenioUrl: varchar("contrato_convenio_url", { length: 500 }),
   contratoSocialUrl: varchar("contrato_social_url_parceiro", { length: 500 }),

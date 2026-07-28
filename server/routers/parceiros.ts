@@ -10,6 +10,7 @@ import {
   systemCriteria,
 } from "../../drizzle/schema";
 import { eq, and, or, desc, sql, isNull, inArray, gte, lte } from "drizzle-orm";
+import { avaliarCreditoColaborador } from "../utils/creditoConvenio";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 
@@ -84,7 +85,7 @@ function sanitizeParceiroPayload<T extends Record<string, any>>(input: T): T {
     }
   }
   // Inteiros opcionais que podem vir como string vazia do form
-  for (const k of ["diaFechamento", "prazoPagamento"] as const) {
+  for (const k of ["diaFechamento", "prazoPagamento", "carenciaDias", "travarDebitoAnterior"] as const) {
     if (out[k] === "" || out[k] === undefined) out[k] = null;
   }
   return out;
@@ -145,6 +146,8 @@ export const parceirosRouter = router({
         diaFechamento: z.number().optional(),
         prazoPagamento: z.number().optional(),
         limiteMensalPorColaborador: z.string().optional(),
+        carenciaDias: z.number().optional(),
+        travarDebitoAnterior: z.number().optional(),
         observacoes: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -195,6 +198,8 @@ export const parceirosRouter = router({
         diaFechamento: z.number().nullish(),
         prazoPagamento: z.number().nullish(),
         limiteMensalPorColaborador: z.union([z.string(), z.number()]).nullish(),
+        carenciaDias: z.number().nullish(),
+        travarDebitoAnterior: z.number().nullish(),
         status: z.enum(["ativo", "suspenso", "inativo"]).nullish(),
         observacoes: z.string().nullish(),
         contratoConvenioUrl: z.string().nullish(),
@@ -338,6 +343,24 @@ export const parceirosRouter = router({
         }
         if (!employeeNome) throw new Error("Colaborador não encontrado");
 
+        // Rev. 4707 — motor de crédito (poka-yoke) também no lançamento interno:
+        // limite/carência/situação/débito anterior. Erro na avaliação = bloqueado.
+        {
+          const [parcRow] = await db.select().from(parceirosConveniados).where(and(
+            eq(parceirosConveniados.id, parceiroId),
+            eq(parceirosConveniados.companyId, input.companyId),
+          )).limit(1);
+          if (!parcRow) throw new Error("Parceiro não encontrado nesta empresa");
+          const credito = await avaliarCreditoColaborador(db, {
+            companyId: input.companyId,
+            parceiro: parcRow,
+            employeeId: input.employeeId,
+            dataCompra: input.dataCompra,
+            valorNovo: valorNum,
+          });
+          if (!credito.liberado) throw new Error(`Lançamento bloqueado: ${credito.motivo}`);
+        }
+
         const [row] = await db
           .insert(lancamentosParceiros)
           .values({
@@ -361,6 +384,28 @@ export const parceirosRouter = router({
             lancadoPor: ctx.user?.name || "Sistema",
           } as any)
           .returning({ id: lancamentosParceiros.id });
+
+        // Rev. 4708 — lançamento MANUAL (interno): alerta informativo para os
+        // usuários master (não bloqueia nada; ciência ao logar).
+        try {
+          const { criarUserAlert } = await import("../db");
+          const { users } = await import("../../drizzle/schema");
+          const masters = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin_master"));
+          const valorFmt = valorNum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          for (const m of masters) {
+            if (ctx.user?.id && m.id === ctx.user.id) continue; // quem lançou não precisa do próprio alerta
+            await criarUserAlert({
+              userId: m.id,
+              companyId: input.companyId,
+              tipo: "parceiro_lancamento_manual",
+              titulo: "Lançamento manual no convênio",
+              mensagem: `${ctx.user?.name || "Um usuário"} fez um lançamento MANUAL de R$ ${valorFmt} para ${employeeNome} (${input.dataCompra ? input.dataCompra.slice(0, 10).split("-").reverse().join("/") : ""}). Dá uma olhada.`,
+              linkUrl: "/parceiros/lancamentos",
+            });
+          }
+        } catch (e) {
+          console.error("[parceiros.create] alerta ao master falhou (não bloqueante):", e);
+        }
         return { id: row.id };
       }),
 

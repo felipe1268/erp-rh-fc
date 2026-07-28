@@ -190,7 +190,9 @@ export default function PortalParceiroApp() {
     setItens((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   };
   const dataFutura = dataCompra > hoje;
-  const prontoParaEnviar = !!selEmp && valorNum > 0 && !!dataCompra && !dataFutura;
+  const credSel = selEmp?.credito || null;
+  const estourouLimite = !!credSel && valorNum > credSel.disponivel + 0.005;
+  const prontoParaEnviar = !!selEmp && valorNum > 0 && !!dataCompra && !dataFutura && !estourouLimite && (!credSel || credSel.liberado);
 
   const handleLogout = () => {
     ["portal_token", "portal_tipo", "portal_nome", "portal_cnpj"].forEach((k) => localStorage.removeItem(k));
@@ -342,6 +344,7 @@ export default function PortalParceiroApp() {
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-slate-900 break-words">{selEmp.nomeCompleto}</p>
                   <p className="text-xs text-slate-500">{selEmp.funcao || selEmp.cargo || "Colaborador"}{selEmp.cpf ? ` · CPF ${selEmp.cpf}` : ""}</p>
+                  {credSel && <p className={`text-xs font-semibold mt-0.5 ${estourouLimite ? "text-red-600" : "text-emerald-700"}`}>Disponível no mês: {fmtBRL(credSel.disponivel)}{credSel.limite ? ` de ${fmtBRL(credSel.limite)}` : ""}</p>}
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setSelEmp(null)}>Trocar</Button>
               </div>
@@ -357,17 +360,33 @@ export default function PortalParceiroApp() {
                   <div className="text-center py-8 text-slate-400 text-sm">Nenhum colaborador encontrado</div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-[340px] overflow-y-auto pr-1">
-                    {employees.map((e: any) => (
-                      <button
-                        key={e.id}
-                        onClick={() => setSelEmp(e)}
-                        className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 hover:border-amber-400 hover:bg-amber-50 active:scale-[0.98] transition text-center"
-                      >
-                        <Avatar nome={e.nomeCompleto} fotoUrl={e.fotoUrl} size="h-16 w-16" text="text-lg" />
-                        <span className="text-xs font-medium text-slate-800 leading-snug break-words w-full">{e.nomeCompleto}</span>
-                        <span className="text-[10px] text-slate-400 leading-none">{e.funcao || e.cargo || ""}</span>
-                      </button>
-                    ))}
+                    {employees.map((e: any) => {
+                      const cred = e.credito; // null = parceiro sem limite configurado
+                      const bloqueado = cred ? !cred.liberado : false;
+                      return (
+                        <button
+                          key={e.id}
+                          disabled={bloqueado}
+                          onClick={() => { if (!bloqueado) setSelEmp(e); }}
+                          className={`flex flex-col items-center gap-2 rounded-xl border p-3 transition text-center ${bloqueado
+                            ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed"
+                            : "border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50 active:scale-[0.98]"}`}
+                        >
+                          <Avatar nome={e.nomeCompleto} fotoUrl={e.fotoUrl} size="h-16 w-16" text="text-lg" />
+                          <span className="text-xs font-medium text-slate-800 leading-snug break-words w-full">{e.nomeCompleto}</span>
+                          <span className="text-[10px] text-slate-400 leading-none">{e.funcao || e.cargo || ""}</span>
+                          {cred && (bloqueado ? (
+                            <span className="text-[10px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 leading-tight break-words w-full">
+                              Bloqueado{cred.codigo === "limite" ? " — limite do mês" : cred.codigo === "carencia" ? " — em carência" : cred.codigo === "debito_anterior" ? " — débito em aberto" : cred.codigo === "situacao" ? "" : ""}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 leading-none">
+                              Disponível {fmtBRL(cred.disponivel)}
+                            </span>
+                          ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </>
@@ -456,6 +475,7 @@ export default function PortalParceiroApp() {
                   <p className="text-sm text-slate-700">
                     Total: <strong className="text-base text-slate-900">{valorNum > 0 ? fmtBRL(valorNum) : "R$ 0,00"}</strong>
                     {itensValidos.length > 1 ? <span className="text-xs text-slate-400"> ({itensValidos.length} itens)</span> : null}
+                    {estourouLimite && <span className="block text-xs font-semibold text-red-600 mt-0.5">Acima do disponível do colaborador ({fmtBRL(credSel!.disponivel)}) — reduza o valor.</span>}
                   </p>
                 </div>
               </div>
