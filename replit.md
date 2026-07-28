@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4704** — Portal do Parceiro: Data e Valor em linhas independentes (fim da sobreposição no iPad); valor em dinheiro BR (1.234,56) estilo caixa eletrônico com R$ fixo; data default no fuso local (Brasília) e exibida dd/mm/aaaa.
 - **Rev. 4703** — Portal do Parceiro: lançamentos agrupados mês a mês (competência 16→15) com badge "Pago/Liquidado" quando o financeiro quita o repasse; PeriodSelectorCard com legenda (verde=pago, azul=com dados, cinza=sem dados).
 - **Rev. 4702** — Fotos dos colaboradores no histórico do Portal do Parceiro (linha clicável abre o detalhe, que também mostra a foto); fallback de iniciais quando sem foto.
 - **Rev. 4701** — Portal do Parceiro nas cores FC (azul-marinho + amarelo): tela de boas-vindas dedicada (instruções de cadastro, datas/fechamento e fluxo de pagamento + "Acessar Sistema") separada da tela de lançamentos.

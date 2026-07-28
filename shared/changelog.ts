@@ -1,4 +1,20 @@
 /**
+ * Rev. 4704 - PORTAL DO PARCEIRO: CAMPOS DATA/VALOR SEM SOBREPOSICAO + FORMATO BR
+ *
+ * Feedback do usuario (iPad): campo de data sobrepunha o campo de valor;
+ * valor deve ser dinheiro BR (1.234,56) e data no padrao brasileiro,
+ * horario de Brasilia.
+ * - Data e Valor agora em LINHAS independentes (space-y, max-w-xs,
+ *   min-w-0) — nada sobrepoe em nenhuma largura.
+ * - Valor: digitacao estilo caixa eletronico (centavos), exibe
+ *   1.234,56 com prefixo R$ fixo; inputMode numeric.
+ * - Data: default calculado no fuso LOCAL do aparelho (antes toISOString
+ *   UTC virava o dia seguinte apos 21h de Brasilia); helper mostra a data
+ *   dd/mm/aaaa por extenso ao lado da competencia.
+ * - Competencia "Agosto De 2026" corrigida (capitalize por classe ->
+ *   inicial maiuscula na funcao).
+ */
+/**
  * Rev. 4703 - PORTAL DO PARCEIRO: LANCAMENTOS MES A MES + STATUS DE PAGAMENTO
  *
  * Pedido do usuario: separar lancamentos por competencia; quando o

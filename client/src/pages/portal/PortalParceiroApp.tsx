@@ -24,7 +24,7 @@ function competenciaDaCompra(dataCompra: string): string {
   let y = Number(m[1]); let mo = Number(m[2]); const d = Number(m[3]);
   if (d >= 16) { mo += 1; if (mo > 12) { mo = 1; y += 1; } }
   const nomes = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
-  return `${nomes[mo - 1]} de ${y}`;
+  const nome = nomes[mo - 1]; return `${nome.charAt(0).toUpperCase()}${nome.slice(1)} de ${y}`;
 }
 
 // YYYY-MM da competência (mesma regra 16→15) quando o registro veio sem a coluna
@@ -88,7 +88,8 @@ export default function PortalParceiroApp() {
   const [page, setPage] = useState<"welcome" | "sistema" | "lancar">("welcome");
   const [busca, setBusca] = useState("");
   const [selEmp, setSelEmp] = useState<any>(null);
-  const [dataCompra, setDataCompra] = useState(new Date().toISOString().slice(0, 10));
+  const hojeLocal = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`; })();
+  const [dataCompra, setDataCompra] = useState(hojeLocal);
   const [valor, setValor] = useState("");
   const [descricao, setDescricao] = useState("");
   const [observacoes, setObservacoes] = useState("");
@@ -119,7 +120,7 @@ export default function PortalParceiroApp() {
   const [ano, setAno] = useState(new Date().getFullYear());
   const [mes, setMes] = useState<number | null>(new Date().getMonth() + 1);
 
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal;
   const mesAtual = hoje.slice(0, 7);
   const doMes = lancamentos.filter((l: any) => String(l.dataCompra || "").slice(0, 7) === mesAtual);
   const totalMes = doMes.reduce((s: number, l: any) => s + (parseFloat(l.valor || "0") || 0), 0);
@@ -176,7 +177,9 @@ export default function PortalParceiroApp() {
     return m;
   }, [empsQuery.data]);
 
-  const valorNum = parseFloat(String(valor).replace(/\./g, "").replace(",", ".")) || 0;
+  // Valor em centavos (digitação estilo caixa eletrônico) → exibição 1.234,56
+  const valorNum = (parseInt(String(valor).replace(/\D/g, "") || "0", 10) || 0) / 100;
+  const valorFmt = valorNum > 0 ? valorNum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
   const dataFutura = dataCompra > hoje;
   const prontoParaEnviar = !!selEmp && valorNum > 0 && !!dataCompra && !dataFutura;
 
@@ -187,7 +190,7 @@ export default function PortalParceiroApp() {
 
   const limparForm = () => {
     setSelEmp(null); setBusca(""); setValor(""); setDescricao(""); setObservacoes("");
-    setArquivo(null); setDataCompra(new Date().toISOString().slice(0, 10));
+    setArquivo(null); setDataCompra(hojeLocal);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -333,27 +336,36 @@ export default function PortalParceiroApp() {
               <span className="h-7 w-7 rounded-full bg-slate-900 text-amber-400 text-sm font-bold flex items-center justify-center">2</span>
               <h3 className="font-semibold text-slate-900">Dados da compra</h3>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-slate-700">Data da compra *</label>
-                <Input type="date" value={dataCompra} max={hoje} onChange={(e) => setDataCompra(e.target.value)} className="mt-1 h-11" />
-                {dataFutura && <p className="text-xs text-red-600 mt-1">A data não pode ser futura.</p>}
+                <label className="text-sm font-medium text-slate-700 block">Data da compra *</label>
+                <Input type="date" value={dataCompra} max={hoje} onChange={(e) => setDataCompra(e.target.value)} className="mt-1.5 h-12 w-full min-w-0 max-w-xs block appearance-none" />
+                {dataFutura && <p className="text-xs text-red-600 mt-1.5">A data não pode ser futura.</p>}
                 {!dataFutura && dataCompra && (
-                  <p className="text-xs text-slate-600 mt-1 flex items-center gap-1">
-                    <CalendarDays className="h-3.5 w-3.5 text-amber-500" /> Desconto na folha de <strong className="capitalize">{competenciaDaCompra(dataCompra)}</strong>
+                  <p className="text-xs text-slate-600 mt-1.5 flex items-center gap-1 flex-wrap">
+                    <CalendarDays className="h-3.5 w-3.5 text-amber-500 shrink-0" /> Data: <strong>{fmtData(dataCompra)}</strong> · Desconto na folha de <strong>{competenciaDaCompra(dataCompra)}</strong>
                   </p>
                 )}
               </div>
               <div>
-                <label className="text-sm font-medium text-slate-700">Valor (R$) *</label>
-                <Input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value.replace(/[^\d.,]/g, ""))} placeholder="0,00" className="mt-1 h-11 text-lg font-semibold" />
-                {valor && valorNum <= 0 && <p className="text-xs text-red-600 mt-1">Informe um valor maior que zero.</p>}
+                <label className="text-sm font-medium text-slate-700 block">Valor (R$) *</label>
+                <div className="relative mt-1.5 max-w-xs">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold text-base">R$</span>
+                  <Input
+                    inputMode="numeric"
+                    value={valorFmt}
+                    onChange={(e) => setValor(e.target.value.replace(/\D/g, ""))}
+                    placeholder="0,00"
+                    className="h-12 w-full min-w-0 pl-10 text-lg font-semibold"
+                  />
+                </div>
+                {valor && valorNum <= 0 && <p className="text-xs text-red-600 mt-1.5">Informe um valor maior que zero.</p>}
               </div>
-              <div className="sm:col-span-2">
+              <div>
                 <label className="text-sm font-medium text-slate-700">Descrição dos itens</label>
                 <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex.: Medicamentos, combustível..." className="mt-1 h-11" />
               </div>
-              <div className="sm:col-span-2">
+              <div>
                 <label className="text-sm font-medium text-slate-700">Observações</label>
                 <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Opcional" rows={2} className="mt-1" />
               </div>
@@ -423,7 +435,7 @@ export default function PortalParceiroApp() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="bg-slate-50 rounded-lg p-2.5"><p className="text-xs text-slate-500">Data</p><p className="font-medium">{fmtData(dataCompra)}</p></div>
                   <div className="bg-slate-50 rounded-lg p-2.5"><p className="text-xs text-slate-500">Valor</p><p className="font-bold text-slate-900">{fmtBRL(valorNum)}</p></div>
-                  <div className="bg-slate-50 rounded-lg p-2.5 col-span-2"><p className="text-xs text-slate-500">Desconto na folha de</p><p className="font-medium capitalize">{competenciaDaCompra(dataCompra)}</p></div>
+                  <div className="bg-slate-50 rounded-lg p-2.5 col-span-2"><p className="text-xs text-slate-500">Desconto na folha de</p><p className="font-medium">{competenciaDaCompra(dataCompra)}</p></div>
                   {descricao.trim() && <div className="bg-slate-50 rounded-lg p-2.5 col-span-2"><p className="text-xs text-slate-500">Itens</p><p className="break-words">{descricao}</p></div>}
                   <div className="bg-slate-50 rounded-lg p-2.5 col-span-2">
                     <p className="text-xs text-slate-500">Comprovante</p>
