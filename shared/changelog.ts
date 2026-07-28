@@ -1,4 +1,16 @@
 /**
+ * Rev. 4713 - LISTA DE FERIAS: "A VENCER" DIFERENCIADA POR PERIODO
+ *
+ * Pedido do usuario: ferias do 2o periodo ainda nao agendadas apareciam com
+ * o mesmo badge amarelo "A Vencer" do 1o periodo, causando interpretacao
+ * errada (a ferias em si ja esta acumulada, mas o que corre e o prazo
+ * concessivo). Agora, so para ferias PENDENTES (nao agendadas): badge
+ * laranja "A Vencer - 1o periodo" e badge vermelho "A Vencer - 2o periodo"
+ * com "Concessivo ate dd/mm" abaixo + fundo vermelho-claro na linha,
+ * seguindo as cores dos cards do topo. Tooltips explicam a regra (Art. 137
+ * CLT). Agendadas/em gozo/concluidas ficam como estavam.
+ */
+/**
  * Rev. 4712 - TRANSFERENCIA AUTOMATICA DE OBRA PELO PONTO (IMPORT DIXI)
  *
  * Pedido do usuario: a batida do ponto e sempre mais relevante que a obra

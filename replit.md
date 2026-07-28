@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4713** — Lista de Férias: badge "A Vencer" diferenciado por período p/ não agendadas (1º = laranja, 2º = vermelho c/ "Concessivo até dd/mm" + fundo vermelho-claro), cores iguais aos cards do topo.
 - **Rev. 4712** — Import DIXI transfere o funcionário automaticamente para a obra do relógio (ponto > alocação); batida atrasada não desfaz transferência manual mais nova; 2 obras no mesmo dia transfere mas mantém alerta pendente p/ RH.
 - **Rev. 4711** — Férias agendada gera título automático no Contas a Pagar (FÉRIAS - MÃO DE OBRA, venc. = data de pagamento), sincroniza valor/vencimento em edição, cancela junto com o agendamento; backfill das férias já agendadas.
 - **Rev. 4710** — Regra de ouro formato BR: máscara de dinheiro (6.000,00) nos valores de Parceiros (cadastro + lançamentos), edição interna normaliza valor BR, reprocessa competência ao mudar data e revalida crédito.

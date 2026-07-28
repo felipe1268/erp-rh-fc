@@ -1494,6 +1494,12 @@ export default function Ferias() {
                         <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Nenhuma férias encontrada</td></tr>
                       ) : filtered.map((f: any) => {
                         const st = STATUS_LABELS[f.status] || STATUS_LABELS.pendente;
+                        // Rev. 4713 — "A Vencer" diferenciada por período (só p/ não agendadas):
+                        // 1º período = laranja; 2º período (ou +) = vermelho (risco de multa em dobro),
+                        // seguindo as cores dos cards do topo. A férias em si não está atrasada — o
+                        // que corre é o prazo concessivo, por isso o badge nomeia o período.
+                        const isPendente2p = f.status === "pendente" && (f.numeroPeriodo || 1) >= 2;
+                        const isPendente1p = f.status === "pendente" && (f.numeroPeriodo || 1) === 1;
                         const estaVencidaOuExpirada = (f.vencida || f.status === "vencida") && f.status !== "concluida";
                         // Vermelho apenas no 2º período (ou superior) — 1º período não exige alerta vermelho
                         const isVencida = estaVencidaOuExpirada && (f.numeroPeriodo || 1) >= 2;
@@ -1508,7 +1514,7 @@ export default function Ferias() {
                         }
                         const perdeuFerias = _isAfast && _diasAfast >= 180;
                         return (
-                          <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida ? "bg-red-50/50" : isPrimeiroVencido ? "bg-amber-50/40" : ""}`}>
+                          <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida || isPendente2p ? "bg-red-50/50" : isPrimeiroVencido ? "bg-amber-50/40" : ""}`}>
                             <td className="p-3">
                               <div className="flex items-center gap-2.5">
                                 <PersonPhoto src={f.employeeFotoUrl} alt={f.employeeName} size="sm" />
@@ -1543,7 +1549,28 @@ export default function Ferias() {
                             </td>
                             <td className="p-3 text-xs">{formatDate(f.dataPagamento)}</td>
                             <td className="p-3 text-center">
-                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
+                              {isPendente2p ? (
+                                <span
+                                  className="text-xs px-2 py-1 rounded-full font-semibold bg-red-100 text-red-700 border border-red-300 whitespace-nowrap"
+                                  title={`2º período aquisitivo pendente de agendamento — o prazo concessivo expira em ${formatDate(f.periodoConcessivoFim)}. Após essa data, as férias devem ser pagas em dobro (Art. 137 CLT). A férias em si não está atrasada; o que corre é o prazo para conceder.`}
+                                >
+                                  A Vencer · 2º período
+                                </span>
+                              ) : isPendente1p ? (
+                                <span
+                                  className="text-xs px-2 py-1 rounded-full font-medium bg-orange-100 text-orange-700 whitespace-nowrap"
+                                  title={`1º período aquisitivo pendente de agendamento — prazo concessivo até ${formatDate(f.periodoConcessivoFim)}.`}
+                                >
+                                  A Vencer · 1º período
+                                </span>
+                              ) : (
+                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
+                              )}
+                              {isPendente2p && (
+                                <div className="text-[10px] text-red-600 font-medium mt-1" title="Data limite do período concessivo">
+                                  Concessivo até {formatDate(f.periodoConcessivoFim)}
+                                </div>
+                              )}
                               {f.status === "agendada" && f.dataAgendamento && (
                                 <div className="text-[10px] text-muted-foreground mt-1" title="Data em que as férias foram agendadas">
                                   Agendada em {formatDate(String(f.dataAgendamento).slice(0, 10))}
