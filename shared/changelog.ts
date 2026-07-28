@@ -1,4 +1,15 @@
 /**
+ * Rev. 4716 - FERIAS: BADGE "A VENCER" USA A MESMA DATA DA COLUNA CONCESSIVO
+ *
+ * A tag "Concessivo ate" do badge do 2o periodo mostrava o fim bruto do
+ * periodo concessivo, enquanto a coluna "Concessivo Ate" mostra a data
+ * limite para INICIAR o gozo (30 dias antes do proximo periodo aquisitivo).
+ * Duas datas diferentes na mesma linha confundiam. Fix: o badge agora usa a
+ * mesma funcao dataLimiteInicioGozoFerias e o texto virou "Iniciar ate
+ * dd/mm/aaaa"; tooltips explicam a relacao (30 dias antes do fim do
+ * concessivo, Art. 137 CLT).
+ */
+/**
  * Rev. 4715 - RELATORIO DE FALTAS RESPEITA CARGO DE CONFIANCA
  *
  * Caso real: Ana Beatriz e Anderson dos Anjos (cargo de confianca = sim)

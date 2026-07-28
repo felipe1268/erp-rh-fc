@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4716** — Férias: badge "A Vencer · 2º período" agora mostra "Iniciar até" com a mesma data da coluna "Concessivo Até" (limite p/ iniciar o gozo, 30 dias antes), eliminando as duas datas divergentes.
 - **Rev. 4715** — Relatório de Faltas/Atrasos passa a respeitar cargo de confiança (CLT Art. 62, II): funcionários com a flag não geram falta/atraso/saída antecipada, igual ao motor do espelho.
 - **Rev. 4714** — Import DIXI: match por nome detecta ambiguidade ampla (mais de um funcionário contendo todos os tokens → Não Identificados); caso "Alex Silva" ia p/ Alex Alessandro em vez de Alex da Silva Domingos; vínculo correto semeado na memória de vinculações.
 - **Rev. 4713** — Lista de Férias: badge "A Vencer" diferenciado por período p/ não agendadas (1º = laranja, 2º = vermelho c/ "Concessivo até dd/mm" + fundo vermelho-claro), cores iguais aos cards do topo.

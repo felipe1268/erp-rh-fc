@@ -1552,14 +1552,14 @@ export default function Ferias() {
                               {isPendente2p ? (
                                 <span
                                   className="text-xs px-2 py-1 rounded-full font-semibold bg-red-100 text-red-700 border border-red-300 whitespace-nowrap"
-                                  title={`2º período aquisitivo pendente de agendamento — o prazo concessivo expira em ${formatDate(f.periodoConcessivoFim)}. Após essa data, as férias devem ser pagas em dobro (Art. 137 CLT). A férias em si não está atrasada; o que corre é o prazo para conceder.`}
+                                  title={`2º período aquisitivo pendente de agendamento — o gozo deve INICIAR até ${formatDate(dataLimiteInicioGozoFerias(f.periodoConcessivoFim))} (30 dias antes do fim do concessivo em ${formatDate(f.periodoConcessivoFim)}). Após o concessivo, as férias devem ser pagas em dobro (Art. 137 CLT). A férias em si não está atrasada; o que corre é o prazo para conceder.`}
                                 >
                                   A Vencer · 2º período
                                 </span>
                               ) : isPendente1p ? (
                                 <span
                                   className="text-xs px-2 py-1 rounded-full font-medium bg-orange-100 text-orange-700 whitespace-nowrap"
-                                  title={`1º período aquisitivo pendente de agendamento — prazo concessivo até ${formatDate(f.periodoConcessivoFim)}.`}
+                                  title={`1º período aquisitivo pendente de agendamento — o gozo deve iniciar até ${formatDate(dataLimiteInicioGozoFerias(f.periodoConcessivoFim))} (30 dias antes do fim do concessivo).`}
                                 >
                                   A Vencer · 1º período
                                 </span>
@@ -1567,8 +1567,8 @@ export default function Ferias() {
                                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
                               )}
                               {isPendente2p && (
-                                <div className="text-[10px] text-red-600 font-medium mt-1" title="Data limite do período concessivo">
-                                  Concessivo até {formatDate(f.periodoConcessivoFim)}
+                                <div className="text-[10px] text-red-600 font-medium mt-1" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo) — mesma data da coluna 'Concessivo Até'">
+                                  Iniciar até {formatDate(dataLimiteInicioGozoFerias(f.periodoConcessivoFim))}
                                 </div>
                               )}
                               {f.status === "agendada" && f.dataAgendamento && (
