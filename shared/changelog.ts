@@ -1,4 +1,14 @@
 /**
+ * Rev. 4702 - PORTAL DO PARCEIRO: FOTOS NO HISTORICO DE LANCAMENTOS
+ *
+ * Pedido do usuario: foto de todos os funcionarios no historico para
+ * facilitar a identificacao, clicavel para abrir o detalhe.
+ * - Mapa employeeId -> fotoUrl (da query buscarFuncionarios ja carregada)
+ *   alimenta o Avatar de cada linha do historico (h-11, ?w=128 lazy) e o
+ *   cabecalho do dialog de detalhe; sem foto -> iniciais (ex-funcionarios
+ *   desligados nao vem na lista de ativos, caem no fallback).
+ */
+/**
  * Rev. 4701 - PORTAL DO PARCEIRO: CORES FC + TELA DE BOAS-VINDAS DEDICADA
  *
  * Feedback do usuario: roxo nao e a cor da FC; queria tela de boas-vindas

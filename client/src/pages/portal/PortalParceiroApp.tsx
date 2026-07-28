@@ -111,6 +111,13 @@ export default function PortalParceiroApp() {
     return [...filtered].sort((a: any, b: any) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || "", "pt-BR"));
   }, [empsQuery.data, busca]);
 
+  // Rev. 4702 — mapa employeeId → fotoUrl para exibir fotos no histórico
+  const fotoPorEmployee = useMemo(() => {
+    const m = new Map<number, string | null>();
+    for (const e of (empsQuery.data || []) as any[]) m.set(e.id, e.fotoUrl || null);
+    return m;
+  }, [empsQuery.data]);
+
   const valorNum = parseFloat(String(valor).replace(/\./g, "").replace(",", ".")) || 0;
   const dataFutura = dataCompra > hoje;
   const prontoParaEnviar = !!selEmp && valorNum > 0 && !!dataCompra && !dataFutura;
@@ -434,7 +441,7 @@ export default function PortalParceiroApp() {
                 {lancamentos.map((l: any) => (
                   <li key={l.id}>
                     <button onClick={() => setVerLancamento(l)} className="w-full flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50 text-left">
-                      <Avatar nome={l.employeeNome || "?"} fotoUrl={null} size="h-10 w-10" text="text-xs" />
+                      <Avatar nome={l.employeeNome || "?"} fotoUrl={fotoPorEmployee.get(l.employeeId)} size="h-11 w-11" text="text-xs" />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-900 break-words">{l.employeeNome}</p>
                         <p className="text-xs text-slate-500">{fmtData(l.dataCompra)}{l.descricaoItens ? ` · ${l.descricaoItens}` : ""}</p>
@@ -457,9 +464,12 @@ export default function PortalParceiroApp() {
             <DialogHeader><DialogTitle className="flex items-center gap-2"><Eye className="h-5 w-5 text-amber-500" /> Lançamento</DialogTitle></DialogHeader>
             {verLancamento && (
               <div className="space-y-2 text-sm">
-                <div className="bg-slate-50 rounded-xl p-3">
-                  <p className="font-semibold text-slate-900 break-words">{verLancamento.employeeNome}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Compra em {fmtData(verLancamento.dataCompra)}</p>
+                <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3">
+                  <Avatar nome={verLancamento.employeeNome || "?"} fotoUrl={fotoPorEmployee.get(verLancamento.employeeId)} size="h-12 w-12" />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 break-words">{verLancamento.employeeNome}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Compra em {fmtData(verLancamento.dataCompra)}</p>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-slate-50 rounded-lg p-2.5"><p className="text-xs text-slate-500">Valor</p><p className="font-bold text-slate-900">{fmtBRL(verLancamento.valor)}</p></div>
