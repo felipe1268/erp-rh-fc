@@ -871,7 +871,7 @@ export default function Curriculos() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-sm">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-100">
                       <th className="px-4 py-3 w-10">
@@ -881,9 +881,9 @@ export default function Curriculos() {
                       </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Candidato</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Função</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Contato</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 hidden xl:table-cell">Contato</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 w-28">Currículo</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 w-28 hidden lg:table-cell">Currículo</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Ações</th>
                     </tr>
                   </thead>
@@ -912,14 +912,14 @@ export default function Curriculos() {
                         <td className="px-4 py-3.5">
                           <span className="inline-block px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium">{c.funcaoNome}</span>
                         </td>
-                        <td className="px-4 py-3.5 text-xs text-slate-600">
+                        <td className="px-4 py-3.5 text-xs text-slate-600 hidden xl:table-cell">
                           {c.telefone && <div>{c.telefone}</div>}
                           {c.email && <div className="text-slate-400">{c.email}</div>}
                         </td>
                         <td className="px-4 py-3.5">
                           {statusBadge(c.statusCandidato, c.motivoReprovacao)}
                         </td>
-                        <td className="px-4 py-3.5">
+                        <td className="px-4 py-3.5 hidden lg:table-cell">
                           {c.documentoUrl ? (
                             <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-amber-700 hover:text-amber-800 hover:underline text-xs flex items-center gap-1">
                               <FileText className="h-3 w-3" /> {c.fileName || "Ver"}
