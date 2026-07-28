@@ -249,9 +249,17 @@ export default function PortalParceiro() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Gestão de acesso externo para parceiros conveniados lançarem consumo</p>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-medium">Competência:</label>
-            <Input type="month" value={competencia} onChange={(e) => setCompetencia(e.target.value)} className="w-[180px]" />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              className="bg-purple-600 hover:bg-purple-700"
+              onClick={() => window.open("/portal/login", "_blank")}
+            >
+              <Globe className="w-4 h-4 mr-1.5" /> Portal do Parceiro
+            </Button>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium">Competência:</label>
+              <Input type="month" value={competencia} onChange={(e) => setCompetencia(e.target.value)} className="w-[180px]" />
+            </div>
           </div>
         </div>
 

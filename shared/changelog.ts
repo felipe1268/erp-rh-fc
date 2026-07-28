@@ -1,4 +1,10 @@
 /**
+ * Rev. 4699 - BOTAO "PORTAL DO PARCEIRO" NA TELA ADMIN
+ *
+ * Pedido do usuario: acesso em 1 clique ao portal publico a partir da tela
+ * Portal Externo. Botao roxo no header abre /portal/login em nova aba.
+ */
+/**
  * Rev. 4698 - PORTAL DO PARCEIRO REPAGINADO (2 PAGINAS, TOUCH-FIRST)
  *
  * Pedido do usuario: pagina "muito pobre" -> redesign moderno com o padrao
