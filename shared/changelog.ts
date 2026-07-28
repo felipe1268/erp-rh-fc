@@ -1,4 +1,37 @@
 /**
+ * Rev. 4697 - PORTAL DO PARCEIRO: CONVITE POR E-MAIL + LINK DO PORTAL
+ *
+ * Pedido do usuario: onboarding completo do parceiro. O portal independente
+ * ja existia (/portal/login, login CNPJ+senha, troca obrigatoria no 1o
+ * acesso); faltava o convite.
+ * - Nova procedure admin.enviarConviteParceiro: cadastra o responsavel
+ *   (nome/e-mail na credencial), cria o acesso com a senha padrao se ainda
+ *   nao existir (NUNCA reseta senha existente) e envia e-mail de boas-vindas
+ *   com link do portal, login (CNPJ), senha inicial e passo a passo dos
+ *   lancamentos + orientacao de contato em caso de duvida.
+ * - Link do portal: origem validada (so origem https, caminho fixo
+ *   /portal/login) com fallback getPortalBaseUrl().
+ * - Tela Portal Externo: botao "Enviar Convite" por parceiro (dialog com
+ *   nome/e-mail do responsavel) e "Copiar Link do Portal" no banner.
+ */
+/**
+ * Rev. 4696 - PORTAL EXTERNO DO PARCEIRO: SENHA PADRAO CONFIGURAVEL + CONTROLES
+ *
+ * Pedido do usuario: controle geral dos acessos dos parceiros com senha
+ * padrao previsivel (antes o reset gerava senha ALEATORIA de 10 chars).
+ * - Nova senha padrao por empresa (system_criteria chave
+ *   portal_senha_padrao_parceiro, default "mudar123"); gerar/resetar acesso
+ *   de PARCEIRO sempre define essa senha e forca troca no 1o acesso.
+ *   Terceiros continuam com senha aleatoria.
+ * - Novas procedures admin: getSenhaPadraoParceiro / setSenhaPadraoParceiro
+ *   (so admin/admin_master) / atualizarAcessoParceiro (editar nome/e-mail
+ *   do responsavel sem resetar senha). Tenant guard assertCompanyAccessPE
+ *   adicionado tambem ao gerarAcesso (antes sem guard).
+ * - Tela Portal Externo: banner mostra a senha padrao vigente + botao
+ *   "Alterar Senha Padrao"; reset agora pede CONFIRMACAO (poka-yoke) e
+ *   botao "Editar" no acesso ativo.
+ */
+/**
  * Rev. 4695 - DASHBOARD PARCEIROS: MES = COMPETENCIA DO CICLO (16 A 15)
  *
  * Bug reportado: a tela de Lancamentos usa competencia por ciclo de desconto

@@ -5,7 +5,9 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
 import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, clienteAvaliacaoDetalhes, portalClienteConfig, clientePerguntasExtras, clienteRespostasExtras, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros, employeeIntegrations, users, userCompanies } from "../../drizzle/schema";
+import { systemCriteria } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
+import { getUserCompanyLinks } from "../db";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { sendEmail } from "../services/smtpService";
@@ -32,6 +34,38 @@ function getPortalBaseUrl(): string {
   return process.env.REPLIT_DEV_DOMAIN
     ? `https://${process.env.REPLIT_DEV_DOMAIN}`
     : (process.env.APP_URL || "");
+}
+
+// Rev. 4696 — tenant guard: valida que o usuário tem acesso à empresa alvo.
+async function assertCompanyAccessPE(ctx: { user?: { id?: number; role?: string | null } }, companyId: number) {
+  if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctx.user.role === "admin" || ctx.user.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctx.user.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  // Sem vínculo com empresa alguma → nega (não-admin nunca tem acesso global)
+  if (!new Set<number>(allowedIds).has(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+}
+
+// Rev. 4696 — senha padrão CONFIGURÁVEL para acesso de PARCEIRO.
+// Fonte: system_criteria chave 'portal_senha_padrao_parceiro' (por empresa).
+// Default histórico: "mudar123". O reset SEMPRE define esta senha e força a
+// troca no primeiro acesso (primeiroAcesso=1).
+const SENHA_PADRAO_PARCEIRO_KEY = "portal_senha_padrao_parceiro";
+const SENHA_PADRAO_PARCEIRO_DEFAULT = "mudar123";
+async function getSenhaPadraoParceiro(db: any, companyId: number): Promise<string> {
+  try {
+    const rows = await db
+      .select({ valor: systemCriteria.valor })
+      .from(systemCriteria)
+      .where(and(eq(systemCriteria.companyId, companyId), eq(systemCriteria.chave, SENHA_PADRAO_PARCEIRO_KEY)));
+    const v = String(rows[0]?.valor ?? "").trim();
+    if (v.length >= 6) return v;
+  } catch (e) {
+    console.warn("[portalExterno] falha ao ler senha padrão do parceiro; usando default", e);
+  }
+  return SENHA_PADRAO_PARCEIRO_DEFAULT;
 }
 
 function generateTempPassword(): string {
@@ -398,6 +432,7 @@ export const portalExternoRouter = router({
       nomeEmpresa: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await assertCompanyAccessPE(ctx as any, input.companyId);
       const cnpjClean = input.cnpj.replace(/\D/g, "");
       try {
         const existing = await db.select().from(portalCredentials).where(
@@ -407,7 +442,12 @@ export const portalExternoRouter = router({
             eq(portalCredentials.companyId, input.companyId),
           )
         );
-        const senhaTemp = generateTempPassword();
+        // Rev. 4696 — PARCEIRO usa a senha padrão configurável da empresa
+        // (reset previsível; troca obrigatória no 1º acesso). Terceiro mantém
+        // senha aleatória como antes.
+        const senhaTemp = input.tipo === "parceiro"
+          ? await getSenhaPadraoParceiro(db, input.companyId)
+          : generateTempPassword();
         const senhaHash = await bcrypt.hash(senhaTemp, 10);
         if (existing.length > 0) {
           await db.update(portalCredentials).set({
@@ -445,6 +485,189 @@ export const portalExternoRouter = router({
         });
       }
     }),
+
+    // Rev. 4696 — senha padrão configurável do acesso de parceiros
+    getSenhaPadraoParceiro: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        await assertCompanyAccessPE(ctx as any, input.companyId);
+        return { senhaPadrao: await getSenhaPadraoParceiro(db, input.companyId) };
+      }),
+
+    setSenhaPadraoParceiro: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        senha: z.string().trim().min(6, "A senha padrão deve ter ao menos 6 caracteres").max(30, "Máximo 30 caracteres"),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        await assertCompanyAccessPE(ctx as any, input.companyId);
+        // Só administradores mudam a senha padrão (afeta todos os resets futuros)
+        const role = (ctx as any).user?.role;
+        if (role !== "admin" && role !== "admin_master") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem alterar a senha padrão." });
+        }
+        const senha = input.senha.trim();
+        const existing = await db
+          .select({ id: systemCriteria.id })
+          .from(systemCriteria)
+          .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.chave, SENHA_PADRAO_PARCEIRO_KEY)));
+        if (existing.length > 0) {
+          await db.update(systemCriteria).set({
+            valor: senha,
+            atualizadoPor: (ctx as any).user?.name || "Sistema",
+            updatedAt: new Date().toISOString(),
+          }).where(eq(systemCriteria.id, existing[0].id));
+        } else {
+          await db.insert(systemCriteria).values({
+            companyId: input.companyId,
+            categoria: "parceiros",
+            chave: SENHA_PADRAO_PARCEIRO_KEY,
+            valor: senha,
+            descricao: "Senha padrão inicial ao gerar/resetar acesso do parceiro no Portal Externo (troca obrigatória no 1º acesso)",
+            atualizadoPor: (ctx as any).user?.name || "Sistema",
+          } as any);
+        }
+        return { success: true, senhaPadrao: senha };
+      }),
+
+    // Rev. 4696 — editar dados do acesso do PARCEIRO (nome/e-mail/ativo) sem resetar senha
+    atualizarAcessoParceiro: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        companyId: z.number(),
+        nomeResponsavel: z.string().trim().max(120).nullish(),
+        emailResponsavel: z.union([z.literal(""), z.string().trim().email("E-mail inválido")]).nullish(),
+        ativo: z.boolean().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        await assertCompanyAccessPE(ctx as any, input.companyId);
+        const [cred] = await db.select().from(portalCredentials).where(eq(portalCredentials.id, input.id));
+        if (!cred || (cred as any).companyId !== input.companyId || (cred as any).tipo !== "parceiro") {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Acesso de parceiro não encontrado nesta empresa." });
+        }
+        const set: any = { updatedAt: new Date().toISOString() };
+        if (input.nomeResponsavel !== undefined) set.nomeResponsavel = input.nomeResponsavel || null;
+        if (input.emailResponsavel !== undefined) set.emailResponsavel = input.emailResponsavel || null;
+        if (input.ativo !== undefined) set.ativo = input.ativo ? 1 : 0;
+        await db.update(portalCredentials).set(set).where(eq(portalCredentials.id, input.id));
+        return { success: true };
+      }),
+
+    // Rev. 4697 — Convite de boas-vindas ao PARCEIRO por e-mail.
+    // Garante a credencial (cria com a senha padrão se não existir; NÃO reseta
+    // senha de acesso já existente), grava o e-mail/nome do responsável e envia
+    // o passo a passo com o link do portal.
+    enviarConviteParceiro: protectedProcedure
+      .input(z.object({
+        parceiroId: z.number(),
+        companyId: z.number(),
+        email: z.string().trim().email("E-mail inválido"),
+        nomeResponsavel: z.string().trim().max(120).optional(),
+        portalBaseUrl: z.string().trim().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        await assertCompanyAccessPE(ctx as any, input.companyId);
+
+        const [parceiro] = await db.select().from(parceirosConveniados).where(and(
+          eq(parceirosConveniados.id, input.parceiroId),
+          eq(parceirosConveniados.companyId, input.companyId),
+        ));
+        if (!parceiro) throw new TRPCError({ code: "NOT_FOUND", message: "Parceiro não encontrado nesta empresa." });
+
+        const cnpjClean = String((parceiro as any).cnpj || "").replace(/\D/g, "");
+        if (!cnpjClean) throw new TRPCError({ code: "BAD_REQUEST", message: "Parceiro sem CNPJ cadastrado." });
+        const nomeEmpresa = (parceiro as any).nomeFantasia || (parceiro as any).razaoSocial || "Parceiro";
+
+        const senhaPadrao = await getSenhaPadraoParceiro(db, input.companyId);
+        const existing = await db.select().from(portalCredentials).where(and(
+          eq(portalCredentials.cnpj, cnpjClean),
+          eq(portalCredentials.tipo, "parceiro"),
+          eq(portalCredentials.companyId, input.companyId),
+        ));
+        let acessoNovo = false;
+        if (existing.length === 0) {
+          const senhaHash = await bcrypt.hash(senhaPadrao, 10);
+          await db.insert(portalCredentials).values({
+            tipo: "parceiro",
+            parceiroId: input.parceiroId,
+            companyId: input.companyId,
+            cnpj: cnpjClean,
+            senhaHash,
+            nomeEmpresa,
+            emailResponsavel: input.email,
+            nomeResponsavel: input.nomeResponsavel || null,
+            primeiroAcesso: 1,
+            ativo: 1,
+          });
+          acessoNovo = true;
+        } else {
+          await db.update(portalCredentials).set({
+            emailResponsavel: input.email,
+            nomeResponsavel: input.nomeResponsavel || (existing[0] as any).nomeResponsavel,
+            ativo: 1,
+            updatedAt: new Date().toISOString(),
+          }).where(eq(portalCredentials.id, (existing[0] as any).id));
+        }
+
+        // Link do portal: usa a origem informada pelo client (mesmo domínio do
+        // app) quando válida; senão o fallback do servidor. Nunca aceita path
+        // arbitrário — só a ORIGEM https, e o caminho é fixo.
+        const origemOk = typeof input.portalBaseUrl === "string" && /^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(input.portalBaseUrl);
+        const base = origemOk ? input.portalBaseUrl! : getPortalBaseUrl();
+        const linkPortal = `${base}/portal/login`;
+
+        const [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
+        const empresaNome = (company as any)?.name || (company as any)?.razaoSocial || "FC Engenharia";
+        const primeiroNome = (input.nomeResponsavel || "").split(" ")[0];
+
+        const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        const senhaInfo = (acessoNovo || (existing[0] as any)?.primeiroAcesso === 1)
+          ? `<li><strong>Senha inicial:</strong> <code style="background:#f3e8ff;padding:2px 8px;border-radius:4px;font-size:15px">${esc(senhaPadrao)}</code> (obrigatório trocar no primeiro acesso)</li>`
+          : `<li><strong>Senha:</strong> a que você já definiu. Esqueceu? Peça o reset ao RH da ${esc(empresaNome)}.</li>`;
+        const html = `
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);border-radius:12px 12px 0 0;padding:28px 24px;text-align:center">
+    <h1 style="color:#fff;margin:0;font-size:22px">Portal do Parceiro</h1>
+    <p style="color:#ede9fe;margin:8px 0 0;font-size:14px">${esc(empresaNome)} — Convênio ${esc(nomeEmpresa)}</p>
+  </div>
+  <div style="border:1px solid #e5e7eb;border-top:0;border-radius:0 0 12px 12px;padding:24px">
+    <p style="font-size:15px">Olá${primeiroNome ? ` <strong>${esc(primeiroNome)}</strong>` : ""}! Você é o responsável pelos lançamentos do convênio <strong>${esc(nomeEmpresa)}</strong> no Portal do Parceiro da ${esc(empresaNome)}.</p>
+    <p style="font-size:14px;margin:16px 0 8px"><strong>Seu acesso:</strong></p>
+    <ul style="font-size:14px;line-height:1.9;padding-left:20px;margin:0">
+      <li><strong>Link do portal:</strong> <a href="${esc(linkPortal)}" style="color:#7c3aed">${esc(linkPortal)}</a></li>
+      <li><strong>Login:</strong> CNPJ ${esc(cnpjClean)}</li>
+      ${senhaInfo}
+    </ul>
+    <p style="font-size:14px;margin:20px 0 8px"><strong>Passo a passo:</strong></p>
+    <ol style="font-size:14px;line-height:1.9;padding-left:20px;margin:0">
+      <li>Acesse o link acima e entre com CNPJ e senha.</li>
+      <li>No primeiro acesso, o sistema pedirá para você criar a sua própria senha.</li>
+      <li>Para cada compra de colaborador: busque o funcionário pelo nome, informe a data, o valor e a descrição dos itens.</li>
+      <li>Anexe o comprovante da compra (foto ou PDF).</li>
+      <li>Envie o lançamento — o RH da ${esc(empresaNome)} confere e aprova; o desconto entra na folha do ciclo (compras de dia 16 a dia 15 entram no mês seguinte).</li>
+    </ol>
+    <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:14px 16px;margin-top:20px">
+      <p style="font-size:13px;margin:0;color:#6b21a8"><strong>Dúvidas?</strong> Fale com o RH da ${esc(empresaNome)} pelos canais habituais de contato.</p>
+    </div>
+    <p style="font-size:12px;color:#9ca3af;margin-top:20px">E-mail automático do sistema de gestão da ${esc(empresaNome)}. Não responda a esta mensagem.</p>
+  </div>
+</div>`;
+
+        const result = await sendEmail({
+          to: input.email,
+          subject: `Bem-vindo ao Portal do Parceiro — ${nomeEmpresa} × ${empresaNome}`,
+          html,
+          text: `Portal do Parceiro ${empresaNome}. Link: ${linkPortal} | Login: CNPJ ${cnpjClean}${acessoNovo ? ` | Senha inicial: ${senhaPadrao} (trocar no 1º acesso)` : ""}`,
+        });
+        if (!result.success) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao enviar e-mail: ${result.error || "erro no SMTP"}` });
+        }
+        return { success: true, acessoNovo, email: input.email, linkPortal };
+      }),
 
     listarAcessos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), tipo: z.enum(["terceiro", "parceiro"]).optional(),
     })).query(async ({ input, ctx }) => {

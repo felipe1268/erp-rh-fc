@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4697** — Portal do Parceiro: convite de boas-vindas por e-mail (cadastra responsável, cria acesso com senha padrão se faltar, passo a passo + link) e botão Copiar Link do Portal.
+- **Rev. 4696** — Portal Externo do Parceiro: senha padrão configurável por empresa (default mudar123, troca obrigatória no 1º acesso), reset com confirmação, botão Editar acesso (nome/e-mail) e tenant guard no gerarAcesso.
 - **Rev. 4695** — Dashboard Parceiros: KPIs, gráficos e drill-down agora agrupam pela competência do ciclo de desconto (16→15), igual à tela de Lançamentos; antes agrupava por mês-calendário e os números divergiam. Auditoria confirmou dados 100% corretos no banco.
 - **Rev. 4694** — Dashboard Parceiros: redesign responsivo para tablet/celular — KPIs em blocos legíveis sem truncamento de valores/títulos, seletor de período com alvos de toque maiores; lógica e drill-downs intactos.
 - **Rev. 4693** — Cheques: matcher cheque×extrato reconhece os formatos reais dos bancos ("CHEQUE EMITIDO/DEBITADO" e "COMPENSACAO INTERNA DE CHEQUE" do Santander, "CHEQUE COMPENSADO · Doc" da Caixa); 51 cheques pendentes da FC Engenharia com compensação confirmada foram marcados compensados/conciliados conforme o extrato.

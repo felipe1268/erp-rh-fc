@@ -76,6 +76,57 @@ export default function PortalParceiro() {
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
+  // Rev. 4696 — senha padrão configurável + edição de acesso
+  const [senhaPadraoOpen, setSenhaPadraoOpen] = useState(false);
+  const [novaSenhaPadrao, setNovaSenhaPadrao] = useState("");
+  const [editAcesso, setEditAcesso] = useState<any>(null);
+  const [editAcessoForm, setEditAcessoForm] = useState({ nomeResponsavel: "", emailResponsavel: "" });
+  const [resetConfirm, setResetConfirm] = useState<any>(null);
+
+  const { data: senhaPadraoData, refetch: refetchSenhaPadrao } = trpc.portalExterno.admin.getSenhaPadraoParceiro.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: companyId > 0 }
+  );
+  const senhaPadrao = senhaPadraoData?.senhaPadrao ?? "mudar123";
+
+  const setSenhaPadraoMutation = trpc.portalExterno.admin.setSenhaPadraoParceiro.useMutation({
+    onSuccess: () => {
+      toast.success("Senha padrão atualizada — os próximos resets usarão a nova senha");
+      setSenhaPadraoOpen(false);
+      setNovaSenhaPadrao("");
+      refetchSenhaPadrao();
+    },
+    onError: (e) => toast.error(e.message || "Erro ao salvar senha padrão"),
+  });
+
+  const atualizarAcessoMutation = trpc.portalExterno.admin.atualizarAcessoParceiro.useMutation({
+    onSuccess: () => { toast.success("Acesso atualizado"); setEditAcesso(null); refetchAcessos(); },
+    onError: (e) => toast.error(e.message || "Erro ao atualizar acesso"),
+  });
+
+  // Rev. 4697 — convite de boas-vindas por e-mail + link do portal
+  const [conviteParceiro, setConviteParceiro] = useState<any>(null);
+  const [conviteForm, setConviteForm] = useState({ email: "", nomeResponsavel: "" });
+  const linkPortal = `${window.location.origin}/portal/login`;
+
+  const enviarConviteMutation = trpc.portalExterno.admin.enviarConviteParceiro.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Convite enviado para ${data.email}${data.acessoNovo ? " (acesso criado com a senha padrão)" : ""}`);
+      setConviteParceiro(null);
+      refetchAcessos();
+    },
+    onError: (e) => toast.error(e.message || "Erro ao enviar convite"),
+  });
+
+  const copiarLinkPortal = async () => {
+    try {
+      await navigator.clipboard.writeText(linkPortal);
+      toast.success("Link do portal copiado");
+    } catch {
+      toast.info(linkPortal);
+    }
+  };
+
   const { data: acessosData, refetch: refetchAcessos } = trpc.portalExterno.admin.listarAcessos.useQuery(
     { companyId: companyId ?? 0, tipo: "parceiro" },
     { enabled: companyId > 0 || companyIds.length > 0 }
@@ -92,10 +143,10 @@ export default function PortalParceiro() {
 
   const gerarAcessoMutation = trpc.portalExterno.admin.gerarAcesso.useMutation({
     onSuccess: (data) => {
-      toast.success(`Acesso gerado! Login: ${data.cnpj} | Senha: ${data.senhaTemporaria}`);
+      toast.success(`Acesso pronto! Login: ${data.cnpj} | Senha: ${data.senhaTemporaria} (troca obrigatória no 1º acesso)`);
       refetchAcessos();
     },
-    onError: () => toast.error("Erro ao gerar acesso"),
+    onError: (e) => toast.error(e.message || "Erro ao gerar acesso"),
   });
 
   const editMutation = trpc.parceiros.lancamentos.editarLancamento.useMutation({
@@ -204,15 +255,33 @@ export default function PortalParceiro() {
           </div>
         </div>
 
-        {/* Info Banner */}
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex items-start gap-3">
+        {/* Info Banner — Rev. 4696: senha padrão dinâmica + controle geral */}
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-start gap-3">
           <Shield className="w-5 h-5 text-purple-500 mt-0.5 shrink-0" />
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-purple-800">Portal de Acesso para Parceiros</p>
-            <p className="text-xs text-purple-600 mt-1">
-              Cada parceiro conveniado acessa o portal com CNPJ e senha. A senha inicial é <strong>mudar123</strong> e deve ser alterada no primeiro acesso.
-              Clique em "Gerar Acesso" para criar ou resetar as credenciais do parceiro.
+            <p className="text-xs text-purple-600 mt-1 break-words">
+              Cada parceiro tem <strong>um acesso único</strong> (login = CNPJ). Ao gerar ou resetar, a senha volta para a
+              senha padrão <strong className="font-mono">{senhaPadrao}</strong> e o parceiro é obrigado a trocá-la no primeiro acesso.
             </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-purple-300 text-purple-700 hover:bg-purple-100"
+              onClick={copiarLinkPortal}
+            >
+              <Globe className="w-4 h-4 mr-1" /> Copiar Link do Portal
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-purple-300 text-purple-700 hover:bg-purple-100"
+              onClick={() => { setNovaSenhaPadrao(senhaPadrao); setSenhaPadraoOpen(true); }}
+            >
+              <Key className="w-4 h-4 mr-1" /> Alterar Senha Padrão
+            </Button>
           </div>
         </div>
 
@@ -289,14 +358,43 @@ export default function PortalParceiro() {
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex flex-wrap gap-2 shrink-0">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleGerarAcesso(parceiro)}
+                        onClick={() => acesso ? setResetConfirm(parceiro) : handleGerarAcesso(parceiro)}
                         disabled={gerarAcessoMutation.isPending}
                       >
-                        <Key className="w-4 h-4 mr-1" /> {acesso ? "Resetar Acesso" : "Gerar Acesso"}
+                        <Key className="w-4 h-4 mr-1" /> {acesso ? "Resetar Senha" : "Gerar Acesso"}
+                      </Button>
+                      {acesso && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditAcesso(acesso);
+                            setEditAcessoForm({
+                              nomeResponsavel: acesso.nomeResponsavel || "",
+                              emailResponsavel: acesso.emailResponsavel || "",
+                            });
+                          }}
+                        >
+                          <Pencil className="w-4 h-4 mr-1" /> Editar
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                        onClick={() => {
+                          setConviteParceiro(parceiro);
+                          setConviteForm({
+                            email: acesso?.emailResponsavel || parceiro.emailPrincipal || "",
+                            nomeResponsavel: acesso?.nomeResponsavel || parceiro.responsavelNome || "",
+                          });
+                        }}
+                      >
+                        <Send className="w-4 h-4 mr-1" /> Enviar Convite
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => { setSimulacaoParceiro(parceiro); setSimulacaoOpen(true); }}>
                         <Eye className="w-4 h-4 mr-1" /> Simular Portal
@@ -538,6 +636,140 @@ export default function PortalParceiro() {
               <Button variant="destructive" disabled={deleteMutation.isPending}
                 onClick={() => deleteMutation.mutate({ id: deleteLancamento.id })}>
                 {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 4696 — Alterar Senha Padrão */}
+        <Dialog open={senhaPadraoOpen} onOpenChange={(o) => !o && setSenhaPadraoOpen(false)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Key className="w-5 h-5 text-purple-500" /> Senha Padrão dos Parceiros</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground break-words">
+                Esta é a senha inicial definida toda vez que um acesso é gerado ou resetado.
+                O parceiro é sempre obrigado a trocá-la no primeiro acesso. Alterar aqui
+                <strong> não muda</strong> senhas já em uso — vale para os próximos resets.
+              </p>
+              <div>
+                <label className="text-sm font-medium">Nova senha padrão</label>
+                <Input
+                  value={novaSenhaPadrao}
+                  onChange={(e) => setNovaSenhaPadrao(e.target.value)}
+                  placeholder="mín. 6 caracteres"
+                  className="mt-1 font-mono"
+                  maxLength={30}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSenhaPadraoOpen(false)}>Cancelar</Button>
+              <Button
+                className="bg-purple-600 hover:bg-purple-700"
+                disabled={setSenhaPadraoMutation.isPending || novaSenhaPadrao.trim().length < 6}
+                onClick={() => setSenhaPadraoMutation.mutate({ companyId, senha: novaSenhaPadrao.trim() })}
+              >
+                {setSenhaPadraoMutation.isPending ? "Salvando..." : "Salvar Senha Padrão"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 4696 — Confirmação de reset de senha */}
+        <Dialog open={!!resetConfirm} onOpenChange={(o) => !o && setResetConfirm(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-yellow-500" /> Resetar Senha do Parceiro</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground break-words">
+              A senha de <strong>{resetConfirm?.nomeFantasia || resetConfirm?.razaoSocial}</strong> voltará
+              para a senha padrão <strong className="font-mono">{senhaPadrao}</strong> e ele deverá trocá-la
+              no primeiro acesso. A senha atual deixa de funcionar imediatamente.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setResetConfirm(null)}>Cancelar</Button>
+              <Button
+                className="bg-purple-600 hover:bg-purple-700"
+                disabled={gerarAcessoMutation.isPending}
+                onClick={() => { const p = resetConfirm; setResetConfirm(null); handleGerarAcesso(p); }}
+              >
+                {gerarAcessoMutation.isPending ? "Resetando..." : "Resetar Senha"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 4697 — Enviar convite de boas-vindas por e-mail */}
+        <Dialog open={!!conviteParceiro} onOpenChange={(o) => !o && setConviteParceiro(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Send className="w-5 h-5 text-purple-500" /> Enviar Convite — {conviteParceiro?.nomeFantasia || conviteParceiro?.razaoSocial}</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground break-words">
+                O responsável recebe um e-mail de boas-vindas com o link do portal, o login
+                (CNPJ), a senha inicial e o passo a passo dos lançamentos. Se o parceiro ainda
+                não tiver acesso, ele é criado com a senha padrão. Acessos existentes <strong>não</strong> têm
+                a senha resetada.
+              </p>
+              <div>
+                <label className="text-sm font-medium">Nome do responsável</label>
+                <Input value={conviteForm.nomeResponsavel} onChange={(e) => setConviteForm(f => ({ ...f, nomeResponsavel: e.target.value }))} className="mt-1" placeholder="Quem vai operar o portal" />
+              </div>
+              <div>
+                <label className="text-sm font-medium">E-mail do responsável *</label>
+                <Input type="email" value={conviteForm.email} onChange={(e) => setConviteForm(f => ({ ...f, email: e.target.value }))} className="mt-1" placeholder="email@parceiro.com.br" />
+              </div>
+              <div className="bg-muted rounded-md p-2.5 text-xs text-muted-foreground break-all">
+                Link enviado: <span className="font-mono">{linkPortal}</span>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConviteParceiro(null)}>Cancelar</Button>
+              <Button
+                className="bg-purple-600 hover:bg-purple-700"
+                disabled={enviarConviteMutation.isPending || !/^\S+@\S+\.\S+$/.test(conviteForm.email.trim())}
+                onClick={() => enviarConviteMutation.mutate({
+                  parceiroId: conviteParceiro.id,
+                  companyId,
+                  email: conviteForm.email.trim(),
+                  nomeResponsavel: conviteForm.nomeResponsavel.trim() || undefined,
+                  portalBaseUrl: window.location.origin,
+                })}
+              >
+                {enviarConviteMutation.isPending ? "Enviando..." : "Enviar Convite"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 4696 — Editar acesso do parceiro */}
+        <Dialog open={!!editAcesso} onOpenChange={(o) => !o && setEditAcesso(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Pencil className="w-5 h-5 text-purple-500" /> Editar Acesso — {editAcesso?.nomeEmpresa}</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium">Login (CNPJ)</label>
+                <Input value={editAcesso?.cnpj || ""} disabled className="mt-1 font-mono bg-muted" />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Nome do responsável</label>
+                <Input value={editAcessoForm.nomeResponsavel} onChange={(e) => setEditAcessoForm(f => ({ ...f, nomeResponsavel: e.target.value }))} className="mt-1" />
+              </div>
+              <div>
+                <label className="text-sm font-medium">E-mail do responsável</label>
+                <Input type="email" value={editAcessoForm.emailResponsavel} onChange={(e) => setEditAcessoForm(f => ({ ...f, emailResponsavel: e.target.value }))} className="mt-1" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditAcesso(null)}>Cancelar</Button>
+              <Button
+                className="bg-purple-600 hover:bg-purple-700"
+                disabled={atualizarAcessoMutation.isPending}
+                onClick={() => atualizarAcessoMutation.mutate({
+                  id: editAcesso.id,
+                  companyId,
+                  nomeResponsavel: editAcessoForm.nomeResponsavel,
+                  emailResponsavel: editAcessoForm.emailResponsavel,
+                })}
+              >
+                {atualizarAcessoMutation.isPending ? "Salvando..." : "Salvar"}
               </Button>
             </DialogFooter>
           </DialogContent>
