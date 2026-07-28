@@ -55,6 +55,8 @@ export default function Curriculos() {
   const utils = trpc.useUtils();
 
   const [funcoesSelecionadas, setFuncoesSelecionadas] = useState<number[]>([]);
+  // Rev. 4719 — busca no menu de funções
+  const [funcaoBusca, setFuncaoBusca] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [statusTab, setStatusTab] = useState<StatusTab>("ativo");
   const [search, setSearch] = useState("");
@@ -727,12 +729,26 @@ export default function Curriculos() {
                   <FolderPlus className="h-3.5 w-3.5" /> Nova
                 </button>
               </div>
+              <div className="relative mb-2">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={funcaoBusca}
+                  onChange={e => setFuncaoBusca(e.target.value)}
+                  placeholder="Filtrar funções..."
+                  className="w-full pl-8 pr-2 py-1.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 placeholder:text-slate-400"
+                />
+              </div>
               <div className="space-y-0.5">
                 <button onClick={() => setFuncoesSelecionadas([])}
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${funcoesSelecionadas.length === 0 ? "bg-amber-50 text-amber-900 font-medium" : "hover:bg-slate-50 text-slate-600"}`}>
                   Todas as funções
                 </button>
-                {funcoes.map((f: any) => {
+                {funcoes.filter((f: any) => {
+                  if (!funcaoBusca.trim()) return true;
+                  const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                  return norm(f.nome || "").includes(norm(funcaoBusca));
+                }).map((f: any) => {
                   const checked = funcoesSelecionadas.includes(f.id);
                   return (
                     <div key={f.id} className="group flex items-center gap-1">

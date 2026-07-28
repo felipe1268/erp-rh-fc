@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4719** — Currículos: campo de busca no menu de funções (ignora acentos); funções sinônimas mescladas nos dados (AUXILIAR ADMINISTRATIVO, ARQUITETO(A), ENGENHEIRO(A), TÉCNICO EM SEGURANÇA DO TRABALHO).
 - **Rev. 4718** — Currículos: página usa toda a largura (menu de funções mais estreito, tabela ampliada); coluna Currículo virou só o ícone da folha (nome do arquivo no tooltip).
 - **Rev. 4717** — Currículos: fluxo de entrevista (botão Selecionar p/ Entrevista → tag ENTREVISTADO → Desclassificar/Efetivar/Manter no Banco), novos status "entrevistado" e "banco", layout da tabela sem corte.
 - **Rev. 4716** — Férias: badge "A Vencer · 2º período" agora mostra "Iniciar até" com a mesma data da coluna "Concessivo Até" (limite p/ iniciar o gozo, 30 dias antes), eliminando as duas datas divergentes.

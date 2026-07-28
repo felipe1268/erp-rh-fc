@@ -1,4 +1,15 @@
 /**
+ * Rev. 4719 - CURRICULOS: BUSCA NO MENU DE FUNCOES + MESCLAGEM DE SINONIMOS
+ *
+ * 1) Campo "Filtrar funcoes..." no topo do menu lateral (busca ignora
+ *    acentos e maiusculas).
+ * 2) Dados (FC ENGENHARIA): funcoes sinonimas mescladas via mesma
+ *    semantica do mesclarFuncoes — AUX. ADMINISTRATIVO + ASSISTENTE
+ *    ADMINISTRATIVO DE OBRAS -> AUXILIAR ADMINISTRATIVO; ARQUITETA ->
+ *    ARQUITETO(A); ENGENHEIRA CIVIL + ENGENHEIRO -> ENGENHEIRO(A);
+ *    TECNICO DE -> TECNICO EM SEGURANCA DO TRABALHO.
+ */
+/**
  * Rev. 4718 - CURRICULOS: TABELA USA A LARGURA TODA (SEM ROLAGEM HORIZONTAL)
  *
  * 1) Container da pagina sem max-w-7xl (usa toda a largura da tela).
