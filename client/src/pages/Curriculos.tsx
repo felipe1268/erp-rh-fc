@@ -31,17 +31,19 @@ type Experiencia = {
   descricao: string;
 };
 
-type StatusTab = "ativo" | "em_analise" | "entrevista" | "aprovado" | "contratado" | "reprovado" | "desistiu" | "blacklist" | "todos";
+type StatusTab = "ativo" | "em_analise" | "entrevista" | "entrevistado" | "aprovado" | "contratado" | "banco" | "reprovado" | "desistiu" | "blacklist" | "todos";
 
 type SortBy = "recente" | "antigo" | "nome_az" | "nome_za";
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string; text: string }> = {
   ativo: { label: "Ativo", icon: <CheckCircle className="h-3.5 w-3.5" />, color: "text-green-700", bg: "bg-green-100", text: "text-green-700" },
   em_analise: { label: "Em Análise", icon: <Search className="h-3.5 w-3.5" />, color: "text-blue-600", bg: "bg-blue-100", text: "text-blue-700" },
-  entrevista: { label: "Entrevista", icon: <Handshake className="h-3.5 w-3.5" />, color: "text-purple-600", bg: "bg-purple-100", text: "text-purple-700" },
+  entrevista: { label: "Selecionado p/ Entrevista", icon: <Handshake className="h-3.5 w-3.5" />, color: "text-purple-600", bg: "bg-purple-100", text: "text-purple-700" },
+  entrevistado: { label: "ENTREVISTADO", icon: <UserCheck className="h-3.5 w-3.5" />, color: "text-indigo-600", bg: "bg-indigo-100", text: "text-indigo-700" },
   aprovado: { label: "Aprovado", icon: <UserCheck className="h-3.5 w-3.5" />, color: "text-emerald-600", bg: "bg-emerald-100", text: "text-emerald-700" },
-  contratado: { label: "Contratado", icon: <Briefcase className="h-3.5 w-3.5" />, color: "text-sky-600", bg: "bg-sky-100", text: "text-sky-700" },
-  reprovado: { label: "Reprovado", icon: <ThumbsDown className="h-3.5 w-3.5" />, color: "text-red-600", bg: "bg-red-100", text: "text-red-700" },
+  contratado: { label: "Efetivado", icon: <Briefcase className="h-3.5 w-3.5" />, color: "text-sky-600", bg: "bg-sky-100", text: "text-sky-700" },
+  banco: { label: "Manter no Banco", icon: <FolderPlus className="h-3.5 w-3.5" />, color: "text-teal-600", bg: "bg-teal-100", text: "text-teal-700" },
+  reprovado: { label: "Desclassificado", icon: <ThumbsDown className="h-3.5 w-3.5" />, color: "text-red-600", bg: "bg-red-100", text: "text-red-700" },
   desistiu: { label: "Desistiu", icon: <UserX className="h-3.5 w-3.5" />, color: "text-orange-600", bg: "bg-orange-100", text: "text-orange-700" },
   blacklist: { label: "Blacklist", icon: <Ban className="h-3.5 w-3.5" />, color: "text-slate-600", bg: "bg-slate-200", text: "text-slate-800" },
 };
@@ -68,6 +70,8 @@ export default function Curriculos() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showReprovDialog, setShowReprovDialog] = useState(false);
   const [motivoReprovacao, setMotivoReprovacao] = useState("");
+  // Rev. 4717 — alvo do dialog de desclassificação (linha única ou seleção em massa)
+  const [reprovIds, setReprovIds] = useState<number[]>([]);
   const [sortBy, setSortBy] = useState<SortBy>("recente");
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [statusDialogTarget, setStatusDialogTarget] = useState<StatusTab>("ativo");
@@ -193,6 +197,7 @@ export default function Curriculos() {
       setShowReprovDialog(false);
       setShowStatusDialog(false);
       setMotivoReprovacao("");
+      setReprovIds([]);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -351,6 +356,17 @@ export default function Curriculos() {
   }
   function handleBulkReprovar() {
     if (selectedIds.length === 0) return;
+    setReprovIds(selectedIds);
+    setMotivoReprovacao("");
+    setShowReprovDialog(true);
+  }
+  // Rev. 4717 — ações rápidas do fluxo de entrevista (por linha)
+  function quickStatus(id: number, status: StatusTab) {
+    if (status === "todos") return;
+    atualizarStatusMut.mutate({ ids: [id], companyId, statusCandidato: status as any });
+  }
+  function abrirDesclassificar(id: number) {
+    setReprovIds([id]);
     setMotivoReprovacao("");
     setShowReprovDialog(true);
   }
@@ -803,7 +819,7 @@ export default function Curriculos() {
             </div>
           </div>
 
-          <div className="col-span-12 md:col-span-9 space-y-4">
+          <div className="col-span-12 md:col-span-9 min-w-0 space-y-4">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input className="pl-11 h-12 rounded-xl border-slate-200/70 bg-white shadow-sm text-sm focus-visible:ring-amber-500/30" placeholder="Buscar por nome, telefone, cidade, habilidade..." value={search} onChange={e => setSearch(e.target.value)} />
@@ -855,7 +871,7 @@ export default function Curriculos() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[980px] text-sm">
                   <thead>
                     <tr className="border-b border-slate-100">
                       <th className="px-4 py-3 w-10">
@@ -868,7 +884,7 @@ export default function Curriculos() {
                       <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Contato</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 w-28">Currículo</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 w-20">Ações</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -918,7 +934,46 @@ export default function Curriculos() {
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-end gap-1 flex-wrap">
+                            {/* Rev. 4717 — fluxo de entrevista: ações rápidas por status */}
+                            {(c.statusCandidato === "ativo" || c.statusCandidato === "em_analise" || c.statusCandidato === "banco") && (
+                              <Button size="sm" variant="outline" disabled={atualizarStatusMut.isPending}
+                                className="h-7 px-2.5 text-[11px] rounded-lg border-purple-200 text-purple-700 hover:bg-purple-50 whitespace-nowrap"
+                                title="Selecionar este candidato para entrevista"
+                                onClick={() => quickStatus(c.id, "entrevista")}>
+                                <Handshake className="h-3 w-3 mr-1" /> Entrevista
+                              </Button>
+                            )}
+                            {c.statusCandidato === "entrevista" && (
+                              <Button size="sm" variant="outline" disabled={atualizarStatusMut.isPending}
+                                className="h-7 px-2.5 text-[11px] rounded-lg border-indigo-200 text-indigo-700 hover:bg-indigo-50 whitespace-nowrap"
+                                title="Marcar que o candidato passou pela entrevista (recebe a tag ENTREVISTADO)"
+                                onClick={() => quickStatus(c.id, "entrevistado")}>
+                                <UserCheck className="h-3 w-3 mr-1" /> Entrevistado
+                              </Button>
+                            )}
+                            {c.statusCandidato === "entrevistado" && (
+                              <>
+                                <Button size="sm" variant="outline" disabled={atualizarStatusMut.isPending}
+                                  className="h-7 px-2 text-[11px] rounded-lg border-red-200 text-red-600 hover:bg-red-50 whitespace-nowrap"
+                                  title="Desclassificar candidato (pede o motivo)"
+                                  onClick={() => abrirDesclassificar(c.id)}>
+                                  Desclassificar
+                                </Button>
+                                <Button size="sm" variant="outline" disabled={atualizarStatusMut.isPending}
+                                  className="h-7 px-2 text-[11px] rounded-lg border-sky-200 text-sky-700 hover:bg-sky-50 whitespace-nowrap"
+                                  title="Candidato aprovado e efetivado (contratado)"
+                                  onClick={() => quickStatus(c.id, "contratado")}>
+                                  Efetivar
+                                </Button>
+                                <Button size="sm" variant="outline" disabled={atualizarStatusMut.isPending}
+                                  className="h-7 px-2 text-[11px] rounded-lg border-teal-200 text-teal-700 hover:bg-teal-50 whitespace-nowrap"
+                                  title="Manter o currículo no banco de talentos para futuras contratações"
+                                  onClick={() => quickStatus(c.id, "banco")}>
+                                  Manter no Banco
+                                </Button>
+                              </>
+                            )}
                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-amber-700 hover:bg-amber-50" title="Editar" onClick={() => openEditDialog(c)}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
@@ -1126,22 +1181,22 @@ export default function Curriculos() {
         </div>
       </FullScreenDialog>
 
-      <Dialog open={showReprovDialog} onOpenChange={(open) => { if (!open) { setShowReprovDialog(false); setMotivoReprovacao(""); } }}>
+      <Dialog open={showReprovDialog} onOpenChange={(open) => { if (!open) { setShowReprovDialog(false); setMotivoReprovacao(""); setReprovIds([]); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-700">
               <ThumbsDown className="h-5 w-5" />
-              Reprovar {selectedIds.length} candidato(s)
+              Desclassificar {(reprovIds.length > 0 ? reprovIds.length : selectedIds.length)} candidato(s)
             </DialogTitle>
           </DialogHeader>
           <div className="py-2 space-y-3">
             <div className="bg-red-50 border border-red-200 rounded-xl p-3">
               <p className="text-sm text-red-800">
-                Os candidatos selecionados serão marcados como <strong>reprovados</strong> e ficarão em uma lista separada para evitar novas entrevistas.
+                Os candidatos selecionados serão marcados como <strong>desclassificados</strong> e ficarão em uma lista separada, evitando que o RH selecione o mesmo currículo novamente.
               </p>
             </div>
             <div>
-              <Label>Motivo da reprovação *</Label>
+              <Label>Motivo da desclassificação *</Label>
               <Textarea className="mt-1"
                 placeholder="Ex: Não possui experiência na área, não compareceu à entrevista, não tem perfil para a vaga..."
                 value={motivoReprovacao}
@@ -1150,13 +1205,13 @@ export default function Curriculos() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowReprovDialog(false); setMotivoReprovacao(""); }}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setShowReprovDialog(false); setMotivoReprovacao(""); setReprovIds([]); }}>Cancelar</Button>
             <Button onClick={() => {
-              if (!motivoReprovacao.trim()) { toast.error("Informe o motivo da reprovação"); return; }
-              atualizarStatusMut.mutate({ ids: selectedIds, companyId, statusCandidato: "reprovado", motivoReprovacao: motivoReprovacao.trim() });
+              if (!motivoReprovacao.trim()) { toast.error("Informe o motivo da desclassificação"); return; }
+              atualizarStatusMut.mutate({ ids: reprovIds.length > 0 ? reprovIds : selectedIds, companyId, statusCandidato: "reprovado", motivoReprovacao: motivoReprovacao.trim() });
             }} disabled={atualizarStatusMut.isPending} className="bg-red-600 hover:bg-red-700">
               {atualizarStatusMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ThumbsDown className="h-4 w-4 mr-1" />}
-              Confirmar Reprovação
+              Confirmar Desclassificação
             </Button>
           </DialogFooter>
         </DialogContent>

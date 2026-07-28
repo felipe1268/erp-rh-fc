@@ -217,7 +217,7 @@ export const curriculosRouter = router({
       companyId: z.number().int().positive(),
       funcaoId: z.number().int().positive().optional(),
       funcaoIds: z.array(z.number().int().positive()).optional(),
-      statusCandidato: z.enum(["ativo", "em_analise", "entrevista", "aprovado", "contratado", "reprovado", "desistiu", "blacklist", "todos"]).optional(),
+      statusCandidato: z.enum(["ativo", "em_analise", "entrevista", "entrevistado", "aprovado", "contratado", "banco", "reprovado", "desistiu", "blacklist", "todos"]).optional(),
     }))
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
@@ -428,7 +428,7 @@ export const curriculosRouter = router({
     .input(z.object({
       ids: z.array(z.number().int().positive()).min(1).max(200),
       companyId: z.number().int().positive(),
-      statusCandidato: z.enum(["ativo", "em_analise", "entrevista", "aprovado", "contratado", "reprovado", "desistiu", "blacklist"]),
+      statusCandidato: z.enum(["ativo", "em_analise", "entrevista", "entrevistado", "aprovado", "contratado", "banco", "reprovado", "desistiu", "blacklist"]),
       motivoReprovacao: z.string().max(1000).optional(),
     }))
     .mutation(async ({ input, ctx }) => {

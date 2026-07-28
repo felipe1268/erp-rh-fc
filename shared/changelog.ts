@@ -1,4 +1,17 @@
 /**
+ * Rev. 4717 - CURRICULOS: FLUXO DE ENTREVISTA COMPLETO + LAYOUT
+ *
+ * 1) Layout: coluna principal com min-w-0 (tabela nao corta mais o Status;
+ *    rolagem horizontal correta) e tabela com min-w.
+ * 2) Botao "Entrevista" por linha (status ativo/em analise/banco) seleciona
+ *    o candidato para entrevista.
+ * 3) Novo status ENTREVISTADO (tag propria) marcado apos a entrevista.
+ * 4) Apos entrevistado, RH decide por linha: Desclassificar (pede motivo),
+ *    Efetivar (contratado) ou Manter no Banco (novo status "banco" para
+ *    futuras contratacoes). Labels: reprovado="Desclassificado",
+ *    contratado="Efetivado". Evita selecionar o mesmo curriculo 2x.
+ */
+/**
  * Rev. 4716 - FERIAS: BADGE "A VENCER" USA A MESMA DATA DA COLUNA CONCESSIVO
  *
  * A tag "Concessivo ate" do badge do 2o periodo mostrava o fim bruto do
