@@ -46,6 +46,8 @@ interface DashChartProps {
   showPercentage?: boolean;
   onChartClick?: (info: ChartClickInfo) => void;
   valueFormatter?: (value: number) => string;
+  /** Rev. 4694 — quando true, o título quebra linha em vez de truncar (mobile/tablet). */
+  wrapTitle?: boolean;
 }
 
 const COLORS = [
@@ -237,7 +239,8 @@ export default function DashChart({ title, className, ...rest }: DashChartProps)
       <Card className={`${className || ''} ${rest.onChartClick ? 'ring-1 ring-transparent hover:ring-blue-200 transition-all' : ''}`}>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-sm truncate">{title}</CardTitle>
+            {/* Rev. 4694 — wrapTitle: título quebra linha em vez de truncar ("Status do..."). Opt-in, default preserva o comportamento antigo. */}
+            <CardTitle className={`text-sm ${rest.wrapTitle ? "break-words leading-snug" : "truncate"}`}>{title}</CardTitle>
             <div className="flex items-center gap-2 shrink-0">
               {rest.onChartClick ? (
                 <span className="hidden sm:flex text-[10px] text-muted-foreground items-center gap-1">

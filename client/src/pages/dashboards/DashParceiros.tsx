@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
+import DashChart, { ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
@@ -60,6 +60,59 @@ function ColabAvatar({ fotoUrl, nome, size = 8 }: { fotoUrl?: string | null; nom
     <span className={`${cls} rounded-full bg-purple-100 text-purple-700 font-semibold flex items-center justify-center flex-shrink-0`}>
       {iniciais || "?"}
     </span>
+  );
+}
+
+/* Rev. 4694 — KPI local SEM truncamento (o DashKpi compartilhado trunca o valor em
+ * telas estreitas — "R$ 1.362,98" virava "R..."). Mesmo vocabulário visual (borda
+ * colorida à esquerda, ícone em pastilha), mas o valor quebra linha quando precisa
+ * e o card inteiro é alvo de toque generoso para iPad/celular. */
+function KpiLocal({ label, value, color = "blue", icon: Icon, sub, onClick }: {
+  label: string;
+  value: string | number;
+  color?: string;
+  icon?: any;
+  sub?: React.ReactNode;
+  onClick?: () => void;
+}) {
+  const colorMap: Record<string, string> = {
+    blue: "text-blue-600 bg-blue-50 border-l-blue-500",
+    green: "text-green-600 bg-green-50 border-l-green-500",
+    red: "text-red-600 bg-red-50 border-l-red-500",
+    yellow: "text-yellow-600 bg-yellow-50 border-l-yellow-500",
+    orange: "text-orange-600 bg-orange-50 border-l-orange-500",
+    purple: "text-purple-600 bg-purple-50 border-l-purple-500",
+    teal: "text-teal-600 bg-teal-50 border-l-teal-500",
+    slate: "text-slate-600 bg-slate-50 border-l-slate-500",
+    indigo: "text-indigo-600 bg-indigo-50 border-l-indigo-500",
+  };
+  const [textColor, bgColor, borderColor] = (colorMap[color] || colorMap.blue).split(" ");
+  const displayValue = typeof value === "number" ? value.toLocaleString("pt-BR") : value;
+  const isMonetary = typeof value === "string" && value.startsWith("R$");
+  return (
+    <Card
+      className={`border-l-4 ${borderColor} transition-all duration-200 ${onClick ? "cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99]" : "hover:shadow-sm"}`}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+    >
+      <CardContent className="p-3.5 sm:p-4">
+        <div className="flex items-start gap-3">
+          {Icon && (
+            <div className={`h-9 w-9 sm:h-10 sm:w-10 rounded-lg ${bgColor} flex items-center justify-center shrink-0`}>
+              <Icon className={`h-4.5 w-4.5 sm:h-5 sm:w-5 ${textColor}`} />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            {/* Valor NUNCA trunca: quebra linha se faltar espaço. Monetário um pouco menor. */}
+            <p className={`${isMonetary ? "text-lg sm:text-xl" : "text-xl sm:text-2xl"} font-bold ${textColor} break-words leading-tight tabular-nums`}>{displayValue}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 break-words leading-snug">{label}</p>
+            {sub && <p className="text-[11px] text-muted-foreground mt-0.5 break-words leading-snug">{sub}</p>}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -128,7 +181,8 @@ export default function DashParceiros() {
 
   const drillByMesIdx = (mIdx: number) => {
     if (!data?.detalhes) return;
-    const items = data.detalhes.filter((d: any) => Number(String(d.dataCompra).slice(5, 7)) === mIdx + 1);
+    // Rev. 4695 — o "mês" do dashboard é a competência do ciclo (16→15), não o mês-calendário
+    const items = data.detalhes.filter((d: any) => Number(String(d.competenciaDesconto ?? d.dataCompra).slice(5, 7)) === mIdx + 1);
     setDrillDialog({ title: `Lançamentos — ${MESES_FULL[mIdx]}/${ano}`, items });
   };
 
@@ -326,28 +380,30 @@ export default function DashParceiros() {
           </CardContent>
         </Card>
 
-        {/* KPIs principais */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <DashKpi label="Parceiros Ativos" value={resumo.parceirosAtivos} sub={`${resumo.parceirosCadastrados} cadastrados`} icon={Store} color="purple" />
-          <DashKpi label="Lançamentos" value={resumo.totalLancamentos} sub={`${resumo.colaboradoresUtilizando} colaboradores`} icon={Receipt} color="blue" />
-          <DashKpi label="Valor Total" value={fmtBRLShort(resumo.valorTotal)} sub={`${ano}${mes !== "todos" ? "/" + String(mes).padStart(2, "0") : ""}`} icon={DollarSign} color="indigo" />
-          <DashKpi label="Pendentes" value={resumo.pendentes} sub={fmtBRLShort(resumo.valorPendente)} icon={Clock} color="yellow" onClick={() => drillByStatus("pendente")} />
-          <DashKpi label="Aprovados" value={resumo.aprovados} sub={fmtBRLShort(resumo.valorAprovado)} icon={CheckCircle} color="green" onClick={() => drillByStatus("aprovado")} />
-          <DashKpi label="Rejeitados" value={resumo.rejeitados} sub={fmtBRLShort(resumo.valorRejeitado)} icon={XCircle} color="red" onClick={() => drillByStatus("rejeitado")} />
+        {/* KPIs principais — Rev. 4694: máx. 3 colunas até desktop largo; 6 colunas só em
+            telas muito largas (2xl). No iPad/celular cada card tem espaço para o valor inteiro. */}
+        <div className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3">
+          <KpiLocal label="Parceiros Ativos" value={resumo.parceirosAtivos} sub={`${resumo.parceirosCadastrados} cadastrados`} icon={Store} color="purple" />
+          <KpiLocal label="Lançamentos" value={resumo.totalLancamentos} sub={`${resumo.colaboradoresUtilizando} colaboradores`} icon={Receipt} color="blue" />
+          <KpiLocal label="Valor Total" value={fmtBRLShort(resumo.valorTotal)} sub={`${ano}${mes !== "todos" ? "/" + String(mes).padStart(2, "0") : ""}`} icon={DollarSign} color="indigo" />
+          <KpiLocal label="Pendentes" value={resumo.pendentes} sub={fmtBRLShort(resumo.valorPendente)} icon={Clock} color="yellow" onClick={() => drillByStatus("pendente")} />
+          <KpiLocal label="Aprovados" value={resumo.aprovados} sub={fmtBRLShort(resumo.valorAprovado)} icon={CheckCircle} color="green" onClick={() => drillByStatus("aprovado")} />
+          <KpiLocal label="Rejeitados" value={resumo.rejeitados} sub={fmtBRLShort(resumo.valorRejeitado)} icon={XCircle} color="red" onClick={() => drillByStatus("rejeitado")} />
         </div>
 
         {/* KPIs secundários */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <DashKpi label="Taxa de Aprovação" value={`${resumo.taxaAprovacao.toFixed(1)}%`} sub="Aprovados / decididos" icon={TrendingUp} color="teal" />
-          <DashKpi label="SLA Aprovação" value={`${resumo.slaDias.toFixed(1)} dias`} sub="Lançamento → aprovação" icon={Timer} color="slate" />
-          <DashKpi label="Total Pago" value={fmtBRLShort(resumo.valorPago)} sub={`${resumo.pagamentosPagos} pagamentos`} icon={Wallet} color="green" />
-          <DashKpi label="A Pagar" value={fmtBRLShort(resumo.valorAPagar)} sub={`${resumo.pagamentosPendentes} pendentes`} icon={CreditCard} color="orange" />
+          <KpiLocal label="Taxa de Aprovação" value={`${resumo.taxaAprovacao.toFixed(1)}%`} sub="Aprovados / decididos" icon={TrendingUp} color="teal" />
+          <KpiLocal label="SLA Aprovação" value={`${resumo.slaDias.toFixed(1)} dias`} sub="Lançamento → aprovação" icon={Timer} color="slate" />
+          <KpiLocal label="Total Pago" value={fmtBRLShort(resumo.valorPago)} sub={`${resumo.pagamentosPagos} pagamentos`} icon={Wallet} color="green" />
+          <KpiLocal label="A Pagar" value={fmtBRLShort(resumo.valorAPagar)} sub={`${resumo.pagamentosPendentes} pendentes`} icon={CreditCard} color="orange" />
         </div>
 
         {/* Charts: Evolução + Status */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
             <DashChart
+            wrapTitle
               title="Evolução Mensal de Lançamentos"
               type="bar"
               labels={data.evolucaoMensal.map((m: any) => m.label)}
@@ -361,6 +417,7 @@ export default function DashParceiros() {
             />
           </div>
           <DashChart
+            wrapTitle
             title="Status dos Lançamentos"
             type="doughnut"
             labels={["Aprovados", "Pendentes", "Rejeitados"]}
@@ -379,6 +436,7 @@ export default function DashParceiros() {
         {/* Valor mensal + Pagamentos */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <DashChart
+            wrapTitle
             title="Valor Aprovado por Mês"
             type="line"
             labels={data.evolucaoMensal.map((m: any) => m.label)}
@@ -391,6 +449,7 @@ export default function DashParceiros() {
             height={260}
           />
           <DashChart
+            wrapTitle
             title="Pagamentos a Parceiros (Pago vs A Pagar)"
             type="bar"
             labels={data.pagamentosPorMes.map((m: any) => m.label)}
@@ -535,6 +594,7 @@ export default function DashParceiros() {
                 <p className="text-sm text-muted-foreground py-6 text-center">Nenhum lançamento no período.</p>
               ) : (
                 <DashChart
+            wrapTitle
                   title=""
                   type="horizontalBar"
                   labels={data.rankingParceiros.map((p: any) => p.nome)}
@@ -575,7 +635,7 @@ export default function DashParceiros() {
                         <Eye className="h-3.5 w-3.5 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                         <ColabAvatar fotoUrl={c.fotoUrl} nome={c.nome} />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium truncate group-hover:text-purple-700">{c.nome}</p>
+                          <p className="text-sm font-medium break-words leading-snug group-hover:text-purple-700">{c.nome}</p>
                           <p className="text-xs text-muted-foreground">{c.lancamentos} lanç.</p>
                         </div>
                       </div>
@@ -717,10 +777,10 @@ export default function DashParceiros() {
               <>
                 {/* KPIs do drill */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                  <DashKpi label="Lançamentos" value={drillDialog.items.length} icon={Receipt} color="blue" />
-                  <DashKpi label="Valor Total" value={fmtBRLShort(drillDialog.items.reduce((a: number, x: any) => a + Number(x.valor || 0), 0))} icon={DollarSign} color="purple" />
-                  <DashKpi label="Parceiros" value={new Set(drillDialog.items.map((x: any) => x.parceiroNome)).size} icon={Store} color="indigo" />
-                  <DashKpi label="Colaboradores" value={new Set(drillDialog.items.map((x: any) => x.employeeNome)).size} icon={Users} color="teal" />
+                  <KpiLocal label="Lançamentos" value={drillDialog.items.length} icon={Receipt} color="blue" />
+                  <KpiLocal label="Valor Total" value={fmtBRLShort(drillDialog.items.reduce((a: number, x: any) => a + Number(x.valor || 0), 0))} icon={DollarSign} color="purple" />
+                  <KpiLocal label="Parceiros" value={new Set(drillDialog.items.map((x: any) => x.parceiroNome)).size} icon={Store} color="indigo" />
+                  <KpiLocal label="Colaboradores" value={new Set(drillDialog.items.map((x: any) => x.employeeNome)).size} icon={Users} color="teal" />
                 </div>
                 <div className="overflow-x-auto rounded-lg border">
                   <table className="w-full text-sm">
@@ -764,7 +824,7 @@ export default function DashParceiros() {
                                 title="Clique para ver o que o funcionário comprou (itens + comprovante)"
                               >
                                 <Eye className="h-3 w-3 opacity-50 shrink-0" />
-                                <span className="truncate text-muted-foreground">{d.descricaoItens || "Ver compra"}</span>
+                                <span className="break-words text-muted-foreground">{d.descricaoItens || "Ver compra"}</span>
                               </button>
                             </td>
                             <td className="text-right py-1.5 px-3 font-medium">{fmtBRL(d.valor)}</td>

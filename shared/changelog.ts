@@ -1,4 +1,31 @@
 /**
+ * Rev. 4695 - DASHBOARD PARCEIROS: MES = COMPETENCIA DO CICLO (16 A 15)
+ *
+ * Bug reportado: a tela de Lancamentos usa competencia por ciclo de desconto
+ * (ex.: "Jul" = compras de 16/06 a 15/07) mas o Dashboard Parceiros agrupava
+ * por MES-CALENDARIO de dataCompra — os numeros nunca batiam (10 lancamentos
+ * de Jul na lista, dashboard mostrando 0/valores trocados entre meses).
+ * Auditoria nos dados (Neon): competencia_desconto 100% preenchida e correta
+ * nos 48 lancamentos — o problema era SO no codigo do dashboard.
+ * Fix em getDashParceiros (server/routers/dashboards.ts): KPIs, filtro de mes,
+ * evolucao mensal e drill-down por mes agora usam a competencia do ciclo
+ * (coluna competencia_desconto; fallback derivado com o diaCorte da empresa
+ * via helpers exportados de parceiros.ts). Janela de busca alargada para
+ * dez/ano-1 (competencia Jan inclui compras do fim de dezembro).
+ */
+/**
+ * Rev. 4694 - DASHBOARD PARCEIROS: REDESIGN RESPONSIVO (TABLET/CELULAR)
+ *
+ * O usuario nao conseguia ler os textos no iPad/celular: os 6 KPIs ficavam
+ * espremidos em 6 colunas e o DashKpi compartilhado truncava o valor
+ * ("R$ 1.362,98" virava "R...") e titulos de grafico ("Status do...").
+ * Redesign completo da apresentacao de DashParceiros.tsx: KPIs reorganizados
+ * em blocos com componentes LOCAIS sem truncamento (break-words), seletor de
+ * periodo com alvos de toque maiores, CSS local que impede truncamento de
+ * titulos dos graficos. Nenhuma logica alterada (tRPC, drill-downs, filtros,
+ * impressao intactos). DashChart.tsx compartilhado NAO foi modificado.
+ */
+/**
  * Rev. 4693 - CHEQUES: MATCHER DO EXTRATO ENTENDE OS FORMATOS REAIS DOS BANCOS
  *
  * A conferencia cheque x extrato (Controle de Cheques Emitidos) so reconhecia

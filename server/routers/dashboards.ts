@@ -18,6 +18,9 @@ import { parseBRL } from "../utils/parseBRL";
 import { calcularRescisaoCompleta, calcularRescisaoComplementar, calcularDiasAvisoTotal, calcularDiasAviso, calcularDescontosRescisao, calcularIndenizacaoEstabilidade, type DescontosRescisaoContext } from "../utils/rescisaoCalc";
 import { carregarMultaFgtsPorEmpresa } from "../utils/rescisaoMultaCfg";
 import { invokeLLM } from "../_core/llm";
+// Rev. 4695 — Dashboard Parceiros agrupa pelo MESMO ciclo de competência da
+// tela de Lançamentos (16→15 configurável por empresa), não por mês-calendário.
+import { competenciaFromDataCompra, getDiaCorteParaEmpresa } from "./parceiros";
 
 const DESLIGADO_STATUSES = ['Desligado', 'Lista_Negra'];
 function isDesligadoStatus(status?: string | null): boolean {
@@ -4530,17 +4533,34 @@ async function getDashParceiros(
       isNull(parceirosConveniados.deletedAt),
     ));
 
-  // Lançamentos do ano
+  // Lançamentos do ano — Rev. 4695: o "mês" do dashboard é a COMPETÊNCIA do
+  // ciclo de desconto (ex.: Jul = 16/06 a 15/07), a mesma da tela de
+  // Lançamentos, e não o mês-calendário de dataCompra. A janela de busca é
+  // alargada em 1 mês para cada lado porque a competência Jan/{ano} inclui
+  // compras de dez/{ano-1} e compras de dez/{ano} caem em Jan/{ano+1}.
+  const diaCorte = await getDiaCorteParaEmpresa(db, companyId);
   const lancConditions: any[] = [
     companyWhere(lancamentosParceiros, companyId, companyIds),
-    gte(lancamentosParceiros.dataCompra, yearStart),
+    gte(lancamentosParceiros.dataCompra, `${ano - 1}-12-01`),
     lte(lancamentosParceiros.dataCompra, `${yearEnd} 23:59:59`),
   ];
   if (parceiroId) lancConditions.push(eq(lancamentosParceiros.parceiroId, parceiroId));
-  const lancamentosRows: any[] = await db
+  const lancamentosRawRows: any[] = await db
     .select()
     .from(lancamentosParceiros)
     .where(and(...lancConditions));
+
+  // Competência efetiva por lançamento: usa a coluna competenciaDesconto
+  // quando válida (fonte de verdade, saneada pelo list de Lançamentos);
+  // senão deriva de dataCompra com o diaCorte da empresa.
+  for (const l of lancamentosRawRows) {
+    const persisted = typeof l.competenciaDesconto === "string" && /^\d{4}-\d{2}$/.test(l.competenciaDesconto)
+      ? l.competenciaDesconto
+      : null;
+    l.__competencia = persisted ?? competenciaFromDataCompra(l.dataCompra, diaCorte);
+  }
+  // Só entram no dashboard as competências do ano selecionado.
+  const lancamentosRows: any[] = lancamentosRawRows.filter(l => String(l.__competencia ?? "").startsWith(`${ano}-`));
 
   // Pagamentos do ano (competencia LIKE 'YYYY-%')
   const pagConditions: any[] = [
@@ -4582,14 +4602,11 @@ async function getDashParceiros(
   const lancFiltrados = lancamentosRows.filter(l => matchTipo(l.parceiroId));
   const pagFiltrados = pagamentosRows.filter(p => matchTipo(p.parceiroId));
 
-  // Filtro adicional por mês (se informado)
-  const inMes = (dataCompra: string | null | undefined) => {
+  // Filtro adicional por mês (se informado) — mês = mês da COMPETÊNCIA (Rev. 4695)
+  const lancMes = lancFiltrados.filter(l => {
     if (!mes) return true;
-    if (!dataCompra) return false;
-    const m = Number(String(dataCompra).slice(5, 7));
-    return m === mes;
-  };
-  const lancMes = lancFiltrados.filter(l => inMes(l.dataCompra));
+    return Number(String(l.__competencia ?? "").slice(5, 7)) === mes;
+  });
   const pagMes = pagFiltrados.filter(p => {
     if (!mes) return true;
     const m = Number(String(p.competencia ?? '').slice(5, 7));
@@ -4648,8 +4665,8 @@ async function getDashParceiros(
     valorAprovado: 0, valorPendente: 0,
   }));
   for (const l of lancFiltrados) {
-    const d = String(l.dataCompra ?? '');
-    const m = Number(d.slice(5, 7));
+    // Rev. 4695 — evolução mensal agrupada pela competência do ciclo
+    const m = Number(String(l.__competencia ?? '').slice(5, 7));
     if (!m || m < 1 || m > 12) continue;
     const row = evolucaoMensal[m - 1];
     row.lancamentos += 1;
@@ -4736,7 +4753,8 @@ async function getDashParceiros(
         employeeFotoUrl: empFotoMap.get(Number(l.employeeId)) ?? null,
         valor: valor(l.valor),
         status: l.status,
-        competenciaDesconto: l.competenciaDesconto,
+        // Rev. 4695 — competência efetiva (coluna válida ou derivada do ciclo)
+        competenciaDesconto: l.__competencia ?? l.competenciaDesconto,
         descricaoItens: l.descricaoItens,
         comprovanteUrl: l.comprovanteUrl,
         motivoRejeicao: l.motivoRejeicao,
@@ -4754,8 +4772,9 @@ async function getDashParceiros(
     const set = new Set<number>();
     set.add(new Date().getFullYear());
     set.add(ano);
-    for (const l of lancamentosRows) {
-      const y = Number(String(l.dataCompra ?? '').slice(0, 4));
+    // Rev. 4695 — anos derivados da competência efetiva (mesma base do agrupamento)
+    for (const l of lancamentosRawRows) {
+      const y = Number(String(l.__competencia ?? '').slice(0, 4));
       if (y) set.add(y);
     }
     return [...set].sort((a, b) => b - a);

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4695** — Dashboard Parceiros: KPIs, gráficos e drill-down agora agrupam pela competência do ciclo de desconto (16→15), igual à tela de Lançamentos; antes agrupava por mês-calendário e os números divergiam. Auditoria confirmou dados 100% corretos no banco.
+- **Rev. 4694** — Dashboard Parceiros: redesign responsivo para tablet/celular — KPIs em blocos legíveis sem truncamento de valores/títulos, seletor de período com alvos de toque maiores; lógica e drill-downs intactos.
 - **Rev. 4693** — Cheques: matcher cheque×extrato reconhece os formatos reais dos bancos ("CHEQUE EMITIDO/DEBITADO" e "COMPENSACAO INTERNA DE CHEQUE" do Santander, "CHEQUE COMPENSADO · Doc" da Caixa); 51 cheques pendentes da FC Engenharia com compensação confirmada foram marcados compensados/conciliados conforme o extrato.
 - **Rev. 4692** — Conciliação: extrato Santander "Consolidado Inteligente" com página de marketing (cita "Internet Banking Empresarial") voltou a importar pelo parser determinístico (gate corrigido nos parsers Consolidado e IBPJ); rodapé jurídico não vaza mais na descrição; importação em chunks não perde mais duplicatas legítimas partidas entre blocos (client envia dupKeyTotais do arquivo inteiro).
 - **Rev. 4691** — Folha: decisões "Pagar/Não Pagar" do card de aviso prévio encerrando no mês não reaparecem mais ao reabrir a tela (getPeriod aplica as decisões gravadas na leitura do snapshot).

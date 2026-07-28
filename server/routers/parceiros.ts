@@ -37,6 +37,20 @@ async function getDiaCorteParaEmpresa(db: any, companyId: number | null | undefi
   return diaCorte;
 }
 
+// Rev. 4695 — deriva a competência (YYYY-MM) a partir da dataCompra para um
+// dado diaCorte: dia <= diaCorte → mês da compra; dia > diaCorte → mês seguinte.
+// Exportado para o Dashboard Parceiros agrupar pelo MESMO ciclo da tela de
+// Lançamentos (antes o dashboard agrupava por mês-calendário e divergia).
+export function competenciaFromDataCompra(dataCompra: string | null | undefined, diaCorte: number): string | null {
+  const [yS, mS, dS] = String(dataCompra ?? "").slice(0, 10).split("-");
+  let y = Number(yS); let m = Number(mS); const d = Number(dS);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  if (d > diaCorte) { m += 1; if (m > 12) { m = 1; y += 1; } }
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+export { getDiaCorteParaEmpresa };
+
 // Calcula a janela do ciclo (cycleStart..cycleEnd) da competência YYYY-MM
 // para um dado `diaCorte`. Retorna null quando entrada inválida.
 function computeCycleRangeForCompetencia(competencia: string, diaCorte: number): { cycleStart: string; cycleEnd: string } | null {
