@@ -442,6 +442,20 @@ function matchEmployee(
       const empParts = normalizeNameForMatch(emp.nomeCompleto).split(" ");
       return empParts[0] === firstName && empParts[empParts.length - 1] === lastName;
     });
+    // Rev. 4714 — ambiguidade AMPLA: além do primeiro+último exato, considere
+    // qualquer funcionário cujo nome CONTENHA todos os tokens do nome DIXI.
+    // Caso real: "Alex Silva" casava (primeiro+último) só com
+    // "ALEX ALESSANDRO MONTEIRO DA SILVA", mas "ALEX DA SILVA DOMINGOS" também
+    // contém ALEX+SILVA — escolher pelo sufixo creditava as batidas ao
+    // funcionário errado. Com >1 contendo todos os tokens → Não Identificados
+    // (o usuário vincula 1x e a memória de vinculações resolve dali em diante).
+    const containsAll = employeeList.filter(emp => {
+      const empParts = normalizeNameForMatch(emp.nomeCompleto).split(" ");
+      return parts.every(p => empParts.includes(p));
+    });
+    // >1 funcionário contém TODOS os tokens → ambíguo de verdade: para AQUI
+    // (não deixa o passo 4 "desempatar" errado) → Não Identificados.
+    if (containsAll.length > 1) return null;
     if (candidates3.length === 1) return candidates3[0];
     // Se > 1 candidato com mesmo primeiro+último → ambíguo → cai no próximo passo
     // Se nenhum → também cai no próximo passo

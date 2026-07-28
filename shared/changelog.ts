@@ -1,4 +1,17 @@
 /**
+ * Rev. 4714 - IMPORT DIXI: COLISAO DE NOMES NO VINCULO DE FUNCIONARIO
+ *
+ * Caso real: "Alex Silva" no relogio casava por primeiro+ultimo nome com
+ * ALEX ALESSANDRO MONTEIRO DA SILVA, mas o funcionario correto era ALEX DA
+ * SILVA DOMINGOS (que tambem contem ALEX+SILVA) — as batidas iam para o
+ * funcionario errado e o certo ficava com falta. Fix: se MAIS DE UM
+ * funcionario contem todos os tokens do nome DIXI, o match e considerado
+ * ambiguo e vai para "Nao Identificados" (usuario vincula 1x; a memoria de
+ * vinculacoes resolve dali em diante). Vinculo "Alex Silva" -> ALEX DA
+ * SILVA DOMINGOS ja semeado em dixi_name_mappings (empresa 60002).
+ * Necessario reimportar o periodo afetado para redistribuir as batidas.
+ */
+/**
  * Rev. 4713 - LISTA DE FERIAS: "A VENCER" DIFERENCIADA POR PERIODO
  *
  * Pedido do usuario: ferias do 2o periodo ainda nao agendadas apareciam com
