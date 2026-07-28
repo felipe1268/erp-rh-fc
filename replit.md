@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4718** — Currículos: página usa toda a largura (menu de funções mais estreito, tabela ampliada); coluna Currículo virou só o ícone da folha (nome do arquivo no tooltip).
 - **Rev. 4717** — Currículos: fluxo de entrevista (botão Selecionar p/ Entrevista → tag ENTREVISTADO → Desclassificar/Efetivar/Manter no Banco), novos status "entrevistado" e "banco", layout da tabela sem corte.
 - **Rev. 4716** — Férias: badge "A Vencer · 2º período" agora mostra "Iniciar até" com a mesma data da coluna "Concessivo Até" (limite p/ iniciar o gozo, 30 dias antes), eliminando as duas datas divergentes.
 - **Rev. 4715** — Relatório de Faltas/Atrasos passa a respeitar cargo de confiança (CLT Art. 62, II): funcionários com a flag não geram falta/atraso/saída antecipada, igual ao motor do espelho.

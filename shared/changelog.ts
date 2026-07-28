@@ -1,4 +1,13 @@
 /**
+ * Rev. 4718 - CURRICULOS: TABELA USA A LARGURA TODA (SEM ROLAGEM HORIZONTAL)
+ *
+ * 1) Container da pagina sem max-w-7xl (usa toda a largura da tela).
+ * 2) Menu de funcoes mais estreito no desktop (lg:col-span-2) e tabela
+ *    ampliada (lg:col-span-10).
+ * 3) Coluna Curriculo virou "CV": so o icone da folha (tooltip mostra o
+ *    nome do arquivo); sem anexo mostra icone de upload clicavel.
+ */
+/**
  * Rev. 4717 - CURRICULOS: FLUXO DE ENTREVISTA COMPLETO + LAYOUT
  *
  * 1) Layout: coluna principal com min-w-0 (tabela nao corta mais o Status;

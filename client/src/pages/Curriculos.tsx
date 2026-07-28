@@ -669,7 +669,7 @@ export default function Curriculos() {
 
     <div className={fichaAberta ? "hidden" : ""}>
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-none">
         <div className="mb-8">
           <Button variant="ghost" size="sm" onClick={() => navigate("/painel/rh")} className="text-slate-500 hover:text-slate-900 hover:bg-slate-100 -ml-2 mb-3 h-8">
             <ArrowLeft className="h-4 w-4 mr-1.5" /> Voltar
@@ -719,7 +719,7 @@ export default function Curriculos() {
         </div>
 
         <div className="grid grid-cols-12 gap-4 lg:gap-6">
-          <div className={`col-span-12 md:col-span-3 space-y-4 ${filterOpen ? "" : "hidden md:block"}`}>
+          <div className={`col-span-12 md:col-span-3 lg:col-span-2 space-y-4 ${filterOpen ? "" : "hidden md:block"}`}>
             <div className="bg-white rounded-2xl border border-slate-200/70 p-4">
               <div className="flex items-center justify-between mb-3 px-1">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Funções</h3>
@@ -819,7 +819,7 @@ export default function Curriculos() {
             </div>
           </div>
 
-          <div className="col-span-12 md:col-span-9 min-w-0 space-y-4">
+          <div className="col-span-12 md:col-span-9 lg:col-span-10 min-w-0 space-y-4">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input className="pl-11 h-12 rounded-xl border-slate-200/70 bg-white shadow-sm text-sm focus-visible:ring-amber-500/30" placeholder="Buscar por nome, telefone, cidade, habilidade..." value={search} onChange={e => setSearch(e.target.value)} />
@@ -883,7 +883,7 @@ export default function Curriculos() {
                       <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Função</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 hidden xl:table-cell">Contato</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 w-28 hidden lg:table-cell">Currículo</th>
+                      <th className="text-center px-2 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 w-12 hidden lg:table-cell" title="Currículo anexado">CV</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Ações</th>
                     </tr>
                   </thead>
@@ -919,15 +919,17 @@ export default function Curriculos() {
                         <td className="px-4 py-3.5">
                           {statusBadge(c.statusCandidato, c.motivoReprovacao)}
                         </td>
-                        <td className="px-4 py-3.5 hidden lg:table-cell">
+                        <td className="px-2 py-3.5 text-center hidden lg:table-cell">
                           {c.documentoUrl ? (
-                            <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-amber-700 hover:text-amber-800 hover:underline text-xs flex items-center gap-1">
-                              <FileText className="h-3 w-3" /> {c.fileName || "Ver"}
+                            <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 transition"
+                              title={c.fileName || "Ver currículo anexado"}>
+                              <FileText className="h-4 w-4" />
                             </a>
                           ) : (
-                            <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-slate-400 hover:text-amber-600 transition">
-                              {uploadingId === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                              {uploadingId === c.id ? "Enviando..." : "Anexar"}
+                            <label className="cursor-pointer inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-300 hover:text-amber-600 hover:bg-amber-50 transition"
+                              title={uploadingId === c.id ? "Enviando..." : "Sem currículo — clique para anexar"}>
+                              {uploadingId === c.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                               <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" disabled={uploadingId === c.id}
                                 onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(c.id, f); }} />
                             </label>
