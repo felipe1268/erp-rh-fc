@@ -1,4 +1,18 @@
 /**
+ * Rev. 4693 - CHEQUES: MATCHER DO EXTRATO ENTENDE OS FORMATOS REAIS DOS BANCOS
+ *
+ * A conferencia cheque x extrato (Controle de Cheques Emitidos) so reconhecia
+ * numero de cheque em descricoes tipo "CHEQUE No 123". Os extratos reais usam
+ * "CHEQUE EMITIDO/DEBITADO 000328" (Santander), "COMPENSACAO INTERNA DE
+ * CHEQUE 000275" (Santander) e "CHEQUE COMPENSADO . Doc 001081" (Caixa) —
+ * por isso dezenas de cheques ja compensados pelo banco seguiam "pendentes".
+ * Fix: extrNum (montarMatcherExtrato em server/routers/cheques.ts) reconhece
+ * os 3 formatos. Match forte continua exigindo n+valor UNICOS (sem falso
+ * positivo). Operacao de dados: 51 cheques pendentes da FC ENGENHARIA com
+ * compensacao confirmada no extrato foram marcados compensado+conciliado
+ * (mesma semantica de autoCorrigirDivergencias); 78 permanecem em aberto.
+ */
+/**
  * Rev. 4692 - CONCILIACAO: EXTRATO SANTANDER CONSOLIDADO VOLTA A IMPORTAR
  *
  * Bug: extratos "Consolidado Inteligente" do Santander de jan/fev 2026 (Hotel)

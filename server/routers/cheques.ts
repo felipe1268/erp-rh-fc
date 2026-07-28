@@ -72,7 +72,7 @@ type MatchExtrato = {
   motivoCodigo: number | null;
   motivoTexto: string | null;
 };
-async function montarMatcherExtrato(db: any, companyId: number): Promise<(cheque: any) => MatchExtrato> {
+export async function montarMatcherExtrato(db: any, companyId: number): Promise<(cheque: any) => MatchExtrato> {
   const res = await dbExecute(db,
     `SELECT id, data, descricao, valor
        FROM bank_statement_lines
@@ -81,7 +81,18 @@ async function montarMatcherExtrato(db: any, companyId: number): Promise<(cheque
   const cents = (v: any) => (v != null && v !== "" ? Math.round(Math.abs(Number(v)) * 100) : null);
   const dia = (v: any) => (v ? String(v).slice(0, 10) : null);
   const extrNum = (descricao: any): string | null => {
-    const m = String(descricao ?? "").match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
+    const s = String(descricao ?? "");
+    // Rev. 4693 — reconhece os formatos REAIS dos extratos, não só "CHEQUE Nº 123":
+    //   Santander: "CHEQUE EMITIDO/DEBITADO 000328" (com ou sem espaço antes do nº)
+    //   Santander: "COMPENSACAO INTERNA DE CHEQUE 000275"
+    //   Caixa:     "CHEQUE COMPENSADO · Doc 001081"
+    // O match forte continua exigindo nº+valor ÚNICOS, então padrões novos não
+    // criam falso-positivo (nº igual com valor diferente nunca casa).
+    const m =
+      s.match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i) ||
+      s.match(/CHEQUE\s+EMITIDO\/?\s*DEBITADO\s*0*(\d{1,12})/i) ||
+      s.match(/COMPENSA[ÇC][AÃ]O\s+INTERNA\s+DE\s+CHEQUE\s*0*(\d{1,12})/i) ||
+      s.match(/CHEQUE\s+COMPENSADO\D{0,10}?0*(\d{1,12})/i);
     if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
     return null;
   };
@@ -149,7 +160,7 @@ async function montarMatcherExtrato(db: any, companyId: number): Promise<(cheque
 // Classifica o cheque contra o extrato: confirmado (banco compensou E controle já diz
 // "compensado") × divergente (banco compensou MAS controle diz != compensado → ALERTA)
 // × devolvido (Rev. 3235 — o débito foi estornado no extrato; compensação não vingou).
-function classificarExtrato(status: any, m: MatchExtrato) {
+export function classificarExtrato(status: any, m: MatchExtrato) {
   const compensado = String(status ?? "").toLowerCase() === "compensado";
   return {
     extratoEncontrado: m.encontrado,

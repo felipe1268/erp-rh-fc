@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4693** — Cheques: matcher cheque×extrato reconhece os formatos reais dos bancos ("CHEQUE EMITIDO/DEBITADO" e "COMPENSACAO INTERNA DE CHEQUE" do Santander, "CHEQUE COMPENSADO · Doc" da Caixa); 51 cheques pendentes da FC Engenharia com compensação confirmada foram marcados compensados/conciliados conforme o extrato.
 - **Rev. 4692** — Conciliação: extrato Santander "Consolidado Inteligente" com página de marketing (cita "Internet Banking Empresarial") voltou a importar pelo parser determinístico (gate corrigido nos parsers Consolidado e IBPJ); rodapé jurídico não vaza mais na descrição; importação em chunks não perde mais duplicatas legítimas partidas entre blocos (client envia dupKeyTotais do arquivo inteiro).
 - **Rev. 4691** — Folha: decisões "Pagar/Não Pagar" do card de aviso prévio encerrando no mês não reaparecem mais ao reabrir a tela (getPeriod aplica as decisões gravadas na leitura do snapshot).
 - **Rev. 4690** — Botão "Reprovar" no Apontamento de Campo (não grava ponto e desfaz o marcador da abertura) e alerta in-app ao criador quando apontamento é reprovado ou HE é rejeitada (tabela user_alerts + pop-up global "Ciente"/"Ver registro").
