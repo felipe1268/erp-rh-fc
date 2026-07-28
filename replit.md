@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4705** — Portal do Parceiro: botão "Ler nota com IA" ao lado da descrição — sobe JPG/PDF, a IA preenche valor/data/itens automaticamente e o arquivo já fica salvo como comprovante (gate do módulo IA financeiro).
 - **Rev. 4704** — Portal do Parceiro: Data e Valor em linhas independentes (fim da sobreposição no iPad); valor em dinheiro BR (1.234,56) estilo caixa eletrônico com R$ fixo; data default no fuso local (Brasília) e exibida dd/mm/aaaa.
 - **Rev. 4703** — Portal do Parceiro: lançamentos agrupados mês a mês (competência 16→15) com badge "Pago/Liquidado" quando o financeiro quita o repasse; PeriodSelectorCard com legenda (verde=pago, azul=com dados, cinza=sem dados).
 - **Rev. 4702** — Fotos dos colaboradores no histórico do Portal do Parceiro (linha clicável abre o detalhe, que também mostra a foto); fallback de iniciais quando sem foto.

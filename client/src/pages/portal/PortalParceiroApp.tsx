@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   LogOut, Plus, CheckCircle, XCircle, Clock, ArrowLeft, ArrowRight,
   Search, ShoppingCart, DollarSign, Receipt, Paperclip, User,
-  CalendarDays, HelpCircle, FileText, Eye, Home, Banknote, ClipboardList,
+  CalendarDays, HelpCircle, FileText, Eye, Home, Banknote, ClipboardList, Sparkles, Loader2,
 } from "lucide-react";
 
 // Competência do desconto (mesma regra do servidor): dia <= 15 → mês da compra; >= 16 → mês seguinte
@@ -98,12 +98,15 @@ export default function PortalParceiroApp() {
   const [enviando, setEnviando] = useState(false);
   const [verLancamento, setVerLancamento] = useState<any>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const iaRef = useRef<HTMLInputElement>(null);
+  const [lendoIA, setLendoIA] = useState(false);
 
   const dados = trpc.portalExterno.parceiro.meusDados.useQuery({ token }, { enabled: !!token });
   const lancQuery = trpc.portalExterno.parceiro.meusLancamentos.useQuery({ token }, { enabled: !!token });
   const empsQuery = trpc.portalExterno.parceiro.buscarFuncionarios.useQuery({ token, busca: "" }, { enabled: !!token, staleTime: 60_000 });
 
   const criarMut = trpc.portalExterno.parceiro.criarLancamento.useMutation();
+  const lerMut = trpc.portalExterno.parceiro.lerComprovante.useMutation();
   const uploadMut = trpc.portalExterno.parceiro.uploadNotaFiscal.useMutation();
 
   const parceiro = dados.data as any;
@@ -192,6 +195,40 @@ export default function PortalParceiroApp() {
     setSelEmp(null); setBusca(""); setValor(""); setDescricao(""); setObservacoes("");
     setArquivo(null); setDataCompra(hojeLocal);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  // Rev. 4705 — IA lê a nota e preenche tudo; o arquivo já fica como comprovante
+  const handleLeituraIA = (f: File | null) => {
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx. 10MB)"); return; }
+    setArquivo(f); // já vale como comprovante do lançamento
+    setLendoIA(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const res = await lerMut.mutateAsync({
+          token,
+          fileBase64: (reader.result as string).split(",")[1],
+          mimeType: f.type || "application/octet-stream",
+        });
+        if (res.success && res.valor > 0) {
+          setValor(String(Math.round(res.valor * 100)));
+          if (res.dataCompra) setDataCompra(res.dataCompra);
+          if (res.descricaoItens) setDescricao(res.descricaoItens);
+          toast.success("Nota lida! Confira os dados preenchidos antes de enviar.");
+        } else {
+          toast.warning((res as any).error || "Não consegui ler o valor. O arquivo ficou anexado — preencha os campos manualmente.");
+          if (res.descricaoItens) setDescricao(res.descricaoItens);
+        }
+      } catch (e: any) {
+        toast.error(e?.message || "Erro na leitura da nota. O arquivo ficou anexado como comprovante.");
+      } finally {
+        setLendoIA(false);
+        if (iaRef.current) iaRef.current.value = "";
+      }
+    };
+    reader.onerror = () => { setLendoIA(false); toast.error("Falha ao ler o arquivo"); };
+    reader.readAsDataURL(f);
   };
 
   const handleArquivo = (f: File | null) => {
@@ -363,7 +400,21 @@ export default function PortalParceiroApp() {
               </div>
               <div>
                 <label className="text-sm font-medium text-slate-700">Descrição dos itens</label>
-                <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex.: Medicamentos, combustível..." className="mt-1 h-11" />
+                <div className="mt-1 flex gap-2">
+                  <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex.: Medicamentos, combustível..." className="h-11 flex-1 min-w-0" />
+                  <input ref={iaRef} type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleLeituraIA(e.target.files?.[0] || null)} />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={lendoIA}
+                    onClick={() => iaRef.current?.click()}
+                    className="h-11 border-amber-400 text-slate-900 bg-amber-50 hover:bg-amber-100 font-semibold shrink-0"
+                  >
+                    {lendoIA ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5 text-amber-500" />}
+                    {lendoIA ? "Lendo..." : "Ler nota com IA"}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">Suba a foto ou PDF da nota: a IA preenche valor, data e itens, e o arquivo já fica salvo como comprovante.</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-slate-700">Observações</label>

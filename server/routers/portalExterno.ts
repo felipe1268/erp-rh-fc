@@ -12,7 +12,8 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { sendEmail } from "../services/smtpService";
 import crypto from "crypto";
-import { invokeLLM } from "../_core/llm";
+import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
+import { assertAiModuleEnabled } from "../_core/aiConfig";
 
 // ── Helpers idênticos aos do server/routers/planejamento.ts ─────────────────
 // Mantemos cópias locais para garantir que o Portal do Cliente produza
@@ -99,7 +100,10 @@ async function _assertObraPermitida(db: any, decoded: any, obraId: number): Prom
   }
 }
 
-export const portalExternoRouter = router({
+export // Rev. 4705 — rate-limit em memória da leitura de nota com IA (por parceiro)
+const lerComprovanteRL = new Map<string, { minWindow: number; minCount: number; dayWindow: number; dayCount: number }>();
+
+const portalExternoRouter = router({
   // ========== AUTH ==========
   auth: router({
     login: publicProcedure.input(z.object({
@@ -1948,6 +1952,88 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         valorTotal: pagamentosParceiros.valorTotal,
       }).from(pagamentosParceiros).where(and(eq(pagamentosParceiros.parceiroId, decoded.parceiroId), eq(pagamentosParceiros.companyId, decoded.companyId)));
       return { lancamentos: lancs, pagamentos };
+    }),
+
+    // Rev. 4705 — IA lê a nota/cupom (imagem ou PDF) e devolve dados p/ preencher o lançamento
+    // Rate-limit em memória por parceiro (endpoint público chama LLM = custo)
+    lerComprovante: publicProcedure.input(z.object({
+      token: z.string(),
+      fileBase64: z.string(),
+      mimeType: z.string(),
+    })).mutation(async ({ input }) => {
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
+      if (input.fileBase64.length > 14 * 1024 * 1024) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo muito grande (máx. 10MB)" });
+      }
+      // Só imagem ou PDF (evita chamada inútil/custosa ao provedor de visão)
+      const mimeOk = /^image\//.test(input.mimeType) || input.mimeType === "application/pdf";
+      if (!mimeOk) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Para leitura automática, envie uma imagem (foto da nota) ou PDF. Outros formatos podem ser anexados como comprovante, mas não são lidos pela IA." });
+      }
+      // Rate-limit: 6/minuto e 60/dia por parceiro
+      const rlKey = `${decoded.companyId}:${decoded.parceiroId}`;
+      const nowMs = Date.now();
+      const rl = lerComprovanteRL.get(rlKey) || { minWindow: nowMs, minCount: 0, dayWindow: nowMs, dayCount: 0 };
+      if (nowMs - rl.minWindow > 60_000) { rl.minWindow = nowMs; rl.minCount = 0; }
+      if (nowMs - rl.dayWindow > 86_400_000) { rl.dayWindow = nowMs; rl.dayCount = 0; }
+      rl.minCount++; rl.dayCount++;
+      lerComprovanteRL.set(rlKey, rl);
+      if (rl.minCount > 6 || rl.dayCount > 60) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Muitas leituras seguidas. Aguarde um pouco e tente novamente." });
+      }
+      await assertAiModuleEnabled(decoded.companyId, "financeiro");
+
+      // "Hoje" no horário de Brasília (não UTC — evita virada de dia após 21h)
+      const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      const systemPrompt = `Você é um assistente especialista em ler notas fiscais, cupons fiscais e comprovantes de compra brasileiros.
+Extraia os dados estruturados do documento. Sempre retorne APENAS JSON válido, sem markdown.`;
+      const prompt = `Leia este comprovante de compra (nota/cupom fiscal ou recibo) e retorne JSON no formato:
+{"valor": <número total da compra em reais, ex 123.45>, "dataCompra": "YYYY-MM-DD", "descricaoItens": "<resumo curto dos itens comprados, ex 'Dipirona, Vitamina C'>", "confianca": "alta|media|baixa"}
+Regras:
+- "valor" é o TOTAL pago (procure por TOTAL, VALOR TOTAL, TOTAL A PAGAR). Use ponto como separador decimal.
+- Se a data não estiver legível, use "${hoje}".
+- "descricaoItens" com no máximo 120 caracteres, em português.
+- Se não conseguir ler nada, retorne {"valor": 0, "dataCompra": "${hoje}", "descricaoItens": "", "confianca": "baixa"}.`;
+
+      try {
+        const result = await invokeAnthropicVision({
+          prompt,
+          base64: input.fileBase64,
+          mimeType: input.mimeType,
+          systemPrompt,
+          maxTokens: 1024,
+        });
+        let cleaned = String(result || "").trim();
+        if (cleaned.startsWith("```")) cleaned = cleaned.replace(/^```(?:json)?\s*/, "").replace(/```\s*$/, "");
+        const si = cleaned.indexOf("{"); const ei = cleaned.lastIndexOf("}");
+        if (si >= 0 && ei > si) cleaned = cleaned.slice(si, ei + 1);
+        let parsed: any;
+        try {
+          parsed = JSON.parse(cleaned);
+        } catch {
+          // Salvage: números BR "1.234,56"/"234,56" → formato JSON
+          const salvaged = cleaned
+            .replace(/(\d{1,3}(?:\.\d{3})+),(\d{2})\b/g, (_m: string, i: string, d: string) => i.replace(/\./g, "") + "." + d)
+            .replace(/\b(\d+),(\d{1,2})\b/g, "$1.$2");
+          parsed = JSON.parse(salvaged);
+        }
+        const out = z.object({
+          valor: z.coerce.number().optional().default(0),
+          dataCompra: z.string().optional().default(hoje),
+          descricaoItens: z.string().optional().default(""),
+          confianca: z.enum(["alta", "media", "baixa"]).optional().default("media"),
+        }).parse(parsed);
+        // Sanitização: data válida e não-futura; valor não-negativo
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(out.dataCompra) || out.dataCompra > hoje) out.dataCompra = hoje;
+        if (!(out.valor > 0) || out.valor > 1_000_000) out.valor = 0;
+        out.descricaoItens = out.descricaoItens.slice(0, 200);
+        return { success: true as const, ...out };
+      } catch (e: any) {
+        return { success: false as const, error: "Não consegui ler o comprovante. Preencha os campos manualmente.", valor: 0, dataCompra: hoje, descricaoItens: "", confianca: "baixa" as const };
+      }
     }),
 
     criarLancamento: publicProcedure.input(z.object({

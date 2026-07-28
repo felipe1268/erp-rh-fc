@@ -1,4 +1,22 @@
 /**
+ * Rev. 4705 - PORTAL DO PARCEIRO: LEITURA DE NOTA COM IA (PREENCHIMENTO AUTOMATICO)
+ *
+ * Pedido do usuario: campinho ao lado da descricao p/ subir JPG/PDF/qualquer
+ * arquivo, a IA le e preenche tudo automatico (inclusive o valor), e o
+ * arquivo ja fica salvo como comprovante.
+ * - Backend: parceiro.lerComprovante (portalExterno.ts) — token de parceiro,
+ *   limite 10MB, assertAiModuleEnabled(companyId,'financeiro'),
+ *   invokeAnthropicVision (imagem/PDF) extrai {valor, dataCompra,
+ *   descricaoItens, confianca}; salvage de numeros BR no JSON; sanitiza
+ *   data futura/invalida -> hoje, valor <=0 ou >1M -> 0 (nunca preenche
+ *   lixo).
+ * - Client: botao "Ler nota com IA" (Sparkles, borda amarela) ao lado da
+ *   Descricao dos itens; ao subir o arquivo ele VIRA o comprovante do
+ *   lancamento (passo 3 ja aparece anexado) e os campos valor (em
+ *   centavos), data e descricao sao preenchidos; toasts de sucesso/aviso;
+ *   fallback manual sempre possivel.
+ */
+/**
  * Rev. 4704 - PORTAL DO PARCEIRO: CAMPOS DATA/VALOR SEM SOBREPOSICAO + FORMATO BR
  *
  * Feedback do usuario (iPad): campo de data sobrepunha o campo de valor;
