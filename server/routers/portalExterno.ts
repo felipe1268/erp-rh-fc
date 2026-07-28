@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, clienteAvaliacaoDetalhes, portalClienteConfig, clientePerguntasExtras, clienteRespostasExtras, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros, employeeIntegrations, users, userCompanies } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, pagamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, clienteAvaliacaoDetalhes, portalClienteConfig, clientePerguntasExtras, clienteRespostasExtras, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros, employeeIntegrations, users, userCompanies } from "../../drizzle/schema";
 import { systemCriteria } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { getUserCompanyLinks } from "../db";
@@ -1940,7 +1940,14 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
       const lancs = await db.select().from(lancamentosParceiros).where(eq(lancamentosParceiros.parceiroId, decoded.parceiroId)).orderBy(desc(lancamentosParceiros.createdAt));
-      return lancs;
+      // Rev. 4703 — status de pagamento (repasse) por competência p/ o portal
+      const pagamentos = await db.select({
+        competencia: pagamentosParceiros.competencia,
+        status: pagamentosParceiros.status,
+        dataPagamento: pagamentosParceiros.dataPagamento,
+        valorTotal: pagamentosParceiros.valorTotal,
+      }).from(pagamentosParceiros).where(and(eq(pagamentosParceiros.parceiroId, decoded.parceiroId), eq(pagamentosParceiros.companyId, decoded.companyId)));
+      return { lancamentos: lancs, pagamentos };
     }),
 
     criarLancamento: publicProcedure.input(z.object({

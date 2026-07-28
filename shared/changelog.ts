@@ -1,4 +1,21 @@
 /**
+ * Rev. 4703 - PORTAL DO PARCEIRO: LANCAMENTOS MES A MES + STATUS DE PAGAMENTO
+ *
+ * Pedido do usuario: separar lancamentos por competencia; quando o
+ * financeiro pagar o repasse, aparecer "Pago/Liquidado" no portal; filtros
+ * de ano/mes com as bolinhas da legenda (padrao PeriodSelectorCard).
+ * - Backend: parceiro.meusLancamentos agora retorna { lancamentos,
+ *   pagamentos } (pagamentos_parceiros do parceiro: competencia, status,
+ *   dataPagamento, valorTotal).
+ * - Portal (tela Sistema): PeriodSelectorCard (regra de ouro) com
+ *   monthStatus — verde=consolidado (repasse pago), azul=com lancamentos,
+ *   cinza=sem dados — e "Ano todo".
+ * - Lancamentos agrupados por competencia (16->15; fallback client-side
+ *   p/ registros antigos sem competencia_desconto): header do grupo com
+ *   total + badge "Pago em dd/mm" (verde) ou "Em aberto"; item aprovado
+ *   de competencia paga vira badge "Liquidado".
+ */
+/**
  * Rev. 4702 - PORTAL DO PARCEIRO: FOTOS NO HISTORICO DE LANCAMENTOS
  *
  * Pedido do usuario: foto de todos os funcionarios no historico para

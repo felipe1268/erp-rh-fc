@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   LogOut, Plus, CheckCircle, XCircle, Clock, ArrowLeft, ArrowRight,
@@ -25,6 +26,20 @@ function competenciaDaCompra(dataCompra: string): string {
   const nomes = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
   return `${nomes[mo - 1]} de ${y}`;
 }
+
+// YYYY-MM da competência (mesma regra 16→15) quando o registro veio sem a coluna
+function compKeyDaCompra(dataCompra: string): string {
+  const m = String(dataCompra || "").slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  let y = Number(m[1]); let mo = Number(m[2]); const d = Number(m[3]);
+  if (d >= 16) { mo += 1; if (mo > 12) { mo = 1; y += 1; } }
+  return `${y}-${String(mo).padStart(2, "0")}`;
+}
+const NOMES_MES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+const compLabel = (key: string) => {
+  const m = key.match(/^(\d{4})-(\d{2})$/);
+  return m ? `${NOMES_MES[Number(m[2]) - 1]} de ${m[1]}` : key;
+};
 
 const fmtBRL = (v: any) => (parseFloat(v || "0") || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtData = (d?: string | null) => {
@@ -92,7 +107,17 @@ export default function PortalParceiroApp() {
 
   const parceiro = dados.data as any;
   const nomeParceiro = parceiro?.nomeFantasia || parceiro?.razaoSocial || nomeLS;
-  const lancamentos = (lancQuery.data || []) as any[];
+  // Rev. 4703 — resposta agora traz { lancamentos, pagamentos } (repasse por competência)
+  const lancamentos = ((lancQuery.data as any)?.lancamentos || []) as any[];
+  const pagamentos = ((lancQuery.data as any)?.pagamentos || []) as any[];
+  const pagamentoPorComp = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const pg of pagamentos) m.set(String(pg.competencia), pg);
+    return m;
+  }, [pagamentos]);
+
+  const [ano, setAno] = useState(new Date().getFullYear());
+  const [mes, setMes] = useState<number | null>(new Date().getMonth() + 1);
 
   const hoje = new Date().toISOString().slice(0, 10);
   const mesAtual = hoje.slice(0, 7);
@@ -100,6 +125,39 @@ export default function PortalParceiroApp() {
   const totalMes = doMes.reduce((s: number, l: any) => s + (parseFloat(l.valor || "0") || 0), 0);
   const pendentes = lancamentos.filter((l: any) => l.status === "pendente").length;
   const aprovados = lancamentos.filter((l: any) => l.status === "aprovado").length;
+
+  // Competência de cada lançamento + agrupamento mês a mês
+  const compDe = (l: any) => l.competenciaDesconto || compKeyDaCompra(l.dataCompra);
+  const monthStatus = useMemo(() => {
+    const st: Record<number, "data" | "consolidated" | "none"> = {};
+    for (let m = 1; m <= 12; m++) st[m] = "none";
+    for (const l of lancamentos) {
+      const k = compDe(l);
+      if (k.slice(0, 4) !== String(ano)) continue;
+      const m = Number(k.slice(5, 7));
+      if (st[m] === "none") st[m] = "data";
+    }
+    for (const [k, pg] of pagamentoPorComp) {
+      if (k.slice(0, 4) !== String(ano)) continue;
+      if (pg.status === "pago") st[Number(k.slice(5, 7))] = "consolidated";
+    }
+    return st;
+  }, [lancamentos, pagamentoPorComp, ano]);
+
+  const grupos = useMemo(() => {
+    const filtro = (l: any) => {
+      const k = compDe(l);
+      if (k.slice(0, 4) !== String(ano)) return false;
+      return mes === null || Number(k.slice(5, 7)) === mes;
+    };
+    const map = new Map<string, any[]>();
+    for (const l of lancamentos.filter(filtro)) {
+      const k = compDe(l);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(l);
+    }
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [lancamentos, ano, mes]);
 
   const employees = useMemo(() => {
     const all = (empsQuery.data || []) as any[];
@@ -423,39 +481,78 @@ export default function PortalParceiroApp() {
             ))}
           </div>
 
-          {/* Lista */}
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-4 sm:px-5 py-3.5 border-b flex items-center gap-2">
-              <FileText className="h-5 w-5 text-amber-500" />
-              <h3 className="font-semibold text-slate-900">Histórico</h3>
+          {/* Rev. 4703 — Filtro de período no padrão do sistema */}
+          <PeriodSelectorCard
+            ano={ano}
+            mes={mes as any}
+            onAno={setAno}
+            onMes={(m: number) => setMes(m)}
+            onAnoTodo={() => setMes(null)}
+            monthStatus={monthStatus}
+            showLegend
+          />
+
+          {/* Lançamentos agrupados por competência */}
+          {lancQuery.isLoading ? (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm text-center py-10 text-slate-400 text-sm">Carregando...</div>
+          ) : grupos.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm text-center py-12 px-4">
+              <ShoppingCart className="h-10 w-10 text-slate-200 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">Nenhum lançamento {mes === null ? `em ${ano}` : "nesta competência"}. Toque em <strong>Novo Lançamento</strong> para começar!</p>
             </div>
-            {lancQuery.isLoading ? (
-              <div className="text-center py-10 text-slate-400 text-sm">Carregando...</div>
-            ) : lancamentos.length === 0 ? (
-              <div className="text-center py-12 px-4">
-                <ShoppingCart className="h-10 w-10 text-slate-200 mx-auto mb-2" />
-                <p className="text-sm text-slate-500">Nenhum lançamento ainda. Toque em <strong>Novo Lançamento</strong> para começar!</p>
-              </div>
-            ) : (
-              <ul className="divide-y">
-                {lancamentos.map((l: any) => (
-                  <li key={l.id}>
-                    <button onClick={() => setVerLancamento(l)} className="w-full flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50 text-left">
-                      <Avatar nome={l.employeeNome || "?"} fotoUrl={fotoPorEmployee.get(l.employeeId)} size="h-11 w-11" text="text-xs" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-slate-900 break-words">{l.employeeNome}</p>
-                        <p className="text-xs text-slate-500">{fmtData(l.dataCompra)}{l.descricaoItens ? ` · ${l.descricaoItens}` : ""}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-bold text-slate-900">{fmtBRL(l.valor)}</p>
-                        <StatusBadge status={l.status} />
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          ) : (
+            grupos.map(([comp, itens]) => {
+              const pg = pagamentoPorComp.get(comp);
+              const pago = pg?.status === "pago";
+              const totalComp = itens.reduce((s: number, l: any) => s + (parseFloat(l.valor || "0") || 0), 0);
+              return (
+                <section key={comp} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${pago ? "border-emerald-200" : "border-slate-200"}`}>
+                  <div className={`px-4 sm:px-5 py-3 border-b flex flex-wrap items-center justify-between gap-2 ${pago ? "bg-emerald-50/60" : "bg-slate-50/60"}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CalendarDays className={`h-5 w-5 shrink-0 ${pago ? "text-emerald-600" : "text-amber-500"}`} />
+                      <h3 className="font-bold text-slate-900 capitalize">{compLabel(comp)}</h3>
+                      <span className="text-xs text-slate-500">· {itens.length} {itens.length === 1 ? "lançamento" : "lançamentos"}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span className="text-sm font-bold text-slate-900">{fmtBRL(totalComp)}</span>
+                      {pago ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white">
+                          <CheckCircle className="h-3.5 w-3.5" /> Pago{pg?.dataPagamento ? ` em ${fmtData(pg.dataPagamento)}` : ""}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                          <Clock className="h-3.5 w-3.5" /> Em aberto
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ul className="divide-y">
+                    {itens.map((l: any) => (
+                      <li key={l.id}>
+                        <button onClick={() => setVerLancamento(l)} className="w-full flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50 text-left">
+                          <Avatar nome={l.employeeNome || "?"} fotoUrl={fotoPorEmployee.get(l.employeeId)} size="h-11 w-11" text="text-xs" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-slate-900 break-words">{l.employeeNome}</p>
+                            <p className="text-xs text-slate-500">{fmtData(l.dataCompra)}{l.descricaoItens ? ` · ${l.descricaoItens}` : ""}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-bold text-slate-900">{fmtBRL(l.valor)}</p>
+                            {pago && l.status === "aprovado" ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white">
+                                <CheckCircle className="h-3.5 w-3.5" /> Liquidado
+                              </span>
+                            ) : (
+                              <StatusBadge status={l.status} />
+                            )}
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })
+          )}
         </div>
 
         {/* Detalhe do lançamento */}
