@@ -9723,7 +9723,7 @@ export const financialRouter = router({
     // pelo menos tantas ocorrências quanto o batch pretende inserir para aquela chave.
     // "sessionInserted" rastreia quantas já inserimos NESTA sessão por chave.
     const lineKey = (l: { data: string; descricao: string; valor: number; saldo: number | null }) =>
-      `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`;
+      `${l.data}|${(l.descricao ?? "").trim().toUpperCase()}|${l.valor}|${l.saldo ?? ""}`;
 
     const batchCount = new Map<string, number>();
     for (const l of lines) {
@@ -9737,7 +9737,7 @@ export const financialRouter = router({
       const valor = parseFloat(valorStr);
       const salParam = salStr === "" ? null : parseFloat(salStr);
       const res = await dbExecute(db,
-        `SELECT COUNT(*) AS cnt FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL`,
+        `SELECT COUNT(*) AS cnt FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND UPPER(TRIM(descricao))=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL`,
         [input.companyId, input.contaBancariaId, data, descricao, valor, salParam, salParam]
       );
       dbCount.set(k, parseInt((rows(res)[0] as any)?.cnt ?? "0", 10));
@@ -9989,7 +9989,7 @@ export const financialRouter = router({
     }
     // Rev. 4090 — dedup ciente de duplicatas legítimas no batch (mesma lógica de importBankStatement).
     const lineKey2 = (l: { data: string; descricao: string; valor: number; saldo: number | null }) =>
-      `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`;
+      `${l.data}|${(l.descricao ?? "").trim().toUpperCase()}|${l.valor}|${l.saldo ?? ""}`;
 
     const batchCount2 = new Map<string, number>();
     for (const l of input.linhas) {
@@ -10002,7 +10002,7 @@ export const financialRouter = router({
       const valor = parseFloat(valorStr);
       const salParam = salStr === "" ? null : parseFloat(salStr);
       const res = await dbExecute(db,
-        `SELECT COUNT(*) AS cnt FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL`,
+        `SELECT COUNT(*) AS cnt FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND UPPER(TRIM(descricao))=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL`,
         [input.companyId, input.contaBancariaId, data, descricao, valor, salParam, salParam]
       );
       dbCount2.set(k, parseInt((rows(res)[0] as any)?.cnt ?? "0", 10));
@@ -10086,7 +10086,7 @@ export const financialRouter = router({
     // Estratégia: pré-calcular batchCount + dbCount UMA vez; usar sessionInserted
     // para rastrear quantas já foram inseridas nesta sessão por chave.
     const bsl_lineKey = (l: { data: string; descricao: string; valor: number; saldo: number | null }) =>
-      `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`;
+      `${l.data}|${(l.descricao ?? "").trim().toUpperCase()}|${l.valor}|${l.saldo ?? ""}`;
 
     let batchCountBSL = new Map<string, number>();
     let dbCountBSL    = new Map<string, number>();
@@ -10110,7 +10110,7 @@ export const financialRouter = router({
         const valor = parseFloat(valorStr);
         const salParam = salStr === "" ? null : parseFloat(salStr);
         const res = await dbExecute(db,
-          `SELECT COUNT(*) AS cnt FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL`,
+          `SELECT COUNT(*) AS cnt FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND UPPER(TRIM(descricao))=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL`,
           [input.companyId, input.contaBancariaId, data, descricao, valor, salParam, salParam]
         );
         dbCountBSL.set(k, parseInt((rows(res)[0] as any)?.cnt ?? "0", 10));

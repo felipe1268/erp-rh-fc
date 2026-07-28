@@ -2723,7 +2723,7 @@ export default function FinanceiroConciliacao() {
         // normalLinhas: a checagem já desconta as existentes no banco; contando só as
         // sobreviventes o server vê db>=total e pula a reimportação da faltante.
         const keyCounts = new Map<string, number>();
-        for (const l of fg.linhas) { const k = `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`; keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1); }
+        for (const l of fg.linhas) { const k = `${l.data}|${(l.descricao ?? "").trim().toUpperCase()}|${l.valor}|${l.saldo ?? ""}`; keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1); }
         const dupKeyTotais = [...keyCounts.entries()].filter(([, t]) => t > 1).map(([k, total]) => ({ k, total }));
         for (let i = 0; i < normalLinhas.length; i += CHUNK) {
           const slice = normalLinhas.slice(i, i + CHUNK);

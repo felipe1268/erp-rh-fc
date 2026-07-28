@@ -1,4 +1,17 @@
 /**
+ * Rev. 4720 - CONCILIACAO: DEDUP DE IMPORTACAO IGNORA MAIUSCULAS/MINUSCULAS
+ *
+ * Caso real: extrato Santander reimportado com descricao em CAIXA ALTA
+ * ("CHEQUE EMITIDO/DEBITADO" vs "Cheque Emitido/debitado") escapou do
+ * detector de duplicidade e criou linhas orfas em "No extrato, sem
+ * lancamento". Fix: as 3 chaves de dedup (importBankStatement, batch
+ * Rev.4090 e insertBatch) e as consultas COUNT normalizam a descricao
+ * com UPPER(TRIM()); os 2 builders de dupKeyTotais no client usam a
+ * MESMA normalizacao (chaves client/server precisam casar).
+ * Dados: cheques 428 (FERRAGENS) e 455 (AUTOLED) vinculados aos titulos
+ * ja conciliados (#894156/#894157) e marcados compensados no Controle.
+ */
+/**
  * Rev. 4719 - CURRICULOS: BUSCA NO MENU DE FUNCOES + MESCLAGEM DE SINONIMOS
  *
  * 1) Campo "Filtrar funcoes..." no topo do menu lateral (busca ignora
