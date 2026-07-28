@@ -50,7 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4692** — Conciliação: extrato Santander "Consolidado Inteligente" com página de marketing (cita "Internet Banking Empresarial") voltou a importar pelo parser determinístico (gate corrigido nos parsers Consolidado e IBPJ); rodapé jurídico não vaza mais na descrição.
+- **Rev. 4692** — Conciliação: extrato Santander "Consolidado Inteligente" com página de marketing (cita "Internet Banking Empresarial") voltou a importar pelo parser determinístico (gate corrigido nos parsers Consolidado e IBPJ); rodapé jurídico não vaza mais na descrição; importação em chunks não perde mais duplicatas legítimas partidas entre blocos (client envia dupKeyTotais do arquivo inteiro).
 - **Rev. 4691** — Folha: decisões "Pagar/Não Pagar" do card de aviso prévio encerrando no mês não reaparecem mais ao reabrir a tela (getPeriod aplica as decisões gravadas na leitura do snapshot).
 - **Rev. 4690** — Botão "Reprovar" no Apontamento de Campo (não grava ponto e desfaz o marcador da abertura) e alerta in-app ao criador quando apontamento é reprovado ou HE é rejeitada (tabela user_alerts + pop-up global "Ciente"/"Ver registro").
 - **Rev. 4689** — Enviar ao Financeiro gera 2 lançamentos quando há multa FGTS (RESCISÃO sem a multa + FGTS separado, 40%/20% acordo); ambos editáveis no modal; aviso só conclui/desliga quando os DOIS forem quitados; reversão cancela os dois.

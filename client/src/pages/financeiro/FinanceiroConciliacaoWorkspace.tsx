@@ -368,11 +368,16 @@ export default function FinanceiroConciliacaoWorkspace() {
     const totalToInsert = normalLinhas.length + forceLinhas.length;
     let inserted = 0, processed = 0;
     const CHUNK = 40;
+    // Rev. 4692 — totais por chave no ARQUIVO inteiro: sem isso, duplicatas
+    // legítimas (mesmo dia/descrição/valor) partidas entre chunks perdem a 2ª ocorrência.
+    const keyCounts = new Map<string, number>();
+    for (const l of normalLinhas) { const k = `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`; keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1); }
+    const dupKeyTotais = [...keyCounts.entries()].filter(([, t]) => t > 1).map(([k, total]) => ({ k, total }));
     try {
       for (let i = 0; i < normalLinhas.length; i += CHUNK) {
         const slice = normalLinhas.slice(i, i + CHUNK);
         const isLast = forceLinhas.length === 0 && i + CHUNK >= normalLinhas.length;
-        const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: data.contaId, formato: importFormato, importadoEm: data.importadoEm, linhas: slice, finalize: isLast, totalInseridos: inserted, totalDuplicados: skippedCount });
+        const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: data.contaId, formato: importFormato, importadoEm: data.importadoEm, linhas: slice, finalize: isLast, totalInseridos: inserted, totalDuplicados: skippedCount, dupKeyTotais });
         inserted += r?.inserted ?? 0; processed += slice.length;
         setImportPct(10 + Math.round((processed / Math.max(totalToInsert, 1)) * 80));
         setImportLabel(`Gravando ${Math.min(processed, totalToInsert)} de ${totalToInsert} transações...`);

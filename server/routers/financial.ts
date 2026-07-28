@@ -10056,6 +10056,12 @@ export const financialRouter = router({
     totalDuplicados: z.number().optional(),
     // Rev. 4085 — força inserção sem dedup (linhas aprovadas pelo usuário no diálogo de revisão)
     forceInsert: z.boolean().optional(),
+    // Rev. 4692 — total de ocorrências de cada chave duplicada no ARQUIVO INTEIRO
+    // (não só neste chunk). Sem isso, um par legítimo de lançamentos idênticos que
+    // cai em chunks diferentes perde a 2ª ocorrência: o chunk seguinte vê a linha
+    // já no banco (inserida pelo chunk anterior) e a descarta como duplicata.
+    // Só precisa conter chaves com total > 1.
+    dupKeyTotais: z.array(z.object({ k: z.string(), total: z.number() })).optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -10085,6 +10091,14 @@ export const financialRouter = router({
     let batchCountBSL = new Map<string, number>();
     let dbCountBSL    = new Map<string, number>();
     const sessionInsertedBSL = new Map<string, number>();
+    // Rev. 4692 — totais por chave no arquivo inteiro (enviados pelo client).
+    // Hardening: só aceita totais plausíveis (2..500) e inteiros — evita um client
+    // forjado inflar o teto do dedup indefinidamente.
+    const fileKeyTotais = new Map<string, number>(
+      (input.dupKeyTotais ?? [])
+        .filter((e) => Number.isInteger(e.total) && e.total >= 2 && e.total <= 500)
+        .map((e) => [e.k, e.total])
+    );
 
     if (!input.forceInsert) {
       for (const l of input.linhas) {
@@ -10109,7 +10123,10 @@ export const financialRouter = router({
         const k = bsl_lineKey(line);
         const alreadyInDb   = dbCountBSL.get(k) ?? 0;
         const alreadyInSess = sessionInsertedBSL.get(k) ?? 0;
-        const batchTotal    = batchCountBSL.get(k) ?? 1;
+        // Rev. 4692 — usa o total do ARQUIVO (dupKeyTotais) quando maior que o do
+        // chunk: duplicatas legítimas partidas entre chunks deixam de ser perdidas.
+        const fileTotal     = fileKeyTotais.get(k) ?? 0;
+        const batchTotal    = Math.max(batchCountBSL.get(k) ?? 1, fileTotal);
 
         if (alreadyInDb + alreadyInSess >= batchTotal) {
           skipped++;

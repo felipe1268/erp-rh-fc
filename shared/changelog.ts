@@ -11,6 +11,14 @@
  * do Consolidado; o parser IBPJ agora se exclui quando esse marcador existe.
  * Extra: rodape juridico ("juros moratorios...") nao vaza mais para a
  * descricao do ultimo lancamento.
+ *
+ * Parte 2 — importacao perdia duplicatas legitimas entre chunks: a gravacao
+ * em fase 2 envia o extrato em blocos de 40 linhas; quando 2 lancamentos
+ * identicos (mesmo dia/descricao/valor, ex: 2x PIX de R$ 6,00) caiam em
+ * blocos DIFERENTES, o 2o bloco via a linha ja no banco (inserida pelo 1o)
+ * e descartava como duplicata (jan: 455 de 458). Fix: client envia
+ * dupKeyTotais (total de ocorrencias por chave no ARQUIVO inteiro) e o
+ * server usa esse total no dedup. Reimportar o mes completa as faltantes.
  */
 /**
  * Rev. 4691 - FOLHA: DECISAO "PAGAR/NAO PAGAR" DO AVISO PREVIO NAO REAPARECE

@@ -2717,12 +2717,17 @@ export default function FinanceiroConciliacao() {
         if (totalToInsert === 0) continue;
         arquivosComDados++;
         let processed = 0;
+        // Rev. 4692 — totais por chave no ARQUIVO inteiro: sem isso, duplicatas
+        // legítimas partidas entre chunks perdem a 2ª ocorrência.
+        const keyCounts = new Map<string, number>();
+        for (const l of normalLinhas) { const k = `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`; keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1); }
+        const dupKeyTotais = [...keyCounts.entries()].filter(([, t]) => t > 1).map(([k, total]) => ({ k, total }));
         for (let i = 0; i < normalLinhas.length; i += CHUNK) {
           const slice = normalLinhas.slice(i, i + CHUNK);
           const isLast = forceLinhas.length === 0 && i + CHUNK >= normalLinhas.length && fi === fileGroups.length - 1;
           // Rev. 4086: usa fg.contaId (batch per-arquivo) se disponível, senão contaId global
           const cId = fg.contaId ?? contaId;
-          const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: cId, formato: fg.formato, importadoEm: fg.importadoEm, linhas: slice, finalize: isLast, totalInseridos: grandInserted, totalDuplicados: grandSkipped });
+          const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: cId, formato: fg.formato, importadoEm: fg.importadoEm, linhas: slice, finalize: isLast, totalInseridos: grandInserted, totalDuplicados: grandSkipped, dupKeyTotais });
           grandInserted += r?.inserted ?? 0; processed += slice.length;
           setImportPct(Math.min(99, Math.round(baseProgress + (processed / Math.max(totalToInsert, 1)) * span * 0.9)));
           setImportLabel(`${prefix}Gravando ${formatInt(Math.min(processed, totalToInsert))} de ${formatInt(totalToInsert)}...`);
