@@ -1,4 +1,13 @@
 /**
+ * Rev. 4721 - IMPRIMIR RELATORIOS: CONTAS A PAGAR + CONTROLE DE CHEQUES
+ *
+ * Botao "Imprimir" nas duas telas. Gera relatorio HTML auto-contido em
+ * window.open (nunca window.print() na pagina — fixed clipa) com o MESMO
+ * recorte da tela (filtros de status/fornecedor/vencimento/busca/mes),
+ * resumo por status/totais no topo e totalizador no rodape. esc() local
+ * em cada builder (regra de XSS de print/PDF do projeto).
+ */
+/**
  * Rev. 4720 - CONCILIACAO: DEDUP DE IMPORTACAO IGNORA MAIUSCULAS/MINUSCULAS
  *
  * Caso real: extrato Santander reimportado com descricao em CAIXA ALTA

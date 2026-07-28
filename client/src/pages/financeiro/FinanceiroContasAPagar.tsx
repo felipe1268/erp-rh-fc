@@ -17,7 +17,7 @@ import {
   Users, Truck, Briefcase, Scale, Package, Receipt, Wallet,
   Download, Copy, TrendingDown, TrendingUp, Zap, Activity, X,
   Eye, ExternalLink, History, Building2, Paperclip, Hash as HashIcon, Info,
-  Trash2, RotateCcw, Pencil, Loader2,
+  Trash2, RotateCcw, Pencil, Loader2, Printer,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1259,6 +1259,77 @@ export default function FinanceiroContasAPagar() {
     toast({ title: `CSV exportado: ${rows.length} linhas` });
   };
 
+  // Rev. 4721 — Relatório de impressão das contas filtradas (mesmo recorte da
+  // tela/CSV). HTML auto-contido em window.open — nunca window.print() na página
+  // (containers fixed clipam a impressão).
+  const imprimirRelatorio = () => {
+    if (!filtered.length) return;
+    // esc LOCAL por builder (regra do projeto p/ print/PDF)
+    const esc = (v: unknown) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const statusDe = (c: any) => c.status === "pago" ? "Pago" : (c.dataVencimento && c.dataVencimento.slice(0, 10) < hojeStr ? "Vencido" : "A Pagar");
+    const filtros: string[] = [verAnoTodo ? `Ano ${ano}` : `${MESES[mesSel - 1]}/${ano}`];
+    // O filtro de KPI tem precedência sobre as pills de status (mesma regra do `filtered`).
+    if (filtroKpi === "aberto_acum") filtros.push("Em Aberto (Acumulado do ano)");
+    else if (filtroKpi === "a_pagar") filtros.push("A Pagar");
+    else if (filtroKpi === "vencidas") filtros.push("Vencidas");
+    else if (filtroKpi === "pago") filtros.push("Pagos");
+    else if (statusFilter === "pendentes") filtros.push("A Pagar");
+    else if (statusFilter === "pagos") filtros.push("Pagos");
+    if (naturezaFilter !== "todos") filtros.push(naturezaFilter === "efetivo" ? "Efetivo" : "Projeção");
+    if (origemFilter !== "all") filtros.push(`Origem: ${ORIGEM_LABELS[origemFilter] ?? origemFilter}`);
+    if (search) filtros.push(`Busca: "${search}"`);
+    let totalPrevisto = 0, totalPago = 0, qtdVencidas = 0, totalVencidas = 0;
+    for (const c of filtered as any[]) {
+      totalPrevisto += Number(c.valorPrevisto ?? 0);
+      totalPago += Number(c.valorRealizado ?? 0);
+      if (statusDe(c) === "Vencido") { qtdVencidas++; totalVencidas += Number(c.valorPrevisto ?? 0); }
+    }
+    const fmtBRL = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const linhas = (filtered as any[]).map((c: any) => `
+      <tr>
+        <td>${esc(fmtDateBR(c.dataVencimento) || "—")}</td>
+        <td class="mono">${esc(extractOcNumero(c) || "—")}</td>
+        <td>${esc(describeEntry(c) ?? "—")}</td>
+        <td>${esc(categoriaFor(c) ?? "—")}</td>
+        <td>${esc(c.obraNome ?? "—")}</td>
+        <td class="num">${esc(fmtBRL(Number(c.valorPrevisto ?? 0)))}</td>
+        <td class="num">${c.valorRealizado ? esc(fmtBRL(Number(c.valorRealizado))) : "—"}</td>
+        <td>${esc(statusDe(c))}</td>
+        <td>${esc(fmtDateBR(c.dataPagamento) || "—")}</td>
+      </tr>`).join("");
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de Contas a Pagar</title>
+      <style>
+        * { box-sizing: border-box; } body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111; margin: 24px; }
+        h1 { font-size: 16px; margin: 0 0 2px; } .sub { color: #555; margin-bottom: 10px; }
+        .pill { display: inline-block; border: 1px solid #ccc; border-radius: 10px; padding: 2px 8px; margin: 0 6px 6px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; vertical-align: top; }
+        th { background: #f3f4f6; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+        .num { text-align: right; white-space: nowrap; } .mono { font-family: monospace; }
+        tfoot td { font-weight: bold; background: #f9fafb; }
+        @media print { body { margin: 8mm; } }
+      </style></head><body>
+      <h1>Contas a Pagar — Relatório</h1>
+      <div class="sub">${esc(filtros.join(" · "))} · Emitido em ${esc(new Date().toLocaleString("pt-BR"))}</div>
+      <div>
+        <span class="pill"><b>Contas:</b> ${filtered.length}</span>
+        <span class="pill"><b>Previsto:</b> ${esc(fmtBRL(totalPrevisto))}</span>
+        <span class="pill"><b>Pago:</b> ${esc(fmtBRL(totalPago))}</span>
+        <span class="pill"><b>Vencidas:</b> ${qtdVencidas} · ${esc(fmtBRL(totalVencidas))}</span>
+      </div>
+      <table>
+        <thead><tr><th>Vencimento</th><th>Nº OC/OS</th><th>Descrição</th><th>Categoria</th><th>Obra</th><th>Previsto</th><th>Pago</th><th>Status</th><th>Data Pgto</th></tr></thead>
+        <tbody>${linhas}</tbody>
+        <tfoot><tr><td colspan="5">Total — ${filtered.length} conta(s)</td><td class="num">${esc(fmtBRL(totalPrevisto))}</td><td class="num">${esc(fmtBRL(totalPago))}</td><td colspan="2"></td></tr></tfoot>
+      </table>
+      <script>window.onload = function(){ window.print(); };<\/script>
+      </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+  };
+
   return (
     <DashboardLayout>
       {/* Rev. 2227 — Tela de Contas a Pagar agora ocupa a largura total
@@ -1565,6 +1636,9 @@ export default function FinanceiroContasAPagar() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input className="pl-9 h-8 text-sm" placeholder="Buscar conta, OC/OS, fornecedor..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
+            <Button variant="outline" size="sm" onClick={imprimirRelatorio} className="h-8 text-xs gap-1" disabled={!filtered.length}>
+              <Printer className="w-3.5 h-3.5" />Imprimir
+            </Button>
             <Button variant="outline" size="sm" onClick={exportCsv} className="h-8 text-xs gap-1" disabled={!filtered.length}>
               <Download className="w-3.5 h-3.5" />Exportar CSV
             </Button>

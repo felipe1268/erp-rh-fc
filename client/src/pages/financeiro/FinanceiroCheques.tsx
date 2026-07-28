@@ -17,7 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, FileText, Sparkles, Loader2, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2, X, Landmark, User, CalendarDays, Hash, FileSignature, ExternalLink, Keyboard, CheckCheck, Building2, Wand2 } from "lucide-react";
+import { Upload, FileSpreadsheet, FileText, Printer, Sparkles, Loader2, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2, X, Landmark, User, CalendarDays, Hash, FileSignature, ExternalLink, Keyboard, CheckCheck, Building2, Wand2 } from "lucide-react";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/SearchableSelect";
 
 function formatBRL(v: number) {
@@ -654,6 +654,76 @@ export default function FinanceiroCheques() {
   });
   const limparSelecao = () => setSelectedIds(new Set());
 
+  // Rev. 4721 — Relatório de impressão dos cheques filtrados (o que a tabela
+  // mostra é o que sai no papel). HTML auto-contido em window.open — nunca
+  // window.print() na página (containers fixed clipam a impressão).
+  const imprimirRelatorio = () => {
+    const lista = chequesFiltrados as any[];
+    if (!lista.length) return;
+    // esc LOCAL por builder (regra do projeto p/ print/PDF)
+    const esc = (v: unknown) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const STATUS_LBL: Record<string, string> = {
+      pendente: "Pendente", compensado: "Compensado", compensado_pix: "Compensado via PIX",
+      devolvido: "Devolvido", sustado: "Sustado", cancelado: "Cancelado", indefinido: "Indefinido",
+    };
+    const porStatus: Record<string, { qtd: number; total: number }> = {};
+    let totalGeral = 0;
+    for (const c of lista) {
+      const s = String(c.status || "indefinido");
+      if (!porStatus[s]) porStatus[s] = { qtd: 0, total: 0 };
+      porStatus[s].qtd++; porStatus[s].total += parseValor(c.valor);
+      totalGeral += parseValor(c.valor);
+    }
+    const filtros: string[] = [];
+    filtros.push(mesSel != null ? `${MESES[mesSel]}/${ano}` : `Ano ${ano}`);
+    if (fStatus !== "todos") filtros.push(`Status: ${STATUS_LBL[fStatus] ?? fStatus}`);
+    if (fFornecedor) filtros.push(`Fornecedor: ${fFornecedor}`);
+    if (fObra) filtros.push(`Obra: ${obraFiltroOpts.find((o) => o.value === fObra)?.label ?? fObra}`);
+    if (fVencDe || fVencAte) filtros.push(`Vencimento: ${fVencDe ? fmtData(fVencDe) : "…"} a ${fVencAte ? fmtData(fVencAte) : "…"}`);
+    if (fBusca) filtros.push(`Busca: "${fBusca}"`);
+    const linhas = lista.map((c) => `
+      <tr>
+        <td class="mono">${esc(c.numeroCheque || "—")}</td>
+        <td>${esc(c.fornecedorNome || "—")}</td>
+        <td>${esc(c.bancoNome || "—")}</td>
+        <td class="num">${c.valor != null ? esc(formatBRL(parseValor(c.valor))) : "—"}</td>
+        <td>${esc(fmtData(c.dataVencimento) || "—")}</td>
+        <td>${esc(c.mes ? `${MESES[c.mes]}/${c.ano}` : (c.ano ?? "—"))}</td>
+        <td>${esc(STATUS_LBL[String(c.status)] ?? c.status ?? "—")}${Number(c.conciliado) === 1 ? " · conciliado" : ""}</td>
+        <td>${esc(c.obraNome || "—")}</td>
+      </tr>`).join("");
+    const resumo = Object.entries(porStatus)
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([s, v]) => `<span class="pill"><b>${esc(STATUS_LBL[s] ?? s)}:</b> ${v.qtd} · ${esc(formatBRL(v.total))}</span>`)
+      .join("");
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de Cheques</title>
+      <style>
+        * { box-sizing: border-box; } body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111; margin: 24px; }
+        h1 { font-size: 16px; margin: 0 0 2px; } .sub { color: #555; margin-bottom: 10px; }
+        .pill { display: inline-block; border: 1px solid #ccc; border-radius: 10px; padding: 2px 8px; margin: 0 6px 6px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; vertical-align: top; }
+        th { background: #f3f4f6; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+        .num { text-align: right; white-space: nowrap; } .mono { font-family: monospace; }
+        tfoot td { font-weight: bold; background: #f9fafb; }
+        @media print { body { margin: 8mm; } }
+      </style></head><body>
+      <h1>Controle de Cheques — Relatório</h1>
+      <div class="sub">${esc(filtros.join(" · "))} · Emitido em ${esc(new Date().toLocaleString("pt-BR"))}</div>
+      <div>${resumo}</div>
+      <table>
+        <thead><tr><th>Nº Cheque</th><th>Fornecedor</th><th>Banco</th><th>Valor</th><th>Vencimento</th><th>Mês/Ano</th><th>Status</th><th>Obra</th></tr></thead>
+        <tbody>${linhas}</tbody>
+        <tfoot><tr><td colspan="3">Total — ${lista.length} cheque(s)</td><td class="num">${esc(formatBRL(totalGeral))}</td><td colspan="4"></td></tr></tfoot>
+      </table>
+      <script>window.onload = function(){ window.print(); };<\/script>
+      </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+  };
+
   // Ao trocar filtro/mês/ano/busca a lista muda — limpa a seleção p/ não agir
   // sobre cheques que saíram da tela.
   useEffect(() => { setSelectedIds(new Set()); setBulkStatus(""); }, [fStatus, mesSel, ano, fBusca, fVencDe, fVencAte, fFornecedor, fObra]);
@@ -1003,6 +1073,10 @@ export default function FinanceiroCheques() {
             </div>
             {activeTab === 'emitidos' && (
               <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={imprimirRelatorio}
+                  className="gap-1.5" disabled={!(chequesFiltrados as any[]).length}>
+                  <Printer className="h-4 w-4" /> Imprimir
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => setConferirOpen(true)}
                   className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
                   <ShieldCheck className="h-4 w-4" /> Conferir c/ extrato
