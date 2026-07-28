@@ -1,4 +1,39 @@
 /**
+ * Rev. 4710 - REGRA DE OURO: DINHEIRO E DATA EM FORMATO BR (MODULO PARCEIROS)
+ *
+ * Pedido do usuario: todo valor em dinheiro separado por ponto (milhar) e
+ * virgula (decimal), toda data no formato brasileiro, em todas as telas —
+ * registrado como regra de ouro em replit.md (nao precisa lembrar de novo).
+ * - CadastroParceiros: limite mensal com mascara caixa-eletronico BR
+ *   (digitos = centavos, ex.: 6000 vira 6.000,00); ao abrir edicao o valor
+ *   do banco e formatado (moedaBRFromDb); resumo mostra R$ formatado.
+ * - LancamentosParceiros: inputs de valor (novo + edicao) com a mesma
+ *   mascara BR (fim do type=number cru); edicao abre com valor formatado.
+ * - Server parceiros.lancamentos.editarLancamento: normaliza valor BR
+ *   ("1.500,00" -> 1500.00), reprocessa competenciaDesconto ao mudar a
+ *   data (16->15) e REVALIDA o credito na edicao interna (mesma regra
+ *   anti-burla do portal: so desconta o proprio valor se colaborador e
+ *   competencia permanecerem iguais).
+ */
+/**
+ * Rev. 4709 - CADASTRO DE PARCEIROS: FORMULARIO REDESENHADO (MODERNO E INTUITIVO)
+ *
+ * Pedido do usuario (com screenshot do iPad): layout melhor, mais moderno
+ * e facil de entender/configurar no Editar Parceiro.
+ * - Abas viraram pills com icone (Dados/Bancario/Convenio/Documentos).
+ * - Conteudo em cards com cabecalho icone+titulo+subtitulo por secao:
+ *   Identificacao (CNPJ primeiro, com busca), Endereco, Contato,
+ *   Situacao (status em botoes-pill) e observacoes.
+ * - Bancario: forma de pagamento em botoes; bloco PIX destacado.
+ * - Convenio: card "Ciclo de pagamento" com resumo em linguagem natural;
+ *   card "Controle de credito" com badge Ligado/Desligado (limite > 0),
+ *   input R$ grande, carencia desabilitada sem limite, toggle switch
+ *   "travar por debito anterior" e resumo "como vai funcionar".
+ * - Documentos em cards com estado enviado/vazio; botao salvar em barra
+ *   fixa inferior (backdrop-blur). Inputs h-11 (toque iPad).
+ * - Sem mudanca de backend; mesmos campos/estado do form.
+ */
+/**
  * Rev. 4708 - ALERTA AO MASTER EM LANCAMENTO MANUAL DE CONVENIO
  *
  * Pedido do usuario: lancamento manual (interno, pelo RH) pode existir,

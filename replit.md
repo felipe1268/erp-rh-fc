@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4710** — Regra de ouro formato BR: máscara de dinheiro (6.000,00) nos valores de Parceiros (cadastro + lançamentos), edição interna normaliza valor BR, reprocessa competência ao mudar data e revalida crédito.
+- **Rev. 4709** — Formulário de parceiro redesenhado: abas em pills, cards por seção, aba Convênio com motor de crédito visual (badge Ligado/Desligado, toggle, resumo "como vai funcionar"), barra de salvar fixa.
 - **Rev. 4708** — Lançamento manual de convênio gera alerta informativo (pop-up ao logar) para os usuários master — não bloqueia o fluxo, só dá ciência.
 - **Rev. 4707** — Motor de crédito do convênio: limite mensal por colaborador (config no parceiro + carência 30d + trava por débito anterior não descontado na folha); validação fail-safe no servidor (portal e interno); portal mostra saldo disponível/bloqueio por colaborador.
 - **Rev. 4706** — Portal do Parceiro: lançamento com vários itens (descrição + valor individual, adicionar/remover) e total somado automaticamente; descrição enviada com valores por item.
@@ -157,6 +159,8 @@ Ver `replit-history.md` para revisões Rev. 4612 e anteriores.
 
 - **🔒 REGRA DE OURO — LÓGICA DO % PREVISTO (PLANEJAMENTO) É CONGELADA (Rev. 4534, 24/07/2026):** A cadeia de cálculo do PREVISTO (SEMANA) — `regenerarPrevistoSemanasCaminhoB` (motor, fallback de baseline defasada, clamp <100% da raiz), captura do literal (`previsto_literal_json`), precedência literal > raiz > snapshot no frontend (`raizAt`/`mspReadOnly`) — está VALIDADA contra o MSP real e NÃO PODE ser alterada como efeito colateral de outras melhorias. Qualquer task que precise tocar nesses caminhos deve: (1) ALERTAR o usuário explicitamente ANTES de mexer, (2) obter confirmação, (3) revalidar contra os XMLs reais do MSP após a mudança. Histórico: toda alteração "de melhoria" nessa área quebrou o sistema.
 
+- **🔒 REGRA DE OURO — FORMATO BR EM DINHEIRO E DATA (28/07/2026):** TODA exibição e TODO input de dinheiro usa formato brasileiro: milhar com ponto, decimal com vírgula (ex.: R$ 6.000,00). Inputs de valor NUNCA usam `type="number"` cru — usar máscara caixa-eletrônico (dígitos = centavos, `moedaBRMask`) e converter do banco com `toLocaleString("pt-BR", { minimumFractionDigits: 2 })`. Toda data exibida em formato brasileiro dd/mm/aaaa. Server aceita/normaliza os dois formatos. Aplicar em TODA tela nova ou tocada, sem o usuário precisar pedir.
+- **🔒 REGRA DE OURO — TELAS MODERNAS (28/07/2026):** toda tela nova ou revisada segue o padrão visual moderno: seções em cards `rounded-2xl border shadow-sm` com cabeçalho ícone-em-quadrado-tintado + título + subtítulo, abas em pills com ícone, escolhas curtas como botões-pill (não dropdown), inputs `h-11`+ para toque no iPad, resumos em linguagem natural, botão salvar em barra fixa inferior. Referência: form de Editar Parceiro (Rev. 4709).
 - **REGRA DE OURO — Seletor de mês/ano:** SEMPRE usar `<PeriodSelectorCard>` (`client/src/components/PeriodSelectorCard.tsx`). Layout padrão: navegação `< ANO >` + botão "Ano todo" no cabeçalho + 12 pills de mês (Jan…Dez) em grade horizontal. Estado: `mes: number | null` (null = ano todo). NUNCA usar seletor inline customizado (‹/›, dropdown, ou similar). Aplicar em TODA tela que filtra por mês/ano.
 - Seletor de período nos dashboards = white-card (padrão PanoramaFiscal), NUNCA DashHeader gradiente.
 - Dialogs nunca truncam texto; use break-words/break-all.

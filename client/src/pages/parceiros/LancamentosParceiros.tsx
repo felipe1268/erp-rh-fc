@@ -13,6 +13,18 @@ import { toast } from "sonner";
 import { Receipt, Plus, Search, CheckCircle, XCircle, Clock, Upload, FileText, Eye, Store, ChevronLeft, ChevronRight, Calendar, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
+// Rev. 4710 — regra de ouro: dinheiro em formato BR (1.234,56) em toda tela
+const moedaBRMask = (raw: string): string => {
+  const d = String(raw || "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  if (!d) return "";
+  const cents = d.padStart(3, "0");
+  return `${Number(cents.slice(0, -2)).toLocaleString("pt-BR")},${cents.slice(-2)}`;
+};
+const moedaBRFromDb = (v: any): string => {
+  const n = parseFloat(String(v ?? ""));
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 const fmtBRL = (v: number | string) => {
   const n = typeof v === "string" ? parseFloat(v || "0") : Number(v || 0);
   return (Number.isFinite(n) ? n : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -475,7 +487,7 @@ export default function LancamentosParceiros() {
               <div
                 key={l.id}
                 className="bg-card rounded-xl border p-4 hover:border-purple-300 hover:shadow-sm cursor-pointer transition"
-                onClick={() => setEditLanc({ ...l })}
+                onClick={() => setEditLanc({ ...l, valor: moedaBRFromDb(l.valor) })}
                 title="Clique para editar / excluir este lançamento"
               >
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -505,7 +517,7 @@ export default function LancamentosParceiros() {
                     <Button size="sm" variant="outline" onClick={() => handleUpload(l.id)}>
                       <Upload className="h-3.5 w-3.5 mr-1" /> Comprovante
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setEditLanc({ ...l })}>
+                    <Button size="sm" variant="outline" onClick={() => setEditLanc({ ...l, valor: moedaBRFromDb(l.valor) })}>
                       <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
                     </Button>
                     <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => setConfirmDel(l)}>
@@ -575,7 +587,7 @@ export default function LancamentosParceiros() {
                   );
                 })()}
               </div>
-              <div><Label>Valor (R$) *</Label><Input type="number" step="0.01" value={form.valor || ""} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="0,00" /></div>
+              <div><Label>Valor (R$) *</Label><Input inputMode="numeric" value={form.valor || ""} onChange={(e) => setForm({ ...form, valor: moedaBRMask(e.target.value) })} placeholder="0,00" /></div>
             </div>
             <div><Label>Descrição dos Itens</Label><Textarea value={form.descricaoItens || ""} onChange={(e) => setForm({ ...form, descricaoItens: e.target.value })} rows={3} placeholder="Descreva os itens comprados..." /></div>
             <div><Label>Observações</Label><Textarea value={form.observacoes || ""} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} rows={2} /></div>
@@ -653,10 +665,9 @@ export default function LancamentosParceiros() {
                 <div className="md:col-span-2">
                   <Label>Valor (R$)</Label>
                   <Input
-                    type="number"
-                    step="0.01"
+                    inputMode="numeric"
                     value={editLanc.valor || ""}
-                    onChange={(e) => setEditLanc({ ...editLanc, valor: e.target.value })}
+                    onChange={(e) => setEditLanc({ ...editLanc, valor: moedaBRMask(e.target.value) })}
                   />
                   <p className="text-xs text-muted-foreground mt-1">Atual: {fmtBRL(editLanc.valor)}</p>
                 </div>

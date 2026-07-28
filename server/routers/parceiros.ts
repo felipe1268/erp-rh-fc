@@ -10,7 +10,7 @@ import {
   systemCriteria,
 } from "../../drizzle/schema";
 import { eq, and, or, desc, sql, isNull, inArray, gte, lte } from "drizzle-orm";
-import { avaliarCreditoColaborador } from "../utils/creditoConvenio";
+import { avaliarCreditoColaborador, competenciaDaData } from "../utils/creditoConvenio";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 
@@ -507,12 +507,47 @@ export const parceirosRouter = router({
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const { id, ...data } = input;
+        const [lanc] = await db.select().from(lancamentosParceiros).where(eq(lancamentosParceiros.id, id)).limit(1);
+        if (!lanc) throw new Error("Lançamento não encontrado");
         const updateData: any = {};
         if (data.employeeId) updateData.employeeId = data.employeeId;
         if (data.employeeNome) updateData.employeeNome = data.employeeNome;
-        if (data.dataCompra) updateData.dataCompra = data.dataCompra;
+        if (data.dataCompra) {
+          updateData.dataCompra = data.dataCompra;
+          // Rev. 4710 — mudar a data reprocessa a competência (regra 16→15)
+          updateData.competenciaDesconto = competenciaDaData(data.dataCompra);
+        }
         if (data.descricaoItens !== undefined) updateData.descricaoItens = data.descricaoItens;
-        if (data.valor) updateData.valor = data.valor;
+        if (data.valor) {
+          // Rev. 4710 — aceita formato BR ("1.500,00") e grava normalizado
+          const rawV = String(data.valor).trim();
+          const normV = rawV.includes(",") ? rawV.replace(/\./g, "").replace(",", ".") : rawV;
+          const vNum = Number(normV);
+          if (!Number.isFinite(vNum) || vNum <= 0) throw new Error("Valor inválido");
+          updateData.valor = String(vNum);
+        }
+        // Rev. 4710 — poka-yoke também na edição interna: revalida crédito quando
+        // muda valor/data/colaborador (mesma regra do portal: só desconta o próprio
+        // valor se colaborador E competência permanecerem os mesmos).
+        if (data.valor || data.dataCompra || data.employeeId) {
+          const [parcRow] = await db.select().from(parceirosConveniados).where(and(
+            eq(parceirosConveniados.id, (lanc as any).parceiroId),
+            eq(parceirosConveniados.companyId, (lanc as any).companyId),
+          )).limit(1);
+          if (parcRow) {
+            const empId = data.employeeId || (lanc as any).employeeId;
+            const dataC = data.dataCompra || (lanc as any).dataCompra;
+            const novoValor = updateData.valor ? Number(updateData.valor) : (parseFloat(String((lanc as any).valor).replace(",", ".")) || 0);
+            const compAntiga = (lanc as any).competenciaDesconto || competenciaDaData((lanc as any).dataCompra);
+            const mesmoCenario = empId === (lanc as any).employeeId && compAntiga === competenciaDaData(dataC);
+            const valorAtual = mesmoCenario ? (parseFloat(String((lanc as any).valor).replace(",", ".")) || 0) : 0;
+            const credito = await avaliarCreditoColaborador(db, {
+              companyId: (lanc as any).companyId, parceiro: parcRow, employeeId: empId,
+              dataCompra: dataC, valorNovo: Math.max(0, novoValor - valorAtual),
+            });
+            if (!credito.liberado) throw new Error(`Edição bloqueada: ${credito.motivo}`);
+          }
+        }
         await db.update(lancamentosParceiros).set(updateData).where(eq(lancamentosParceiros.id, id));
         return { success: true };
       }),
