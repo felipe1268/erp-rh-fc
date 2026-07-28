@@ -1,4 +1,18 @@
 /**
+ * Rev. 4706 - PORTAL DO PARCEIRO: VARIOS ITENS COM VALORES INDIVIDUAIS + TOTAL AUTOMATICO
+ *
+ * Pedido do usuario: adicionar varios itens, cada um com seu valor, e o
+ * total somado automaticamente.
+ * - Novo Lancamento: campo unico Valor/Descricao substituido por LISTA de
+ *   itens (descricao + valor R$ estilo caixa eletronico + lixeira);
+ *   botao "Adicionar item"; linha de Total (soma ao vivo, n itens) que
+ *   alimenta o total do lançamento (barra inferior e envio).
+ * - Envio: descricaoItens = "Item — R$ x,xx; Item2 — R$ y,yy";
+ *   valor = soma dos itens validos (>0).
+ * - IA "Ler nota" preenche 1 item com o total da nota (fallback mantem
+ *   itens digitados). Rate-limit e sanitizacao da Rev. 4705 mantidos.
+ */
+/**
  * Rev. 4705 - PORTAL DO PARCEIRO: LEITURA DE NOTA COM IA (PREENCHIMENTO AUTOMATICO)
  *
  * Pedido do usuario: campinho ao lado da descricao p/ subir JPG/PDF/qualquer

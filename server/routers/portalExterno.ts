@@ -100,10 +100,10 @@ async function _assertObraPermitida(db: any, decoded: any, obraId: number): Prom
   }
 }
 
-export // Rev. 4705 — rate-limit em memória da leitura de nota com IA (por parceiro)
+// Rev. 4705 — rate-limit em memória da leitura de nota com IA (por parceiro)
 const lerComprovanteRL = new Map<string, { minWindow: number; minCount: number; dayWindow: number; dayCount: number }>();
 
-const portalExternoRouter = router({
+export const portalExternoRouter = router({
   // ========== AUTH ==========
   auth: router({
     login: publicProcedure.input(z.object({
@@ -2041,7 +2041,7 @@ Regras:
       employeeId: z.number(),
       employeeNome: z.string().optional(),
       dataCompra: z.string(),
-      descricaoItens: z.string().optional(),
+      descricaoItens: z.string().max(2000).optional(),
       valor: z.string(),
       observacoes: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {

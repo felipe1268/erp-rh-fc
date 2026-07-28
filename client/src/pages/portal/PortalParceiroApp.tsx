@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   LogOut, Plus, CheckCircle, XCircle, Clock, ArrowLeft, ArrowRight,
   Search, ShoppingCart, DollarSign, Receipt, Paperclip, User,
-  CalendarDays, HelpCircle, FileText, Eye, Home, Banknote, ClipboardList, Sparkles, Loader2,
+  CalendarDays, HelpCircle, FileText, Eye, Home, Banknote, ClipboardList, Sparkles, Loader2, Trash2,
 } from "lucide-react";
 
 // Competência do desconto (mesma regra do servidor): dia <= 15 → mês da compra; >= 16 → mês seguinte
@@ -90,8 +90,8 @@ export default function PortalParceiroApp() {
   const [selEmp, setSelEmp] = useState<any>(null);
   const hojeLocal = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`; })();
   const [dataCompra, setDataCompra] = useState(hojeLocal);
-  const [valor, setValor] = useState("");
-  const [descricao, setDescricao] = useState("");
+  // Rev. 4706 — vários itens, cada um com valor; total somado automaticamente
+  const [itens, setItens] = useState<{ desc: string; valor: string }[]>([{ desc: "", valor: "" }]);
   const [observacoes, setObservacoes] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -180,9 +180,15 @@ export default function PortalParceiroApp() {
     return m;
   }, [empsQuery.data]);
 
-  // Valor em centavos (digitação estilo caixa eletrônico) → exibição 1.234,56
-  const valorNum = (parseInt(String(valor).replace(/\D/g, "") || "0", 10) || 0) / 100;
-  const valorFmt = valorNum > 0 ? valorNum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+  // Cada item digita em centavos (estilo caixa eletrônico); total = soma automática
+  const itemValorNum = (v: string) => (parseInt(String(v).replace(/\D/g, "") || "0", 10) || 0) / 100;
+  const itemValorFmt = (v: string) => { const n = itemValorNum(v); return n > 0 ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""; };
+  const itensValidos = itens.filter((i) => itemValorNum(i.valor) > 0);
+  const valorNum = itensValidos.reduce((s, i) => s + itemValorNum(i.valor), 0);
+  const descricao = itensValidos.map((i) => i.desc.trim()).filter(Boolean).join("; ");
+  const setItem = (idx: number, patch: Partial<{ desc: string; valor: string }>) => {
+    setItens((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  };
   const dataFutura = dataCompra > hoje;
   const prontoParaEnviar = !!selEmp && valorNum > 0 && !!dataCompra && !dataFutura;
 
@@ -192,7 +198,7 @@ export default function PortalParceiroApp() {
   };
 
   const limparForm = () => {
-    setSelEmp(null); setBusca(""); setValor(""); setDescricao(""); setObservacoes("");
+    setSelEmp(null); setBusca(""); setItens([{ desc: "", valor: "" }]); setObservacoes("");
     setArquivo(null); setDataCompra(hojeLocal);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -212,13 +218,12 @@ export default function PortalParceiroApp() {
           mimeType: f.type || "application/octet-stream",
         });
         if (res.success && res.valor > 0) {
-          setValor(String(Math.round(res.valor * 100)));
+          setItens([{ desc: res.descricaoItens || "Compra conforme nota", valor: String(Math.round(res.valor * 100)) }]);
           if (res.dataCompra) setDataCompra(res.dataCompra);
-          if (res.descricaoItens) setDescricao(res.descricaoItens);
           toast.success("Nota lida! Confira os dados preenchidos antes de enviar.");
         } else {
           toast.warning((res as any).error || "Não consegui ler o valor. O arquivo ficou anexado — preencha os campos manualmente.");
-          if (res.descricaoItens) setDescricao(res.descricaoItens);
+          if (res.descricaoItens) setItens((prev) => [{ desc: res.descricaoItens, valor: prev[0]?.valor || "" }, ...prev.slice(1)]);
         }
       } catch (e: any) {
         toast.error(e?.message || "Erro na leitura da nota. O arquivo ficou anexado como comprovante.");
@@ -246,7 +251,9 @@ export default function PortalParceiroApp() {
         employeeId: selEmp.id,
         employeeNome: selEmp.nomeCompleto,
         dataCompra,
-        descricaoItens: descricao.trim() || undefined,
+        descricaoItens: itensValidos.length
+          ? itensValidos.map((i) => `${i.desc.trim() || "Item"} — R$ ${itemValorFmt(i.valor)}`).join("; ")
+          : undefined,
         valor: valorNum.toFixed(2),
         observacoes: observacoes.trim() || undefined,
       });
@@ -384,37 +391,73 @@ export default function PortalParceiroApp() {
                   </p>
                 )}
               </div>
+
               <div>
-                <label className="text-sm font-medium text-slate-700 block">Valor (R$) *</label>
-                <div className="relative mt-1.5 max-w-xs">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold text-base">R$</span>
-                  <Input
-                    inputMode="numeric"
-                    value={valorFmt}
-                    onChange={(e) => setValor(e.target.value.replace(/\D/g, ""))}
-                    placeholder="0,00"
-                    className="h-12 w-full min-w-0 pl-10 text-lg font-semibold"
-                  />
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <label className="text-sm font-medium text-slate-700">Itens da compra *</label>
+                  <div>
+                    <input ref={iaRef} type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleLeituraIA(e.target.files?.[0] || null)} />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={lendoIA}
+                      onClick={() => iaRef.current?.click()}
+                      className="h-10 border-amber-400 text-slate-900 bg-amber-50 hover:bg-amber-100 font-semibold"
+                    >
+                      {lendoIA ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5 text-amber-500" />}
+                      {lendoIA ? "Lendo..." : "Ler nota com IA"}
+                    </Button>
+                  </div>
                 </div>
-                {valor && valorNum <= 0 && <p className="text-xs text-red-600 mt-1.5">Informe um valor maior que zero.</p>}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-slate-700">Descrição dos itens</label>
-                <div className="mt-1 flex gap-2">
-                  <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex.: Medicamentos, combustível..." className="h-11 flex-1 min-w-0" />
-                  <input ref={iaRef} type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleLeituraIA(e.target.files?.[0] || null)} />
+                <p className="text-[11px] text-slate-400 mt-1">Adicione cada item com seu valor — o total soma sozinho. Ou suba a nota e a IA preenche (o arquivo já fica como comprovante).</p>
+                <div className="mt-2 space-y-2">
+                  {itens.map((it, idx) => (
+                    <div key={idx} className="flex gap-2 items-start">
+                      <Input
+                        value={it.desc}
+                        onChange={(e) => setItem(idx, { desc: e.target.value })}
+                        placeholder={`Item ${idx + 1} — ex.: Dipirona`}
+                        className="h-11 flex-1 min-w-0"
+                      />
+                      <div className="relative w-32 sm:w-40 shrink-0">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 font-semibold text-sm">R$</span>
+                        <Input
+                          inputMode="numeric"
+                          value={itemValorFmt(it.valor)}
+                          onChange={(e) => setItem(idx, { valor: e.target.value.replace(/\D/g, "") })}
+                          placeholder="0,00"
+                          className="h-11 w-full pl-8 font-semibold text-right"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={itens.length === 1}
+                        onClick={() => setItens((prev) => prev.filter((_, i) => i !== idx))}
+                        className="h-11 w-10 shrink-0 text-slate-400 hover:text-red-600 disabled:opacity-30"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={lendoIA}
-                    onClick={() => iaRef.current?.click()}
-                    className="h-11 border-amber-400 text-slate-900 bg-amber-50 hover:bg-amber-100 font-semibold shrink-0"
+                    size="sm"
+                    disabled={itens.length >= 30}
+                    onClick={() => setItens((prev) => (prev.length >= 30 ? prev : [...prev, { desc: "", valor: "" }]))}
+                    className="border-slate-300"
                   >
-                    {lendoIA ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5 text-amber-500" />}
-                    {lendoIA ? "Lendo..." : "Ler nota com IA"}
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar item
                   </Button>
+                  <p className="text-sm text-slate-700">
+                    Total: <strong className="text-base text-slate-900">{valorNum > 0 ? fmtBRL(valorNum) : "R$ 0,00"}</strong>
+                    {itensValidos.length > 1 ? <span className="text-xs text-slate-400"> ({itensValidos.length} itens)</span> : null}
+                  </p>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">Suba a foto ou PDF da nota: a IA preenche valor, data e itens, e o arquivo já fica salvo como comprovante.</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-slate-700">Observações</label>
