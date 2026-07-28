@@ -2719,8 +2719,11 @@ export default function FinanceiroConciliacao() {
         let processed = 0;
         // Rev. 4692 — totais por chave no ARQUIVO inteiro: sem isso, duplicatas
         // legítimas partidas entre chunks perdem a 2ª ocorrência.
+        // Rev. 4692b — conta sobre TODAS as linhas do arquivo (fg.linhas), não só as
+        // normalLinhas: a checagem já desconta as existentes no banco; contando só as
+        // sobreviventes o server vê db>=total e pula a reimportação da faltante.
         const keyCounts = new Map<string, number>();
-        for (const l of normalLinhas) { const k = `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`; keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1); }
+        for (const l of fg.linhas) { const k = `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`; keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1); }
         const dupKeyTotais = [...keyCounts.entries()].filter(([, t]) => t > 1).map(([k, total]) => ({ k, total }));
         for (let i = 0; i < normalLinhas.length; i += CHUNK) {
           const slice = normalLinhas.slice(i, i + CHUNK);

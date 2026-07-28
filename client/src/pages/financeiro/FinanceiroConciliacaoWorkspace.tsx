@@ -370,8 +370,11 @@ export default function FinanceiroConciliacaoWorkspace() {
     const CHUNK = 40;
     // Rev. 4692 — totais por chave no ARQUIVO inteiro: sem isso, duplicatas
     // legítimas (mesmo dia/descrição/valor) partidas entre chunks perdem a 2ª ocorrência.
+    // Rev. 4692b — conta sobre TODAS as linhas do arquivo (data.linhas), não só as
+    // normalLinhas: a fase de checagem já desconta as ocorrências existentes no banco;
+    // se o total for contado só sobre as sobreviventes, o server vê db>=total e pula.
     const keyCounts = new Map<string, number>();
-    for (const l of normalLinhas) { const k = `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`; keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1); }
+    for (const l of data.linhas) { const k = `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`; keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1); }
     const dupKeyTotais = [...keyCounts.entries()].filter(([, t]) => t > 1).map(([k, total]) => ({ k, total }));
     try {
       for (let i = 0; i < normalLinhas.length; i += CHUNK) {
