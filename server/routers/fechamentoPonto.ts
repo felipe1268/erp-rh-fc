@@ -5118,6 +5118,7 @@ export const fechamentoPontoRouter = router({
         jornadaTrabalho: employees.jornadaTrabalho,
         status: employees.status,
         companyId: employees.companyId,
+        cargoConfianca: employees.cargoConfianca,
       }).from(employees).where(and(...empConds));
 
       // ----- 1b) Deduplicação por (matrícula|cpf) — pega o registro com maior id (mais recente)
@@ -5377,6 +5378,10 @@ export const fechamentoPontoRouter = router({
 
       for (const emp of empList) {
         if (obraEmpIds && !obraEmpIds.has(emp.id)) continue;
+        // Rev. 4715 — CARGO DE CONFIANÇA (CLT Art. 62, II): sem controle de
+        // jornada → não gera falta, atraso nem saída antecipada neste relatório
+        // (mesma regra do motor do espelho, que zera faltas/atrasos/HE).
+        if (emp.cargoConfianca) continue;
 
         const empAdmissao = emp.dataAdmissao || dataInicio;
         const empDeslig = emp.dataDesligamentoEfetiva || emp.dataDemissao || dataFim;

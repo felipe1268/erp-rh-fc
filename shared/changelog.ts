@@ -1,4 +1,15 @@
 /**
+ * Rev. 4715 - RELATORIO DE FALTAS RESPEITA CARGO DE CONFIANCA
+ *
+ * Caso real: Ana Beatriz e Anderson dos Anjos (cargo de confianca = sim)
+ * apareciam com dezenas de "Falta Inj." no Relatorio de Faltas, Atrasos e
+ * Saidas Antecipadas. O motor do espelho ja zerava faltas/atrasos/HE para
+ * cargo de confianca (CLT Art. 62, II), mas o getFaltasReport nao carregava
+ * a flag e contava dia util sem batida como falta. Fix: funcionarios com
+ * cargo_confianca=1 sao pulados no relatorio (sem falta, atraso ou saida
+ * antecipada), espelhando a regra do motor.
+ */
+/**
  * Rev. 4714 - IMPORT DIXI: COLISAO DE NOMES NO VINCULO DE FUNCIONARIO
  *
  * Caso real: "Alex Silva" no relogio casava por primeiro+ultimo nome com
