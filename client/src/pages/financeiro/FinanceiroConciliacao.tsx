@@ -1581,6 +1581,10 @@ export default function FinanceiroConciliacao() {
       fmtData(r.data),
       formatBRL(Math.abs(Number(r.valor) || 0)),
       String(Math.abs(Number(r.valor) || 0)),
+      // Rev. 4723 — busca por valor SEM ponto de milhar ("1648,78"): formatBRL só
+      // cobre "1.648,78" e o número cru só "1648.78"; usuário digitando vírgula
+      // sem milhar não achava a linha.
+      (Math.abs(Number(r.valor) || 0)).toFixed(2).replace(".", ","),
     ].filter(Boolean).join(" "));
     return alvo.includes(termoBusca);
   };

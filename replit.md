@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4723** — Busca da Conciliação aceita valor sem ponto de milhar ("1648,78"); extrato jan/2026 do hotel completado por diff do PDF (3 linhas incluídas, 3 descrições mescladas corrigidas).
 - **Rev. 4722** — OC entregue pelo Almoxarifado agora gera título no Contas a Pagar (self-heal `garantirEntryDaOC`); backfill dos 45 títulos de julho/2026 que estavam faltando.
 - **Rev. 4721** — Botão "Imprimir" no Contas a Pagar e no Controle de Cheques: relatório imprimível com o mesmo recorte dos filtros da tela, resumo por status e totais.
 - **Rev. 4720** — Conciliação: dedup da importação de extrato ignora maiúsculas/minúsculas (reimportar período repetido não gera sobras); cheques 428/455 vinculados aos títulos já conciliados e compensados no Controle de Cheques.

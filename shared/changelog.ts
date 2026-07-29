@@ -1,4 +1,15 @@
 /**
+ * Rev. 4723 - BUSCA DA CONCILIACAO ACEITA VALOR SEM PONTO DE MILHAR
+ *
+ * Na busca das listas de pendencia da Conciliacao ("No extrato, sem lancamento" /
+ * "No ERP, sem extrato"), digitar "1648,78" nao achava a linha de R$ 1.648,78:
+ * o alvo so continha o valor formatado com milhar ("1.648,78") e o numero cru
+ * ("1648.78"). Adicionada variante toFixed(2) com virgula sem milhar.
+ * Dados (conta hotel, jan/2026): extrato Santander reimportado por diff do PDF —
+ * 3 linhas incluidas (2x agua SAAE 6.065,66/5.541,93 + consorcio 1.648,78) e
+ * 3 descricoes mescladas da importacao antiga corrigidas (EDP SP 2x + tarifa PIX).
+ */
+/**
  * Rev. 4722 - OC ENTREGUE PELO ALMOXARIFADO NAO GERAVA TITULO NO CONTAS A PAGAR
  *
  * Causa raiz: o recebimento inteligente do Almoxarifado (registerSmartEntry)
