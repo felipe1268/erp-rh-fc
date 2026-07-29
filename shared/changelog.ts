@@ -1,4 +1,18 @@
 /**
+ * Rev. 4729 - PERDA DE OPORTUNIDADE DE AGRUPAMENTO + LAYOUT EXECUTIVO
+ *
+ * Dashboard Gerencial de Compras:
+ * - Novo indicador "Perda de Oportunidade de Agrupamento": mesmo insumo
+ *   comprado em 2+ OCs dentro de uma janela curta (7/15/30 dias) = compra
+ *   picada, que perde poder de negociacao por volume. A perda e precificada
+ *   contra o MELHOR preco unitario pago no proprio grupo (conservador):
+ *   perda = soma((preco pago - melhor preco) x quantidade). Ranking por
+ *   insumo (expandindo mostra a linha do tempo: data, OC, obra, solicitante,
+ *   qtd, preco pago vs melhor preco), com quebras por obra e por solicitante.
+ *   KPI de perda total no topo da pagina.
+ * - Layout mais gerencial: largura maxima centralizada, KPIs em faixa de 4
+ *   colunas no desktop/iPad, cards em grade de 2 colunas a partir de lg.
+ *
  * Rev. 4728 - DASHBOARD GERENCIAL: PLANEJAMENTO vs TEMPO DE RESPOSTA
  *
  * Novos indicadores para a reuniao gerencial de Compras:

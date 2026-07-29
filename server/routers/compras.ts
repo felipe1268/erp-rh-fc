@@ -11153,6 +11153,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       obraId: z.number().int().nullable().optional(),
       // Rev. 4728: filtro por solicitante (nome) — aplica só ao bloco "Quando Pedem"
       solicitante: z.string().nullable().optional(),
+      // Rev. 4729: janela (dias) p/ detectar compras sequenciais do mesmo insumo
+      janelaAgrupamento: z.number().int().min(3).max(60).optional(),
     }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
@@ -11400,6 +11402,129 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         .map(p => ({ nome: p.nome, urgentes: p.urgentes, total: p.total, pct: (p.urgentes / p.total) * 100 }))
         .sort((a, b) => b.urgentes - a.urgentes || b.pct - a.pct).slice(0, 10);
 
+      // ── Rev. 4729: Perda de oportunidade de agrupamento ──
+      // Mesmo insumo comprado várias vezes em janela curta (compras "picadas"):
+      // perde-se poder de negociação por volume. Referência = MELHOR preço unitário
+      // já pago dentro do próprio grupo (conservador: preço que a empresa comprovadamente
+      // conseguiu). Perda = Σ (preço pago − melhor preço) × quantidade.
+      const JANELA_DIAS = input.janelaAgrupamento ?? 15;
+      const ocsCompra = ocsAtivas.filter(o => !o.isLocacao);
+      const ocById = new Map(ocsCompra.map(o => [o.id, o]));
+      type EvCompra = {
+        data: string; ordemId: number; numeroOc: string | null;
+        obraId: number | null; solicitante: string; qtd: number; preco: number;
+      };
+      type GrupoInsumo = {
+        chave: string; descricao: string; unidade: string | null;
+        grupos: number; compras: number; qtdTotal: number;
+        precoMin: number; precoMax: number; perda: number;
+        detalhe: (EvCompra & { melhorPreco: number; perdaItem: number })[];
+      };
+      const perdaPorInsumo: GrupoInsumo[] = [];
+      const perdaObraMap: Record<string, { obraId: number | null; perda: number; compras: number }> = {};
+      const perdaSolMap: Record<string, { nome: string; perda: number; compras: number }> = {};
+      let perdaTotal = 0, gruposTotal = 0, comprasEnvolvidas = 0;
+      if (ocsCompra.length > 0) {
+        const itensOc = await db.select({
+          ordemId: comprasOrdensItens.ordemId,
+          insumoCodigo: comprasOrdensItens.insumoCodigo,
+          descricao: comprasOrdensItens.descricao,
+          unidade: comprasOrdensItens.unidade,
+          quantidade: comprasOrdensItens.quantidade,
+          precoUnitario: comprasOrdensItens.precoUnitario,
+        }).from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocsCompra.map(o => o.id)));
+
+        const porChave: Record<string, { chave: string; descricao: string; unidade: string | null; evs: EvCompra[] }> = {};
+        for (const it of itensOc) {
+          const preco = n(it.precoUnitario), qtd = n(it.quantidade);
+          if (preco <= 0 || qtd <= 0) continue;
+          const o = ocById.get(it.ordemId);
+          if (!o) continue;
+          const base = (it.insumoCodigo || "").trim() || (it.descricao || "").trim().toUpperCase();
+          if (!base) continue;
+          const key = `${base}|${(it.unidade || "").trim().toUpperCase()}`;
+          const scId = o.solicitacaoId ?? (o.cotacaoId ? cotById.get(o.cotacaoId)?.solicitacaoId : null) ?? null;
+          const sc = scId != null ? scById.get(scId) : undefined;
+          const solicitante = (sc?.criadoPorNome || "").trim() || (o.criadoPorNome || "").trim() || "—";
+          if (!porChave[key]) porChave[key] = { chave: key, descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, evs: [] };
+          porChave[key].evs.push({
+            data: d10(o.criadoEm), ordemId: o.id, numeroOc: o.numeroOc ?? null,
+            obraId: o.obraId ?? null, solicitante, qtd, preco,
+          });
+        }
+
+        const diasEntre = (a: string, b: string) =>
+          (new Date(b + "T00:00:00Z").getTime() - new Date(a + "T00:00:00Z").getTime()) / 86_400_000;
+
+        for (const info of Object.values(porChave)) {
+          const evs = info.evs.sort((a, b) => a.data.localeCompare(b.data) || a.ordemId - b.ordemId);
+          // clusteriza: nova compra a até JANELA_DIAS da anterior fica no mesmo grupo
+          const clusters: EvCompra[][] = [];
+          let atual: EvCompra[] = [];
+          for (const ev of evs) {
+            if (atual.length === 0 || diasEntre(atual[atual.length - 1].data, ev.data) <= JANELA_DIAS) {
+              atual.push(ev);
+            } else { clusters.push(atual); atual = [ev]; }
+          }
+          if (atual.length) clusters.push(atual);
+
+          const agg: GrupoInsumo = {
+            chave: info.chave, descricao: info.descricao, unidade: info.unidade,
+            grupos: 0, compras: 0, qtdTotal: 0,
+            precoMin: Infinity, precoMax: 0, perda: 0, detalhe: [],
+          };
+          for (const cl of clusters) {
+            const ocsDistintas = new Set(cl.map(e => e.ordemId));
+            if (ocsDistintas.size < 2) continue; // 1 OC só (mesmo com várias linhas) não é compra picada
+            const melhor = Math.min(...cl.map(e => e.preco));
+            agg.grupos++;
+            for (const ev of cl) {
+              const perdaItem = (ev.preco - melhor) * ev.qtd;
+              agg.qtdTotal += ev.qtd;
+              agg.precoMin = Math.min(agg.precoMin, ev.preco);
+              agg.precoMax = Math.max(agg.precoMax, ev.preco);
+              agg.perda += perdaItem;
+              agg.detalhe.push({ ...ev, melhorPreco: melhor, perdaItem });
+              const okKey = String(ev.obraId ?? "null");
+              if (!perdaObraMap[okKey]) perdaObraMap[okKey] = { obraId: ev.obraId, perda: 0, compras: 0 };
+              perdaObraMap[okKey].perda += perdaItem;
+              const skKey = ev.solicitante.toUpperCase();
+              if (!perdaSolMap[skKey]) perdaSolMap[skKey] = { nome: ev.solicitante, perda: 0, compras: 0 };
+              perdaSolMap[skKey].perda += perdaItem;
+            }
+            agg.compras += ocsDistintas.size;
+            for (const oid of ocsDistintas) {
+              const ev = cl.find(e => e.ordemId === oid)!;
+              perdaObraMap[String(ev.obraId ?? "null")].compras++;
+              perdaSolMap[ev.solicitante.toUpperCase()].compras++;
+            }
+          }
+          if (agg.grupos > 0) {
+            perdaTotal += agg.perda;
+            gruposTotal += agg.grupos;
+            comprasEnvolvidas += agg.compras;
+            agg.detalhe.sort((a, b) => a.data.localeCompare(b.data));
+            if (agg.detalhe.length > 20) agg.detalhe = agg.detalhe.slice(0, 20);
+            perdaPorInsumo.push(agg);
+          }
+        }
+      }
+      const perdaAgrupamento = {
+        janelaDias: JANELA_DIAS,
+        totalPerda: perdaTotal,
+        grupos: gruposTotal,
+        comprasEnvolvidas,
+        porInsumo: perdaPorInsumo
+          .sort((a, b) => b.perda - a.perda || b.compras - a.compras)
+          .slice(0, 12)
+          .map(g => ({ ...g, precoMin: g.precoMin === Infinity ? 0 : g.precoMin })),
+        porObra: Object.values(perdaObraMap)
+          .map(o => ({ obraId: o.obraId, obraNome: o.obraId != null ? (obraMap[o.obraId] ?? `Obra #${o.obraId}`) : "Sem obra", perda: o.perda, compras: o.compras }))
+          .sort((a, b) => b.perda - a.perda).slice(0, 10),
+        porSolicitante: Object.values(perdaSolMap)
+          .sort((a, b) => b.perda - a.perda).slice(0, 10),
+      };
+
       // Gargalo atual (independe do período): quantas paradas em cada etapa hoje
       const gargalo = {
         scsAguardandoAprov: scsAll.filter(r => r.aprovacaoStatus === "aguardando" && !isCancel(r.status) && obraOk(r.obraId)).length,
@@ -11412,6 +11537,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         leadTime, gargalo, obras: obrasRows,
         quandoPedem: { porDiaSemana, porHora },
         planejamento, rankingUrgencia,
+        perdaAgrupamento,
       };
     }),
 
