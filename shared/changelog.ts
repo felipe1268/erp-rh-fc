@@ -1,4 +1,17 @@
 /**
+ * Rev. 4725 - ORCAMENTISTA TEM ACESSO PLENO AO MODULO ORCAMENTO
+ *
+ * Usuario cujo grupo libera o modulo Orcamento (level admin ou qualquer pagina
+ * com view/create/edit) agora acessa TODOS os orcamentos das empresas que ja
+ * acessa, sem ser barrado pela lista de obras liberadas ("Sem permissao para
+ * acessar este orcamento"). Caso Andre (grupo Orcamento): era bloqueado ao
+ * importar/abrir orcamento de obra fora da sua lista (ex.: MOSTEIRO BELEM).
+ * Fix: helper userHasOrcamentoModuleAccess (db.ts) + orcAllowedObraIds no
+ * router de orcamento — aplicado no assertOrcamentoObraAccess (getById,
+ * importarBdi, reimportar, excluir etc.), na list e no painel. Escopo por
+ * EMPRESA continua valendo; demais modulos nao mudam.
+ */
+/**
  * Rev. 4724 - PARSER SANTANDER PDF NAO MESCLA MAIS TRANSACOES (Tarefa #123)
  *
  * Causa raiz: no Extrato Consolidado Inteligente, uma linha de texto DEPOIS do

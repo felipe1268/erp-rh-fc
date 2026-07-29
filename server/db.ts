@@ -579,6 +579,25 @@ export async function userIsRhOrAdmin(userId: number, role?: string | null): Pro
 }
 
 /**
+ * Rev. 4725 — Orçamentista: usuário cujo grupo libera o módulo `orcamento`
+ * com nível ADMIN tem acesso pleno a tudo que envolve orçamento, independente
+ * da lista de obras liberadas. Nível "viewer"/páginas soltas NÃO dá bypass
+ * (senão viewer viraria editor — as mutations confiam no assert de obra).
+ * O escopo por EMPRESA continua obrigatório: quem chama deve validar o
+ * companyId do recurso contra getCompaniesForUser.
+ */
+export async function userHasOrcamentoModuleAccess(userId: number, role?: string | null): Promise<boolean> {
+  if (role === "admin_master" || role === "admin") return true;
+  try {
+    const ma = await getUserModuleAccessMap(userId);
+    const perm = normalizeModulePerm("orcamento", (ma as any)["orcamento"]);
+    return perm?.level === "admin";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * LGPD — Raio-X / dossiê do colaborador: decide se `userId` pode acessar a
  * documentação completa de `employeeId`. RH/Admin: tudo. Demais: somente se
  * ALGUMA obra com alocação ATIVA do colaborador estiver entre as obras liberadas

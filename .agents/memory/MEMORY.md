@@ -22,6 +22,7 @@
 - [Crachá: pills = TODOS os treinamentos feitos](cracha-treinamentos-todos-feitos.md) — regra de ouro: pills sem filtro de vigência (histórico); selos NR e pendências continuam só vigentes (aptidão).
 - [Period selector golden rules](period-selector-golden-rule.md) — SEMPRE `<PeriodSelectorCard>` (estado `number|null`, nunca inline); [dashboard = white-card PanoramaFiscal, nunca DashHeader gradiente](dashboard-period-selector-standard.md).
 - [Marketing screenshot fictional data](marketing-screenshot-fictional-data.md) — public marketing screenshots of authenticated screens must use 100% fictional seed data, never real tenant PII; revert any temp auth bypass fully.
+- [Orçamentista — bypass de obra no Orçamento](orcamento-module-access-bypass.md) — grupo com módulo orcamento level admin ignora allowed_obra_ids; bypass exige companyId ∈ empresas do user; viewer NÃO ganha bypass.
 - [Unguarded tRPC endpoints](unguarded-trpc-endpoints.md) — frontend route gating ≠ backend authorization; verify role/tenant checks live IN the procedure, not just behind the UI route guard.
 - [OC entregue fora do fluxo padrão precisa de self-heal](oc-almox-entrega-sem-titulo.md) — todo caminho que marca OC entregue (Almoxarifado!) deve chamar garantirEntryDaOC ou a OC some do Contas a Pagar.
 - [Contas a Pagar — base da janela de fechamento](contas-pagar-ciclo-window-basis.md) — agrupar por ciclo de fornecedor usa data da COMPRA (competência), nunca vencimento (varia por OC).

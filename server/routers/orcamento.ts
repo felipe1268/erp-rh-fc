@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb, getEffectiveAllowedObraIds } from "../db";
+import { getDb, getEffectiveAllowedObraIds, userHasOrcamentoModuleAccess, getCompaniesForUser } from "../db";
 import {
   orcamentos,
   orcamentoItens,
@@ -1696,12 +1696,43 @@ async function processarImportacaoComposicoesBackground(
  * Usuário restrito só acessa orçamentos cujo obraId está em sua lista.
  * Orçamento sem obraId (flutuante) → somente admins.
  */
+/**
+ * Rev. 4725 — Orçamentista (grupo com módulo `orcamento` nível ADMIN):
+ * acesso a TODOS os orçamentos das EMPRESAS que o usuário acessa, sem
+ * restrição pela lista de obras. `companyId` do input/recurso deve estar
+ * entre as empresas do usuário (getCompaniesForUser), senão não há bypass.
+ * Retorna null (sem restrição de obra) para admins e orçamentistas validados.
+ */
+async function orcAllowedObraIds(
+  ctx: { user: { id: number; role: string } },
+  companyId?: number | null,
+): Promise<number[] | null> {
+  if (ctx.user.role === 'admin' || ctx.user.role === 'admin_master') return null;
+  if (await userHasOrcamentoModuleAccess(ctx.user.id, ctx.user.role)) {
+    if (companyId != null) {
+      const companies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if ((companies as any[]).some((c: any) => Number(c.id) === Number(companyId))) return null;
+    }
+    // companyId ausente ou empresa não acessível → cai na regra padrão por obra
+  }
+  return getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+}
+
 async function assertOrcamentoObraAccess(
-  orc: { id: number; obraId?: number | null },
+  orc: { id: number; obraId?: number | null; companyId?: number | null },
   ctx: { user: { id: number; role: string } }
 ): Promise<void> {
-  const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
-  if (allowed === null) return; // admin_master / admin → acesso total
+  // Resolve o companyId do orçamento (nem todo caller carrega a coluna)
+  let companyId: number | null = orc.companyId != null ? Number(orc.companyId) : null;
+  if (companyId === null && orc.id) {
+    try {
+      const db = await getDb();
+      const [row] = db ? await db.select({ companyId: orcamentos.companyId }).from(orcamentos).where(eq(orcamentos.id, orc.id)).limit(1) : [];
+      if (row?.companyId != null) companyId = Number(row.companyId);
+    } catch {}
+  }
+  const allowed = await orcAllowedObraIds(ctx, companyId);
+  if (allowed === null) return; // admin / orçamentista da empresa → acesso total
   const obraId = orc.obraId ? Number(orc.obraId) : null;
   if (obraId === null || !allowed.includes(obraId)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para acessar este orçamento.' });
@@ -1727,7 +1758,7 @@ export const orcamentoRouter = router({
         eq(orcamentos.companyId, input.companyId),
         isNull(orcamentos.deletedAt),
       ];
-      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const allowed = await orcAllowedObraIds(ctx, input.companyId);
       if (input.obraId) {
         if (allowed !== null && !allowed.includes(input.obraId)) return [];
         conditions.push(eq(orcamentos.obraId, input.obraId));
@@ -4570,7 +4601,7 @@ export const orcamentoRouter = router({
         bdiMedio: 0, margemMedia: 0, recentes: [], porStatus: [], porCliente: [], porBdi: [], porMargem: [], lista: [],
       };
 
-      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const allowed = await orcAllowedObraIds(ctx, input.companyId);
       const whereClause = allowed !== null
         ? and(eq(orcamentos.companyId, input.companyId), isNull(orcamentos.deletedAt),
             allowed.length > 0 ? inArray(orcamentos.obraId, allowed) : eq(orcamentos.obraId, -1))
