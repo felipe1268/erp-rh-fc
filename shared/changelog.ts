@@ -1,4 +1,20 @@
 /**
+ * Rev. 4724 - PARSER SANTANDER PDF NAO MESCLA MAIS TRANSACOES (Tarefa #123)
+ *
+ * Causa raiz: no Extrato Consolidado Inteligente, uma linha de texto DEPOIS do
+ * valor de uma transacao completa era tratada como continuacao da descricao
+ * anterior quando nao comecava com verbo canonico (PIX/TED/TARIFA...). Ex.:
+ * "CONTA DE AGUA E ESGOTO..." e "PRESTACAO CONSORCIO..." eram grudadas na
+ * transacao anterior e o valor delas era descartado como "saldo orfao".
+ * Fix (santanderPdfParser.ts): apos pending completo (A+B), linha de texto so e
+ * continuacao se casar padrao conhecido (PERIODO/dd-mm-aaaa/MOTIVO/REF/DEVOLUCAO);
+ * caso contrario inicia NOVA transacao. Poka-yoke: parser agora valida a soma
+ * das linhas extraidas contra os totais "(+)Total de Creditos"/"(-)Total de
+ * Debitos" do Resumo do proprio PDF e devolve avisoTotais; a UI mostra toast
+ * destrutivo na importacao (single e batch). Validado no extrato jan/2026 do
+ * hotel: 461 linhas, totais exatos R$ 294.427,60.
+ */
+/**
  * Rev. 4723 - BUSCA DA CONCILIACAO ACEITA VALOR SEM PONTO DE MILHAR
  *
  * Na busca das listas de pendencia da Conciliacao ("No extrato, sem lancamento" /

@@ -813,13 +813,14 @@ async function parseExtratoLines(input: {
   csvColunaValor?: number;
   csvColunaSaldo?: number;
   companyId?: number; // usado p/ carregar templates de extrato da empresa
-}): Promise<{ lines: ExtratoLine[]; rendimentoAplicacao: RendimentoAplicacao | null; templateDetectado: boolean | null }> {
+}): Promise<{ lines: ExtratoLine[]; rendimentoAplicacao: RendimentoAplicacao | null; templateDetectado: boolean | null; avisoTotais?: string | null }> {
   let lines: ExtratoLine[] = [];
   let rendimentoAplicacao: RendimentoAplicacao | null = null;
   // null = N/A (OFX/CSV ou parser determinístico, sem gate de template)
   // true = template encontrado (ou parser determinístico reconheceu o banco)
   // false = empresa tem templates mas nenhum bateu → bloquear import
   let templateDetectado: boolean | null = null;
+  let avisoTotais: string | null = null;
 
   if (input.formato === "pdf") {
     // 1) Caminho determinístico: layout em colunas da CAIXA (rápido, sem IA).
@@ -870,6 +871,8 @@ async function parseExtratoLines(input: {
           lines = st.lines;
           // Rev. 3363 — rendimento de aplicação/resgate automático (CDB ContaMax), se houver.
           rendimentoAplicacao = st.rendimentoAplicacao ?? null;
+          // Rev. 4724 — aviso quando a extração não bate com o Resumo do PDF.
+          avisoTotais = st.avisoTotais ?? null;
         }
       } catch (stErr: any) {
         if (/não é um PDF válido/i.test(stErr?.message || "")) {
@@ -1033,7 +1036,7 @@ async function parseExtratoLines(input: {
   if (lines.length === 0) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma linha válida encontrada no arquivo" });
   }
-  return { lines, rendimentoAplicacao, templateDetectado };
+  return { lines, rendimentoAplicacao, templateDetectado, avisoTotais };
 }
 
 // ─────────────────── Rev. 3193 — LEITURA DE COMPROVANTE (IA de visão) ───────────────────
@@ -9824,8 +9827,8 @@ export const financialRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
     }
 
-    const { lines, rendimentoAplicacao, templateDetectado } = await parseExtratoLines({ ...input, companyId: input.companyId });
-    return { lines, total: lines.length, importadoEm: new Date().toISOString(), rendimentoAplicacao, templateDetectado };
+    const { lines, rendimentoAplicacao, templateDetectado, avisoTotais } = await parseExtratoLines({ ...input, companyId: input.companyId });
+    return { lines, total: lines.length, importadoEm: new Date().toISOString(), rendimentoAplicacao, templateDetectado, avisoTotais };
   }),
 
   // ─────────── Rev. 3363 — LANÇAR RENDIMENTO DE APLICAÇÃO/RESGATE AUTOMÁTICO ───────────

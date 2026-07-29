@@ -44,6 +44,10 @@ export interface SantanderParseResult {
   lines: ExtratoLine[];
   isSantander: boolean;
   rendimentoAplicacao?: RendimentoAplicacao | null;
+  // Rev. 4724 — validação contra o Resumo do próprio PDF: se a soma das linhas
+  // extraídas divergir dos totais "(+)Total de Créditos"/"(-)Total de Débitos",
+  // devolvemos um aviso legível pro usuário conferir a importação.
+  avisoTotais?: string | null;
 }
 
 const RE_MONEY = /(\d{1,3}(?:\.\d{3})*,\d{2})(-?)/g;
@@ -251,8 +255,19 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
           // Continuação da descrição staged (ex: PERIODO:, datas, motivo devolução)
           nextDesc = (nextDesc + " " + part).replace(/\s+/g, " ").trim();
         } else if (pending) {
-          // Continuação da transação pendente
-          pending.parts.push(part);
+          // Rev. 4724 — pending já tem A+B completos (descrição + valor). Uma linha
+          // de texto DEPOIS do valor é quase sempre uma NOVA transação cuja descrição
+          // não começa com verbo canônico (ex.: "CONTA DE AGUA E ESGOTO...",
+          // "PRESTACAO CONSORCIO..."). Tratar como continuação mesclava as duas
+          // descrições e DESCARTAVA o valor da segunda (virava "saldo órfão").
+          // Só é continuação de verdade se casar com os padrões conhecidos.
+          const CONTINUATION_RE = /^(PERIODO\b|\d{2}\/\d{2}\/\d{4}\b|MOTIVO\b|REF\.?\b|DEVOLU[ÇC][AÃ]O:)/i;
+          if (CONTINUATION_RE.test(part)) {
+            pending.parts.push(part);
+          } else {
+            flushPending();
+            nextDesc = part;
+          }
         }
       }
       continue;
@@ -316,5 +331,26 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
     rendimentoAplicacao = parseRendimentoContaMax(rawLines, refMonth, refYear);
   }
 
-  return { lines: out, isSantander: true, rendimentoAplicacao };
+  // Rev. 4724 — valida a extração contra os totais do Resumo do próprio PDF.
+  let avisoTotais: string | null = null;
+  const mCred = text.match(/\(\+\)\s*Total de Cr[ée]ditos\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i);
+  const mDeb = text.match(/\(-\)\s*Total de D[ée]bitos\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i);
+  if (mCred || mDeb) {
+    const round2 = (v: number) => Math.round(v * 100) / 100;
+    const somaCred = round2(out.filter(l => l.valor > 0).reduce((s, l) => s + l.valor, 0));
+    const somaDeb = round2(out.filter(l => l.valor < 0).reduce((s, l) => s - l.valor, 0));
+    const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const difs: string[] = [];
+    if (mCred && Math.abs(somaCred - moneyBR(mCred[1])) > 0.005) {
+      difs.push(`créditos extraídos R$ ${fmt(somaCred)} ≠ resumo R$ ${mCred[1]}`);
+    }
+    if (mDeb && Math.abs(somaDeb - moneyBR(mDeb[1])) > 0.005) {
+      difs.push(`débitos extraídos R$ ${fmt(somaDeb)} ≠ resumo R$ ${mDeb[1]}`);
+    }
+    if (difs.length) {
+      avisoTotais = `Atenção: a leitura do PDF não bateu com o resumo do extrato (${difs.join("; ")}). Confira se todos os lançamentos foram importados.`;
+    }
+  }
+
+  return { lines: out, isSantander: true, rendimentoAplicacao, avisoTotais };
 }

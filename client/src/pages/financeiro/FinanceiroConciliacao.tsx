@@ -2557,6 +2557,10 @@ export default function FinanceiroConciliacao() {
           if (multi) continue;
           setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500); return;
         }
+        // Rev. 4724 — parser validou a extração contra o Resumo do próprio PDF e divergiu.
+        if (analysis?.avisoTotais) {
+          toast({ title: multi ? `Divergência de totais em ${f.nome}` : "Divergência nos totais do extrato", description: String(analysis.avisoTotais), variant: "destructive", duration: 15000 });
+        }
         // Rev. 3363 — rendimento de aplicação/resgate automático (CDB ContaMax)
         const rend = analysis?.rendimentoAplicacao;
         if (rend && (Number(rend.bruto) > 0 || Number(rend.iof) > 0 || Number(rend.ir) > 0)) {
@@ -2653,6 +2657,10 @@ export default function FinanceiroConciliacao() {
         if (linhas.length === 0) {
           toast({ title: `Sem transações em ${item.file.nome}`, variant: "destructive" });
           continue;
+        }
+        // Rev. 4724 — divergência entre linhas extraídas e o Resumo do PDF.
+        if (analysis?.avisoTotais) {
+          toast({ title: `Divergência de totais em ${item.file.nome}`, description: String(analysis.avisoTotais), variant: "destructive", duration: 15000 });
         }
         const rend = analysis?.rendimentoAplicacao;
         if (rend && (Number(rend.bruto) > 0 || Number(rend.iof) > 0 || Number(rend.ir) > 0)) {
