@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4722** — OC entregue pelo Almoxarifado agora gera título no Contas a Pagar (self-heal `garantirEntryDaOC`); backfill dos 45 títulos de julho/2026 que estavam faltando.
 - **Rev. 4721** — Botão "Imprimir" no Contas a Pagar e no Controle de Cheques: relatório imprimível com o mesmo recorte dos filtros da tela, resumo por status e totais.
 - **Rev. 4720** — Conciliação: dedup da importação de extrato ignora maiúsculas/minúsculas (reimportar período repetido não gera sobras); cheques 428/455 vinculados aos títulos já conciliados e compensados no Controle de Cheques.
 - **Rev. 4719** — Currículos: campo de busca no menu de funções (ignora acentos); funções sinônimas mescladas nos dados (AUXILIAR ADMINISTRATIVO, ARQUITETO(A), ENGENHEIRO(A), TÉCNICO EM SEGURANÇA DO TRABALHO).

@@ -2834,6 +2834,17 @@ REGRAS:
         await db.update(comprasOrdens)
           .set({ status: allDelivered ? "entregue" : "parcial" } as any)
           .where(and(eq(comprasOrdens.id, input.ordemCompraId), eq(comprasOrdens.companyId, input.companyId)));
+
+        // Rev. 4722 — o recebimento pelo Almoxarifado marcava a OC como entregue SEM
+        // passar pela integração financeira (só atualizarStatusOrdem criava o título).
+        // Resultado: OCs entregues que nunca apareciam no Contas a Pagar. Self-heal
+        // garante o título (a_pagar) respeitando as exclusões (FD, cartão, total 0).
+        try {
+          const { garantirEntryDaOC } = await import("../services/purchaseFinancialBridge");
+          await garantirEntryDaOC(input.ordemCompraId, input.companyId);
+        } catch (e) {
+          console.error("[Almox→Financeiro] Falha ao garantir título da OC", input.ordemCompraId, e);
+        }
       }
 
       if (temDivergencia && divergencias.length > 0) {

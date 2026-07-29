@@ -23,6 +23,7 @@
 - [Period selector golden rules](period-selector-golden-rule.md) — SEMPRE `<PeriodSelectorCard>` (estado `number|null`, nunca inline); [dashboard = white-card PanoramaFiscal, nunca DashHeader gradiente](dashboard-period-selector-standard.md).
 - [Marketing screenshot fictional data](marketing-screenshot-fictional-data.md) — public marketing screenshots of authenticated screens must use 100% fictional seed data, never real tenant PII; revert any temp auth bypass fully.
 - [Unguarded tRPC endpoints](unguarded-trpc-endpoints.md) — frontend route gating ≠ backend authorization; verify role/tenant checks live IN the procedure, not just behind the UI route guard.
+- [OC entregue fora do fluxo padrão precisa de self-heal](oc-almox-entrega-sem-titulo.md) — todo caminho que marca OC entregue (Almoxarifado!) deve chamar garantirEntryDaOC ou a OC some do Contas a Pagar.
 - [Contas a Pagar — base da janela de fechamento](contas-pagar-ciclo-window-basis.md) — agrupar por ciclo de fornecedor usa data da COMPRA (competência), nunca vencimento (varia por OC).
 - [Medição FD ↔ Compras link](medicao-fd-compras-link.md) — medicao_fd_registros.compraId (coluna já existia sem uso) é o ponto de integração p/ puxar valor de OC de Faturamento Direto direto pro boletim.
 - [Medição × Cronograma: casar por atividadeId, não EAP](medicao-cronograma-atividade-id-match.md) — eap_codigo do cronograma real vem vazio na maioria das atividades; use a PK atividade_id (1:1, sempre presente).
@@ -84,10 +85,7 @@
 - [SyncSchema+ log is capped](syncschema-log-cap.md) — `[SyncSchema+]` log file caps ~49 lines; missing `Rev. N` line ≠ failure. Verify via NEON_DATABASE_URL direct pg.
 - [Master-only field must gate at backend](master-only-field-backend-gate.md) — a "só Admin Master" field must be stripped from the payload by role server-side, not just hidden in the UI.
 - [react-pdf worker version match](pdfjs-worker-version-match.md) — "Erro ao carregar PDF" = bundled worker version ≠ react-pdf's internal pdfjs API; pin pdfjs-dist EXACTLY to react-pdf's dep.
-- [pdf-parse multi-line table cells](pdf-parse-multiline-table-cells.md) — a bank statement row can extract as separate lines; single-line regex parsers silently return zero rows.
-- [Dedup de extrato é case-insensitive](extrato-import-case-insensitive-dedup.md) — chave normaliza UPPER/TRIM em server E client (dupKeyTotais); comparação crua deixou passar reimport em caixa alta.
-- [Extrato import: dedup × chunks](extrato-import-chunk-dedup.md) — dupKeyTotais conta o ARQUIVO inteiro (nunca normalLinhas); duplicatas legítimas partidas entre chunks de 40 eram perdidas.
-- [Santander PDF split-row parser](santander-pdf-split-row.md) — pdf-parse splits EVERY Santander PJ row: date+desc on line A, value on line B. Extract date from line A, not line B.
+- [Extrato import gotchas](extrato-import-case-insensitive-dedup.md) — [dedup case-insensitive UPPER/TRIM server E client](extrato-import-case-insensitive-dedup.md); [dupKeyTotais conta o ARQUIVO inteiro, não o chunk](extrato-import-chunk-dedup.md); [Santander PJ: pdf-parse quebra toda linha em 2](santander-pdf-split-row.md) ([células multi-linha](pdf-parse-multiline-table-cells.md)).
 - [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; mutações de conta precisam de tenant guard.
 - [Notification recipient tenancy](notification-recipient-tenancy.md) — notify queries must join `user_companies` (users has NO companyId; admin roles are global) or you leak across tenants.
 - [resolveCompanyIds trusts input](resolvecompanyids-no-intersect.md) — resolveCompanyIds/companyFilter don't intersect with user's allowed companies; per-company endpoints must call assert guard explicitly.

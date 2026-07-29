@@ -1,4 +1,18 @@
 /**
+ * Rev. 4722 - OC ENTREGUE PELO ALMOXARIFADO NAO GERAVA TITULO NO CONTAS A PAGAR
+ *
+ * Causa raiz: o recebimento inteligente do Almoxarifado (registerSmartEntry)
+ * marcava a OC como entregue/parcial SEM passar pela integracao financeira —
+ * so atualizarStatusOrdem criava o titulo. Resultado: centenas de OCs entregues
+ * invisiveis no Contas a Pagar. Fix: novo self-heal garantirEntryDaOC()
+ * (purchaseFinancialBridge) replicando a semantica do bloco inline de
+ * atualizarStatusOrdem (conta 3.2/3.3/3.4, ciclo de fornecedor, exclusoes FD/
+ * cartao/total 0, dedup por origem + financial_entry_id), chamado no recebimento
+ * do Almoxarifado. Dados: backfill dos 45 titulos de julho/2026 (R$ 62.219,85)
+ * com observacao "[backfill Rev.4722]". Abril-junho (478 OCs) aguardando
+ * decisao do usuario (risco de duplicar contas ja pagas por fora).
+ */
+/**
  * Rev. 4721 - IMPRIMIR RELATORIOS: CONTAS A PAGAR + CONTROLE DE CHEQUES
  *
  * Botao "Imprimir" nas duas telas. Gera relatorio HTML auto-contido em

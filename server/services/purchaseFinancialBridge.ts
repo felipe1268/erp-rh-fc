@@ -4,9 +4,9 @@ import {
   financialEntries, financialAccounts,
   fornecedores, buyerCommissions, purchaseCancellations,
   purchaseOrderItems, notificationLogs, almoxarifadoNotificacoes,
-  comprasEntregasProgramadas,
+  comprasEntregasProgramadas, comprasOrdens, obras, empresasTerceiras,
 } from "../../drizzle/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, ne, sql } from "drizzle-orm";
 import { createAuditLog } from "../db";
 import { calcularParcelas, getTipoPagamentoInfo } from "../../shared/paymentConditions";
 import { sendEmail } from "./smtpService";
@@ -202,6 +202,109 @@ export async function criarParcelasFinanceiras(
   });
 
   return { entryIds, apIds };
+}
+
+// Rev. 4722 — SELF-HEAL: garante que uma OC aprovada/entregue tenha o título no
+// Contas a Pagar. Caminhos como o recebimento pelo Almoxarifado (registerSmartEntry)
+// marcavam a OC como entregue SEM passar pela integração financeira de
+// atualizarStatusOrdem → centenas de OCs entregues sem título. Esta função replica
+// exatamente a semântica do bloco inline de atualizarStatusOrdem (compras.ts):
+// - só cria se NÃO existe entry ativa (origem compras/origem_id OU financial_entry_id);
+// - conta 3.2/3.3/3.4 por tipo; fornecedor com ciclo de fechamento → vencimento = competência;
+// - entregue/entregue_parcial → a_pagar; aprovada → previsto.
+// Exclusões respeitadas: FD (modalidade_fd ≠ normal), cartão, total <= 0.
+// Hardening (review Rev. 4722): tenant-explícito (companyId obrigatório no WHERE),
+// advisory lock transacional por OC contra corrida de recebimentos concorrentes,
+// dedup considera SÓ entries não-canceladas, competência = dataLancamento || hoje
+// (mesma semântica de atualizarStatusOrdem — backfill de datas antigas é só via SQL).
+export async function garantirEntryDaOC(ocId: number, companyId: number, dataLancamento?: string | null): Promise<number | null> {
+  const outerDb = await getDb();
+  if (!outerDb) return null;
+  return await outerDb.transaction(async (db: any) => {
+  // Lock por OC: serializa com outros recebimentos/self-heals da mesma OC.
+  await db.execute(sql`SELECT pg_advisory_xact_lock(477002, ${ocId})`);
+  const [oc] = await db.select().from(comprasOrdens)
+    .where(and(eq(comprasOrdens.id, ocId), eq(comprasOrdens.companyId, companyId)));
+  if (!oc) return null;
+  const status = String((oc as any).status || "");
+  if (!["aprovada", "entregue", "entregue_parcial", "parcial", "concluida"].includes(status)) return null;
+  const total = parseFloat(String((oc as any).total ?? "0")) || 0;
+  if (total <= 0) return null;
+  const modalidadeFd = (oc as any).modalidadeFd ?? "normal";
+  if (modalidadeFd && modalidadeFd !== "normal") return null; // FD nunca vira título padrão
+  if ((oc as any).cartaoId || (oc as any).formaPagamento === "cartao") return null; // vai pra fatura do cartão
+
+  // Já tem entry ativa? (via link direto OU por origem)
+  if ((oc as any).financialEntryId) {
+    const [linked] = await db.select({ id: financialEntries.id, status: financialEntries.status })
+      .from(financialEntries).where(eq(financialEntries.id, (oc as any).financialEntryId));
+    if (linked && linked.status !== "cancelado") return null;
+  }
+  // Só entries ATIVAS contam como existentes — se só houver canceladas, cria de novo.
+  const existentes = await db.select({ id: financialEntries.id })
+    .from(financialEntries)
+    .where(and(
+      inArray((financialEntries as any).origemModulo, ["compras", "compra_oc", "transferencia_estoque"]),
+      eq((financialEntries as any).origemId, ocId),
+      eq((financialEntries as any).companyId, companyId),
+      ne((financialEntries as any).status, "cancelado"),
+    ));
+  if (existentes.length > 0) {
+    // Entries ativas existem mas o link está solto — repara o link e sai.
+    const ativa = existentes[0];
+    if (!(oc as any).financialEntryId) {
+      await db.update(comprasOrdens).set({ financialEntryId: ativa.id } as any)
+        .where(and(eq(comprasOrdens.id, ocId), eq(comprasOrdens.companyId, companyId)));
+    }
+    return null;
+  }
+
+  const obraNomeFin: string | null = (oc as any).obraId
+    ? (await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, (oc as any).obraId)))[0]?.nome ?? null
+    : null;
+  const codigoConta = (oc as any).tipo === "servico" ? "3.2" : (oc as any).tipo === "locacao" ? "3.4" : "3.3";
+  const contaId = await getContaId(db, (oc as any).companyId, codigoConta);
+
+  const novoStatus = status === "aprovada" ? "previsto" : "a_pagar";
+  const dataCompetenciaFin = dataLancamento || new Date().toISOString().split("T")[0];
+  let vencimentoFin: string | null = (oc as any).dataVencimento ?? (oc as any).dataEntregaPrevista ?? null;
+  if ((oc as any).fornecedorId) {
+    const [cycleCfg] = await db.select({ cicloPagamento: (empresasTerceiras as any).cicloPagamento })
+      .from(empresasTerceiras as any)
+      .where(and(
+        eq((empresasTerceiras as any).fornecedorId, (oc as any).fornecedorId),
+        eq((empresasTerceiras as any).companyId, (oc as any).companyId),
+      ))
+      .limit(1);
+    if (cycleCfg?.cicloPagamento && cycleCfg.cicloPagamento !== "avista") {
+      vencimentoFin = dataCompetenciaFin;
+    }
+  }
+  if (!vencimentoFin) vencimentoFin = dataCompetenciaFin;
+
+  const [entry] = await db.insert(financialEntries as any).values({
+    companyId: (oc as any).companyId,
+    obraId: (oc as any).obraId ?? null,
+    obraNome: obraNomeFin,
+    contaId,
+    tipo: "despesa",
+    natureza: "variavel",
+    valorPrevisto: String((oc as any).total ?? "0"),
+    dataCompetencia: dataCompetenciaFin,
+    dataVencimento: vencimentoFin,
+    status: novoStatus,
+    origemModulo: "compras",
+    origemId: ocId,
+    fornecedorNome: (oc as any).fornecedorNome ?? null,
+    descricao: `OC ${(oc as any).numeroOc}${(oc as any).fornecedorNome ? " — " + (oc as any).fornecedorNome : ""}`,
+  } as any).returning({ id: (financialEntries as any).id });
+  if (entry?.id) {
+    await db.update(comprasOrdens).set({ financialEntryId: entry.id } as any)
+      .where(and(eq(comprasOrdens.id, ocId), eq(comprasOrdens.companyId, companyId)));
+    return entry.id;
+  }
+  return null;
+  });
 }
 
 export async function onOCEmitida(ocId: number, userId: number, userName: string) {
