@@ -67,9 +67,10 @@ export default function DashboardGerencialCompras() {
   const [gerAno, setGerAno] = useState(hoje.getFullYear());
   const [gerMes, setGerMes] = useState<number | null>(hoje.getMonth() + 1);
   const [gerObraId, setGerObraId] = useState<number | null>(null);
+  const [solicitante, setSolicitante] = useState<string | null>(null);
 
   const { data: gerData, isFetching: gerFetching } = trpc.compras.getDashboardGerencial.useQuery(
-    { companyIds, ano: gerAno, mes: gerMes, obraId: gerObraId },
+    { companyIds, ano: gerAno, mes: gerMes, obraId: gerObraId, solicitante },
     { enabled: companyIds.length > 0 }
   );
 
@@ -130,27 +131,94 @@ export default function DashboardGerencialCompras() {
                 sub={`${BRL(g.kpis.valorOcs)} · ${delta(g.kpis.valorOcs, g.kpis.prev.valorOcs)}`} color="bg-emerald-600" />
             </div>
 
-            {/* Lead time + gargalo */}
+            {/* Tempo de resposta por etapa (média, mediana, % em 24/48h) */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <SectionHeader icon={Clock} title="Tempo de Resposta por Etapa" color="text-indigo-600" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {([
+                  { titulo: "Resposta de Suprimentos", sub: "SC → Cotação", s: g.leadTime.det.scCot, destaque: false },
+                  { titulo: "Decisão de Compra", sub: "Cotação → OC", s: g.leadTime.det.cotOc, destaque: false },
+                  { titulo: "Tempo Total", sub: "SC → OC", s: g.leadTime.det.scOc, destaque: true },
+                ] as const).map(et => (
+                  <div key={et.sub} className={`p-3 rounded-lg ${et.destaque ? "bg-indigo-50 border border-indigo-100" : "bg-gray-50"}`}>
+                    <p className={`text-[10px] uppercase font-semibold ${et.destaque ? "text-indigo-500" : "text-gray-500"}`}>{et.titulo}</p>
+                    <p className={`text-[10px] mb-1 ${et.destaque ? "text-indigo-400" : "text-gray-400"}`}>{et.sub} · {et.s.n} casos</p>
+                    <p className={`text-xl font-bold ${et.destaque ? "text-indigo-700" : "text-gray-900"}`}>{fmtLead(et.s.media)}</p>
+                    <div className="mt-1.5 grid grid-cols-3 gap-1 text-center">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700">{fmtLead(et.s.mediana)}</p>
+                        <p className="text-[9px] text-gray-400 uppercase">Mediana</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-emerald-600">{et.s.pct24h === null ? "—" : `${et.s.pct24h.toFixed(0)}%`}</p>
+                        <p className="text-[9px] text-gray-400 uppercase">≤ 24h</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-emerald-600">{et.s.pct48h === null ? "—" : `${et.s.pct48h.toFixed(0)}%`}</p>
+                        <p className="text-[9px] text-gray-400 uppercase">≤ 48h</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-gray-400 mt-2">Mediana = metade dos casos foi respondida nesse tempo ou menos (não distorce com casos extremos).</p>
+            </div>
+
+            {/* Quando pedem + Gargalo */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <SectionHeader icon={Clock} title="Tempo Médio do Fluxo" color="text-indigo-600" />
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center p-3 rounded-lg bg-gray-50">
-                    <p className="text-lg font-bold text-gray-900">{fmtLead(g.leadTime.scParaCotacao)}</p>
-                    <p className="text-[10px] text-gray-500 uppercase">SC → Cotação</p>
-                    <p className="text-[10px] text-gray-400">{g.leadTime.amostraScCot} casos</p>
+                <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-cyan-600" />
+                    <h3 className="font-semibold text-gray-800 text-sm">Quando Pedem (dia × horário)</h3>
                   </div>
-                  <div className="text-center p-3 rounded-lg bg-gray-50">
-                    <p className="text-lg font-bold text-gray-900">{fmtLead(g.leadTime.cotacaoParaOc)}</p>
-                    <p className="text-[10px] text-gray-500 uppercase">Cotação → OC</p>
-                    <p className="text-[10px] text-gray-400">{g.leadTime.amostraCotOc} casos</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-indigo-50 border border-indigo-100">
-                    <p className="text-lg font-bold text-indigo-700">{fmtLead(g.leadTime.scParaOc)}</p>
-                    <p className="text-[10px] text-indigo-500 uppercase font-semibold">SC → OC (total)</p>
-                    <p className="text-[10px] text-indigo-400">{g.leadTime.amostraScOc} casos</p>
-                  </div>
+                  <select
+                    value={solicitante ?? ""}
+                    onChange={e => setSolicitante(e.target.value || null)}
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 max-w-[180px]"
+                  >
+                    <option value="">Todos os solicitantes</option>
+                    {g.rankingSolicitantes.map(s => (
+                      <option key={s.nome} value={s.nome}>{s.nome}</option>
+                    ))}
+                  </select>
                 </div>
+                {(() => {
+                  const dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                  const maxDow = Math.max(...g.quandoPedem.porDiaSemana, 1);
+                  const maxH = Math.max(...g.quandoPedem.porHora, 1);
+                  const totalQ = g.quandoPedem.porDiaSemana.reduce((s, v) => s + v, 0);
+                  return totalQ === 0 ? <EmptyRow msg="Sem SCs no período (com esse filtro)" /> : (
+                    <div className={gerFetching ? "opacity-60" : ""}>
+                      <p className="text-[10px] text-gray-400 uppercase mb-1">Por dia da semana</p>
+                      <div className="flex items-end gap-1.5 h-16 mb-1">
+                        {g.quandoPedem.porDiaSemana.map((v, i) => (
+                          <div key={i} className="flex-1 flex flex-col items-center" title={`${dias[i]}: ${v} SCs`}>
+                            <span className="text-[9px] text-gray-500">{v > 0 ? v : ""}</span>
+                            <div className={`w-full rounded-t ${i === 0 || i === 6 ? "bg-amber-400" : "bg-cyan-500"}`}
+                              style={{ height: `${Math.max((v / maxDow) * 44, v > 0 ? 3 : 1)}px` }} />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-1.5 mb-3">
+                        {dias.map(d => <span key={d} className="flex-1 text-center text-[9px] text-gray-400">{d}</span>)}
+                      </div>
+                      <p className="text-[10px] text-gray-400 uppercase mb-1">Por horário (Brasília)</p>
+                      <div className="flex items-end gap-[2px] h-14">
+                        {g.quandoPedem.porHora.map((v, i) => (
+                          <div key={i} className="flex-1" title={`${i}h: ${v} SCs`}>
+                            <div className={`w-full rounded-t ${i < 7 || i >= 18 ? "bg-red-400" : "bg-cyan-500"}`}
+                              style={{ height: `${Math.max((v / maxH) * 52, v > 0 ? 3 : 1)}px` }} />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-between text-[9px] text-gray-400 mt-0.5">
+                        <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1.5">Em vermelho/âmbar: fora do horário comercial (antes das 7h, depois das 18h, fim de semana).</p>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                 <SectionHeader icon={AlertTriangle} title="Gargalo Atual (hoje)" color="text-amber-600" />
@@ -168,7 +236,79 @@ export default function DashboardGerencialCompras() {
                     <p className="text-[10px] text-indigo-600 uppercase">OCs aguardando aprovação</p>
                   </div>
                 </div>
+                {/* Quem mais pede urgência */}
+                <div className="mt-4">
+                  <SectionHeader icon={AlertTriangle} title="Quem Mais Pede Urgência" count={g.rankingUrgencia.length} color="text-red-600" />
+                  {g.rankingUrgencia.length === 0 ? <EmptyRow msg="Nenhuma SC urgente no período 🎉" /> : (
+                    <div className="space-y-1.5">
+                      {g.rankingUrgencia.map((u, i) => (
+                        <div key={u.nome} className="flex items-center justify-between text-xs">
+                          <span className="text-gray-700 truncate" title={u.nome}>
+                            <span className="text-gray-400 font-mono mr-1">{i + 1}.</span>{u.nome}
+                          </span>
+                          <span className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-gray-400">{u.total} SCs</span>
+                            <span className="text-red-600 font-bold">{u.urgentes} urg. ({u.pct.toFixed(0)}%)</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
+            </div>
+
+            {/* Índice de planejamento por solicitante */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <SectionHeader icon={ClipboardList} title="Índice de Planejamento por Solicitante" count={g.planejamento.length} color="text-emerald-600" />
+              <p className="text-[11px] text-gray-500 mb-2">
+                Antecedência = data de necessidade informada − data do pedido. "Última hora" = necessidade para o mesmo dia ou já vencida.
+              </p>
+              {g.planejamento.length === 0 ? <EmptyRow msg="Sem SCs no período" /> : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] text-gray-400 uppercase border-b border-gray-100">
+                        <th className="text-left py-1.5 pr-2">Solicitante</th>
+                        <th className="text-right py-1.5 px-2">SCs</th>
+                        <th className="text-right py-1.5 px-2">Antecedência média</th>
+                        <th className="text-right py-1.5 px-2">Última hora</th>
+                        <th className="text-right py-1.5 px-2">Urgentes</th>
+                        <th className="text-right py-1.5 pl-2">Fora do horário</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {g.planejamento.map(p => {
+                        const ultAlta = p.pctUltimaHora !== null && p.pctUltimaHora >= 50;
+                        return (
+                          <tr key={p.nome} className="border-b border-gray-50">
+                            <td className="py-1.5 pr-2 text-gray-700 truncate max-w-[180px]" title={p.nome}>{p.nome}</td>
+                            <td className="py-1.5 px-2 text-right font-semibold text-gray-800">{p.total}</td>
+                            <td className="py-1.5 px-2 text-right">
+                              {p.antecedenciaMedia === null ? <span className="text-gray-300">sem data</span> : (
+                                <span className={p.antecedenciaMedia < 1 ? "text-red-600 font-semibold" : p.antecedenciaMedia < 3 ? "text-amber-600" : "text-emerald-600"}>
+                                  {p.antecedenciaMedia.toFixed(1)} dias
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-2 text-right">
+                              {p.pctUltimaHora === null ? <span className="text-gray-300">—</span> : (
+                                <span className={ultAlta ? "text-red-600 font-bold" : "text-gray-700"}>{p.pctUltimaHora.toFixed(0)}%</span>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-2 text-right">
+                              {p.urgentes > 0 ? <span className="text-red-600 font-semibold">{p.urgentes}</span> : <span className="text-gray-300">0</span>}
+                            </td>
+                            <td className="py-1.5 pl-2 text-right">
+                              {p.foraHorario > 0 ? <span className="text-amber-600 font-semibold">{p.foraHorario}</span> : <span className="text-gray-300">0</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             {/* Ritmo diário */}

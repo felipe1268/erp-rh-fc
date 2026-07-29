@@ -11151,6 +11151,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       ano: z.number().int().min(2020).max(2100),
       mes: z.number().int().min(1).max(12).nullable(), // null = ano todo
       obraId: z.number().int().nullable().optional(),
+      // Rev. 4728: filtro por solicitante (nome) — aplica só ao bloco "Quando Pedem"
+      solicitante: z.string().nullable().optional(),
     }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
@@ -11316,11 +11318,87 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         }
       });
       const avg = (arr: number[]) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+      // Rev. 4728: além da média — mediana e % respondido em até 24h/48h por etapa
+      const stats = (arr: number[]) => {
+        if (!arr.length) return { media: null as number | null, mediana: null as number | null, pct24h: null as number | null, pct48h: null as number | null, n: 0 };
+        const sorted = [...arr].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const mediana = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        return {
+          media: avg(arr), mediana,
+          pct24h: (arr.filter(v => v <= 1).length / arr.length) * 100,
+          pct48h: (arr.filter(v => v <= 2).length / arr.length) * 100,
+          n: arr.length,
+        };
+      };
       const leadTime = {
         scParaCotacao: avg(ltScCot), amostraScCot: ltScCot.length,
         cotacaoParaOc: avg(ltCotOc), amostraCotOc: ltCotOc.length,
         scParaOc: avg(ltScOc), amostraScOc: ltScOc.length,
+        det: { scCot: stats(ltScCot), cotOc: stats(ltCotOc), scOc: stats(ltScOc) },
       };
+
+      // ── Rev. 4728: Quando pedem (dia da semana × hora, horário de Brasília UTC-3) ──
+      const LOCAL_OFFSET_MS = 3 * 3_600_000; // America/Sao_Paulo (sem DST desde 2019)
+      const localParts = (ts: unknown) => {
+        const ms = parseTs(ts);
+        if (!Number.isFinite(ms)) return null;
+        const d = new Date(ms - LOCAL_OFFSET_MS);
+        return { dow: d.getUTCDay(), hora: d.getUTCHours(), data: d.toISOString().slice(0, 10) };
+      };
+      const solKey = (r: typeof scsAll[number]) =>
+        ((r.criadoPorNome || "").trim() || (r.solicitanteId ? `Usuário #${r.solicitanteId}` : "—")).toUpperCase();
+      const filtroSol = (input.solicitante ?? "").trim().toUpperCase() || null;
+      const porDiaSemana = Array.from({ length: 7 }, () => 0);
+      const porHora = Array.from({ length: 24 }, () => 0);
+      scsAtivas.forEach(r => {
+        if (filtroSol && solKey(r) !== filtroSol) return;
+        const lp = localParts(r.criadoEm);
+        if (!lp) return;
+        porDiaSemana[lp.dow]++;
+        porHora[lp.hora]++;
+      });
+
+      // ── Rev. 4728: Índice de planejamento por solicitante ──
+      // antecedência = data de necessidade − data do pedido (dias); ≤0 = "para ontem/hoje"
+      // fora do horário comercial = antes das 7h, depois das 18h ou fim de semana
+      const planMap: Record<string, {
+        nome: string; total: number; urgentes: number; comNecessidade: number;
+        somaAntecedencia: number; ultimaHora: number; foraHorario: number;
+      }> = {};
+      scsAtivas.forEach(r => {
+        const key = solKey(r);
+        const nome = (r.criadoPorNome || "").trim() || (r.solicitanteId ? `Usuário #${r.solicitanteId}` : "—");
+        if (!planMap[key]) planMap[key] = { nome, total: 0, urgentes: 0, comNecessidade: 0, somaAntecedencia: 0, ultimaHora: 0, foraHorario: 0 };
+        const p = planMap[key];
+        p.total++;
+        if (isUrgente(r)) p.urgentes++;
+        const lp = localParts(r.criadoEm);
+        if (lp && (lp.dow === 0 || lp.dow === 6 || lp.hora < 7 || lp.hora >= 18)) p.foraHorario++;
+        const nec = (r.dataNecessidade ?? "").slice(0, 10);
+        if (lp && /^\d{4}-\d{2}-\d{2}$/.test(nec)) {
+          const ant = (new Date(nec + "T00:00:00Z").getTime() - new Date(lp.data + "T00:00:00Z").getTime()) / 86_400_000;
+          p.comNecessidade++;
+          p.somaAntecedencia += ant;
+          if (ant <= 0) p.ultimaHora++;
+        }
+      });
+      const planejamento = Object.values(planMap)
+        .filter(p => p.total > 0)
+        .map(p => ({
+          nome: p.nome, total: p.total, urgentes: p.urgentes,
+          antecedenciaMedia: p.comNecessidade ? p.somaAntecedencia / p.comNecessidade : null,
+          pctUltimaHora: p.comNecessidade ? (p.ultimaHora / p.comNecessidade) * 100 : null,
+          comNecessidade: p.comNecessidade,
+          foraHorario: p.foraHorario,
+        }))
+        .sort((a, b) => b.total - a.total).slice(0, 15);
+
+      // Ranking de urgência (quem mais pede urgente, com % sobre as SCs dele)
+      const rankingUrgencia = Object.values(planMap)
+        .filter(p => p.urgentes > 0)
+        .map(p => ({ nome: p.nome, urgentes: p.urgentes, total: p.total, pct: (p.urgentes / p.total) * 100 }))
+        .sort((a, b) => b.urgentes - a.urgentes || b.pct - a.pct).slice(0, 10);
 
       // Gargalo atual (independe do período): quantas paradas em cada etapa hoje
       const gargalo = {
@@ -11329,7 +11407,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         ocsAguardandoAprov: ocsAll.filter(r => r.aprovacaoStatus === "aguardando" && !isCancel(r.status) && !["entregue", "recebido"].includes(r.status) && obraOk(r.obraId)).length,
       };
 
-      return { kpis, seriePorDia, rankingSolicitantes, rankingMateriais, porTipo, rankingObras, leadTime, gargalo, obras: obrasRows };
+      return {
+        kpis, seriePorDia, rankingSolicitantes, rankingMateriais, porTipo, rankingObras,
+        leadTime, gargalo, obras: obrasRows,
+        quandoPedem: { porDiaSemana, porHora },
+        planejamento, rankingUrgencia,
+      };
     }),
 
   getComprasBadgeCounts: protectedProcedure

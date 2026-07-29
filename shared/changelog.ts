@@ -1,4 +1,18 @@
 /**
+ * Rev. 4728 - DASHBOARD GERENCIAL: PLANEJAMENTO vs TEMPO DE RESPOSTA
+ *
+ * Novos indicadores para a reuniao gerencial de Compras:
+ * - "Quando Pedem": SCs por dia da semana e por horario (Brasilia), com
+ *   filtro por solicitante; destaca pedidos fora do horario comercial.
+ * - "Tempo de Resposta por Etapa": SC->Cotacao (resposta de Suprimentos),
+ *   Cotacao->OC (decisao de compra) e SC->OC (total), agora com mediana e
+ *   % respondido em ate 24h/48h alem da media.
+ * - "Indice de Planejamento por Solicitante": antecedencia media (data de
+ *   necessidade - data do pedido), % de pedidos de ultima hora, urgentes e
+ *   pedidos fora do horario comercial, por engenheiro.
+ * - "Quem Mais Pede Urgencia": ranking com % sobre as SCs de cada um.
+ */
+/**
  * Rev. 4727 - DASHBOARD GERENCIAL DE COMPRAS VIRA PAGINA PROPRIA NO MENU
  *
  * A analise gerencial (Rev. 4726) sai da aba do Painel de Controle e vira
