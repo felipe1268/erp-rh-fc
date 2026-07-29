@@ -1,4 +1,14 @@
 /**
+ * Rev. 4727 - DASHBOARD GERENCIAL DE COMPRAS VIRA PAGINA PROPRIA NO MENU
+ *
+ * A analise gerencial (Rev. 4726) sai da aba do Painel de Controle e vira
+ * a pagina "Dashboard Gerencial" no menu lateral do modulo Compras
+ * (/compras/dashboard-gerencial), ao lado do Dashboard por Obra.
+ * Fix: "Tempo Medio do Fluxo" aparecia "-" com 0 casos — os timestamps do
+ * banco vem com offset "+00" (sem minutos), que o new Date() do Node rejeita;
+ * parser agora normaliza para UTC (SC->Cotacao ~2,6 dias em Jun/2026).
+ */
+/**
  * Rev. 4726 - ABA "GERENCIAL" NO PAINEL DE COMPRAS
  *
  * Nova aba no Painel de Compras para analise gerencial (reuniao de equipe):

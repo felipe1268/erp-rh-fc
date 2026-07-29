@@ -661,6 +661,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
   "compras": {
     "/compras/painel":         "painel",
     "/compras/dashboard-obra": "dashboard_obra",
+    "/compras/dashboard-gerencial": "painel",
     "/compras/painel-fd":      "painel_fd",
     "/compras/solicitacoes":   "solicitacoes",
     "/compras/cotacoes":       "cotacoes",

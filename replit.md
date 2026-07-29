@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4727** — Dashboard Gerencial de Compras vira página própria no menu lateral do módulo Compras (/compras/dashboard-gerencial); fix do "Tempo Médio do Fluxo" zerado (parse de timestamp com offset "+00").
 - **Rev. 4726** — Aba "Gerencial" no Painel de Compras: KPIs do período, ritmo diário, rankings de solicitantes/materiais/obras, lead time SC→Cotação→OC, filtro por mês/ano e obra.
 - **Rev. 4725** — Orçamentista (grupo com módulo Orçamento liberado) tem acesso pleno a todos os orçamentos das suas empresas, sem restrição pela lista de obras.
 - **Rev. 4724** — Parser Santander PDF não mescla mais transações consecutivas (perdia valores); valida totais extraídos contra o Resumo do PDF e avisa na importação se divergir.

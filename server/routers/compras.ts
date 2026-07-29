@@ -11281,9 +11281,17 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       // Lead time (dias): SC→Cotação e Cotação→OC, pelas cotações/OCs CRIADAS no período
       const scById = new Map(scsAll.map(r => [r.id, r]));
       const cotById = new Map(cotsAll.map(r => [r.id, r]));
-      const diffDias = (a?: string | null, b?: string | null) => {
-        if (!a || !b) return null;
-        const ms = new Date(b.replace(" ", "T")).getTime() - new Date(a.replace(" ", "T")).getTime();
+      // Rev. 4727: parser robusto — timestamps do Neon vêm como "YYYY-MM-DD HH:MM:SS.mmm+00"
+      // (offset "+00" sem minutos), que o new Date() do Node NÃO aceita → tudo virava NaN
+      // e o lead time aparecia "—" com 0 casos. Normaliza para os 19 primeiros chars (UTC).
+      const parseTs = (v: unknown): number => {
+        if (v instanceof Date) return v.getTime();
+        if (typeof v !== "string" || v.length < 10) return NaN;
+        const s = v.slice(0, 19).replace(" ", "T");
+        return new Date(s.length >= 19 ? s + "Z" : s.slice(0, 10) + "T00:00:00Z").getTime();
+      };
+      const diffDias = (a?: unknown, b?: unknown) => {
+        const ms = parseTs(b) - parseTs(a);
         return Number.isFinite(ms) && ms >= 0 ? ms / 86_400_000 : null;
       };
       const ltScCot: number[] = [];

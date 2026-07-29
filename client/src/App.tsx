@@ -388,6 +388,7 @@ const MedicaoLevantamento = lazyWithRetry(() => import("./pages/medicao/MedicaoL
 
 // Compras
 const PainelCompras = lazyWithRetry(() => import("./pages/compras/Painel"));
+const DashboardGerencialCompras = lazyWithRetry(() => import("./pages/compras/DashboardGerencial"));
 const Fornecedores = lazyWithRetry(() => import("./pages/compras/Fornecedores"));
 const FornecedorFicha = lazyWithRetry(() => import("./pages/compras/FornecedorFicha"));
 const Almoxarifado = lazyWithRetry(() => import("./pages/compras/Almoxarifado"));
@@ -756,6 +757,7 @@ function Router() {
         <Route path="/compras/comissoes"         component={() => <RouteGuard component={ComprasComissoes} route="/compras/comissoes" />} />
         <Route path="/compras/configuracoes"     component={() => <RouteGuard component={ComprasConfiguracoes} route="/compras/configuracoes" />} />
         <Route path="/compras/dashboard-obra"    component={() => <RouteGuard component={DashboardObra} route="/compras/painel" />} />
+        <Route path="/compras/dashboard-gerencial" component={() => <RouteGuard component={DashboardGerencialCompras} route="/compras/painel" />} />
         <Route path="/compras/painel-fd"         component={() => <RouteGuard component={PainelFd} route="/compras/painel" />} />
         <Route path="/integrasign" component={() => <RouteGuard component={IntegraSignDashboard} route={["/compras/painel", "/terceiros/painel", "/terceiros/advertencias", "/terceiros/contratos"]} />} />
         <Route path="/integrasign/assinar/:token" component={IntegraSignAssinar} />

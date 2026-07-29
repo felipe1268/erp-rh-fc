@@ -378,6 +378,7 @@ const menuSectionsCompras: MenuSection[] = [
     items: [
       { icon: LayoutDashboard, label: "Painel de Controle",   path: "/compras/painel"           },
       { icon: BarChart3,       label: "Dashboard por Obra",   path: "/compras/dashboard-obra"   },
+      { icon: TrendingUp,      label: "Dashboard Gerencial",  path: "/compras/dashboard-gerencial" },
       { icon: Receipt,         label: "Painel FD",            path: "/compras/painel-fd"        },
     ],
   },
