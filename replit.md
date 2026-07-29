@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4726** — Aba "Gerencial" no Painel de Compras: KPIs do período, ritmo diário, rankings de solicitantes/materiais/obras, lead time SC→Cotação→OC, filtro por mês/ano e obra.
 - **Rev. 4725** — Orçamentista (grupo com módulo Orçamento liberado) tem acesso pleno a todos os orçamentos das suas empresas, sem restrição pela lista de obras.
 - **Rev. 4724** — Parser Santander PDF não mescla mais transações consecutivas (perdia valores); valida totais extraídos contra o Resumo do PDF e avisa na importação se divergir.
 - **Rev. 4723** — Busca da Conciliação aceita valor sem ponto de milhar ("1648,78"); extrato jan/2026 do hotel completado por diff do PDF (3 linhas incluídas, 3 descrições mescladas corrigidas).

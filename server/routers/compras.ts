@@ -11141,6 +11141,189 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       return { kpis, alertasOC, scsPendentesAprov, cotsPendentes, ocsRecentes, scsRecentes, gastosMensais, fornecedores: forn, obraMap, ocsAtrasadasPorObra };
     }),
 
+  // Rev. 4726 — Dashboard Gerencial de Compras (aba "Gerencial" do Painel):
+  // volume de SCs/cotações/OCs por período, ranking de solicitantes (quem pede
+  // todo dia / mais urgente), ranking de materiais, distribuição por tipo,
+  // demanda por obra e lead time SC→Cotação→OC.
+  getDashboardGerencial: protectedProcedure
+    .input(z.object({
+      companyIds: z.array(z.number()).min(1),
+      ano: z.number().int().min(2020).max(2100),
+      mes: z.number().int().min(1).max(12).nullable(), // null = ano todo
+      obraId: z.number().int().nullable().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const ids = input.companyIds;
+      for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
+
+      const pad = (v: number) => String(v).padStart(2, "0");
+      // Período selecionado [ini, fimEx) em YYYY-MM-DD (comparação por slice(0,10))
+      let ini: string, fimEx: string, iniPrev: string, fimPrevEx: string;
+      if (input.mes === null) {
+        ini = `${input.ano}-01-01`;   fimEx = `${input.ano + 1}-01-01`;
+        iniPrev = `${input.ano - 1}-01-01`; fimPrevEx = ini;
+      } else {
+        ini = `${input.ano}-${pad(input.mes)}-01`;
+        const prox = input.mes === 12 ? { a: input.ano + 1, m: 1 } : { a: input.ano, m: input.mes + 1 };
+        fimEx = `${prox.a}-${pad(prox.m)}-01`;
+        const ant = input.mes === 1 ? { a: input.ano - 1, m: 12 } : { a: input.ano, m: input.mes - 1 };
+        iniPrev = `${ant.a}-${pad(ant.m)}-01`; fimPrevEx = ini;
+      }
+
+      const [scsAll, cotsAll, ocsAll, obrasRows] = await Promise.all([
+        db.select().from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.companyId, ids)),
+        db.select().from(comprasCotacoes).where(inArray(comprasCotacoes.companyId, ids)),
+        db.select().from(comprasOrdens).where(inArray(comprasOrdens.companyId, ids)),
+        db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo }).from(obras).where(inArray(obras.companyId, ids)),
+      ]);
+
+      const obraMap: Record<number, string> = {};
+      obrasRows.forEach(o => { obraMap[o.id] = o.codigo ? `${o.codigo} – ${o.nome}` : o.nome; });
+
+      const d10 = (ts: string | null | undefined) => (ts ?? "").slice(0, 10);
+      const inRange = (ts: string | null | undefined, a: string, b: string) => { const d = d10(ts); return d >= a && d < b; };
+      const obraOk = (obraId: number | null | undefined) => input.obraId == null || obraId === input.obraId;
+
+      const isCancel = (st: string | null | undefined) => st === "cancelado" || st === "cancelada";
+      const scs  = scsAll.filter(r => inRange(r.criadoEm, ini, fimEx) && obraOk(r.obraId));
+      const cots = cotsAll.filter(r => inRange(r.criadoEm, ini, fimEx) && obraOk(r.obraId));
+      const ocs  = ocsAll.filter(r => inRange(r.criadoEm, ini, fimEx) && obraOk(r.obraId));
+
+      const scsAtivas = scs.filter(r => !isCancel(r.status));
+      const cotsAtivas = cots.filter(r => !isCancel(r.status));
+      const ocsAtivas = ocs.filter(r => !isCancel(r.status));
+
+      const isUrgente = (sc: typeof scs[number]) => sc.prioridade === "urgente" || sc.tipo === "emergencial";
+
+      // KPIs do período + comparativo com o período anterior
+      const prevScs  = scsAll.filter(r => inRange(r.criadoEm, iniPrev, fimPrevEx) && obraOk(r.obraId) && !isCancel(r.status)).length;
+      const prevCots = cotsAll.filter(r => inRange(r.criadoEm, iniPrev, fimPrevEx) && obraOk(r.obraId) && !isCancel(r.status)).length;
+      const prevOcsRows = ocsAll.filter(r => inRange(r.criadoEm, iniPrev, fimPrevEx) && obraOk(r.obraId) && !isCancel(r.status));
+      const kpis = {
+        scs: scsAtivas.length,
+        scsUrgentes: scsAtivas.filter(isUrgente).length,
+        scsCanceladas: scs.length - scsAtivas.length,
+        cotacoes: cotsAtivas.length,
+        ocs: ocsAtivas.length,
+        valorOcs: ocsAtivas.reduce((s, r) => s + n(r.total), 0),
+        prev: { scs: prevScs, cotacoes: prevCots, ocs: prevOcsRows.length, valorOcs: prevOcsRows.reduce((s, r) => s + n(r.total), 0) },
+      };
+
+      // Série por dia
+      const serieMap: Record<string, { scs: number; cots: number; ocs: number }> = {};
+      const bump = (ts: string, k: "scs" | "cots" | "ocs") => {
+        const d = d10(ts); if (!serieMap[d]) serieMap[d] = { scs: 0, cots: 0, ocs: 0 }; serieMap[d][k]++;
+      };
+      scsAtivas.forEach(r => bump(r.criadoEm, "scs"));
+      cotsAtivas.forEach(r => bump(r.criadoEm, "cots"));
+      ocsAtivas.forEach(r => bump(r.criadoEm, "ocs"));
+      const seriePorDia = Object.entries(serieMap).sort(([a], [b]) => a.localeCompare(b))
+        .map(([dia, v]) => ({ dia, ...v }));
+
+      // Ranking de solicitantes (quem pede mais / todo dia / urgente)
+      const solMap: Record<string, { nome: string; total: number; urgentes: number; dias: Set<string>; valorEstimado: number }> = {};
+      scsAtivas.forEach(r => {
+        const nome = (r.criadoPorNome || "").trim() || (r.solicitanteId ? `Usuário #${r.solicitanteId}` : "—");
+        const key = nome.toUpperCase();
+        if (!solMap[key]) solMap[key] = { nome, total: 0, urgentes: 0, dias: new Set(), valorEstimado: 0 };
+        solMap[key].total++;
+        if (isUrgente(r)) solMap[key].urgentes++;
+        solMap[key].dias.add(d10(r.criadoEm));
+      });
+      const rankingSolicitantes = Object.values(solMap)
+        .map(s => ({ nome: s.nome, total: s.total, urgentes: s.urgentes, diasComPedido: s.dias.size }))
+        .sort((a, b) => b.total - a.total).slice(0, 15);
+
+      // Ranking de materiais (itens das SCs do período)
+      const scIds = scsAtivas.map(r => r.id);
+      let rankingMateriais: { descricao: string; unidade: string | null; pedidos: number; quantidade: number }[] = [];
+      if (scIds.length > 0) {
+        const itens = await db.select({
+          solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
+          descricao: comprasSolicitacoesItens.descricao,
+          unidade: comprasSolicitacoesItens.unidade,
+          quantidade: comprasSolicitacoesItens.quantidade,
+        }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.solicitacaoId, scIds));
+        const matMap: Record<string, { descricao: string; unidade: string | null; pedidos: number; quantidade: number }> = {};
+        for (const it of itens) {
+          const key = (it.descricao || "").trim().toUpperCase();
+          if (!key) continue;
+          if (!matMap[key]) matMap[key] = { descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, pedidos: 0, quantidade: 0 };
+          matMap[key].pedidos++;
+          matMap[key].quantidade += n(it.quantidade);
+        }
+        rankingMateriais = Object.values(matMap).sort((a, b) => b.pedidos - a.pedidos).slice(0, 15);
+      }
+
+      // Distribuição por tipo de SC (material / mdo / pacote / equipamento…)
+      const tipoMap: Record<string, number> = {};
+      scsAtivas.forEach(r => { const t = r.tipo || "material"; tipoMap[t] = (tipoMap[t] ?? 0) + 1; });
+      const porTipo = Object.entries(tipoMap).map(([tipo, total]) => ({ tipo, total })).sort((a, b) => b.total - a.total);
+
+      // Demanda por obra
+      const obraAgg: Record<number, { scs: number; urgentes: number; valorOcs: number }> = {};
+      scsAtivas.forEach(r => {
+        if (!r.obraId) return;
+        if (!obraAgg[r.obraId]) obraAgg[r.obraId] = { scs: 0, urgentes: 0, valorOcs: 0 };
+        obraAgg[r.obraId].scs++;
+        if (isUrgente(r)) obraAgg[r.obraId].urgentes++;
+      });
+      ocsAtivas.forEach(r => {
+        if (!r.obraId) return;
+        if (!obraAgg[r.obraId]) obraAgg[r.obraId] = { scs: 0, urgentes: 0, valorOcs: 0 };
+        obraAgg[r.obraId].valorOcs += n(r.total);
+      });
+      const rankingObras = Object.entries(obraAgg).map(([obraId, v]) => ({
+        obraId: Number(obraId), obraNome: obraMap[Number(obraId)] ?? `Obra #${obraId}`, ...v,
+      })).sort((a, b) => b.scs - a.scs).slice(0, 15);
+
+      // Lead time (dias): SC→Cotação e Cotação→OC, pelas cotações/OCs CRIADAS no período
+      const scById = new Map(scsAll.map(r => [r.id, r]));
+      const cotById = new Map(cotsAll.map(r => [r.id, r]));
+      const diffDias = (a?: string | null, b?: string | null) => {
+        if (!a || !b) return null;
+        const ms = new Date(b.replace(" ", "T")).getTime() - new Date(a.replace(" ", "T")).getTime();
+        return Number.isFinite(ms) && ms >= 0 ? ms / 86_400_000 : null;
+      };
+      const ltScCot: number[] = [];
+      cotsAtivas.forEach(c => {
+        if (!c.solicitacaoId) return;
+        const sc = scById.get(c.solicitacaoId);
+        const d = diffDias(sc?.criadoEm, c.criadoEm);
+        if (d !== null) ltScCot.push(d);
+      });
+      const ltCotOc: number[] = [];
+      const ltScOc: number[] = [];
+      ocsAtivas.forEach(o => {
+        if (o.cotacaoId) {
+          const cot = cotById.get(o.cotacaoId);
+          const d = diffDias(cot?.criadoEm, o.criadoEm);
+          if (d !== null) ltCotOc.push(d);
+          if (cot?.solicitacaoId) {
+            const sc = scById.get(cot.solicitacaoId);
+            const d2 = diffDias(sc?.criadoEm, o.criadoEm);
+            if (d2 !== null) ltScOc.push(d2);
+          }
+        }
+      });
+      const avg = (arr: number[]) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+      const leadTime = {
+        scParaCotacao: avg(ltScCot), amostraScCot: ltScCot.length,
+        cotacaoParaOc: avg(ltCotOc), amostraCotOc: ltCotOc.length,
+        scParaOc: avg(ltScOc), amostraScOc: ltScOc.length,
+      };
+
+      // Gargalo atual (independe do período): quantas paradas em cada etapa hoje
+      const gargalo = {
+        scsAguardandoAprov: scsAll.filter(r => r.aprovacaoStatus === "aguardando" && !isCancel(r.status) && obraOk(r.obraId)).length,
+        cotacoesAbertas: cotsAll.filter(r => r.status === "pendente" && obraOk(r.obraId)).length,
+        ocsAguardandoAprov: ocsAll.filter(r => r.aprovacaoStatus === "aguardando" && !isCancel(r.status) && !["entregue", "recebido"].includes(r.status) && obraOk(r.obraId)).length,
+      };
+
+      return { kpis, seriePorDia, rankingSolicitantes, rankingMateriais, porTipo, rankingObras, leadTime, gargalo, obras: obrasRows };
+    }),
+
   getComprasBadgeCounts: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
     .query(async ({ input, ctx }) => {

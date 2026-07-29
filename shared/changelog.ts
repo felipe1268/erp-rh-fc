@@ -1,4 +1,16 @@
 /**
+ * Rev. 4726 - ABA "GERENCIAL" NO PAINEL DE COMPRAS
+ *
+ * Nova aba no Painel de Compras para analise gerencial (reuniao de equipe):
+ * KPIs do periodo (SCs, urgentes, cotacoes, OCs + valor, comparativo com
+ * periodo anterior), tempo medio do fluxo SC->Cotacao->OC, gargalo atual,
+ * ritmo diario (grafico de barras empilhadas), ranking de solicitantes
+ * (quem pede mais / todo dia / urgente), materiais mais pedidos, distribuicao
+ * por tipo e demanda por obra. Seletor de periodo padrao (PeriodSelectorCard,
+ * mes/ano ou ano todo) + filtro por obra. Backend: compras.getDashboardGerencial
+ * com _assertCompanyAccess por empresa.
+ */
+/**
  * Rev. 4725 - ORCAMENTISTA TEM ACESSO PLENO AO MODULO ORCAMENTO
  *
  * Usuario cujo grupo libera o modulo Orcamento (level admin ou qualquer pagina
