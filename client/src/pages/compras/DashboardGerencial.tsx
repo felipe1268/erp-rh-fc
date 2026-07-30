@@ -16,7 +16,7 @@ import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import {
   ClipboardList, ShoppingCart, AlertTriangle, Clock,
   RefreshCw, Users, TrendingDown, ChevronDown, ChevronRight, Info,
-  Lightbulb, BarChart3, CalendarClock, ArrowUpRight, Target, Layers3, Gauge,
+  Lightbulb, BarChart3, ArrowUpRight, Target, Layers3, Gauge,
   CircleDollarSign, Activity, Building2, CalendarClock,
 } from "lucide-react";
 import {
