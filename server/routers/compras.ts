@@ -11482,6 +11482,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       type EvCompra = {
         data: string; ordemId: number; numeroOc: string | null; scId: number | null; numeroSc: string | null;
         obraId: number | null; solicitante: string; qtd: number; preco: number;
+        insumoCodigo?: string | null;
       };
       type GrupoInsumo = {
         chave: string; descricao: string; unidade: string | null;
@@ -11495,9 +11496,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       let perdaTotal = 0, gruposTotal = 0, comprasEnvolvidas = 0;
       type RecItem = {
         chave: string; descricao: string; unidade: string | null;
+        qtdPorUnidade?: { unidade: string; qtd: number }[];
         compras: number; diasDistintos: number; qtdTotal: number; valorTotal: number;
         intervaloMedioDias: number | null; primeiraCompra: string; ultimaCompra: string;
-        obras: number; detalhe: EvCompra[];
+        obras: number; detalhe: (EvCompra & { unidade?: string | null })[];
       };
       const recorrenciaItens: RecItem[] = [];
       const inconsistentes = {
@@ -11514,6 +11516,24 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           precoUnitario: comprasOrdensItens.precoUnitario,
         }).from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocsCompra.map(o => o.id)));
 
+        // Rev. 4750: itens lançados com o CÓDIGO no lugar do nome ("20.05.03") —
+        // resolver pelo catálogo de composições (nome real do insumo) antes de agrupar.
+        const codigoRe = /^\d{2}(\.\d{2,3})+$/;
+        const codesPendentes = Array.from(new Set(
+          itensOc.map(it => (it.descricao || "").trim()).filter(d => codigoRe.test(d))
+        ));
+        const nomePorCodigo: Record<string, string> = {};
+        if (codesPendentes.length > 0) {
+          try {
+            const res = await db.execute(sql`
+              SELECT insumo_codigo AS codigo, min(insumo_descricao) AS descricao
+              FROM composicao_insumos
+              WHERE company_id IN (${sql.join(ids.map(i => sql`${i}`), sql`, `)})
+                AND insumo_codigo IN (${sql.join(codesPendentes.map(cd => sql`${cd}`), sql`, `)})
+              GROUP BY 1`);
+            ((res as any).rows ?? []).forEach((r: any) => { if (r.descricao) nomePorCodigo[r.codigo] = String(r.descricao).trim(); });
+          } catch { /* resolução de nome é cosmética */ }
+        }
         const porChave: Record<string, { chave: string; descricao: string; unidade: string | null; evs: EvCompra[] }> = {};
         for (const it of itensOc) {
           const preco = n(it.precoUnitario), qtd = n(it.quantidade);
@@ -11524,17 +11544,24 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           // insumo_codigo NÃO identifica o produto — é código de CATEGORIA (ex.: "01.04"
           // cobre 174 produtos diferentes, de R$0,16 a R$4.510), o que gerava comparações
           // absurdas entre itens incomparáveis.
-          const base = normalizarTexto((it.descricao || "").trim()).toUpperCase().replace(/\s+/g, " ");
+          let descRaw = (it.descricao || "").trim();
+          let codigoItem: string | null = it.insumoCodigo ?? null;
+          if (codigoRe.test(descRaw)) {
+            codigoItem = descRaw;
+            descRaw = nomePorCodigo[descRaw] ? `${nomePorCodigo[descRaw]} (${descRaw})` : `Insumo ${descRaw} — sem nome no cadastro`;
+          }
+          const base = normalizarTexto(descRaw).toUpperCase().replace(/\s+/g, " ");
           if (!base) continue;
           const key = `${base}|${(it.unidade || "").trim().toUpperCase()}`;
           const scId = o.solicitacaoId ?? (o.cotacaoId ? cotById.get(o.cotacaoId)?.solicitacaoId : null) ?? null;
           const sc = scId != null ? scById.get(scId) : undefined;
           const solicitante = (sc?.criadoPorNome || "").trim() || (o.criadoPorNome || "").trim() || "—";
-          if (!porChave[key]) porChave[key] = { chave: key, descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, evs: [] };
+          if (!porChave[key]) porChave[key] = { chave: key, descricao: descRaw, unidade: it.unidade ?? null, evs: [] };
           porChave[key].evs.push({
             data: d10(o.criadoEm), ordemId: o.id, numeroOc: o.numeroOc ?? null,
             scId: sc?.id ?? null, numeroSc: sc?.numeroSc ?? null,
             obraId: o.obraId ?? null, solicitante, qtd, preco,
+            insumoCodigo: codigoItem,
           });
         }
 
@@ -11610,29 +11637,46 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           }
         }
 
-        // ── Rev. 4733: Recorrência de compra por produto (o que mais compramos,
-        // quantas vezes e de quanto em quanto tempo) — mesma chave descrição+unidade ──
+        // ── Rev. 4733/4749: Recorrência de compra por produto (o que mais compramos,
+        // quantas vezes e de quanto em quanto tempo). Rev. 4749: agrupado SÓ pela
+        // descrição — o mesmo produto comprado em unidades diferentes (cimento em
+        // "sc" e "kg") aparecia 2× no card. Quantidade não soma entre unidades:
+        // vai discriminada em `qtdPorUnidade`.
+        const recPorDesc: Record<string, { descricao: string; evs: { ev: (typeof porChave)[string]["evs"][number]; unidade: string | null }[] }> = {};
         for (const info of Object.values(porChave)) {
-          const evs = info.evs;
-          const ocsDist = new Set(evs.map(e => e.ordemId));
+          const dKey = normalizarTexto(info.descricao.trim()).toUpperCase().replace(/\s+/g, " ");
+          if (!recPorDesc[dKey]) recPorDesc[dKey] = { descricao: info.descricao, evs: [] };
+          info.evs.forEach(ev => recPorDesc[dKey].evs.push({ ev, unidade: info.unidade ?? null }));
+        }
+        for (const grp of Object.values(recPorDesc)) {
+          const evs = grp.evs;
+          const ocsDist = new Set(evs.map(x => x.ev.ordemId));
           if (ocsDist.size === 0) continue;
-          const diasCompra = Array.from(new Set(evs.map(e => e.data))).sort();
+          const diasCompra = Array.from(new Set(evs.map(x => x.ev.data))).sort();
           let intervaloMedio: number | null = null;
           if (diasCompra.length >= 2) {
             let soma = 0;
             for (let i = 1; i < diasCompra.length; i++) soma += diasEntre(diasCompra[i - 1], diasCompra[i]);
             intervaloMedio = soma / (diasCompra.length - 1);
           }
+          // quantidade discriminada por unidade (não misturar sc com kg)
+          const qtdUn: Record<string, number> = {};
+          evs.forEach(x => { const u = (x.unidade ?? "?").trim() || "?"; qtdUn[u] = (qtdUn[u] ?? 0) + x.ev.qtd; });
+          const qtdPorUnidade = Object.entries(qtdUn).map(([unidade, qtd]) => ({ unidade, qtd }))
+            .sort((a, b) => b.qtd - a.qtd);
+          const unidadePrincipal = qtdPorUnidade[0]?.unidade ?? null;
           recorrenciaItens.push({
-            chave: info.chave, descricao: info.descricao, unidade: info.unidade,
+            chave: grp.descricao.trim().toUpperCase(), descricao: grp.descricao,
+            unidade: qtdPorUnidade.length > 1 ? null : unidadePrincipal,
+            qtdPorUnidade,
             compras: ocsDist.size, diasDistintos: diasCompra.length,
-            qtdTotal: evs.reduce((s, e) => s + e.qtd, 0),
-            valorTotal: evs.reduce((s, e) => s + e.preco * e.qtd, 0),
+            qtdTotal: evs.reduce((s, x) => s + x.ev.qtd, 0),
+            valorTotal: evs.reduce((s, x) => s + x.ev.preco * x.ev.qtd, 0),
             intervaloMedioDias: intervaloMedio,
             primeiraCompra: diasCompra[0], ultimaCompra: diasCompra[diasCompra.length - 1],
-            obras: new Set(evs.map(e => e.obraId)).size,
-            detalhe: [...evs].sort((a, b) => a.data.localeCompare(b.data)).slice(-15),
-          });
+            obras: new Set(evs.map(x => x.ev.obraId)).size,
+            detalhe: [...evs].sort((a, b) => a.ev.data.localeCompare(b.ev.data)).slice(-15).map(x => ({ ...x.ev, unidade: x.unidade })),
+          } as any);
         }
       }
       const recorrencia = {
@@ -11644,7 +11688,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         oportunidades: [...recorrenciaItens]
           .filter(r => r.compras >= 4 && r.intervaloMedioDias != null && r.intervaloMedioDias <= 30)
           .sort((a, b) => b.valorTotal - a.valorTotal).slice(0, 10)
-          .map(r => ({ chave: r.chave, descricao: r.descricao, unidade: r.unidade, compras: r.compras, intervaloMedioDias: r.intervaloMedioDias, valorTotal: r.valorTotal, obras: r.obras })),
+          .map(r => ({ chave: r.chave, descricao: r.descricao, unidade: r.unidade, qtdPorUnidade: r.qtdPorUnidade, compras: r.compras, intervaloMedioDias: r.intervaloMedioDias, valorTotal: r.valorTotal, obras: r.obras })),
       };
       const perdaAgrupamento = {
         janelaDias: JANELA_DIAS,

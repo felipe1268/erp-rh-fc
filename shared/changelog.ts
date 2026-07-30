@@ -1,4 +1,20 @@
 /**
+ * Rev. 4750 - RECORRENCIA: CODIGO NO LUGAR DO NOME RESOLVIDO + Nº DO INSUMO
+ *
+ * Itens de OC lancados com o CODIGO do insumo no campo descricao ("20.05.03")
+ * apareciam como nome do produto. Agora o codigo e resolvido pelo catalogo de
+ * composicoes ("Areia media (20.05.03)"; sem cadastro -> "Insumo X — sem nome
+ * no cadastro") antes de agrupar. Drill-down ganhou coluna "Insumo" com o
+ * numero do insumo de cada linha de OC.
+ *
+ * Rev. 4749 - RECORRENCIA: MESMO PRODUTO EM UNIDADES DIFERENTES = 1 LINHA
+ *
+ * "O que Mais Compramos" agrupava por descricao+unidade: cimento comprado em
+ * "sc" E em "kg" aparecia 2x com valores separados. Agora agrupa SO pela
+ * descricao; a quantidade NUNCA soma entre unidades — vai discriminada em
+ * chips por unidade (ex.: 500 sc / 12.000 kg) e no drill-down cada linha de
+ * OC mostra a unidade. Compras/intervalo/valor consolidados no produto.
+ *
  * Rev. 4748 - DEMANDA & CONVERSAO: EIXOS E LEGENDAS LEGIVEIS
  *
  * O grafico anual mostrava o numero do mes repetido em TODO tick diario

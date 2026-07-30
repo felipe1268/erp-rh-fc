@@ -532,7 +532,7 @@ export default function DashboardGerencialCompras() {
                         </div>
                       </div>
                       <FonteNote>
-                        <b>Fonte:</b> itens das OCs ativas do período (canceladas e locações excluídas), agrupados por descrição idêntica + unidade.<br />
+                        <b>Fonte:</b> itens das OCs ativas do período (canceladas e locações excluídas), agrupados por descrição idêntica — <b>o mesmo produto comprado em unidades diferentes (ex.: sc e kg) conta como um só</b>, com a quantidade discriminada por unidade.<br />
                         <b>Intervalo médio</b> = média de dias entre datas de compra distintas do mesmo produto.
                         Cada linha expande e mostra as últimas OCs (nº, data, obra, solicitante, qtd, preço) para conferência.
                       </FonteNote>
@@ -545,7 +545,16 @@ export default function DashboardGerencialCompras() {
                               <button onClick={() => setRecAberto(aberto ? null : `${recModo}|${r.chave}`)}
                                 className="w-full flex items-center gap-2 py-2.5 text-left">
                                 {aberto ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
-                                <span className="text-sm text-gray-800 font-medium flex-1 min-w-0 break-words">{r.descricao}{r.unidade ? ` (${r.unidade})` : ""}</span>
+                                <span className="text-sm text-gray-800 font-medium flex-1 min-w-0 break-words">
+                                  {r.descricao}{r.unidade ? ` (${r.unidade})` : ""}
+                                  {(r.qtdPorUnidade?.length ?? 0) > 1 && (
+                                    <span className="ml-1.5 inline-flex flex-wrap gap-1 align-middle">
+                                      {r.qtdPorUnidade.map((u: any) => (
+                                        <span key={u.unidade} className="text-[9px] font-semibold text-violet-700 bg-violet-50 border border-violet-100 rounded-full px-1.5 py-0.5">{u.qtd.toLocaleString("pt-BR")} {u.unidade}</span>
+                                      ))}
+                                    </span>
+                                  )}
+                                </span>
                                 <span className="text-[11px] text-gray-500 whitespace-nowrap">{r.compras}× </span>
                                 <span className="text-[11px] text-gray-500 whitespace-nowrap hidden sm:inline">
                                   {r.intervaloMedioDias != null ? `a cada ${r.intervaloMedioDias.toFixed(0)}d` : "compra única"}
@@ -566,6 +575,7 @@ export default function DashboardGerencialCompras() {
                                         <th className="py-1 pr-2 font-medium">SC</th>
                                         <th className="py-1 pr-2 font-medium">Obra</th>
                                         <th className="py-1 pr-2 font-medium">Solicitante</th>
+                                        <th className="py-1 pr-2 font-medium">Insumo</th>
                                         <th className="py-1 pr-2 font-medium text-right">Qtd</th>
                                         <th className="py-1 font-medium text-right">Preço unit.</th>
                                       </tr>
@@ -578,7 +588,8 @@ export default function DashboardGerencialCompras() {
                                           <td className="py-1 pr-2 whitespace-nowrap">{d.numeroSc ? <LinkSc id={d.scId} label={d.numeroSc} /> : "—"}</td>
                                           <td className="py-1 pr-2 max-w-[160px] break-words">{d.obraId != null ? ((g.obras.find((o: any) => o.id === d.obraId)?.nome) ?? `#${d.obraId}`) : "—"}</td>
                                           <td className="py-1 pr-2 max-w-[140px] break-words">{d.solicitante}</td>
-                                          <td className="py-1 pr-2 text-right">{d.qtd}</td>
+                                          <td className="py-1 pr-2 whitespace-nowrap text-gray-500">{d.insumoCodigo ?? "—"}</td>
+                                          <td className="py-1 pr-2 text-right whitespace-nowrap">{d.qtd}{d.unidade ? <span className="text-gray-400"> {d.unidade}</span> : ""}</td>
                                           <td className="py-1 text-right">{BRL(d.preco)}</td>
                                         </tr>
                                       ))}

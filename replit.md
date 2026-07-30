@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4750** — Recorrência: descrição que era só código ("20.05.03") resolvida pelo catálogo de composições; coluna "Insumo" (nº do insumo) no drill-down.
+- **Rev. 4749** — Recorrência de compras: mesmo produto em unidades diferentes (sc/kg) consolidado numa linha só, com quantidade discriminada por unidade.
 - **Rev. 4748** — Demanda & Conversão: eixo X com nome do mês na virada (anual) / dia a cada 2 (mensal), tooltip dd/mm/aaaa e legenda fixa das 2 linhas.
 - **Rev. 4747** — Correções do code review: fotos de solicitantes filtradas por empresa (tenancy) e comparativo de antecedência com base de data local unificada.
 - **Rev. 4746** — Planejamento por Solicitante: cards com foto (zoom), tiles de números com semáforo e comparativo "vs período anterior" (SCs/antecedência/urgentes).
