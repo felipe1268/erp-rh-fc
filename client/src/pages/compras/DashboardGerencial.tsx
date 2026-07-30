@@ -8,7 +8,8 @@
  * - Rastreabilidade total: todo número expande e mostra as SCs/OCs de origem
  *   (nº do documento, data, obra, solicitante) + nota "Fonte & método" por bloco.
  */
-import { useState } from "react";
+import { useState, createContext, useContext } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -33,16 +34,110 @@ const fmtDate = (d: string | null | undefined) => {
   return `${day}/${m}/${y}`;
 };
 
-// Rev. 4735 — links de auditoria: abrem a OC/SC real com o detalhe destacado
-const LinkOc = ({ id, label }: { id: number | null | undefined; label: string }) =>
-  id != null ? (
-    <a href={`/compras/ordens?destaque=${id}`} className="text-blue-600 underline decoration-blue-300 underline-offset-2 hover:text-blue-800">{label}</a>
-  ) : <>{label}</>;
+// Rev. 4739 — links de auditoria abrem POP-UP aqui mesmo (sem sair do dashboard)
+const DocCtx = createContext<{ openSc: (id: number) => void; openOc: (id: number) => void }>({ openSc: () => {}, openOc: () => {} });
 
-const LinkSc = ({ id, label }: { id: number | null | undefined; label: string }) =>
-  id != null ? (
-    <a href={`/compras/solicitacoes?destaque=${id}`} className="text-blue-600 underline decoration-blue-300 underline-offset-2 hover:text-blue-800">{label}</a>
+const LinkOc = ({ id, label }: { id: number | null | undefined; label: string }) => {
+  const { openOc } = useContext(DocCtx);
+  return id != null ? (
+    <button type="button" onClick={() => openOc(id)} className="text-blue-600 underline decoration-blue-300 underline-offset-2 hover:text-blue-800">{label}</button>
   ) : <>{label}</>;
+};
+
+const LinkSc = ({ id, label }: { id: number | null | undefined; label: string }) => {
+  const { openSc } = useContext(DocCtx);
+  return id != null ? (
+    <button type="button" onClick={() => openSc(id)} className="text-blue-600 underline decoration-blue-300 underline-offset-2 hover:text-blue-800">{label}</button>
+  ) : <>{label}</>;
+};
+
+// Pop-up de detalhe de SC/OC (leitura rápida, sem navegar)
+function DocPreviewDialog({ doc, onClose }: { doc: { tipo: "sc" | "oc"; id: number } | null; onClose: () => void }) {
+  const scQ = trpc.compras.getSolicitacao.useQuery({ id: doc?.id ?? 0 }, { enabled: doc?.tipo === "sc" });
+  const ocQ = trpc.compras.getOrdem.useQuery({ id: doc?.id ?? 0 }, { enabled: doc?.tipo === "oc" });
+  const q: any = doc?.tipo === "sc" ? scQ : ocQ;
+  const d: any = q.data;
+  const isSc = doc?.tipo === "sc";
+  const numero = d ? (isSc ? d.numeroSc ?? d.solicitacao?.numeroSc : d.numeroOc ?? d.ordem?.numeroOc) : null;
+  const base: any = d ? (isSc ? (d.solicitacao ?? d) : (d.ordem ?? d)) : null;
+  const itens: any[] = d?.itens ?? base?.itens ?? [];
+  const campo = (label: string, valor: any) =>
+    valor == null || valor === "" ? null : (
+      <div key={label}>
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
+        <p className="text-sm text-gray-800 break-words">{valor}</p>
+      </div>
+    );
+  return (
+    <Dialog open={doc != null} onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 break-words">
+            {isSc ? "Solicitação" : "Ordem de Compra"} {numero ?? (doc ? `#${doc.id}` : "")}
+            {base?.status && <span className="text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">{String(base.status).replace(/_/g, " ")}</span>}
+          </DialogTitle>
+        </DialogHeader>
+        {q.isLoading && <p className="text-sm text-gray-500 py-6 text-center">Carregando…</p>}
+        {q.isError && <p className="text-sm text-rose-600 py-6 text-center break-words">Não foi possível carregar o documento.</p>}
+        {base && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {campo("Criada em", fmtDate(base.criadoEm ?? base.createdAt))}
+              {campo(isSc ? "Necessidade" : "Entrega prevista", fmtDate(base.dataNecessidade ?? base.dataEntregaPrevista))}
+              {campo("Obra", base.obraNome ?? base.obra?.nome)}
+              {campo("Solicitante", base.criadoPorNome ?? base.solicitanteNome)}
+              {campo("Fornecedor", base.fornecedorNome ?? base.fornecedor?.nome)}
+              {campo("Prioridade", base.prioridade)}
+              {campo("Tipo", base.tipo)}
+              {campo("Total", base.total != null ? BRL(Number(base.total) || 0) : null)}
+            </div>
+            {base.observacoes && (
+              <div>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Observações</p>
+                <p className="text-sm text-gray-700 break-words whitespace-pre-wrap">{base.observacoes}</p>
+              </div>
+            )}
+            {itens.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Itens ({itens.length})</p>
+                <div className="overflow-x-auto border border-gray-100 rounded-lg">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="text-gray-400 text-left bg-gray-50/60">
+                        <th className="py-1.5 px-2 font-medium">Descrição</th>
+                        <th className="py-1.5 px-2 font-medium text-right">Qtd</th>
+                        <th className="py-1.5 px-2 font-medium">Un.</th>
+                        <th className="py-1.5 px-2 font-medium text-right">Vlr. unit.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itens.map((it: any, i: number) => (
+                        <tr key={i} className="border-t border-gray-50 text-gray-700">
+                          <td className="py-1 px-2 break-words">{it.descricao ?? it.nome ?? "—"}</td>
+                          <td className="py-1 px-2 text-right whitespace-nowrap">{it.quantidade ?? it.qtd ?? "—"}</td>
+                          <td className="py-1 px-2 whitespace-nowrap">{it.unidade ?? "—"}</td>
+                          <td className="py-1 px-2 text-right whitespace-nowrap">{it.precoUnitario != null ? BRL(Number(it.precoUnitario) || 0) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            <div className="pt-1">
+              <a
+                href={isSc ? `/compras/solicitacoes?destaque=${doc!.id}` : `/compras/ordens?destaque=${doc!.id}`}
+                className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
+              >
+                Abrir no módulo de Compras →
+              </a>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const fmtDias = (v: number | null | undefined) => {
   if (v == null) return "—";
@@ -160,6 +255,7 @@ export default function DashboardGerencialCompras() {
   const [recModo, setRecModo] = useState<"valor" | "freq">("valor");
   const [recAberto, setRecAberto] = useState<string | null>(null);
   const [sustoAberto, setSustoAberto] = useState(false);
+  const [docAberto, setDocAberto] = useState<{ tipo: "sc" | "oc"; id: number } | null>(null);
 
   const { data: gerData } = trpc.compras.getDashboardGerencial.useQuery(
     { companyIds, ano: gerAno, mes: gerMes, obraId: gerObraId, solicitante: null, janelaAgrupamento: janela },
@@ -168,6 +264,8 @@ export default function DashboardGerencialCompras() {
 
   return (
     <DashboardLayout>
+      <DocCtx.Provider value={{ openSc: id => setDocAberto({ tipo: "sc", id }), openOc: id => setDocAberto({ tipo: "oc", id }) }}>
+      <DocPreviewDialog doc={docAberto} onClose={() => setDocAberto(null)} />
       <div className="fc-dashboard p-4 sm:p-5 min-h-screen bg-[#f4f6f8]">
         <div className="max-w-[1300px] mx-auto space-y-5">
           <style>{`
@@ -551,14 +649,14 @@ export default function DashboardGerencialCompras() {
                     <h3 className="font-semibold text-gray-800">Tempo de Resposta do Fluxo de Compras</h3>
                   </div>
                   <FonteNote>
-                    <b>Fonte:</b> datas de criação de SC, Cotação e OC (Compras), pelos documentos criados no período, cancelados excluídos.<br />
+                    <b>Fonte:</b> SC = data de criação; Cotação = data de <b>aprovação</b> (a cotação nasce junto com a SC — medir a criação não significa nada); OC = data de emissão. Documentos do período, cancelados excluídos.<br />
                     <b>Mediana</b> = metade dos casos foi respondida nesse tempo ou menos (não distorce com casos extremos).
                     O drill-down lista os 10 casos mais lentos SC→OC com nº dos documentos para auditoria.
                   </FonteNote>
                   <div className="grid sm:grid-cols-3 gap-3 mt-3">
                     {[
-                      { t: "Suprimentos responde (SC → Cotação)", s: lt.det.scCot },
-                      { t: "Decisão de compra (Cotação → OC)", s: lt.det.cotOc },
+                      { t: "Suprimentos responde (SC → Cotação aprovada)", s: lt.det.scCot },
+                      { t: "Decisão de compra (Cotação aprovada → OC)", s: lt.det.cotOc },
                       { t: "Tempo total (SC → OC)", s: lt.det.scOc, destaque: true },
                     ].map((b: any) => (
                       <div key={b.t} className={`rounded-lg border p-3 ${b.destaque ? "border-blue-200 bg-blue-50/50" : "border-gray-100 bg-gray-50/50"}`}>
@@ -720,6 +818,110 @@ export default function DashboardGerencialCompras() {
                   );
                 })()}
 
+                {/* ── Rev. 4740: Gestão — termômetro, top materiais e tendência ── */}
+                {(() => {
+                  const ge: any = (g as any).gestao;
+                  if (!ge) return null;
+                  const corScore = (s: number) => (s >= 70 ? "#1f8a70" : s >= 40 ? "#d97706" : "#e11d48");
+                  const Termometro = ({ itens, titulo }: { itens: any[]; titulo: string }) => (
+                    <div>
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{titulo}</p>
+                      {itens.length === 0 && <p className="text-xs text-gray-400">Sem dados no período.</p>}
+                      <div className="space-y-2">
+                        {itens.map((s: any) => (
+                          <div key={s.nome ?? s.obraNome}>
+                            <div className="flex justify-between items-baseline text-xs gap-2">
+                              <span className="text-gray-700 font-medium break-words min-w-0">{s.nome ?? s.obraNome}</span>
+                              <span className="font-bold whitespace-nowrap" style={{ color: corScore(s.score) }}>{s.score}/100</span>
+                            </div>
+                            <div className="h-2.5 bg-gray-100 rounded-full mt-0.5 overflow-hidden">
+                              <div className="h-2.5 rounded-full transition-all" style={{ width: `${Math.max(s.score, 2)}%`, background: corScore(s.score) }} />
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {s.scs} SCs · {s.pctComNecessidade.toFixed(0)}% c/ data de necessidade · antecedência {s.antecedenciaMediana != null ? `${s.antecedenciaMediana.toFixed(1).replace(".", ",")}d` : "—"}
+                              {s.pctSusto != null ? ` · ${s.pctSusto.toFixed(0)}% no susto` : ""}{s.pctUrgentes > 0 ? ` · ${s.pctUrgentes.toFixed(0)}% urgente` : ""}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                  const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+                  const tend = (ge.tendencia ?? []).map((t: any) => ({ ...t, nome: MESES[t.mes - 1] }));
+                  const temTend = tend.some((t: any) => t.scs > 0);
+                  return (
+                    <>
+                      <Card>
+                        <div className="flex items-center gap-2">
+                          <Gauge className="w-5 h-5 text-[#f06449]" />
+                          <h3 className="font-semibold text-gray-800">Termômetro de Planejamento (0–100)</h3>
+                        </div>
+                        <FonteNote>
+                          <b>Score</b> = 25% preencher data de necessidade + 35% antecedência do pedido (meta 7 dias) + 15% não recorrer a urgência + 25% comprar fora do susto (entrega &gt;3d).
+                          Sem OC no período, o peso do susto migra p/ antecedência. Mínimo de 2 SCs. <b>0 = compra tudo no susto; 100 = planeja.</b>
+                        </FonteNote>
+                        <div className="grid md:grid-cols-2 gap-6 mt-3">
+                          <Termometro titulo="Por solicitante (pior → melhor)" itens={ge.scoreSolicitantes ?? []} />
+                          <Termometro titulo="Por obra (pior → melhor)" itens={ge.scoreObras ?? []} />
+                        </div>
+                      </Card>
+
+                      <div className="grid lg:grid-cols-2 gap-5">
+                        <Card>
+                          <div className="flex items-center gap-2">
+                            <BarChart3 className="w-5 h-5 text-[#35658f]" />
+                            <h3 className="font-semibold text-gray-800">Materiais Mais Pedidos</h3>
+                          </div>
+                          <FonteNote><b>Fonte:</b> itens das SCs ativas do período, agrupados por descrição idêntica + unidade. Candidatos naturais a contrato de fornecimento/estoque mínimo.</FonteNote>
+                          {(ge.topMateriais ?? []).length === 0 ? <p className="text-xs text-gray-400 mt-3">Sem itens no período.</p> : (
+                            <div className="mt-3" style={{ height: Math.max(220, ge.topMateriais.length * 30) }}>
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={ge.topMateriais} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
+                                  <XAxis type="number" hide />
+                                  <YAxis type="category" dataKey="descricao" width={210}
+                                    tick={{ fontSize: 10, fill: "#475569" }}
+                                    tickFormatter={(v: string) => (v.length > 34 ? v.slice(0, 33) + "…" : v)} />
+                                  <Tooltip formatter={(v: any, k: any) => [v, k === "pedidos" ? "Vezes pedido" : k]}
+                                    labelFormatter={(l: any) => l} />
+                                  <Bar dataKey="pedidos" fill="#35658f" radius={[0, 4, 4, 0]}
+                                    label={{ position: "right", fontSize: 10, fill: "#64748b" }} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                        </Card>
+
+                        <Card>
+                          <div className="flex items-center gap-2">
+                            <Activity className="w-5 h-5 text-[#1f8a70]" />
+                            <h3 className="font-semibold text-gray-800">Tendência de Planejamento no Ano</h3>
+                          </div>
+                          <FonteNote><b>Linhas por mês:</b> antecedência mediana dos pedidos (dias) e % de OCs compradas no susto (entrega ≤3d). O objetivo é a linha verde subir e a vermelha cair.</FonteNote>
+                          {!temTend ? <p className="text-xs text-gray-400 mt-3">Sem dados no ano.</p> : (
+                            <div className="mt-3 h-[260px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={tend} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
+                                  <XAxis dataKey="nome" tick={{ fontSize: 10, fill: "#64748b" }} />
+                                  <YAxis yAxisId="d" tick={{ fontSize: 10, fill: "#1f8a70" }} label={{ value: "dias", angle: -90, position: "insideLeft", fontSize: 10, fill: "#1f8a70" }} />
+                                  <YAxis yAxisId="p" orientation="right" domain={[0, 100]} tick={{ fontSize: 10, fill: "#e11d48" }} unit="%" />
+                                  <Tooltip formatter={(v: any, k: any) =>
+                                    k === "antecedenciaMediana" ? [`${Number(v).toFixed(1).replace(".", ",")} dias`, "Antecedência mediana"]
+                                    : k === "pctSusto" ? [`${Number(v).toFixed(0)}%`, "OCs no susto"]
+                                    : [v, k]} />
+                                  <Legend formatter={(v: any) => v === "antecedenciaMediana" ? "Antecedência mediana (d)" : "% OCs no susto"} wrapperStyle={{ fontSize: 11 }} />
+                                  <Line yAxisId="d" type="monotone" dataKey="antecedenciaMediana" stroke="#1f8a70" strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
+                                  <Line yAxisId="p" type="monotone" dataKey="pctSusto" stroke="#e11d48" strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                        </Card>
+                      </div>
+                    </>
+                  );
+                })()}
+
                 {/* ── Bloco 3: Planejamento por solicitante ── */}
                 <Card>
                   <div className="flex items-center gap-2">
@@ -789,6 +991,7 @@ export default function DashboardGerencialCompras() {
           })()}
         </div>
       </div>
+      </DocCtx.Provider>
     </DashboardLayout>
   );
 }

@@ -1,4 +1,28 @@
 /**
+ * Rev. 4740 - DASHBOARD GERENCIAL: TERMOMETRO DE PLANEJAMENTO + GRAFICOS DE GESTAO
+ *
+ * Tres novos cards para reuniao gerencial (dados validados no banco):
+ * - Termometro de Planejamento 0-100 por solicitante E por obra (pior->melhor):
+ *   25% preencher data de necessidade + 35% antecedencia (meta 7d) + 15% nao
+ *   urgencia + 25% comprar fora do susto; sem OC, peso do susto migra p/
+ *   antecedencia; minimo 2 SCs.
+ * - Materiais Mais Pedidos: barras horizontais (descricao identica + unidade),
+ *   candidatos a contrato de fornecimento/estoque minimo.
+ * - Tendencia de Planejamento no Ano: linhas mensais de antecedencia mediana
+ *   (verde, deve subir) x % OCs no susto (vermelha, deve cair).
+ * - Validacao: mediana OC->entrega = 1 dia e real (so 7 casos data=criacao);
+ *   30% das SCs sem data de necessidade; antecedencia mediana global 2d.
+ *
+ * Rev. 4739 - DASHBOARD GERENCIAL: TEMPO DE RESPOSTA REAL + POP-UP DE SC/OC
+ *
+ * - "Suprimentos responde" media SC->criacao da cotacao, mas a cotacao NASCE
+ *   junto com a SC (mesma acao) — dava "1s" e nao media nada. Agora mede
+ *   SC -> APROVACAO da cotacao (aprovado_em, so cotacoes aprovadas); "Decisao
+ *   de compra" conta da aprovacao da cotacao ate a emissao da OC.
+ * - Navegabilidade: clicar em SC/OC no dashboard abre POP-UP de detalhe ali
+ *   mesmo (status, datas, obra, solicitante, itens, total), sem sair da tela;
+ *   link secundario "Abrir no modulo de Compras" para quem quiser ir la.
+ *
  * Rev. 4738 - DASHBOARD GERENCIAL: HORIZONTE DE PLANEJAMENTO (PEDIDO->ENTREGA)
  *
  * Novo bloco que mede o horizonte real de compra (entrega prevista - criacao

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4740** — Dashboard Gerencial: Termômetro de Planejamento 0–100 (por solicitante e por obra), gráfico de barras Materiais Mais Pedidos e tendência anual antecedência × % susto (dados validados no Neon).
+- **Rev. 4739** — Dashboard Gerencial: "Suprimentos responde" agora mede SC → aprovação da cotação (a cotação nasce junto com a SC; medir criação dava "1s"); clicar em SC/OC abre pop-up de detalhe na própria tela.
 - **Rev. 4738** — Dashboard Gerencial: bloco "Horizonte de Planejamento (Pedido → Entrega)" — compra no susto (entrega ≤3d mesmo sem urgência), buckets, mediana vs meta ≥15d (30d sob encomenda), % por solicitante e drill dos maiores casos com links SC/OC.
 - **Rev. 4737** — Dashboard Gerencial: redesign visual completo (cockpit BI executivo — paleta própria, pulso de demanda, gauge de urgência, donut de perda por obra); dados, drill-downs e links SC/OC intactos.
 - **Rev. 4736** — Dashboard Gerencial: tempos abaixo de 1 dia agora em h/min/s reais (fim do "0h" no SC→Cotação; o cálculo já era preciso, só o formato arredondava).

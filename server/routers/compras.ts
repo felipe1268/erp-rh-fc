@@ -11319,11 +11319,14 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         const ms = parseTs(b) - parseTs(a);
         return Number.isFinite(ms) && ms >= 0 ? ms / 86_400_000 : null;
       };
+      // Rev. 4739: a cotação é CRIADA junto com a SC (mesma ação) — medir criação
+      // dava "1s" e não significava nada. O trabalho real de Suprimentos termina
+      // quando a cotação é APROVADA → usa aprovado_em (só cotações aprovadas).
       const ltScCot: number[] = [];
       cotsAtivas.forEach(c => {
-        if (!c.solicitacaoId) return;
+        if (!c.solicitacaoId || !c.aprovadoEm) return;
         const sc = scById.get(c.solicitacaoId);
-        const d = diffDias(sc?.criadoEm, c.criadoEm);
+        const d = diffDias(sc?.criadoEm, c.aprovadoEm);
         if (d !== null) ltScCot.push(d);
       });
       const ltCotOc: number[] = [];
@@ -11333,7 +11336,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       ocsAtivas.forEach(o => {
         if (o.cotacaoId) {
           const cot = cotById.get(o.cotacaoId);
-          const d = diffDias(cot?.criadoEm, o.criadoEm);
+          // Rev. 4739: decisão de compra conta a partir da APROVAÇÃO da cotação
+          const d = diffDias(cot?.aprovadoEm ?? cot?.criadoEm, o.criadoEm);
           if (d !== null) ltCotOc.push(d);
           if (cot?.solicitacaoId) {
             const sc = scById.get(cot.solicitacaoId);
@@ -11651,6 +11655,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const horizonteDias: number[] = [];
       const casosSusto: CasoSusto[] = [];
       const sustoSolMap: Record<string, { nome: string; ocs: number; susto: number }> = {};
+      const sustoObraMap: Record<number, { ocs: number; susto: number }> = {};
       let comEntrega = 0;
       const bucketsHorizonte = { ate3: 0, de4a7: 0, de8a14: 0, acima15: 0 };
       ocsAtivas.forEach(o => {
@@ -11671,6 +11676,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         const sKey = solicitante.toUpperCase();
         if (!sustoSolMap[sKey]) sustoSolMap[sKey] = { nome: solicitante, ocs: 0, susto: 0 };
         sustoSolMap[sKey].ocs++;
+        if (o.obraId != null) {
+          if (!sustoObraMap[o.obraId]) sustoObraMap[o.obraId] = { ocs: 0, susto: 0 };
+          sustoObraMap[o.obraId].ocs++;
+          if (dias <= 3) sustoObraMap[o.obraId].susto++;
+        }
         if (dias <= 3) {
           sustoSolMap[sKey].susto++;
           casosSusto.push({
@@ -11705,6 +11715,119 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           .slice(0, 10),
       };
 
+      // ── Rev. 4740: bloco Gestão — top materiais, tendência mensal e score de planejamento ──
+      // 1) Materiais mais pedidos (itens das SCs ativas do período)
+      const scIdsPeriodo = scsAtivas.map(r => r.id);
+      const itensSc = scIdsPeriodo.length
+        ? await db.select({
+            solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
+            descricao: comprasSolicitacoesItens.descricao,
+            unidade: comprasSolicitacoesItens.unidade,
+            quantidade: comprasSolicitacoesItens.quantidade,
+          }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.solicitacaoId, scIdsPeriodo))
+        : [];
+      const matMap: Record<string, { descricao: string; unidade: string | null; pedidos: number; scs: Set<number>; qtd: number }> = {};
+      itensSc.forEach(it => {
+        const key = `${(it.descricao || "").trim().toUpperCase()}|${(it.unidade || "").trim().toUpperCase()}`;
+        if (!key.trim() || key === "|") return;
+        if (!matMap[key]) matMap[key] = { descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, pedidos: 0, scs: new Set(), qtd: 0 };
+        matMap[key].pedidos++;
+        matMap[key].scs.add(it.solicitacaoId);
+        matMap[key].qtd += n(it.quantidade);
+      });
+      const topMateriais = Object.values(matMap)
+        .map(m => ({ descricao: m.descricao, unidade: m.unidade, pedidos: m.pedidos, scs: m.scs.size, qtd: m.qtd }))
+        .sort((a, b) => b.pedidos - a.pedidos)
+        .slice(0, 12);
+
+      // 2) Tendência mensal (ano do período, respeitando filtro de obra):
+      //    antecedência mediana, % SC com data de necessidade, % OC no susto
+      const anoIni = `${input.ano}-01-01`, anoFimEx = `${input.ano + 1}-01-01`;
+      const tendencia: { mes: number; scs: number; pctComNecessidade: number | null; antecedenciaMediana: number | null; pctSusto: number | null; ocs: number }[] = [];
+      for (let m = 1; m <= 12; m++) {
+        const mi = `${input.ano}-${pad(m)}-01`;
+        const mf = m === 12 ? anoFimEx : `${input.ano}-${pad(m + 1)}-01`;
+        const scsM = scsAll.filter(r => inRange(r.criadoEm, mi, mf) && obraOk(r.obraId) && !isCancel(r.status));
+        const antecs: number[] = [];
+        let comNec = 0;
+        scsM.forEach(r => {
+          const nec = d10((r as any).dataNecessidade);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(nec)) return;
+          comNec++;
+          const dd = (new Date(nec + "T00:00:00Z").getTime() - new Date(d10(r.criadoEm) + "T00:00:00Z").getTime()) / 86_400_000;
+          if (Number.isFinite(dd) && dd >= -30 && dd <= 365) antecs.push(dd);
+        });
+        const ocsM = ocsAll.filter(r => inRange(r.criadoEm, mi, mf) && obraOk(r.obraId) && !isCancel(r.status));
+        let ocsComEnt = 0, ocsSusto = 0;
+        ocsM.forEach(o => {
+          const ent = d10((o as any).dataEntregaPrevista);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(ent)) return;
+          const dd = (new Date(ent + "T00:00:00Z").getTime() - new Date(d10(o.criadoEm) + "T00:00:00Z").getTime()) / 86_400_000;
+          if (!Number.isFinite(dd) || dd < 0 || dd > 365) return;
+          ocsComEnt++;
+          if (dd <= 3) ocsSusto++;
+        });
+        tendencia.push({
+          mes: m, scs: scsM.length, ocs: ocsComEnt,
+          pctComNecessidade: scsM.length ? (comNec / scsM.length) * 100 : null,
+          antecedenciaMediana: medianaH(antecs),
+          pctSusto: ocsComEnt ? (ocsSusto / ocsComEnt) * 100 : null,
+        });
+      }
+
+      // 3) Score de planejamento 0–100 (termômetro) por solicitante e por obra.
+      //    Componentes: A % SCs com data de necessidade (peso 25) · B antecedência
+      //    mediana vs 7 dias (peso 35) · C % não-urgente (peso 15) · D % OCs fora
+      //    do susto (peso 25). Sem OC no período, o peso de D é redistribuído p/ B.
+      type ScoreAgg = { scs: number; comNec: number; antecs: number[]; urg: number };
+      const mkScore = (a: ScoreAgg, susto?: { ocs: number; susto: number }) => {
+        if (a.scs === 0) return null;
+        const A = a.comNec / a.scs;
+        const antecMed = medianaH(a.antecs);
+        const B = antecMed == null ? 0 : Math.max(0, Math.min(antecMed / 7, 1));
+        const C = 1 - a.urg / a.scs;
+        const temD = susto && susto.ocs > 0;
+        const D = temD ? 1 - susto!.susto / susto!.ocs : 0;
+        const score = temD ? 25 * A + 35 * B + 15 * C + 25 * D : 25 * A + 60 * B + 15 * C;
+        return {
+          score: Math.round(Math.max(0, Math.min(score, 100))),
+          pctComNecessidade: A * 100, antecedenciaMediana: antecMed,
+          pctUrgentes: (a.urg / a.scs) * 100,
+          pctSusto: temD ? (susto!.susto / susto!.ocs) * 100 : null,
+          scs: a.scs, ocs: susto?.ocs ?? 0,
+        };
+      };
+      const aggSol: Record<string, ScoreAgg & { nome: string }> = {};
+      const aggObra: Record<number, ScoreAgg> = {};
+      scsAtivas.forEach(r => {
+        const nome = nomeSolicitante(r);
+        const k = nome.toUpperCase();
+        if (!aggSol[k]) aggSol[k] = { nome, scs: 0, comNec: 0, antecs: [], urg: 0 };
+        const tgt = [aggSol[k]] as ScoreAgg[];
+        if (r.obraId != null) {
+          if (!aggObra[r.obraId]) aggObra[r.obraId] = { scs: 0, comNec: 0, antecs: [], urg: 0 };
+          tgt.push(aggObra[r.obraId]);
+        }
+        const nec = d10((r as any).dataNecessidade);
+        const temNec = /^\d{4}-\d{2}-\d{2}$/.test(nec);
+        const dd = temNec ? (new Date(nec + "T00:00:00Z").getTime() - new Date(d10(r.criadoEm) + "T00:00:00Z").getTime()) / 86_400_000 : null;
+        tgt.forEach(a => {
+          a.scs++;
+          if (temNec) a.comNec++;
+          if (dd != null && Number.isFinite(dd) && dd >= -30 && dd <= 365) a.antecs.push(dd);
+          if (isUrgente(r)) a.urg++;
+        });
+      });
+      const scoreSolicitantes = Object.values(aggSol)
+        .map(a => ({ nome: a.nome, ...mkScore(a, sustoSolMap[a.nome.toUpperCase()]) }))
+        .filter((s: any) => s.score != null && s.scs >= 2)
+        .sort((x: any, y: any) => x.score - y.score);
+      const scoreObras = Object.entries(aggObra)
+        .map(([obraId, a]) => ({ obraId: Number(obraId), obraNome: obraMap[Number(obraId)] ?? `Obra #${obraId}`, ...mkScore(a, sustoObraMap[Number(obraId)]) }))
+        .filter((s: any) => s.score != null && s.scs >= 2)
+        .sort((x: any, y: any) => x.score - y.score);
+      const gestao = { topMateriais, tendencia, scoreSolicitantes, scoreObras };
+
       // Gargalo atual (independe do período): quantas paradas em cada etapa hoje
       const gargalo = {
         scsAguardandoAprov: scsAll.filter(r => r.aprovacaoStatus === "aguardando" && !isCancel(r.status) && obraOk(r.obraId)).length,
@@ -11717,7 +11840,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         leadTime, gargalo, obras: obrasRows,
         quandoPedem: { porDiaSemana, porHora },
         planejamento, rankingUrgencia,
-        perdaAgrupamento, recorrencia, horizonte,
+        perdaAgrupamento, recorrencia, horizonte, gestao,
       };
     }),
 
