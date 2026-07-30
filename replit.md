@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4764** — Vale Alimentação: fix config vigente com café/lanche desativados (dados) + poka-yoke ao salvar benefício desativado com valor.
+- **Rev. 4763** — Vale Alimentação: config única p/ toda empresa (sem Escritório Central × obra) + guias Vigente/Histórico.
 - **Rev. 4762** — Evolução Mensal: visual refinado (chips só nos extremos, deltas compactos, legenda, Score em gradiente).
 - **Rev. 4761** — Evolução Mensal: tabela viva (heatmap + setas + tendência) e modo gráfico de linhas com benchmark.
 - **Rev. 4760** — Evolução Mensal: layout moderno com cards interativos, sparklines e pop-up de detalhe por indicador.

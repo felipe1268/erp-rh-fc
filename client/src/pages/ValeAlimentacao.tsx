@@ -144,6 +144,7 @@ export default function ValeAlimentacao() {
   const [mes, setMes] = useState(now.getMonth() + 1);
   const mesStr = `${ano}-${String(mes).padStart(2, "0")}`;
   const [tab, setTab] = useState<TabKey>("lancamento");
+  const [showCfgHist, setShowCfgHist] = useState(false); // Rev. 4763 — guia Histórico de configurações
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [diasUteis, setDiasUteis] = useState(22);
@@ -171,7 +172,6 @@ export default function ValeAlimentacao() {
   const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesStr }, { enabled: !!companyId || companyIds?.length > 0 });
   const lancamentosQ = trpc.valeAlimentacao.listLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesStr }, { enabled: !!companyId || companyIds?.length > 0 });
   const configsQ = trpc.avisoPrevio.avisoPrevio.listMealBenefitConfigs.useQuery({ companyId, companyIds }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "configuracao" });
-  const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "configuracao" });
   const histQ = trpc.valeAlimentacao.historicoColaborador.useQuery(
     { companyId, employeeId: histEmployeeId! },
     { enabled: (!!companyId || companyIds?.length > 0) && !!histEmployeeId && tab === "historico" }
@@ -348,7 +348,12 @@ export default function ValeAlimentacao() {
   const stats = statsQ.data;
   const lancamentos = lancamentosQ.data || [];
   const configs = (configsQ.data || []) as any[];
-  const obras = (obrasQ.data || []) as any[];
+  // Rev. 4763 — só a config vigente na tela; encerradas vão pra guia "Histórico" (poka-yoke)
+  // Normaliza string OU Date (superjson pode devolver Date; String(Date).slice = "Fri May 15" — bug conhecido)
+  const isoDateCfg = (v: any): string | null => v == null ? null : (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
+  const hojeIsoCfg = new Date().toISOString().slice(0, 10);
+  const cfgVigentes = configs.filter((c: any) => { const f = isoDateCfg(c.vigencia_fim); return !f || f >= hojeIsoCfg; });
+  const cfgEncerradas = configs.filter((c: any) => { const f = isoDateCfg(c.vigencia_fim); return f != null && f < hojeIsoCfg; });
 
   const filteredLancamentos = useMemo(() => {
     return lancamentos.filter((l: any) => {
@@ -1284,7 +1289,7 @@ export default function ValeAlimentacao() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold">Configurações de Benefícios</h2>
-                <p className="text-sm text-muted-foreground">Defina os valores de café, lanche, jantar e VA por obra ou como padrão da empresa.</p>
+                <p className="text-sm text-muted-foreground">Valor único para TODOS os CLTs da empresa (café da manhã, café da tarde e VR 100%) — sem separação por obra ou escritório.</p>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="gap-2" onClick={() => {
@@ -1324,18 +1329,27 @@ export default function ValeAlimentacao() {
               </div>
             </div>
 
-            {configs.length === 0 ? (
+            {/* Guias: Vigente × Histórico (poka-yoke: encerradas não poluem a tela) */}
+            <div className="flex items-center gap-1.5">
+              <Button variant={!showCfgHist ? "default" : "outline"} size="sm" className={`gap-1.5 rounded-full ${!showCfgHist ? "bg-orange-600 hover:bg-orange-700 text-white" : ""}`} onClick={() => setShowCfgHist(false)}>
+                ✅ Vigente {cfgVigentes.length > 0 && <Badge variant="secondary" className="h-4 px-1.5 py-0 text-[10px]">{cfgVigentes.length}</Badge>}
+              </Button>
+              <Button variant={showCfgHist ? "default" : "outline"} size="sm" className={`gap-1.5 rounded-full ${showCfgHist ? "bg-slate-600 hover:bg-slate-700 text-white" : "text-muted-foreground"}`} onClick={() => setShowCfgHist(true)}>
+                🕓 Histórico {cfgEncerradas.length > 0 && <Badge variant="secondary" className="h-4 px-1.5 py-0 text-[10px]">{cfgEncerradas.length}</Badge>}
+              </Button>
+            </div>
+            {(showCfgHist ? cfgEncerradas : cfgVigentes).length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
                   <Settings className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-muted-foreground mb-2">Nenhuma configuração cadastrada</p>
-                  <p className="text-sm text-muted-foreground">Crie uma configuração padrão para definir os valores dos benefícios.</p>
+                  <p className="text-muted-foreground mb-2">{showCfgHist ? "Nenhuma configuração encerrada" : "Nenhuma configuração vigente"}</p>
+                  <p className="text-sm text-muted-foreground">{showCfgHist ? "Quando um valor for reajustado, a versão antiga aparece aqui automaticamente." : "Crie uma configuração padrão para definir os valores dos benefícios."}</p>
                 </CardContent>
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {configs.map((cfg: any) => (
-                  <Card key={cfg.id} className={`${!cfg.obraId ? "border-orange-300 bg-orange-50/30" : ""}`}>
+                {(showCfgHist ? cfgEncerradas : cfgVigentes).map((cfg: any) => (
+                  <Card key={cfg.id} className={showCfgHist ? "border-slate-200 bg-slate-50/70 opacity-70 grayscale-[.4]" : `${!cfg.obraId ? "border-orange-300 bg-orange-50/30" : ""}`}>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <div className="flex flex-col gap-1">
@@ -1684,20 +1698,9 @@ export default function ValeAlimentacao() {
               <Label className="text-sm">Nome</Label>
               <Input value={configForm.nome || ""} onChange={e => setConfigForm((f: any) => ({ ...f, nome: e.target.value }))} className="mt-1" />
             </div>
-            <div>
-              <Label className="text-sm">Obra (deixe vazio para padrão da empresa)</Label>
-              <Select value={configForm.obraId ? String(configForm.obraId) : "none"} onValueChange={(v) => setConfigForm((f: any) => ({ ...f, obraId: v === "none" ? null : Number(v) }))}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Padrão da empresa" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Padrão da empresa</SelectItem>
-                  {obras.map((o: any) => (
-                    <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <p className="text-xs rounded-md border border-blue-200 bg-blue-50/60 text-blue-800 p-2.5">
+              Configuração única da empresa: vale para <b>todos os CLTs</b> (obras e escritório), com café da manhã, café da tarde e VR 100%. Não existe mais separação por obra/escritório.
+            </p>
             <div className="grid grid-cols-2 gap-3 rounded-md border border-orange-200 bg-orange-50/50 p-3">
               <div>
                 <Label className="text-sm flex items-center gap-1"><CalendarRange className="h-3.5 w-3.5" /> Vigência — Início</Label>
@@ -1828,6 +1831,17 @@ export default function ValeAlimentacao() {
               const lancheDia = dias > 0 ? lancheTotalMes / dias : 0;
               const jantaDia = dias > 0 ? jantaTotalMes / dias : 0;
               const vaDia = dias > 0 ? vaTotalMes / dias : 0;
+
+              // Poka-yoke (Rev. 4764): valor preenchido com benefício DESATIVADO gera lançamento
+              // zerado no mês seguinte sem ninguém perceber — confirma explicitamente antes.
+              const inconsistentes: string[] = [];
+              if (!(configForm.cafeAtivo ?? true) && cafeTotalMes > 0) inconsistentes.push(`Café da manhã (R$ ${cafeTotalMes.toFixed(2).replace('.', ',')}/mês)`);
+              if (!(configForm.lancheAtivo ?? true) && lancheTotalMes > 0) inconsistentes.push(`Café da tarde (R$ ${lancheTotalMes.toFixed(2).replace('.', ',')}/mês)`);
+              if (!(configForm.jantaAtivo ?? false) && jantaTotalMes > 0) inconsistentes.push(`Jantar (R$ ${jantaTotalMes.toFixed(2).replace('.', ',')}/mês)`);
+              if (inconsistentes.length > 0) {
+                const ok = confirm(`⚠️ Atenção: ${inconsistentes.join(" e ")} tem VALOR preenchido mas está DESATIVADO.\n\nAssim, os lançamentos mensais sairão com R$ 0,00 nesse item.\n\nQuer salvar mesmo assim? (Cancele para voltar e ativar o benefício)`);
+                if (!ok) return;
+              }
 
               const brutoTotal = cafeTotalMes + lancheTotalMes + jantaTotalMes + vaTotalMes;
               const descPct = parseBRL(configForm.descontoVaPercentual) || 0;

@@ -1,4 +1,23 @@
 /**
+ * Rev. 4764 - VALE ALIMENTACAO: POKA-YOKE BENEFICIO DESATIVADO COM VALOR
+ *
+ * Causa do "valor do cafe nao aparece no mes seguinte": a config vigente
+ * estava salva com cafe e lanche DESATIVADOS (mas com valores preenchidos),
+ * entao a geracao mensal zerava esses itens. Corrigido o dado (cafe/lanche
+ * reativados na config vigente) e adicionado poka-yoke no salvar: se um
+ * beneficio tem valor preenchido mas esta desativado, o sistema alerta e
+ * pede confirmacao explicita antes de gravar. A geracao mensal ja usa a
+ * config vigente na data do mes — basta "Regerar" o mes em aberto.
+ *
+ * Rev. 4763 - VALE ALIMENTACAO: CONFIG UNICA + GUIA HISTORICO
+ *
+ * Configuracao de Beneficios agora e UNICA para toda a empresa (todos os
+ * CLTs: cafe da manha, cafe da tarde e VR 100%) — fim da separacao
+ * Escritorio Central x obra (o seletor de obra saiu do formulario). A tela
+ * mostra so a config VIGENTE; quando a vigencia vence, o cartao vai
+ * automaticamente (acinzentado) para a guia "Historico" — poka-yoke: o
+ * historico de reajustes anuais fica preservado sem poluir a tela.
+ *
  * Rev. 4762 - EVOLUCAO MENSAL: VISUAL REFINADO DA TABELA VIVA
  *
  * Menos manchas de cor: chips discretos so nos EXTREMOS (melhor mes = verde
