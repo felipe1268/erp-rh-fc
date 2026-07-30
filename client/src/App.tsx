@@ -195,6 +195,7 @@ const EncargosSociais = lazyWithRetry(() => import("./pages/EncargosSociais"));
 const PayrollCompetencias = lazyWithRetry(() => import("./pages/PayrollCompetencias"));
 const ControleDocumentos = lazyWithRetry(() => import("./pages/ControleDocumentos"));
 const ValeAlimentacao = lazyWithRetry(() => import("./pages/ValeAlimentacao"));
+const WhatsAppRH = lazyWithRetry(() => import("./pages/WhatsAppRH"));
 const Setores = lazyWithRetry(() => import("./pages/Setores"));
 const Funcoes = lazyWithRetry(() => import("./pages/Funcoes"));
 const ContasBancarias = lazyWithRetry(() => import("./pages/ContasBancarias"));
@@ -552,6 +553,7 @@ function Router() {
         <Route path={"/solicitacao-mdo"} component={() => <RouteGuard component={SolicitacaoMDO} route="/solicitacao-mdo" />} />
         <Route path={"/controle-documentos"} component={() => <RouteGuard component={ControleDocumentos} route="/controle-documentos" />} />
         <Route path={"/vale-alimentacao"} component={() => <RouteGuard component={ValeAlimentacao} route="/vale-alimentacao" />} />
+        <Route path={"/whatsapp-rh"} component={() => <RouteGuard component={WhatsAppRH} route="/whatsapp-rh" />} />
         <Route path={"/configuracoes"} component={() => <MasterOnlyGuard component={Configuracoes} />} />
         <Route path={"/configuracoes/menu"} component={() => <MasterOnlyGuard component={MenuConfig} />} />
         <Route path={"/migracao"} component={() => <RouteGuard component={Migration} route="/colaboradores" />} />

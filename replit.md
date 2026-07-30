@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4768** — Planejamento: fix "Sem permissão para este projeto" — usuário comum não conseguia salvar revisão/avanços (users não tem companyId; guard agora usa user_companies + obras permitidas).
+- **Rev. 4767** — RH: "Conversa WhatsApp" — recepção de mensagens do número da empresa via Meta Cloud API (webhook), arquivo de conversas/mídias e vínculo com funcionário.
 - **Rev. 4766** — Contas a Pagar: seção "Anexos" com botão de anexar documento direto no detalhe do título (aba Geral).
 - **Rev. 4765** — Processos Trabalhistas: % de risco 0–100 (probabilidade de condenação da IA) na coluna Risco da lista e no badge do detalhe.
 - **Rev. 4764** — Vale Alimentação: fix config vigente com café/lanche desativados (dados) + poka-yoke ao salvar benefício desativado com valor.

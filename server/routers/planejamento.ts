@@ -98,13 +98,38 @@ async function limparSnapshotMspDoProjeto(db: any, projetoId: number) {
 // padrão de `salvarMetadadosMSProject` (admin/admin_master = global; usuário
 // comum só na própria empresa). Antes, `limparAvancos`/`limparAvancosSemana`
 // não checavam NADA (IDOR — qualquer logado limpava avanços de outra empresa).
+// Rev. 4768 — BUG FIX CRÍTICO: `users` NÃO tem coluna companyId (vínculo vive em
+// user_companies) → `ctx.user.companyId` resolve `undefined` e o compare estrito
+// bloqueava TODO usuário comum (ex.: João Mantovani não conseguia salvar revisão
+// do cronograma — "Sem permissão para este projeto"). Agora usa a MESMA régua de
+// `listarProjetos` (Rev. 2984): vínculo de empresa via user_companies + obra via
+// resolvePlanAllowedObraIds. Se o projeto aparece na lista, o save também passa.
 async function assertProjetoAcesso(db: any, ctx: any, projetoId: number): Promise<void> {
-  const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+  const role = ctx.user?.role;
+  if (role === "admin" || role === "admin_master") return;
+  const [proj] = await db.select({ companyId: planejamentoProjetos.companyId, obraId: planejamentoProjetos.obraId })
     .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, projetoId)).limit(1);
   if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-  const isAdm = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-  if (!isAdm && String(proj.companyId) !== String(ctx.user.companyId)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+  const companyId = Number(proj.companyId);
+  // Empresa: vínculo em user_companies (users NÃO tem companyId). Usuário com
+  // vínculos precisa ter a empresa do projeto; usuário sem vínculo algum passa
+  // (controle por grupo/módulo — mesmo padrão do assertCompanyAccess).
+  const ucr: any = await db.execute(sql`SELECT 1 FROM user_companies WHERE "userId" = ${ctx.user.id} AND "companyId" = ${companyId} LIMIT 1`);
+  const linked = ((ucr?.rows ?? ucr) as any[]).length > 0;
+  if (!linked) {
+    const anyR: any = await db.execute(sql`SELECT 1 FROM user_companies WHERE "userId" = ${ctx.user.id} LIMIT 1`);
+    if (((anyR?.rows ?? anyR) as any[]).length > 0) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+    }
+  }
+  // Obra: mesma régua de listarProjetos — se restrito, a obra do projeto precisa
+  // estar nas suas obras permitidas (null = sem restrição por obra).
+  const allowedObraIds = await resolvePlanAllowedObraIds(db, ctx.user.id, role, ctx.user.email, companyId);
+  if (allowedObraIds !== null) {
+    const obraId = proj.obraId != null ? Number(proj.obraId) : null;
+    if (obraId == null || !allowedObraIds.includes(obraId)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+    }
   }
 }
 
@@ -696,12 +721,9 @@ async function assertProjetoRevisaoScope(db: any, ctx: any, projetoId: number, r
   if (Number(rev.projetoId) !== Number(projetoId)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Revisão não pertence ao projeto informado." });
   }
+  // Rev. 4768 — mesma régua do assertProjetoAcesso (users NÃO tem companyId).
   if (!isAdmin) {
-    const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
-      .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, projetoId)).limit(1);
-    if (!proj || String(proj.companyId) !== String((ctx?.user as any)?.companyId)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-    }
+    await assertProjetoAcesso(db, ctx, projetoId);
   }
 }
 
@@ -1321,9 +1343,7 @@ export const planejamentoRouter = router({
       if (!rev) throw new Error("Revisão não encontrada.");
       if (rev.status !== "cancelada") throw new Error("Somente revisões canceladas podem ser reativadas.");
       if (rev.projetoId && ctx.user.role !== "admin_master") {
-        const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
-          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, rev.projetoId));
-        if (proj && String(proj.companyId) !== String(ctx.user.companyId)) throw new Error("Sem permissão para esta revisão.");
+        await assertProjetoAcesso(db, ctx, rev.projetoId);
       }
       await db.update(planejamentoRevisoes)
         .set({ status: "aprovada", aprovadoPor: input.aprovadoPor ?? ctx.user.name ?? null })
@@ -1349,10 +1369,7 @@ export const planejamentoRouter = router({
       if (!rev) throw new Error("Revisão não encontrada.");
       if (rev.isBaseline) throw new Error("O Baseline não pode ser editado.");
       if (rev.projetoId && ctx.user.role !== "admin_master") {
-        const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
-          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, rev.projetoId));
-        if (proj && String(proj.companyId) !== String(ctx.user.companyId))
-          throw new Error("Sem permissão para editar esta revisão.");
+        await assertProjetoAcesso(db, ctx, rev.projetoId);
       }
       const updates: Record<string, any> = {};
       if (input.motivo !== undefined) updates.motivo = input.motivo;
@@ -1377,10 +1394,7 @@ export const planejamentoRouter = router({
       if (!rev) throw new Error("Revisão não encontrada.");
       if (rev.isBaseline) throw new Error("O Baseline não pode ser excluído.");
       if (rev.projetoId && ctx.user.role !== "admin_master") {
-        const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
-          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, rev.projetoId));
-        if (proj && String(proj.companyId) !== String(ctx.user.companyId))
-          throw new Error("Sem permissão para excluir esta revisão.");
+        await assertProjetoAcesso(db, ctx, rev.projetoId);
       }
 
       // Garante que só a revisão de maior número pode ser excluída
@@ -1866,17 +1880,14 @@ export const planejamentoRouter = router({
       const [row] = await db
         .select({
           projetoCompany: planejamentoProjetos.companyId,
+          projetoId:      planejamentoAtividades.projetoId,
           atual:          planejamentoAtividades.diasTrabalhadosExtras,
         })
         .from(planejamentoAtividades)
         .innerJoin(planejamentoProjetos, eq(planejamentoProjetos.id, planejamentoAtividades.projetoId))
         .where(eq(planejamentoAtividades.id, input.atividadeId));
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Atividade não encontrada" });
-      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      const userCompany = (ctx.user as any).companyId;
-      if (!isAdmin && String(row.projetoCompany) !== String(userCompany)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Atividade fora da sua empresa" });
-      }
+      await assertProjetoAcesso(db, ctx, Number(row.projetoId));
       let lista: string[] = [];
       try { lista = row.atual ? JSON.parse(row.atual) : []; if (!Array.isArray(lista)) lista = []; } catch { lista = []; }
       lista = lista.filter((s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s));
@@ -1924,12 +1935,8 @@ export const planejamentoRouter = router({
         .innerJoin(planejamentoProjetos, eq(planejamentoProjetos.id, planejamentoAtividades.projetoId))
         .where(eq(planejamentoAtividades.id, input.atividadeId));
       if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "Atividade não encontrada" });
-      // Tenant: usa SEMPRE companyId do usuário autenticado; admin/admin_master pode atravessar.
-      const isAdminSet = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      const userCompany = (ctx.user as any).companyId;
-      if (!isAdminSet && String(check.projetoCompany) !== String(userCompany)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Atividade fora da sua empresa" });
-      }
+      // Tenant guard — Rev. 4768: régua de obra/empresa (users não tem companyId).
+      await assertProjetoAcesso(db, ctx, Number(check.projetoId));
       await db.update(planejamentoAtividades).set(patch).where(eq(planejamentoAtividades.id, input.atividadeId));
 
       // Rev. 1662 — Auto-avanço LOTUS:
@@ -2047,11 +2054,7 @@ export const planejamentoRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Revisão não pertence ao projeto informado." });
         }
         if (!isAdmin) {
-          const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
-            .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
-          if (!proj || String(proj.companyId) !== String((ctx.user as any).companyId)) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-          }
+          await assertProjetoAcesso(db, ctx, input.projetoId);
         }
       }
       const rows = input.atividades.map((a, i) => {
@@ -2514,11 +2517,7 @@ export const planejamentoRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Revisão não pertence ao projeto informado." });
         }
         if (!isAdmin) {
-          const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
-            .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
-          if (!proj || String(proj.companyId) !== String((ctx.user as any).companyId)) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-          }
+          await assertProjetoAcesso(db, ctx, input.projetoId);
         }
       }
 
@@ -2682,11 +2681,7 @@ export const planejamentoRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Revisão não pertence ao projeto informado." });
         }
         if (!isAdmin) {
-          const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
-            .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
-          if (!proj || String(proj.companyId) !== String((ctx.user as any).companyId)) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-          }
+          await assertProjetoAcesso(db, ctx, input.projetoId);
         }
       }
 
@@ -3034,13 +3029,8 @@ export const planejamentoRouter = router({
       const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
       if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem excluir um REFIS." });
       // Rev. 1859 — valida ownership do projeto (cross-tenant guard)
-      const isMaster = ctx.user.role === "admin_master";
-      if (!isMaster) {
-        const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
-          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, refis.projetoId));
-        if (!proj || String(proj.companyId) !== String(ctx.user.companyId)) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "REFIS pertence a outra empresa." });
-        }
+      if (ctx.user.role !== "admin_master") {
+        await assertProjetoAcesso(db, ctx, Number(refis.projetoId));
       }
       await db.delete(planejamentoRefis).where(eq(planejamentoRefis.id, input.id));
       return { success: true };
@@ -3054,13 +3044,8 @@ export const planejamentoRouter = router({
       if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem excluir REFIs em lote." });
       const db = await getDb();
       // Valida ownership do projeto (cross-tenant guard) — admin_master ignora companyId
-      const isMaster = ctx.user.role === "admin_master";
-      if (!isMaster) {
-        const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
-          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
-        if (!proj || String(proj.companyId) !== String(ctx.user.companyId)) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Projeto pertence a outra empresa." });
-        }
+      if (ctx.user.role !== "admin_master") {
+        await assertProjetoAcesso(db, ctx, input.projetoId);
       }
       // Delete só IDs que ESTÃO nesse projeto (defense-in-depth contra IDs estranhos no payload)
       const result: any = await db.delete(planejamentoRefis).where(and(
@@ -3141,10 +3126,7 @@ export const planejamentoRouter = router({
         cutoffConsolidado: planejamentoProjetos.cutoffConsolidado,
       }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      const isAdminSet = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdminSet && String(proj.companyId) !== String(ctx.user.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-      }
+      await assertProjetoAcesso(db, ctx, input.projetoId);
       if (proj.cutoffConsolidado) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "A premissa de cutoff já foi consolidada e não pode ser alterada." });
       }
@@ -3188,10 +3170,7 @@ export const planejamentoRouter = router({
         diaCorteSemana: planejamentoProjetos.diaCorteSemana,
       }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      const isAdminCon = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdminCon && String(proj.companyId) !== String(ctx.user.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-      }
+      await assertProjetoAcesso(db, ctx, input.projetoId);
       if (proj.cutoffConsolidado) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Cutoff já consolidado." });
       }
@@ -3268,11 +3247,7 @@ export const planejamentoRouter = router({
         diaCorteSemana: planejamentoProjetos.diaCorteSemana,
       }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      const isAdminFech = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdminFech && String(proj.companyId) !== String(ctx.user.companyId)) {
-        console.warn(`[fecharSemana] FORBIDDEN projetoId=${input.projetoId} projCompany=${proj.companyId} userCompany=${ctx.user.companyId} role=${ctx.user.role}`);
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-      }
+      await assertProjetoAcesso(db, ctx, input.projetoId);
       const { ultimoDiaSemanaAte, ehDiaSemana, todayBR, nomeDiaSemana, DIA_CORTE_DEFAULT } = await import("../../shared/dataCorte");
       const hojeBR = todayBR();
       const dow = (proj.diaCorteSemana ?? DIA_CORTE_DEFAULT) as number;
@@ -3352,11 +3327,7 @@ export const planejamentoRouter = router({
       })
         .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      const isAdminMet = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdminMet && String(proj.companyId) !== String(ctx.user.companyId)) {
-        console.warn(`[salvarMetadadosMSProject] FORBIDDEN projetoId=${input.projetoId} projCompany=${proj.companyId} userCompany=${ctx.user.companyId} role=${ctx.user.role}`);
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-      }
+      await assertProjetoAcesso(db, ctx, input.projetoId);
       const quem = ctx.user.name || ctx.user.email || "—";
       const patch: any = { atualizadoEm: new Date() };
       if (input.statusDate) {
@@ -3708,11 +3679,8 @@ export const planejamentoRouter = router({
         calendarioJson: planejamentoProjetos.calendarioJson,
       }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, rev.projetoId)).limit(1);
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto da revisão não encontrado." });
-      // Tenant isolation: admin bypass (consolidação multi-empresa). Padrão herdado de getDataCorte.
-      const isAdminPv = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdminPv && String(proj.companyId) !== String(ctx.user.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta revisão." });
-      }
+      // Tenant isolation — Rev. 4768: régua de obra/empresa (users não tem companyId).
+      await assertProjetoAcesso(db, ctx, Number(rev.projetoId));
 
       let statusDate: string | null = null;
       try {
@@ -5040,10 +5008,7 @@ export const planejamentoRouter = router({
       }).from(planejamentoProjetos)
         .where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      const isAdminDg = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdminDg && String(proj.companyId) !== String(ctx.user.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-      }
+      await assertProjetoAcesso(db, ctx, input.projetoId);
       if (!proj.orcamentoId) return { atualizadas: 0 };
 
       const [rev] = await db.select({ id: planejamentoRevisoes.id })
@@ -5056,7 +5021,9 @@ export const planejamentoRouter = router({
 
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
         .from(orcamentos).where(eq(orcamentos.id, proj.orcamentoId)).limit(1);
-      if (!orc || (!isAdminDg && String(orc.companyId) !== String(ctx.user.companyId))) {
+      // Rev. 4768 — consistência de recurso: o orçamento deve ser da MESMA empresa
+      // do projeto já autorizado (users não tem companyId p/ compare direto).
+      if (!orc || String(orc.companyId) !== String(proj.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para o orçamento vinculado." });
       }
 
@@ -5142,10 +5109,7 @@ export const planejamentoRouter = router({
       }).from(planejamentoProjetos)
         .where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      const isAdminDg = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdminDg && String(proj.companyId) !== String(ctx.user.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-      }
+      await assertProjetoAcesso(db, ctx, input.projetoId);
       if (!proj.orcamentoId) {
         return { atualizadas: 0, predecessorasAtualizadas: 0, dependentesAtualizadas: 0, ambiguos: 0 };
       }
@@ -5160,7 +5124,8 @@ export const planejamentoRouter = router({
 
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
         .from(orcamentos).where(eq(orcamentos.id, proj.orcamentoId)).limit(1);
-      if (!orc || (!isAdminDg && String(orc.companyId) !== String(ctx.user.companyId))) {
+      // Rev. 4768 — consistência de recurso: orçamento deve ser da MESMA empresa do projeto.
+      if (!orc || String(orc.companyId) !== String(proj.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para o orçamento vinculado." });
       }
 
@@ -6423,11 +6388,8 @@ REGRAS TÉCNICAS:
         .where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
 
       if (!projeto) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      // Tenant isolation
-      const isAdminCsf = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdminCsf && String(projeto.companyId) !== String(ctx.user.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
-      }
+      // Tenant isolation — Rev. 4768: régua de obra/empresa (users não tem companyId).
+      await assertProjetoAcesso(db, ctx, input.projetoId);
       // Validação de relacionamento revisão↔projeto (evita cross-link via IDs)
       const [revCheck] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
         .from(planejamentoRevisoes)

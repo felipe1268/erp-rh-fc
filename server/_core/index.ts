@@ -79,6 +79,17 @@ async function startServer() {
       res.status(400).send(`Webhook Error: ${e?.message || "unknown"}`);
     }
   });
+  // Rev. 4767 — Webhook do WhatsApp (Meta Cloud API): também ANTES do express.json(),
+  // pois a validação de X-Hub-Signature-256 exige o corpo RAW. Limite pequeno (2MB)
+  // + rate limit dedicado (payloads da Meta são minúsculos; mídia é baixada via Graph API).
+  app.get("/api/whatsapp/webhook", apiRateLimit, async (req: any, res: any) => {
+    const { whatsappWebhookVerify } = await import("../whatsappWebhook");
+    return whatsappWebhookVerify(req, res);
+  });
+  app.post("/api/whatsapp/webhook", apiRateLimit, express.raw({ type: "application/json", limit: "2mb" }), async (req: any, res: any) => {
+    const { whatsappWebhookReceive } = await import("../whatsappWebhook");
+    return whatsappWebhookReceive(req, res);
+  });
   // Configure body parser with larger size limit for file uploads
   // Rev. 1765 — limites de upload removidos a pedido do usuário ('quero ilimitado').
   // Mantemos um teto técnico alto pra evitar OOM no container (2GB), mas na prática
@@ -5882,7 +5893,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4690-2026-07-27-user-alerts";
+    const COLFIX_VERSION = "v4767-2026-07-30-whatsapp-rh";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6566,6 +6577,51 @@ REGRAS DE EXTRAÇÃO:
           if (smoN > 0) console.log(`[ColFix] SMO: ${smoN} solicitação(ões) em 'aprovada_coord' migradas para 'enviada' (etapa Coord. removida)`);
         } catch (err: any) {
           console.warn("[ColFix] SMO migração aprovada_coord falhou (não-fatal):", err?.message || err);
+        }
+        // Rev. 4767 — WhatsApp RH (Meta Cloud API): config + conversas + mensagens
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS whatsapp_configs (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            phone_number_id VARCHAR(50) NOT NULL,
+            access_token TEXT NOT NULL,
+            verify_token VARCHAR(100) NOT NULL,
+            numero_exibicao VARCHAR(30),
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS whatsapp_configs_company_uq ON whatsapp_configs (company_id)`);
+          await db.execute(sql`ALTER TABLE whatsapp_configs ADD COLUMN IF NOT EXISTS app_secret TEXT`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS whatsapp_conversas (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            wa_id VARCHAR(30) NOT NULL,
+            nome_perfil VARCHAR(255),
+            employee_id INTEGER,
+            ultima_mensagem_em TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS whatsapp_conversas_company_wa_uq ON whatsapp_conversas (company_id, wa_id)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS whatsapp_mensagens (
+            id SERIAL PRIMARY KEY,
+            conversa_id INTEGER NOT NULL,
+            company_id INTEGER NOT NULL,
+            wa_message_id VARCHAR(128),
+            direcao VARCHAR(5) NOT NULL DEFAULT 'in',
+            tipo VARCHAR(20) NOT NULL DEFAULT 'text',
+            corpo TEXT,
+            midia_url TEXT,
+            midia_nome VARCHAR(255),
+            midia_mime VARCHAR(100),
+            timestamp_wa TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS whatsapp_mensagens_waid_uq ON whatsapp_mensagens (wa_message_id) WHERE wa_message_id IS NOT NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS whatsapp_mensagens_conversa_idx ON whatsapp_mensagens (conversa_id)`);
+          console.log("[ColFix] WhatsApp RH tables OK");
+        } catch (err: any) {
+          console.warn("[ColFix] WhatsApp RH tables falhou (não-fatal):", err?.message || err);
         }
         console.log("[ColFix] Startup migrations OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }

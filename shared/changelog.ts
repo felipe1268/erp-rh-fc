@@ -1,4 +1,30 @@
 /**
+ * Rev. 4768 - PLANEJAMENTO: FIX "SEM PERMISSAO PARA ESTE PROJETO" (USUARIO COMUM)
+ *
+ * Bug critico: a tabela users NAO tem coluna companyId (o vinculo vive em
+ * user_companies), entao o compare estrito ctx.user.companyId === projeto
+ * resolvia undefined e BLOQUEAVA todo usuario comum nas mutations do
+ * Planejamento — ex.: Joao Mantovani nao conseguia salvar a Nova Revisao do
+ * Cronograma (botao ficava em "Salvando atividades..." para sempre).
+ * Fix: todas as mutations (salvarAtividades, avancos, revisoes, REFIS,
+ * cutoff, fecharSemana, metadados MSP, dias extras, datas reais, sync
+ * orcamento) agora usam a MESMA regua de listarProjetos (Rev. 2984):
+ * empresa via user_companies + obra via obras permitidas do usuario.
+ * Se o projeto aparece na lista, o save tambem passa.
+ *
+ * Rev. 4767 - RH: CONVERSA WHATSAPP (RECEPCAO VIA META CLOUD API)
+ *
+ * Novo item "Conversa WhatsApp" no menu RH & DP (Comunicacao e Recrutamento):
+ * todas as mensagens enviadas ao numero WhatsApp Business da empresa chegam
+ * no ERP via webhook (/api/whatsapp/webhook) e ficam arquivadas — texto,
+ * fotos, audios, videos e documentos (midias baixadas para o storage
+ * interno). Vinculo automatico com o funcionario pelo telefone do cadastro
+ * (match por sufixo de digitos) + botao "Informar funcionario" para vincular
+ * manualmente. Configuracao facil na propria tela: Phone Number ID + Token
+ * da Meta; URL de callback e Token de Verificacao gerados prontos para
+ * copiar. Recepcao-somente = custo zero na Meta. Token de acesso nunca
+ * retorna ao client. Tabelas: whatsapp_configs/conversas/mensagens.
+ *
  * Rev. 4766 - CONTAS A PAGAR: ANEXAR DOCUMENTO DIRETO NO DETALHE
  *
  * O detalhe do titulo (aba Geral) ganhou secao "Anexos" com botao

@@ -10817,3 +10817,42 @@ export const avaliacaoFeedbacks = pgTable("avaliacao_feedbacks", {
   updatedAt:  timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
   deletedAt:  timestamp("deleted_at", { mode: "string" }),
 });
+
+// ── Rev. 4767 — WhatsApp RH: recepção de mensagens via Meta Cloud API ──
+export const whatsappConfigs = pgTable("whatsapp_configs", {
+  id:            serial("id").primaryKey().notNull(),
+  companyId:     integer("company_id").notNull(),
+  phoneNumberId: varchar("phone_number_id", { length: 50 }).notNull(),
+  accessToken:   text("access_token").notNull(),
+  verifyToken:   varchar("verify_token", { length: 100 }).notNull(),
+  appSecret:     text("app_secret"),
+  numeroExibicao: varchar("numero_exibicao", { length: 30 }),
+  ativo:         integer("ativo").default(1).notNull(),
+  createdAt:     timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:     timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const whatsappConversas = pgTable("whatsapp_conversas", {
+  id:               serial("id").primaryKey().notNull(),
+  companyId:        integer("company_id").notNull(),
+  waId:             varchar("wa_id", { length: 30 }).notNull(), // telefone remetente (dígitos)
+  nomePerfil:       varchar("nome_perfil", { length: 255 }),
+  employeeId:       integer("employee_id"),
+  ultimaMensagemEm: timestamp("ultima_mensagem_em", { mode: "string" }),
+  createdAt:        timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const whatsappMensagens = pgTable("whatsapp_mensagens", {
+  id:          serial("id").primaryKey().notNull(),
+  conversaId:  integer("conversa_id").notNull(),
+  companyId:   integer("company_id").notNull(),
+  waMessageId: varchar("wa_message_id", { length: 128 }),
+  direcao:     varchar("direcao", { length: 5 }).default("in").notNull(), // in|out
+  tipo:        varchar("tipo", { length: 20 }).default("text").notNull(), // text|image|audio|video|document|sticker|outro
+  corpo:       text("corpo"),
+  midiaUrl:    text("midia_url"),
+  midiaNome:   varchar("midia_nome", { length: 255 }),
+  midiaMime:   varchar("midia_mime", { length: 100 }),
+  timestampWa: timestamp("timestamp_wa", { mode: "string" }),
+  createdAt:   timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});

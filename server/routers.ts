@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { memCache, TTL } from "./services/memCache";
 import { fechamentoPontoRouter } from "./routers/fechamentoPonto";
+import { whatsappRhRouter } from "./routers/whatsappRh";
 import { syncEmployeeStatus } from "./services/statusSyncJob";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
@@ -2096,6 +2097,7 @@ export const appRouter = router({
   // FECHAMENTO DE PONTO (upload DIXI, cálculo horas, inconsistências)
   // ============================================================
   fechamentoPonto: fechamentoPontoRouter,
+  whatsappRh: whatsappRhRouter,
 
   // ============================================================
   // DIXI PONTO (AFD)
