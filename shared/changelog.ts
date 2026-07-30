@@ -1,4 +1,24 @@
 /**
+ * Rev. 4742 - DASHBOARD GERENCIAL: RANKING COM FOTOS + DRILL-DOWN DE MATERIAIS
+ *
+ * - Termometro virou "Ranking de Planejamento": ordenado do melhor pro pior,
+ *   medalhas (ouro/prata/bronze), foto do solicitante (match por nome com o
+ *   cadastro de funcionarios, ?w=128; iniciais quando sem foto), faixas com
+ *   legenda (70-100 Planejador / 40-69 Atencao / 0-39 Critico).
+ * - Materiais Mais Pedidos: card proprio full-width; tocar no material abre
+ *   drill-down com TODAS as SCs (numero clicavel -> pop-up, data, qtd, obra,
+ *   solicitante). Backend agrega casos por material (cap 25) + contagem de
+ *   obras e solicitantes distintos.
+ * - Tendencia do Ano: card proprio full-width, legenda com direcao desejada.
+ *
+ * Rev. 4741 - DASHBOARD GERENCIAL: NOTA EXPLICATIVA DO TEMPO TOTAL (SC->OC)
+ *
+ * Usuario questionou a mediana de ~21h30 do tempo total. Validado no Neon:
+ * o numero e REAL (552 pares, mediana 21,5h). Distribuicao bimodal: 33% das
+ * OCs saem em <1h da SC (compra imediata) e 37% levam >2 dias — a mediana cai
+ * entre os grupos. Etapas nao somam o total (populacoes diferentes: so
+ * cotacoes aprovadas). Nota "Fonte & metodo" do card agora explica isso.
+ *
  * Rev. 4740 - DASHBOARD GERENCIAL: TERMOMETRO DE PLANEJAMENTO + GRAFICOS DE GESTAO
  *
  * Tres novos cards para reuniao gerencial (dados validados no banco):

@@ -251,6 +251,7 @@ export default function DashboardGerencialCompras() {
   const [insumoAberto, setInsumoAberto] = useState<string | null>(null);
   const [solAberto, setSolAberto] = useState<string | null>(null);
   const [casosAbertos, setCasosAbertos] = useState(false);
+  const [matAberto, setMatAberto] = useState<number | null>(null); // Rev. 4742: drill-down de material
   const [inconsAberto, setInconsAberto] = useState(false);
   const [recModo, setRecModo] = useState<"valor" | "freq">("valor");
   const [recAberto, setRecAberto] = useState<string | null>(null);
@@ -651,6 +652,7 @@ export default function DashboardGerencialCompras() {
                   <FonteNote>
                     <b>Fonte:</b> SC = data de criação; Cotação = data de <b>aprovação</b> (a cotação nasce junto com a SC — medir a criação não significa nada); OC = data de emissão. Documentos do período, cancelados excluídos.<br />
                     <b>Mediana</b> = metade dos casos foi respondida nesse tempo ou menos (não distorce com casos extremos).
+                    <b>As etapas não somam o total</b>: cada uma é medida na sua própria população (o total inclui casos sem cotação aprovada). O total é "meio a meio": ~1/3 das OCs sai em menos de 1h da SC (compra imediata) e ~1/3 leva mais de 2 dias — a mediana cai entre os dois grupos.
                     O drill-down lista os 10 casos mais lentos SC→OC com nº dos documentos para auditoria.
                   </FonteNote>
                   <div className="grid sm:grid-cols-3 gap-3 mt-3">
@@ -818,31 +820,53 @@ export default function DashboardGerencialCompras() {
                   );
                 })()}
 
-                {/* ── Rev. 4740: Gestão — termômetro, top materiais e tendência ── */}
+                {/* ── Rev. 4742: Gestão — ranking com fotos, materiais com drill-down e tendência ── */}
                 {(() => {
                   const ge: any = (g as any).gestao;
                   if (!ge) return null;
                   const corScore = (s: number) => (s >= 70 ? "#1f8a70" : s >= 40 ? "#d97706" : "#e11d48");
-                  const Termometro = ({ itens, titulo }: { itens: any[]; titulo: string }) => (
-                    <div>
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{titulo}</p>
-                      {itens.length === 0 && <p className="text-xs text-gray-400">Sem dados no período.</p>}
-                      <div className="space-y-2">
-                        {itens.map((s: any) => (
-                          <div key={s.nome ?? s.obraNome}>
-                            <div className="flex justify-between items-baseline text-xs gap-2">
-                              <span className="text-gray-700 font-medium break-words min-w-0">{s.nome ?? s.obraNome}</span>
-                              <span className="font-bold whitespace-nowrap" style={{ color: corScore(s.score) }}>{s.score}/100</span>
-                            </div>
-                            <div className="h-2.5 bg-gray-100 rounded-full mt-0.5 overflow-hidden">
-                              <div className="h-2.5 rounded-full transition-all" style={{ width: `${Math.max(s.score, 2)}%`, background: corScore(s.score) }} />
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-0.5">
-                              {s.scs} SCs · {s.pctComNecessidade.toFixed(0)}% c/ data de necessidade · antecedência {s.antecedenciaMediana != null ? `${s.antecedenciaMediana.toFixed(1).replace(".", ",")}d` : "—"}
-                              {s.pctSusto != null ? ` · ${s.pctSusto.toFixed(0)}% no susto` : ""}{s.pctUrgentes > 0 ? ` · ${s.pctUrgentes.toFixed(0)}% urgente` : ""}
-                            </p>
-                          </div>
-                        ))}
+                  const faixaScore = (s: number) => (s >= 70 ? "Planejador" : s >= 40 ? "Atenção" : "Crítico");
+                  const Avatar = ({ nome, fotoUrl, size = 40 }: { nome: string; fotoUrl?: string | null; size?: number }) => {
+                    const iniciais = nome.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase();
+                    return fotoUrl ? (
+                      <img src={`${fotoUrl}?w=128`} alt={nome} loading="lazy"
+                        className="rounded-full object-cover border-2 border-white shadow-sm shrink-0"
+                        style={{ width: size, height: size }} />
+                    ) : (
+                      <div className="rounded-full bg-gradient-to-br from-slate-500 to-slate-700 text-white flex items-center justify-center font-bold border-2 border-white shadow-sm shrink-0"
+                        style={{ width: size, height: size, fontSize: size * 0.36 }}>{iniciais}</div>
+                    );
+                  };
+                  const Medalha = ({ pos }: { pos: number }) =>
+                    pos <= 3 ? <span className="text-base leading-none">{["🥇", "🥈", "🥉"][pos - 1]}</span>
+                      : <span className="text-[11px] font-bold text-gray-400 w-5 text-center">{pos}º</span>;
+                  const solRank = [...(ge.scoreSolicitantes ?? [])].sort((a: any, b: any) => b.score - a.score);
+                  const obraRank = [...(ge.scoreObras ?? [])].sort((a: any, b: any) => b.score - a.score);
+                  const LegendaScore = () => (
+                    <div className="flex flex-wrap items-center gap-3 mt-2 text-[10px] text-gray-500">
+                      {[["#1f8a70", "70–100 Planejador"], ["#d97706", "40–69 Atenção"], ["#e11d48", "0–39 Crítico"]].map(([c, t]) => (
+                        <span key={t} className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />{t}</span>
+                      ))}
+                      <span className="text-gray-400">· Score: 25% data de necessidade + 35% antecedência (meta 7d) + 15% sem urgência + 25% compra fora do susto</span>
+                    </div>
+                  );
+                  const RankLinha = ({ s, pos, comFoto }: { s: any; pos: number; comFoto: boolean }) => (
+                    <div className={`flex items-center gap-3 rounded-xl border p-2.5 ${pos === 1 ? "border-emerald-200 bg-emerald-50/40" : pos === solRank.length && s.score < 40 ? "border-rose-200 bg-rose-50/40" : "border-gray-100 bg-white"}`}>
+                      <Medalha pos={pos} />
+                      {comFoto && <Avatar nome={s.nome ?? s.obraNome} fotoUrl={s.fotoUrl} />}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline gap-2">
+                          <span className="text-xs font-semibold text-gray-800 break-words min-w-0">{s.nome ?? s.obraNome}</span>
+                          <span className="text-sm font-extrabold whitespace-nowrap" style={{ color: corScore(s.score) }}>{s.score}<span className="text-[10px] font-medium text-gray-400">/100</span></span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                          <div className="h-2 rounded-full" style={{ width: `${Math.max(s.score, 2)}%`, background: corScore(s.score) }} />
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-0.5 truncate" title={`${s.scs} SCs · ${s.pctComNecessidade.toFixed(0)}% com data de necessidade`}>
+                          <span className="font-semibold" style={{ color: corScore(s.score) }}>{faixaScore(s.score)}</span>
+                          {" · "}{s.scs} SCs · {s.pctComNecessidade.toFixed(0)}% c/ data · antecedência {s.antecedenciaMediana != null ? `${s.antecedenciaMediana.toFixed(1).replace(".", ",")}d` : "—"}
+                          {s.pctSusto != null ? ` · ${s.pctSusto.toFixed(0)}% susto` : ""}{s.pctUrgentes > 0 ? ` · ${s.pctUrgentes.toFixed(0)}% urg.` : ""}
+                        </p>
                       </div>
                     </div>
                   );
@@ -854,70 +878,105 @@ export default function DashboardGerencialCompras() {
                       <Card>
                         <div className="flex items-center gap-2">
                           <Gauge className="w-5 h-5 text-[#f06449]" />
-                          <h3 className="font-semibold text-gray-800">Termômetro de Planejamento (0–100)</h3>
+                          <h3 className="font-semibold text-gray-800">Ranking de Planejamento</h3>
                         </div>
-                        <FonteNote>
-                          <b>Score</b> = 25% preencher data de necessidade + 35% antecedência do pedido (meta 7 dias) + 15% não recorrer a urgência + 25% comprar fora do susto (entrega &gt;3d).
-                          Sem OC no período, o peso do susto migra p/ antecedência. Mínimo de 2 SCs. <b>0 = compra tudo no susto; 100 = planeja.</b>
-                        </FonteNote>
+                        <LegendaScore />
                         <div className="grid md:grid-cols-2 gap-6 mt-3">
-                          <Termometro titulo="Por solicitante (pior → melhor)" itens={ge.scoreSolicitantes ?? []} />
-                          <Termometro titulo="Por obra (pior → melhor)" itens={ge.scoreObras ?? []} />
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">🏆 Por solicitante (melhor → pior)</p>
+                            {solRank.length === 0 && <p className="text-xs text-gray-400">Sem dados no período.</p>}
+                            <div className="space-y-2">{solRank.map((s: any, i: number) => <RankLinha key={s.nome} s={s} pos={i + 1} comFoto />)}</div>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">🏗️ Por obra (melhor → pior)</p>
+                            {obraRank.length === 0 && <p className="text-xs text-gray-400">Sem dados no período.</p>}
+                            <div className="space-y-2">{obraRank.map((s: any, i: number) => <RankLinha key={s.obraNome} s={s} pos={i + 1} comFoto={false} />)}</div>
+                          </div>
                         </div>
                       </Card>
 
-                      <div className="grid lg:grid-cols-2 gap-5">
-                        <Card>
+                      <Card>
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
                           <div className="flex items-center gap-2">
                             <BarChart3 className="w-5 h-5 text-[#35658f]" />
                             <h3 className="font-semibold text-gray-800">Materiais Mais Pedidos</h3>
                           </div>
-                          <FonteNote><b>Fonte:</b> itens das SCs ativas do período, agrupados por descrição idêntica + unidade. Candidatos naturais a contrato de fornecimento/estoque mínimo.</FonteNote>
-                          {(ge.topMateriais ?? []).length === 0 ? <p className="text-xs text-gray-400 mt-3">Sem itens no período.</p> : (
-                            <div className="mt-3" style={{ height: Math.max(220, ge.topMateriais.length * 30) }}>
-                              <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={ge.topMateriais} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
-                                  <XAxis type="number" hide />
-                                  <YAxis type="category" dataKey="descricao" width={210}
-                                    tick={{ fontSize: 10, fill: "#475569" }}
-                                    tickFormatter={(v: string) => (v.length > 34 ? v.slice(0, 33) + "…" : v)} />
-                                  <Tooltip formatter={(v: any, k: any) => [v, k === "pedidos" ? "Vezes pedido" : k]}
-                                    labelFormatter={(l: any) => l} />
-                                  <Bar dataKey="pedidos" fill="#35658f" radius={[0, 4, 4, 0]}
-                                    label={{ position: "right", fontSize: 10, fill: "#64748b" }} />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                          )}
-                        </Card>
-
-                        <Card>
-                          <div className="flex items-center gap-2">
-                            <Activity className="w-5 h-5 text-[#1f8a70]" />
-                            <h3 className="font-semibold text-gray-800">Tendência de Planejamento no Ano</h3>
+                          <span className="text-[10px] text-gray-400">👆 toque na barra ou no nome p/ ver as SCs, obras e quem pediu</span>
+                        </div>
+                        <FonteNote><b>Fonte:</b> itens das SCs ativas do período, agrupados por descrição idêntica + unidade. Candidatos naturais a contrato de fornecimento/estoque mínimo.</FonteNote>
+                        {(ge.topMateriais ?? []).length === 0 ? <p className="text-xs text-gray-400 mt-3">Sem itens no período.</p> : (
+                          <div className="mt-3 space-y-1.5">
+                            {ge.topMateriais.map((m: any, i: number) => {
+                              const max = ge.topMateriais[0]?.pedidos || 1;
+                              const aberto = matAberto === i;
+                              return (
+                                <div key={`${m.descricao}|${m.unidade}`} className={`rounded-lg border ${aberto ? "border-blue-200 bg-blue-50/30" : "border-gray-100"}`}>
+                                  <button type="button" onClick={() => setMatAberto(aberto ? null : i)} className="w-full text-left p-2.5">
+                                    <div className="flex items-center justify-between gap-2 text-xs">
+                                      <span className="font-medium text-gray-800 break-words min-w-0 flex items-center gap-1.5">
+                                        {aberto ? <ChevronDown className="w-3.5 h-3.5 text-blue-500 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+                                        {m.descricao}{m.unidade ? <span className="text-gray-400 font-normal"> ({m.unidade})</span> : null}
+                                      </span>
+                                      <span className="font-bold text-[#35658f] whitespace-nowrap">{m.pedidos}×</span>
+                                    </div>
+                                    <div className="h-2.5 bg-gray-100 rounded-full mt-1.5 overflow-hidden">
+                                      <div className="h-2.5 rounded-full bg-gradient-to-r from-[#35658f] to-[#5a8ab8]" style={{ width: `${Math.max((m.pedidos / max) * 100, 3)}%` }} />
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 mt-0.5">{m.scs} SCs · {m.obras} obra{m.obras !== 1 ? "s" : ""} · {m.solicitantes} solicitante{m.solicitantes !== 1 ? "s" : ""}</p>
+                                  </button>
+                                  {aberto && (m.casos ?? []).length > 0 && (
+                                    <div className="px-2.5 pb-2.5 overflow-x-auto">
+                                      <table className="w-full text-[11px]">
+                                        <thead><tr className="text-left text-gray-400 uppercase text-[9px]">
+                                          <th className="py-1 pr-2">SC</th><th className="py-1 pr-2">Data</th><th className="py-1 pr-2">Qtd</th><th className="py-1 pr-2">Obra</th><th className="py-1">Solicitante</th>
+                                        </tr></thead>
+                                        <tbody>
+                                          {m.casos.map((cs: any, j: number) => (
+                                            <tr key={j} className="border-t border-gray-100">
+                                              <td className="py-1 pr-2 font-medium whitespace-nowrap"><LinkSc id={cs.scId} label={cs.numero} /></td>
+                                              <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(cs.data)}</td>
+                                              <td className="py-1 pr-2 whitespace-nowrap">{cs.qtd}{m.unidade ? ` ${m.unidade}` : ""}</td>
+                                              <td className="py-1 pr-2 max-w-[200px] break-words">{cs.obra}</td>
+                                              <td className="py-1 break-words">{cs.solicitante}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
-                          <FonteNote><b>Linhas por mês:</b> antecedência mediana dos pedidos (dias) e % de OCs compradas no susto (entrega ≤3d). O objetivo é a linha verde subir e a vermelha cair.</FonteNote>
-                          {!temTend ? <p className="text-xs text-gray-400 mt-3">Sem dados no ano.</p> : (
-                            <div className="mt-3 h-[260px]">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={tend} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
-                                  <XAxis dataKey="nome" tick={{ fontSize: 10, fill: "#64748b" }} />
-                                  <YAxis yAxisId="d" tick={{ fontSize: 10, fill: "#1f8a70" }} label={{ value: "dias", angle: -90, position: "insideLeft", fontSize: 10, fill: "#1f8a70" }} />
-                                  <YAxis yAxisId="p" orientation="right" domain={[0, 100]} tick={{ fontSize: 10, fill: "#e11d48" }} unit="%" />
-                                  <Tooltip formatter={(v: any, k: any) =>
-                                    k === "antecedenciaMediana" ? [`${Number(v).toFixed(1).replace(".", ",")} dias`, "Antecedência mediana"]
-                                    : k === "pctSusto" ? [`${Number(v).toFixed(0)}%`, "OCs no susto"]
-                                    : [v, k]} />
-                                  <Legend formatter={(v: any) => v === "antecedenciaMediana" ? "Antecedência mediana (d)" : "% OCs no susto"} wrapperStyle={{ fontSize: 11 }} />
-                                  <Line yAxisId="d" type="monotone" dataKey="antecedenciaMediana" stroke="#1f8a70" strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
-                                  <Line yAxisId="p" type="monotone" dataKey="pctSusto" stroke="#e11d48" strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
-                                </LineChart>
-                              </ResponsiveContainer>
-                            </div>
-                          )}
-                        </Card>
-                      </div>
+                        )}
+                      </Card>
+
+                      <Card>
+                        <div className="flex items-center gap-2">
+                          <Activity className="w-5 h-5 text-[#1f8a70]" />
+                          <h3 className="font-semibold text-gray-800">Tendência de Planejamento no Ano</h3>
+                        </div>
+                        <FonteNote><b>Linhas por mês:</b> antecedência mediana dos pedidos (dias) e % de OCs compradas no susto (entrega ≤3d). O objetivo é a <b style={{ color: "#1f8a70" }}>verde subir</b> e a <b style={{ color: "#e11d48" }}>vermelha cair</b>.</FonteNote>
+                        {!temTend ? <p className="text-xs text-gray-400 mt-3">Sem dados no ano.</p> : (
+                          <div className="mt-3 h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={tend} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
+                                <XAxis dataKey="nome" tick={{ fontSize: 10, fill: "#64748b" }} />
+                                <YAxis yAxisId="d" tick={{ fontSize: 10, fill: "#1f8a70" }} label={{ value: "dias", angle: -90, position: "insideLeft", fontSize: 10, fill: "#1f8a70" }} />
+                                <YAxis yAxisId="p" orientation="right" domain={[0, 100]} tick={{ fontSize: 10, fill: "#e11d48" }} unit="%" />
+                                <Tooltip formatter={(v: any, k: any) =>
+                                  k === "antecedenciaMediana" ? [`${Number(v).toFixed(1).replace(".", ",")} dias`, "Antecedência mediana"]
+                                  : k === "pctSusto" ? [`${Number(v).toFixed(0)}%`, "OCs no susto"]
+                                  : [v, k]} />
+                                <Legend formatter={(v: any) => v === "antecedenciaMediana" ? "Antecedência mediana (d) — quanto maior, melhor" : "% OCs no susto — quanto menor, melhor"} wrapperStyle={{ fontSize: 11 }} />
+                                <Line yAxisId="d" type="monotone" dataKey="antecedenciaMediana" stroke="#1f8a70" strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+                                <Line yAxisId="p" type="monotone" dataKey="pctSusto" stroke="#e11d48" strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
+                      </Card>
                     </>
                   );
                 })()}

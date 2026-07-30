@@ -11726,17 +11726,36 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             quantidade: comprasSolicitacoesItens.quantidade,
           }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.solicitacaoId, scIdsPeriodo))
         : [];
-      const matMap: Record<string, { descricao: string; unidade: string | null; pedidos: number; scs: Set<number>; qtd: number }> = {};
+      // Rev. 4742: drill-down por material — quem pediu, quando e em qual obra
+      const scInfo: Record<number, { numero: string; data: string; obra: string; solicitante: string }> = {};
+      scsAtivas.forEach(r => {
+        scInfo[r.id] = {
+          numero: (r as any).numeroSc || `SC #${r.id}`,
+          data: d10(r.criadoEm),
+          obra: r.obraId != null ? (obraMap[r.obraId] ?? `Obra #${r.obraId}`) : "—",
+          solicitante: nomeSolicitante(r),
+        };
+      });
+      const matMap: Record<string, { descricao: string; unidade: string | null; pedidos: number; scs: Set<number>; qtd: number; casos: { scId: number; qtd: number }[] }> = {};
       itensSc.forEach(it => {
         const key = `${(it.descricao || "").trim().toUpperCase()}|${(it.unidade || "").trim().toUpperCase()}`;
         if (!key.trim() || key === "|") return;
-        if (!matMap[key]) matMap[key] = { descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, pedidos: 0, scs: new Set(), qtd: 0 };
+        if (!matMap[key]) matMap[key] = { descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, pedidos: 0, scs: new Set(), qtd: 0, casos: [] };
         matMap[key].pedidos++;
         matMap[key].scs.add(it.solicitacaoId);
         matMap[key].qtd += n(it.quantidade);
+        matMap[key].casos.push({ scId: it.solicitacaoId, qtd: n(it.quantidade) });
       });
       const topMateriais = Object.values(matMap)
-        .map(m => ({ descricao: m.descricao, unidade: m.unidade, pedidos: m.pedidos, scs: m.scs.size, qtd: m.qtd }))
+        .map(m => {
+          const casos = m.casos
+            .map(cs => ({ scId: cs.scId, qtd: cs.qtd, ...(scInfo[cs.scId] ?? { numero: `SC #${cs.scId}`, data: "", obra: "—", solicitante: "—" }) }))
+            .sort((a, b) => (b.data || "").localeCompare(a.data || ""))
+            .slice(0, 25);
+          const obrasSet = new Set(casos.map(cs => cs.obra).filter(o => o !== "—"));
+          const solSet = new Set(casos.map(cs => cs.solicitante).filter(s => s !== "—"));
+          return { descricao: m.descricao, unidade: m.unidade, pedidos: m.pedidos, scs: m.scs.size, qtd: m.qtd, obras: obrasSet.size, solicitantes: solSet.size, casos };
+        })
         .sort((a, b) => b.pedidos - a.pedidos)
         .slice(0, 12);
 
@@ -11818,8 +11837,14 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           if (isUrgente(r)) a.urg++;
         });
       });
+      // Rev. 4742: foto do solicitante (match por nome com o cadastro de funcionários)
+      let fotoMap: Record<string, string> = {};
+      try {
+        const fotosRes = await db.execute(sql`SELECT upper(trim("nomeCompleto")) AS nome, max("fotoUrl") AS foto FROM employees WHERE "fotoUrl" IS NOT NULL GROUP BY 1`);
+        ((fotosRes as any).rows ?? []).forEach((r: any) => { if (r.foto) fotoMap[r.nome] = r.foto; });
+      } catch { /* foto é cosmética — nunca derruba o dashboard */ }
       const scoreSolicitantes = Object.values(aggSol)
-        .map(a => ({ nome: a.nome, ...mkScore(a, sustoSolMap[a.nome.toUpperCase()]) }))
+        .map(a => ({ nome: a.nome, fotoUrl: fotoMap[a.nome.toUpperCase()] ?? null, ...mkScore(a, sustoSolMap[a.nome.toUpperCase()]) }))
         .filter((s: any) => s.score != null && s.scs >= 2)
         .sort((x: any, y: any) => x.score - y.score);
       const scoreObras = Object.entries(aggObra)
