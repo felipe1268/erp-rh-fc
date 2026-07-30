@@ -11728,7 +11728,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             const pior = [...fs].sort((a, b) => b.precoMedio - a.precoMedio)[0];
             const uni = (r as any).unidadeAudit as string | null;
             const valorNaUnidade = fs.reduce((s, f) => s + f.precoMedio * f.qtd, 0);
-            const economiaPotencial = fs.reduce((s, f) => s + Math.max(0, f.precoMedio - melhor.precoMin) * f.qtd, 0);
+            // Rev. 4757 — trava de sanidade (mesma regra 4× da perda de agrupamento):
+            // variação > 4× entre fornecedores do MESMO item/unidade = provável erro
+            // de cadastro (ex.: areia cotada a preço de SACO numa cotação em m³),
+            // não oportunidade real. Flag pro usuário conferir, sem computar economia.
+            const suspeito = melhor.precoMin > 0 && pior.precoMedio / melhor.precoMin > 4;
+            const economiaPotencial = suspeito ? 0 : fs.reduce((s, f) => s + Math.max(0, f.precoMedio - melhor.precoMin) * f.qtd, 0);
             return {
               chave: r.chave, descricao: r.descricao, unidade: uni,
               compras: r.compras, valorTotal: valorNaUnidade,
@@ -11736,6 +11741,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               melhor: { nome: melhor.nome, preco: melhor.precoMin, compras: melhor.compras },
               pior: { nome: pior.nome, preco: pior.precoMedio, compras: pior.compras },
               economiaPotencial,
+              suspeito,
             };
           })
           .sort((a, b) => b.economiaPotencial - a.economiaPotencial || b.valorTotal - a.valorTotal)

@@ -1,4 +1,21 @@
 /**
+ * Rev. 4757 - ONDE COMPRAR MELHOR: TRAVA DE SANIDADE 4x (ERRO DE CADASTRO)
+ *
+ * Quando a variacao de preco entre fornecedores do MESMO item/unidade passa de
+ * 4x, o card marca "provavel erro de cadastro" (chip ambar) em vez de computar
+ * economia potencial. Caso real: Areia Media Lavada a Granel — cotacao da
+ * SC-2026-0449 respondida a ~R$ 7 (preco de SACO) numa cotacao em m3 (meta era
+ * R$ 110/m3), gerando OC-713 a R$ 7/m3 e "economia" fantasma de R$ 5.322 vs
+ * Ferragens (R$ 107-122/m3, precos reais). OC nao foi alterada (entregue).
+ *
+ * Rev. 4756 - RECEBER MATERIAL: POP-UP RESPEITA O LOCAL DO ALMOXARIFADO
+ *
+ * O contador "pra receber" e o modal Receber Material agora filtram pelo
+ * contexto do almoxarifado: Escritorio Central (obra null) so ve OCs SEM obra
+ * de destino; obra especifica so ve as dela; "Todos os almoxarifados" ve tudo.
+ * Backend listPendingOCs aceita obraId null (IS NULL) — visivel apenas a quem
+ * enxerga todas as obras. Antes o Central listava as OCs de todas as obras.
+ *
  * Rev. 4755 - CIMENTO UNIFICADO NA RAIZ + RASCUNHO FORA DA ANALISE DE PRECO
  *
  * (1) Dados (Neon): "Cimento Cp3" e "Cimento Cp Iii" renomeados para o nome

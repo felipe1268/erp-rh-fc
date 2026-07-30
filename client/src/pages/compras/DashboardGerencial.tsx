@@ -647,11 +647,16 @@ export default function DashboardGerencialCompras() {
                                   {aberto ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
                                   <span className="text-sm text-gray-800 font-medium flex-1 min-w-0 break-words">{r.descricao}{r.unidade ? ` (${r.unidade})` : ""}</span>
                                   <span className="text-[11px] text-gray-400 whitespace-nowrap hidden sm:inline">{r.fornecedores.length} fornecedores</span>
-                                  {r.economiaPotencial > 0.5 && <span className="text-sm font-bold text-rose-600 whitespace-nowrap">−{BRL(r.economiaPotencial)}</span>}
+                                  {r.suspeito && <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 whitespace-nowrap">⚠️ provável erro de cadastro</span>}
+                                  {!r.suspeito && r.economiaPotencial > 0.5 && <span className="text-sm font-bold text-rose-600 whitespace-nowrap">−{BRL(r.economiaPotencial)}</span>}
                                 </div>
                                 <div className="flex flex-wrap gap-1.5 mt-1.5 ml-6">
-                                  <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5">🏆 Mais barato: <b>{r.melhor.nome}</b> · {BRL(r.melhor.preco)}{r.unidade ? `/${r.unidade}` : ""} (menor preço pago)</span>
-                                  <span className="text-[10px] font-medium text-rose-700 bg-rose-50 border border-rose-100 rounded-full px-2 py-0.5">Mais caro: {r.pior.nome} · {BRL(r.pior.preco)}{r.unidade ? `/${r.unidade}` : ""} (preço médio pago)</span>
+                                  {r.suspeito ? (
+                                    <span className="text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">Variação &gt; 4× entre fornecedores na mesma unidade ({BRL(r.melhor.preco)} vs {BRL(r.pior.preco)}{r.unidade ? `/${r.unidade}` : ""}) — provável unidade/preço digitado errado na cotação. Confira as OCs antes de comparar.</span>
+                                  ) : (<>
+                                    <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5">🏆 Mais barato: <b>{r.melhor.nome}</b> · {BRL(r.melhor.preco)}{r.unidade ? `/${r.unidade}` : ""} (menor preço pago)</span>
+                                    <span className="text-[10px] font-medium text-rose-700 bg-rose-50 border border-rose-100 rounded-full px-2 py-0.5">Mais caro: {r.pior.nome} · {BRL(r.pior.preco)}{r.unidade ? `/${r.unidade}` : ""} (preço médio pago)</span>
+                                  </>)}
                                 </div>
                               </button>
                               {aberto && (

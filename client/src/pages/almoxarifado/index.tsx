@@ -331,6 +331,9 @@ export default function AlmoxarifadoPage() {
   // Filtra pela obra do contexto quando o user está vendo uma obra específica;
   // no consolidado ("todos"), o backend já restringe às obras permitidas pro user.
   const obraIdFiltro = typeof obraContexto === "number" ? obraContexto : undefined;
+  // Rev. 4756 — recebimento de material respeita o LOCAL: contexto Central (null)
+  // só vê OCs sem obra de destino; "todos" vê tudo; obra específica vê a dela.
+  const obraIdMaterial = obraContexto === "todos" ? undefined : obraContexto;
   const ocsLocacaoPendentesQ = trpc.equipamentos.ocsLocacaoPendentes.useQuery(
     { companyId, obraId: obraIdFiltro },
     { enabled: !!companyId, refetchInterval: 60_000, refetchOnWindowFocus: true }
@@ -341,7 +344,7 @@ export default function AlmoxarifadoPage() {
   // (botão ENTRADA / modal "Receber Material" do SmartEntry). Mesma query
   // que SmartEntry usa (warehouse.listPendingOCs) com filtro por obra contexto.
   const ocsMaterialPendentesQ = trpc.warehouse.listPendingOCs.useQuery(
-    { companyId, obraId: obraIdFiltro },
+    { companyId, obraId: obraIdMaterial },
     { enabled: !!companyId, refetchInterval: 60_000, refetchOnWindowFocus: true }
   );
   const qtdMaterialPendente = (ocsMaterialPendentesQ.data || []).length;
@@ -3855,8 +3858,8 @@ export default function AlmoxarifadoPage() {
       {modalSmartEntry && (
         <SmartEntry
           companyId={companyId}
-          obraId={typeof obraContexto === "number" ? obraContexto : undefined}
-          obraNome={typeof obraContexto === "number" ? (obrasAtivas.find((o: any) => o.id === obraContexto) as any)?.nome : undefined}
+          obraId={obraIdMaterial}
+          obraNome={typeof obraContexto === "number" ? (obrasAtivas.find((o: any) => o.id === obraContexto) as any)?.nome : obraContexto === null ? "Escritório Central" : undefined}
           itens={itens.map((i: any) => ({ id: i.id, nome: i.nome, unidade: i.unidade, categoria: i.categoria, quantidadeAtual: parseFloat(String(i.quantidadeAtual) || "0") }))}
           onClose={() => setModalSmartEntry(false)}
           onSuccess={() => { refetch(); utils.warehouse.getDashboard.invalidate(); }}

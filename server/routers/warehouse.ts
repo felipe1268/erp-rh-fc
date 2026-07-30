@@ -2408,7 +2408,9 @@ REGRAS:
   listPendingOCs: protectedProcedure
     .input(z.object({
       companyId: z.number(),
-      obraId: z.number().optional(),
+      // Rev. 4756 — obraId null = SÓ OCs do Escritório Central (obra_id IS NULL);
+      // undefined = todas as obras (contexto "Todos os almoxarifados").
+      obraId: z.number().nullable().optional(),
     }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
@@ -2426,7 +2428,13 @@ REGRAS:
       // Aplica em AMBOS os caminhos (com ou sem obraId explícito) pra evitar
       // IDOR horizontal: user com acesso só à obra A não pode pedir obra B.
       const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
-      if (input.obraId) {
+      if (input.obraId === null) {
+        // Rev. 4756 — contexto "Almoxarifado Central": só OCs sem obra de destino.
+        // User: "só pode ter o pop-up dos itens que vão chegar naquele local".
+        // OCs sem obra são visíveis apenas a quem enxerga todas as obras (admin).
+        if (allowed !== null) return [];
+        conditions.push(isNull(comprasOrdens.obraId));
+      } else if (input.obraId) {
         if (allowed !== null && !allowed.includes(input.obraId)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra solicitada" });
         }
@@ -2543,7 +2551,8 @@ REGRAS:
   matchNFtoOC: protectedProcedure
     .input(z.object({
       companyId: z.number(),
-      obraId: z.number().optional(),
+      // Rev. 4756 — null = Escritório Central (só OCs sem obra); undefined = todas
+      obraId: z.number().nullable().optional(),
       fornecedorNome: z.string().optional(),
       itensNf: z.array(z.object({
         descricao: z.string(),
@@ -2559,7 +2568,8 @@ REGRAS:
         eq(comprasOrdens.companyId, input.companyId),
         sql`${comprasOrdens.status} IN ('pendente', 'aprovada', 'parcial')`,
       ];
-      if (input.obraId) conditions.push(eq(comprasOrdens.obraId, input.obraId));
+      if (input.obraId === null) conditions.push(isNull(comprasOrdens.obraId)); // Rev. 4756
+      else if (input.obraId) conditions.push(eq(comprasOrdens.obraId, input.obraId));
 
       const ocs = await db.select().from(comprasOrdens).where(and(...conditions));
 
@@ -2616,7 +2626,8 @@ REGRAS:
   registerSmartEntry: protectedProcedure
     .input(z.object({
       companyId: z.number(),
-      obraId: z.number().optional(),
+      // Rev. 4756 — null = Escritório Central; tratado como "sem obra" (falsy) abaixo
+      obraId: z.number().nullable().optional(),
       obraNome: z.string().optional(),
       ordemCompraId: z.number().optional(),
       numeroOc: z.string().optional(),

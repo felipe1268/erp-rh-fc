@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4757** — "Onde Comprar Melhor": variação >4× entre fornecedores vira alerta de provável erro de cadastro (sem economia fantasma).
+- **Rev. 4756** — Receber Material filtra pelo local: Central só vê OCs sem obra; obra vê as dela; "todos" vê tudo.
 - **Rev. 4755** — Cimento CP3/CPIII unificado na raiz (OC/SC/cotação) + unidade m²→sc na OC-0090 + rascunho fora da análise de preço do Dashboard Gerencial.
 - **Rev. 4754** — Receber Material: cada OC mostra obra de destino, SC de origem (solicitante + data) ou "OC direta".
 - **Rev. 4753** — Recorrência: coluna Fornecedor no drill-down + novo dash "Onde Comprar Melhor" (melhor × pior fornecedor por item, economia potencial).

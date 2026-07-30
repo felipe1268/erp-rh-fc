@@ -82,7 +82,8 @@ function matchItemCadastro<T extends { id: number; nome: string }>(
 
 type SmartEntryProps = {
   companyId: number;
-  obraId?: number;
+  // Rev. 4756 — null = Escritório Central (só OCs sem obra); undefined = todas
+  obraId?: number | null;
   obraNome?: string;
   itens: { id: number; nome: string; unidade: string; categoria?: string; quantidadeAtual?: number }[];
   onClose: () => void;
