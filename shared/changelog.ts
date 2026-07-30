@@ -1,4 +1,11 @@
 /**
+ * Rev. 4762 - EVOLUCAO MENSAL: VISUAL REFINADO DA TABELA VIVA
+ *
+ * Menos manchas de cor: chips discretos so nos EXTREMOS (melhor mes = verde
+ * suave, pior mes = rosa suave), delta compacto embaixo do valor (▲ 7 p.p.),
+ * cabecalho com pill do mes atual, linha do Score com gradiente azul,
+ * sparkline com ponto final + hover nas linhas + legenda no rodape da tabela.
+ *
  * Rev. 4761 - EVOLUCAO MENSAL: TABELA VIVA (HEATMAP) + GRAFICO DE LINHAS
  *
  * Volta ao comparativo mes a mes em TABELA, agora "viva": celulas com mapa de

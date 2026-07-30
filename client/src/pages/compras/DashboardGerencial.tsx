@@ -312,40 +312,39 @@ function EvolucaoMensalCard({ ev, companyId, ano }: { ev: any; companyId: number
         <button onClick={() => setModo("grafico")} className={`rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition ${modo === "grafico" ? "bg-[#35658f] text-white shadow-sm" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>📈 Gráfico de linhas</button>
       </div>
       {modo === "tabela" && (
-        <div className="overflow-x-auto mt-3 rounded-2xl border border-slate-100">
-          <table className="w-full text-[11px] min-w-[760px] border-collapse">
+        <div className="overflow-x-auto mt-3 rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(38,53,69,.05)]">
+          <table className="w-full text-[12px] min-w-[780px] border-collapse">
             <thead>
-              <tr className="bg-slate-50/80 text-gray-400 text-left">
-                <th className="py-2 px-3 font-medium sticky left-0 bg-slate-50 z-10">Indicador</th>
-                {meses.map(m => <th key={m.mes} className={`py-2 px-2 font-bold text-center ${m.mes === ultimo.mes ? "text-[#35658f]" : "text-slate-500"}`}>{MESES_A[m.mes - 1]}{m.mes === ultimo.mes && <span className="block text-[8px] font-semibold text-[#35658f]/70">ATUAL</span>}</th>)}
-                <th className="py-2 px-2 font-medium text-center">Tendência</th>
+              <tr className="text-left border-b border-slate-200/70">
+                <th className="py-3 px-4 font-semibold text-[10px] uppercase tracking-wider text-slate-400 sticky left-0 bg-white z-10">Indicador</th>
+                {meses.map(m => (
+                  <th key={m.mes} className="py-3 px-2 text-center">
+                    <span className={`inline-block rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${m.mes === ultimo.mes ? "bg-[#35658f] text-white shadow-sm" : "text-slate-400"}`}>{MESES_A[m.mes - 1]}</span>
+                  </th>
+                ))}
+                <th className="py-3 px-3 text-center font-semibold text-[10px] uppercase tracking-wider text-slate-400">Tendência</th>
               </tr>
             </thead>
-            <tbody>
-              {EVO_INDICADORES.map((li, ri) => {
+            <tbody className="divide-y divide-slate-100">
+              {EVO_INDICADORES.map(li => {
                 const isScore = li.k === "score";
                 const vals = meses.map(m => m[li.k]).filter((x: any) => x != null) as number[];
                 const vMin = vals.length ? Math.min(...vals) : 0;
                 const vMax = vals.length ? Math.max(...vals) : 1;
                 const range = vMax - vMin;
-                // heat: 0 = ruim, 1 = bom (respeita direção do indicador; volume fica neutro)
-                const heat = (v: number | null): string => {
-                  if (v == null || li.hint === "volume") return "";
-                  const t = range < 1e-9 ? 0.5 : (v - vMin) / range;
-                  const bom = li.menorMelhor ? 1 - t : t;
-                  if (bom >= 0.75) return "bg-emerald-50 text-emerald-900";
-                  if (bom >= 0.5) return "bg-emerald-50/40";
-                  if (bom >= 0.25) return "bg-rose-50/40";
-                  return "bg-rose-50 text-rose-900";
+                // heat 0..1 (1 = bom), respeitando a direção; volume = neutro
+                const heatT = (v: number | null): number | null => {
+                  if (v == null || li.hint === "volume" || range < 1e-9 || vals.length < 2) return null;
+                  const t = (v - vMin) / range;
+                  return li.menorMelhor ? 1 - t : t;
                 };
-                // sparkline SVG de linha
                 const pts = meses.map((m, i) => {
                   const v = m[li.k];
                   if (v == null) return null;
-                  const x = meses.length > 1 ? (i / (meses.length - 1)) * 72 + 4 : 40;
-                  const y = 22 - (range < 1e-9 ? 0.5 : (v - vMin) / range) * 18;
-                  return `${x},${y}`;
-                }).filter(Boolean).join(" ");
+                  const x = meses.length > 1 ? (i / (meses.length - 1)) * 64 + 6 : 38;
+                  const y = 20 - (range < 1e-9 ? 0.5 : (v - vMin) / range) * 14;
+                  return { x, y };
+                }).filter(Boolean) as { x: number; y: number }[];
                 const tendBoa = (() => {
                   if (vals.length < 2 || li.hint === "volume") return null;
                   const d = vals[vals.length - 1] - vals[0];
@@ -353,34 +352,53 @@ function EvolucaoMensalCard({ ev, companyId, ano }: { ev: any; companyId: number
                   return li.menorMelhor ? d < 0 : d > 0;
                 })();
                 return (
-                  <tr key={li.k} className={`border-t border-slate-100 ${isScore ? "bg-[#35658f]/[.05]" : ri % 2 === 1 ? "bg-slate-50/40" : "bg-white"}`}>
-                    <td className={`py-2 px-3 sticky left-0 z-10 ${isScore ? "bg-[#eef3f8]" : ri % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"}`}>
-                      <span className={`font-semibold ${isScore ? "text-[#35658f]" : "text-slate-700"}`}>{li.label}</span>
-                      <span className="block text-[9px] text-gray-400">{li.hint}</span>
+                  <tr key={li.k} className={isScore ? "bg-gradient-to-r from-[#35658f]/[.07] to-transparent" : "hover:bg-slate-50/60 transition-colors"}>
+                    <td className={`py-2.5 px-4 sticky left-0 z-10 ${isScore ? "bg-[#eef3f8]" : "bg-white"}`}>
+                      <span className={`font-semibold ${isScore ? "text-[#35658f] text-[13px]" : "text-slate-700"}`}>{li.label}</span>
+                      <span className="block text-[9px] text-slate-400 mt-0.5">{li.hint}</span>
                     </td>
                     {meses.map((m, i) => {
                       const v = m[li.k];
                       const d = deltaInfo(li, v, i > 0 ? meses[i - 1][li.k] : null);
+                      const h = heatT(v);
+                      const extremo = h != null && (h >= 0.999 || h <= 0.001); // melhor/pior mês
+                      const chip = extremo
+                        ? h! >= 0.999 ? "bg-emerald-100/70 text-emerald-800" : "bg-rose-100/70 text-rose-700"
+                        : "";
                       return (
-                        <td key={m.mes} className={`py-2 px-2 text-center whitespace-nowrap ${heat(v)} ${m.mes === ultimo.mes ? "font-bold" : ""}`} title={li.desc}>
-                          <span className={isScore ? "font-bold" : ""}>{fmtVal(li.tipo, v)}</span>
-                          {d && d.subiu != null && (
-                            <span className={`ml-1 text-[10px] font-bold ${d.bom == null ? "text-slate-400" : d.bom ? "text-emerald-600" : "text-rose-600"}`} title={`${d.subiu ? "subiu" : "caiu"} ${d.txt} vs ${MESES_A[meses[i - 1].mes - 1]}${d.bom != null ? d.bom ? " · melhorou" : " · piorou" : ""}`}>{d.subiu ? "▲" : "▼"}</span>
-                          )}
+                        <td key={m.mes} className="py-2.5 px-2 text-center whitespace-nowrap" title={li.desc}>
+                          <span className={`inline-flex flex-col items-center rounded-xl px-2.5 py-1 ${chip}`}>
+                            <span className={`leading-tight ${m.mes === ultimo.mes || isScore ? "font-bold text-slate-900" : "font-medium text-slate-600"} ${extremo ? "!text-inherit" : ""}`}>{fmtVal(li.tipo, v)}</span>
+                            <span className="text-[9px] leading-tight min-h-[12px]">
+                              {d && d.subiu != null
+                                ? <span className={`font-bold ${d.bom == null ? "text-slate-400" : d.bom ? "text-emerald-600" : "text-rose-500"}`} title={`${d.subiu ? "subiu" : "caiu"} ${d.txt} vs ${MESES_A[meses[i - 1].mes - 1]}`}>{d.subiu ? "▲" : "▼"} {d.txt}</span>
+                                : d && d.subiu == null ? <span className="text-slate-300">=</span> : null}
+                            </span>
+                          </span>
                         </td>
                       );
                     })}
-                    <td className="py-2 px-2 text-center">
-                      <svg width="80" height="26" className="inline-block align-middle">
-                        {pts && <polyline points={pts} fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={tendBoa == null ? "stroke-slate-400" : tendBoa ? "stroke-emerald-500" : "stroke-rose-500"} />}
+                    <td className="py-2.5 px-3 text-center">
+                      <svg width="76" height="24" className="inline-block align-middle">
+                        {pts.length > 1 && (
+                          <>
+                            <polyline points={pts.map(p => `${p.x},${p.y}`).join(" ")} fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={tendBoa == null ? "stroke-slate-300" : tendBoa ? "stroke-emerald-500" : "stroke-rose-400"} />
+                            <circle cx={pts[pts.length - 1].x} cy={pts[pts.length - 1].y} r="3" className={tendBoa == null ? "fill-slate-400" : tendBoa ? "fill-emerald-500" : "fill-rose-400"} />
+                          </>
+                        )}
                       </svg>
-                      {tendBoa != null && <span className={`block text-[8px] font-bold ${tendBoa ? "text-emerald-600" : "text-rose-600"}`}>{tendBoa ? "MELHORANDO" : "PIORANDO"}</span>}
+                      {tendBoa != null && <span className={`block text-[8px] font-bold tracking-wide ${tendBoa ? "text-emerald-600" : "text-rose-500"}`}>{tendBoa ? "MELHORANDO" : "PIORANDO"}</span>}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 border-t border-slate-100 bg-slate-50/50 text-[9px] text-slate-400">
+            <span><span className="inline-block w-2.5 h-2.5 rounded bg-emerald-100 align-middle mr-1" />melhor mês do ano</span>
+            <span><span className="inline-block w-2.5 h-2.5 rounded bg-rose-100 align-middle mr-1" />pior mês do ano</span>
+            <span><span className="font-bold text-emerald-600">▲▼</span> variação vs mês anterior (verde = melhorou pro negócio)</span>
+          </div>
         </div>
       )}
       {modo === "grafico" && (() => {
