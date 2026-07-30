@@ -16,7 +16,11 @@ import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import {
   ClipboardList, ShoppingCart, AlertTriangle, Clock,
   RefreshCw, Users, TrendingDown, ChevronDown, ChevronRight, Info,
+  Lightbulb, BarChart3,
 } from "lucide-react";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
+} from "recharts";
 
 const BRL = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -83,6 +87,8 @@ export default function DashboardGerencialCompras() {
   const [solAberto, setSolAberto] = useState<string | null>(null);
   const [casosAbertos, setCasosAbertos] = useState(false);
   const [inconsAberto, setInconsAberto] = useState(false);
+  const [recModo, setRecModo] = useState<"valor" | "freq">("valor");
+  const [recAberto, setRecAberto] = useState<string | null>(null);
 
   const { data: gerData } = trpc.compras.getDashboardGerencial.useQuery(
     { companyIds, ano: gerAno, mes: gerMes, obraId: gerObraId, solicitante: null, janelaAgrupamento: janela },
@@ -138,6 +144,35 @@ export default function DashboardGerencialCompras() {
                   <KpiCard icon={TrendingDown} label="Perda por compra picada" value={BRL(pa.totalPerda)}
                     sub={`${pa.grupos} grupos · ${pa.comprasEnvolvidas} OCs · janela ${pa.janelaDias}d`} color="bg-rose-600" />
                 </div>
+
+                {/* ── Destaques (insights automáticos) ── */}
+                {(() => {
+                  const bullets: { txt: React.ReactNode; tom: "rose" | "amber" | "blue" | "emerald" }[] = [];
+                  const topIns = pa.porInsumo[0];
+                  if (topIns) bullets.push({ tom: "rose", txt: <>Maior perda por compra picada: <b>{topIns.descricao}</b> — {BRL(topIns.perda)} em {topIns.compras} OCs (dava pra pagar {BRL(topIns.precoMin)}, chegou a {BRL(topIns.precoMax)}).</> });
+                  const topObra = pa.porObra[0];
+                  if (topObra && topObra.perda > 0) bullets.push({ tom: "rose", txt: <>Obra que mais perde com compra picada: <b>{topObra.obraNome}</b> ({BRL(topObra.perda)}).</> });
+                  const piorPlan = [...plan].filter((p: any) => p.comNecessidade >= 3 && p.antecedenciaMedia != null).sort((a: any, b: any) => a.antecedenciaMedia - b.antecedenciaMedia)[0];
+                  if (piorPlan && piorPlan.antecedenciaMedia < 2) bullets.push({ tom: "amber", txt: <><b>{piorPlan.nome}</b> pede com {piorPlan.antecedenciaMedia.toFixed(1).replace(".", ",")} dias de antecedência média ({piorPlan.total} SCs) — planejamento é a alavanca mais barata contra urgência e preço ruim.</> });
+                  if (g.kpis.scs > 0 && g.kpis.scsUrgentes / g.kpis.scs > 0.05) bullets.push({ tom: "amber", txt: <><b>{((g.kpis.scsUrgentes / g.kpis.scs) * 100).toFixed(0)}%</b> das SCs do período são urgentes ({g.kpis.scsUrgentes} de {g.kpis.scs}) — urgência elimina cotação competitiva.</> });
+                  if (lt.det.scOc.mediana != null) bullets.push({ tom: "blue", txt: <>Metade das compras fecha em até <b>{fmtDias(lt.det.scOc.mediana)}</b> da SC à OC ({lt.det.scOc.n} casos) — o gargalo não é velocidade, é planejamento do pedido.</> });
+                  const garg = (g as any).gargalo;
+                  if (garg && (garg.scsAguardandoAprov > 0 || garg.ocsAguardandoAprov > 0)) bullets.push({ tom: "emerald", txt: <>Fila de hoje: <b>{garg.scsAguardandoAprov}</b> SCs e <b>{garg.ocsAguardandoAprov}</b> OCs aguardando aprovação, <b>{garg.cotacoesAbertas}</b> cotações abertas.</> });
+                  const cores = { rose: "border-rose-200 bg-rose-50/60", amber: "border-amber-200 bg-amber-50/60", blue: "border-blue-200 bg-blue-50/60", emerald: "border-emerald-200 bg-emerald-50/60" };
+                  return bullets.length > 0 ? (
+                    <Card>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Lightbulb className="w-5 h-5 text-amber-500" />
+                        <h3 className="font-semibold text-gray-800">Destaques do período</h3>
+                      </div>
+                      <div className="space-y-1.5">
+                        {bullets.map((b, i) => (
+                          <div key={i} className={`text-xs text-gray-700 border rounded-lg px-3 py-2 leading-relaxed ${cores[b.tom]}`}>{b.txt}</div>
+                        ))}
+                      </div>
+                    </Card>
+                  ) : null;
+                })()}
 
                 {/* ── Bloco 1: Perda de Oportunidade de Agrupamento ── */}
                 <Card>
@@ -225,24 +260,28 @@ export default function DashboardGerencialCompras() {
 
                   {(pa.porObra.length > 0 || pa.porSolicitante.length > 0) && (
                     <div className="grid sm:grid-cols-2 gap-4 mt-4 pt-3 border-t border-gray-100">
-                      <div>
-                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Perda por obra</p>
-                        {pa.porObra.slice(0, 6).map((o: any) => (
-                          <div key={String(o.obraId)} className="flex justify-between text-xs py-0.5">
-                            <span className="text-gray-600 break-words min-w-0 pr-2">{o.obraNome}</span>
-                            <span className="font-semibold text-rose-600 whitespace-nowrap">{BRL(o.perda)}</span>
+                      {[
+                        { titulo: "Perda por obra", itens: pa.porObra.slice(0, 6).map((o: any) => ({ k: String(o.obraId), nome: o.obraNome, perda: o.perda })) },
+                        { titulo: "Perda por solicitante", itens: pa.porSolicitante.slice(0, 6).map((s: any) => ({ k: s.nome, nome: s.nome, perda: s.perda })) },
+                      ].map(bloco => {
+                        const max = Math.max(...bloco.itens.map((i: any) => i.perda), 1);
+                        return (
+                          <div key={bloco.titulo}>
+                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{bloco.titulo}</p>
+                            {bloco.itens.map((it: any) => (
+                              <div key={it.k} className="py-1">
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-600 break-words min-w-0 pr-2">{it.nome}</span>
+                                  <span className="font-semibold text-rose-600 whitespace-nowrap">{BRL(it.perda)}</span>
+                                </div>
+                                <div className="h-1.5 bg-gray-100 rounded-full mt-0.5">
+                                  <div className="h-1.5 bg-rose-400 rounded-full" style={{ width: `${Math.max((it.perda / max) * 100, 2)}%` }} />
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Perda por solicitante</p>
-                        {pa.porSolicitante.slice(0, 6).map((s: any) => (
-                          <div key={s.nome} className="flex justify-between text-xs py-0.5">
-                            <span className="text-gray-600 break-words min-w-0 pr-2">{s.nome}</span>
-                            <span className="font-semibold text-rose-600 whitespace-nowrap">{BRL(s.perda)}</span>
-                          </div>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -266,6 +305,154 @@ export default function DashboardGerencialCompras() {
                     </div>
                   )}
                 </Card>
+
+                {/* ── Recorrência: o que mais compramos e de quanto em quanto tempo ── */}
+                {(() => {
+                  const rec: any = (g as any).recorrencia;
+                  if (!rec) return null;
+                  const lista: any[] = recModo === "valor" ? rec.porValor : rec.porFrequencia;
+                  return (
+                    <Card>
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <ShoppingCart className="w-5 h-5 text-violet-600" />
+                          <h3 className="font-semibold text-gray-800">O que Mais Compramos &amp; Recorrência</h3>
+                        </div>
+                        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                          <button onClick={() => setRecModo("valor")}
+                            className={`px-3 py-1.5 font-medium ${recModo === "valor" ? "bg-violet-600 text-white" : "bg-white text-gray-600"}`}>Por R$</button>
+                          <button onClick={() => setRecModo("freq")}
+                            className={`px-3 py-1.5 font-medium ${recModo === "freq" ? "bg-violet-600 text-white" : "bg-white text-gray-600"}`}>Mais vezes</button>
+                        </div>
+                      </div>
+                      <FonteNote>
+                        <b>Fonte:</b> itens das OCs ativas do período (canceladas e locações excluídas), agrupados por descrição idêntica + unidade.<br />
+                        <b>Intervalo médio</b> = média de dias entre datas de compra distintas do mesmo produto.
+                        Cada linha expande e mostra as últimas OCs (nº, data, obra, solicitante, qtd, preço) para conferência.
+                      </FonteNote>
+                      <div className="mt-2 divide-y divide-gray-100">
+                        {lista.length === 0 && <div className="py-6 text-center text-gray-400 text-sm">Sem compras no período.</div>}
+                        {lista.map((r: any) => {
+                          const aberto = recAberto === `${recModo}|${r.chave}`;
+                          return (
+                            <div key={r.chave}>
+                              <button onClick={() => setRecAberto(aberto ? null : `${recModo}|${r.chave}`)}
+                                className="w-full flex items-center gap-2 py-2.5 text-left">
+                                {aberto ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+                                <span className="text-sm text-gray-800 font-medium flex-1 min-w-0 break-words">{r.descricao}{r.unidade ? ` (${r.unidade})` : ""}</span>
+                                <span className="text-[11px] text-gray-500 whitespace-nowrap">{r.compras}× </span>
+                                <span className="text-[11px] text-gray-500 whitespace-nowrap hidden sm:inline">
+                                  {r.intervaloMedioDias != null ? `a cada ${r.intervaloMedioDias.toFixed(0)}d` : "compra única"}
+                                </span>
+                                <span className="text-[11px] text-gray-400 whitespace-nowrap hidden md:inline">{r.obras} obra{r.obras > 1 ? "s" : ""}</span>
+                                <span className="text-sm font-bold text-violet-700 whitespace-nowrap">{BRL(r.valorTotal)}</span>
+                              </button>
+                              {aberto && (
+                                <div className="pb-3 pl-6 overflow-x-auto">
+                                  <p className="text-[11px] text-gray-400 mb-1">
+                                    {fmtDate(r.primeiraCompra)} a {fmtDate(r.ultimaCompra)} · {r.diasDistintos} dias de compra distintos · últimas {r.detalhe.length} linhas de OC:
+                                  </p>
+                                  <table className="w-full text-[11px]">
+                                    <thead>
+                                      <tr className="text-gray-400 text-left">
+                                        <th className="py-1 pr-2 font-medium">Data</th>
+                                        <th className="py-1 pr-2 font-medium">OC</th>
+                                        <th className="py-1 pr-2 font-medium">SC</th>
+                                        <th className="py-1 pr-2 font-medium">Obra</th>
+                                        <th className="py-1 pr-2 font-medium">Solicitante</th>
+                                        <th className="py-1 pr-2 font-medium text-right">Qtd</th>
+                                        <th className="py-1 font-medium text-right">Preço unit.</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {r.detalhe.map((d: any, i: number) => (
+                                        <tr key={i} className="border-t border-gray-50 text-gray-700">
+                                          <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(d.data)}</td>
+                                          <td className="py-1 pr-2 font-medium whitespace-nowrap">{d.numeroOc ?? `#${d.ordemId}`}</td>
+                                          <td className="py-1 pr-2 whitespace-nowrap">{d.numeroSc ?? "—"}</td>
+                                          <td className="py-1 pr-2 max-w-[160px] break-words">{d.obraId != null ? ((g.obras.find((o: any) => o.id === d.obraId)?.nome) ?? `#${d.obraId}`) : "—"}</td>
+                                          <td className="py-1 pr-2 max-w-[140px] break-words">{d.solicitante}</td>
+                                          <td className="py-1 pr-2 text-right">{d.qtd}</td>
+                                          <td className="py-1 text-right">{BRL(d.preco)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {rec.oportunidades?.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-gray-100">
+                          <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide mb-1.5">
+                            Oportunidades de melhoria — candidatos a contrato de fornecimento / pedido programado
+                          </p>
+                          <div className="space-y-1.5">
+                            {rec.oportunidades.map((o: any) => (
+                              <div key={o.chave} className="text-xs text-gray-700 border border-emerald-200 bg-emerald-50/60 rounded-lg px-3 py-2 leading-relaxed">
+                                <b>{o.descricao}</b>{o.unidade ? ` (${o.unidade})` : ""}: comprado <b>{o.compras}×</b> (a cada ~{o.intervaloMedioDias.toFixed(0)} dias), {BRL(o.valorTotal)} no período{o.obras > 1 ? `, em ${o.obras} obras` : ""}.
+                                Comprar recorrente no varejo = perder volume; negocie fornecimento programado ou estoque mínimo.
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })()}
+
+                {/* ── Ritmo do período (gráfico) ── */}
+                {(() => {
+                  const serie: any[] = (g as any).seriePorDia ?? [];
+                  if (serie.length === 0) return null;
+                  let dados: { label: string; SCs: number; Cotações: number; OCs: number }[];
+                  if (gerMes === null) {
+                    const porMes: Record<string, { SCs: number; Cotações: number; OCs: number }> = {};
+                    serie.forEach(s => {
+                      const m = s.dia.slice(0, 7);
+                      if (!porMes[m]) porMes[m] = { SCs: 0, Cotações: 0, OCs: 0 };
+                      porMes[m].SCs += s.scs; porMes[m].Cotações += s.cots; porMes[m].OCs += s.ocs;
+                    });
+                    const nomes = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+                    // Jan–Dez completo, meses sem atividade aparecem zerados (leitura de sazonalidade)
+                    dados = nomes.map((label, i) => {
+                      const key = `${gerAno}-${String(i + 1).padStart(2, "0")}`;
+                      return { label, SCs: porMes[key]?.SCs ?? 0, Cotações: porMes[key]?.Cotações ?? 0, OCs: porMes[key]?.OCs ?? 0 };
+                    });
+                  } else {
+                    dados = serie.map(s => ({ label: s.dia.slice(8, 10), SCs: s.scs, Cotações: s.cots, OCs: s.ocs }));
+                  }
+                  return (
+                    <Card>
+                      <div className="flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-indigo-600" />
+                        <h3 className="font-semibold text-gray-800">Ritmo do Período</h3>
+                        <span className="text-xs text-gray-400">{gerMes === null ? "por mês" : "por dia"}</span>
+                      </div>
+                      <FonteNote>
+                        <b>Fonte:</b> contagem de SCs, Cotações e OCs pela data de criação (canceladas excluídas).
+                        Serve para ver sazonalidade e picos de demanda de suprimentos.
+                      </FonteNote>
+                      <div className="h-56 mt-3">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={dados} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
+                            <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                            <Tooltip wrapperStyle={{ fontSize: 12 }} />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Bar dataKey="SCs" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="Cotações" stackId="a" fill="#3b82f6" />
+                            <Bar dataKey="OCs" stackId="a" fill="#10b981" radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </Card>
+                  );
+                })()}
 
                 {/* ── Bloco 2: Tempo do fluxo ── */}
                 <Card>

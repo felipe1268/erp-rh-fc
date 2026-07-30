@@ -1,4 +1,25 @@
 /**
+ * Rev. 4733 - DASHBOARD GERENCIAL: RECORRENCIA DE COMPRA + OPORTUNIDADES
+ *
+ * Novo bloco "O que Mais Compramos & Recorrencia":
+ * - Ranking por R$ e por numero de compras (toggle), agrupado por descricao
+ *   identica + unidade (mesma chave auditada da Perda de Agrupamento).
+ * - Intervalo medio entre compras ("a cada Xd"), nº de obras, periodo.
+ * - Drill-down por produto: ultimas OCs (nº OC/SC, data, obra, solicitante,
+ *   qtd, preco unit.) para rastreabilidade.
+ * - "Oportunidades de melhoria": comprado 4+ vezes com intervalo medio <= 30
+ *   dias = candidato a contrato de fornecimento / pedido programado /
+ *   estoque minimo.
+ *
+ * Rev. 4732 - DASHBOARD GERENCIAL: GRAFICOS + DESTAQUES AUTOMATICOS
+ *
+ * - Card "Destaques do periodo": insights automaticos em linguagem de reuniao
+ *   (maior perda por compra picada, obra que mais perde, pior antecedencia,
+ *   % de urgentes, mediana SC->OC, fila de aprovacao de hoje).
+ * - Grafico "Ritmo do Periodo" (recharts, barras empilhadas SC/Cotacao/OC,
+ *   por dia no mes ou por mes no ano) com nota Fonte & metodo.
+ * - Perda por obra / por solicitante agora com barras proporcionais.
+ *
  * Rev. 4731 - DASHBOARD GERENCIAL: AUDITORIA + CORRECAO DA PERDA + LAYOUT NOVO
  *
  * Auditoria confirmou erro grave na Perda de Agrupamento: o agrupamento por

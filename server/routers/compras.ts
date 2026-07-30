@@ -11459,6 +11459,13 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const perdaObraMap: Record<string, { obraId: number | null; perda: number; compras: number }> = {};
       const perdaSolMap: Record<string, { nome: string; perda: number; compras: number }> = {};
       let perdaTotal = 0, gruposTotal = 0, comprasEnvolvidas = 0;
+      type RecItem = {
+        chave: string; descricao: string; unidade: string | null;
+        compras: number; diasDistintos: number; qtdTotal: number; valorTotal: number;
+        intervaloMedioDias: number | null; primeiraCompra: string; ultimaCompra: string;
+        obras: number; detalhe: EvCompra[];
+      };
+      const recorrenciaItens: RecItem[] = [];
       const inconsistentes = {
         grupos: 0, compras: 0,
         exemplos: [] as { descricao: string; unidade: string | null; precoMin: number; precoMax: number; ocs: string[] }[],
@@ -11568,7 +11575,43 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             perdaPorInsumo.push(agg);
           }
         }
+
+        // ── Rev. 4733: Recorrência de compra por produto (o que mais compramos,
+        // quantas vezes e de quanto em quanto tempo) — mesma chave descrição+unidade ──
+        for (const info of Object.values(porChave)) {
+          const evs = info.evs;
+          const ocsDist = new Set(evs.map(e => e.ordemId));
+          if (ocsDist.size === 0) continue;
+          const diasCompra = Array.from(new Set(evs.map(e => e.data))).sort();
+          let intervaloMedio: number | null = null;
+          if (diasCompra.length >= 2) {
+            let soma = 0;
+            for (let i = 1; i < diasCompra.length; i++) soma += diasEntre(diasCompra[i - 1], diasCompra[i]);
+            intervaloMedio = soma / (diasCompra.length - 1);
+          }
+          recorrenciaItens.push({
+            chave: info.chave, descricao: info.descricao, unidade: info.unidade,
+            compras: ocsDist.size, diasDistintos: diasCompra.length,
+            qtdTotal: evs.reduce((s, e) => s + e.qtd, 0),
+            valorTotal: evs.reduce((s, e) => s + e.preco * e.qtd, 0),
+            intervaloMedioDias: intervaloMedio,
+            primeiraCompra: diasCompra[0], ultimaCompra: diasCompra[diasCompra.length - 1],
+            obras: new Set(evs.map(e => e.obraId)).size,
+            detalhe: [...evs].sort((a, b) => a.data.localeCompare(b.data)).slice(-15),
+          });
+        }
       }
+      const recorrencia = {
+        porValor: [...recorrenciaItens].sort((a, b) => b.valorTotal - a.valorTotal).slice(0, 12),
+        porFrequencia: [...recorrenciaItens].filter(r => r.compras >= 2)
+          .sort((a, b) => b.compras - a.compras || b.valorTotal - a.valorTotal).slice(0, 12),
+        // Oportunidade: comprado 4+ vezes com intervalo médio ≤ 30 dias → candidato a
+        // contrato de fornecimento / pedido programado / estoque mínimo
+        oportunidades: [...recorrenciaItens]
+          .filter(r => r.compras >= 4 && r.intervaloMedioDias != null && r.intervaloMedioDias <= 30)
+          .sort((a, b) => b.valorTotal - a.valorTotal).slice(0, 10)
+          .map(r => ({ chave: r.chave, descricao: r.descricao, unidade: r.unidade, compras: r.compras, intervaloMedioDias: r.intervaloMedioDias, valorTotal: r.valorTotal, obras: r.obras })),
+      };
       const perdaAgrupamento = {
         janelaDias: JANELA_DIAS,
         totalPerda: perdaTotal,
@@ -11598,7 +11641,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         leadTime, gargalo, obras: obrasRows,
         quandoPedem: { porDiaSemana, porHora },
         planejamento, rankingUrgencia,
-        perdaAgrupamento,
+        perdaAgrupamento, recorrencia,
       };
     }),
 

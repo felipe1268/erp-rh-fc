@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4733** — Dashboard Gerencial: bloco "O que Mais Compramos & Recorrência" (toggle R$/mais vezes, intervalo médio entre compras, drill até OC/SC) + "Oportunidades de melhoria" (4+ compras com intervalo ≤30d = candidato a contrato de fornecimento/pedido programado).
+- **Rev. 4732** — Dashboard Gerencial: card "Destaques do período" (insights automáticos), gráfico "Ritmo do Período" (recharts, barras empilhadas SC/Cot/OC por dia ou mês) e barras proporcionais na perda por obra/solicitante.
 - **Rev. 4731** — Dashboard Gerencial: auditoria achou bug grave (insumo_codigo é código de CATEGORIA, não de produto → perda inflada ~60×); agrupamento agora por descrição+unidade com trava de sanidade 4×; layout executivo enxuto (4 KPIs + 3 blocos) com rastreabilidade total (nota "Fonte & método" + drill-down até SC/OC de origem em cada bloco).
 - **Rev. 4730** — Dashboard Gerencial: SCs antigas sem criadoPorNome resolviam pra "Usuário #ID" (parecia fantasma); backend agora busca o nome no cadastro de usuários e junta as SCs na linha certa da pessoa.
 - **Rev. 4729** — Dashboard Gerencial de Compras: indicador "Perda de Oportunidade de Agrupamento" (mesmo insumo em 2+ OCs numa janela de 7/15/30 dias = compra picada; perda = Σ(preço pago − melhor preço do grupo)×qtd; ranking por insumo com timeline expandível, quebras por obra/solicitante, KPI no topo, select de janela) + layout executivo (max-width central, KPIs 4 col, cards 2 col em lg).
