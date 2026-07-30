@@ -11225,10 +11225,23 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const seriePorDia = Object.entries(serieMap).sort(([a], [b]) => a.localeCompare(b))
         .map(([dia, v]) => ({ dia, ...v }));
 
+      // Rev. 4730: SCs antigas gravadas sem criadoPorNome — resolve o nome pelo cadastro de usuários
+      const idsSemNome = Array.from(new Set(
+        scsAtivas.filter(r => !(r.criadoPorNome || "").trim() && r.solicitanteId).map(r => r.solicitanteId as number)
+      ));
+      const nomePorUserId = new Map<number, string>();
+      if (idsSemNome.length > 0) {
+        const uRows = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, idsSemNome));
+        uRows.forEach(u => { if ((u.name || "").trim()) nomePorUserId.set(u.id, (u.name as string).trim()); });
+      }
+      const nomeSolicitante = (r: { criadoPorNome: string | null; solicitanteId: number | null }) =>
+        (r.criadoPorNome || "").trim()
+        || (r.solicitanteId ? (nomePorUserId.get(r.solicitanteId) || `Usuário #${r.solicitanteId}`) : "—");
+
       // Ranking de solicitantes (quem pede mais / todo dia / urgente)
       const solMap: Record<string, { nome: string; total: number; urgentes: number; dias: Set<string>; valorEstimado: number }> = {};
       scsAtivas.forEach(r => {
-        const nome = (r.criadoPorNome || "").trim() || (r.solicitanteId ? `Usuário #${r.solicitanteId}` : "—");
+        const nome = nomeSolicitante(r);
         const key = nome.toUpperCase();
         if (!solMap[key]) solMap[key] = { nome, total: 0, urgentes: 0, dias: new Set(), valorEstimado: 0 };
         solMap[key].total++;
@@ -11348,8 +11361,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         const d = new Date(ms - LOCAL_OFFSET_MS);
         return { dow: d.getUTCDay(), hora: d.getUTCHours(), data: d.toISOString().slice(0, 10) };
       };
-      const solKey = (r: typeof scsAll[number]) =>
-        ((r.criadoPorNome || "").trim() || (r.solicitanteId ? `Usuário #${r.solicitanteId}` : "—")).toUpperCase();
+      const solKey = (r: typeof scsAll[number]) => nomeSolicitante(r).toUpperCase();
       const filtroSol = (input.solicitante ?? "").trim().toUpperCase() || null;
       const porDiaSemana = Array.from({ length: 7 }, () => 0);
       const porHora = Array.from({ length: 24 }, () => 0);
@@ -11370,7 +11382,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       }> = {};
       scsAtivas.forEach(r => {
         const key = solKey(r);
-        const nome = (r.criadoPorNome || "").trim() || (r.solicitanteId ? `Usuário #${r.solicitanteId}` : "—");
+        const nome = nomeSolicitante(r);
         if (!planMap[key]) planMap[key] = { nome, total: 0, urgentes: 0, comNecessidade: 0, somaAntecedencia: 0, ultimaHora: 0, foraHorario: 0 };
         const p = planMap[key];
         p.total++;

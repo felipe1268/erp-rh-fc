@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4730** — Dashboard Gerencial: SCs antigas sem criadoPorNome resolviam pra "Usuário #ID" (parecia fantasma); backend agora busca o nome no cadastro de usuários e junta as SCs na linha certa da pessoa.
 - **Rev. 4729** — Dashboard Gerencial de Compras: indicador "Perda de Oportunidade de Agrupamento" (mesmo insumo em 2+ OCs numa janela de 7/15/30 dias = compra picada; perda = Σ(preço pago − melhor preço do grupo)×qtd; ranking por insumo com timeline expandível, quebras por obra/solicitante, KPI no topo, select de janela) + layout executivo (max-width central, KPIs 4 col, cards 2 col em lg).
 - **Rev. 4728** — Dashboard Gerencial de Compras: "Quando Pedem" (dia×hora com filtro por solicitante), tempo de resposta por etapa (média/mediana/%≤24h-48h), índice de planejamento por solicitante (antecedência, última hora, fora do horário) e ranking de urgência.
 - **Rev. 4727** — Dashboard Gerencial de Compras vira página própria no menu lateral do módulo Compras (/compras/dashboard-gerencial); fix do "Tempo Médio do Fluxo" zerado (parse de timestamp com offset "+00").

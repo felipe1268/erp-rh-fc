@@ -1,4 +1,12 @@
 /**
+ * Rev. 4730 - DASHBOARD GERENCIAL: NOME DO SOLICITANTE RESOLVIDO PELO CADASTRO
+ *
+ * Correcao: SCs antigas gravadas sem criadoPorNome apareciam como
+ * "Usuario #ID" nos rankings de solicitantes (parecia usuario fantasma).
+ * Agora o backend resolve o nome pelo cadastro de usuarios (users) e as
+ * SCs se juntam a linha correta da pessoa (ex.: 25 SCs do "Usuario #73668"
+ * eram do Leonardo Cardoso). Nenhum dado foi apagado.
+ *
  * Rev. 4729 - PERDA DE OPORTUNIDADE DE AGRUPAMENTO + LAYOUT EXECUTIVO
  *
  * Dashboard Gerencial de Compras:
