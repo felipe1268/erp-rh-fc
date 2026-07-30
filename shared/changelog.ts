@@ -1,4 +1,13 @@
 /**
+ * Rev. 4761 - EVOLUCAO MENSAL: TABELA VIVA (HEATMAP) + GRAFICO DE LINHAS
+ *
+ * Volta ao comparativo mes a mes em TABELA, agora "viva": celulas com mapa de
+ * calor (verde = melhor mes, vermelho = pior, respeitando a direcao boa de
+ * cada indicador), setas ▲▼ coloridas vs mes anterior, coluna Tendencia com
+ * mini-linha SVG e selo MELHORANDO/PIORANDO, coluna do mes atual destacada.
+ * Toggle para modo grafico de linhas interativo (recharts): chips por
+ * indicador + linha do benchmark tracejada. Termometro e IA mantidos.
+ *
  * Rev. 4760 - EVOLUCAO MENSAL: CARDS INTERATIVOS + POP-UP DE DETALHE
  *
  * A tabela densa mes x indicador foi substituida por um grid responsivo de

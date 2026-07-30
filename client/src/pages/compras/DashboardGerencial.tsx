@@ -256,7 +256,7 @@ function FonteNote({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Rev. 4758/4760 — Evolução Mensal: cards interativos + pop-up de detalhe + termômetro + análise IA */
+/** Rev. 4761 — Evolução Mensal: tabela viva (heatmap + setas + tendência) e gráfico de linhas + termômetro + análise IA */
 const EVO_INDICADORES: { label: string; curto: string; k: string; menorMelhor: boolean; hint: string; desc: string; tipo: "num" | "brl" | "pct" | "dias" }[] = [
   { label: "Solicitações (SCs)", curto: "SCs", k: "scs", menorMelhor: false, hint: "volume", tipo: "num", desc: "Quantas solicitações de compra foram criadas no mês (canceladas fora)." },
   { label: "OCs emitidas", curto: "OCs", k: "ocs", menorMelhor: false, hint: "volume", tipo: "num", desc: "Quantas ordens de compra foram emitidas no mês (rascunhos e canceladas fora)." },
@@ -273,7 +273,8 @@ const EVO_INDICADORES: { label: string; curto: string; k: string; menorMelhor: b
 function EvolucaoMensalCard({ ev, companyId, ano }: { ev: any; companyId: number; ano: number }) {
   const MESES_A = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
   const analisar = trpc.compras.analisarEvolucaoCompras.useMutation();
-  const [detalhe, setDetalhe] = useState<string | null>(null); // k do indicador aberto no pop-up
+  const [modo, setModo] = useState<"tabela" | "grafico">("tabela"); // Rev. 4761
+  const [indGraf, setIndGraf] = useState<string>("score"); // indicador do gráfico de linha
   const meses: any[] = ev?.meses ?? [];
   if (meses.length === 0) return null;
   const fmtVal = (tipo: string, v: number | null): string => {
@@ -299,95 +300,117 @@ function EvolucaoMensalCard({ ev, companyId, ano }: { ev: any; companyId: number
   const atual = ev.scoreAtual;
   const falta = atual != null ? Math.max(0, ideal - atual) : null;
   const pctTermo = atual != null ? Math.min(100, Math.max(0, atual)) : 0;
-  const liAberto = detalhe ? EVO_INDICADORES.find(x => x.k === detalhe) : null;
   return (
     <Card>
       <SectionLabel eyebrow="Evolução mensal" title="A empresa está melhorando ou piorando?" icon={TrendingUp} accent="text-[#35658f]" />
       <FonteNote>
-        Indicadores calculados por mês de criação da SC/OC (canceladas e rascunhos fora). Cada card mostra o último mês com atividade e a variação vs o mês anterior — verde = melhorou, vermelho = piorou (a direção "bom" depende do indicador: urgência boa é CAIR). Toque num card pra abrir o detalhe mês a mês. Score composto 0–100%: 25% SCs com data de necessidade + 35% antecedência vs 7 dias + 15% não-urgência + 25% OCs fora do susto. Benchmark (literatura de compras — CIPS): score ≥85%, urgências ≤10%, antecedência ≥7d, ≥85% planejadas. Perda por compra picada usa os grupos do card de agrupamento (janela selecionada).
+        Indicadores calculados por mês de criação da SC/OC (canceladas e rascunhos fora). Na tabela, a cor da célula compara os meses do ano entre si (verde = melhor, vermelho = pior, respeitando a direção boa de cada indicador — ex.: urgência boa é CAIR); as setas ▲▼ comparam com o mês anterior; a coluna Tendência resume o ano. No modo gráfico, escolha o indicador e veja a linha contra o benchmark tracejado. Score composto 0–100%: 25% SCs com data de necessidade + 35% antecedência vs 7 dias + 15% não-urgência + 25% OCs fora do susto. Benchmark (literatura de compras — CIPS): score ≥85%, urgências ≤10%, antecedência ≥7d, ≥85% planejadas. Perda por compra picada usa os grupos do card de agrupamento (janela selecionada).
       </FonteNote>
-      {/* Grid de cards interativos — último mês + variação + mini-sparkline */}
-      <p className="mt-3 text-[11px] text-gray-400">Mostrando <b className="text-slate-600">{MESES_A[ultimo.mes - 1]}</b>{penultimo ? <> vs <b className="text-slate-600">{MESES_A[penultimo.mes - 1]}</b></> : null} · toque num card pra ver a evolução completa</p>
-      <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-        {EVO_INDICADORES.map(li => {
-          const v = ultimo[li.k];
-          const d = deltaInfo(li, v, penultimo ? penultimo[li.k] : null);
-          const vals = meses.map(m => m[li.k]).filter((x: any) => x != null) as number[];
-          const max = vals.length ? Math.max(...vals, 1e-9) : 1;
-          const isScore = li.k === "score";
-          return (
-            <button
-              key={li.k}
-              onClick={() => setDetalhe(li.k)}
-              className={`fc-card text-left rounded-2xl border p-3 bg-white hover:border-slate-300 active:scale-[.98] transition ${isScore ? "border-[#35658f]/40 ring-1 ring-[#35658f]/15 col-span-2 sm:col-span-1" : "border-slate-100"}`}
-            >
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 truncate" title={li.label}>{li.curto}</span>
-                <ChevronRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-              </div>
-              <div className={`mt-1 font-bold text-slate-900 leading-tight ${li.tipo === "brl" ? "text-sm" : "text-xl"}`}>{fmtVal(li.tipo, v)}</div>
-              <div className="mt-0.5 min-h-[16px] text-[10px]">
-                {d == null ? <span className="text-gray-300">sem comparação</span>
-                  : d.subiu == null ? <span className="text-gray-400">= estável</span>
-                  : <span className={`font-semibold ${d.bom == null ? "text-slate-500" : d.bom ? "text-emerald-600" : "text-rose-600"}`}>{d.subiu ? "▲" : "▼"} {d.txt}{d.bom != null && <span className="font-normal"> · {d.bom ? "melhorou" : "piorou"}</span>}</span>}
-              </div>
-              {/* mini-sparkline de barras */}
-              <div className="mt-1.5 flex items-end gap-[3px] h-6">
-                {meses.map(m => {
-                  const mv = m[li.k];
-                  const h = mv == null ? 0 : Math.max(2, (Math.abs(mv) / max) * 24);
-                  const eUltimo = m.mes === ultimo.mes;
-                  return <div key={m.mes} className={`flex-1 rounded-sm ${mv == null ? "bg-slate-100" : eUltimo ? (isScore ? "bg-[#35658f]" : "bg-slate-500") : "bg-slate-200"}`} style={{ height: h }} title={`${MESES_A[m.mes - 1]}: ${fmtVal(li.tipo, mv)}`} />;
-                })}
-              </div>
-              <div className="mt-1 text-[9px] text-gray-300">{li.hint}</div>
-            </button>
-          );
-        })}
+      {/* Toggle tabela × gráfico */}
+      <div className="mt-3 flex items-center gap-1.5">
+        <button onClick={() => setModo("tabela")} className={`rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition ${modo === "tabela" ? "bg-[#35658f] text-white shadow-sm" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>📋 Tabela viva</button>
+        <button onClick={() => setModo("grafico")} className={`rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition ${modo === "grafico" ? "bg-[#35658f] text-white shadow-sm" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>📈 Gráfico de linhas</button>
       </div>
-      {/* Pop-up de detalhe do indicador */}
-      <Dialog open={detalhe != null} onOpenChange={o => { if (!o) setDetalhe(null); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          {liAberto && (() => {
-            const vals = meses.map(m => m[liAberto.k]).filter((x: any) => x != null) as number[];
-            const max = vals.length ? Math.max(...vals, 1e-9) : 1;
-            const melhor = vals.length ? (liAberto.menorMelhor ? Math.min(...vals) : Math.max(...vals)) : null;
-            return (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 break-words">
-                    <TrendingUp className="w-4 h-4 text-[#35658f]" /> {liAberto.label} — {ano}
-                  </DialogTitle>
-                </DialogHeader>
-                <p className="text-[12px] text-slate-600 leading-relaxed break-words">{liAberto.desc}</p>
-                <div className="space-y-1.5 mt-1">
-                  {meses.map((m, i) => {
-                    const v = m[liAberto.k];
-                    const d = deltaInfo(liAberto, v, i > 0 ? meses[i - 1][liAberto.k] : null);
-                    const w = v == null ? 0 : Math.max(3, (Math.abs(v) / max) * 100);
-                    const eMelhor = v != null && v === melhor && vals.length > 1;
-                    return (
-                      <div key={m.mes} className="flex items-center gap-2">
-                        <span className="w-9 shrink-0 text-[11px] font-semibold text-slate-500">{MESES_A[m.mes - 1]}</span>
-                        <div className="flex-1 h-6 rounded-lg bg-slate-100 overflow-hidden relative">
-                          <div className={`h-full rounded-lg ${v == null ? "" : eMelhor ? "bg-emerald-400/80" : "bg-[#35658f]/70"}`} style={{ width: `${w}%` }} />
-                        </div>
-                        <span className="w-24 shrink-0 text-right text-[12px] font-bold text-slate-800 whitespace-nowrap">{fmtVal(liAberto.tipo, v)}</span>
-                        <span className="w-20 shrink-0 text-right text-[10px] whitespace-nowrap">
-                          {d == null ? <span className="text-gray-300">—</span>
-                            : d.subiu == null ? <span className="text-gray-400">=</span>
-                            : <span className={`font-semibold ${d.bom == null ? "text-slate-500" : d.bom ? "text-emerald-600" : "text-rose-600"}`}>{d.subiu ? "▲" : "▼"} {d.txt}</span>}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="text-[10px] text-gray-400 mt-1">Benchmark: {liAberto.hint} · barra verde = melhor mês do ano · variação vs mês anterior (verde = melhorou pro negócio).</p>
-              </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
+      {modo === "tabela" && (
+        <div className="overflow-x-auto mt-3 rounded-2xl border border-slate-100">
+          <table className="w-full text-[11px] min-w-[760px] border-collapse">
+            <thead>
+              <tr className="bg-slate-50/80 text-gray-400 text-left">
+                <th className="py-2 px-3 font-medium sticky left-0 bg-slate-50 z-10">Indicador</th>
+                {meses.map(m => <th key={m.mes} className={`py-2 px-2 font-bold text-center ${m.mes === ultimo.mes ? "text-[#35658f]" : "text-slate-500"}`}>{MESES_A[m.mes - 1]}{m.mes === ultimo.mes && <span className="block text-[8px] font-semibold text-[#35658f]/70">ATUAL</span>}</th>)}
+                <th className="py-2 px-2 font-medium text-center">Tendência</th>
+              </tr>
+            </thead>
+            <tbody>
+              {EVO_INDICADORES.map((li, ri) => {
+                const isScore = li.k === "score";
+                const vals = meses.map(m => m[li.k]).filter((x: any) => x != null) as number[];
+                const vMin = vals.length ? Math.min(...vals) : 0;
+                const vMax = vals.length ? Math.max(...vals) : 1;
+                const range = vMax - vMin;
+                // heat: 0 = ruim, 1 = bom (respeita direção do indicador; volume fica neutro)
+                const heat = (v: number | null): string => {
+                  if (v == null || li.hint === "volume") return "";
+                  const t = range < 1e-9 ? 0.5 : (v - vMin) / range;
+                  const bom = li.menorMelhor ? 1 - t : t;
+                  if (bom >= 0.75) return "bg-emerald-50 text-emerald-900";
+                  if (bom >= 0.5) return "bg-emerald-50/40";
+                  if (bom >= 0.25) return "bg-rose-50/40";
+                  return "bg-rose-50 text-rose-900";
+                };
+                // sparkline SVG de linha
+                const pts = meses.map((m, i) => {
+                  const v = m[li.k];
+                  if (v == null) return null;
+                  const x = meses.length > 1 ? (i / (meses.length - 1)) * 72 + 4 : 40;
+                  const y = 22 - (range < 1e-9 ? 0.5 : (v - vMin) / range) * 18;
+                  return `${x},${y}`;
+                }).filter(Boolean).join(" ");
+                const tendBoa = (() => {
+                  if (vals.length < 2 || li.hint === "volume") return null;
+                  const d = vals[vals.length - 1] - vals[0];
+                  if (Math.abs(d) < 1e-9) return null;
+                  return li.menorMelhor ? d < 0 : d > 0;
+                })();
+                return (
+                  <tr key={li.k} className={`border-t border-slate-100 ${isScore ? "bg-[#35658f]/[.05]" : ri % 2 === 1 ? "bg-slate-50/40" : "bg-white"}`}>
+                    <td className={`py-2 px-3 sticky left-0 z-10 ${isScore ? "bg-[#eef3f8]" : ri % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"}`}>
+                      <span className={`font-semibold ${isScore ? "text-[#35658f]" : "text-slate-700"}`}>{li.label}</span>
+                      <span className="block text-[9px] text-gray-400">{li.hint}</span>
+                    </td>
+                    {meses.map((m, i) => {
+                      const v = m[li.k];
+                      const d = deltaInfo(li, v, i > 0 ? meses[i - 1][li.k] : null);
+                      return (
+                        <td key={m.mes} className={`py-2 px-2 text-center whitespace-nowrap ${heat(v)} ${m.mes === ultimo.mes ? "font-bold" : ""}`} title={li.desc}>
+                          <span className={isScore ? "font-bold" : ""}>{fmtVal(li.tipo, v)}</span>
+                          {d && d.subiu != null && (
+                            <span className={`ml-1 text-[10px] font-bold ${d.bom == null ? "text-slate-400" : d.bom ? "text-emerald-600" : "text-rose-600"}`} title={`${d.subiu ? "subiu" : "caiu"} ${d.txt} vs ${MESES_A[meses[i - 1].mes - 1]}${d.bom != null ? d.bom ? " · melhorou" : " · piorou" : ""}`}>{d.subiu ? "▲" : "▼"}</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td className="py-2 px-2 text-center">
+                      <svg width="80" height="26" className="inline-block align-middle">
+                        {pts && <polyline points={pts} fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={tendBoa == null ? "stroke-slate-400" : tendBoa ? "stroke-emerald-500" : "stroke-rose-500"} />}
+                      </svg>
+                      {tendBoa != null && <span className={`block text-[8px] font-bold ${tendBoa ? "text-emerald-600" : "text-rose-600"}`}>{tendBoa ? "MELHORANDO" : "PIORANDO"}</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {modo === "grafico" && (() => {
+        const li = EVO_INDICADORES.find(x => x.k === indGraf)!;
+        const dados = meses.map(m => ({ nome: MESES_A[m.mes - 1], valor: m[li.k], ideal: li.k === "score" || li.k === "pctPlanejadas" ? ideal : li.k === "pctComNecessidade" ? 100 : li.k === "pctUrgentes" ? 10 : li.k === "antecedenciaMediana" ? 7 : null }));
+        const temIdeal = dados.some(d => d.ideal != null);
+        return (
+          <div className="mt-3">
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {EVO_INDICADORES.map(x => (
+                <button key={x.k} onClick={() => setIndGraf(x.k)} className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${indGraf === x.k ? "bg-[#35658f] text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>{x.curto}</button>
+              ))}
+            </div>
+            <div className="rounded-2xl border border-slate-100 p-3">
+              <p className="text-[11px] text-slate-600 mb-2"><b>{li.label}</b> · {li.desc}</p>
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={dados} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef1f4" />
+                  <XAxis dataKey="nome" tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} width={li.tipo === "brl" ? 78 : 36} tickFormatter={(v: number) => li.tipo === "brl" ? BRL(v).replace(",00", "") : `${v}${li.tipo === "pct" ? "%" : li.tipo === "dias" ? "d" : ""}`} />
+                  <Tooltip formatter={(v: any, nome: any) => [fmtVal(li.tipo, typeof v === "number" ? v : null), nome === "ideal" ? "Benchmark" : li.curto]} labelStyle={{ fontSize: 12 }} contentStyle={{ fontSize: 12, borderRadius: 12 }} />
+                  <Line type="monotone" dataKey="valor" name={li.curto} stroke="#35658f" strokeWidth={3} dot={{ r: 4, fill: "#35658f" }} activeDot={{ r: 6 }} connectNulls />
+                  {temIdeal && <Line type="monotone" dataKey="ideal" name="ideal" stroke="#10b981" strokeWidth={1.5} strokeDasharray="6 4" dot={false} />}
+                </LineChart>
+              </ResponsiveContainer>
+              {temIdeal && <p className="text-[10px] text-gray-400 mt-1">Linha verde tracejada = benchmark ({li.hint}).</p>}
+            </div>
+          </div>
+        );
+      })()}
       {/* Termômetro grande */}
       {atual != null && (
         <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
