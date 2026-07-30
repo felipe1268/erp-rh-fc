@@ -256,86 +256,151 @@ function FonteNote({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Rev. 4758 — Evolução Mensal: tabela comparativa mês a mês + termômetro + análise IA */
+/** Rev. 4758/4760 — Evolução Mensal: cards interativos + pop-up de detalhe + termômetro + análise IA */
+const EVO_INDICADORES: { label: string; curto: string; k: string; menorMelhor: boolean; hint: string; desc: string; tipo: "num" | "brl" | "pct" | "dias" }[] = [
+  { label: "Solicitações (SCs)", curto: "SCs", k: "scs", menorMelhor: false, hint: "volume", tipo: "num", desc: "Quantas solicitações de compra foram criadas no mês (canceladas fora)." },
+  { label: "OCs emitidas", curto: "OCs", k: "ocs", menorMelhor: false, hint: "volume", tipo: "num", desc: "Quantas ordens de compra foram emitidas no mês (rascunhos e canceladas fora)." },
+  { label: "Valor comprado", curto: "Valor", k: "valorComprado", menorMelhor: false, hint: "volume", tipo: "brl", desc: "Soma do valor das OCs emitidas no mês." },
+  { label: "Compra planejada", curto: "Planejadas", k: "pctPlanejadas", menorMelhor: false, hint: "ideal ≥85%", tipo: "pct", desc: "% de SCs criadas com antecedência ≥3 dias da data de necessidade. Benchmark: ≥85%." },
+  { label: "SCs com data de necessidade", curto: "C/ data", k: "pctComNecessidade", menorMelhor: false, hint: "ideal 100%", tipo: "pct", desc: "% de SCs que informaram QUANDO o material é necessário. Sem essa data não dá pra planejar. Ideal: 100%." },
+  { label: "Antecedência mediana", curto: "Antecedência", k: "antecedenciaMediana", menorMelhor: false, hint: "ideal ≥7d", tipo: "dias", desc: "Com quantos dias de antecedência (mediana) as SCs são criadas vs a data de necessidade. Benchmark: ≥7 dias." },
+  { label: "Lead SC→OC", curto: "Lead SC→OC", k: "leadScOcMediana", menorMelhor: true, hint: "menor = melhor", tipo: "dias", desc: "Tempo mediano entre criar a SC e emitir a OC. Quanto menor, mais ágil o setor de compras." },
+  { label: "SCs urgentes", curto: "Urgentes", k: "pctUrgentes", menorMelhor: true, hint: "ideal ≤10%", tipo: "pct", desc: "% de SCs marcadas como urgentes. Urgência custa caro (frete, preço, retrabalho). Benchmark: ≤10%." },
+  { label: "OCs no susto", curto: "No susto", k: "pctSusto", menorMelhor: true, hint: "menor = melhor", tipo: "pct", desc: "% de OCs emitidas a ≤3 dias da entrega prevista — compra feita em cima da hora." },
+  { label: "Perda compra picada", curto: "Perda picada", k: "perdaPicada", menorMelhor: true, hint: "menor = melhor", tipo: "brl", desc: "R$ perdidos comprando o mesmo insumo picado em várias OCs em vez de agrupar (janela selecionada). '—' = fora do período filtrado." },
+  { label: "Score de planejamento", curto: "Score", k: "score", menorMelhor: false, hint: "ideal ≥85%", tipo: "pct", desc: "Nota composta 0–100%: 25% SCs com data de necessidade + 35% antecedência vs 7d + 15% não-urgência + 25% OCs fora do susto. Benchmark: ≥85%." },
+];
 function EvolucaoMensalCard({ ev, companyId, ano }: { ev: any; companyId: number; ano: number }) {
   const MESES_A = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
   const analisar = trpc.compras.analisarEvolucaoCompras.useMutation();
+  const [detalhe, setDetalhe] = useState<string | null>(null); // k do indicador aberto no pop-up
   const meses: any[] = ev?.meses ?? [];
   if (meses.length === 0) return null;
-  const fmt = (v: number | null, suf = "", dec = 0) => v == null ? "—" : `${v.toFixed(dec).replace(".", ",")}${suf}`;
-  // indicadores: label, chave, formato, "menor é melhor?"
-  const linhas: { label: string; k: string; f: (v: any) => string; menorMelhor: boolean; hint: string }[] = [
-    { label: "Solicitações (SCs)", k: "scs", f: v => fmt(v), menorMelhor: false, hint: "volume" },
-    { label: "OCs emitidas", k: "ocs", f: v => fmt(v), menorMelhor: false, hint: "volume" },
-    { label: "Valor comprado", k: "valorComprado", f: v => v == null ? "—" : BRL(v), menorMelhor: false, hint: "volume" },
-    { label: "Compra planejada (antecedência ≥3d)", k: "pctPlanejadas", f: v => fmt(v, "%"), menorMelhor: false, hint: "ideal ≥85%" },
-    { label: "SCs com data de necessidade", k: "pctComNecessidade", f: v => fmt(v, "%"), menorMelhor: false, hint: "ideal 100%" },
-    { label: "Antecedência mediana", k: "antecedenciaMediana", f: v => fmt(v, "d", 1), menorMelhor: false, hint: "ideal ≥7d" },
-    { label: "Compra rápida — lead SC→OC", k: "leadScOcMediana", f: v => fmt(v, "d", 1), menorMelhor: true, hint: "menor = melhor" },
-    { label: "SCs urgentes", k: "pctUrgentes", f: v => fmt(v, "%"), menorMelhor: true, hint: "ideal ≤10%" },
-    { label: "OCs no susto (entrega ≤3d)", k: "pctSusto", f: v => fmt(v, "%"), menorMelhor: true, hint: "menor = melhor" },
-    { label: "Perda por compra picada", k: "perdaPicada", f: v => v == null ? "—" : BRL(v), menorMelhor: true, hint: "menor = melhor" },
-    { label: "Score de planejamento (0–100)", k: "score", f: v => fmt(v), menorMelhor: false, hint: "ideal ≥85" },
-  ];
+  const fmtVal = (tipo: string, v: number | null): string => {
+    if (v == null) return "—";
+    if (tipo === "brl") return BRL(v);
+    if (tipo === "pct") return `${v.toFixed(0)}%`;
+    if (tipo === "dias") return `${v.toFixed(1).replace(".", ",")}d`;
+    return `${v}`;
+  };
+  const deltaInfo = (li: typeof EVO_INDICADORES[number], v: number | null, prev: number | null) => {
+    if (v == null || prev == null) return null;
+    const diff = v - prev;
+    const limiar = li.tipo === "pct" ? 0.5 : li.tipo === "brl" ? 1 : 0.05;
+    if (Math.abs(diff) <= limiar) return { txt: "estável", bom: null as boolean | null, subiu: null as boolean | null };
+    const subiu = diff > 0;
+    const bom = li.hint === "volume" ? null : (li.menorMelhor ? !subiu : subiu);
+    const txt = li.tipo === "brl" ? BRL(Math.abs(diff)) : li.tipo === "dias" ? `${Math.abs(diff).toFixed(1).replace(".", ",")}d` : li.tipo === "pct" ? `${Math.abs(diff).toFixed(0)} p.p.` : `${Math.abs(diff)}`;
+    return { txt, bom, subiu };
+  };
+  const ultimo = meses[meses.length - 1];
+  const penultimo = meses.length > 1 ? meses[meses.length - 2] : null;
   const ideal = ev.ideal ?? 85;
   const atual = ev.scoreAtual;
   const falta = atual != null ? Math.max(0, ideal - atual) : null;
   const pctTermo = atual != null ? Math.min(100, Math.max(0, atual)) : 0;
+  const liAberto = detalhe ? EVO_INDICADORES.find(x => x.k === detalhe) : null;
   return (
     <Card>
       <SectionLabel eyebrow="Evolução mensal" title="A empresa está melhorando ou piorando?" icon={TrendingUp} accent="text-[#35658f]" />
       <FonteNote>
-        Indicadores calculados por mês de criação da SC/OC (canceladas e rascunhos fora). Setas comparam com o mês anterior: verde = melhorou, vermelho = piorou (a direção "bom" depende do indicador — ex.: urgência boa é CAIR). Score composto 0–100: 25% SCs com data de necessidade + 35% antecedência vs 7 dias + 15% não-urgência + 25% OCs fora do susto. Benchmark (literatura de compras — CIPS/benchmarks nacionais): score ≥85, urgências ≤10%, antecedência ≥7d, ≥85% de compras planejadas. Perda por compra picada usa os grupos do card de agrupamento (janela selecionada).
+        Indicadores calculados por mês de criação da SC/OC (canceladas e rascunhos fora). Cada card mostra o último mês com atividade e a variação vs o mês anterior — verde = melhorou, vermelho = piorou (a direção "bom" depende do indicador: urgência boa é CAIR). Toque num card pra abrir o detalhe mês a mês. Score composto 0–100%: 25% SCs com data de necessidade + 35% antecedência vs 7 dias + 15% não-urgência + 25% OCs fora do susto. Benchmark (literatura de compras — CIPS): score ≥85%, urgências ≤10%, antecedência ≥7d, ≥85% planejadas. Perda por compra picada usa os grupos do card de agrupamento (janela selecionada).
       </FonteNote>
-      {/* Tabela comparativa mês a mês */}
-      <div className="overflow-x-auto mt-3">
-        <table className="w-full text-[11px] min-w-[720px]">
-          <thead>
-            <tr className="text-gray-400 text-left">
-              <th className="py-1.5 pr-2 font-medium sticky left-0 bg-white">Indicador</th>
-              {meses.map(m => <th key={m.mes} className="py-1.5 px-2 font-semibold text-center text-slate-600">{MESES_A[m.mes - 1]}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {linhas.map(li => (
-              <tr key={li.k} className="border-t border-gray-50">
-                <td className="py-1.5 pr-2 sticky left-0 bg-white">
-                  <span className={`font-medium ${li.k === "score" ? "text-slate-900 font-bold" : "text-gray-700"}`}>{li.label}</span>
-                  <span className="text-gray-300 ml-1">· {li.hint}</span>
-                </td>
-                {meses.map((m, i) => {
-                  const v = m[li.k];
-                  const prev = i > 0 ? meses[i - 1][li.k] : null;
-                  let seta: React.ReactNode = null;
-                  if (v != null && prev != null && Math.abs(v - prev) > (li.k.startsWith("pct") || li.k === "score" ? 0.5 : 0.05)) {
-                    const subiu = v > prev;
-                    const bom = li.hint === "volume" ? null : (li.menorMelhor ? !subiu : subiu);
-                    seta = <span className={`ml-0.5 ${bom == null ? "text-slate-400" : bom ? "text-emerald-600" : "text-rose-600"}`}>{subiu ? "📈" : "📉"}</span>;
-                  }
-                  return (
-                    <td key={m.mes} className={`py-1.5 px-2 text-center whitespace-nowrap ${li.k === "score" ? "font-bold text-slate-900" : "text-gray-700"}`}>
-                      {li.f(v)}{seta}
-                    </td>
-                  );
+      {/* Grid de cards interativos — último mês + variação + mini-sparkline */}
+      <p className="mt-3 text-[11px] text-gray-400">Mostrando <b className="text-slate-600">{MESES_A[ultimo.mes - 1]}</b>{penultimo ? <> vs <b className="text-slate-600">{MESES_A[penultimo.mes - 1]}</b></> : null} · toque num card pra ver a evolução completa</p>
+      <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+        {EVO_INDICADORES.map(li => {
+          const v = ultimo[li.k];
+          const d = deltaInfo(li, v, penultimo ? penultimo[li.k] : null);
+          const vals = meses.map(m => m[li.k]).filter((x: any) => x != null) as number[];
+          const max = vals.length ? Math.max(...vals, 1e-9) : 1;
+          const isScore = li.k === "score";
+          return (
+            <button
+              key={li.k}
+              onClick={() => setDetalhe(li.k)}
+              className={`fc-card text-left rounded-2xl border p-3 bg-white hover:border-slate-300 active:scale-[.98] transition ${isScore ? "border-[#35658f]/40 ring-1 ring-[#35658f]/15 col-span-2 sm:col-span-1" : "border-slate-100"}`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 truncate" title={li.label}>{li.curto}</span>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+              </div>
+              <div className={`mt-1 font-bold text-slate-900 leading-tight ${li.tipo === "brl" ? "text-sm" : "text-xl"}`}>{fmtVal(li.tipo, v)}</div>
+              <div className="mt-0.5 min-h-[16px] text-[10px]">
+                {d == null ? <span className="text-gray-300">sem comparação</span>
+                  : d.subiu == null ? <span className="text-gray-400">= estável</span>
+                  : <span className={`font-semibold ${d.bom == null ? "text-slate-500" : d.bom ? "text-emerald-600" : "text-rose-600"}`}>{d.subiu ? "▲" : "▼"} {d.txt}{d.bom != null && <span className="font-normal"> · {d.bom ? "melhorou" : "piorou"}</span>}</span>}
+              </div>
+              {/* mini-sparkline de barras */}
+              <div className="mt-1.5 flex items-end gap-[3px] h-6">
+                {meses.map(m => {
+                  const mv = m[li.k];
+                  const h = mv == null ? 0 : Math.max(2, (Math.abs(mv) / max) * 24);
+                  const eUltimo = m.mes === ultimo.mes;
+                  return <div key={m.mes} className={`flex-1 rounded-sm ${mv == null ? "bg-slate-100" : eUltimo ? (isScore ? "bg-[#35658f]" : "bg-slate-500") : "bg-slate-200"}`} style={{ height: h }} title={`${MESES_A[m.mes - 1]}: ${fmtVal(li.tipo, mv)}`} />;
                 })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </div>
+              <div className="mt-1 text-[9px] text-gray-300">{li.hint}</div>
+            </button>
+          );
+        })}
       </div>
+      {/* Pop-up de detalhe do indicador */}
+      <Dialog open={detalhe != null} onOpenChange={o => { if (!o) setDetalhe(null); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          {liAberto && (() => {
+            const vals = meses.map(m => m[liAberto.k]).filter((x: any) => x != null) as number[];
+            const max = vals.length ? Math.max(...vals, 1e-9) : 1;
+            const melhor = vals.length ? (liAberto.menorMelhor ? Math.min(...vals) : Math.max(...vals)) : null;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 break-words">
+                    <TrendingUp className="w-4 h-4 text-[#35658f]" /> {liAberto.label} — {ano}
+                  </DialogTitle>
+                </DialogHeader>
+                <p className="text-[12px] text-slate-600 leading-relaxed break-words">{liAberto.desc}</p>
+                <div className="space-y-1.5 mt-1">
+                  {meses.map((m, i) => {
+                    const v = m[liAberto.k];
+                    const d = deltaInfo(liAberto, v, i > 0 ? meses[i - 1][liAberto.k] : null);
+                    const w = v == null ? 0 : Math.max(3, (Math.abs(v) / max) * 100);
+                    const eMelhor = v != null && v === melhor && vals.length > 1;
+                    return (
+                      <div key={m.mes} className="flex items-center gap-2">
+                        <span className="w-9 shrink-0 text-[11px] font-semibold text-slate-500">{MESES_A[m.mes - 1]}</span>
+                        <div className="flex-1 h-6 rounded-lg bg-slate-100 overflow-hidden relative">
+                          <div className={`h-full rounded-lg ${v == null ? "" : eMelhor ? "bg-emerald-400/80" : "bg-[#35658f]/70"}`} style={{ width: `${w}%` }} />
+                        </div>
+                        <span className="w-24 shrink-0 text-right text-[12px] font-bold text-slate-800 whitespace-nowrap">{fmtVal(liAberto.tipo, v)}</span>
+                        <span className="w-20 shrink-0 text-right text-[10px] whitespace-nowrap">
+                          {d == null ? <span className="text-gray-300">—</span>
+                            : d.subiu == null ? <span className="text-gray-400">=</span>
+                            : <span className={`font-semibold ${d.bom == null ? "text-slate-500" : d.bom ? "text-emerald-600" : "text-rose-600"}`}>{d.subiu ? "▲" : "▼"} {d.txt}</span>}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Benchmark: {liAberto.hint} · barra verde = melhor mês do ano · variação vs mês anterior (verde = melhorou pro negócio).</p>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
       {/* Termômetro grande */}
       {atual != null && (
         <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Termômetro do planejamento de compras</span>
-            <span className="text-sm text-slate-600">O ideal (literatura de compras) é <b>{ideal}</b> · hoje você está em <b className={atual >= ideal ? "text-emerald-600" : "text-rose-600"}>{atual}</b>{falta != null && falta > 0 ? <> · faltam <b className="text-rose-600">{falta} pontos</b> pra trabalhar</> : <> · <b className="text-emerald-600">meta atingida 🎉</b></>}</span>
+            <span className="text-sm text-slate-600">O ideal (literatura de compras) é <b>{ideal}%</b> · hoje você está em <b className={atual >= ideal ? "text-emerald-600" : "text-rose-600"}>{atual}%</b>{falta != null && falta > 0 ? <> · faltam <b className="text-rose-600">{falta} pontos percentuais</b> pra trabalhar</> : <> · <b className="text-emerald-600">meta atingida 🎉</b></>}</span>
           </div>
           <div className="relative mt-3 h-5 rounded-full bg-gradient-to-r from-rose-200 via-amber-200 to-emerald-200 overflow-visible">
             <div className="absolute inset-y-0 left-0 rounded-full bg-slate-900/10" style={{ width: `${pctTermo}%` }} />
-            <div className="absolute -top-1.5 h-8 w-1 rounded bg-slate-900" style={{ left: `calc(${pctTermo}% - 2px)` }} title={`Hoje: ${atual}`} />
-            <div className="absolute -top-1.5 h-8 w-0.5 bg-emerald-700" style={{ left: `${ideal}%` }} title={`Ideal: ${ideal}`} />
-            <span className="absolute top-6 text-[10px] font-bold text-slate-700" style={{ left: `calc(${pctTermo}% - 10px)` }}>{atual}</span>
-            <span className="absolute top-6 text-[10px] font-bold text-emerald-700" style={{ left: `calc(${ideal}% - 14px)` }}>ideal {ideal}</span>
+            <div className="absolute -top-1.5 h-8 w-1 rounded bg-slate-900" style={{ left: `calc(${pctTermo}% - 2px)` }} title={`Hoje: ${atual}%`} />
+            <div className="absolute -top-1.5 h-8 w-0.5 bg-emerald-700" style={{ left: `${ideal}%` }} title={`Ideal: ${ideal}%`} />
+            <span className="absolute top-6 text-[10px] font-bold text-slate-700" style={{ left: `calc(${pctTermo}% - 12px)` }}>{atual}%</span>
+            <span className="absolute top-6 text-[10px] font-bold text-emerald-700" style={{ left: `calc(${ideal}% - 16px)` }}>ideal {ideal}%</span>
           </div>
           <div className="h-4" />
         </div>

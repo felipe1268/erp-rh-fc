@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4760** — Evolução Mensal: layout moderno com cards interativos, sparklines e pop-up de detalhe por indicador.
+- **Rev. 4759** — Evolução Mensal: score e termômetro exibidos em percentual (0–100%).
 - **Rev. 4758** — Dashboard Gerencial: card "Evolução Mensal" (tabela mês a mês com setas, termômetro ideal 85 e análise com IA).
 - **Rev. 4757** — "Onde Comprar Melhor": variação >4× entre fornecedores vira alerta de provável erro de cadastro (sem economia fantasma).
 - **Rev. 4756** — Receber Material filtra pelo local: Central só vê OCs sem obra; obra vê as dela; "todos" vê tudo.

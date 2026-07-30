@@ -1,4 +1,18 @@
 /**
+ * Rev. 4760 - EVOLUCAO MENSAL: CARDS INTERATIVOS + POP-UP DE DETALHE
+ *
+ * A tabela densa mes x indicador foi substituida por um grid responsivo de
+ * cards clicaveis (2/3/4 colunas): cada card mostra o ultimo mes, a variacao
+ * vs mes anterior (verde/vermelho conforme a direcao boa) e um mini-sparkline
+ * de barras. Tocar no card abre pop-up com a explicacao do indicador em
+ * linguagem simples + barras mes a mes (melhor mes em verde) + variacoes.
+ * Termometro e analise IA mantidos.
+ *
+ * Rev. 4759 - TERMOMETRO EM PERCENTUAL (0-100%)
+ *
+ * Card Evolucao Mensal: score e termometro agora exibidos como percentual
+ * (40% / ideal 85%), inclusive na linha da tabela e nos marcadores da regua.
+ *
  * Rev. 4758 - DASHBOARD GERENCIAL: EVOLUCAO MENSAL + TERMOMETRO + ANALISE IA
  *
  * Novo card no fim do Dashboard Gerencial de Compras: (1) tabela comparativa
