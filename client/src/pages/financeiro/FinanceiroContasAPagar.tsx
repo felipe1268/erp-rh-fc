@@ -2670,21 +2670,34 @@ export default function FinanceiroContasAPagar() {
                         </div>
                       )}
 
-                      {e.comprovanteUrl && (
-                        <a href={e.comprovanteUrl} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-sm text-blue-700 hover:underline">
-                          <Paperclip className="w-4 h-4" />Ver comprovante de pagamento
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-
-                      {e.anexoUrl && (
-                        <a href={e.anexoUrl} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
-                          <Paperclip className="w-4 h-4" />Ver documento anexado{e.anexoNome ? ` — ${e.anexoNome}` : ""}
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
+                      {/* Rev. 4766 — Anexos com botão de anexar direto no detalhe */}
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+                            <Paperclip className="w-3.5 h-3.5" /> Anexos
+                          </p>
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            onClick={() => openAnexo(e)}>
+                            <Paperclip className="w-3.5 h-3.5" /> {e.anexoUrl ? "Trocar documento" : "Anexar documento"}
+                          </Button>
+                        </div>
+                        {e.anexoUrl ? (
+                          <a href={e.anexoUrl} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm text-emerald-700 hover:underline break-all">
+                            <Paperclip className="w-4 h-4 flex-shrink-0" />Ver documento anexado{e.anexoNome ? ` — ${e.anexoNome}` : ""}
+                            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          </a>
+                        ) : (
+                          <p className="text-xs text-slate-500">Nenhum documento anexado (boleto, NF, contrato, foto...).</p>
+                        )}
+                        {e.comprovanteUrl && (
+                          <a href={e.comprovanteUrl} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-sm text-blue-700 hover:underline">
+                            <Paperclip className="w-4 h-4" />Ver comprovante de pagamento
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
                     </TabsContent>
 
                     {/* ORIGEM */}

@@ -1,4 +1,12 @@
 /**
+ * Rev. 4766 - CONTAS A PAGAR: ANEXAR DOCUMENTO DIRETO NO DETALHE
+ *
+ * O detalhe do titulo (aba Geral) ganhou secao "Anexos" com botao
+ * "Anexar documento" / "Trocar documento" — abre o mesmo dialogo de anexo
+ * ja usado na lista (boleto/NF/contrato/foto), sem precisar voltar para a
+ * tabela. Mostra tambem o link do documento anexado e do comprovante de
+ * pagamento no mesmo bloco.
+ *
  * Rev. 4765 - PROCESSOS TRABALHISTAS: % DE RISCO 0-100 NA LISTA
  *
  * A coluna Risco da lista de processos agora mostra, alem do selo
