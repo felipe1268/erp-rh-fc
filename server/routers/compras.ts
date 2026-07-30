@@ -11320,6 +11320,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       });
       const ltCotOc: number[] = [];
       const ltScOc: number[] = [];
+      // Rev. 4731: rastreabilidade — casos individuais SC→OC p/ drill-down (auditoria)
+      const ltScOcCasos: { numeroSc: string | null; numeroOc: string | null; dias: number; obraNome: string | null; dataSc: string; dataOc: string }[] = [];
       ocsAtivas.forEach(o => {
         if (o.cotacaoId) {
           const cot = cotById.get(o.cotacaoId);
@@ -11328,7 +11330,14 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           if (cot?.solicitacaoId) {
             const sc = scById.get(cot.solicitacaoId);
             const d2 = diffDias(sc?.criadoEm, o.criadoEm);
-            if (d2 !== null) ltScOc.push(d2);
+            if (d2 !== null) {
+              ltScOc.push(d2);
+              ltScOcCasos.push({
+                numeroSc: sc?.numeroSc ?? null, numeroOc: o.numeroOc ?? null, dias: d2,
+                obraNome: o.obraId != null ? (obraMap[o.obraId] ?? null) : null,
+                dataSc: d10(sc?.criadoEm), dataOc: d10(o.criadoEm),
+              });
+            }
           }
         }
       });
@@ -11351,6 +11360,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         cotacaoParaOc: avg(ltCotOc), amostraCotOc: ltCotOc.length,
         scParaOc: avg(ltScOc), amostraScOc: ltScOc.length,
         det: { scCot: stats(ltScCot), cotOc: stats(ltCotOc), scOc: stats(ltScOc) },
+        casosLentos: ltScOcCasos.sort((a, b) => b.dias - a.dias).slice(0, 10),
       };
 
       // ── Rev. 4728: Quando pedem (dia da semana × hora, horário de Brasília UTC-3) ──
@@ -11376,26 +11386,38 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       // ── Rev. 4728: Índice de planejamento por solicitante ──
       // antecedência = data de necessidade − data do pedido (dias); ≤0 = "para ontem/hoje"
       // fora do horário comercial = antes das 7h, depois das 18h ou fim de semana
+      type ScDet = {
+        numeroSc: string; data: string; necessidade: string | null;
+        antecedencia: number | null; urgente: boolean; obraNome: string | null;
+      };
       const planMap: Record<string, {
         nome: string; total: number; urgentes: number; comNecessidade: number;
-        somaAntecedencia: number; ultimaHora: number; foraHorario: number;
+        somaAntecedencia: number; ultimaHora: number; foraHorario: number; scs: ScDet[];
       }> = {};
       scsAtivas.forEach(r => {
         const key = solKey(r);
         const nome = nomeSolicitante(r);
-        if (!planMap[key]) planMap[key] = { nome, total: 0, urgentes: 0, comNecessidade: 0, somaAntecedencia: 0, ultimaHora: 0, foraHorario: 0 };
+        if (!planMap[key]) planMap[key] = { nome, total: 0, urgentes: 0, comNecessidade: 0, somaAntecedencia: 0, ultimaHora: 0, foraHorario: 0, scs: [] };
         const p = planMap[key];
         p.total++;
         if (isUrgente(r)) p.urgentes++;
         const lp = localParts(r.criadoEm);
         if (lp && (lp.dow === 0 || lp.dow === 6 || lp.hora < 7 || lp.hora >= 18)) p.foraHorario++;
         const nec = (r.dataNecessidade ?? "").slice(0, 10);
+        let ant: number | null = null;
         if (lp && /^\d{4}-\d{2}-\d{2}$/.test(nec)) {
-          const ant = (new Date(nec + "T00:00:00Z").getTime() - new Date(lp.data + "T00:00:00Z").getTime()) / 86_400_000;
+          ant = (new Date(nec + "T00:00:00Z").getTime() - new Date(lp.data + "T00:00:00Z").getTime()) / 86_400_000;
           p.comNecessidade++;
           p.somaAntecedencia += ant;
           if (ant <= 0) p.ultimaHora++;
         }
+        // Rev. 4731: rastreabilidade — SCs individuais p/ drill-down
+        p.scs.push({
+          numeroSc: r.numeroSc, data: lp?.data ?? d10(r.criadoEm),
+          necessidade: /^\d{4}-\d{2}-\d{2}$/.test(nec) ? nec : null,
+          antecedencia: ant, urgente: isUrgente(r),
+          obraNome: r.obraId != null ? (obraMap[r.obraId] ?? null) : null,
+        });
       });
       const planejamento = Object.values(planMap)
         .filter(p => p.total > 0)
@@ -11405,6 +11427,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           pctUltimaHora: p.comNecessidade ? (p.ultimaHora / p.comNecessidade) * 100 : null,
           comNecessidade: p.comNecessidade,
           foraHorario: p.foraHorario,
+          scs: p.scs.sort((a, b) => b.data.localeCompare(a.data)).slice(0, 20),
         }))
         .sort((a, b) => b.total - a.total).slice(0, 15);
 
@@ -11423,7 +11446,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const ocsCompra = ocsAtivas.filter(o => !o.isLocacao);
       const ocById = new Map(ocsCompra.map(o => [o.id, o]));
       type EvCompra = {
-        data: string; ordemId: number; numeroOc: string | null;
+        data: string; ordemId: number; numeroOc: string | null; numeroSc: string | null;
         obraId: number | null; solicitante: string; qtd: number; preco: number;
       };
       type GrupoInsumo = {
@@ -11436,6 +11459,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const perdaObraMap: Record<string, { obraId: number | null; perda: number; compras: number }> = {};
       const perdaSolMap: Record<string, { nome: string; perda: number; compras: number }> = {};
       let perdaTotal = 0, gruposTotal = 0, comprasEnvolvidas = 0;
+      const inconsistentes = {
+        grupos: 0, compras: 0,
+        exemplos: [] as { descricao: string; unidade: string | null; precoMin: number; precoMax: number; ocs: string[] }[],
+      };
       if (ocsCompra.length > 0) {
         const itensOc = await db.select({
           ordemId: comprasOrdensItens.ordemId,
@@ -11452,7 +11479,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           if (preco <= 0 || qtd <= 0) continue;
           const o = ocById.get(it.ordemId);
           if (!o) continue;
-          const base = (it.insumoCodigo || "").trim() || (it.descricao || "").trim().toUpperCase();
+          // Rev. 4731: agrupar SÓ por descrição idêntica (normalizada) + unidade.
+          // insumo_codigo NÃO identifica o produto — é código de CATEGORIA (ex.: "01.04"
+          // cobre 174 produtos diferentes, de R$0,16 a R$4.510), o que gerava comparações
+          // absurdas entre itens incomparáveis.
+          const base = normalizarTexto((it.descricao || "").trim()).toUpperCase().replace(/\s+/g, " ");
           if (!base) continue;
           const key = `${base}|${(it.unidade || "").trim().toUpperCase()}`;
           const scId = o.solicitacaoId ?? (o.cotacaoId ? cotById.get(o.cotacaoId)?.solicitacaoId : null) ?? null;
@@ -11461,6 +11492,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           if (!porChave[key]) porChave[key] = { chave: key, descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, evs: [] };
           porChave[key].evs.push({
             data: d10(o.criadoEm), ordemId: o.id, numeroOc: o.numeroOc ?? null,
+            numeroSc: sc?.numeroSc ?? null,
             obraId: o.obraId ?? null, solicitante, qtd, preco,
           });
         }
@@ -11489,6 +11521,22 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             const ocsDistintas = new Set(cl.map(e => e.ordemId));
             if (ocsDistintas.size < 2) continue; // 1 OC só (mesmo com várias linhas) não é compra picada
             const melhor = Math.min(...cl.map(e => e.preco));
+            const pior = Math.max(...cl.map(e => e.preco));
+            // Rev. 4731: trava de sanidade — variação > 4× dentro do MESMO produto indica
+            // cadastro inconsistente (descrições iguais p/ produtos diferentes ou erro de
+            // digitação de preço). Não entra na perda; vai p/ a lista de inconsistências.
+            if (melhor > 0 && pior / melhor > 4) {
+              inconsistentes.grupos++;
+              inconsistentes.compras += ocsDistintas.size;
+              if (inconsistentes.exemplos.length < 8) {
+                inconsistentes.exemplos.push({
+                  descricao: info.descricao, unidade: info.unidade,
+                  precoMin: melhor, precoMax: pior,
+                  ocs: Array.from(new Set(cl.map(e => e.numeroOc || `#${e.ordemId}`))).slice(0, 6),
+                });
+              }
+              continue;
+            }
             agg.grupos++;
             for (const ev of cl) {
               const perdaItem = (ev.preco - melhor) * ev.qtd;
@@ -11535,6 +11583,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           .sort((a, b) => b.perda - a.perda).slice(0, 10),
         porSolicitante: Object.values(perdaSolMap)
           .sort((a, b) => b.perda - a.perda).slice(0, 10),
+        inconsistentes,
       };
 
       // Gargalo atual (independe do período): quantas paradas em cada etapa hoje

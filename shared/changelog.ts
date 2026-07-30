@@ -1,4 +1,20 @@
 /**
+ * Rev. 4731 - DASHBOARD GERENCIAL: AUDITORIA + CORRECAO DA PERDA + LAYOUT NOVO
+ *
+ * Auditoria confirmou erro grave na Perda de Agrupamento: o agrupamento por
+ * insumo_codigo estava ERRADO — e codigo de CATEGORIA, nao de produto
+ * ("01.04" cobre 174 produtos de R$0,16 a R$4.510), gerando comparacoes
+ * absurdas (ex.: "Pincel R$0,16 -> R$3.990"). Correcoes:
+ * - Agrupar SO por descricao identica normalizada + unidade.
+ * - Trava de sanidade: variacao > 4x no grupo = inconsistencia de cadastro,
+ *   fora do total e listada a parte para correcao.
+ * - Julho/2026: perda real R$ 1.048,68 (antes mostrava R$ 65.318,88).
+ * Layout novo, enxuto p/ reuniao: 4 KPIs + 3 blocos (Perda, Tempo do Fluxo,
+ * Planejamento por Solicitante). Rastreabilidade total: cada bloco tem nota
+ * "Fonte & metodo" e drill-down ate as SCs/OCs de origem (numero, data,
+ * obra, solicitante) — perda por OC, 10 casos mais lentos SC->OC, SCs de
+ * cada solicitante com antecedencia individual.
+ *
  * Rev. 4730 - DASHBOARD GERENCIAL: NOME DO SOLICITANTE RESOLVIDO PELO CADASTRO
  *
  * Correcao: SCs antigas gravadas sem criadoPorNome apareciam como

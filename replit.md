@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4731** — Dashboard Gerencial: auditoria achou bug grave (insumo_codigo é código de CATEGORIA, não de produto → perda inflada ~60×); agrupamento agora por descrição+unidade com trava de sanidade 4×; layout executivo enxuto (4 KPIs + 3 blocos) com rastreabilidade total (nota "Fonte & método" + drill-down até SC/OC de origem em cada bloco).
 - **Rev. 4730** — Dashboard Gerencial: SCs antigas sem criadoPorNome resolviam pra "Usuário #ID" (parecia fantasma); backend agora busca o nome no cadastro de usuários e junta as SCs na linha certa da pessoa.
 - **Rev. 4729** — Dashboard Gerencial de Compras: indicador "Perda de Oportunidade de Agrupamento" (mesmo insumo em 2+ OCs numa janela de 7/15/30 dias = compra picada; perda = Σ(preço pago − melhor preço do grupo)×qtd; ranking por insumo com timeline expandível, quebras por obra/solicitante, KPI no topo, select de janela) + layout executivo (max-width central, KPIs 4 col, cards 2 col em lg).
 - **Rev. 4728** — Dashboard Gerencial de Compras: "Quando Pedem" (dia×hora com filtro por solicitante), tempo de resposta por etapa (média/mediana/%≤24h-48h), índice de planejamento por solicitante (antecedência, última hora, fora do horário) e ranking de urgência.
@@ -174,6 +175,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 Ver `replit-history.md` para revisões Rev. 4612 e anteriores.
 
 ## User preferences
+
+- **🔒 REGRA DE OURO — SEMPRE NOME, NUNCA "Usuário #ID" (30/07/2026):** Qualquer tela/relatório/ranking que exibe pessoa deve resolver o nome pelo cadastro de usuários quando o campo desnormalizado vier vazio (batch lookup em `users`). Nunca exibir o id numérico como rótulo ("Usuário #73668") — o usuário não tem como saber quem é o número.
 
 - **🔒 REGRA DE OURO — POKA-YOKE EM TODA REVISÃO (25/07/2026):** Toda nova revisão/feature deve aplicar o princípio Poka-Yoke (à prova de erros): preferir SEMPRE o nível mais forte viável — (3) prevenção pelo design (máscara/select/campo que só aceita valor válido) > (2) bloqueio (validação que impede salvar dado inconsistente, ex.: data no passado, valor zero, duplicidade) > (1) aviso (alerta visual). Ao revisar um fluxo existente, identificar e propor Poka-Yokes faltantes na área tocada.
 

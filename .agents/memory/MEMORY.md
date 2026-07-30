@@ -18,6 +18,7 @@
 - [Billing module active/inactive toggle](billing-module-active-toggle.md) — isActive (comercializável) ≠ preço; grandfather: desativar módulo nunca revoga de quem já tem, só bloqueia ADICIONAR novo.
 - [Conciliação → sub-razões (Controle de Cheques)](conciliacao-fanout-subledgers.md) — conciliar lançamento não baixa cheque sozinho; toda mutation de conciliação deve varrer sub-razões dependentes com match inequívoco + try/catch não-bloqueante.
 - [Cross-company-group employee duplication](employee-cross-company-group-duplication.md) — sibling companies sharing recursos already share employees; re-registering the same CPF in the other company creates status-drifting duplicates.
+- [Usuário sempre por NOME, nunca #ID](usuario-sempre-nome-nunca-id.md) — regra de ouro: nome vazio → resolver em users; nunca exibir "Usuário #ID" em nenhuma tela/relatório.
 - [Poka-Yoke em toda revisão](poka-yoke-rule.md) — regra de ouro: toda revisão aplica mistake-proofing (design > bloqueio > aviso); validar valor/data no server, isPending nos botões.
 - [Crachá: pills = TODOS os treinamentos feitos](cracha-treinamentos-todos-feitos.md) — regra de ouro: pills sem filtro de vigência (histórico); selos NR e pendências continuam só vigentes (aptidão).
 - [Period selector golden rules](period-selector-golden-rule.md) — SEMPRE `<PeriodSelectorCard>` (estado `number|null`, nunca inline); [dashboard = white-card PanoramaFiscal, nunca DashHeader gradiente](dashboard-period-selector-standard.md).
