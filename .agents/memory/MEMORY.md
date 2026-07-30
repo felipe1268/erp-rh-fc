@@ -12,6 +12,7 @@
 - [Scorecard month-end date construction](scorecard-month-end-date.md) — `|| '-31'` rejeita junho/abr/set/nov/fev; sempre usar `|| '-01')::date + INTERVAL '1 month' - 1 day`.
 - [Férias custo via JOIN cross-company](ferias-custo-join-cross-company.md) — empSalarioMap filtrado por companyFilter perde funcionários de empresa irmã; fix: incluir salarioBase no SELECT do JOIN que já existe.
 - [NFS-e Nacional SPED/RFB format](nfse-nacional-sped-format.md) — XMLs da Prefeitura de Guaratinguetá (e outros municípios RFB) usam root `<NFSe xmlns="sped.fazenda..."><infNFSe>`, campos abreviados (nNFSe/dhEmi/prest/toma/serv/valores), completamente diferente do ABRASF/SIAP GEO.
+- [Preço "impossível" no dash = cotação com BDI](dashboard-preco-fd-bdi.md) — conversão kg↔saco certa; raiz = preço de orçamento c/ BDI digitado na cotação (FD); rascunho fora da análise; OC-510 itens duplicados 2×.
 - [Cotacao preco_unitario vs total drift](cotacao-preco-unitario-total-drift.md) — preco_unitario (4dp roundeado) × qty ≠ total salvo; usar resp.total para itens não-alterados; só recomputar preco*qty para itens mudados.
 - [orcamentos valor_negociado snake_case](orcamentos-valor-negociado-snake.md) — `orcamentos.valorNegociado` tem nome explícito `"valor_negociado"` (snake); safe() engole erros → diagnose silent failures com logging antes de mudar query logic.
 - [date minus date is integer not interval](date-minus-date-integer.md) — No Postgres, (date - date) retorna INTEGER (dias); EXTRACT(days FROM integer) não existe → safe() captura silenciosamente. Use (date - date) direto para aritmética de dias.
@@ -53,9 +54,7 @@
 - [AI output sanitization](ai-output-sanitization.md) — LLM output feeding a decision UI must be filtered server-side against the deterministic fact set (whitelist keys, clamp scores, enum-normalize).
 - [Mudança de obra na timeline](employee-obra-change-timeline.md) — troca de obra grava em `employee_site_history` (não `employee_history`); timeline raioX precisa ler AMBAS.
 - [valorEstimadoTotal fica defasado](valorEstimado-stale-column.md) — coluna persistida congela na criação do aviso; list/getById/homeData devem recalcular ao vivo.
-- [Rescisão tipos especiais](rescisao-tipos-especiais.md) — justa_causa/rescisao_indireta/acordo_mutuo não casam com includes('empregador'); todo branch por tipo precisa tratá-los explicitamente (3 motores paralelos).
-- [Rescisão Grupo A x Grupo B](rescisao-grupos-custo.md) — incremento da projeção do aviso = custo da demissão SÓ quando aviso.tipo começa com "empregador".
-- [Rescisão férias model](rescisao-ferias-model.md) — proporcional×vencidas com `-1`: último período completo vira 12/12 proporcional; regra dos 15 dias só no período incompleto.
+- [Rescisão gotchas](rescisao-tipos-especiais.md) — [tipos especiais não casam com includes('empregador')](rescisao-tipos-especiais.md); [custo Grupo A×B só aviso "empregador*"](rescisao-grupos-custo.md); [férias proporcional×vencidas com `-1`](rescisao-ferias-model.md).
 - [Central de Documentos ISO — gate](document-templates-iso-gate.md) — só consome template vigente; editar rebaixa p/ rascunho e limpa aprovação; auto-seed garante os 7 tipos.
 - [Employee Direto/Indireto source](employee-categoria-source.md) — `employees.list` NÃO traz `categoria`; classifique via `jobFunctions.categoriaMO`.
 - [CPF gravado em formatos mistos](cpf-stored-mixed-format.md) — employees.cpf ora formatado ora limpo; match deve normalizar OS DOIS lados via `regexp_replace(cpf,'[^0-9]','','g')`.
@@ -104,7 +103,7 @@
 - [CIPA module write-path guards](cipa-module.md) — CIPA create/update/delete need companyFilter; update/delete-by-id are IDOR holes; abrirVotacao race fixed via UNIQUE+onConflictDoNothing.
 - [Medição módulos cliente vs terceiros + shared engine](medicao-modules-architecture.md) — "medicao"=lado CLIENTE, terceiros é tabela separada, IDs colidem → medicao_campo precisa de `origem`; [sem origem = escopo CLIENTE nunca `true`](medicao-shared-engine-origem.md).
 - [/uploads DB-fallback MIME + traversal](uploads-db-fallback-mime.md) — off-disk attachments fall back to uploaded_files; octet-stream → Safari/iOS preview blank; derive MIME from extension; fallback needs path-traversal guard.
-- [NFS-e Valor Líquido formula](nfse-valor-liquido-formula.md) — Bruto − ISS(se retido) − INSS − IRRF − PIS/COFINS(retido, nunca "débito apuração própria").
+- [NFS-e gotchas](nfse-valor-liquido-formula.md) — [Valor Líquido = Bruto − retenções](nfse-valor-liquido-formula.md); [SIAP GEO: nunca mapear "ISS devido" em iss_retido](nfse-siapgeo-issretido-vs-informado.md).
 - [PJ payments grouping frontend-only](financeiro-pj-grouping.md) — PJ (origem 'pagamento_pj') agrupa por mês SÓ na UI; entries ficam individuais no banco p/ preservar baixa/conciliação por item.
 - [Centro de Custo na Análise de Custos](centro-custo-analise-custos.md) — "centro de custo" = financial_cost_centers (cadastro), NÃO obra; edição usa "-1=manter atual".
 - [PDF export XSS / per-function esc](pdf-export-xss-esc-scope.md) — print/PDF builders (document.write) define esc LOCALLY; new fields (esp. AI-sourced) must esc()/escAttr().
@@ -137,7 +136,6 @@
 - [Stripe restricted key breaks stripe-replit-sync](stripe-restricted-key-permissions.md) — rk_test_/rk_live_ keys lack account-read scope; must use a standard sk_ secret key.
 - [Tenant isolation audit — recurring IDOR pattern](tenant-isolation-audit-idor-pattern.md) — lookup-by-id procedures often skip companyId check; `admin` role is intentionally global (SaaS painel mestre needs separate client-admin).
 - [Contas a Pagar — FD nunca consolida](contas-pagar-fd-exclusion.md) — Faturamento Direto deve ficar SEMPRE fora de agrupamento por ciclo de fechamento de fornecedor.
-- [SIAP GEO NFSe ISS informado vs retido](nfse-siapgeo-issretido-vs-informado.md) — bulk NFSe import format has no retention flag; never map "ISS due" into `iss_retido`.
 - [Espelho de Ponto read-surface](espelho-ponto-read-surface.md) — espelho lê `time_records` + projeções; abono de atestado escreve em `timecard_daily`/`ponto_descontos` (NÃO lidos) → não aparece. Projete no retorno.
 - [Cheques × Conciliação gotchas](conciliar-cheque-controle-atomicity.md) — [reservar o CHEQUE primeiro ou corrida concilia 2×](conciliar-cheque-controle-atomicity.md); [dedup c/ mes_ref](financial-cheques-dedup.md); [desconsiderado_em](conciliacao-desconsiderar-cheque.md); [interno×externo 3 camadas](conciliacao-interno-classificacao.md).
 - [Batch VALUES date<text silent-zero](batch-values-date-cast.md) — `(VALUES('YYYY-MM-DD')) AS p(...,data_fim)` compared to a DATE col throws; try/catch zeroes ALL counts. Cast `p.data_fim::date`.

@@ -11477,7 +11477,9 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       // já pago dentro do próprio grupo (conservador: preço que a empresa comprovadamente
       // conseguiu). Perda = Σ (preço pago − melhor preço) × quantidade.
       const JANELA_DIAS = input.janelaAgrupamento ?? 15;
-      const ocsCompra = ocsAtivas.filter(o => !o.isLocacao);
+      // Rev. 4755 — rascunho fora da análise de preço/recorrência: não é compra
+      // efetivada (OCs rascunho de 3.500–5.000 kg de cimento inflavam qtd e valor).
+      const ocsCompra = ocsAtivas.filter(o => !o.isLocacao && o.status !== "rascunho");
       const ocById = new Map(ocsCompra.map(o => [o.id, o]));
       type EvCompra = {
         data: string; ordemId: number; numeroOc: string | null; scId: number | null; numeroSc: string | null;

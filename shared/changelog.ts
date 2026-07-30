@@ -1,4 +1,15 @@
 /**
+ * Rev. 4755 - CIMENTO UNIFICADO NA RAIZ + RASCUNHO FORA DA ANALISE DE PRECO
+ *
+ * (1) Dados (Neon): "Cimento Cp3" e "Cimento Cp Iii" renomeados para o nome
+ * canonico "Cimento Cpiii-e-32 (Sacos de 50 Kg)..." em itens de OC (14), SC (7)
+ * e cotacao (7); OC-2026-0090 tinha unidade m2 corrigida para sc. (2) Dashboard
+ * Gerencial: OCs em RASCUNHO ficam fora da analise de recorrencia/preco (nao
+ * sao compra efetivada). Auditoria: R$ 51,72/sc (= R$ 1,0344/kg x 50) NAO e
+ * erro de conversao — e o preco digitado na COTACAO da Ferragens Santa Rita
+ * (= R$ 38,90 + 33% BDI, preco de orcamento FD, nao de balcao); OC-2026-510
+ * tem itens duplicados (2x) tambem no recebimento — reportado ao usuario.
+ *
  * Rev. 4754 - RECEBER MATERIAL: DESTINO + SC DE ORIGEM EM CADA OC
  *
  * O modal "Receber Material" do Almoxarifado agora mostra em cada card de OC:
