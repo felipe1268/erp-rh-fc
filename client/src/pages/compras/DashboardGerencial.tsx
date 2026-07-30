@@ -18,7 +18,7 @@ import {
   ClipboardList, ShoppingCart, AlertTriangle, Clock,
   RefreshCw, Users, TrendingDown, ChevronDown, ChevronRight, Info,
   Lightbulb, BarChart3, ArrowUpRight, Target, Layers3, Gauge,
-  CircleDollarSign, Activity, Building2, CalendarClock,
+  CircleDollarSign, Activity, Building2, CalendarClock, TrendingUp,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
@@ -253,6 +253,113 @@ function FonteNote({ children }: { children: React.ReactNode }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Rev. 4758 — Evolução Mensal: tabela comparativa mês a mês + termômetro + análise IA */
+function EvolucaoMensalCard({ ev, companyId, ano }: { ev: any; companyId: number; ano: number }) {
+  const MESES_A = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  const analisar = trpc.compras.analisarEvolucaoCompras.useMutation();
+  const meses: any[] = ev?.meses ?? [];
+  if (meses.length === 0) return null;
+  const fmt = (v: number | null, suf = "", dec = 0) => v == null ? "—" : `${v.toFixed(dec).replace(".", ",")}${suf}`;
+  // indicadores: label, chave, formato, "menor é melhor?"
+  const linhas: { label: string; k: string; f: (v: any) => string; menorMelhor: boolean; hint: string }[] = [
+    { label: "Solicitações (SCs)", k: "scs", f: v => fmt(v), menorMelhor: false, hint: "volume" },
+    { label: "OCs emitidas", k: "ocs", f: v => fmt(v), menorMelhor: false, hint: "volume" },
+    { label: "Valor comprado", k: "valorComprado", f: v => v == null ? "—" : BRL(v), menorMelhor: false, hint: "volume" },
+    { label: "Compra planejada (antecedência ≥3d)", k: "pctPlanejadas", f: v => fmt(v, "%"), menorMelhor: false, hint: "ideal ≥85%" },
+    { label: "SCs com data de necessidade", k: "pctComNecessidade", f: v => fmt(v, "%"), menorMelhor: false, hint: "ideal 100%" },
+    { label: "Antecedência mediana", k: "antecedenciaMediana", f: v => fmt(v, "d", 1), menorMelhor: false, hint: "ideal ≥7d" },
+    { label: "Compra rápida — lead SC→OC", k: "leadScOcMediana", f: v => fmt(v, "d", 1), menorMelhor: true, hint: "menor = melhor" },
+    { label: "SCs urgentes", k: "pctUrgentes", f: v => fmt(v, "%"), menorMelhor: true, hint: "ideal ≤10%" },
+    { label: "OCs no susto (entrega ≤3d)", k: "pctSusto", f: v => fmt(v, "%"), menorMelhor: true, hint: "menor = melhor" },
+    { label: "Perda por compra picada", k: "perdaPicada", f: v => v == null ? "—" : BRL(v), menorMelhor: true, hint: "menor = melhor" },
+    { label: "Score de planejamento (0–100)", k: "score", f: v => fmt(v), menorMelhor: false, hint: "ideal ≥85" },
+  ];
+  const ideal = ev.ideal ?? 85;
+  const atual = ev.scoreAtual;
+  const falta = atual != null ? Math.max(0, ideal - atual) : null;
+  const pctTermo = atual != null ? Math.min(100, Math.max(0, atual)) : 0;
+  return (
+    <Card>
+      <SectionLabel eyebrow="Evolução mensal" title="A empresa está melhorando ou piorando?" icon={TrendingUp} accent="text-[#35658f]" />
+      <FonteNote>
+        Indicadores calculados por mês de criação da SC/OC (canceladas e rascunhos fora). Setas comparam com o mês anterior: verde = melhorou, vermelho = piorou (a direção "bom" depende do indicador — ex.: urgência boa é CAIR). Score composto 0–100: 25% SCs com data de necessidade + 35% antecedência vs 7 dias + 15% não-urgência + 25% OCs fora do susto. Benchmark (literatura de compras — CIPS/benchmarks nacionais): score ≥85, urgências ≤10%, antecedência ≥7d, ≥85% de compras planejadas. Perda por compra picada usa os grupos do card de agrupamento (janela selecionada).
+      </FonteNote>
+      {/* Tabela comparativa mês a mês */}
+      <div className="overflow-x-auto mt-3">
+        <table className="w-full text-[11px] min-w-[720px]">
+          <thead>
+            <tr className="text-gray-400 text-left">
+              <th className="py-1.5 pr-2 font-medium sticky left-0 bg-white">Indicador</th>
+              {meses.map(m => <th key={m.mes} className="py-1.5 px-2 font-semibold text-center text-slate-600">{MESES_A[m.mes - 1]}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.map(li => (
+              <tr key={li.k} className="border-t border-gray-50">
+                <td className="py-1.5 pr-2 sticky left-0 bg-white">
+                  <span className={`font-medium ${li.k === "score" ? "text-slate-900 font-bold" : "text-gray-700"}`}>{li.label}</span>
+                  <span className="text-gray-300 ml-1">· {li.hint}</span>
+                </td>
+                {meses.map((m, i) => {
+                  const v = m[li.k];
+                  const prev = i > 0 ? meses[i - 1][li.k] : null;
+                  let seta: React.ReactNode = null;
+                  if (v != null && prev != null && Math.abs(v - prev) > (li.k.startsWith("pct") || li.k === "score" ? 0.5 : 0.05)) {
+                    const subiu = v > prev;
+                    const bom = li.hint === "volume" ? null : (li.menorMelhor ? !subiu : subiu);
+                    seta = <span className={`ml-0.5 ${bom == null ? "text-slate-400" : bom ? "text-emerald-600" : "text-rose-600"}`}>{subiu ? "📈" : "📉"}</span>;
+                  }
+                  return (
+                    <td key={m.mes} className={`py-1.5 px-2 text-center whitespace-nowrap ${li.k === "score" ? "font-bold text-slate-900" : "text-gray-700"}`}>
+                      {li.f(v)}{seta}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Termômetro grande */}
+      {atual != null && (
+        <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Termômetro do planejamento de compras</span>
+            <span className="text-sm text-slate-600">O ideal (literatura de compras) é <b>{ideal}</b> · hoje você está em <b className={atual >= ideal ? "text-emerald-600" : "text-rose-600"}>{atual}</b>{falta != null && falta > 0 ? <> · faltam <b className="text-rose-600">{falta} pontos</b> pra trabalhar</> : <> · <b className="text-emerald-600">meta atingida 🎉</b></>}</span>
+          </div>
+          <div className="relative mt-3 h-5 rounded-full bg-gradient-to-r from-rose-200 via-amber-200 to-emerald-200 overflow-visible">
+            <div className="absolute inset-y-0 left-0 rounded-full bg-slate-900/10" style={{ width: `${pctTermo}%` }} />
+            <div className="absolute -top-1.5 h-8 w-1 rounded bg-slate-900" style={{ left: `calc(${pctTermo}% - 2px)` }} title={`Hoje: ${atual}`} />
+            <div className="absolute -top-1.5 h-8 w-0.5 bg-emerald-700" style={{ left: `${ideal}%` }} title={`Ideal: ${ideal}`} />
+            <span className="absolute top-6 text-[10px] font-bold text-slate-700" style={{ left: `calc(${pctTermo}% - 10px)` }}>{atual}</span>
+            <span className="absolute top-6 text-[10px] font-bold text-emerald-700" style={{ left: `calc(${ideal}% - 14px)` }}>ideal {ideal}</span>
+          </div>
+          <div className="h-4" />
+        </div>
+      )}
+      {/* Análise por IA */}
+      <div className="mt-4">
+        {!analisar.data && (
+          <button
+            onClick={() => analisar.mutate({ companyId, ano, meses: meses.map(m => ({ mes: m.mes, scs: m.scs, ocs: m.ocs, valorComprado: m.valorComprado, pctUrgentes: m.pctUrgentes, pctComNecessidade: m.pctComNecessidade, pctPlanejadas: m.pctPlanejadas, antecedenciaMediana: m.antecedenciaMediana, leadScOcMediana: m.leadScOcMediana, pctSusto: m.pctSusto, perdaPicada: m.perdaPicada, score: m.score })), scoreAtual: atual ?? null })}
+            disabled={analisar.isPending}
+            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2"
+          >
+            ✨ {analisar.isPending ? "Analisando os meses..." : "O que fazer pra melhorar? (análise com IA)"}
+          </button>
+        )}
+        {analisar.error && <p className="text-[11px] text-rose-600 mt-2">Não consegui gerar a análise agora: {analisar.error.message}</p>}
+        {analisar.data?.analise && (
+          <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500 mb-2">✨ Análise da IA — como chegar no ideal</p>
+            <p className="text-[12px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{analisar.data.analise}</p>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -1241,6 +1348,10 @@ export default function DashboardGerencialCompras() {
               </>
             );
           })()}
+          {/* Rev. 4758 — Evolução mensal: tabela comparativa + termômetro + IA */}
+          {(gerData as any)?.evolucaoMensal && companyIds.length > 0 && (
+            <EvolucaoMensalCard ev={(gerData as any).evolucaoMensal} companyId={companyIds[0]} ano={gerAno} />
+          )}
         </div>
       </div>
       {/* Rev. 4744/4746: foto ampliada (usado no Ranking e no Planejamento por Solicitante) */}

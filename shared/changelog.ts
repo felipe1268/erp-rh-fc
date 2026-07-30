@@ -1,4 +1,16 @@
 /**
+ * Rev. 4758 - DASHBOARD GERENCIAL: EVOLUCAO MENSAL + TERMOMETRO + ANALISE IA
+ *
+ * Novo card no fim do Dashboard Gerencial de Compras: (1) tabela comparativa
+ * mes a mes do ano (SCs, OCs, valor comprado, % compra planejada >=3d, % SCs
+ * com data de necessidade, antecedencia mediana, lead SC->OC, % urgentes,
+ * % OCs no susto, perda por compra picada, score 0-100) com setas 📈/📉
+ * verdes/vermelhas conforme a direcao boa de cada indicador; (2) termometro
+ * grande com benchmark da literatura de compras (ideal 85): "hoje voce esta em
+ * Y, faltam X pontos"; (3) botao de analise por IA (gated por modulo compras)
+ * com sugestoes praticas pra chegar no ideal. Backend: evolucaoMensal no
+ * getDashboardGerencial + mutation analisarEvolucaoCompras.
+ *
  * Rev. 4757 - ONDE COMPRAR MELHOR: TRAVA DE SANIDADE 4x (ERRO DE CADASTRO)
  *
  * Quando a variacao de preco entre fornecedores do MESMO item/unidade passa de

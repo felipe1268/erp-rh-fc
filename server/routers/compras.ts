@@ -12096,13 +12096,117 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         ocsAguardandoAprov: ocsAll.filter(r => r.aprovacaoStatus === "aguardando" && !isCancel(r.status) && !["entregue", "recebido"].includes(r.status) && obraOk(r.obraId)).length,
       };
 
+      // Rev. 4758 — Evolução Mensal (tabela comparativa mês a mês do ano):
+      // indicadores de planejamento/velocidade/preço por mês + score composto
+      // 0–100 (mesmos pesos do mkScore). Benchmark: literatura de compras
+      // (CIPS/benchmarks nacionais) — compras planejadas ≥85%, urgências ≤10%.
+      const perdaPicadaPorMes: Record<number, number> = {};
+      perdaPorInsumo.forEach(gi => gi.detalhe.forEach(ev => {
+        const d = d10(ev.data);
+        if (d.slice(0, 4) === String(input.ano)) {
+          const m = Number(d.slice(5, 7));
+          perdaPicadaPorMes[m] = (perdaPicadaPorMes[m] ?? 0) + (ev.perdaItem || 0);
+        }
+      }));
+      const evolucaoMeses: any[] = [];
+      for (let m = 1; m <= 12; m++) {
+        const mi = `${input.ano}-${pad(m)}-01`;
+        const mf = m === 12 ? anoFimEx : `${input.ano}-${pad(m + 1)}-01`;
+        const scsM = scsAll.filter(r => inRange(r.criadoEm, mi, mf) && obraOk(r.obraId) && !isCancel(r.status));
+        const ocsM = ocsAll.filter(r => inRange(r.criadoEm, mi, mf) && obraOk(r.obraId) && !isCancel(r.status) && r.status !== "rascunho");
+        if (scsM.length === 0 && ocsM.length === 0) continue;
+        let comNec = 0, urg = 0, planejadas = 0;
+        const antecs: number[] = [];
+        scsM.forEach(r => {
+          if (isUrgente(r)) urg++;
+          const nec = d10((r as any).dataNecessidade);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(nec)) return;
+          comNec++;
+          const dd = (new Date(nec + "T00:00:00Z").getTime() - new Date(d10(r.criadoEm) + "T00:00:00Z").getTime()) / 86_400_000;
+          if (Number.isFinite(dd) && dd >= -30 && dd <= 365) { antecs.push(dd); if (dd >= 3) planejadas++; }
+        });
+        const leads: number[] = [];
+        let valorComprado = 0, ocsComEnt = 0, ocsSusto = 0;
+        ocsM.forEach(o => {
+          valorComprado += n((o as any).total);
+          const scId = o.solicitacaoId ?? (o.cotacaoId ? cotById.get(o.cotacaoId)?.solicitacaoId : null) ?? null;
+          const sc = scId != null ? scById.get(scId) : undefined;
+          if (sc) {
+            const dd = (new Date(d10(o.criadoEm) + "T00:00:00Z").getTime() - new Date(d10(sc.criadoEm) + "T00:00:00Z").getTime()) / 86_400_000;
+            if (Number.isFinite(dd) && dd >= 0 && dd <= 365) leads.push(dd);
+          }
+          const ent = d10((o as any).dataEntregaPrevista);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(ent)) {
+            const de = (new Date(ent + "T00:00:00Z").getTime() - new Date(d10(o.criadoEm) + "T00:00:00Z").getTime()) / 86_400_000;
+            if (Number.isFinite(de) && de >= 0 && de <= 365) { ocsComEnt++; if (de <= 3) ocsSusto++; }
+          }
+        });
+        const A = scsM.length ? comNec / scsM.length : 0;
+        const antecMed = medianaH(antecs);
+        const B = antecMed == null ? 0 : Math.max(0, Math.min(antecMed / 7, 1));
+        const C = scsM.length ? 1 - urg / scsM.length : 0;
+        const temD = ocsComEnt > 0;
+        const D = temD ? 1 - ocsSusto / ocsComEnt : 0;
+        const score = scsM.length === 0 ? null : Math.round(Math.max(0, Math.min(temD ? 25 * A + 35 * B + 15 * C + 25 * D : 25 * A + 60 * B + 15 * C, 100)));
+        evolucaoMeses.push({
+          mes: m, scs: scsM.length, ocs: ocsM.length, valorComprado,
+          pctUrgentes: scsM.length ? (urg / scsM.length) * 100 : null,
+          pctComNecessidade: scsM.length ? A * 100 : null,
+          pctPlanejadas: comNec ? (planejadas / comNec) * 100 : null,
+          antecedenciaMediana: antecMed,
+          leadScOcMediana: medianaH(leads),
+          pctSusto: temD ? (ocsSusto / ocsComEnt) * 100 : null,
+          // perdaPorInsumo cobre só o PERÍODO selecionado — fora dele o valor
+          // seria um falso zero; null = "não calculado" (frontend mostra "—").
+          perdaPicada: mi >= ini && mi < fimEx ? (perdaPicadaPorMes[m] ?? 0) : null,
+          score,
+        });
+      }
+      const mesesComScore = evolucaoMeses.filter(e => e.score != null);
+      const scoreAtual = mesesComScore.length
+        ? Math.round(mesesComScore.reduce((s, e) => s + e.score * e.scs, 0) / Math.max(1, mesesComScore.reduce((s, e) => s + e.scs, 0)))
+        : null;
+      const evolucaoMensal = { meses: evolucaoMeses, scoreAtual, ideal: 85 };
+
       return {
         kpis, seriePorDia, rankingSolicitantes, rankingMateriais, porTipo, rankingObras,
         leadTime, gargalo, obras: obrasRows,
         quandoPedem: { porDiaSemana, porHora },
         planejamento, rankingUrgencia,
-        perdaAgrupamento, recorrencia, horizonte, gestao,
+        perdaAgrupamento, recorrencia, horizonte, gestao, evolucaoMensal,
       };
+    }),
+
+  // Rev. 4758 — análise por IA da evolução mensal de compras (gerada sob demanda)
+  analisarEvolucaoCompras: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ano: z.number().int().min(2020).max(2100),
+      meses: z.array(z.object({
+        mes: z.number().int().min(1).max(12), scs: z.number(), ocs: z.number(), valorComprado: z.number(),
+        pctUrgentes: z.number().nullable(), pctComNecessidade: z.number().nullable(),
+        pctPlanejadas: z.number().nullable(), antecedenciaMediana: z.number().nullable(),
+        leadScOcMediana: z.number().nullable(), pctSusto: z.number().nullable(),
+        perdaPicada: z.number().nullable(), score: z.number().nullable(),
+      })).min(1).max(12),
+      scoreAtual: z.number().nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      await assertAiModuleEnabled(input.companyId, "compras");
+      const MESES_N = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+      const linhas = input.meses.map(e =>
+        `${MESES_N[e.mes - 1]}/${input.ano}: ${e.scs} SCs, ${e.ocs} OCs, R$ ${e.valorComprado.toFixed(0)} comprados; urgentes ${e.pctUrgentes?.toFixed(0) ?? "-"}%; SCs c/ data necessidade ${e.pctComNecessidade?.toFixed(0) ?? "-"}%; planejadas (≥3d) ${e.pctPlanejadas?.toFixed(0) ?? "-"}%; antecedência mediana ${e.antecedenciaMediana?.toFixed(1) ?? "-"}d; lead SC→OC ${e.leadScOcMediana?.toFixed(1) ?? "-"}d; OCs no susto ${e.pctSusto?.toFixed(0) ?? "-"}%; perda por compra picada R$ ${e.perdaPicada?.toFixed(0) ?? "-"}; score ${e.score ?? "-"}/100`
+      ).join("\n");
+      const result = await invokeLLM({
+        maxTokens: 900,
+        messages: [
+          { role: "system", content: "Você é um consultor sênior de Compras/Suprimentos de construtora brasileira. Responda em português, direto, sem markdown pesado (use apenas linhas iniciadas por •). Benchmark de referência: score de planejamento ideal ≥85/100, urgências ≤10%, antecedência ≥7 dias, ≥85% das compras planejadas." },
+          { role: "user", content: `Indicadores mensais de compras (score composto 0-100: peso 25 SCs com data de necessidade, 35 antecedência vs 7d, 15 não-urgência, 25 OCs fora do susto). Score atual do ano: ${input.scoreAtual ?? "-"}/100 (ideal 85).\n\n${linhas}\n\nEm no máximo 6 bullets: (1) diga se a empresa está melhorando ou piorando mês a mês e onde; (2) aponte o indicador que mais segura o score; (3) dê 3 ações práticas e específicas para chegar ao ideal de 85. Sem introdução nem conclusão.` }],
+      });
+      const analise = String((result as any)?.content ?? (result as any)?.text ?? "").trim();
+      if (!analise) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA não retornou análise" });
+      return { analise };
     }),
 
   getComprasBadgeCounts: protectedProcedure
