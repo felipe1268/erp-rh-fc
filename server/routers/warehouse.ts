@@ -23,6 +23,7 @@ import {
   warehouseInventoryAjustes,
   comprasOrdens,
   comprasOrdensItens,
+  comprasSolicitacoes,
   employees,
   warnings,
   obras,
@@ -2435,18 +2436,30 @@ REGRAS:
         conditions.push(inArray(comprasOrdens.obraId, allowed));
       }
 
+      // Rev. 4754 — contexto pro recebimento: obra de DESTINO da OC, quem criou,
+      // e a SC de origem (nº, solicitante, data). Pedido do usuário: no Central
+      // apareciam OCs "sem cara" e ficava a dúvida se o destino estava errado —
+      // na verdade todas têm obra de destino, só faltava mostrar.
       const ocs = await db
         .select({
           id: comprasOrdens.id,
           numeroOc: comprasOrdens.numeroOc,
           fornecedorNome: comprasOrdens.fornecedorNome,
           obraId: comprasOrdens.obraId,
+          obraNome: obras.nome,
           dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
           status: comprasOrdens.status,
           total: comprasOrdens.total,
           criadoEm: comprasOrdens.criadoEm,
+          criadoPorNome: comprasOrdens.criadoPorNome,
+          scId: comprasSolicitacoes.id,
+          numeroSc: comprasSolicitacoes.numeroSc,
+          scSolicitante: comprasSolicitacoes.criadoPorNome,
+          scCriadoEm: comprasSolicitacoes.criadoEm,
         })
         .from(comprasOrdens)
+        .leftJoin(obras, eq(obras.id, comprasOrdens.obraId))
+        .leftJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasOrdens.solicitacaoId))
         .where(and(...conditions))
         .orderBy(desc(comprasOrdens.criadoEm));
 

@@ -50,6 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4754** — Receber Material: cada OC mostra obra de destino, SC de origem (solicitante + data) ou "OC direta".
+- **Rev. 4753** — Recorrência: coluna Fornecedor no drill-down + novo dash "Onde Comprar Melhor" (melhor × pior fornecedor por item, economia potencial).
+- **Rev. 4752** — Materiais Mais Pedidos: conversão kg→saco (descrição "Sacos de N Kg") em qtd e preço + fallback preço meta da SC quando não há OC.
 - **Rev. 4751** — Materiais Mais Pedidos: coluna "Preço pago" por SC (via OC vinculada) + faixa de perda de oportunidade vs melhor preço do período.
 - **Rev. 4750** — Recorrência: descrição que era só código ("20.05.03") resolvida pelo catálogo de composições; coluna "Insumo" (nº do insumo) no drill-down.
 - **Rev. 4749** — Recorrência de compras: mesmo produto em unidades diferentes (sc/kg) consolidado numa linha só, com quantidade discriminada por unidade.

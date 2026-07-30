@@ -691,6 +691,22 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
                               <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                               <span className="truncate">{oc.fornecedorNome || "Fornecedor não informado"}</span>
                             </div>
+                            {/* Rev. 4754 — destino + origem da compra (quem pediu, quando, pra onde vai) */}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 ${oc.obraId != null ? "bg-violet-50 text-violet-700 ring-violet-200" : "bg-slate-100 text-slate-600 ring-slate-200"}`}>
+                                📍 {oc.obraId != null ? (oc.obraNome || `Obra #${oc.obraId}`) : "Escritório Central"}
+                              </span>
+                              {oc.numeroSc && (
+                                <span className="text-[10px] font-medium text-slate-500 bg-slate-50 ring-1 ring-slate-200 rounded-full px-2 py-0.5">
+                                  {oc.numeroSc} · {oc.scSolicitante || "—"}{oc.scCriadoEm ? ` · ${String(oc.scCriadoEm).slice(8, 10)}/${String(oc.scCriadoEm).slice(5, 7)}` : ""}
+                                </span>
+                              )}
+                              {!oc.numeroSc && oc.criadoPorNome && (
+                                <span className="text-[10px] font-medium text-slate-500 bg-slate-50 ring-1 ring-slate-200 rounded-full px-2 py-0.5">
+                                  OC direta · {oc.criadoPorNome}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wide whitespace-nowrap ${
                             oc.status === "parcial"

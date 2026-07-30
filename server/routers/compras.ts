@@ -11483,6 +11483,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         data: string; ordemId: number; numeroOc: string | null; scId: number | null; numeroSc: string | null;
         obraId: number | null; solicitante: string; qtd: number; preco: number;
         insumoCodigo?: string | null;
+        fornecedor?: string; // Rev. 4753: auditoria de preço por fornecedor
       };
       type GrupoInsumo = {
         chave: string; descricao: string; unidade: string | null;
@@ -11562,6 +11563,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             scId: sc?.id ?? null, numeroSc: sc?.numeroSc ?? null,
             obraId: o.obraId ?? null, solicitante, qtd, preco,
             insumoCodigo: codigoItem,
+            fornecedor: ((o as any).fornecedorNome || "").trim() || "—",
           });
         }
 
@@ -11665,6 +11667,25 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           const qtdPorUnidade = Object.entries(qtdUn).map(([unidade, qtd]) => ({ unidade, qtd }))
             .sort((a, b) => b.qtd - a.qtd);
           const unidadePrincipal = qtdPorUnidade[0]?.unidade ?? null;
+          // Rev. 4753: auditoria por fornecedor — só na unidade principal (preços em
+          // unidades diferentes não são comparáveis, ex.: "vb" × "un").
+          const fornMap: Record<string, { nome: string; compras: Set<number>; qtd: number; valor: number; precoMin: number; precoMax: number }> = {};
+          evs.forEach(x => {
+            const u = (x.unidade ?? "?").trim() || "?";
+            if (u !== (unidadePrincipal ?? "?")) return;
+            const nome = (x.ev.fornecedor || "—").trim() || "—";
+            const fk = nome.toUpperCase();
+            if (!fornMap[fk]) fornMap[fk] = { nome, compras: new Set(), qtd: 0, valor: 0, precoMin: Infinity, precoMax: 0 };
+            fornMap[fk].compras.add(x.ev.ordemId);
+            fornMap[fk].qtd += x.ev.qtd;
+            fornMap[fk].valor += x.ev.preco * x.ev.qtd;
+            fornMap[fk].precoMin = Math.min(fornMap[fk].precoMin, x.ev.preco);
+            fornMap[fk].precoMax = Math.max(fornMap[fk].precoMax, x.ev.preco);
+          });
+          const fornecedoresStats = Object.values(fornMap)
+            .filter(f => f.nome !== "—")
+            .map(f => ({ nome: f.nome, compras: f.compras.size, qtd: f.qtd, precoMin: f.precoMin, precoMedio: f.qtd > 0 ? f.valor / f.qtd : f.precoMin, precoMax: f.precoMax }))
+            .sort((a, b) => a.precoMin - b.precoMin);
           recorrenciaItens.push({
             chave: grp.descricao.trim().toUpperCase(), descricao: grp.descricao,
             unidade: qtdPorUnidade.length > 1 ? null : unidadePrincipal,
@@ -11675,6 +11696,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             intervaloMedioDias: intervaloMedio,
             primeiraCompra: diasCompra[0], ultimaCompra: diasCompra[diasCompra.length - 1],
             obras: new Set(evs.map(x => x.ev.obraId)).size,
+            fornecedores: fornecedoresStats,
+            unidadeAudit: unidadePrincipal,
             detalhe: [...evs].sort((a, b) => a.ev.data.localeCompare(b.ev.data)).slice(-15).map(x => ({ ...x.ev, unidade: x.unidade })),
           } as any);
         }
@@ -11689,6 +11712,32 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           .filter(r => r.compras >= 4 && r.intervaloMedioDias != null && r.intervaloMedioDias <= 30)
           .sort((a, b) => b.valorTotal - a.valorTotal).slice(0, 10)
           .map(r => ({ chave: r.chave, descricao: r.descricao, unidade: r.unidade, qtdPorUnidade: r.qtdPorUnidade, compras: r.compras, intervaloMedioDias: r.intervaloMedioDias, valorTotal: r.valorTotal, obras: r.obras })),
+        // Rev. 4753: "Onde Comprar Melhor" — itens mais comprados com 2+ fornecedores
+        // na MESMA unidade: melhor (menor preço) × pior fornecedor + economia potencial
+        // (o que teria poupado comprando tudo ao melhor preço do melhor fornecedor).
+        melhorFornecedor: [...recorrenciaItens]
+          .filter(r => ((r as any).fornecedores ?? []).length >= 2)
+          .map(r => {
+            const fs = (r as any).fornecedores as { nome: string; compras: number; qtd: number; precoMin: number; precoMedio: number; precoMax: number }[];
+            const melhor = fs[0];
+            // Rev. 4753b (code-review): "mais caro" = fornecedor com MAIOR preço médio
+            // pago (métrica única e coerente com a economia potencial), não fs[último]
+            // por precoMin exibindo precoMax (misturava métricas).
+            const pior = [...fs].sort((a, b) => b.precoMedio - a.precoMedio)[0];
+            const uni = (r as any).unidadeAudit as string | null;
+            const valorNaUnidade = fs.reduce((s, f) => s + f.precoMedio * f.qtd, 0);
+            const economiaPotencial = fs.reduce((s, f) => s + Math.max(0, f.precoMedio - melhor.precoMin) * f.qtd, 0);
+            return {
+              chave: r.chave, descricao: r.descricao, unidade: uni,
+              compras: r.compras, valorTotal: valorNaUnidade,
+              fornecedores: fs,
+              melhor: { nome: melhor.nome, preco: melhor.precoMin, compras: melhor.compras },
+              pior: { nome: pior.nome, preco: pior.precoMedio, compras: pior.compras },
+              economiaPotencial,
+            };
+          })
+          .sort((a, b) => b.economiaPotencial - a.economiaPotencial || b.valorTotal - a.valorTotal)
+          .slice(0, 12),
       };
       const perdaAgrupamento = {
         janelaDias: JANELA_DIAS,
@@ -11790,6 +11839,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             descricao: comprasSolicitacoesItens.descricao,
             unidade: comprasSolicitacoesItens.unidade,
             quantidade: comprasSolicitacoesItens.quantidade,
+            precoMeta: comprasSolicitacoesItens.precoMeta,
           }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.solicitacaoId, scIdsPeriodo))
         : [];
       // Rev. 4751: preço efetivamente PAGO por item de SC — via itens de OC
@@ -11836,11 +11886,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       // Rev. 4743: SCs têm linhas duplicadas do mesmo item (ex.: 24 linhas iguais
       // numa SC) — contar linha de item MAQUIA o gráfico. 1 SC = 1 caso; a
       // quantidade é SOMADA dentro da SC.
-      const matMap: Record<string, { descricao: string; unidade: string | null; qtd: number; porSc: Map<number, number>; pagoPorSc: Map<number, { valor: number; qtd: number }> }> = {};
+      const matMap: Record<string, { descricao: string; unidade: string | null; qtd: number; porSc: Map<number, number>; pagoPorSc: Map<number, { valor: number; qtd: number }>; metaPorSc: Map<number, { valor: number; qtd: number }> }> = {};
       itensSc.forEach(it => {
         const key = `${(it.descricao || "").trim().toUpperCase()}|${(it.unidade || "").trim().toUpperCase()}`;
         if (!key.trim() || key === "|") return;
-        if (!matMap[key]) matMap[key] = { descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, qtd: 0, porSc: new Map(), pagoPorSc: new Map() };
+        if (!matMap[key]) matMap[key] = { descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, qtd: 0, porSc: new Map(), pagoPorSc: new Map(), metaPorSc: new Map() };
         matMap[key].qtd += n(it.quantidade);
         matMap[key].porSc.set(it.solicitacaoId, (matMap[key].porSc.get(it.solicitacaoId) ?? 0) + n(it.quantidade));
         const pago = pagoPorScItem.get(it.id);
@@ -11849,21 +11899,47 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           cur.valor += pago.valor; cur.qtd += pago.qtd;
           matMap[key].pagoPorSc.set(it.solicitacaoId, cur);
         }
+        // Rev. 4752: fallback — preço meta da própria SC (orçamento) quando não há OC
+        const pm = n(it.precoMeta);
+        if (pm > 0) {
+          const cur = matMap[key].metaPorSc.get(it.solicitacaoId) ?? { valor: 0, qtd: 0 };
+          cur.valor += pm * n(it.quantidade); cur.qtd += n(it.quantidade);
+          matMap[key].metaPorSc.set(it.solicitacaoId, cur);
+        }
       });
+      // Rev. 4752: conversão kg→saco quando a própria descrição declara o peso do
+      // saco (ex.: "Cimento Cpiii-e-32 (Sacos de 50 Kg)") e a unidade é kg.
+      const detectarSacoKg = (descricao: string, unidade: string | null): number | null => {
+        if ((unidade || "").trim().toLowerCase() !== "kg") return null;
+        const m = descricao.match(/sacos?\s+(?:de\s+)?(\d+(?:[.,]\d+)?)\s*kg/i);
+        if (!m) return null;
+        const kg = parseFloat(m[1].replace(",", "."));
+        return Number.isFinite(kg) && kg > 0 ? kg : null;
+      };
       const topMateriais = Object.values(matMap)
         .map(m => {
           const casos = [...m.porSc.entries()]
             .map(([scId, qtd]) => {
               const pago = m.pagoPorSc.get(scId);
-              const preco = pago && pago.qtd > 0 ? pago.valor / pago.qtd : null;
-              return { scId, qtd, preco, ...(scInfo[scId] ?? { numero: `SC #${scId}`, data: "", obra: "—", solicitante: "—" }) };
+              const meta = m.metaPorSc.get(scId);
+              // Rev. 4752: sem OC vinculada → cai no preço meta da própria SC
+              const preco = pago && pago.qtd > 0 ? pago.valor / pago.qtd
+                : meta && meta.qtd > 0 ? meta.valor / meta.qtd : null;
+              const fonte = pago && pago.qtd > 0 ? "oc" : meta && meta.qtd > 0 ? "meta" : null;
+              return { scId, qtd, preco, fonte, ...(scInfo[scId] ?? { numero: `SC #${scId}`, data: "", obra: "—", solicitante: "—" }) };
             })
             .sort((a, b) => (b.data || "").localeCompare(a.data || ""))
             .slice(0, 25);
           // Rev. 4751: flutuação e perda de oportunidade — compara o preço unitário
           // pago em cada SC com o MELHOR preço pago no período pro mesmo item;
           // perda = Σ (preço da SC − melhor preço) × qtd comprada naquela SC.
-          const comPreco = [...m.pagoPorSc.values()].filter(p => p.qtd > 0);
+          // Rev. 4752b (code-review): NÃO misturar pago real (OC) com meta no mesmo
+          // cálculo — perda "paga" com min vindo de meta seria artificial. Regra:
+          // usa SÓ OCs quando existirem; sem nenhuma OC, cai 100% em meta (rotulado).
+          const ocsComPreco = [...m.pagoPorSc.values()].filter(p => p.qtd > 0);
+          const metasComPreco = [...m.metaPorSc.values()].filter(p => p.qtd > 0);
+          const precoBase: "oc" | "meta" | null = ocsComPreco.length > 0 ? "oc" : metasComPreco.length > 0 ? "meta" : null;
+          const comPreco = precoBase === "oc" ? ocsComPreco : metasComPreco;
           let precoMin: number | null = null, precoMax: number | null = null, precoMedio: number | null = null, perdaOportunidade = 0;
           if (comPreco.length > 0) {
             const unitarios = comPreco.map(p => p.valor / p.qtd);
@@ -11880,6 +11956,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             obras: obrasSet.size, solicitantes: solSet.size, casos,
             precoMin, precoMax, precoMedio, perdaOportunidade,
             scsComPreco: comPreco.length,
+            precoBase,
+            sacoKg: detectarSacoKg(m.descricao, m.unidade),
           };
         })
         .sort((a, b) => b.pedidos - a.pedidos)

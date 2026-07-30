@@ -272,6 +272,7 @@ export default function DashboardGerencialCompras() {
   const [inconsAberto, setInconsAberto] = useState(false);
   const [recModo, setRecModo] = useState<"valor" | "freq">("valor");
   const [recAberto, setRecAberto] = useState<string | null>(null);
+  const [fornAberto, setFornAberto] = useState<string | null>(null); // Rev. 4753
   const [sustoAberto, setSustoAberto] = useState(false);
   const [docAberto, setDocAberto] = useState<{ tipo: "sc" | "oc"; id: number } | null>(null);
 
@@ -575,6 +576,7 @@ export default function DashboardGerencialCompras() {
                                         <th className="py-1 pr-2 font-medium">SC</th>
                                         <th className="py-1 pr-2 font-medium">Obra</th>
                                         <th className="py-1 pr-2 font-medium">Solicitante</th>
+                                        <th className="py-1 pr-2 font-medium">Fornecedor</th>
                                         <th className="py-1 pr-2 font-medium">Insumo</th>
                                         <th className="py-1 pr-2 font-medium text-right">Qtd</th>
                                         <th className="py-1 font-medium text-right">Preço unit.</th>
@@ -588,6 +590,7 @@ export default function DashboardGerencialCompras() {
                                           <td className="py-1 pr-2 whitespace-nowrap">{d.numeroSc ? <LinkSc id={d.scId} label={d.numeroSc} /> : "—"}</td>
                                           <td className="py-1 pr-2 max-w-[160px] break-words">{d.obraId != null ? ((g.obras.find((o: any) => o.id === d.obraId)?.nome) ?? `#${d.obraId}`) : "—"}</td>
                                           <td className="py-1 pr-2 max-w-[140px] break-words">{d.solicitante}</td>
+                                          <td className="py-1 pr-2 max-w-[160px] break-words">{d.fornecedor ?? "—"}</td>
                                           <td className="py-1 pr-2 whitespace-nowrap text-gray-500">{d.insumoCodigo ?? "—"}</td>
                                           <td className="py-1 pr-2 text-right whitespace-nowrap">{d.qtd}{d.unidade ? <span className="text-gray-400"> {d.unidade}</span> : ""}</td>
                                           <td className="py-1 text-right">{BRL(d.preco)}</td>
@@ -617,6 +620,70 @@ export default function DashboardGerencialCompras() {
                           </div>
                         </div>
                       )}
+                    </Card>
+                  );
+                })()}
+
+                {/* ── Rev. 4753: Onde Comprar Melhor — melhor × pior fornecedor por item ── */}
+                {(() => {
+                  const mf: any[] = (g as any).recorrencia?.melhorFornecedor ?? [];
+                  if (mf.length === 0) return null;
+                  return (
+                    <Card>
+                      <div className="flex items-center gap-2">
+                        <ShoppingCart className="w-5 h-5 text-emerald-600" />
+                        <h3 className="font-semibold text-gray-800">Onde Comprar Melhor — Fornecedor por Item</h3>
+                      </div>
+                      <FonteNote>
+                        <b>Fonte:</b> itens comprados de <b>2+ fornecedores na mesma unidade</b> no período (preços de unidades diferentes não são comparados). <b>Melhor</b> = fornecedor com o menor preço unitário pago; <b>Economia potencial</b> = quanto teria poupado comprando todo o volume ao melhor preço. Serve de auditoria: se a diferença parecer absurda, confira as OCs — pode ser erro de cadastro (kit × unidade, unidade errada).
+                      </FonteNote>
+                      <div className="mt-2 divide-y divide-gray-100">
+                        {mf.map((r: any) => {
+                          const aberto = fornAberto === r.chave;
+                          return (
+                            <div key={r.chave}>
+                              <button onClick={() => setFornAberto(aberto ? null : r.chave)} className="w-full text-left py-2.5">
+                                <div className="flex items-center gap-2">
+                                  {aberto ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+                                  <span className="text-sm text-gray-800 font-medium flex-1 min-w-0 break-words">{r.descricao}{r.unidade ? ` (${r.unidade})` : ""}</span>
+                                  <span className="text-[11px] text-gray-400 whitespace-nowrap hidden sm:inline">{r.fornecedores.length} fornecedores</span>
+                                  {r.economiaPotencial > 0.5 && <span className="text-sm font-bold text-rose-600 whitespace-nowrap">−{BRL(r.economiaPotencial)}</span>}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 mt-1.5 ml-6">
+                                  <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5">🏆 Mais barato: <b>{r.melhor.nome}</b> · {BRL(r.melhor.preco)}{r.unidade ? `/${r.unidade}` : ""} (menor preço pago)</span>
+                                  <span className="text-[10px] font-medium text-rose-700 bg-rose-50 border border-rose-100 rounded-full px-2 py-0.5">Mais caro: {r.pior.nome} · {BRL(r.pior.preco)}{r.unidade ? `/${r.unidade}` : ""} (preço médio pago)</span>
+                                </div>
+                              </button>
+                              {aberto && (
+                                <div className="pb-3 pl-6 overflow-x-auto">
+                                  <table className="w-full text-[11px]">
+                                    <thead><tr className="text-gray-400 text-left">
+                                      <th className="py-1 pr-2 font-medium">Fornecedor</th>
+                                      <th className="py-1 pr-2 font-medium text-right">Compras</th>
+                                      <th className="py-1 pr-2 font-medium text-right">Qtd</th>
+                                      <th className="py-1 pr-2 font-medium text-right">Menor preço</th>
+                                      <th className="py-1 pr-2 font-medium text-right">Preço médio</th>
+                                      <th className="py-1 font-medium text-right">Maior preço</th>
+                                    </tr></thead>
+                                    <tbody>
+                                      {r.fornecedores.map((f: any, i: number) => (
+                                        <tr key={i} className={`border-t border-gray-50 ${i === 0 ? "text-emerald-700 font-semibold" : "text-gray-700"}`}>
+                                          <td className="py-1 pr-2 max-w-[220px] break-words">{i === 0 ? "🏆 " : ""}{f.nome}</td>
+                                          <td className="py-1 pr-2 text-right whitespace-nowrap">{f.compras}×</td>
+                                          <td className="py-1 pr-2 text-right whitespace-nowrap">{f.qtd.toLocaleString("pt-BR")}{r.unidade ? ` ${r.unidade}` : ""}</td>
+                                          <td className="py-1 pr-2 text-right whitespace-nowrap">{BRL(f.precoMin)}</td>
+                                          <td className="py-1 pr-2 text-right whitespace-nowrap">{BRL(f.precoMedio)}</td>
+                                          <td className="py-1 text-right whitespace-nowrap">{BRL(f.precoMax)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </Card>
                   );
                 })()}
@@ -933,7 +1000,7 @@ export default function DashboardGerencialCompras() {
                           </div>
                           <span className="text-[10px] text-gray-400">👆 toque na barra ou no nome p/ ver as SCs, obras e quem pediu</span>
                         </div>
-                        <FonteNote><b>Fonte:</b> itens das SCs ativas do período, agrupados por descrição idêntica + unidade. <b>1 SC = 1 pedido</b> (linhas repetidas do mesmo item na mesma SC são somadas na quantidade, nunca contadas 2×). Candidatos naturais a contrato de fornecimento/estoque mínimo. <b>Preço pago</b> = preço unitário da OC vinculada à SC (média ponderada se houver mais de uma); a faixa 💸 e a perda de oportunidade comparam cada compra com o <b>melhor preço pago no período</b>.</FonteNote>
+                        <FonteNote><b>Fonte:</b> itens das SCs ativas do período, agrupados por descrição idêntica + unidade. <b>1 SC = 1 pedido</b> (linhas repetidas do mesmo item na mesma SC são somadas na quantidade, nunca contadas 2×). Candidatos naturais a contrato de fornecimento/estoque mínimo. <b>Preço pago</b> = preço unitário da OC vinculada à SC (média ponderada se houver mais de uma); a faixa 💸 e a perda de oportunidade comparam cada compra com o <b>melhor preço pago no período</b>. SC sem OC usa o <b>preço meta</b> da própria solicitação (marcado "meta"). Item pedido em kg cuja descrição declara "Sacos de N Kg" é exibido <b>convertido em sacos</b> (qtd ÷ N; preço × N).</FonteNote>
                         {(ge.topMateriais ?? []).length === 0 ? <p className="text-xs text-gray-400 mt-3">Sem itens no período.</p> : (
                           <div className="mt-4 space-y-2">
                             {ge.topMateriais.map((m: any, i: number) => {
@@ -945,6 +1012,13 @@ export default function DashboardGerencialCompras() {
                                 : pos === 3 ? "from-orange-300 to-orange-400 text-white shadow-orange-200"
                                 : "from-slate-100 to-slate-200 text-slate-500";
                               const barCor = pos <= 3 ? "from-[#35658f] via-[#4a7cad] to-[#6ba3d6]" : "from-[#7d9cb8] to-[#a8c3da]";
+                              // Rev. 4752: item comprado em kg mas vendido em saco (descrição declara
+                              // "Sacos de N Kg") → exibe TUDO em sacos: qtd ÷ N e preço × N.
+                              const sacoKg: number | null = m.sacoKg && m.sacoKg > 0 ? m.sacoKg : null;
+                              const uniExib = sacoKg ? "sc" : m.unidade;
+                              const qtdExib = (v: number) => sacoKg ? v / sacoKg : v;
+                              const precoExib = (v: number) => sacoKg ? v * sacoKg : v;
+                              const fmtQtd = (v: number) => sacoKg ? qtdExib(v).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : v.toLocaleString("pt-BR");
                               return (
                                 <div key={`${m.descricao}|${m.unidade}`}
                                   className={`rounded-2xl border transition-all ${aberto ? "border-[#35658f]/40 bg-gradient-to-br from-blue-50/80 to-white shadow-md" : "border-gray-100 bg-white hover:border-[#35658f]/25 hover:shadow-sm"}`}>
@@ -970,9 +1044,9 @@ export default function DashboardGerencialCompras() {
                                         <div className="flex flex-wrap items-center gap-1.5 mt-2">
                                           <span className="text-[10px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">🏗️ {m.obras} obra{m.obras !== 1 ? "s" : ""}</span>
                                           <span className="text-[10px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">👤 {m.solicitantes} solicitante{m.solicitantes !== 1 ? "s" : ""}</span>
-                                          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5">Σ {m.qtd.toLocaleString("pt-BR")}{m.unidade ? ` ${m.unidade}` : ""}</span>
+                                          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5">Σ {fmtQtd(m.qtd)}{uniExib ? ` ${uniExib}` : ""}{sacoKg ? ` (${m.qtd.toLocaleString("pt-BR")} kg)` : ""}</span>
                                           {m.precoMin != null && m.precoMax != null && m.precoMax > m.precoMin && (
-                                            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5">💸 {BRL(m.precoMin)} – {BRL(m.precoMax)}{m.unidade ? `/${m.unidade}` : ""}</span>
+                                            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5">💸 {BRL(precoExib(m.precoMin))} – {BRL(precoExib(m.precoMax))}{uniExib ? `/${uniExib}` : ""}</span>
                                           )}
                                           <span className={`ml-auto flex items-center gap-0.5 text-[10px] font-semibold ${aberto ? "text-[#35658f]" : "text-gray-400"}`}>
                                             {aberto ? <>fechar <ChevronDown className="w-3 h-3" /></> : <>detalhar <ChevronRight className="w-3 h-3" /></>}
@@ -985,8 +1059,8 @@ export default function DashboardGerencialCompras() {
                                     <div className="px-3 pb-3">
                                       {m.perdaOportunidade > 0.005 && m.precoMin != null && m.precoMedio != null && (
                                         <div className="mb-2 rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2 text-xs text-rose-800 leading-relaxed">
-                                          <b>Perda de oportunidade: {BRL(m.perdaOportunidade)}.</b>{" "}
-                                          Devido às compras recorrentes, pagou em média <b>{BRL(m.precoMedio - m.precoMin)} a mais</b>{m.unidade ? ` por ${m.unidade}` : " por unidade"} do que o melhor preço já conseguido no período ({BRL(m.precoMin)}{m.unidade ? `/${m.unidade}` : ""}) — em {m.scsComPreco} compra{m.scsComPreco !== 1 ? "s" : ""} com preço fechado.
+                                          <b>Perda de oportunidade{m.precoBase === "meta" ? " (estimada pelo preço meta)" : ""}: {BRL(m.perdaOportunidade)}.</b>{" "}
+                                          Devido às compras recorrentes, {m.precoBase === "meta" ? "orçou" : "pagou"} em média <b>{BRL(precoExib(m.precoMedio - m.precoMin))} a mais</b>{sacoKg ? " por saco" : m.unidade ? ` por ${m.unidade}` : " por unidade"} do que o melhor preço {m.precoBase === "meta" ? "meta" : "já pago"} no período ({BRL(precoExib(m.precoMin))}{uniExib ? `/${uniExib}` : ""}) — em {m.scsComPreco} {m.precoBase === "meta" ? `SC${m.scsComPreco !== 1 ? "s" : ""} com preço meta` : `compra${m.scsComPreco !== 1 ? "s" : ""} com OC fechada`}.
                                         </div>
                                       )}
                                       <div className="rounded-xl border border-blue-100/70 bg-white overflow-hidden">
@@ -1000,9 +1074,9 @@ export default function DashboardGerencialCompras() {
                                                 <tr key={j} className={j % 2 ? "bg-slate-50/50" : "bg-white"}>
                                                   <td className="py-1.5 px-2.5 font-semibold whitespace-nowrap"><LinkSc id={cs.scId} label={cs.numero} /></td>
                                                   <td className="py-1.5 pr-2 whitespace-nowrap text-gray-500">{fmtDate(cs.data)}</td>
-                                                  <td className="py-1.5 pr-2 whitespace-nowrap text-right font-bold text-gray-800">{cs.qtd.toLocaleString("pt-BR")}{m.unidade ? <span className="font-normal text-gray-400"> {m.unidade}</span> : ""}</td>
+                                                  <td className="py-1.5 pr-2 whitespace-nowrap text-right font-bold text-gray-800">{fmtQtd(cs.qtd)}{uniExib ? <span className="font-normal text-gray-400"> {uniExib}</span> : ""}{sacoKg ? <span className="font-normal text-[9px] text-gray-400"> ({cs.qtd.toLocaleString("pt-BR")} kg)</span> : ""}</td>
                                                   <td className={`py-1.5 pr-2 whitespace-nowrap text-right font-semibold ${cs.preco != null && m.precoMin != null && cs.preco - m.precoMin > 0.005 ? "text-rose-600" : cs.preco != null ? "text-emerald-700" : "text-gray-400"}`}>
-                                                    {cs.preco != null ? <>{BRL(cs.preco)}{cs.preco - (m.precoMin ?? cs.preco) > 0.005 ? <span className="font-normal text-[9px]"> (+{BRL(cs.preco - m.precoMin)})</span> : ""}</> : "—"}
+                                                    {cs.preco != null ? <>{BRL(precoExib(cs.preco))}{sacoKg ? <span className="font-normal text-[9px] text-gray-400">/sc</span> : ""}{cs.preco - (m.precoMin ?? cs.preco) > 0.005 ? <span className="font-normal text-[9px]"> (+{BRL(precoExib(cs.preco - m.precoMin))})</span> : ""}{cs.fonte === "meta" ? <span className="font-normal text-[9px] text-gray-400" title="Preço meta da SC (sem OC vinculada)"> meta</span> : ""}</> : "—"}
                                                   </td>
                                                   <td className="py-1.5 pl-3 pr-2 max-w-[220px] break-words text-gray-600">{cs.obra}</td>
                                                   <td className="py-1.5 pr-2.5 break-words text-gray-600">{cs.solicitante}</td>

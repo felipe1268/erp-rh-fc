@@ -1,4 +1,32 @@
 /**
+ * Rev. 4754 - RECEBER MATERIAL: DESTINO + SC DE ORIGEM EM CADA OC
+ *
+ * O modal "Receber Material" do Almoxarifado agora mostra em cada card de OC:
+ * a obra de DESTINO (badge violeta; "Escritorio Central" quando sem obra),
+ * a SC de origem com solicitante e data, e "OC direta · <criador>" quando
+ * nao ha SC. Auditoria (30/07/2026): as 21 OCs pendentes tinham TODAS obra
+ * de destino definida (nenhuma era do Central) — o modal no contexto Central
+ * lista OCs de todas as obras, so faltava exibir o destino.
+ *
+ * Rev. 4753 - RECORRENCIA: FORNECEDOR POR LINHA + DASH "ONDE COMPRAR MELHOR"
+ *
+ * (1) Drill-down de "O que Mais Compramos & Recorrencia" ganhou a coluna
+ * Fornecedor em cada linha de OC (auditoria do preco unitario). (2) Novo
+ * card "Onde Comprar Melhor — Fornecedor por Item": itens comprados de 2+
+ * fornecedores na MESMA unidade, com melhor (menor preco) x pior fornecedor,
+ * tabela por fornecedor (compras, qtd, menor/medio/maior preco) e economia
+ * potencial se todo o volume fosse ao melhor preco. Unidades diferentes
+ * nunca sao comparadas entre si (evita distorcao vb x un).
+ *
+ * Rev. 4752 - MATERIAIS MAIS PEDIDOS: CONVERSAO KG->SACO + FALLBACK PRECO META
+ *
+ * (1) Item pedido em kg cuja descricao declara o saco (ex.: "Cimento
+ * Cpiii-e-32 (Sacos de 50 Kg)") agora exibe TUDO em sacos: quantidade
+ * dividida pelo peso do saco (com kg entre parenteses) e preco POR SACO
+ * (R$/sc). (2) SC sem OC vinculada nao mostra mais "—": cai no preco META
+ * da propria solicitacao (orcamento), marcado "meta" na coluna; o preco
+ * meta tambem entra na flutuacao/perda de oportunidade.
+ *
  * Rev. 4751 - MATERIAIS MAIS PEDIDOS: PRECO PAGO POR SC + PERDA DE OPORTUNIDADE
  *
  * Drill-down do card ganhou coluna "Preco pago" (preco unitario da OC
