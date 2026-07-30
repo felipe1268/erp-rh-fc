@@ -50,6 +50,12 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4748** — Demanda & Conversão: eixo X com nome do mês na virada (anual) / dia a cada 2 (mensal), tooltip dd/mm/aaaa e legenda fixa das 2 linhas.
+- **Rev. 4747** — Correções do code review: fotos de solicitantes filtradas por empresa (tenancy) e comparativo de antecedência com base de data local unificada.
+- **Rev. 4746** — Planejamento por Solicitante: cards com foto (zoom), tiles de números com semáforo e comparativo "vs período anterior" (SCs/antecedência/urgentes).
+- **Rev. 4745** — Materiais Mais Pedidos: layout pódio (badge ouro/prata/bronze, contador grande, chips, drill-down zebrado).
+- **Rev. 4744** — Ranking de Planejamento: foto de todos os solicitantes (match por tokens com o cadastro, só quando inequívoco) e zoom da foto ao tocar.
+- **Rev. 4743** — Materiais Mais Pedidos: dedup por SC (linhas repetidas do mesmo item na mesma SC somam quantidade, não contam 2×; ranking = nº de SCs distintas).
 - **Rev. 4742** — Dashboard Gerencial: Ranking de Planejamento com fotos e medalhas (legenda de faixas), Materiais Mais Pedidos com drill-down por SC/obra/solicitante em card próprio e Tendência em card próprio.
 - **Rev. 4741** — Dashboard Gerencial: nota no card de Tempo de Resposta explicando por que as etapas não somam o total e a bimodalidade do SC→OC (33% <1h, 37% >2d; mediana 21,5h validada no banco).
 - **Rev. 4740** — Dashboard Gerencial: Termômetro de Planejamento 0–100 (por solicitante e por obra), gráfico de barras Materiais Mais Pedidos e tendência anual antecedência × % susto (dados validados no Neon).

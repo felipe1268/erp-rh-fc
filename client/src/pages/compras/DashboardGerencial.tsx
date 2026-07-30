@@ -186,7 +186,15 @@ function SectionLabel({ eyebrow, title, icon: Icon, accent = "text-slate-700" }:
 
 function ExecutivePulse({ g, pa, lt, plan, gerMes }: { g: any; pa: any; lt: any; plan: any[]; gerMes: number | null }) {
   const serie: any[] = g.seriePorDia ?? [];
-  const trend = serie.map((s: any) => ({ label: gerMes === null ? s.dia.slice(5, 7) : s.dia.slice(8, 10), scs: s.scs, ocs: s.ocs }));
+  // Rev. 4748: eixo X legível — na visão anual, tick só na virada do mês (nome do mês);
+  // na visão mensal, dia a cada 2. Tooltip mostra a data completa.
+  const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const trend = serie.map((s: any) => ({ dia: s.dia, scs: s.scs, ocs: s.ocs }));
+  const trendTicks = gerMes === null
+    ? trend.filter((t: any, i: number) => i === 0 || t.dia.slice(5, 7) !== trend[i - 1].dia.slice(5, 7)).map((t: any) => t.dia)
+    : trend.filter((_: any, i: number) => i % 2 === 0).map((t: any) => t.dia);
+  const trendTickFmt = (d: string) => gerMes === null ? (MESES_ABREV[Number(d.slice(5, 7)) - 1] ?? d.slice(5, 7)) : d.slice(8, 10);
+  const trendTooltipLabel = (d: string) => { const [a, m, dd] = String(d).split("-"); return `${dd}/${m}/${a}`; };
   const obras = (pa.porObra ?? []).slice(0, 5).map((x: any) => ({ name: x.obraNome, value: x.perda }));
   const colors = ["#f06449", "#f59e0b", "#1f8a70", "#35658f", "#8b5cf6"];
   const urgentRate = g.kpis.scs ? (g.kpis.scsUrgentes / g.kpis.scs) * 100 : 0;
@@ -201,8 +209,16 @@ function ExecutivePulse({ g, pa, lt, plan, gerMes }: { g: any; pa: any; lt: any;
       <div className="h-44">
         <ResponsiveContainer width="100%" height="100%"><AreaChart data={trend} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}>
           <defs><linearGradient id="fc-scs" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35658f" stopOpacity=".28"/><stop offset="100%" stopColor="#35658f" stopOpacity=".02"/></linearGradient></defs>
-          <CartesianGrid stroke="#e8edf2" vertical={false}/><XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}/><YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false}/><Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #dbe3ea", fontSize: 12 }}/><Area type="monotone" dataKey="scs" name="SCs" stroke="#35658f" strokeWidth={2.5} fill="url(#fc-scs)"/><Line type="monotone" dataKey="ocs" name="OCs" stroke="#f06449" strokeWidth={2} dot={false}/>
+          <CartesianGrid stroke="#e8edf2" vertical={false}/>
+          <XAxis dataKey="dia" ticks={trendTicks} tickFormatter={trendTickFmt} interval={0} tick={{ fontSize: 10, fill: "#64748b", fontWeight: 600 }} axisLine={false} tickLine={false}/>
+          <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false}/>
+          <Tooltip labelFormatter={trendTooltipLabel} formatter={(v: any, k: any) => [v, k === "scs" || k === "SCs" ? "Solicitações (SCs)" : "Ordens emitidas (OCs)"]} contentStyle={{ borderRadius: 12, border: "1px solid #dbe3ea", fontSize: 12 }}/>
+          <Area type="monotone" dataKey="scs" name="SCs" stroke="#35658f" strokeWidth={2.5} fill="url(#fc-scs)"/><Line type="monotone" dataKey="ocs" name="OCs" stroke="#f06449" strokeWidth={2} dot={false}/>
         </AreaChart></ResponsiveContainer>
+      </div>
+      <div className="flex items-center gap-4 mt-1.5 text-[11px] text-slate-500">
+        <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-[#35658f]"/>Solicitações (SCs) por dia</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-[#f06449]"/>Ordens emitidas (OCs) por dia</span>
       </div>
     </Card>
     <Card>
@@ -252,6 +268,7 @@ export default function DashboardGerencialCompras() {
   const [solAberto, setSolAberto] = useState<string | null>(null);
   const [casosAbertos, setCasosAbertos] = useState(false);
   const [matAberto, setMatAberto] = useState<number | null>(null); // Rev. 4742: drill-down de material
+  const [fotoZoom, setFotoZoom] = useState<{ nome: string; url: string } | null>(null); // Rev. 4744: ampliar foto
   const [inconsAberto, setInconsAberto] = useState(false);
   const [recModo, setRecModo] = useState<"valor" | "freq">("valor");
   const [recAberto, setRecAberto] = useState<string | null>(null);
@@ -829,9 +846,11 @@ export default function DashboardGerencialCompras() {
                   const Avatar = ({ nome, fotoUrl, size = 40 }: { nome: string; fotoUrl?: string | null; size?: number }) => {
                     const iniciais = nome.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase();
                     return fotoUrl ? (
-                      <img src={`${fotoUrl}?w=128`} alt={nome} loading="lazy"
-                        className="rounded-full object-cover border-2 border-white shadow-sm shrink-0"
-                        style={{ width: size, height: size }} />
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setFotoZoom({ nome, url: fotoUrl }); }} className="shrink-0" title="Toque para ampliar">
+                        <img src={`${fotoUrl}?w=128`} alt={nome} loading="lazy"
+                          className="rounded-full object-cover border-2 border-white shadow-sm"
+                          style={{ width: size, height: size }} />
+                      </button>
                     ) : (
                       <div className="rounded-full bg-gradient-to-br from-slate-500 to-slate-700 text-white flex items-center justify-center font-bold border-2 border-white shadow-sm shrink-0"
                         style={{ width: size, height: size, fontSize: size * 0.36 }}>{iniciais}</div>
@@ -903,45 +922,73 @@ export default function DashboardGerencialCompras() {
                           </div>
                           <span className="text-[10px] text-gray-400">👆 toque na barra ou no nome p/ ver as SCs, obras e quem pediu</span>
                         </div>
-                        <FonteNote><b>Fonte:</b> itens das SCs ativas do período, agrupados por descrição idêntica + unidade. Candidatos naturais a contrato de fornecimento/estoque mínimo.</FonteNote>
+                        <FonteNote><b>Fonte:</b> itens das SCs ativas do período, agrupados por descrição idêntica + unidade. <b>1 SC = 1 pedido</b> (linhas repetidas do mesmo item na mesma SC são somadas na quantidade, nunca contadas 2×). Candidatos naturais a contrato de fornecimento/estoque mínimo.</FonteNote>
                         {(ge.topMateriais ?? []).length === 0 ? <p className="text-xs text-gray-400 mt-3">Sem itens no período.</p> : (
-                          <div className="mt-3 space-y-1.5">
+                          <div className="mt-4 space-y-2">
                             {ge.topMateriais.map((m: any, i: number) => {
                               const max = ge.topMateriais[0]?.pedidos || 1;
                               const aberto = matAberto === i;
+                              const pos = i + 1;
+                              const rankCor = pos === 1 ? "from-amber-400 to-amber-500 text-white shadow-amber-200"
+                                : pos === 2 ? "from-slate-300 to-slate-400 text-white shadow-slate-200"
+                                : pos === 3 ? "from-orange-300 to-orange-400 text-white shadow-orange-200"
+                                : "from-slate-100 to-slate-200 text-slate-500";
+                              const barCor = pos <= 3 ? "from-[#35658f] via-[#4a7cad] to-[#6ba3d6]" : "from-[#7d9cb8] to-[#a8c3da]";
                               return (
-                                <div key={`${m.descricao}|${m.unidade}`} className={`rounded-lg border ${aberto ? "border-blue-200 bg-blue-50/30" : "border-gray-100"}`}>
-                                  <button type="button" onClick={() => setMatAberto(aberto ? null : i)} className="w-full text-left p-2.5">
-                                    <div className="flex items-center justify-between gap-2 text-xs">
-                                      <span className="font-medium text-gray-800 break-words min-w-0 flex items-center gap-1.5">
-                                        {aberto ? <ChevronDown className="w-3.5 h-3.5 text-blue-500 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
-                                        {m.descricao}{m.unidade ? <span className="text-gray-400 font-normal"> ({m.unidade})</span> : null}
-                                      </span>
-                                      <span className="font-bold text-[#35658f] whitespace-nowrap">{m.pedidos}×</span>
+                                <div key={`${m.descricao}|${m.unidade}`}
+                                  className={`rounded-2xl border transition-all ${aberto ? "border-[#35658f]/40 bg-gradient-to-br from-blue-50/80 to-white shadow-md" : "border-gray-100 bg-white hover:border-[#35658f]/25 hover:shadow-sm"}`}>
+                                  <button type="button" onClick={() => setMatAberto(aberto ? null : i)} className="w-full text-left p-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${rankCor} flex items-center justify-center font-extrabold text-sm shadow-sm shrink-0`}>
+                                        {pos}º
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <p className="text-[13px] font-semibold text-gray-800 leading-snug break-words min-w-0">
+                                            {m.descricao}
+                                            {m.unidade ? <span className="ml-1.5 inline-block align-middle text-[9px] font-bold uppercase tracking-wide text-[#35658f] bg-blue-50 border border-blue-100 rounded-full px-1.5 py-0.5">{m.unidade}</span> : null}
+                                          </p>
+                                          <div className="text-right shrink-0">
+                                            <p className="text-xl font-extrabold text-[#35658f] leading-none">{m.pedidos}</p>
+                                            <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">solicitações</p>
+                                          </div>
+                                        </div>
+                                        <div className="h-3 bg-gray-100 rounded-full mt-2 overflow-hidden">
+                                          <div className={`h-3 rounded-full bg-gradient-to-r ${barCor} transition-all`} style={{ width: `${Math.max((m.pedidos / max) * 100, 4)}%` }} />
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                                          <span className="text-[10px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">🏗️ {m.obras} obra{m.obras !== 1 ? "s" : ""}</span>
+                                          <span className="text-[10px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">👤 {m.solicitantes} solicitante{m.solicitantes !== 1 ? "s" : ""}</span>
+                                          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5">Σ {m.qtd.toLocaleString("pt-BR")}{m.unidade ? ` ${m.unidade}` : ""}</span>
+                                          <span className={`ml-auto flex items-center gap-0.5 text-[10px] font-semibold ${aberto ? "text-[#35658f]" : "text-gray-400"}`}>
+                                            {aberto ? <>fechar <ChevronDown className="w-3 h-3" /></> : <>detalhar <ChevronRight className="w-3 h-3" /></>}
+                                          </span>
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="h-2.5 bg-gray-100 rounded-full mt-1.5 overflow-hidden">
-                                      <div className="h-2.5 rounded-full bg-gradient-to-r from-[#35658f] to-[#5a8ab8]" style={{ width: `${Math.max((m.pedidos / max) * 100, 3)}%` }} />
-                                    </div>
-                                    <p className="text-[10px] text-gray-400 mt-0.5">{m.scs} SCs · {m.obras} obra{m.obras !== 1 ? "s" : ""} · {m.solicitantes} solicitante{m.solicitantes !== 1 ? "s" : ""}</p>
                                   </button>
                                   {aberto && (m.casos ?? []).length > 0 && (
-                                    <div className="px-2.5 pb-2.5 overflow-x-auto">
-                                      <table className="w-full text-[11px]">
-                                        <thead><tr className="text-left text-gray-400 uppercase text-[9px]">
-                                          <th className="py-1 pr-2">SC</th><th className="py-1 pr-2">Data</th><th className="py-1 pr-2">Qtd</th><th className="py-1 pr-2">Obra</th><th className="py-1">Solicitante</th>
-                                        </tr></thead>
-                                        <tbody>
-                                          {m.casos.map((cs: any, j: number) => (
-                                            <tr key={j} className="border-t border-gray-100">
-                                              <td className="py-1 pr-2 font-medium whitespace-nowrap"><LinkSc id={cs.scId} label={cs.numero} /></td>
-                                              <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(cs.data)}</td>
-                                              <td className="py-1 pr-2 whitespace-nowrap">{cs.qtd}{m.unidade ? ` ${m.unidade}` : ""}</td>
-                                              <td className="py-1 pr-2 max-w-[200px] break-words">{cs.obra}</td>
-                                              <td className="py-1 break-words">{cs.solicitante}</td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
+                                    <div className="px-3 pb-3">
+                                      <div className="rounded-xl border border-blue-100/70 bg-white overflow-hidden">
+                                        <div className="overflow-x-auto">
+                                          <table className="w-full text-[11px]">
+                                            <thead><tr className="text-left text-[#35658f] uppercase text-[9px] bg-blue-50/60">
+                                              <th className="py-1.5 px-2.5">SC</th><th className="py-1.5 pr-2">Data</th><th className="py-1.5 pr-2 text-right">Qtd</th><th className="py-1.5 pl-3 pr-2">Obra</th><th className="py-1.5 pr-2.5">Solicitante</th>
+                                            </tr></thead>
+                                            <tbody>
+                                              {m.casos.map((cs: any, j: number) => (
+                                                <tr key={j} className={j % 2 ? "bg-slate-50/50" : "bg-white"}>
+                                                  <td className="py-1.5 px-2.5 font-semibold whitespace-nowrap"><LinkSc id={cs.scId} label={cs.numero} /></td>
+                                                  <td className="py-1.5 pr-2 whitespace-nowrap text-gray-500">{fmtDate(cs.data)}</td>
+                                                  <td className="py-1.5 pr-2 whitespace-nowrap text-right font-bold text-gray-800">{cs.qtd.toLocaleString("pt-BR")}{m.unidade ? <span className="font-normal text-gray-400"> {m.unidade}</span> : ""}</td>
+                                                  <td className="py-1.5 pl-3 pr-2 max-w-[220px] break-words text-gray-600">{cs.obra}</td>
+                                                  <td className="py-1.5 pr-2.5 break-words text-gray-600">{cs.solicitante}</td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
                                     </div>
                                   )}
                                 </div>
@@ -993,19 +1040,63 @@ export default function DashboardGerencialCompras() {
                     <b> Última hora</b> = necessidade para o mesmo dia ou já vencida. <b>Fora do horário</b> = antes das 7h, depois das 18h ou fim de semana (Brasília).
                     Clique no nome para ver as SCs da pessoa (nº, datas, obra) e conferir uma a uma.
                   </FonteNote>
-                  <div className="mt-2 divide-y divide-gray-100">
+                  <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
                     {plan.map((p: any) => {
                       const aberto = solAberto === p.nome;
+                      const antRuim = p.antecedenciaMedia != null && p.antecedenciaMedia < 2;
+                      const iniciais = p.nome.split(" ").filter(Boolean).map((t: string) => t[0]).slice(0, 2).join("").toUpperCase();
+                      // Comparativo vs período anterior
+                      const dSc = p.total - (p.prevTotal ?? 0);
+                      const dAnt = p.antecedenciaMedia != null && p.prevAntecedenciaMedia != null ? p.antecedenciaMedia - p.prevAntecedenciaMedia : null;
+                      const dUrg = p.urgentes - (p.prevUrgentes ?? 0);
+                      const Delta = ({ v, invert, sufixo }: { v: number; invert?: boolean; sufixo?: string }) => {
+                        if (Math.abs(v) < 0.05) return <span className="text-gray-400 font-semibold">= igual</span>;
+                        const bom = invert ? v < 0 : v > 0;
+                        return <span className={`font-bold ${bom ? "text-emerald-600" : "text-rose-600"}`}>{v > 0 ? "▲" : "▼"} {Math.abs(v) % 1 === 0 ? Math.abs(v) : Math.abs(v).toFixed(1).replace(".", ",")}{sufixo ?? ""}</span>;
+                      };
                       return (
-                        <div key={p.nome}>
-                          <button onClick={() => setSolAberto(aberto ? null : p.nome)} className="w-full flex items-center gap-2 py-2.5 text-left">
-                            {aberto ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
-                            <span className="text-sm text-gray-800 font-medium flex-1 min-w-0 break-words">{p.nome}</span>
-                            <span className="text-[11px] text-gray-500 whitespace-nowrap">{p.total} SCs</span>
-                            <span className={`text-[11px] whitespace-nowrap ${p.antecedenciaMedia != null && p.antecedenciaMedia < 2 ? "text-rose-600 font-semibold" : "text-gray-500"}`}>
-                              {p.antecedenciaMedia != null ? `${p.antecedenciaMedia.toFixed(1).replace(".", ",")}d antecedência` : "sem data de necessidade"}
-                            </span>
-                            {p.urgentes > 0 && <span className="text-[11px] text-red-600 font-semibold whitespace-nowrap">{p.urgentes} urg.</span>}
+                        <div key={p.nome} className={`rounded-2xl border transition-all ${aberto ? "border-emerald-300/60 bg-gradient-to-br from-emerald-50/60 to-white shadow-md lg:col-span-2" : "border-gray-100 bg-white hover:border-emerald-200 hover:shadow-sm"}`}>
+                          <button onClick={() => setSolAberto(aberto ? null : p.nome)} className="w-full text-left p-3">
+                            <div className="flex items-center gap-3">
+                              {p.fotoUrl ? (
+                                <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); setFotoZoom({ nome: p.nome, url: p.fotoUrl }); }} className="shrink-0 cursor-zoom-in" title="Toque para ampliar">
+                                  <img src={`${p.fotoUrl}?w=128`} alt={p.nome} loading="lazy" className="w-12 h-12 rounded-full object-cover border-2 border-white shadow" />
+                                </span>
+                              ) : (
+                                <span className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow">{iniciais}</span>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-800 break-words leading-snug">{p.nome}</p>
+                                <p className="text-[10px] text-gray-400">{p.comNecessidade} de {p.total} SCs com data de necessidade · {p.foraHorario} fora do horário</p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-2xl font-extrabold text-gray-800 leading-none">{p.total}</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">SCs</p>
+                              </div>
+                              {aberto ? <ChevronDown className="w-4 h-4 text-emerald-500 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
+                            </div>
+                            {/* Números claros */}
+                            <div className="grid grid-cols-3 gap-2 mt-3">
+                              <div className={`rounded-xl px-2 py-1.5 text-center ${antRuim ? "bg-rose-50 border border-rose-100" : "bg-emerald-50 border border-emerald-100"}`}>
+                                <p className={`text-base font-extrabold leading-none ${antRuim ? "text-rose-600" : "text-emerald-600"}`}>{p.antecedenciaMedia != null ? `${p.antecedenciaMedia.toFixed(1).replace(".", ",")}d` : "—"}</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mt-0.5">antecedência</p>
+                              </div>
+                              <div className={`rounded-xl px-2 py-1.5 text-center border ${(p.pctUltimaHora ?? 0) >= 50 ? "bg-rose-50 border-rose-100" : "bg-gray-50 border-gray-100"}`}>
+                                <p className={`text-base font-extrabold leading-none ${(p.pctUltimaHora ?? 0) >= 50 ? "text-rose-600" : "text-gray-700"}`}>{p.pctUltimaHora != null ? `${p.pctUltimaHora.toFixed(0)}%` : "—"}</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mt-0.5">última hora</p>
+                              </div>
+                              <div className={`rounded-xl px-2 py-1.5 text-center border ${p.urgentes > 0 ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100"}`}>
+                                <p className={`text-base font-extrabold leading-none ${p.urgentes > 0 ? "text-red-600" : "text-gray-700"}`}>{p.urgentes}</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mt-0.5">urgentes</p>
+                              </div>
+                            </div>
+                            {/* Comparativo vs período anterior */}
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[10px] bg-slate-50 border border-slate-100 rounded-xl px-2.5 py-1.5">
+                              <span className="font-semibold uppercase tracking-wide text-gray-400 text-[9px]">vs período anterior</span>
+                              <span className="text-gray-500">SCs: {dSc === 0 ? <span className="text-gray-400 font-semibold">= igual</span> : <span className="font-bold text-slate-600">{dSc > 0 ? "▲" : "▼"} {Math.abs(dSc)}</span>} <span className="text-gray-300">({p.prevTotal ?? 0} antes)</span></span>
+                              <span className="text-gray-500">Antecedência: {dAnt != null ? <Delta v={dAnt} sufixo="d" /> : <span className="text-gray-300">—</span>}</span>
+                              <span className="text-gray-500">Urgentes: <Delta v={dUrg} invert /></span>
+                            </div>
                           </button>
                           {aberto && (
                             <div className="pb-3 pl-6 overflow-x-auto">
@@ -1050,6 +1141,13 @@ export default function DashboardGerencialCompras() {
           })()}
         </div>
       </div>
+      {/* Rev. 4744/4746: foto ampliada (usado no Ranking e no Planejamento por Solicitante) */}
+      <Dialog open={fotoZoom != null} onOpenChange={(o) => { if (!o) setFotoZoom(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="break-words">{fotoZoom?.nome}</DialogTitle></DialogHeader>
+          {fotoZoom && <img src={fotoZoom.url} alt={fotoZoom.nome} className="w-full max-h-[70vh] object-contain rounded-xl" />}
+        </DialogContent>
+      </Dialog>
       </DocCtx.Provider>
     </DashboardLayout>
   );

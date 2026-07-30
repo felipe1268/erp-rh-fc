@@ -11432,16 +11432,37 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           obraNome: r.obraId != null ? (obraMap[r.obraId] ?? null) : null,
         });
       });
-      const planejamento = Object.values(planMap)
-        .filter(p => p.total > 0)
-        .map(p => ({
-          nome: p.nome, total: p.total, urgentes: p.urgentes,
-          antecedenciaMedia: p.comNecessidade ? p.somaAntecedencia / p.comNecessidade : null,
-          pctUltimaHora: p.comNecessidade ? (p.ultimaHora / p.comNecessidade) * 100 : null,
-          comNecessidade: p.comNecessidade,
-          foraHorario: p.foraHorario,
-          scs: p.scs.sort((a, b) => b.data.localeCompare(a.data)).slice(0, 20),
-        }))
+      // Rev. 4746: comparativo com o período anterior (mesmo tamanho de janela)
+      const prevPlanMap: Record<string, { total: number; comNec: number; somaAnt: number; urgentes: number }> = {};
+      scsAll.filter(r => inRange(r.criadoEm, iniPrev, fimPrevEx) && obraOk(r.obraId) && !isCancel(r.status)).forEach(r => {
+        const key = solKey(r);
+        if (!prevPlanMap[key]) prevPlanMap[key] = { total: 0, comNec: 0, somaAnt: 0, urgentes: 0 };
+        const pp = prevPlanMap[key];
+        pp.total++;
+        if (isUrgente(r)) pp.urgentes++;
+        const nec = (r.dataNecessidade ?? "").slice(0, 10);
+        const lpPrev = localParts(r.criadoEm); // Rev. 4747: mesma base local (UTC-3) da janela atual
+        if (lpPrev && /^\d{4}-\d{2}-\d{2}$/.test(nec)) {
+          pp.comNec++;
+          pp.somaAnt += (new Date(nec + "T00:00:00Z").getTime() - new Date(lpPrev.data + "T00:00:00Z").getTime()) / 86_400_000;
+        }
+      });
+      const planejamento = Object.entries(planMap)
+        .filter(([, p]) => p.total > 0)
+        .map(([key, p]) => {
+          const prev = prevPlanMap[key];
+          return {
+            nome: p.nome, total: p.total, urgentes: p.urgentes,
+            antecedenciaMedia: p.comNecessidade ? p.somaAntecedencia / p.comNecessidade : null,
+            pctUltimaHora: p.comNecessidade ? (p.ultimaHora / p.comNecessidade) * 100 : null,
+            comNecessidade: p.comNecessidade,
+            foraHorario: p.foraHorario,
+            prevTotal: prev?.total ?? 0,
+            prevAntecedenciaMedia: prev && prev.comNec > 0 ? prev.somaAnt / prev.comNec : null,
+            prevUrgentes: prev?.urgentes ?? 0,
+            scs: p.scs.sort((a, b) => b.data.localeCompare(a.data)).slice(0, 20),
+          };
+        })
         .sort((a, b) => b.total - a.total).slice(0, 15);
 
       // Ranking de urgência (quem mais pede urgente, com % sobre as SCs dele)
@@ -11736,25 +11757,26 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           solicitante: nomeSolicitante(r),
         };
       });
-      const matMap: Record<string, { descricao: string; unidade: string | null; pedidos: number; scs: Set<number>; qtd: number; casos: { scId: number; qtd: number }[] }> = {};
+      // Rev. 4743: SCs têm linhas duplicadas do mesmo item (ex.: 24 linhas iguais
+      // numa SC) — contar linha de item MAQUIA o gráfico. 1 SC = 1 caso; a
+      // quantidade é SOMADA dentro da SC.
+      const matMap: Record<string, { descricao: string; unidade: string | null; qtd: number; porSc: Map<number, number> }> = {};
       itensSc.forEach(it => {
         const key = `${(it.descricao || "").trim().toUpperCase()}|${(it.unidade || "").trim().toUpperCase()}`;
         if (!key.trim() || key === "|") return;
-        if (!matMap[key]) matMap[key] = { descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, pedidos: 0, scs: new Set(), qtd: 0, casos: [] };
-        matMap[key].pedidos++;
-        matMap[key].scs.add(it.solicitacaoId);
+        if (!matMap[key]) matMap[key] = { descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, qtd: 0, porSc: new Map() };
         matMap[key].qtd += n(it.quantidade);
-        matMap[key].casos.push({ scId: it.solicitacaoId, qtd: n(it.quantidade) });
+        matMap[key].porSc.set(it.solicitacaoId, (matMap[key].porSc.get(it.solicitacaoId) ?? 0) + n(it.quantidade));
       });
       const topMateriais = Object.values(matMap)
         .map(m => {
-          const casos = m.casos
-            .map(cs => ({ scId: cs.scId, qtd: cs.qtd, ...(scInfo[cs.scId] ?? { numero: `SC #${cs.scId}`, data: "", obra: "—", solicitante: "—" }) }))
+          const casos = [...m.porSc.entries()]
+            .map(([scId, qtd]) => ({ scId, qtd, ...(scInfo[scId] ?? { numero: `SC #${scId}`, data: "", obra: "—", solicitante: "—" }) }))
             .sort((a, b) => (b.data || "").localeCompare(a.data || ""))
             .slice(0, 25);
           const obrasSet = new Set(casos.map(cs => cs.obra).filter(o => o !== "—"));
           const solSet = new Set(casos.map(cs => cs.solicitante).filter(s => s !== "—"));
-          return { descricao: m.descricao, unidade: m.unidade, pedidos: m.pedidos, scs: m.scs.size, qtd: m.qtd, obras: obrasSet.size, solicitantes: solSet.size, casos };
+          return { descricao: m.descricao, unidade: m.unidade, pedidos: m.porSc.size, scs: m.porSc.size, qtd: m.qtd, obras: obrasSet.size, solicitantes: solSet.size, casos };
         })
         .sort((a, b) => b.pedidos - a.pedidos)
         .slice(0, 12);
@@ -11837,14 +11859,36 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           if (isUrgente(r)) a.urg++;
         });
       });
-      // Rev. 4742: foto do solicitante (match por nome com o cadastro de funcionários)
-      let fotoMap: Record<string, string> = {};
+      // Rev. 4742/4744: foto do solicitante — match por nome com o cadastro de
+      // funcionários. O nome do usuário costuma ser mais curto que o nomeCompleto
+      // ("Mateus Oliveira" × "MATEUS OLIVEIRA BRITO PIRES"), então além do match
+      // exato fazemos match por tokens (todos os tokens do usuário contidos, em
+      // ordem, no nome do funcionário) — SÓ quando o candidato é único (ambíguo
+      // = sem foto, nunca chutar).
+      const normNome = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim().replace(/\s+/g, " ");
+      const fotoRows: { nome: string; foto: string }[] = [];
       try {
-        const fotosRes = await db.execute(sql`SELECT upper(trim("nomeCompleto")) AS nome, max("fotoUrl") AS foto FROM employees WHERE "fotoUrl" IS NOT NULL GROUP BY 1`);
-        ((fotosRes as any).rows ?? []).forEach((r: any) => { if (r.foto) fotoMap[r.nome] = r.foto; });
+        // Rev. 4747: escopo por empresa — nunca vazar foto de outra tenant
+        const fotosRes = await db.execute(sql`SELECT upper(trim("nomeCompleto")) AS nome, max("fotoUrl") AS foto FROM employees WHERE "fotoUrl" IS NOT NULL AND "companyId" IN (${sql.join(ids.map(i => sql`${i}`), sql`, `)}) GROUP BY 1`);
+        ((fotosRes as any).rows ?? []).forEach((r: any) => { if (r.foto && r.nome) fotoRows.push({ nome: normNome(r.nome), foto: r.foto }); });
       } catch { /* foto é cosmética — nunca derruba o dashboard */ }
+      const resolverFoto = (nomeUser: string): string | null => {
+        const alvo = normNome(nomeUser);
+        if (!alvo) return null;
+        const exato = fotoRows.find(f => f.nome === alvo);
+        if (exato) return exato.foto;
+        const tokens = alvo.split(" ").filter(t => t.length > 1);
+        if (tokens.length < 2) return null;
+        const candidatos = fotoRows.filter(f => {
+          const ft = f.nome.split(" ");
+          let i = 0;
+          for (const t of tokens) { i = ft.indexOf(t, i); if (i < 0) return false; i++; }
+          return true;
+        });
+        return candidatos.length === 1 ? candidatos[0].foto : null;
+      };
       const scoreSolicitantes = Object.values(aggSol)
-        .map(a => ({ nome: a.nome, fotoUrl: fotoMap[a.nome.toUpperCase()] ?? null, ...mkScore(a, sustoSolMap[a.nome.toUpperCase()]) }))
+        .map(a => ({ nome: a.nome, fotoUrl: resolverFoto(a.nome), ...mkScore(a, sustoSolMap[a.nome.toUpperCase()]) }))
         .filter((s: any) => s.score != null && s.scs >= 2)
         .sort((x: any, y: any) => x.score - y.score);
       const scoreObras = Object.entries(aggObra)
@@ -11852,6 +11896,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         .filter((s: any) => s.score != null && s.scs >= 2)
         .sort((x: any, y: any) => x.score - y.score);
       const gestao = { topMateriais, tendencia, scoreSolicitantes, scoreObras };
+      // Rev. 4746: foto também no bloco "Planejamento por Solicitante"
+      planejamento.forEach((p: any) => { p.fotoUrl = resolverFoto(p.nome); });
 
       // Gargalo atual (independe do período): quantas paradas em cada etapa hoje
       const gargalo = {

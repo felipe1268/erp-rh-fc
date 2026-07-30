@@ -1,4 +1,56 @@
 /**
+ * Rev. 4748 - DEMANDA & CONVERSAO: EIXOS E LEGENDAS LEGIVEIS
+ *
+ * O grafico anual mostrava o numero do mes repetido em TODO tick diario
+ * ("04 04 04 05 05..."). Agora: visao anual = tick so na virada do mes com
+ * nome abreviado (jan, fev...); visao mensal = dia a cada 2. Tooltip com data
+ * completa dd/mm/aaaa e nomes por extenso (Solicitacoes/Ordens emitidas).
+ * Legenda fixa embaixo do grafico com as 2 cores.
+ *
+ * Rev. 4747 - CORRECOES DO CODE REVIEW (FOTOS + COMPARATIVO)
+ *
+ * - Tenancy: a busca de fotos de solicitantes agora filtra employees pelo
+ *   companyId das empresas do request (antes varria todas as tenants —
+ *   foto de outra empresa podia vazar por nome parecido).
+ * - Comparativo "vs periodo anterior": antecedencia da janela anterior passou
+ *   a usar a MESMA base de data local (UTC-3, localParts) da janela atual;
+ *   antes usava a data UTC crua e SCs perto da meia-noite deslocavam 1 dia.
+ *
+ * Rev. 4746 - PLANEJAMENTO POR SOLICITANTE: CARDS COM FOTO + COMPARATIVO
+ *
+ * Redesign do bloco: tabela virou grade de cards por pessoa com foto (mesmo
+ * match por tokens do ranking; toque amplia), numero grande de SCs, 3 tiles
+ * de numeros claros (antecedencia media / % ultima hora / urgentes, coloridos
+ * por semaforo) e faixa "vs periodo anterior" com setas verde/vermelho
+ * (SCs, antecedencia — melhora=verde; urgentes — queda=verde). Backend passa
+ * a calcular prevTotal/prevAntecedenciaMedia/prevUrgentes na janela anterior
+ * de mesmo tamanho e fotoUrl por solicitante. Drill-down de SCs mantido.
+ * Pop-up de zoom da foto movido p/ fora do bloco gestao (serve os 2 blocos).
+ *
+ * Rev. 4745 - MATERIAIS MAIS PEDIDOS: LAYOUT MODERNO (PODIO)
+ *
+ * Redesign visual do card: badge de posicao com gradiente (ouro/prata/bronze
+ * no top 3), contador grande de solicitacoes, barra gradiente azul-aco, chips
+ * de obras/solicitantes/quantidade total, acao "detalhar" explicita; drill-down
+ * em tabela zebrada com cabecalho azul e quantidades em destaque.
+ *
+ * Rev. 4744 - RANKING: FOTO DE TODOS OS SOLICITANTES + ZOOM AO TOCAR
+ *
+ * - Match de foto por TOKENS: nome do usuario e mais curto que o nomeCompleto
+ *   do cadastro ("Mateus Oliveira" x "MATEUS OLIVEIRA BRITO PIRES") — agora
+ *   todos os tokens do usuario contidos em ordem no nome do funcionario
+ *   resolvem a foto, SO quando o candidato e unico (ambiguo = iniciais,
+ *   nunca chutar — regra do dixi-name-match). Acentos normalizados.
+ * - Tocar na foto abre pop-up com a imagem ampliada (original, sem ?w=128).
+ *
+ * Rev. 4743 - MATERIAIS MAIS PEDIDOS: DEDUP POR SC (1 SC = 1 PEDIDO)
+ *
+ * Usuario flagrou duplicidade: SCs tem LINHAS repetidas do mesmo item (ex.:
+ * SC-2026-0522 com 24 linhas de "Suporte de Dutos"; cimento 2x em varias SCs).
+ * Contar linha de item maquiava o grafico (24x vindo de UMA SC). Agora:
+ * 1 SC = 1 pedido; quantidades das linhas repetidas sao SOMADAS dentro da SC.
+ * Drill-down mostra 1 linha por SC com a quantidade total. Nota do card avisa.
+ *
  * Rev. 4742 - DASHBOARD GERENCIAL: RANKING COM FOTOS + DRILL-DOWN DE MATERIAIS
  *
  * - Termometro virou "Ranking de Planejamento": ordenado do melhor pro pior,
