@@ -933,7 +933,7 @@ export default function DashboardGerencialCompras() {
                           </div>
                           <span className="text-[10px] text-gray-400">👆 toque na barra ou no nome p/ ver as SCs, obras e quem pediu</span>
                         </div>
-                        <FonteNote><b>Fonte:</b> itens das SCs ativas do período, agrupados por descrição idêntica + unidade. <b>1 SC = 1 pedido</b> (linhas repetidas do mesmo item na mesma SC são somadas na quantidade, nunca contadas 2×). Candidatos naturais a contrato de fornecimento/estoque mínimo.</FonteNote>
+                        <FonteNote><b>Fonte:</b> itens das SCs ativas do período, agrupados por descrição idêntica + unidade. <b>1 SC = 1 pedido</b> (linhas repetidas do mesmo item na mesma SC são somadas na quantidade, nunca contadas 2×). Candidatos naturais a contrato de fornecimento/estoque mínimo. <b>Preço pago</b> = preço unitário da OC vinculada à SC (média ponderada se houver mais de uma); a faixa 💸 e a perda de oportunidade comparam cada compra com o <b>melhor preço pago no período</b>.</FonteNote>
                         {(ge.topMateriais ?? []).length === 0 ? <p className="text-xs text-gray-400 mt-3">Sem itens no período.</p> : (
                           <div className="mt-4 space-y-2">
                             {ge.topMateriais.map((m: any, i: number) => {
@@ -971,6 +971,9 @@ export default function DashboardGerencialCompras() {
                                           <span className="text-[10px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">🏗️ {m.obras} obra{m.obras !== 1 ? "s" : ""}</span>
                                           <span className="text-[10px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">👤 {m.solicitantes} solicitante{m.solicitantes !== 1 ? "s" : ""}</span>
                                           <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5">Σ {m.qtd.toLocaleString("pt-BR")}{m.unidade ? ` ${m.unidade}` : ""}</span>
+                                          {m.precoMin != null && m.precoMax != null && m.precoMax > m.precoMin && (
+                                            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5">💸 {BRL(m.precoMin)} – {BRL(m.precoMax)}{m.unidade ? `/${m.unidade}` : ""}</span>
+                                          )}
                                           <span className={`ml-auto flex items-center gap-0.5 text-[10px] font-semibold ${aberto ? "text-[#35658f]" : "text-gray-400"}`}>
                                             {aberto ? <>fechar <ChevronDown className="w-3 h-3" /></> : <>detalhar <ChevronRight className="w-3 h-3" /></>}
                                           </span>
@@ -980,11 +983,17 @@ export default function DashboardGerencialCompras() {
                                   </button>
                                   {aberto && (m.casos ?? []).length > 0 && (
                                     <div className="px-3 pb-3">
+                                      {m.perdaOportunidade > 0.005 && m.precoMin != null && m.precoMedio != null && (
+                                        <div className="mb-2 rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2 text-xs text-rose-800 leading-relaxed">
+                                          <b>Perda de oportunidade: {BRL(m.perdaOportunidade)}.</b>{" "}
+                                          Devido às compras recorrentes, pagou em média <b>{BRL(m.precoMedio - m.precoMin)} a mais</b>{m.unidade ? ` por ${m.unidade}` : " por unidade"} do que o melhor preço já conseguido no período ({BRL(m.precoMin)}{m.unidade ? `/${m.unidade}` : ""}) — em {m.scsComPreco} compra{m.scsComPreco !== 1 ? "s" : ""} com preço fechado.
+                                        </div>
+                                      )}
                                       <div className="rounded-xl border border-blue-100/70 bg-white overflow-hidden">
                                         <div className="overflow-x-auto">
                                           <table className="w-full text-[11px]">
                                             <thead><tr className="text-left text-[#35658f] uppercase text-[9px] bg-blue-50/60">
-                                              <th className="py-1.5 px-2.5">SC</th><th className="py-1.5 pr-2">Data</th><th className="py-1.5 pr-2 text-right">Qtd</th><th className="py-1.5 pl-3 pr-2">Obra</th><th className="py-1.5 pr-2.5">Solicitante</th>
+                                              <th className="py-1.5 px-2.5">SC</th><th className="py-1.5 pr-2">Data</th><th className="py-1.5 pr-2 text-right">Qtd</th><th className="py-1.5 pr-2 text-right">Preço pago</th><th className="py-1.5 pl-3 pr-2">Obra</th><th className="py-1.5 pr-2.5">Solicitante</th>
                                             </tr></thead>
                                             <tbody>
                                               {m.casos.map((cs: any, j: number) => (
@@ -992,6 +1001,9 @@ export default function DashboardGerencialCompras() {
                                                   <td className="py-1.5 px-2.5 font-semibold whitespace-nowrap"><LinkSc id={cs.scId} label={cs.numero} /></td>
                                                   <td className="py-1.5 pr-2 whitespace-nowrap text-gray-500">{fmtDate(cs.data)}</td>
                                                   <td className="py-1.5 pr-2 whitespace-nowrap text-right font-bold text-gray-800">{cs.qtd.toLocaleString("pt-BR")}{m.unidade ? <span className="font-normal text-gray-400"> {m.unidade}</span> : ""}</td>
+                                                  <td className={`py-1.5 pr-2 whitespace-nowrap text-right font-semibold ${cs.preco != null && m.precoMin != null && cs.preco - m.precoMin > 0.005 ? "text-rose-600" : cs.preco != null ? "text-emerald-700" : "text-gray-400"}`}>
+                                                    {cs.preco != null ? <>{BRL(cs.preco)}{cs.preco - (m.precoMin ?? cs.preco) > 0.005 ? <span className="font-normal text-[9px]"> (+{BRL(cs.preco - m.precoMin)})</span> : ""}</> : "—"}
+                                                  </td>
                                                   <td className="py-1.5 pl-3 pr-2 max-w-[220px] break-words text-gray-600">{cs.obra}</td>
                                                   <td className="py-1.5 pr-2.5 break-words text-gray-600">{cs.solicitante}</td>
                                                 </tr>

@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4751** — Materiais Mais Pedidos: coluna "Preço pago" por SC (via OC vinculada) + faixa de perda de oportunidade vs melhor preço do período.
 - **Rev. 4750** — Recorrência: descrição que era só código ("20.05.03") resolvida pelo catálogo de composições; coluna "Insumo" (nº do insumo) no drill-down.
 - **Rev. 4749** — Recorrência de compras: mesmo produto em unidades diferentes (sc/kg) consolidado numa linha só, com quantidade discriminada por unidade.
 - **Rev. 4748** — Demanda & Conversão: eixo X com nome do mês na virada (anual) / dia a cada 2 (mensal), tooltip dd/mm/aaaa e legenda fixa das 2 linhas.

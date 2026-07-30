@@ -1,4 +1,12 @@
 /**
+ * Rev. 4751 - MATERIAIS MAIS PEDIDOS: PRECO PAGO POR SC + PERDA DE OPORTUNIDADE
+ *
+ * Drill-down do card ganhou coluna "Preco pago" (preco unitario da OC
+ * vinculada ao item da SC; media ponderada se 2+ OCs), colorida: verde =
+ * melhor preco, vermelho = pagou mais (+diferenca). No topo do detalhe,
+ * faixa "Perda de oportunidade: R$ X — pagou em media R$ Y a mais por
+ * unidade vs o melhor preco do periodo". Chip 💸 com faixa min-max no card.
+ *
  * Rev. 4750 - RECORRENCIA: CODIGO NO LUGAR DO NOME RESOLVIDO + Nº DO INSUMO
  *
  * Itens de OC lancados com o CODIGO do insumo no campo descricao ("20.05.03")

@@ -100,7 +100,7 @@ function getClientIp(ctx: any): string | null {
 import { classificarNaturezaItemAlmox } from "../../shared/naturezaItemAlmox";
 export { classificarNaturezaItemAlmox };
 import crypto from "crypto";
-import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, notInArray, isNull } from "drizzle-orm";
 import {
   fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
   almoxarifadoCategorias, almoxarifadoUnidades, almoxarifadoRecebimentos,
@@ -11785,12 +11785,44 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const scIdsPeriodo = scsAtivas.map(r => r.id);
       const itensSc = scIdsPeriodo.length
         ? await db.select({
+            id: comprasSolicitacoesItens.id,
             solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
             descricao: comprasSolicitacoesItens.descricao,
             unidade: comprasSolicitacoesItens.unidade,
             quantidade: comprasSolicitacoesItens.quantidade,
           }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.solicitacaoId, scIdsPeriodo))
         : [];
+      // Rev. 4751: preço efetivamente PAGO por item de SC — via itens de OC
+      // vinculados (solicitacao_item_id). Permite ver flutuação de preço entre
+      // pedidos recorrentes e a perda de oportunidade vs o melhor preço pago.
+      const pagoPorScItem = new Map<number, { valor: number; qtd: number }>();
+      if (itensSc.length > 0) {
+        const scItemIds = itensSc.map(it => it.id);
+        for (let i = 0; i < scItemIds.length; i += 500) {
+          const chunk = scItemIds.slice(i, i + 500);
+          // Rev. 4751b (code-review): join com a OC — só empresas do escopo e OCs
+          // não-canceladas contam como "preço pago" (guard defensivo de tenancy).
+          const ocItens = await db.select({
+            scItemId: comprasOrdensItens.solicitacaoItemId,
+            preco: comprasOrdensItens.precoUnitario,
+            qtd: comprasOrdensItens.quantidade,
+          }).from(comprasOrdensItens)
+            .innerJoin(comprasOrdens, eq(comprasOrdens.id, comprasOrdensItens.ordemId))
+            .where(and(
+              inArray(comprasOrdensItens.solicitacaoItemId, chunk),
+              inArray(comprasOrdens.companyId, ids),
+              notInArray(comprasOrdens.status, ["cancelada", "rascunho"]),
+            ));
+          for (const oi of ocItens) {
+            if (oi.scItemId == null) continue;
+            const preco = n(oi.preco), qtd = n(oi.qtd);
+            if (preco <= 0 || qtd <= 0) continue;
+            const cur = pagoPorScItem.get(oi.scItemId) ?? { valor: 0, qtd: 0 };
+            cur.valor += preco * qtd; cur.qtd += qtd;
+            pagoPorScItem.set(oi.scItemId, cur);
+          }
+        }
+      }
       // Rev. 4742: drill-down por material — quem pediu, quando e em qual obra
       const scInfo: Record<number, { numero: string; data: string; obra: string; solicitante: string }> = {};
       scsAtivas.forEach(r => {
@@ -11804,23 +11836,51 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       // Rev. 4743: SCs têm linhas duplicadas do mesmo item (ex.: 24 linhas iguais
       // numa SC) — contar linha de item MAQUIA o gráfico. 1 SC = 1 caso; a
       // quantidade é SOMADA dentro da SC.
-      const matMap: Record<string, { descricao: string; unidade: string | null; qtd: number; porSc: Map<number, number> }> = {};
+      const matMap: Record<string, { descricao: string; unidade: string | null; qtd: number; porSc: Map<number, number>; pagoPorSc: Map<number, { valor: number; qtd: number }> }> = {};
       itensSc.forEach(it => {
         const key = `${(it.descricao || "").trim().toUpperCase()}|${(it.unidade || "").trim().toUpperCase()}`;
         if (!key.trim() || key === "|") return;
-        if (!matMap[key]) matMap[key] = { descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, qtd: 0, porSc: new Map() };
+        if (!matMap[key]) matMap[key] = { descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, qtd: 0, porSc: new Map(), pagoPorSc: new Map() };
         matMap[key].qtd += n(it.quantidade);
         matMap[key].porSc.set(it.solicitacaoId, (matMap[key].porSc.get(it.solicitacaoId) ?? 0) + n(it.quantidade));
+        const pago = pagoPorScItem.get(it.id);
+        if (pago) {
+          const cur = matMap[key].pagoPorSc.get(it.solicitacaoId) ?? { valor: 0, qtd: 0 };
+          cur.valor += pago.valor; cur.qtd += pago.qtd;
+          matMap[key].pagoPorSc.set(it.solicitacaoId, cur);
+        }
       });
       const topMateriais = Object.values(matMap)
         .map(m => {
           const casos = [...m.porSc.entries()]
-            .map(([scId, qtd]) => ({ scId, qtd, ...(scInfo[scId] ?? { numero: `SC #${scId}`, data: "", obra: "—", solicitante: "—" }) }))
+            .map(([scId, qtd]) => {
+              const pago = m.pagoPorSc.get(scId);
+              const preco = pago && pago.qtd > 0 ? pago.valor / pago.qtd : null;
+              return { scId, qtd, preco, ...(scInfo[scId] ?? { numero: `SC #${scId}`, data: "", obra: "—", solicitante: "—" }) };
+            })
             .sort((a, b) => (b.data || "").localeCompare(a.data || ""))
             .slice(0, 25);
+          // Rev. 4751: flutuação e perda de oportunidade — compara o preço unitário
+          // pago em cada SC com o MELHOR preço pago no período pro mesmo item;
+          // perda = Σ (preço da SC − melhor preço) × qtd comprada naquela SC.
+          const comPreco = [...m.pagoPorSc.values()].filter(p => p.qtd > 0);
+          let precoMin: number | null = null, precoMax: number | null = null, precoMedio: number | null = null, perdaOportunidade = 0;
+          if (comPreco.length > 0) {
+            const unitarios = comPreco.map(p => p.valor / p.qtd);
+            precoMin = Math.min(...unitarios);
+            precoMax = Math.max(...unitarios);
+            const totV = comPreco.reduce((s, p) => s + p.valor, 0), totQ = comPreco.reduce((s, p) => s + p.qtd, 0);
+            precoMedio = totQ > 0 ? totV / totQ : null;
+            perdaOportunidade = comPreco.reduce((s, p) => s + (p.valor / p.qtd - precoMin!) * p.qtd, 0);
+          }
           const obrasSet = new Set(casos.map(cs => cs.obra).filter(o => o !== "—"));
           const solSet = new Set(casos.map(cs => cs.solicitante).filter(s => s !== "—"));
-          return { descricao: m.descricao, unidade: m.unidade, pedidos: m.porSc.size, scs: m.porSc.size, qtd: m.qtd, obras: obrasSet.size, solicitantes: solSet.size, casos };
+          return {
+            descricao: m.descricao, unidade: m.unidade, pedidos: m.porSc.size, scs: m.porSc.size, qtd: m.qtd,
+            obras: obrasSet.size, solicitantes: solSet.size, casos,
+            precoMin, precoMax, precoMedio, perdaOportunidade,
+            scsComPreco: comPreco.length,
+          };
         })
         .sort((a, b) => b.pedidos - a.pedidos)
         .slice(0, 12);
