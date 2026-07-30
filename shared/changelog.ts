@@ -1,4 +1,16 @@
 /**
+ * Rev. 4734 - POKA-YOKE: DATA DE NECESSIDADE NUNCA ANTERIOR AO PEDIDO
+ *
+ * - Bloqueio no SERVIDOR (criar e editar SC): data de necessidade anterior a
+ *   data do pedido e rejeitada com mensagem clara (nao existe "preciso pra
+ *   ontem" formalizado em SC).
+ * - Prevencao no formulario: campo de data com min = hoje (criacao e inicio
+ *   de locacao).
+ * - Correcao de dados: 118 SCs (todas as empresas) tinham necessidade
+ *   anterior ao pedido (backlog da implantacao + 2 anos digitados errado);
+ *   todas ajustadas para data do pedido + 2 dias. Antecedencias negativas
+ *   somem do Dashboard Gerencial.
+ *
  * Rev. 4733 - DASHBOARD GERENCIAL: RECORRENCIA DE COMPRA + OPORTUNIDADES
  *
  * Novo bloco "O que Mais Compramos & Recorrencia":

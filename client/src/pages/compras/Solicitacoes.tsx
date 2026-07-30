@@ -3303,6 +3303,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                         </label>
                         <input
                           type="date"
+                          min={new Date().toISOString().slice(0, 10)}
                           value={form.locacaoDataInicioPrevista}
                           onChange={e => {
                             const ini = e.target.value;
@@ -4502,6 +4503,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   <label className="text-xs font-medium text-gray-700">Data de Necessidade</label>
                   <input
                     type="date"
+                    min={new Date().toISOString().slice(0, 10)}
                     className="w-full h-8 px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
                     value={form.dataNecessidade}
                     onChange={e => setForm(p => ({ ...p, dataNecessidade: e.target.value }))}

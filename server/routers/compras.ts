@@ -4518,6 +4518,14 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     .mutation(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
+      // Rev. 4734 — Poka-Yoke: data de necessidade NUNCA pode ser anterior à data
+      // do pedido (hoje, Brasília). Não existe "preciso pra ontem" formalizado em SC.
+      if (input.dataNecessidade) {
+        const hojeBr = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+        if (input.dataNecessidade.slice(0, 10) < hojeBr) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Data de necessidade (${input.dataNecessidade.slice(0, 10).split("-").reverse().join("/")}) não pode ser anterior à data do pedido (hoje). Ajuste a data.` });
+        }
+      }
       if (input.tipo === "pecas_veiculo" && !input.vehicleId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione um veículo para SC de Peças Veículo." });
       }
@@ -14482,6 +14490,14 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const [sc] = await db.select().from(comprasSolicitacoes)
         .where(and(eq(comprasSolicitacoes.id, input.id), eq(comprasSolicitacoes.companyId, input.companyId)));
       if (!sc) throw new TRPCError({ code: "NOT_FOUND", message: "SC não encontrada." });
+
+      // Rev. 4734 — Poka-Yoke: necessidade nunca anterior à data do pedido (criação da SC).
+      if (input.dataNecessidade) {
+        const dataPedido = String(sc.criadoEm ?? "").slice(0, 10) || new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+        if (input.dataNecessidade.slice(0, 10) < dataPedido) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Data de necessidade não pode ser anterior à data do pedido (${dataPedido.split("-").reverse().join("/")}).` });
+        }
+      }
 
       if (!["pendente", "aprovado"].includes(sc.status ?? "") && sc.aprovacaoStatus !== "aguardando") {
         const activeCots = await db.select({ id: comprasCotacoes.id })
