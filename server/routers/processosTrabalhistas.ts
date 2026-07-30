@@ -76,11 +76,26 @@ export const processosTrabRouter = router({
         docCountMap = new Map(docCounts.map(d => [d.processoId, Number(d.count)]));
       }
 
+      // Rev. 4765 — % de risco (0–100): probabilidade de condenação da ÚLTIMA análise IA
+      const probMap = new Map<number, number>();
+      if (procIds.length > 0) {
+        const analiseRows = await db.select({
+          processoId: processoAnalises.processoId,
+          prob: processoAnalises.probabilidadeCondenacao,
+        }).from(processoAnalises)
+          .where(inArray(processoAnalises.processoId, procIds))
+          .orderBy(desc(processoAnalises.id));
+        for (const r of analiseRows) {
+          if (!probMap.has(r.processoId) && r.prob != null) probMap.set(r.processoId, Number(r.prob));
+        }
+      }
+
       return filtered.map(p => ({
         ...p,
         employee: empMap.get(p.employeeId) || null,
         pedidos: typeof p.pedidos === "string" ? JSON.parse(p.pedidos) : (p.pedidos || []),
         totalDocumentos: docCountMap.get(p.id) || 0,
+        probabilidadeCondenacao: probMap.get(p.id) ?? null,
       })).sort((a, b) => {
         // Ordenar: em_andamento primeiro, encerrado por último
         const statusOrder: Record<string, number> = {
@@ -113,11 +128,19 @@ export const processosTrabRouter = router({
         ))
         .orderBy(desc(processosAndamentos.data));
 
+      // Rev. 4765 — mesmo contrato da lista: % da última análise IA
+      const [ultimaAnalise] = await db.select({ prob: processoAnalises.probabilidadeCondenacao })
+        .from(processoAnalises)
+        .where(eq(processoAnalises.processoId, input.id))
+        .orderBy(desc(processoAnalises.id))
+        .limit(1);
+
       return {
         ...processo,
         pedidos: typeof processo.pedidos === "string" ? JSON.parse(processo.pedidos) : (processo.pedidos || []),
         employee: emp || null,
         andamentos,
+        probabilidadeCondenacao: ultimaAnalise?.prob ?? null,
       };
     }),
 

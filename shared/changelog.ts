@@ -1,4 +1,13 @@
 /**
+ * Rev. 4765 - PROCESSOS TRABALHISTAS: % DE RISCO 0-100 NA LISTA
+ *
+ * A coluna Risco da lista de processos agora mostra, alem do selo
+ * Baixo/Medio/Alto, o percentual de 0 a 100% (probabilidade de condenacao
+ * da ultima analise IA do processo), com cor por faixa (verde <40, ambar
+ * 40-69, vermelho >=70). O badge de risco na tela de detalhe tambem exibe
+ * o %. Processos ainda sem analise IA nao mostram numero (sem inventar
+ * percentual).
+ *
  * Rev. 4764 - VALE ALIMENTACAO: POKA-YOKE BENEFICIO DESATIVADO COM VALOR
  *
  * Causa do "valor do cafe nao aparece no mes seguinte": a config vigente

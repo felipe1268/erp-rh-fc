@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4765** — Processos Trabalhistas: % de risco 0–100 (probabilidade de condenação da IA) na coluna Risco da lista e no badge do detalhe.
 - **Rev. 4764** — Vale Alimentação: fix config vigente com café/lanche desativados (dados) + poka-yoke ao salvar benefício desativado com valor.
 - **Rev. 4763** — Vale Alimentação: config única p/ toda empresa (sem Escritório Central × obra) + guias Vigente/Histórico.
 - **Rev. 4762** — Evolução Mensal: visual refinado (chips só nos extremos, deltas compactos, legenda, Score em gradiente).

@@ -502,6 +502,7 @@ export default function ProcessosTrabalhistas() {
                 </span>
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${RISCO_LABELS[p.risco]?.bg} ${RISCO_LABELS[p.risco]?.color}`}>
                   {RISCO_LABELS[p.risco]?.icon} Risco {RISCO_LABELS[p.risco]?.label}
+                  {(p as any).probabilidadeCondenacao != null && <> • {Math.min(100, Math.max(0, (p as any).probabilidadeCondenacao))}%</>}
                 </span>
                 <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
                   Fase: {FASE_LABELS[p.fase]}
@@ -1633,6 +1634,11 @@ export default function ProcessosTrabalhistas() {
                           </td>
                           <td className="p-2.5 text-center">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${riscoInfo.bg} ${riscoInfo.color}`}>{riscoInfo.icon} {riscoInfo.label}</span>
+                            {p.probabilidadeCondenacao != null && (
+                              <p className={`mt-0.5 text-[11px] font-semibold ${p.probabilidadeCondenacao >= 70 ? "text-red-600" : p.probabilidadeCondenacao >= 40 ? "text-amber-600" : "text-green-600"}`} title="Probabilidade de condenação (análise IA)">
+                                {Math.min(100, Math.max(0, p.probabilidadeCondenacao))}%
+                              </p>
+                            )}
                           </td>
                           <td className="p-2.5 text-center text-xs">{FASE_LABELS[p.fase]}</td>
                           <td className="p-2.5 text-xs">{formatBRL(p.valorCausa)}</td>
