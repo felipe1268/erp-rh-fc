@@ -16,10 +16,12 @@ import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import {
   ClipboardList, ShoppingCart, AlertTriangle, Clock,
   RefreshCw, Users, TrendingDown, ChevronDown, ChevronRight, Info,
-  Lightbulb, BarChart3,
+  Lightbulb, BarChart3, CalendarClock, ArrowUpRight, Target, Layers3, Gauge,
+  CircleDollarSign, Activity, Building2, CalendarClock,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
+  AreaChart, Area, PieChart, Pie, Cell, LineChart, Line,
 } from "recharts";
 
 const BRL = (v: number) =>
@@ -31,9 +33,29 @@ const fmtDate = (d: string | null | undefined) => {
   return `${day}/${m}/${y}`;
 };
 
+// Rev. 4735 — links de auditoria: abrem a OC/SC real com o detalhe destacado
+const LinkOc = ({ id, label }: { id: number | null | undefined; label: string }) =>
+  id != null ? (
+    <a href={`/compras/ordens?destaque=${id}`} className="text-blue-600 underline decoration-blue-300 underline-offset-2 hover:text-blue-800">{label}</a>
+  ) : <>{label}</>;
+
+const LinkSc = ({ id, label }: { id: number | null | undefined; label: string }) =>
+  id != null ? (
+    <a href={`/compras/solicitacoes?destaque=${id}`} className="text-blue-600 underline decoration-blue-300 underline-offset-2 hover:text-blue-800">{label}</a>
+  ) : <>{label}</>;
+
 const fmtDias = (v: number | null | undefined) => {
   if (v == null) return "—";
-  if (v < 1) return `${Math.round(v * 24)}h`;
+  // Rev. 4736 — abaixo de 1 dia, mostrar h/min/s reais (nunca "0h")
+  if (v < 1) {
+    const totalSeg = Math.round(v * 86_400);
+    const h = Math.floor(totalSeg / 3600);
+    const m = Math.floor((totalSeg % 3600) / 60);
+    const s = totalSeg % 60;
+    if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min`;
+    if (m > 0) return `${m}min ${String(s).padStart(2, "0")}s`;
+    return `${s}s`;
+  }
   return `${v.toFixed(1).replace(".", ",")} dias`;
 };
 
@@ -41,13 +63,13 @@ function KpiCard({ icon: Icon, label, value, sub, color }: {
   icon: any; label: string; value: string | number; sub?: string; color: string;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3 shadow-sm text-left w-full">
-      <div className={`w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
+    <div className="fc-kpi bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3 shadow-sm text-left w-full">
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
         <Icon className="w-5 h-5 text-white" />
       </div>
       <div className="min-w-0">
         <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide leading-tight">{label}</p>
-        <p className="text-2xl font-bold text-gray-900 leading-tight">{value}</p>
+        <p className="text-2xl font-bold text-slate-950 leading-tight tracking-tight">{value}</p>
         {sub && <p className="text-[10px] text-gray-400 leading-tight">{sub}</p>}
       </div>
     </div>
@@ -55,7 +77,55 @@ function KpiCard({ icon: Icon, label, value, sub, color }: {
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 ${className}`}>{children}</div>;
+  return <div className={`fc-card bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 ${className}`}>{children}</div>;
+}
+
+function SectionLabel({ eyebrow, title, icon: Icon, accent = "text-slate-700" }: {
+  eyebrow?: string; title: string; icon: any; accent?: string;
+}) {
+  return <div className="flex items-start gap-3">
+    <div className={`mt-0.5 w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center ${accent}`}><Icon className="w-4.5 h-4.5" /></div>
+    <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{eyebrow}</p><h3 className="font-bold text-slate-800 tracking-tight">{title}</h3></div>
+  </div>;
+}
+
+function ExecutivePulse({ g, pa, lt, plan, gerMes }: { g: any; pa: any; lt: any; plan: any[]; gerMes: number | null }) {
+  const serie: any[] = g.seriePorDia ?? [];
+  const trend = serie.map((s: any) => ({ label: gerMes === null ? s.dia.slice(5, 7) : s.dia.slice(8, 10), scs: s.scs, ocs: s.ocs }));
+  const obras = (pa.porObra ?? []).slice(0, 5).map((x: any) => ({ name: x.obraNome, value: x.perda }));
+  const colors = ["#f06449", "#f59e0b", "#1f8a70", "#35658f", "#8b5cf6"];
+  const urgentRate = g.kpis.scs ? (g.kpis.scsUrgentes / g.kpis.scs) * 100 : 0;
+  const planned = plan.length ? plan.reduce((a: number, p: any) => a + (p.antecedenciaMedia ?? 0), 0) / plan.length : 0;
+  return <div className="grid grid-cols-1 xl:grid-cols-[1.45fr_.75fr_.75fr] gap-4">
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between mb-1">
+        <SectionLabel eyebrow="Pulso operacional" title="Demanda & conversão" icon={Activity} accent="text-[#35658f]" />
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{gerMes === null ? "jan–dez" : "dia a dia"}</span>
+      </div>
+      <p className="text-xs text-slate-500 mb-2">O fluxo de solicitações até ordens emitidas no período selecionado.</p>
+      <div className="h-44">
+        <ResponsiveContainer width="100%" height="100%"><AreaChart data={trend} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}>
+          <defs><linearGradient id="fc-scs" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35658f" stopOpacity=".28"/><stop offset="100%" stopColor="#35658f" stopOpacity=".02"/></linearGradient></defs>
+          <CartesianGrid stroke="#e8edf2" vertical={false}/><XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}/><YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false}/><Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #dbe3ea", fontSize: 12 }}/><Area type="monotone" dataKey="scs" name="SCs" stroke="#35658f" strokeWidth={2.5} fill="url(#fc-scs)"/><Line type="monotone" dataKey="ocs" name="OCs" stroke="#f06449" strokeWidth={2} dot={false}/>
+        </AreaChart></ResponsiveContainer>
+      </div>
+    </Card>
+    <Card>
+      <SectionLabel eyebrow="Risco de urgência" title="Índice de pressão" icon={Gauge} accent="text-[#f06449]" />
+      <div className="flex items-center justify-center py-3"><div className="fc-gauge" style={{"--value": `${Math.min(urgentRate, 100) * 3.6}deg`} as React.CSSProperties}><div><strong>{urgentRate.toFixed(0)}%</strong><span>SCs urgentes</span></div></div></div>
+      <div className="border-t border-slate-100 pt-2 text-xs text-slate-500 leading-relaxed"><b className="text-slate-700">{g.kpis.scsUrgentes}</b> de {g.kpis.scs} solicitações precisam de atenção imediata.</div>
+    </Card>
+    <Card>
+      <SectionLabel eyebrow="Maturidade do pedido" title="Antecedência média" icon={CalendarClock} accent="text-[#1f8a70]" />
+      <p className="text-4xl font-bold text-slate-950 tracking-tight mt-5">{planned.toFixed(1).replace(".", ",")}<span className="text-base font-semibold text-slate-400 ml-1">dias</span></p>
+      <div className="mt-4 h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-[#1f8a70]" style={{width: `${Math.min(Math.max(planned / 10 * 100, 4), 100)}%`}}/></div>
+      <p className="text-xs text-slate-500 mt-2">média entre solicitantes · {plan.length} perfis com SCs</p>
+    </Card>
+    {obras.length > 0 && <Card className="xl:col-span-3">
+      <div className="flex items-center justify-between mb-2"><SectionLabel eyebrow="Concentração de perda" title="Onde o dinheiro está escapando" icon={Building2} accent="text-[#f06449]" /><span className="text-xs text-slate-400">por obra</span></div>
+      <div className="h-36 flex items-center"><div className="w-1/3 h-full"><ResponsiveContainer><PieChart><Pie data={obras} dataKey="value" nameKey="name" innerRadius={38} outerRadius={58} paddingAngle={3}>{obras.map((_: any, i: number) => <Cell key={i} fill={colors[i % colors.length]}/>)}</Pie><Tooltip formatter={(v: any) => BRL(Number(v))}/></PieChart></ResponsiveContainer></div><div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-3">{obras.map((o: any, i: number) => <div key={o.name} className="min-w-0"><div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{background: colors[i % colors.length]}}/><span className="text-[11px] text-slate-500 break-words">{o.name}</span></div><b className="text-sm text-slate-800">{BRL(o.value)}</b></div>)}</div></div>
+    </Card>}
+  </div>;
 }
 
 /** Nota "Fonte & método" — rastreabilidade metodológica de cada bloco */
@@ -89,6 +159,7 @@ export default function DashboardGerencialCompras() {
   const [inconsAberto, setInconsAberto] = useState(false);
   const [recModo, setRecModo] = useState<"valor" | "freq">("valor");
   const [recAberto, setRecAberto] = useState<string | null>(null);
+  const [sustoAberto, setSustoAberto] = useState(false);
 
   const { data: gerData } = trpc.compras.getDashboardGerencial.useQuery(
     { companyIds, ano: gerAno, mes: gerMes, obraId: gerObraId, solicitante: null, janelaAgrupamento: janela },
@@ -97,11 +168,29 @@ export default function DashboardGerencialCompras() {
 
   return (
     <DashboardLayout>
-      <div className="p-5 min-h-screen bg-gray-50">
+      <div className="fc-dashboard p-4 sm:p-5 min-h-screen bg-[#f4f6f8]">
         <div className="max-w-[1300px] mx-auto space-y-5">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Dashboard Gerencial de Compras</h1>
-            <p className="text-sm text-gray-500">Visão executiva: volume, perda de poder de compra, tempo do fluxo e planejamento — todo número é rastreável até a SC/OC de origem</p>
+          <style>{`
+            .fc-dashboard { color: #263545; }
+            .fc-dashboard::before { content:""; display:block; position:fixed; inset:0; pointer-events:none; opacity:.25; background-image: radial-gradient(#b8c4ce .6px, transparent .6px); background-size:14px 14px; mask-image: linear-gradient(to bottom, black, transparent 55%); }
+            .fc-card { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+            .fc-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(38,53,69,.08); border-color:#c8d5df; }
+            .fc-kpi { border-top: 3px solid #35658f; }
+            .fc-kpi:nth-child(2) { border-top-color:#f06449; } .fc-kpi:nth-child(3) { border-top-color:#1f8a70; } .fc-kpi:nth-child(4) { border-top-color:#8b5cf6; }
+            .fc-gauge { width:132px; height:132px; border-radius:50%; display:grid; place-items:center; background: conic-gradient(#f06449 var(--value), #edf1f4 0); position:relative; }
+            .fc-gauge:after { content:""; position:absolute; width:102px; height:102px; border-radius:50%; background:white; }
+            .fc-gauge > div { position:relative; z-index:1; text-align:center; display:flex; flex-direction:column; } .fc-gauge strong { font-size:28px; line-height:1; color:#263545; } .fc-gauge span { margin-top:5px; font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:.08em; }
+            @media (prefers-reduced-motion: reduce) { .fc-card { transition:none; } .fc-card:hover { transform:none; } }
+          `}</style>
+          <div className="relative">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-[#f06449]"/><span className="text-[10px] font-bold tracking-[.2em] uppercase text-[#35658f]">FC Gestão Integrada · inteligência de compras</span></div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-[-.04em] text-slate-950">Dashboard Gerencial</h1>
+                <p className="text-sm text-slate-500 mt-1 max-w-3xl">Uma leitura executiva do poder de compra, do ritmo operacional e da qualidade do planejamento. Cada número abre caminho até a SC ou OC de origem.</p>
+              </div>
+              <div className="hidden sm:flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border border-slate-200 bg-white rounded-full px-3 py-1.5 shadow-sm"><span className="w-1.5 h-1.5 rounded-full bg-[#1f8a70]"/> Dados auditáveis</div>
+            </div>
           </div>
 
           <PeriodSelectorCard
@@ -144,6 +233,7 @@ export default function DashboardGerencialCompras() {
                   <KpiCard icon={TrendingDown} label="Perda por compra picada" value={BRL(pa.totalPerda)}
                     sub={`${pa.grupos} grupos · ${pa.comprasEnvolvidas} OCs · janela ${pa.janelaDias}d`} color="bg-rose-600" />
                 </div>
+                 <ExecutivePulse g={g} pa={pa} lt={lt} plan={plan} gerMes={gerMes} />
 
                 {/* ── Destaques (insights automáticos) ── */}
                 {(() => {
@@ -239,8 +329,8 @@ export default function DashboardGerencialCompras() {
                                   {ins.detalhe.map((d: any, i: number) => (
                                     <tr key={i} className="border-t border-gray-50 text-gray-700">
                                       <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(d.data)}</td>
-                                      <td className="py-1 pr-2 font-medium whitespace-nowrap">{d.numeroOc ?? `#${d.ordemId}`}</td>
-                                      <td className="py-1 pr-2 whitespace-nowrap">{d.numeroSc ?? "—"}</td>
+                                      <td className="py-1 pr-2 font-medium whitespace-nowrap"><LinkOc id={d.ordemId} label={d.numeroOc ?? `#${d.ordemId}`} /></td>
+                                      <td className="py-1 pr-2 whitespace-nowrap">{d.numeroSc ? <LinkSc id={d.scId} label={d.numeroSc} /> : "—"}</td>
                                       <td className="py-1 pr-2 max-w-[160px] break-words">{d.obraId != null ? ((g.obras.find((o: any) => o.id === d.obraId)?.nome) ?? `#${d.obraId}`) : "—"}</td>
                                       <td className="py-1 pr-2 max-w-[140px] break-words">{d.solicitante}</td>
                                       <td className="py-1 pr-2 text-right">{d.qtd}</td>
@@ -368,8 +458,8 @@ export default function DashboardGerencialCompras() {
                                       {r.detalhe.map((d: any, i: number) => (
                                         <tr key={i} className="border-t border-gray-50 text-gray-700">
                                           <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(d.data)}</td>
-                                          <td className="py-1 pr-2 font-medium whitespace-nowrap">{d.numeroOc ?? `#${d.ordemId}`}</td>
-                                          <td className="py-1 pr-2 whitespace-nowrap">{d.numeroSc ?? "—"}</td>
+                                          <td className="py-1 pr-2 font-medium whitespace-nowrap"><LinkOc id={d.ordemId} label={d.numeroOc ?? `#${d.ordemId}`} /></td>
+                                          <td className="py-1 pr-2 whitespace-nowrap">{d.numeroSc ? <LinkSc id={d.scId} label={d.numeroSc} /> : "—"}</td>
                                           <td className="py-1 pr-2 max-w-[160px] break-words">{d.obraId != null ? ((g.obras.find((o: any) => o.id === d.obraId)?.nome) ?? `#${d.obraId}`) : "—"}</td>
                                           <td className="py-1 pr-2 max-w-[140px] break-words">{d.solicitante}</td>
                                           <td className="py-1 pr-2 text-right">{d.qtd}</td>
@@ -502,9 +592,9 @@ export default function DashboardGerencialCompras() {
                             <tbody>
                               {lt.casosLentos.map((c: any, i: number) => (
                                 <tr key={i} className="border-t border-gray-50 text-gray-700">
-                                  <td className="py-1 pr-2 font-medium whitespace-nowrap">{c.numeroSc ?? "—"}</td>
+                                  <td className="py-1 pr-2 font-medium whitespace-nowrap">{c.numeroSc ? <LinkSc id={c.scId} label={c.numeroSc} /> : "—"}</td>
                                   <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(c.dataSc)}</td>
-                                  <td className="py-1 pr-2 font-medium whitespace-nowrap">{c.numeroOc ?? "—"}</td>
+                                  <td className="py-1 pr-2 font-medium whitespace-nowrap">{c.numeroOc ? <LinkOc id={c.ocId} label={c.numeroOc} /> : "—"}</td>
                                   <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(c.dataOc)}</td>
                                   <td className="py-1 pr-2 max-w-[180px] break-words">{c.obraNome ?? "—"}</td>
                                   <td className="py-1 text-right font-semibold text-rose-600 whitespace-nowrap">{fmtDias(c.dias)}</td>
@@ -517,6 +607,118 @@ export default function DashboardGerencialCompras() {
                     </div>
                   )}
                 </Card>
+
+                {/* ── Horizonte de Planejamento: pedido → entrega prevista ── */}
+                {(() => {
+                  const hz: any = (g as any).horizonte;
+                  if (!hz || hz.comEntrega === 0) return null;
+                  const pct = (v: number) => (hz.comEntrega > 0 ? (v / hz.comEntrega) * 100 : 0);
+                  const buckets = [
+                    { label: "Até 3 dias (no susto)", v: hz.buckets.ate3, cor: "bg-rose-500", txt: "text-rose-600" },
+                    { label: "4 a 7 dias", v: hz.buckets.de4a7, cor: "bg-amber-400", txt: "text-amber-600" },
+                    { label: "8 a 14 dias", v: hz.buckets.de8a14, cor: "bg-blue-400", txt: "text-blue-600" },
+                    { label: "15+ dias (planejado)", v: hz.buckets.acima15, cor: "bg-emerald-500", txt: "text-emerald-600" },
+                  ];
+                  return (
+                    <Card>
+                      <div className="flex items-center gap-2">
+                        <CalendarClock className="w-5 h-5 text-cyan-600" />
+                        <h3 className="font-semibold text-gray-800">Horizonte de Planejamento (Pedido → Entrega)</h3>
+                      </div>
+                      <FonteNote>
+                        <b>Fonte:</b> OCs ativas do período com data de entrega prevista ({hz.comEntrega} de {hz.comEntrega + hz.semEntrega}; datas inconsistentes e &gt;365d fora).
+                        <b> Horizonte</b> = entrega prevista − criação da OC. <b>Compra no susto</b> = entrega em até 3 dias, mesmo sem marcar urgente.<br />
+                        <b>Referência de boas práticas</b> (PMBOK / Lean Construction): o pedido nasce do cronograma, não do estoque zerado —
+                        <b> ≥ 15 dias</b> para material corrente e <b>≥ 30 dias</b> para itens sob encomenda (esquadrias, aço cortado/dobrado, elevadores etc.).
+                      </FonteNote>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                        <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Horizonte mediano</p>
+                          <p className={`text-2xl font-bold ${hz.mediana != null && hz.mediana < hz.metaDias ? "text-rose-600" : "text-emerald-600"}`}>
+                            {hz.mediana != null ? `${hz.mediana.toFixed(0)} dias` : "—"}
+                          </p>
+                          <p className="text-[11px] text-gray-500">meta de referência: ≥ {hz.metaDias} dias</p>
+                        </div>
+                        <div className="rounded-lg border border-rose-100 bg-rose-50/60 p-3">
+                          <p className="text-[10px] font-semibold text-rose-500 uppercase tracking-wide">Compras no susto (≤3d)</p>
+                          <p className="text-2xl font-bold text-rose-600">{hz.totalSusto} <span className="text-sm font-semibold">({pct(hz.buckets.ate3).toFixed(0)}%)</span></p>
+                          <p className="text-[11px] text-gray-500">{BRL(hz.valorSusto)} comprados sem horizonte</p>
+                        </div>
+                        <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Dentro da meta (15+ dias)</p>
+                          <p className="text-2xl font-bold text-emerald-600">{pct(hz.buckets.acima15).toFixed(0)}%</p>
+                          <p className="text-[11px] text-gray-500">{hz.buckets.acima15} de {hz.comEntrega} OCs</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 space-y-1.5">
+                        {buckets.map(b => (
+                          <div key={b.label}>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-600">{b.label}</span>
+                              <span className={`font-semibold ${b.txt}`}>{b.v} OCs · {pct(b.v).toFixed(0)}%</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full mt-0.5">
+                              <div className={`h-2 rounded-full ${b.cor}`} style={{ width: `${Math.max(pct(b.v), 1)}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {hz.porSolicitante?.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-gray-100">
+                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">% de compras no susto por solicitante (mín. 3 OCs)</p>
+                          {hz.porSolicitante.map((s: any) => (
+                            <div key={s.nome} className="flex justify-between text-xs py-0.5">
+                              <span className="text-gray-600 break-words min-w-0 pr-2">{s.nome}</span>
+                              <span className={`font-semibold whitespace-nowrap ${s.pctSusto >= 40 ? "text-rose-600" : "text-amber-600"}`}>{s.susto} de {s.ocs} · {s.pctSusto.toFixed(0)}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {hz.casosSusto?.length > 0 && (
+                        <div className="mt-3">
+                          <button onClick={() => setSustoAberto(v => !v)} className="flex items-center gap-1 text-xs font-medium text-cyan-700">
+                            {sustoAberto ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            Ver os maiores casos no susto (R$)
+                          </button>
+                          {sustoAberto && (
+                            <div className="mt-2 overflow-x-auto">
+                              <table className="w-full text-[11px]">
+                                <thead>
+                                  <tr className="text-gray-400 text-left">
+                                    <th className="py-1 pr-2 font-medium">OC</th>
+                                    <th className="py-1 pr-2 font-medium">SC</th>
+                                    <th className="py-1 pr-2 font-medium">Criada</th>
+                                    <th className="py-1 pr-2 font-medium">Entrega prev.</th>
+                                    <th className="py-1 pr-2 font-medium text-right">Horizonte</th>
+                                    <th className="py-1 pr-2 font-medium">Urgente?</th>
+                                    <th className="py-1 pr-2 font-medium">Obra</th>
+                                    <th className="py-1 pr-2 font-medium">Solicitante</th>
+                                    <th className="py-1 font-medium text-right">Valor</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {hz.casosSusto.map((c: any, i: number) => (
+                                    <tr key={i} className="border-t border-gray-50 text-gray-700">
+                                      <td className="py-1 pr-2 font-medium whitespace-nowrap"><LinkOc id={c.ocId} label={c.numeroOc ?? `#${c.ocId}`} /></td>
+                                      <td className="py-1 pr-2 whitespace-nowrap">{c.numeroSc ? <LinkSc id={c.scId} label={c.numeroSc} /> : "—"}</td>
+                                      <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(c.criadaEm)}</td>
+                                      <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(c.entregaPrevista)}</td>
+                                      <td className="py-1 pr-2 text-right font-semibold text-rose-600 whitespace-nowrap">{c.dias.toFixed(0)}d</td>
+                                      <td className="py-1 pr-2">{c.urgente ? <span className="text-red-600 font-semibold">Sim</span> : <span className="text-gray-400">Não</span>}</td>
+                                      <td className="py-1 pr-2 max-w-[160px] break-words">{c.obraNome ?? "—"}</td>
+                                      <td className="py-1 pr-2 max-w-[140px] break-words">{c.solicitante}</td>
+                                      <td className="py-1 text-right font-semibold whitespace-nowrap">{BRL(c.total)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })()}
 
                 {/* ── Bloco 3: Planejamento por solicitante ── */}
                 <Card>
@@ -563,7 +765,7 @@ export default function DashboardGerencialCompras() {
                                 <tbody>
                                   {p.scs.map((s: any, i: number) => (
                                     <tr key={`${s.numeroSc}|${s.data}|${i}`} className="border-t border-gray-50 text-gray-700">
-                                      <td className="py-1 pr-2 font-medium whitespace-nowrap">{s.numeroSc}</td>
+                                      <td className="py-1 pr-2 font-medium whitespace-nowrap"><LinkSc id={s.scId} label={s.numeroSc} /></td>
                                       <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(s.data)}</td>
                                       <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(s.necessidade)}</td>
                                       <td className={`py-1 pr-2 text-right whitespace-nowrap ${s.antecedencia != null && s.antecedencia <= 0 ? "text-rose-600 font-semibold" : ""}`}>

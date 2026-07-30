@@ -50,6 +50,10 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4738** — Dashboard Gerencial: bloco "Horizonte de Planejamento (Pedido → Entrega)" — compra no susto (entrega ≤3d mesmo sem urgência), buckets, mediana vs meta ≥15d (30d sob encomenda), % por solicitante e drill dos maiores casos com links SC/OC.
+- **Rev. 4737** — Dashboard Gerencial: redesign visual completo (cockpit BI executivo — paleta própria, pulso de demanda, gauge de urgência, donut de perda por obra); dados, drill-downs e links SC/OC intactos.
+- **Rev. 4736** — Dashboard Gerencial: tempos abaixo de 1 dia agora em h/min/s reais (fim do "0h" no SC→Cotação; o cálculo já era preciso, só o formato arredondava).
+- **Rev. 4735** — Dashboard Gerencial: números de SC/OC nos drill-downs viraram links (abrem a tela real com o detalhe destacado via ?destaque=id).
 - **Rev. 4734** — Poka-Yoke: data de necessidade da SC nunca anterior à data do pedido (validação server em criar/editar + min=hoje no formulário); 118 SCs históricas corrigidas para pedido+2 dias (fim das antecedências negativas no Dashboard Gerencial).
 - **Rev. 4733** — Dashboard Gerencial: bloco "O que Mais Compramos & Recorrência" (toggle R$/mais vezes, intervalo médio entre compras, drill até OC/SC) + "Oportunidades de melhoria" (4+ compras com intervalo ≤30d = candidato a contrato de fornecimento/pedido programado).
 - **Rev. 4732** — Dashboard Gerencial: card "Destaques do período" (insights automáticos), gráfico "Ritmo do Período" (recharts, barras empilhadas SC/Cot/OC por dia ou mês) e barras proporcionais na perda por obra/solicitante.

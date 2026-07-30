@@ -11329,7 +11329,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const ltCotOc: number[] = [];
       const ltScOc: number[] = [];
       // Rev. 4731: rastreabilidade — casos individuais SC→OC p/ drill-down (auditoria)
-      const ltScOcCasos: { numeroSc: string | null; numeroOc: string | null; dias: number; obraNome: string | null; dataSc: string; dataOc: string }[] = [];
+      const ltScOcCasos: { scId: number | null; ocId: number; numeroSc: string | null; numeroOc: string | null; dias: number; obraNome: string | null; dataSc: string; dataOc: string }[] = [];
       ocsAtivas.forEach(o => {
         if (o.cotacaoId) {
           const cot = cotById.get(o.cotacaoId);
@@ -11341,6 +11341,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             if (d2 !== null) {
               ltScOc.push(d2);
               ltScOcCasos.push({
+                scId: sc?.id ?? null, ocId: o.id,
                 numeroSc: sc?.numeroSc ?? null, numeroOc: o.numeroOc ?? null, dias: d2,
                 obraNome: o.obraId != null ? (obraMap[o.obraId] ?? null) : null,
                 dataSc: d10(sc?.criadoEm), dataOc: d10(o.criadoEm),
@@ -11395,7 +11396,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       // antecedência = data de necessidade − data do pedido (dias); ≤0 = "para ontem/hoje"
       // fora do horário comercial = antes das 7h, depois das 18h ou fim de semana
       type ScDet = {
-        numeroSc: string; data: string; necessidade: string | null;
+        scId: number; numeroSc: string; data: string; necessidade: string | null;
         antecedencia: number | null; urgente: boolean; obraNome: string | null;
       };
       const planMap: Record<string, {
@@ -11421,7 +11422,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         }
         // Rev. 4731: rastreabilidade — SCs individuais p/ drill-down
         p.scs.push({
-          numeroSc: r.numeroSc, data: lp?.data ?? d10(r.criadoEm),
+          scId: r.id, numeroSc: r.numeroSc, data: lp?.data ?? d10(r.criadoEm),
           necessidade: /^\d{4}-\d{2}-\d{2}$/.test(nec) ? nec : null,
           antecedencia: ant, urgente: isUrgente(r),
           obraNome: r.obraId != null ? (obraMap[r.obraId] ?? null) : null,
@@ -11454,7 +11455,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const ocsCompra = ocsAtivas.filter(o => !o.isLocacao);
       const ocById = new Map(ocsCompra.map(o => [o.id, o]));
       type EvCompra = {
-        data: string; ordemId: number; numeroOc: string | null; numeroSc: string | null;
+        data: string; ordemId: number; numeroOc: string | null; scId: number | null; numeroSc: string | null;
         obraId: number | null; solicitante: string; qtd: number; preco: number;
       };
       type GrupoInsumo = {
@@ -11507,7 +11508,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           if (!porChave[key]) porChave[key] = { chave: key, descricao: (it.descricao || "").trim(), unidade: it.unidade ?? null, evs: [] };
           porChave[key].evs.push({
             data: d10(o.criadoEm), ordemId: o.id, numeroOc: o.numeroOc ?? null,
-            numeroSc: sc?.numeroSc ?? null,
+            scId: sc?.id ?? null, numeroSc: sc?.numeroSc ?? null,
             obraId: o.obraId ?? null, solicitante, qtd, preco,
           });
         }
@@ -11637,6 +11638,73 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         inconsistentes,
       };
 
+      // Rev. 4738 — Horizonte de planejamento: pedido → entrega prevista.
+      // "Compra no susto" = entrega prevista em até 3 dias da criação da OC
+      // (mesmo sem marcar urgente). Meta de boas práticas: >= 15 dias p/ material
+      // corrente, >= 30 p/ item sob encomenda (PMBOK/Lean Construction — lead time
+      // de suprimentos deve nascer do cronograma, não do estoque zerado).
+      type CasoSusto = {
+        ocId: number; numeroOc: string | null; scId: number | null; numeroSc: string | null;
+        criadaEm: string; entregaPrevista: string; dias: number;
+        obraNome: string | null; solicitante: string; total: number; urgente: boolean;
+      };
+      const horizonteDias: number[] = [];
+      const casosSusto: CasoSusto[] = [];
+      const sustoSolMap: Record<string, { nome: string; ocs: number; susto: number }> = {};
+      let comEntrega = 0;
+      const bucketsHorizonte = { ate3: 0, de4a7: 0, de8a14: 0, acima15: 0 };
+      ocsAtivas.forEach(o => {
+        const ent = d10((o as any).dataEntregaPrevista);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(ent)) return;
+        const cri = d10(o.criadoEm);
+        const dias = (new Date(ent + "T00:00:00Z").getTime() - new Date(cri + "T00:00:00Z").getTime()) / 86_400_000;
+        if (!Number.isFinite(dias) || dias < 0 || dias > 365) return; // datas inconsistentes fora
+        comEntrega++;
+        horizonteDias.push(dias);
+        if (dias <= 3) bucketsHorizonte.ate3++;
+        else if (dias <= 7) bucketsHorizonte.de4a7++;
+        else if (dias <= 14) bucketsHorizonte.de8a14++;
+        else bucketsHorizonte.acima15++;
+        const scId = o.solicitacaoId ?? (o.cotacaoId ? cotById.get(o.cotacaoId)?.solicitacaoId : null) ?? null;
+        const sc = scId != null ? scById.get(scId) : undefined;
+        const solicitante = (sc ? nomeSolicitante(sc) : "").trim() || (o.criadoPorNome || "").trim() || "—";
+        const sKey = solicitante.toUpperCase();
+        if (!sustoSolMap[sKey]) sustoSolMap[sKey] = { nome: solicitante, ocs: 0, susto: 0 };
+        sustoSolMap[sKey].ocs++;
+        if (dias <= 3) {
+          sustoSolMap[sKey].susto++;
+          casosSusto.push({
+            ocId: o.id, numeroOc: o.numeroOc ?? null, scId: sc?.id ?? null, numeroSc: sc?.numeroSc ?? null,
+            criadaEm: cri, entregaPrevista: ent, dias,
+            obraNome: o.obraId != null ? (obraMap[o.obraId] ?? null) : null,
+            solicitante, total: n(o.total), urgente: sc ? isUrgente(sc) : false,
+          });
+        }
+      });
+      const medianaH = (arr: number[]) => {
+        if (arr.length === 0) return null;
+        const s = [...arr].sort((a, b) => a - b);
+        const m = Math.floor(s.length / 2);
+        return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+      };
+      const horizonte = {
+        comEntrega,
+        semEntrega: ocsAtivas.length - comEntrega,
+        mediana: medianaH(horizonteDias),
+        buckets: bucketsHorizonte,
+        metaDias: 15,
+        casosSusto: casosSusto
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 15),
+        totalSusto: casosSusto.length,
+        valorSusto: casosSusto.reduce((s, c) => s + c.total, 0),
+        porSolicitante: Object.values(sustoSolMap)
+          .filter(s => s.ocs >= 3 && s.susto > 0)
+          .map(s => ({ ...s, pctSusto: (s.susto / s.ocs) * 100 }))
+          .sort((a, b) => b.pctSusto - a.pctSusto || b.susto - a.susto)
+          .slice(0, 10),
+      };
+
       // Gargalo atual (independe do período): quantas paradas em cada etapa hoje
       const gargalo = {
         scsAguardandoAprov: scsAll.filter(r => r.aprovacaoStatus === "aguardando" && !isCancel(r.status) && obraOk(r.obraId)).length,
@@ -11649,7 +11717,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         leadTime, gargalo, obras: obrasRows,
         quandoPedem: { porDiaSemana, porHora },
         planejamento, rankingUrgencia,
-        perdaAgrupamento, recorrencia,
+        perdaAgrupamento, recorrencia, horizonte,
       };
     }),
 

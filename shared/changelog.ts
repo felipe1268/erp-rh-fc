@@ -1,4 +1,43 @@
 /**
+ * Rev. 4738 - DASHBOARD GERENCIAL: HORIZONTE DE PLANEJAMENTO (PEDIDO->ENTREGA)
+ *
+ * Novo bloco que mede o horizonte real de compra (entrega prevista - criacao
+ * da OC), independente de marcar "urgente":
+ * - "Compra no susto" = entrega em ate 3 dias; buckets 4-7 / 8-14 / 15+.
+ * - KPIs: horizonte mediano vs meta de referencia (>=15d material corrente,
+ *   >=30d sob encomenda — PMBOK/Lean Construction: o pedido nasce do
+ *   cronograma, nao do estoque zerado), % no susto e R$ comprado no susto.
+ * - % de susto por solicitante (min. 3 OCs) + drill dos maiores casos por
+ *   valor com links SC/OC e flag "urgente?".
+ * - Datas de entrega inconsistentes (negativas ou >365d) ficam fora.
+ *
+ * Rev. 4737 - DASHBOARD GERENCIAL: REDESIGN VISUAL COMPLETO (COCKPIT BI)
+ *
+ * - Reformulacao visual profissional: composicao densa estilo BI executivo,
+ *   paleta propria (azul aco, coral, verde mineral, violeta), hierarquia
+ *   editorial e microinteracoes.
+ * - Novas visualizacoes derivadas do MESMO payload: pulso de demanda
+ *   (area/linha), gauge de urgencia, progressao de antecedencia media e
+ *   donut de concentracao de perda por obra + ranking.
+ * - Nada de dado mudou: query, drill-downs, links SC/OC, Fonte & metodo e
+ *   seletor de periodo preservados integralmente.
+ *
+ * Rev. 4736 - DASHBOARD GERENCIAL: TEMPOS SUB-DIA EM HORAS/MINUTOS/SEGUNDOS
+ *
+ * - "Suprimentos Responde (SC->Cotacao)" mostrava "0h" quando a mediana era
+ *   menor que 1 hora (arredondamento). Agora tempos abaixo de 1 dia exibem
+ *   h/min/s reais (ex.: "23min 14s", "1h 05min"); >= 1 dia segue em dias.
+ * - O calculo ja era preciso (timestamps completos); o problema era so o
+ *   formato de exibicao.
+ *
+ * Rev. 4735 - DASHBOARD GERENCIAL: LINKS CLICAVEIS PARA SC/OC
+ *
+ * - Todos os drill-downs do Dashboard Gerencial (Perda de Agrupamento,
+ *   Recorrencia, Casos Lentos SC->OC, Planejamento por Solicitante) agora
+ *   linkam o numero da SC/OC para a tela real com o detalhe aberto
+ *   (?destaque=<id>), permitindo auditar o documento na hora.
+ * - Backend passa scId/ocId junto com os numeros nos blocos de drill.
+ *
  * Rev. 4734 - POKA-YOKE: DATA DE NECESSIDADE NUNCA ANTERIOR AO PEDIDO
  *
  * - Bloqueio no SERVIDOR (criar e editar SC): data de necessidade anterior a
