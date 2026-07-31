@@ -2,3 +2,4 @@ server/uploads/sst/integracao/videos/60002-1779034987319-INTEGRA____O_FC_ENGENHA
 attached_assets/INTEGRAÇÃO_FC_ENGENHARIA__1779047279184.MP4 filter=lfs diff=lfs merge=lfs -text
 server/uploads/backups/erp-fc-backup-2026-07-26T20-28-52.json.gz filter=lfs diff=lfs merge=lfs -text
 server/uploads/backups/erp-fc-backup-2026-07-27T03-00-00.json.gz filter=lfs diff=lfs merge=lfs -text
+server/uploads/backups/erp-fc-backup-2026-07-31T03-00-01.json.gz filter=lfs diff=lfs merge=lfs -text
