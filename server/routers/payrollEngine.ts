@@ -3492,6 +3492,9 @@ export const payrollEngineRouter = router({
         status: employees.status,
         jornadaTrabalho: employees.jornadaTrabalho,
         companyId: employees.companyId,
+        // Rev. 4771 — Afastamento INSS: datas da licença p/ janela dos 15 dias
+        licencaDataInicio: employees.licencaDataInicio,
+        licencaDataFim: employees.licencaDataFim,
         // Rev. — Conta da Empresa para Pagamento (conta salário pela qual a
         // empresa paga o colaborador). É a CHAVE de agrupamento da remessa por
         // banco — NÃO o banco pessoal do funcionário.
@@ -3519,6 +3522,7 @@ export const payrollEngineRouter = router({
           // EXISTS com `tipo NOT LIKE '%indenizado%'` é OBRIGATÓRIO aqui.
           sql`(
             ${employees.status} IN ('Ativo', 'Ferias')
+            OR ${employees.status} = 'Afastado'
             OR (
               ${employees.status} = 'Aviso'
               AND EXISTS (
@@ -3562,6 +3566,66 @@ export const payrollEngineRouter = router({
         }
         return true;
       });
+
+      // Rev. 4771 — AFASTAMENTO INSS: janela dos 15 dias por conta da empresa.
+      // Fonte do início: employees.licencaDataInicio; fallback = atestado que
+      // alterou o status (status_alterado=1). Fim inclusivo: licencaDataFim ??
+      // (atestado.dataRetorno - 1 dia). Afastado SEM data de início conhecida
+      // fica FORA da folha (fail-safe = comportamento anterior).
+      const toIsoDia = (v: any): string | null => {
+        if (!v) return null;
+        return v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+      };
+      const addDias = (iso: string, n: number): string => {
+        const d = new Date(iso + 'T12:00:00Z');
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().slice(0, 10);
+      };
+      // Map empId → { ini, fimIncl (null = em aberto) }
+      const afastWindowMap = new Map<number, { ini: string; fimIncl: string | null }>();
+      {
+        const afastCandidatos = empList.filter((e: any) => e.status === 'Afastado' || e.licencaDataInicio);
+        const semInicio = afastCandidatos.filter((e: any) => e.status === 'Afastado' && !e.licencaDataInicio);
+        const atestadoMap = new Map<number, { ini: string; fimIncl: string | null }>();
+        if (semInicio.length > 0) {
+          const idsSqlAf = sql.join(semInicio.map((e: any) => sql`${e.id}`), sql`,`);
+          const atRows = ((await db.execute(sql`
+            SELECT DISTINCT ON ("employeeId") "employeeId", "dataEmissao", "dataRetorno"
+            FROM atestados
+            WHERE "employeeId" IN (${idsSqlAf})
+              AND "deletedAt" IS NULL
+              AND status_alterado = 1
+            ORDER BY "employeeId", "dataEmissao" DESC
+          `)) as any).rows || [];
+          for (const r of atRows as any[]) {
+            const ini = toIsoDia(r.dataEmissao);
+            if (!ini) continue;
+            const ret = toIsoDia(r.dataRetorno);
+            atestadoMap.set(Number(r.employeeId), { ini, fimIncl: ret ? addDias(ret, -1) : null });
+          }
+        }
+        for (const e of afastCandidatos as any[]) {
+          const iniLic = toIsoDia(e.licencaDataInicio);
+          const fimLic = toIsoDia(e.licencaDataFim);
+          if (iniLic) {
+            afastWindowMap.set(e.id, { ini: iniLic, fimIncl: fimLic });
+          } else {
+            const at = atestadoMap.get(e.id);
+            if (at) afastWindowMap.set(e.id, at);
+          }
+        }
+        // Afastado sem NENHUMA data de início → fora da folha (como antes)
+        const semDataIds = new Set(
+          afastCandidatos.filter((e: any) => e.status === 'Afastado' && !afastWindowMap.has(e.id)).map((e: any) => e.id),
+        );
+        if (semDataIds.size > 0) {
+          console.log(`[SimPag AFASTAMENTO] ${semDataIds.size} afastado(s) sem data de início conhecida — mantidos FORA da folha.`);
+          for (const id of semDataIds) {
+            const idx = empList.findIndex((e: any) => e.id === id);
+            if (idx >= 0) empList.splice(idx, 1);
+          }
+        }
+      }
 
       const allCompanyIds = resolveCompanyIds(input);
       const allCompanyIdsSql = sql.join(allCompanyIds.map(id => sql`${id}`), sql`,`);
@@ -3793,6 +3857,16 @@ export const payrollEngineRouter = router({
               if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === 'compensado' ? 'compensado' : 'sabado';
               // Dias em gozo de férias não geram falta
               if (autoPontoFeriasDateSet.has(`${emp.id}-${dateStr}`)) tipoDia = 'ferias';
+              // Rev. 4771 — dias dentro da janela de afastamento não geram falta.
+              // Fim em aberto só vale para quem AINDA está Afastado; quem já
+              // voltou (status ≠ Afastado) sem fim conhecido segue regra normal
+              // (mesmo guard do desconto proporcional — senão o ponto suprime
+              // faltas de dias em que a folha volta a pagar normal).
+              {
+                const wAf = afastWindowMap.get(emp.id);
+                const fimAfOk = wAf ? (wAf.fimIncl ? dateStr <= wAf.fimIncl : emp.status === 'Afastado') : false;
+                if (wAf && dateStr >= wAf.ini && fimAfOk) tipoDia = 'atestado';
+              }
 
               const key = `${emp.id}-${dateStr}`;
               const recs = autoRecordMap.get(key) || [];
@@ -4319,11 +4393,35 @@ export const payrollEngineRouter = router({
             }
           }
         }
+        // Rev. 4771 — AFASTAMENTO INSS: dias NÃO remunerados pela empresa no mês.
+        // Empresa paga os 15 primeiros dias corridos (ini .. ini+14), mesmo
+        // atravessando meses; do 16º dia em diante é INSS → sai da base do
+        // salário. Fim em aberto: Afastado → até o fim do mês; quem já voltou
+        // (status ≠ Afastado) sem fim conhecido → não desconta (fail-safe).
+        for (const [empIdAf, w] of afastWindowMap) {
+          const empRowAf: any = empList.find((e: any) => e.id === empIdAf);
+          if (!empRowAf) continue;
+          const inicioInssIso = addDias(w.ini, 15); // 1º dia por conta do INSS
+          let fimIncl = w.fimIncl;
+          if (!fimIncl) {
+            if (empRowAf.status !== 'Afastado') continue; // já voltou, fim desconhecido
+            fimIncl = ultimoDiaMesFer;
+          }
+          const ini = new Date(((inicioInssIso >= primeiroDiaMesFer) ? inicioInssIso : primeiroDiaMesFer) + 'T12:00:00Z');
+          const fim = new Date(((fimIncl <= ultimoDiaMesFer) ? fimIncl : ultimoDiaMesFer) + 'T12:00:00Z');
+          if (ini > fim) continue;
+          let daySet = feriasDiasSetSim.get(empIdAf);
+          if (!daySet) { daySet = new Set(); feriasDiasSetSim.set(empIdAf, daySet); }
+          for (let d = new Date(ini); d <= fim; d.setUTCDate(d.getUTCDate() + 1)) {
+            daySet.add(d.toISOString().slice(0, 10));
+          }
+        }
+        // Consolidação (férias + afastamento INSS, dedup por dia de calendário)
         for (const [empIdFer, daySet] of feriasDiasSetSim) {
           feriasMesMapSim.set(empIdFer, Math.min(diasNoMesSim, daySet.size));
         }
         if (feriasMesMapSim.size > 0) {
-          console.log(`[SimPag FÉRIAS] ${feriasMesMapSim.size} funcionário(s) com férias na competência ${input.mesReferencia} → salário proporcional aplicado.`);
+          console.log(`[SimPag FÉRIAS/AFAST] ${feriasMesMapSim.size} funcionário(s) com dias não remunerados na competência ${input.mesReferencia} → salário proporcional aplicado.`);
         }
       }
 
@@ -4349,6 +4447,12 @@ export const payrollEngineRouter = router({
         }
         const alertaAvisoPendente = !!avisoDataFimEmp && decisaoAvisoEmp !== 'pagar';
         const statusPagamentoRow = alertaAvisoPendente ? 'alerta_aviso_pendente' : 'simulado';
+
+        // Rev. 4771 — Afastado com o mês 100% por conta do INSS: fora da folha
+        // (nenhum dia devido pela empresa na competência).
+        if (emp.status === 'Afastado' && (feriasMesMapSim.get(emp.id) || 0) >= diasNoMesSim) {
+          continue;
+        }
 
         const valorHora = parseBRL(emp.valorHora);
         // CLT horista: 220h = referência de 30 dias. Proporcional ao número real de dias do mês.

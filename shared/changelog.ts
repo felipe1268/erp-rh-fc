@@ -1,4 +1,19 @@
 /**
+ * Rev. 4771 - FOLHA: AFASTAMENTO INSS COM PROPORCIONALIDADE (JANELA DOS 15 DIAS)
+ *
+ * Antes, funcionario com status "Afastado" ficava 100% FORA da folha — inclusive
+ * no mes em que trabalhou parte dos dias e no mes em que a empresa ainda deve os
+ * 15 primeiros dias do afastamento (auxilio-doenca).
+ * Agora: a folha calcula a janela de 15 dias corridos por conta da empresa
+ * (inicio .. inicio+14, podendo atravessar meses — ex.: atestado 20/06 → empresa
+ * paga 20/06 a 04/07 e a folha de julho paga so 01-04/07). Do 16o dia em diante
+ * (INSS) os dias saem da base do salario, na mesma regua proporcional das ferias
+ * (Rev. 4770). Fonte do inicio: employees.licencaDataInicio, com fallback no
+ * atestado que alterou o status; fim: licencaDataFim ?? dataRetorno-1; em aberto
+ * = ate o fim do mes. Dias na janela de afastamento nao geram falta no ponto
+ * automatico (tipoDia=atestado). Fail-safe: Afastado SEM data de inicio conhecida
+ * permanece fora da folha (comportamento anterior); mes 100% INSS = fora da folha.
+ *
  * Rev. 4770 - FOLHA: SALARIO PROPORCIONAL PARA QUEM ESTEVE DE FERIAS NO MES
  *
  * Bug: a folha mensal pagava salario CHEIO para funcionario em gozo de ferias

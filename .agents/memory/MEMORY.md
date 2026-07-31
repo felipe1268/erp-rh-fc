@@ -50,6 +50,7 @@
 - [Warehouse session IDOR guard](warehouse-session-idor.md) — getInventorySessionItems takes only sessionId; derive company/obra from the session row to authorize.
 - [Company-access tenancy guard](company-access-guard.md) — per-company endpoints must use `assertCompanyAccess` helper, NOT the legacy strict `ctx.user.companyId` compare which blocks multi-company users.
 - [Frota null-obra visibility](frota-null-obra-visibility.md) — veículos obra_id NULL = admin-only; NÃO relaxar guard de updateVehicle (abre IDOR); falha silenciosa = falta onError no client.
+- [Afastamento INSS na Folha](afastamento-inss-folha.md) — empresa paga 15 primeiros dias (cruza meses); início vem de licencaDataInicio ?? atestado status_alterado=1; sem data = fora da folha (decisão do user).
 - [No employee status history](no-status-history.md) — only CURRENT status is stored; for past-date snapshots derive active-at-D from admissão/demissão dates + férias from vacationPeriods.
 - [AI output sanitization](ai-output-sanitization.md) — LLM output feeding a decision UI must be filtered server-side against the deterministic fact set (whitelist keys, clamp scores, enum-normalize).
 - [Mudança de obra na timeline](employee-obra-change-timeline.md) — troca de obra grava em `employee_site_history` (não `employee_history`); timeline raioX precisa ler AMBAS.
