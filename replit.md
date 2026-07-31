@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4769** — Contas a Pagar: cheque da baixa agora é criado no Controle de Cheques na MESMA transação (antes era 2ª chamada da tela que falhava em silêncio); nº do cheque gravado na baixa.
 - **Rev. 4768** — Planejamento: fix "Sem permissão para este projeto" — usuário comum não conseguia salvar revisão/avanços (users não tem companyId; guard agora usa user_companies + obras permitidas).
 - **Rev. 4767** — RH: "Conversa WhatsApp" — recepção de mensagens do número da empresa via Meta Cloud API (webhook), arquivo de conversas/mídias e vínculo com funcionário.
 - **Rev. 4766** — Contas a Pagar: seção "Anexos" com botão de anexar documento direto no detalhe do título (aba Geral).

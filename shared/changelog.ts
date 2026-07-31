@@ -1,4 +1,17 @@
 /**
+ * Rev. 4769 - CONTAS A PAGAR: CHEQUE DA BAIXA VAI DIRETO PRO CONTROLE DE CHEQUES
+ *
+ * Bug: ao dar baixa com forma "cheque" (cheque proprio), a criacao do cheque no
+ * Controle de Cheques era uma 2a chamada disparada pela TELA depois da baixa —
+ * se ela falhasse ou nao disparasse (tipo nao selecionado, campo separado vazio),
+ * a baixa ficava salva mas o cheque NAO aparecia no Controle, em silencio.
+ * O numero digitado tambem nao era gravado na baixa (campo legado nunca era
+ * preenchido pelo dialog) — caso real: OC-2026-891 CERAMICA LARA R$ 2.520.
+ * Fix: registrarBaixa agora recebe os cheques e os INSERE em financial_cheques
+ * NA MESMA transacao da baixa (mesmo padrao do pagamento consolidado), com
+ * validacao de numero obrigatorio, sem repeticao e sem colisao com cheques
+ * existentes; o(s) numero(s) tambem ficam gravados na propria baixa.
+ *
  * Rev. 4768 - PLANEJAMENTO: FIX "SEM PERMISSAO PARA ESTE PROJETO" (USUARIO COMUM)
  *
  * Bug critico: a tabela users NAO tem coluna companyId (o vinculo vive em

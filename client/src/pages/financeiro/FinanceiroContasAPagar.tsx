@@ -447,7 +447,9 @@ export default function FinanceiroContasAPagar() {
     }),
   });
 
-  // Rev. 4529 — ao registrar baixa com cheque próprio, cria os N cheques no Controle de Cheques
+  // Rev. 4769 — na BAIXA, a criação dos cheques no Controle agora acontece DENTRO da
+  // própria registrarBaixa (mesma transação no servidor). Esta mutation continua em
+  // uso APENAS no fluxo de EDIÇÃO (Rev. 4587: programar cheques sem baixar o título).
   const criarChequesLoteMut = (trpc as any).cheques.criarManualLote.useMutation({
     onSuccess: (r: any) => {
       if (r?.criados > 0) {
@@ -455,8 +457,8 @@ export default function FinanceiroContasAPagar() {
       }
     },
     onError: (e: any) => toast({
-      title: "Baixa registrada, mas falha ao criar cheques",
-      description: `Os cheques NÃO foram cadastrados no Controle: ${e.message}`,
+      title: "Falha ao criar cheques no Controle",
+      description: `Os cheques NÃO foram cadastrados: ${e.message}`,
       variant: "destructive",
     }),
   });
@@ -474,35 +476,11 @@ export default function FinanceiroContasAPagar() {
         });
         setChequesTerceiroSelAvulso([]);
       }
-      // Rev. 4529 — se forma=cheque próprio, criar N cheques no Controle de Cheques Emitidos
-      if (formaPagamento === "cheque" && chequeSubtipo === "empresa" && companyId) {
-        const qtd = Math.min(120, Math.max(1, parseInt(chequeQtd || "1", 10) || 1));
-        const total = parseValorBR(valorPagar) + parseValorBR(jurosPay) - parseValorBR(descontosPay) + parseValorBR(outrosPay);
-        if (total > 0 && qtd > 0) {
-          const centsTotal = Math.round(total * 100);
-          const base = Math.floor(centsTotal / qtd);
-          const resto = centsTotal - base * qtd;
-          const numIniNum = /^\d+$/.test(chequeNumIni.trim()) ? parseInt(chequeNumIni.trim(), 10) : null;
-          const baseVenc = chequePrimVenc || dataPagamento || "";
-          // Rev. 4600 — respeita o "Prazo entre parcelas" do ciclo do fornecedor (ex.: 15d)
-          const stepDias = cicloStepDias(showPay);
-          const parcelas = Array.from({ length: qtd }, (_, i) => ({
-            valor: (base + (i === qtd - 1 ? resto : 0)) / 100,
-            numeroCheque: numIniNum != null ? String(numIniNum + i) : (qtd === 1 ? chequeNumIni.trim() || undefined : undefined),
-            parcela: `${i + 1}/${qtd}`,
-            dataVencimento: (stepDias ? addDaysISO(baseVenc, i * stepDias) : addMonthsISO(baseVenc, i)) || undefined,
-          }));
-          criarChequesLoteMut.mutate({
-            companyId,
-            fornecedorNome: showPay?.fornecedorNome ?? showPay?.descricao ?? undefined,
-            contaBancariaId: contaBancariaId ?? undefined,
-            bancoNome: chequeBanco || undefined,
-            agencia: chequeAgencia || undefined,
-            contaCorrenteRaw: chequeConta || undefined,
-            status: (chequeStatusIni as any) || "pendente",
-            parcelas,
-          });
-        }
+      // Rev. 4769 — cheques próprios agora são criados pelo servidor na MESMA
+      // transação da baixa (payload `cheques` em baixaPayload). Aqui só informamos.
+      if (Number(r?.chequesCriados ?? 0) > 0) {
+        const n = Number(r.chequesCriados);
+        toast({ title: `${n} cheque${n !== 1 ? "s" : ""} cadastrado${n !== 1 ? "s" : ""} no Controle de Cheques` });
       }
       toast({ title: r?.quitado ? "Título quitado!" : "Baixa parcial registrada!", description: r?.quitado ? undefined : `Saldo em aberto: ${formatBRL(Number(r?.saldo ?? 0))}` });
       setShowPay(null);
@@ -879,13 +857,36 @@ export default function FinanceiroContasAPagar() {
       observacoes: obsPay || undefined,
       comprovanteUrl: comprovanteUrl || undefined,
       chequeTipo: formaPagamento === "cheque" ? (chequeTipo || undefined) : undefined,
-      chequeNumero: formaPagamento === "cheque" ? (chequeNumero || undefined) : undefined,
+      // Rev. 4769 — fallback: o dialog coleta o nº no campo "nº do 1º cheque" (chequeNumIni)
+      chequeNumero: formaPagamento === "cheque" ? (chequeNumero || chequeNumIni.trim() || undefined) : undefined,
       chequeBanco: formaPagamento === "cheque" ? (chequeBanco || undefined) : undefined,
       chequeAgencia: formaPagamento === "cheque" ? (chequeAgencia || undefined) : undefined,
       chequeConta: formaPagamento === "cheque" ? (chequeConta || undefined) : undefined,
       chequeTitular: formaPagamento === "cheque" ? (chequeTitular || undefined) : undefined,
       chequeDataEmissao: formaPagamento === "cheque" ? (chequeDataEmissao || undefined) : undefined,
       chequeDataBomPara: formaPagamento === "cheque" ? (chequeDataBomPara || undefined) : undefined,
+      // Rev. 4769 — cheques próprios criados no Controle NA MESMA transação da baixa
+      // (antes era uma 2ª mutation client-side que falhava em silêncio).
+      ...(formaPagamento === "cheque" && chequeSubtipo === "empresa" ? (() => {
+        const qtd = Math.min(120, Math.max(1, parseInt(chequeQtd || "1", 10) || 1));
+        const total = num(valorPagar) + num(jurosPay) - num(descontosPay) + num(outrosPay);
+        if (total <= 0) return {};
+        const centsTotal = Math.round(total * 100);
+        const base = Math.floor(centsTotal / qtd);
+        const resto = centsTotal - base * qtd;
+        const numIniNum = /^\d+$/.test(chequeNumIni.trim()) ? parseInt(chequeNumIni.trim(), 10) : null;
+        const baseVenc = chequePrimVenc || dataPagamento || "";
+        const stepDias = cicloStepDias(showPay);
+        const cheques = Array.from({ length: qtd }, (_, i) => ({
+          valor: (base + (i === qtd - 1 ? resto : 0)) / 100,
+          numero: numIniNum != null ? String(numIniNum + i) : (qtd === 1 ? chequeNumIni.trim() : ""),
+          parcela: `${i + 1}/${qtd}`,
+          dataVencimento: (stepDias ? addDaysISO(baseVenc, i * stepDias) : addMonthsISO(baseVenc, i)) || undefined,
+        }));
+        // só envia se TODOS os números estiverem preenchidos (o servidor exige)
+        if (cheques.some(c => !c.numero)) return {};
+        return { cheques, fornecedorNome: showPay?.fornecedorNome ?? showPay?.descricao ?? undefined };
+      })() : {}),
     };
   }
 

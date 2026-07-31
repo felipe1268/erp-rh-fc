@@ -10746,6 +10746,17 @@ export const financialRouter = router({
     chequeDataBomPara: z.string().optional(),
     observacoes: z.string().optional(),
     quitarTotal: z.boolean().optional(),
+    // Rev. 4769 — cheques do pagamento (cheque PRÓPRIO): criados no Controle de
+    // Cheques (financial_cheques) DENTRO da mesma transação da baixa. Antes a
+    // criação era uma 2ª mutation disparada pelo cliente (criarManualLote), que
+    // podia falhar/não disparar em silêncio → baixa salva SEM cheque no Controle.
+    cheques: z.array(z.object({
+      numero: z.string(),
+      valor: z.number().positive("Valor do cheque inválido."),
+      dataVencimento: z.string().optional(),
+      parcela: z.string().optional(),
+    })).max(120).optional(),
+    fornecedorNome: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -10759,10 +10770,30 @@ export const financialRouter = router({
       throw new TRPCError({ code: "BAD_REQUEST", message: "Data da baixa não pode ser futura." });
     }
     const isCheque = input.formaPagamento === "cheque";
+    // Rev. 4769 — valida os cheques ANTES da transação (mesma régua do consolidado):
+    // número obrigatório, sem repetição no lote, sem colisão com cheques já existentes.
+    const chequesLote = (isCheque && input.cheques?.length) ? input.cheques : [];
+    if (chequesLote.length) {
+      const numerosDoLote = new Set<string>();
+      for (const c of chequesLote) {
+        if (!c.numero || !c.numero.trim()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o número de todos os cheques." });
+        }
+        const norm = String(c.numero).replace(/[^0-9]/g, "").replace(/^0+(?=.)/, "");
+        if (norm && numerosDoLote.has(norm)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `O nº de cheque ${c.numero} está repetido dentro deste pagamento.` });
+        }
+        if (norm) numerosDoLote.add(norm);
+        await assertNumeroChequeDisponivel(db, input.companyId, c.numero, {
+          contaBancariaId: input.contaBancariaId ?? null,
+          fornecedorNome: input.fornecedorNome ?? null,
+        });
+      }
+    }
     // Rev. 3743 — TUDO numa transação com advisory lock por lançamento: serializa backfill +
     // insert + rollup contra baixas/estornos concorrentes do MESMO título (sem isso, dois cliques
     // simultâneos duplicariam o backfill "Baixa anterior" e/ou somariam estado defasado no rollup).
-    const { tipo, roll } = await (db as any).transaction(async (tx: any) => {
+    const { tipo, roll, chequesCriados } = await (db as any).transaction(async (tx: any) => {
       await _lockEntryBaixas(tx, input.companyId, input.id);
       const [entry]: any = await dbExecute(tx,
         `SELECT id, tipo, valor_previsto, valor_realizado, status, data_pagamento
@@ -10819,7 +10850,8 @@ export const financialRouter = router({
          input.contaBancariaId ?? null, input.formaPagamento ?? null,
          input.juros ?? null, input.descontos ?? null, input.outros ?? null, input.comprovanteUrl ?? null,
          isCheque ? (input.chequeTipo ?? null) : null,
-         isCheque ? (input.chequeNumero ?? null) : null,
+         // Rev. 4769 — se o nº não veio no campo legado, usa o(s) nº(s) dos cheques do lote
+         isCheque ? (input.chequeNumero ?? (chequesLote.length ? chequesLote.map(c => c.numero.trim()).join(", ") : null)) : null,
          isCheque ? (input.chequeBanco ?? null) : null,
          isCheque ? (input.chequeAgencia ?? null) : null,
          isCheque ? (input.chequeConta ?? null) : null,
@@ -10829,8 +10861,42 @@ export const financialRouter = router({
          input.observacoes ?? null, input.quitarTotal ? 1 : 0,
          ctx.user?.id ?? null, ctx.user?.name ?? null]
       );
+      // Rev. 4769 — registra os cheques no Controle de Cheques NA MESMA transação
+      // da baixa (antes era uma 2ª chamada do cliente, que falhava em silêncio).
+      const chequesCriadosTx: number[] = [];
+      if (chequesLote.length) {
+        const loteId = randomUUID();
+        let fornecedorId: number | null = null;
+        if (input.fornecedorNome) {
+          const fr: any[] = rows(await dbExecute(tx,
+            `SELECT id FROM fornecedores WHERE company_id=$1
+               AND (UPPER(TRIM(razao_social))=UPPER(TRIM($2)) OR UPPER(TRIM(nome_fantasia))=UPPER(TRIM($2)))
+             LIMIT 1`,
+            [input.companyId, input.fornecedorNome]));
+          fornecedorId = fr[0]?.id ?? null;
+        }
+        for (const c of chequesLote) {
+          const venc = (c.dataVencimento || input.chequeDataBomPara || dataBaixa).slice(0, 10);
+          const dt = new Date(venc + "T12:00:00Z");
+          const mesRef = dt.getUTCMonth() + 1;
+          const anoRef = dt.getUTCFullYear();
+          const res: any = await dbExecute(tx,
+            `INSERT INTO financial_cheques
+               (company_id, conta_bancaria_id, numero_cheque, fornecedor_nome, fornecedor_id, valor,
+                data_vencimento, status, observacao, mes_ref, ano_ref, origem_arquivo, lote_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,$9,$10,'contas_a_pagar',$11)
+             RETURNING id`,
+            [input.companyId, input.contaBancariaId ?? null, c.numero.trim(), input.fornecedorNome ?? null,
+             fornecedorId, c.valor, venc,
+             `Baixa em Contas a Pagar — título ${input.id}${c.parcela ? ` (parcela ${c.parcela})` : ""}`,
+             mesRef, anoRef, loteId]
+          );
+          const cid = rows(res)[0]?.id;
+          if (cid) chequesCriadosTx.push(cid);
+        }
+      }
       const r = await _aplicarRollupBaixas(tx, input.id, input.companyId);
-      return { tipo: entry.tipo as string, roll: r };
+      return { tipo: entry.tipo as string, roll: r, chequesCriados: chequesCriadosTx };
     });
     await createAuditLog({
       action: tipo === "receita" ? "financial_receivable_partial_paid" : "financial_payable_partial_paid",
@@ -10868,7 +10934,7 @@ export const financialRouter = router({
         }
       } catch (_) { /* não bloqueia a baixa principal */ }
     }
-    return { ok: true, quitado: roll.quitado, acumulado: roll.acumulado, saldo: roll.saldo, status: roll.status };
+    return { ok: true, quitado: roll.quitado, acumulado: roll.acumulado, saldo: roll.saldo, status: roll.status, chequesCriados: chequesCriados?.length ?? 0 };
   }),
 
   // Rev. 4070 — Paga um GRUPO consolidado de Contas a Pagar (fechamento por fornecedor,
