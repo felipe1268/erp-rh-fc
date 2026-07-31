@@ -1,4 +1,16 @@
 /**
+ * Rev. 4770 - FOLHA: SALARIO PROPORCIONAL PARA QUEM ESTEVE DE FERIAS NO MES
+ *
+ * Bug: a folha mensal pagava salario CHEIO para funcionario em gozo de ferias
+ * na competencia (ex.: Acacio 29/06-28/07 e Caio Augusto 01/07-30/07 sairam
+ * integrais na folha de Julho). As ferias so evitavam falta no ponto — como o
+ * periodo ja e remunerado pelo modulo de Ferias (com 1/3), virava pagamento em
+ * dobro dos dias de gozo.
+ * Fix: simularPagamento agora carrega os periodos de ferias (em_gozo/concluida,
+ * nao-deletados, incluindo fracionamentos 2 e 3) sobrepostos ao mes e aplica
+ * salario proporcional: (dias do mes - dias de ferias no mes) / dias do mes,
+ * mesma regua que o motor do Vale ja usava (feriasMesMap).
+ *
  * Rev. 4769 - CONTAS A PAGAR: CHEQUE DA BAIXA VAI DIRETO PRO CONTROLE DE CHEQUES
  *
  * Bug: ao dar baixa com forma "cheque" (cheque proprio), a criacao do cheque no

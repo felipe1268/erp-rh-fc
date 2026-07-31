@@ -4272,6 +4272,61 @@ export const payrollEngineRouter = router({
       // Dias reais do mês para cálculo proporcional do horista (220h = ref 30 dias)
       const diasNoMesSim = new Date(year, month, 0).getDate();
 
+      // Rev. 4770 — FÉRIAS: salário proporcional na folha mensal.
+      // Dias em gozo de férias dentro da competência NÃO são pagos como salário na
+      // folha (já foram remunerados via módulo de Férias, com 1/3). Antes, as férias
+      // só evitavam falta no ponto e o salário saía CHEIO (pagamento em dobro).
+      // Espelha a regra do motor do Vale (feriasMesMap, ~L2455): dias de CALENDÁRIO
+      // de férias sobrepostos ao mês, status em_gozo/concluida, não-deletadas.
+      const feriasMesMapSim = new Map<number, number>();
+      if (empList.length > 0) {
+        const empIdsSqlFer = sql.join(empList.map((e: any) => sql`${e.id}`), sql`,`);
+        const primeiroDiaMesFer = `${year}-${String(month).padStart(2, '0')}-01`;
+        const ultimoDiaMesFer = `${year}-${String(month).padStart(2, '0')}-${String(diasNoMesSim).padStart(2, '0')}`;
+        const feriasSimRows = ((await db.execute(sql`
+          SELECT "employeeId", "dataInicio", "dataFim",
+                 "periodo2Inicio", "periodo2Fim", "periodo3Inicio", "periodo3Fim"
+          FROM vacation_periods
+          WHERE "employeeId" IN (${empIdsSqlFer})
+            AND "deletedAt" IS NULL
+            AND status IN ('em_gozo', 'concluida')
+            AND "dataInicio" IS NOT NULL
+        `)) as any).rows || [];
+        const mesIniFer = new Date(`${primeiroDiaMesFer}T12:00:00Z`);
+        const mesFimFer = new Date(`${ultimoDiaMesFer}T12:00:00Z`);
+        // Dedup por DIA de calendário (períodos sobrepostos não podem contar 2x)
+        const feriasDiasSetSim = new Map<number, Set<string>>();
+        for (const vp of feriasSimRows as any[]) {
+          const periods = [
+            { ini: vp.dataInicio, fim: vp.dataFim },
+            { ini: vp.periodo2Inicio, fim: vp.periodo2Fim },
+            { ini: vp.periodo3Inicio, fim: vp.periodo3Fim },
+          ];
+          for (const p of periods) {
+            if (!p.ini) continue;
+            const ini = new Date(String(p.ini).slice(0, 10) + 'T12:00:00Z');
+            // dataFim nula = férias em curso → ativa até o fim do mês (mesma
+            // semântica do motor do Vale, ~L2463).
+            const fim = p.fim ? new Date(String(p.fim).slice(0, 10) + 'T12:00:00Z') : mesFimFer;
+            const start = ini < mesIniFer ? mesIniFer : ini;
+            const end = fim > mesFimFer ? mesFimFer : fim;
+            if (start > end) continue;
+            const empIdFer = Number(vp.employeeId);
+            let daySet = feriasDiasSetSim.get(empIdFer);
+            if (!daySet) { daySet = new Set(); feriasDiasSetSim.set(empIdFer, daySet); }
+            for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+              daySet.add(d.toISOString().slice(0, 10));
+            }
+          }
+        }
+        for (const [empIdFer, daySet] of feriasDiasSetSim) {
+          feriasMesMapSim.set(empIdFer, Math.min(diasNoMesSim, daySet.size));
+        }
+        if (feriasMesMapSim.size > 0) {
+          console.log(`[SimPag FÉRIAS] ${feriasMesMapSim.size} funcionário(s) com férias na competência ${input.mesReferencia} → salário proporcional aplicado.`);
+        }
+      }
+
       // Rev. 3977 — Banco de Horas: acumula débitos de atraso/falta redirecionados
       // (aplicados em lote após o loop principal, uma vez que o period foi limpo acima).
       const bancoHorasDebitosBatch: { employeeId: number; companyId: number; minutos: number }[] = [];
@@ -4299,7 +4354,13 @@ export const payrollEngineRouter = router({
         // CLT horista: 220h = referência de 30 dias. Proporcional ao número real de dias do mês.
         const horasMensaisBaseEmp = emp.horasMensais ? Number(emp.horasMensais) : 220;
         const horasMensaisEmp = horasMensaisBaseEmp * diasNoMesSim / 30;
-        const salarioBruto = valorHora * horasMensaisEmp;
+        // Rev. 4770 — dias de férias na competência saem da base do salário mensal
+        // (já pagos via módulo de Férias). Proporção sobre os dias reais do mês.
+        const diasFeriasNoMesEmp = feriasMesMapSim.get(emp.id) || 0;
+        const fatorFeriasEmp = diasFeriasNoMesEmp > 0
+          ? Math.max(0, diasNoMesSim - diasFeriasNoMesEmp) / diasNoMesSim
+          : 1;
+        const salarioBruto = valorHora * horasMensaisEmp * fatorFeriasEmp;
         // HE = 0 — Hora Extra é módulo separado (he_periods)
         const valorHE = 0;
         // Rev. 3978 — diferença de dissídio NÃO entra mais na folha mensal (paga à
