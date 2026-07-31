@@ -1,4 +1,12 @@
 /**
+ * Rev. 4776 - SST: FILTROS DE ATESTADOS & ACIDENTES REPAGINADOS
+ *
+ * Tela "Analise de Atestados & Acidentes": card de filtros redesenhado —
+ * datas sobrepunham os atalhos (Mes/3M/6M...) no iPad. Agora e um card
+ * "Periodo da analise" com secoes empilhadas e divididas (Atalhos, Por
+ * calendario com Ano/T1-T4/S1-S2/Mes, Personalizado com Data Inicio/Fim)
+ * + rodape com resumo (meses, colaboradores, HH). Nada sobreposto.
+ *
  * Rev. 4775 - ALMOXARIFADO: NOME DO ITEM EMPRESTADO SEMPRE EM MAIUSCULA
  *
  * Padronizacao: nao importa como o usuario digitou o nome do item, o

@@ -406,109 +406,116 @@ export default function DashboardAtestadosAcidentes() {
           </Button>
         </div>
 
-        {/* Filtros */}
-        <Card>
-          <CardContent className="p-4 space-y-4">
-            {/* Linha 1: Período personalizado (datas) + atalhos */}
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
-              <div className="min-w-0">
-                <Label className="text-xs text-gray-600">Data Início</Label>
-                <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="w-full" />
-              </div>
-              <div className="min-w-0">
-                <Label className="text-xs text-gray-600">Data Fim</Label>
-                <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-full" />
-              </div>
+        {/* Filtros — Rev. 4776: repaginado em seções empilhadas, sem sobreposição */}
+        <Card className="overflow-hidden">
+          <div className="bg-gray-50/80 border-b px-4 py-2.5 flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-emerald-600" />
+            <span className="text-sm font-semibold text-gray-800">Período da análise</span>
+          </div>
+          <CardContent className="p-0 divide-y divide-gray-100">
+            {/* Seção 1 — Atalhos rápidos */}
+            <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 sm:w-32 shrink-0">Atalhos</span>
               <div className="flex flex-wrap gap-1.5">
-                <Button size="sm" variant="outline" onClick={() => setRange(1)}>Mês</Button>
-                <Button size="sm" variant="outline" onClick={() => setRange(3)}>3M</Button>
-                <Button size="sm" variant="outline" onClick={() => setRange(6)}>6M</Button>
-                <Button size="sm" variant="outline" onClick={() => setRange(12)}>12M</Button>
-                <Button size="sm" variant="outline" onClick={() => setRange(24)}>24M</Button>
+                <Button size="sm" variant="outline" onClick={() => setRange(1)}>Último mês</Button>
+                <Button size="sm" variant="outline" onClick={() => setRange(3)}>3 meses</Button>
+                <Button size="sm" variant="outline" onClick={() => setRange(6)}>6 meses</Button>
+                <Button size="sm" variant="outline" onClick={() => setRange(12)}>12 meses</Button>
+                <Button size="sm" variant="outline" onClick={() => setRange(24)}>24 meses</Button>
               </div>
             </div>
 
-            {/* Linha 2: Ano de referência + Ano todo */}
-            <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
-              <Label className="text-xs text-gray-600 whitespace-nowrap">Ano de referência</Label>
-              <select
-                className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                value={anoSel}
-                onChange={(e) => setAnoSel(parseInt(e.target.value, 10))}
-              >
-                {anosDisp.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-              <Button
-                size="sm"
-                variant={anoCheioAtivo(anoSel) ? "default" : "outline"}
-                onClick={() => setAnoCheio(anoSel)}
-                title={`Período: 01/01/${anoSel} a 31/12/${anoSel}`}
-              >
-                Ano todo
-              </Button>
-            </div>
-
-            {/* Linha 3: Trimestre / Semestre / Mês — grid para evitar sobreposição */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs text-gray-500 mr-1 whitespace-nowrap">Trimestre:</span>
-                {([1, 2, 3, 4] as const).map((q) => (
-                  <Button
-                    key={`t${q}`}
-                    size="sm"
-                    variant={trimAtivo(q) ? "default" : "outline"}
-                    onClick={() => setTrimestre(anoSel, q)}
-                    className="px-2"
+            {/* Seção 2 — Ano / Trimestre / Semestre / Mês */}
+            <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 sm:w-32 shrink-0 sm:pt-1.5">Por calendário</span>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <select
+                    className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    value={anoSel}
+                    onChange={(e) => setAnoSel(parseInt(e.target.value, 10))}
                   >
-                    T{q}
-                  </Button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs text-gray-500 mr-1 whitespace-nowrap">Semestre:</span>
-                {([1, 2] as const).map((s) => (
+                    {anosDisp.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
                   <Button
-                    key={`s${s}`}
                     size="sm"
-                    variant={semAtivo(s) ? "default" : "outline"}
-                    onClick={() => setSemestre(anoSel, s)}
-                    className="px-2"
+                    variant={anoCheioAtivo(anoSel) ? "default" : "outline"}
+                    onClick={() => setAnoCheio(anoSel)}
+                    title={`Período: 01/01/${anoSel} a 31/12/${anoSel}`}
                   >
-                    S{s}
+                    Ano todo
                   </Button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-gray-600 whitespace-nowrap">Mês:</Label>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {([1, 2, 3, 4] as const).map((q) => (
+                    <Button
+                      key={`t${q}`}
+                      size="sm"
+                      variant={trimAtivo(q) ? "default" : "outline"}
+                      onClick={() => setTrimestre(anoSel, q)}
+                      className="px-2.5"
+                    >
+                      T{q}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {([1, 2] as const).map((s) => (
+                    <Button
+                      key={`s${s}`}
+                      size="sm"
+                      variant={semAtivo(s) ? "default" : "outline"}
+                      onClick={() => setSemestre(anoSel, s)}
+                      className="px-2.5"
+                    >
+                      S{s}
+                    </Button>
+                  ))}
+                </div>
                 <select
-                  className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 flex-1 min-w-0"
+                  className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-40"
                   value={mesAtivoIdx}
                   onChange={(e) => {
                     const idx = parseInt(e.target.value, 10);
                     if (idx >= 0) setMesAno(anoSel, idx);
                   }}
                 >
-                  <option value={-1}>—</option>
+                  <option value={-1}>Mês específico…</option>
                   {mesesPt.map((m, i) => (
                     <option key={m} value={i}>{m}/{String(anoSel).slice(2)}</option>
                   ))}
                 </select>
               </div>
             </div>
+
+            {/* Seção 3 — Período personalizado (datas) */}
+            <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 sm:w-32 shrink-0">Personalizado</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
+                <div className="min-w-0">
+                  <Label className="text-xs text-gray-600">Data Início</Label>
+                  <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="w-full mt-1" />
+                </div>
+                <div className="min-w-0">
+                  <Label className="text-xs text-gray-600">Data Fim</Label>
+                  <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-full mt-1" />
+                </div>
+              </div>
+            </div>
+
+            {/* Rodapé — resumo do período */}
             {d && (
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
-                <Badge variant="outline" className="gap-1">
+              <div className="px-4 py-2.5 bg-gray-50/60 flex flex-wrap gap-2 text-xs text-gray-600">
+                <Badge variant="outline" className="gap-1 bg-white">
                   <Calendar className="h-3 w-3" />
                   {d.periodo.meses} {d.periodo.meses === 1 ? "mês" : "meses"}
                 </Badge>
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 bg-white">
                   <Users className="h-3 w-3" /> {fmtNum(d.headcount)} colaboradores ativos
                 </Badge>
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 bg-white">
                   <Clock className="h-3 w-3" /> {fmtNum(d.horasHomem)} HH no período (220h/mês)
                 </Badge>
               </div>
