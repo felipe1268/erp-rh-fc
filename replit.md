@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4773** — Almoxarifado: foto do funcionário em todas as pendências de devolução (fallback por código/nome + miniatura ?w=128) e alerta piscante no botão DEVOLUÇÃO com contador de itens em aberto.
+- **Rev. 4772** — Almoxarifado: Ferramentas em Aberto mostra a obra, alerta vermelho de "não devolvido" (pendências de dias anteriores entram na lista do dia) e data/hora no padrão BR/fuso de Brasília (gravação era UTC).
 - **Rev. 4771** — Folha: afastamento INSS proporcional — empresa paga os 15 primeiros dias corridos (mesmo cruzando meses); do 16º dia em diante sai da base do salário; afastado sem data de início segue fora da folha.
 - **Rev. 4770** — Folha: salário proporcional para funcionário de férias na competência — desconta os dias de gozo (já pagos pelo módulo de Férias) do salário base, mesma regra do Vale.
 - **Rev. 4769** — Contas a Pagar: cheque da baixa agora é criado no Controle de Cheques na MESMA transação (antes era 2ª chamada da tela que falhava em silêncio); nº do cheque gravado na baixa.

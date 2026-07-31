@@ -99,7 +99,7 @@ export const warehouseRouter = router({
         0
       );
 
-      const hoje = new Date().toISOString().split("T")[0];
+      const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
       const emprestimosHoje = await db
         .select()
         .from(warehouseLoans)
@@ -667,8 +667,9 @@ export const warehouseRouter = router({
       if (atual < input.quantidade)
         throw new TRPCError({ code: "BAD_REQUEST", message: "Estoque insuficiente para empréstimo" });
 
-      const hoje = new Date().toISOString().split("T")[0];
-      const hora = new Date().toTimeString().slice(0, 5);
+      // Rev. 4772 — data/hora no fuso de Brasília (antes era UTC → +3h)
+      const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      const hora = new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 
       const observacoes = [
         input.terceiroEmpresa ? `Empresa: ${input.terceiroEmpresa}` : null,
@@ -721,7 +722,7 @@ export const warehouseRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const hoje = new Date().toISOString().split("T")[0];
+      const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
       return db
         .select()
         .from(warehouseLoans)
@@ -749,8 +750,19 @@ export const warehouseRouter = router({
 
       const conditions: any[] = [eq(warehouseLoans.companyId, input.companyId)];
       if (input.data) {
-        // filtrar por dia: mostra todos (emprestado + devolvido) do dia
-        conditions.push(eq(warehouseLoans.dataEmprestimo, input.data));
+        // filtrar por dia: mostra todos (emprestado + devolvido) do dia.
+        // Rev. 4772 — inclui também PENDÊNCIAS de dias anteriores (status
+        // 'emprestado' com dataEmprestimo < dia filtrado) para o almoxarife
+        // ver o alerta de "não devolvido" sem precisar navegar dia a dia.
+        conditions.push(
+          or(
+            eq(warehouseLoans.dataEmprestimo, input.data),
+            and(
+              eq(warehouseLoans.status, "emprestado"),
+              sql`${warehouseLoans.dataEmprestimo} < ${input.data}`,
+            ),
+          )!,
+        );
       } else {
         // sem filtro de data: mostra só os abertos
         conditions.push(eq(warehouseLoans.status, "emprestado"));
@@ -782,7 +794,20 @@ export const warehouseRouter = router({
           funcionarioCodigo:    warehouseLoans.funcionarioCodigo,
           funcionarioNome:      warehouseLoans.funcionarioNome,
           // Rev. 4552 — foto do funcionário p/ facilitar a localização visual.
-          funcionarioFotoUrl:   employees.fotoUrl,
+          // Rev. 4773 — fallback: empréstimos antigos sem funcionarioId ainda
+          // acham a foto pelo código interno ou pelo nome (só exibição).
+          funcionarioFotoUrl:   sql<string | null>`COALESCE(${employees.fotoUrl}, (
+            SELECT e2."fotoUrl" FROM employees e2
+            WHERE e2."companyId" = ${warehouseLoans.companyId}
+              AND e2."deletedAt" IS NULL
+              AND e2."fotoUrl" IS NOT NULL
+              AND (
+                (${warehouseLoans.funcionarioCodigo} IS NOT NULL AND e2."codigoInterno" = ${warehouseLoans.funcionarioCodigo})
+                OR UPPER(TRIM(e2."nomeCompleto")) = UPPER(TRIM(${warehouseLoans.funcionarioNome}))
+              )
+            ORDER BY (e2."codigoInterno" = ${warehouseLoans.funcionarioCodigo}) DESC NULLS LAST
+            LIMIT 1
+          ))`,
           dataEmprestimo:       warehouseLoans.dataEmprestimo,
           horaEmprestimo:       warehouseLoans.horaEmprestimo,
           dataDevolucao:        warehouseLoans.dataDevolucao,
@@ -834,8 +859,9 @@ export const warehouseRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para operar o almoxarifado desta obra (somente leitura)." });
       }
 
-      const hoje = new Date().toISOString().split("T")[0];
-      const hora = new Date().toTimeString().slice(0, 5);
+      // Rev. 4772 — data/hora no fuso de Brasília (antes era UTC → +3h)
+      const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      const hora = new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 
       await db
         .update(warehouseLoans)
@@ -887,7 +913,7 @@ export const warehouseRouter = router({
           employeeId: loan.funcionarioId,
           tipoAdvertencia: "Advertencia",
           motivo: `Ferramenta não devolvida: ${loan.itemNome} — emprestada em ${loan.dataEmprestimo}`,
-          dataOcorrencia: new Date().toISOString().split("T")[0],
+          dataOcorrencia: new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }),
           aplicadoPor: ctx.user.name || "Sistema",
           sequencia: 1,
         } as any);
@@ -1849,7 +1875,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const hoje = new Date().toISOString().split("T")[0];
+      const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
       const rows = await db.execute(
         sql`SELECT * FROM almoxarifado_saidas_insumo
             WHERE company_id = ${input.companyId}

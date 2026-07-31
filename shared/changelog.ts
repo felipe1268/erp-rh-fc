@@ -1,4 +1,29 @@
 /**
+ * Rev. 4773 - ALMOXARIFADO: FOTO EM TODAS AS PENDENCIAS + ALERTA PISCANTE NA DEVOLUCAO
+ *
+ * Fechar Dia — Pendencias de Devolucao:
+ * 1. Foto do funcionario em TODOS os cards: emprestimos antigos sem
+ *    funcionarioId agora acham a foto por fallback (codigoInterno ou nome,
+ *    so exibicao) direto no listOpenLoans; avatares usam miniatura ?w=128
+ *    (foto original grande quebrava no Safari/iPad).
+ * 2. Alerta PISCANTE: botao DEVOLUCAO DE FERRAMENTA fica vermelho pulsando com
+ *    contador de itens em aberto (query sempre ativa, nao so com modal aberto)
+ *    — lembrete visual p/ devolver tudo ate o fim do dia; badges "Dia anterior"
+ *    e "Pendente" do modal tambem pulsam.
+ *
+ * Rev. 4772 - ALMOXARIFADO: OBRA + ALERTA DE NAO DEVOLVIDO + DATA/HORA BRASILIA
+ *
+ * Ferramentas em Aberto (Registros do Almoxarifado):
+ * 1. Cada item agora mostra a OBRA do emprestimo.
+ * 2. Alerta vermelho quando a ferramenta NAO foi devolvida: emprestimo de dia
+ *    anterior ainda aberto aparece destacado (borda vermelha + "Nao devolvido —
+ *    N dias em aberto") e as pendencias antigas agora entram na lista do dia
+ *    filtrado (antes so apareciam navegando ate o dia do emprestimo).
+ * 3. Data no padrao brasileiro (DD/MM/AAAA) e hora no fuso de Brasilia — o
+ *    servidor gravava data/hora do emprestimo e da devolucao em UTC (+3h);
+ *    timestamps de entradas/saidas/insumos/transferencias tambem formatados
+ *    via fuso America/Sao_Paulo.
+ *
  * Rev. 4771 - FOLHA: AFASTAMENTO INSS COM PROPORCIONALIDADE (JANELA DOS 15 DIAS)
  *
  * Antes, funcionario com status "Afastado" ficava 100% FORA da folha — inclusive

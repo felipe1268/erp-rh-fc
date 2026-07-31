@@ -13,6 +13,7 @@ import {
   CheckSquare, Square, Globe, Check, Tag, Layers, CalendarPlus, RefreshCw,
 } from "lucide-react";
 import SmartEntry from "./SmartEntry";
+import { formatDateTime } from "@/lib/dateUtils";
 import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
 import { inferirCategoria, CATEGORIA_KEYWORDS } from "./categoriaUtils";
 import { ModalConfirmacaoAuditoria } from "@/components/almoxarifado/ModalConfirmacaoAuditoria";
@@ -1765,11 +1766,13 @@ export default function AlmoxarifadoPage() {
   // filtro de obra opcional no próprio modal.
   const [modalFecharDia, setModalFecharDia] = useState(false);
   const [fecharDiaObraFiltro, setFecharDiaObraFiltro] = useState<number | "todas">("todas");
+  // Rev. 4773 — sempre carregado (não só com o modal aberto) p/ o alerta piscante
+  // de pendências no botão DEVOLUÇÃO.
   const { data: emprestimosAbertos = [], refetch: refetchLoans } = trpc.warehouse.listOpenLoans.useQuery(
     { companyId },
-    { enabled: modalFecharDia && !!companyId }
+    { enabled: !!companyId }
   );
-  const hojeStr = new Date().toISOString().split("T")[0];
+  const hojeStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // Rev. 4772 — dia de Brasília
   const emprestimosHoje = (emprestimosAbertos as any[])
     .filter((l) => fecharDiaObraFiltro === "todas" || Number(l.obraId) === Number(fecharDiaObraFiltro))
     .sort((a, b) => String(a.dataEmprestimo).localeCompare(String(b.dataEmprestimo)));
@@ -1799,7 +1802,7 @@ export default function AlmoxarifadoPage() {
   // ── Modal Registros ─────────────────────────────────────────────
   const [modalRegistros, setModalRegistros] = useState(false);
   const [abaRegistros, setAbaRegistros] = useState<"entradas" | "saidas" | "emprestados" | "insumos" | "transferencias" | "cadastros">("entradas");
-  const [filtroData, setFiltroData] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [filtroData, setFiltroData] = useState<string>(() => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }));
   const { data: movEntradas = [], isLoading: loadingEntradas } = trpc.warehouse.listMovements.useQuery(
     { companyId, tipo: "entrada", limit: 300, data: filtroData },
     { enabled: !!companyId && modalRegistros && abaRegistros === "entradas" }
@@ -2021,8 +2024,18 @@ export default function AlmoxarifadoPage() {
             {/* Rev. 4566 — DEVOLUÇÃO DE FERRAMENTA (ex-"Fechar Dia"), ao lado da Entrega */}
             <button
               onClick={() => setModalFecharDia(true)}
-              className="flex flex-col items-center justify-center gap-2 bg-gray-700 hover:bg-gray-800 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+              className={`relative flex flex-col items-center justify-center gap-2 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition ${
+                (emprestimosAbertos as any[]).length > 0
+                  ? "bg-red-600 hover:bg-red-700 animate-pulse"
+                  : "bg-gray-700 hover:bg-gray-800"
+              }`}
             >
+              {/* Rev. 4773 — alerta piscante: ferramentas em aberto p/ devolver até o fim do dia */}
+              {(emprestimosAbertos as any[]).length > 0 && (
+                <span className="absolute -top-2 -right-2 bg-white text-red-600 border-2 border-red-600 text-xs font-extrabold rounded-full min-w-[26px] h-[26px] px-1 flex items-center justify-center shadow">
+                  {(emprestimosAbertos as any[]).length}
+                </span>
+              )}
               <ClipboardCheck className="w-8 h-8" />
               <span className="text-center leading-tight">
                 DEVOLUÇÃO
@@ -4566,7 +4579,7 @@ export default function AlmoxarifadoPage() {
                         {/* Rev. 4552 — foto do funcionário (clique = ampliar) p/ facilitar a localização */}
                         {(loan as any).funcionarioFotoUrl ? (
                           <img
-                            src={(loan as any).funcionarioFotoUrl}
+                            src={`${(loan as any).funcionarioFotoUrl}${String((loan as any).funcionarioFotoUrl).includes("?") ? "&" : "?"}w=128`}
                             alt={loan.funcionarioNome || "Funcionário"}
                             className="w-12 h-12 rounded-full object-cover border-2 border-gray-200 flex-shrink-0 cursor-pointer hover:opacity-80 transition"
                             onClick={() => setFotoExpandida({ url: (loan as any).funcionarioFotoUrl, nome: loan.funcionarioNome || "Funcionário" })}
@@ -4591,9 +4604,9 @@ export default function AlmoxarifadoPage() {
                           </p>
                         </div>
                         {atrasado ? (
-                          <span className="text-xs font-semibold text-orange-700 bg-orange-50 px-2 py-1 rounded-full flex-shrink-0">⚠️ Dia anterior</span>
+                          <span className="text-xs font-semibold text-orange-700 bg-orange-50 px-2 py-1 rounded-full flex-shrink-0 animate-pulse">⚠️ Dia anterior</span>
                         ) : (
-                          <span className="text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded-full flex-shrink-0">⏳ Pendente</span>
+                          <span className="text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded-full flex-shrink-0 animate-pulse">⏳ Pendente</span>
                         )}
                       </div>
                       <button
@@ -4839,13 +4852,13 @@ export default function AlmoxarifadoPage() {
                 <input
                   type="date"
                   value={filtroData}
-                  max={new Date().toISOString().split("T")[0]}
+                  max={new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })}
                   onChange={e => setFiltroData(e.target.value)}
                   className="text-sm font-semibold text-gray-800 bg-transparent border-none outline-none text-center cursor-pointer"
                 />
-                {filtroData === new Date().toISOString().split("T")[0] ? (
+                {filtroData === new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }) ? (
                   <span className="text-xs text-emerald-600 font-bold">HOJE</span>
-                ) : filtroData === new Date(Date.now() - 86400000).toISOString().split("T")[0] ? (
+                ) : filtroData === new Date(new Date(hojeStr + "T12:00:00Z").getTime() - 86400000).toISOString().slice(0, 10) ? (
                   <span className="text-xs text-blue-500 font-semibold">ONTEM</span>
                 ) : (
                   <span className="text-xs text-gray-400">
@@ -4864,7 +4877,7 @@ export default function AlmoxarifadoPage() {
                   }
                 }}
                 className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-200 transition text-gray-600 font-bold text-lg disabled:opacity-30"
-                disabled={filtroData === new Date().toISOString().split("T")[0]}
+                disabled={filtroData === new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })}
               >›</button>
             </div>
           )}
@@ -4887,7 +4900,7 @@ export default function AlmoxarifadoPage() {
                         {m.motivo ? ` · ${m.motivo}` : ""}
                         {m.usuarioNome ? ` · ${m.usuarioNome}` : ""}
                       </p>
-                      <p className="text-[11px] text-gray-400">{m.criadoEm ? new Date(m.criadoEm).toLocaleString("pt-BR") : "—"}</p>
+                      <p className="text-[11px] text-gray-400">{m.criadoEm ? formatDateTime(m.criadoEm) : "—"}</p>
                     </div>
                   </div>
                 ))}
@@ -4909,7 +4922,7 @@ export default function AlmoxarifadoPage() {
                         {m.obraNome ? ` · ${m.obraNome}` : ""}
                         {m.usuarioNome ? ` · ${m.usuarioNome}` : ""}
                       </p>
-                      <p className="text-[11px] text-gray-400">{m.criadoEm ? new Date(m.criadoEm).toLocaleString("pt-BR") : "—"}</p>
+                      <p className="text-[11px] text-gray-400">{m.criadoEm ? formatDateTime(m.criadoEm) : "—"}</p>
                     </div>
                   </div>
                 ))}
@@ -4953,7 +4966,7 @@ export default function AlmoxarifadoPage() {
                             {/* Rev. 4552 — foto do funcionário (clique = ampliar) */}
                             {g.fotoUrl ? (
                               <img
-                                src={g.fotoUrl}
+                                src={`${g.fotoUrl}${g.fotoUrl.includes("?") ? "&" : "?"}w=128`}
                                 alt={g.nome}
                                 className="w-9 h-9 rounded-full object-cover border-2 border-blue-300 shrink-0 cursor-pointer hover:opacity-80 transition"
                                 onClick={() => setFotoExpandida({ url: g.fotoUrl!, nome: g.nome })}
@@ -4978,12 +4991,27 @@ export default function AlmoxarifadoPage() {
                           )}
                         </div>
                         <div className="divide-y divide-blue-100">
-                          {g.itens.map((l: any) => (
-                            <div key={l.id} className="bg-blue-50 px-4 py-2 flex items-center gap-3">
-                              <Wrench className="w-4 h-4 text-blue-500 shrink-0" />
+                          {g.itens.map((l: any) => {
+                            // Rev. 4772 — data BR + alerta de não devolvido (empréstimo de dia anterior ainda aberto)
+                            const hojeSP = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+                            const dataEmpIso = String(l.dataEmprestimo || "").slice(0, 10);
+                            const dataEmpBR = dataEmpIso ? dataEmpIso.split("-").reverse().join("/") : "";
+                            const atrasado = l.status === "emprestado" && !!dataEmpIso && dataEmpIso < hojeSP;
+                            const diasAtraso = atrasado ? Math.round((new Date(hojeSP + "T12:00:00Z").getTime() - new Date(dataEmpIso + "T12:00:00Z").getTime()) / 86400000) : 0;
+                            return (
+                            <div key={l.id} className={`px-4 py-2 flex items-center gap-3 ${atrasado ? "bg-red-50 border-l-4 border-red-500" : "bg-blue-50"}`}>
+                              {atrasado
+                                ? <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                                : <Wrench className="w-4 h-4 text-blue-500 shrink-0" />}
                               <div className="flex-1 min-w-0">
                                 <p className="font-semibold text-gray-900 text-sm truncate">{l.itemNome}</p>
-                                <p className="text-[11px] text-gray-500">{fmtQtd(l.quantidade)} un · Emprestado em {l.dataEmprestimo}{l.horaEmprestimo ? ` às ${l.horaEmprestimo}` : ""}</p>
+                                <p className="text-[11px] text-gray-500">{fmtQtd(l.quantidade)} un · Emprestado em {dataEmpBR}{l.horaEmprestimo ? ` às ${l.horaEmprestimo}` : ""}</p>
+                                {l.obraNome && <p className="text-[11px] text-blue-700">🏗️ {l.obraNome}</p>}
+                                {atrasado && (
+                                  <p className="text-[11px] font-bold text-red-600">
+                                    ⚠️ Não devolvido — {diasAtraso === 1 ? "1 dia" : `${diasAtraso} dias`} em aberto
+                                  </p>
+                                )}
                               </div>
                               <button
                                 onClick={() => { setAssinaturaDevolucaoDataUrl(null); setModalAssinaturaDevolucao({ tipo: "individual", loan: l }); }}
@@ -4993,7 +5021,8 @@ export default function AlmoxarifadoPage() {
                                 Devolver
                               </button>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
@@ -5023,7 +5052,7 @@ export default function AlmoxarifadoPage() {
                       </p>
                       {r.obra_nome && <p className="text-[11px] text-amber-700">🏗️ {r.obra_nome}</p>}
                       {r.motivo && <p className="text-[11px] text-gray-400 italic">{r.motivo}</p>}
-                      <p className="text-[11px] text-gray-400">{r.created_at ? new Date(r.created_at).toLocaleString("pt-BR") : ""}</p>
+                      <p className="text-[11px] text-gray-400">{r.created_at ? formatDateTime(r.created_at) : ""}</p>
                     </div>
                   </div>
                 ))}
@@ -5057,7 +5086,7 @@ export default function AlmoxarifadoPage() {
                       </div>
                       {t.motivo && <p className="text-[11px] text-gray-400 italic mt-1">{t.motivo}</p>}
                       <div className="flex items-center justify-between mt-0.5">
-                        <p className="text-[11px] text-gray-400">{t.created_at ? new Date(t.created_at).toLocaleString("pt-BR") : ""}</p>
+                        <p className="text-[11px] text-gray-400">{t.created_at ? formatDateTime(t.created_at) : ""}</p>
                         {t.almoxarife_nome && <p className="text-[11px] text-purple-600 font-medium">Enviado por {t.almoxarife_nome}</p>}
                       </div>
                     </div>
