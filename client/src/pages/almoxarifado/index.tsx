@@ -4609,7 +4609,7 @@ export default function AlmoxarifadoPage() {
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-gray-900 text-base">{loan.itemNome}</p>
+                          <p className="font-bold text-gray-900 text-base uppercase">{loan.itemNome}</p>
                           <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5">
                             <User className="w-3 h-3" /> {loan.funcionarioNome}
                           </p>
@@ -5023,7 +5023,7 @@ export default function AlmoxarifadoPage() {
                                 ? <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
                                 : <Wrench className="w-4 h-4 text-blue-500 shrink-0" />}
                               <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-gray-900 text-sm truncate">{l.itemNome}</p>
+                                <p className="font-semibold text-gray-900 text-sm truncate uppercase">{l.itemNome}</p>
                                 <p className="text-[11px] text-gray-500">{fmtQtd(l.quantidade)} un · Emprestado em {dataEmpBR}{l.horaEmprestimo ? ` às ${l.horaEmprestimo}` : ""}</p>
                                 {l.obraNome && <p className="text-[11px] text-blue-700">🏗️ {l.obraNome}</p>}
                                 {atrasado && (

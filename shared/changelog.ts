@@ -1,4 +1,11 @@
 /**
+ * Rev. 4775 - ALMOXARIFADO: NOME DO ITEM EMPRESTADO SEMPRE EM MAIUSCULA
+ *
+ * Padronizacao: nao importa como o usuario digitou o nome do item, o
+ * emprestimo grava itemNome em MAIUSCULA (registerLoan) e as telas de
+ * pendencias (Fechar Dia + Ferramentas em Aberto) exibem com classe
+ * `uppercase`, cobrindo tambem os emprestimos antigos ja gravados.
+ *
  * Rev. 4774 - ALMOXARIFADO: BANNERAO PISCANTE DE DEVOLUCAO ("PUXAO DE ORELHA")
  *
  * Pedido: alerta em MAIS evidencia, grande, com mensagem puxando a orelha.

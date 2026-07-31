@@ -680,7 +680,8 @@ export const warehouseRouter = router({
         companyId: input.companyId,
         obraId: input.obraId || null,
         itemId: input.itemId,
-        itemNome: item.nome,
+        // Rev. 4775 — nome do item sempre em MAIÚSCULA no empréstimo
+        itemNome: String(item.nome || "").toUpperCase(),
         quantidade: String(input.quantidade),
         funcionarioId,
         funcionarioCodigo,
