@@ -1970,6 +1970,25 @@ export default function AlmoxarifadoPage() {
 
         {/* ── AÇÕES RÁPIDAS MOBILE ──────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 py-4">
+          {/* Rev. 4774 — bannerão piscante "puxão de orelha" de devolução pendente */}
+          {!somenteLeitura && (emprestimosAbertos as any[]).length > 0 && (
+            <button
+              onClick={() => setModalFecharDia(true)}
+              className="w-full mb-4 bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white rounded-2xl px-4 py-5 shadow-lg border-4 border-red-300 animate-pulse text-left transition"
+            >
+              <span className="flex items-center gap-4">
+                <AlertTriangle className="w-12 h-12 flex-shrink-0" />
+                <span className="min-w-0">
+                  <span className="block text-2xl font-extrabold leading-tight">
+                    🚨 ATENÇÃO, ALMOXARIFE! {(emprestimosAbertos as any[]).length} ferramenta{(emprestimosAbertos as any[]).length !== 1 ? "s" : ""} NÃO devolvida{(emprestimosAbertos as any[]).length !== 1 ? "s" : ""}!
+                  </span>
+                  <span className="block text-base font-semibold mt-1 opacity-95">
+                    Ferramenta não dorme na obra: cobre a devolução de TUDO antes de fechar o dia. Toque aqui para ver quem está devendo.
+                  </span>
+                </span>
+              </span>
+            </button>
+          )}
           {/* Rev. 4539 — obra somente-leitura: esconde os botões de operação */}
           {!somenteLeitura && (
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7">

@@ -1,4 +1,12 @@
 /**
+ * Rev. 4774 - ALMOXARIFADO: BANNERAO PISCANTE DE DEVOLUCAO ("PUXAO DE ORELHA")
+ *
+ * Pedido: alerta em MAIS evidencia, grande, com mensagem puxando a orelha.
+ * Banner vermelho pulsante em largura total no topo das acoes rapidas quando ha
+ * ferramentas em aberto: "ATENCAO, ALMOXARIFE! N ferramentas NAO devolvidas!
+ * Ferramenta nao dorme na obra: cobre a devolucao de TUDO antes de fechar o
+ * dia." Toque abre o Fechar Dia. Some quando tudo foi devolvido.
+ *
  * Rev. 4773 - ALMOXARIFADO: FOTO EM TODAS AS PENDENCIAS + ALERTA PISCANTE NA DEVOLUCAO
  *
  * Fechar Dia — Pendencias de Devolucao:

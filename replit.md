@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4774** — Almoxarifado: banner grande vermelho pulsante ("puxão de orelha") no topo das ações rápidas quando há ferramentas não devolvidas; toque abre o Fechar Dia.
 - **Rev. 4773** — Almoxarifado: foto do funcionário em todas as pendências de devolução (fallback por código/nome + miniatura ?w=128) e alerta piscante no botão DEVOLUÇÃO com contador de itens em aberto.
 - **Rev. 4772** — Almoxarifado: Ferramentas em Aberto mostra a obra, alerta vermelho de "não devolvido" (pendências de dias anteriores entram na lista do dia) e data/hora no padrão BR/fuso de Brasília (gravação era UTC).
 - **Rev. 4771** — Folha: afastamento INSS proporcional — empresa paga os 15 primeiros dias corridos (mesmo cruzando meses); do 16º dia em diante sai da base do salário; afastado sem data de início segue fora da folha.
