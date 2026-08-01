@@ -1647,7 +1647,11 @@ export default function MedicaoLevantamento() {
   // geometria + recálculo de área/perímetro/volume/quantidade. Mesmo caminho do
   // recolorContorno/bind (off.saveContorno por id/uuid → UPDATE).
   function salvarGeometriaContorno(c: any, ptsNorm: GeoPonto[]) {
-    const mpu = c.metrosPorUnidade ? parseFloat(c.metrosPorUnidade) : (calibAtualEff?.metrosPorUnidade ?? 0);
+    // Rev. 4792 — mpu auto-calibrado pela área salva (calcula sobre a geometria
+    // ORIGINAL do contorno): edição de pontos em planta DXF recalcula certo.
+    let ptsOrig: GeoPonto[] = [];
+    try { ptsOrig = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+    const mpu = mpuEfetivo(c, ptsOrig);
     const esp = c.espessura ? parseFloat(c.espessura) : 0;
     const cont = c.contagem ?? 0;
     const r = mpu > 0
@@ -1775,11 +1779,29 @@ export default function MedicaoLevantamento() {
   function metrosEntre(a: GeoPonto, b: GeoPonto, mpu: number): number {
     return distancia(normToPt(a), normToPt(b)) * mpu;
   }
+
+  // Rev. 4792 — fator de conversão AUTO-CALIBRADO pelo próprio contorno: a
+  // área/perímetro SALVOS são o gabarito. Se a escala da tela atual não for a
+  // mesma da criação (comum em DXF), recomputar com pageDims de agora daria
+  // medida errada (ex.: "0,21 m" numa área de 11,66 m²). Corrigimos o mpu p/
+  // que o recálculo BATA com o valor salvo — medidas e área sempre fecham.
+  function mpuEfetivo(c: any, pts: GeoPonto[]): number {
+    const mpu0 = parseFloat(c.metrosPorUnidade || "0") || calibAtualEff?.metrosPorUnidade || 0;
+    if (!(mpu0 > 0) || pts.length < 2) return mpu0;
+    try {
+      const r = calcularContorno(c.tipo as TipoContorno, pts.map(normToPt), mpu0, c.espessura ? parseFloat(c.espessura) : 0, c.contagem ?? 0);
+      const areaSalva = c.area ? parseFloat(c.area) : 0;
+      if (areaSalva > 0 && r.area > 0) return mpu0 * Math.sqrt(areaSalva / r.area);
+      const perSalvo = c.perimetro ? parseFloat(c.perimetro) : 0;
+      if (perSalvo > 0 && r.perimetro > 0) return mpu0 * (perSalvo / r.perimetro);
+    } catch { /* mantém mpu0 */ }
+    return mpu0;
+  }
   async function redimensionarContorno(c: any, dim: "largura" | "altura" | "comprimento", metrosNovo: number) {
     if (!(metrosNovo > 0)) return;
     let pts: GeoPonto[] = [];
     try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
-    const mpu = parseFloat(c.metrosPorUnidade || "0") || calibAtualEff?.metrosPorUnidade || 0;
+    const mpu = mpuEfetivo(c, pts);
     if (!(mpu > 0) || pts.length < 2) return;
     const box = detectRectBox(pts);
     let novos: GeoPonto[] | null = null;
@@ -1808,7 +1830,7 @@ export default function MedicaoLevantamento() {
     if (!(novoM > 0)) return;
     let pts: GeoPonto[] = [];
     try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
-    const mpu = parseFloat(c.metrosPorUnidade || "0") || calibAtualEff?.metrosPorUnidade || 0;
+    const mpu = mpuEfetivo(c, pts);
     if (!(mpu > 0) || pts.length < 2) return;
     const r = calcularContorno(c.tipo as TipoContorno, pts.map(normToPt), mpu, novoM, c.contagem ?? 0);
     await off.saveContorno({
@@ -2897,7 +2919,7 @@ export default function MedicaoLevantamento() {
                         if (!c || c.tipo === "contagem") return null;
                         let pts: GeoPonto[] = [];
                         try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
-                        const mpu = parseFloat(c.metrosPorUnidade || "0") || calibAtualEff?.metrosPorUnidade || 0;
+                        const mpu = mpuEfetivo(c, pts); // auto-calibrado pela área salva
                         if (!(mpu > 0) || pts.length < 2) return null;
                         const box = detectRectBox(pts);
                         const linha = !box && pts.length === 2;
@@ -3025,7 +3047,7 @@ export default function MedicaoLevantamento() {
                       {c.tipo !== "contagem" && (() => {
                         let pts: GeoPonto[] = [];
                         try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
-                        const mpu = parseFloat(c.metrosPorUnidade || "0") || calibAtualEff?.metrosPorUnidade || 0;
+                        const mpu = mpuEfetivo(c, pts); // auto-calibrado pela área salva
                         if (!(mpu > 0) || pts.length < 2) return null;
                         const box = detectRectBox(pts);
                         const linha = !box && pts.length === 2;

@@ -44,6 +44,11 @@
  *   retangulo = largura x altura; linha = comprimento; volume = espessura.
  *   Editar a medida re-escala o DESENHO e recalcula a area junto — o numero
  *   nunca desgruda da planta (nada de quantidade digitada solta).
+ * - Medidas AUTO-CALIBRADAS pela area salva do contorno: em planta DXF a
+ *   escala da tela podia divergir da escala da criacao (ex.: "0,21 m" numa
+ *   area de 11,66 m2). Agora o fator e corrigido pelo proprio m2 salvo —
+ *   largura x altura sempre fecham com a area do cartao (tambem no
+ *   redimensionar por numero e na edicao de pontos).
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO
