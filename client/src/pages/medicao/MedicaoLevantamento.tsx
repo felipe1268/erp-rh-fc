@@ -2462,7 +2462,8 @@ export default function MedicaoLevantamento() {
                     <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide shrink-0">{pai.nome}:</span>
                     {abas.map((s: any) => {
                       const sel = servicoAtivo === s.chave;
-                      const label = s.chave === pai.chave ? "Geral" : (String(s.nome).startsWith(`${pai.nome} `) ? String(s.nome).slice(pai.nome.length + 1) : s.nome);
+                      // Rev. 4801 — no Forro a aba base chama "Teto" (pedido do usuário)
+                      const label = s.chave === pai.chave ? (pai.chave === "forro" ? "Teto" : "Geral") : (String(s.nome).startsWith(`${pai.nome} `) ? String(s.nome).slice(pai.nome.length + 1) : s.nome);
                       const tot = totaisPorServico.get(s.chave) ?? 0;
                       return (
                         <button
