@@ -12,6 +12,7 @@ import {
   medicaoLevantamentoServicos,
   medicaoCampoFotos,
   terceiroContratos,
+  terceiroContratoItens,
   planejamentoProjetos,
   planejamentoAtividades,
   planejamentoAvancos,
@@ -26,6 +27,27 @@ import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
 import { consolidarContornos } from "../../shared/levantamentoConsolidado";
+import { unidadesCompativeis } from "../../shared/unidadeCompat";
+import { aplicarLevantamentoNaMedicaoTerceiro } from "../terceiroLevantamentoSync";
+
+// Rev. 4792 — guard de UNIDADE no vínculo contorno → item da planilha.
+// Retorna mensagem de erro se as unidades divergem; null se ok/sem info.
+async function checarUnidadeVinculo(db: any, campoId: number, orcamentoItemId: number | null | undefined, unidadeContorno: string | null | undefined): Promise<string | null> {
+  if (!orcamentoItemId || !unidadeContorno) return null;
+  const [campo] = await db.select({ origem: medicaoCampo.origem }).from(medicaoCampo).where(eq(medicaoCampo.id, campoId)).limit(1);
+  let unidadeItem: string | null = null;
+  if ((campo as any)?.origem === "terceiro") {
+    const [it] = await db.select({ unidade: terceiroContratoItens.unidade }).from(terceiroContratoItens).where(eq(terceiroContratoItens.id, orcamentoItemId)).limit(1);
+    unidadeItem = (it as any)?.unidade ?? null;
+  } else {
+    const [it] = await db.select({ unidade: orcamentoItens.unidade }).from(orcamentoItens).where(eq(orcamentoItens.id, orcamentoItemId)).limit(1);
+    unidadeItem = (it as any)?.unidade ?? null;
+  }
+  if (!unidadesCompativeis(unidadeContorno, unidadeItem)) {
+    return `Unidade errada: o trecho está em "${unidadeContorno}" e o item da planilha em "${unidadeItem}". Verifique antes de vincular.`;
+  }
+  return null;
+}
 
 // Guard PERMISSIVO de empresa (mesmo padrão de medicaoConfig/aiConfig/compras):
 // admin libera; usuário SEM vínculo libera; só bloqueia usuário vinculado a
@@ -1360,11 +1382,15 @@ export const medicaoRouter = router({
         .limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
       const { id, companyId, numero: numeroInput, ...rest } = input;
+      // Rev. 4792 — Poka-Yoke: unidade do trecho ≠ unidade do item = NÃO salva.
+      const erroUnidade = await checarUnidadeVinculo(db, input.medicaoCampoId, input.orcamentoItemId, input.unidade);
+      if (erroUnidade) throw new TRPCError({ code: "BAD_REQUEST", message: erroUnidade });
       if (id) {
         await db.update(medicaoCampoContornos)
           // Rev. 4792 — numero agora persiste (patch parcial: só se veio no input)
           .set({ ...rest, ...(typeof numeroInput === "number" ? { numero: numeroInput } : {}), atualizadoEm: new Date() })
           .where(and(eq(medicaoCampoContornos.id, id), eq(medicaoCampoContornos.companyId, companyId)));
+        await aplicarLevantamentoNaMedicaoTerceiro(db, input.medicaoCampoId).catch((e: any) => console.error("[Medicao] aplicarLevantamento:", e));
         return { id };
       }
       // Rev. 4792 — numeração POR CATEGORIA (serviço; fallback tipo), ignorando
@@ -1387,6 +1413,7 @@ export const medicaoRouter = router({
         numero: (typeof numeroInput === "number" && numeroInput > 0 && !setUsados.has(numeroInput)) ? numeroInput : maxUsado + 1,
       }).returning();
       await dedupNumerosContornos(db, input.medicaoCampoId).catch((e: any) => console.error("[Medicao] dedupNumeros:", e));
+      await aplicarLevantamentoNaMedicaoTerceiro(db, input.medicaoCampoId).catch((e: any) => console.error("[Medicao] aplicarLevantamento:", e));
       return row;
     }),
 
@@ -1394,9 +1421,13 @@ export const medicaoRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const [alvo] = await db.select({ medicaoCampoId: medicaoCampoContornos.medicaoCampoId })
+        .from(medicaoCampoContornos)
+        .where(and(eq(medicaoCampoContornos.id, input.id), eq(medicaoCampoContornos.companyId, input.companyId))).limit(1);
       await db.update(medicaoCampoContornos)
         .set({ deletedAt: new Date() })
         .where(and(eq(medicaoCampoContornos.id, input.id), eq(medicaoCampoContornos.companyId, input.companyId)));
+      if (alvo) await aplicarLevantamentoNaMedicaoTerceiro(db, alvo.medicaoCampoId).catch((e: any) => console.error("[Medicao] aplicarLevantamento:", e));
       return { success: true };
     }),
 
@@ -1586,11 +1617,26 @@ export const medicaoRouter = router({
       const [campo] = await db.select({ id: medicaoCampo.id }).from(medicaoCampo)
         .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId))).limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      // Rev. 4792 — Poka-Yoke de UNIDADE também no vínculo por serviço (server:
+      // o client já bloqueia, mas chamada direta à API não pode furar a regra).
+      if (input.orcamentoItemId) {
+        let tipoMedida = input.tipoMedida as string | undefined;
+        if (!tipoMedida && input.id) {
+          const [srv] = await db.select({ tipoMedida: medicaoLevantamentoServicos.tipoMedida }).from(medicaoLevantamentoServicos)
+            .where(eq(medicaoLevantamentoServicos.id, input.id)).limit(1);
+          tipoMedida = (srv as any)?.tipoMedida ?? undefined;
+        }
+        const unidadeServico = ({ area: "m²", parede: "m²", perimetro: "m", volume: "m³", contagem: "un" } as Record<string, string>)[tipoMedida ?? "area"];
+        const erroUn = await checarUnidadeVinculo(db, input.medicaoCampoId, input.orcamentoItemId, unidadeServico);
+        if (erroUn) throw new TRPCError({ code: "BAD_REQUEST", message: erroUn });
+      }
       const { id, companyId, medicaoCampoId, ...rest } = input;
       if (id) {
         await db.update(medicaoLevantamentoServicos)
           .set({ ...rest, atualizadoEm: new Date() })
           .where(and(eq(medicaoLevantamentoServicos.id, id), eq(medicaoLevantamentoServicos.companyId, companyId), eq(medicaoLevantamentoServicos.medicaoCampoId, medicaoCampoId)));
+        // vínculo por serviço muda o consolidado → repropaga p/ medição vinculada
+        await aplicarLevantamentoNaMedicaoTerceiro(db, medicaoCampoId).catch((e: any) => console.error("[Medicao] aplicarLevantamento:", e));
         return { id };
       }
       const [row] = await db.insert(medicaoLevantamentoServicos)
@@ -1844,6 +1890,15 @@ export const medicaoRouter = router({
               continue;
             }
             camposComContorno.add(campoId); // dedup de numeração pós-lote
+            // Rev. 4792 — Poka-Yoke: unidade do trecho ≠ unidade do item. No sync
+            // offline NÃO rejeitamos a op (rejeição não-transitória = fila em
+            // loop eterno no aparelho): salvamos a MEDIDA e descartamos só o
+            // vínculo errado — o contorno volta como "Sem item" p/ revincular.
+            const erroUnidade = await checarUnidadeVinculo(db, campoId, d.orcamentoItemId, d.unidade);
+            if (erroUnidade) {
+              d.orcamentoItemId = null; d.itemEapCodigo = null; d.itemDescricao = null;
+              console.warn(`[Medicao] sincronizarLote: vínculo descartado por unidade (campo ${campoId}): ${erroUnidade}`);
+            }
             const fields = {
               pdfId: d.pdfId,
               pagina: d.pagina ?? 1,
@@ -2039,6 +2094,9 @@ export const medicaoRouter = router({
       // trocar números que o usuário já conhece.
       for (const campoId of camposComContorno) {
         try { await dedupNumerosContornos(db, campoId); } catch (e) { console.error("[Medicao] dedupNumeros falhou:", e); }
+        // Rev. 4792 — levantamento vinculado a medição de terceiros em rascunho:
+        // os quantitativos fluem automaticamente para a planilha da medição.
+        try { await aplicarLevantamentoNaMedicaoTerceiro(db, campoId); } catch (e) { console.error("[Medicao] aplicarLevantamento falhou:", e); }
       }
       return { resultados, okCount, conflitos, erros };
     }),

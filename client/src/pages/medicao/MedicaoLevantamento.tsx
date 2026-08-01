@@ -23,6 +23,7 @@ import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
   calcularContorno, distancia, fatorCalibracao, simplificarPontos,
 } from "@shared/levantamentoGeo";
+import { unidadesCompativeis } from "@shared/unidadeCompat";
 import { useLevantamentoOffline } from "@/hooks/useLevantamentoOffline";
 import { VincularItemCombobox, buildItensVinculaveis } from "./VincularItemCombobox";
 import { parseDxfPlanta, type DxfPlanta } from "./dxfPlanta";
@@ -1492,6 +1493,17 @@ export default function MedicaoLevantamento() {
 
   function bindContornoItem(c: any, orcamentoItemId: string) {
     const it = (itensOrcamento as any[]).find((i) => String(i.id) === orcamentoItemId);
+    // Rev. 4792 — Poka-Yoke de UNIDADE: trecho em m² não pode vincular a item
+    // em m (etc.) — geraria quantitativo errado na planilha. Não salva.
+    if (it && !unidadesCompativeis(c.unidade, it.unidade)) {
+      askConfirm({
+        title: "Unidade errada — verifique",
+        description: `Este trecho está em "${c.unidade}" e o item da planilha está em "${it.unidade}". O vínculo não foi salvo. Escolha um item com a mesma unidade ou refaça a medida na unidade certa.`,
+        confirmText: "Entendi",
+        onConfirm: () => {},
+      });
+      return Promise.resolve();
+    }
     return off.saveContorno({
       id: c.id, uuid: c.uuid, pdfId: pdfSelId!,
       pagina: c.pagina ?? pagina,
@@ -3717,6 +3729,17 @@ export default function MedicaoLevantamento() {
                     onChange={(idStr) => {
                       const itemId = idStr ? parseInt(idStr) : null;
                       const it = itemId ? itensVinculaveis.find((i) => i.id === itemId) : null;
+                      // Rev. 4792 — Poka-Yoke de UNIDADE também no vínculo por serviço
+                      const unidadeServico = ({ area: "m²", parede: "m²", perimetro: "m", volume: "m³", contagem: "un" } as Record<string, string>)[s.tipoMedida ?? "area"];
+                      if (it && unidadeServico && !unidadesCompativeis(unidadeServico, (it as any).unidade)) {
+                        askConfirm({
+                          title: "Unidade errada — verifique",
+                          description: `O serviço "${s.nome}" mede em "${unidadeServico}" e o item da planilha está em "${(it as any).unidade}". O vínculo não foi salvo.`,
+                          confirmText: "Entendi",
+                          onConfirm: () => {},
+                        });
+                        return;
+                      }
                       salvarServicoMut.mutate({
                         id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome,
                         orcamentoItemId: itemId, itemEapCodigo: it?.eapCodigo ?? null, itemDescricao: it?.descricao ?? null,

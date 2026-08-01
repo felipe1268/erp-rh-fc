@@ -92,6 +92,17 @@
  *   gravacao direta), duplicados sao movidos para o proximo numero livre da
  *   categoria (nunca compacta buracos) — garante unicidade mesmo com dois
  *   aparelhos sincronizando ao mesmo tempo.
+ * - Levantamento → Medicao de TERCEIROS automatico: com o levantamento
+ *   vinculado a uma medicao em rascunho, os quantitativos consolidados
+ *   alimentam sozinhos a planilha da medicao (a cada sincronizacao, vinculo
+ *   ou edicao de contorno/servico). Item editado manualmente no modulo de
+ *   Medicoes nunca e sobrescrito; medicao aprovada/paga e intocavel.
+ * - Poka-Yoke de UNIDADE no vinculo: trecho em m2 nao vincula a item em m
+ *   (etc.) — mensagem "Unidade errada — verifique" e o vinculo nao salva.
+ *   Trava no aplicativo e no servidor (m2=m², ml=m, un=und=pc...). Na
+ *   sincronizacao offline a medida e salva e so o vinculo errado e
+ *   descartado (o trecho volta como "Sem item" p/ revincular) — assim a
+ *   fila do aparelho nunca entra em loop de erro.
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO

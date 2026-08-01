@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getUserCompanyLinks, createAuditLog } from "../db";
 import { upperCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
+import { aplicarLevantamentoNaMedicaoTerceiro } from "../terceiroLevantamentoSync";
 import { triggerFinancialSync, triggerFinancialSyncAwaited } from "../services/financialEventTrigger";
 import { eq, and, or, desc, inArray, notInArray, sql, asc, isNull } from "drizzle-orm";
 import {
@@ -2300,6 +2301,11 @@ export const terceiroContratosRouter = router({
         alertaDivergencia,
         atualizadoEm: new Date().toISOString(),
       } as any).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId))).returning();
+      // Rev. 4792 — ao vincular, os quantitativos já levantados fluem na hora
+      // para a planilha da medição (rascunho).
+      if (upd?.levantamentoCampoId) {
+        await aplicarLevantamentoNaMedicaoTerceiro(db, upd.levantamentoCampoId).catch((e: any) => console.error("[Terceiros] aplicarLevantamento:", e));
+      }
       return upd;
     }),
 

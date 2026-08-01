@@ -33,3 +33,9 @@ O guard raiz do `sincronizarLote` deve aceitar contratoId de `medicao_contratos`
 
 ## Numeração de contornos — regra de ouro
 Número é único POR CATEGORIA (COALESCE(servico,tipo)) dentro do campo. O check no INSERT não é atômico (lotes concorrentes) → todo caminho de escrita chama `dedupNumerosContornos` pós-gravação (move só duplicados p/ max+1, nunca compacta buracos, pois o usuário conhece os números). Não criar índice único: o Renumerar em massa gera colisões transitórias legítimas.
+
+## Levantamento → Medição de terceiros (auto-flow)
+Medição de terceiros em RASCUNHO com `levantamento_campo_id` é alimentada automaticamente pelo consolidado do levantamento (`server/terceiroLevantamentoSync.ts`), disparado em todo write de contorno/serviço/sync/vínculo. Item com `editadoManualmente=true` nunca é sobrescrito; itens sem linha no consolidado ficam intactos; aprovada/paga intocável. Todo NOVO caminho de escrita de contorno/serviço deve chamar `aplicarLevantamentoNaMedicaoTerceiro`.
+
+## Guard de unidade no vínculo
+Vínculo contorno/serviço → item exige unidades compatíveis (`shared/unidadeCompat.ts`). Online = bloqueia (BAD_REQUEST + dialog). No sync offline NUNCA rejeitar a op por erro não-transitório (fila em loop eterno): salva a medida e descarta só o vínculo errado.
