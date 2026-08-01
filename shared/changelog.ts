@@ -27,6 +27,12 @@
  *   linha-guia tracejada com bolinha aponta o ponto exato.
  * - Campo de nome com lapis ("Toque p/ nomear") p/ rastreabilidade por
  *   ambiente (ex.: CONTRAPISO APTO 1).
+ * - Fila offline: op em CONFLITO (servidor mais recente) agora e descartada
+ *   (last-write-wins) em vez de ficar presa pra sempre entupindo o chip
+ *   "N pend."; sincronizar volta a zerar.
+ * - Cartoes da lista PROFISSIONAIS: ordenados por categoria e numero, barra
+ *   lateral e cabecalho na cor da categoria, bolinha numerada igual a da
+ *   planta, quantidade em destaque no topo.
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO

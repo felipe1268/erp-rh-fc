@@ -2866,35 +2866,63 @@ export default function MedicaoLevantamento() {
                     </div>
                   )}
 
-                  {contornosVisiveis.map((c) => {
+                  {/* Rev. 4792 — cartões PROFISSIONAIS: ordenados por categoria e nº,
+                      barra de cor da categoria, bolinha numerada igual à da planta,
+                      chip da categoria e quantidade em destaque. */}
+                  {[...contornosVisiveis]
+                    .sort((a: any, b: any) => {
+                      const ka = String(a.servico ?? a.tipo ?? ""), kb = String(b.servico ?? b.tipo ?? "");
+                      return ka.localeCompare(kb) || ((a.numero ?? 0) - (b.numero ?? 0)) || (a.id - b.id);
+                    })
+                    .map((c) => {
                     const sel = selContornos.has(c.id);
+                    const svcObj = c.servico ? servicos.find((s: any) => s.chave === c.servico) : null;
+                    const catNomeCard = svcObj?.nome ?? LABEL_TIPO[c.tipo as TipoContorno] ?? c.tipo;
+                    const corCard = c.cor || svcObj?.cor || COR_TIPO[c.tipo as TipoContorno] || "#2563eb";
                     return (
-                    <div key={c.id} className={`border rounded-md p-2 text-xs ${sel ? "border-blue-400 bg-blue-50/40" : ""}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <label className="flex items-center gap-1.5 font-medium cursor-pointer select-none min-w-0" style={{ color: c.cor }}>
+                    <div
+                      key={c.id}
+                      className={`border rounded-lg text-xs overflow-hidden shadow-sm ${sel ? "ring-2 ring-blue-400" : ""}`}
+                      style={{ borderLeft: `4px solid ${corCard}` }}
+                    >
+                      {/* Cabeçalho colorido da categoria */}
+                      <div className="flex items-center justify-between gap-2 px-2 py-1.5" style={{ backgroundColor: `${corCard}14` }}>
+                        <label className="flex items-center gap-2 cursor-pointer select-none min-w-0">
                           <Checkbox checked={sel} onCheckedChange={() => toggleSelContorno(c.id)} aria-label="Selecionar contorno" />
-                          <span className="flex items-center gap-1 truncate">
-                            {ICON_TIPO[c.tipo as TipoContorno]}{" "}
-                            {/* Rev. 4790 — rótulo digitado (sempre MAIÚSCULO) manda no título;
-                                sem rótulo, cai no padrão "Área #002" */}
-                            {c.rotulo
-                              ? <>{String(c.rotulo).toUpperCase()} <span className="opacity-60 font-normal">{String(c.numero ?? "")}</span></>
-                              : <>{LABEL_TIPO[c.tipo as TipoContorno]} {String(c.numero ?? "")}</>}
+                          {/* bolinha numerada — idêntica à etiqueta da planta */}
+                          <span
+                            className="shrink-0 rounded-full font-bold tabular-nums border-2 bg-white flex items-center justify-center"
+                            style={{ width: 22, height: 22, fontSize: 10, borderColor: corCard, color: corCard }}
+                          >
+                            {c.numero ?? "•"}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block font-semibold truncate leading-tight" style={{ color: corCard }}>
+                              {c.rotulo ? String(c.rotulo).toUpperCase() : `${catNomeCard} ${String(c.numero ?? "")}`}
+                            </span>
+                            <span className="block text-[10px] text-gray-500 truncate leading-tight">
+                              {catNomeCard} · nº {String(c.numero ?? "—")}
+                            </span>
                           </span>
                         </label>
-                        <button className="text-red-600 shrink-0" onClick={() => askConfirm({ title: "Excluir contorno?", description: `${LABEL_TIPO[c.tipo as TipoContorno]} ${String(c.numero ?? "")} será removido. Esta ação não pode ser desfeita.`, confirmText: "Excluir", onConfirm: () => off.excluirContorno(c) })}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-bold text-[13px] tabular-nums text-gray-800 whitespace-nowrap">
+                            {numFmt(parseFloat(c.quantidade || "0"), 2)} <span className="font-medium text-[10px] text-gray-500">{c.unidade}</span>
+                          </span>
+                          <button className="text-red-500 hover:text-red-700" onClick={() => askConfirm({ title: "Excluir contorno?", description: `${catNomeCard} ${String(c.numero ?? "")} será removido. Esta ação não pode ser desfeita.`, confirmText: "Excluir", onConfirm: () => off.excluirContorno(c) })}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
+                      <div className="p-2">
                       {/* Nome/rótulo do contorno (ex.: "APARTAMENTO 1402") */}
-                      <div className="mt-1.5">
+                      <div>
                         <RotuloInput
                           key={`rot-${c.id}-${c.rotulo ?? ""}`}
                           value={c.rotulo ?? ""}
                           onCommit={(v) => { void salvarRotulo(c, v); }}
                         />
                       </div>
-                      <div className="mt-1 text-gray-600">Quantidade: <b>{numFmt(parseFloat(c.quantidade || "0"), 2)} {c.unidade}</b></div>
                       <div className="mt-1.5">
                         <VincularItemCombobox
                           items={itensVinculaveis}
@@ -2929,6 +2957,7 @@ export default function MedicaoLevantamento() {
                             ))}
                           </div>
                         )}
+                      </div>
                       </div>
                     </div>
                     );

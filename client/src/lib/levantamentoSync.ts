@@ -122,7 +122,10 @@ export async function processQueue(): Promise<SyncSummary> {
             if (!r || r.status === "ok") {
               await deleteOp(op.clientOpId);
             } else if (r.status === "conflito") {
-              await putOp({ ...op, status: "error", error: `Conflito: ${r.mensagem || "servidor tem versão mais recente"}` });
+              // Rev. 4792 — servidor tem versão MAIS RECENTE → o servidor vence
+              // (last-write-wins). Guardar a op eternamente só entupia a fila:
+              // o chip ficava "N pend." pra sempre e nada parecia acontecer.
+              await deleteOp(op.clientOpId);
             } else {
               await putOp({ ...op, status: "error", error: r.mensagem || "Falha ao sincronizar." });
             }
