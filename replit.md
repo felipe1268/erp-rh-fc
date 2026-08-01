@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4781** — Levantamento: escala à prova de erro (3 camadas) — escala do carimbo 1:N automática, conferência obrigatória de cota (±2%) que bloqueia o desenho até validar, e leitura automática das cotas do PDF pré-preenchendo os valores.
 - **Rev. 4780** — Levantamento de Campo: paleta de serviços (alvenaria, chapisco, emboço, reboco...) tablet-first; contorno nasce classificado; derivados automáticos por nº de faces; vínculo EAP 1x por serviço com consolidação automática em R$.
 - **Rev. 4779** — Medições de Terceiros: seletor de ano/mês movido para o topo da tela (principal); esteira e acompanhamento foram para baixo da lista.
 - **Rev. 4778** — Terceiros: esteira completa Compras→Contrato→Assinatura→Medição→Financeiro na tela de Medições, acompanhamento por contrato, e título GARANTIDO no Contas a Pagar ao aprovar medição (bypassa toggle de auto-import, com badge/reenvio e alerta se falhar).

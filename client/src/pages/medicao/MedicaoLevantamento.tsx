@@ -16,7 +16,7 @@ import {
   Hash, MousePointer2, Crosshair, ZoomIn, ZoomOut, Check, Camera, Image as ImageIcon,
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
-  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2,
+  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -34,7 +34,12 @@ import {
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
-type Ferramenta = "select" | "calibrar" | "retangulo" | "livre" | TipoContorno;
+type Ferramenta = "select" | "calibrar" | "conferir" | "retangulo" | "livre" | TipoContorno;
+
+// Rev. 4781 — escala à prova de erro: 1 ponto de PDF = 1/72 pol. no papel.
+// Em planta plotada na escala 1:N, 1 ponto = N/72 pol. reais → metros/ponto:
+const PT_TO_M = 0.0254 / 72;
+const ESCALAS_COMUNS = [25, 50, 75, 100, 125, 200];
 
 const COR_TIPO: Record<TipoContorno, string> = {
   area: "#2563eb",
@@ -170,7 +175,13 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-type Calibracao = { p1: GeoPonto; p2: GeoPonto; metros: number; metrosPorUnidade: number };
+type Calibracao = {
+  p1: GeoPonto; p2: GeoPonto; metros: number; metrosPorUnidade: number;
+  // Rev. 4781 — poka-yoke de escala: origem + conferência obrigatória.
+  fonte?: "manual" | "nominal";     // ausente = calibração legada (não bloqueia)
+  escalaNominal?: number;           // 1:N do carimbo (fonte "nominal")
+  conferida?: boolean;              // true só após conferir uma cota conhecida
+};
 
 // Escapa texto p/ interpolação segura em HTML (memória de cálculo via document.write).
 function escHtml(s: unknown): string {
@@ -448,6 +459,47 @@ export default function MedicaoLevantamento() {
   }, [isDxf, dxfData]);
   const calibAtualEff = calibAtual || dxfAutoCalib;
 
+  // Rev. 4781 — poka-yoke: escala com fonte declarada (nominal/manual nova)
+  // só libera medição depois de CONFERIDA contra uma cota conhecida.
+  // Calibração legada (sem `fonte`) e DXF com unidade não bloqueiam.
+  const escalaNaoConferida = !isDxf && !!calibAtual?.fonte && !calibAtual?.conferida;
+  const escalaOk = !!calibAtualEff && !escalaNaoConferida;
+
+  // Rev. 4781 — camada 3: textos (cotas) da página do PDF, extraídos do vetor.
+  const pageTextsRef = useRef<Record<string, { x: number; y: number; str: string }[]>>({});
+  async function extrairTextosPagina(pg: any) {
+    try {
+      const key = `${pdfSelId}:${pg.pageNumber}`;
+      if (pageTextsRef.current[key]) return;
+      const vp = pg.getViewport({ scale: 1 });
+      const tc = await pg.getTextContent();
+      pageTextsRef.current[key] = (tc.items || [])
+        .map((it: any) => {
+          const [vx, vy] = vp.convertToViewportPoint(it.transform[4], it.transform[5]);
+          return { x: vx / vp.width, y: vy / vp.height, str: String(it.str || "").trim() };
+        })
+        .filter((t: any) => t.str);
+    } catch { /* PDF rasterizado (sem texto) — segue sem sugestão de cota */ }
+  }
+
+  // Cota numérica mais próxima do segmento marcado (sugestão automática).
+  // Heurística de unidade: cotas de arquitetura > 20 costumam ser cm.
+  function cotaProxima(p1: GeoPonto, p2: GeoPonto): { metros: number; raw: string } | null {
+    const items = pageTextsRef.current[`${pdfSelId}:${pagina}`] || [];
+    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    let best: { raw: string; val: number } | null = null;
+    let bestD = 0.05;
+    for (const t of items) {
+      const m = t.str.replace(/\s/g, "").match(/^(\d{1,4}(?:[.,]\d{1,2})?)$/);
+      if (!m) continue;
+      const d = Math.hypot(t.x - mid.x, t.y - mid.y);
+      const v = parseFloat(m[1].replace(",", "."));
+      if (d < bestD && v > 0) { bestD = d; best = { raw: t.str, val: v }; }
+    }
+    if (!best) return null;
+    return { metros: best.val > 20 ? best.val / 100 : best.val, raw: best.raw };
+  }
+
   const overlayRef = useRef<HTMLDivElement>(null);
 
   // largura disponível
@@ -659,7 +711,7 @@ export default function MedicaoLevantamento() {
   // ponto de referência p/ perpendicular = último vértice do desenho em curso.
   const snapFromPt = useCallback((): GeoPonto | undefined => {
     if (TOOLS_POLILINHA.includes(tool as FerramentaDesenho) && draft.length) return draft[draft.length - 1];
-    if (tool === "calibrar" && calibDraft.length) return calibDraft[calibDraft.length - 1];
+    if ((tool === "calibrar" || tool === "conferir") && calibDraft.length) return calibDraft[calibDraft.length - 1];
     return undefined;
   }, [tool, draft, calibDraft]);
 
@@ -786,10 +838,13 @@ export default function MedicaoLevantamento() {
     const hit = toolUsaSnap(tool) ? applySnap(ptRaw, snapFromPt()) : null;
     const pt = hit ? hit.p : ptRaw;
     setSnapHit(null);
-    if (tool === "calibrar") {
+    if (tool === "calibrar" || tool === "conferir") {
       const next = [...calibDraft, pt];
-      if (next.length >= 2) { setCalibDraft([]); void finalizarCalibracao(next[0], next[1]); }
-      else setCalibDraft(next);
+      if (next.length >= 2) {
+        setCalibDraft([]);
+        if (tool === "calibrar") void finalizarCalibracao(next[0], next[1]);
+        else void finalizarConferencia(next[0], next[1]);
+      } else setCalibDraft(next);
       return;
     }
     if (tool === "contagem") { finalizarContorno("contagem", [pt], 0, 1); return; }
@@ -800,14 +855,88 @@ export default function MedicaoLevantamento() {
     if (!pdfSel) return;
     const distPt = distancia(normToPt(p1), normToPt(p2));
     if (!(distPt > 0)) { alert("Pontos muito próximos. Tente novamente."); return; }
+    // Camada 3: lê a cota do desenho perto do segmento e pré-preenche.
+    const sug = cotaProxima(p1, p2);
     const metros = await askNumber({
-      title: "Calibrar escala", hint: "Distância REAL entre os 2 pontos marcados.", suffix: "m",
+      title: "Calibrar escala",
+      hint: `Distância REAL entre os 2 pontos marcados.${sug ? ` Cota lida na planta: "${sug.raw}".` : ""}`,
+      suffix: "m",
+      initial: sug ? String(sug.metros).replace(".", ",") : undefined,
     });
     if (!(metros && metros > 0)) { setCalibDraft([]); return; }
     const mpu = fatorCalibracao(distPt, metros);
-    const novo: Record<string, Calibracao> = { ...calibracaoMap, [String(pagina)]: { p1, p2, metros, metrosPorUnidade: mpu } };
+    const novo: Record<string, Calibracao> = {
+      ...calibracaoMap,
+      [String(pagina)]: { p1, p2, metros, metrosPorUnidade: mpu, fonte: "manual", conferida: false },
+    };
     off.calibrarPdf(pdfSel, JSON.stringify(novo));
-    setTool("select");
+    // Poka-yoke: calibração nova SEMPRE precisa de conferência com OUTRA cota.
+    setTool("conferir");
+    setCalibDraft([]);
+  }
+
+  // Rev. 4781 — camada 1: escala nominal do carimbo (1:N). Matemática exata do
+  // PDF plotado em escala; a camada 2 (conferência) pega o caso "fit to page".
+  async function definirEscalaNominal(escala: number | null) {
+    if (!pdfSel) return;
+    let esc = escala;
+    if (esc == null) {
+      const v = await askNumber({ title: "Escala do carimbo", hint: "Denominador da escala — ex.: 100 para 1:100.", suffix: "1:N" });
+      if (!(v && v > 0)) return;
+      esc = v;
+    }
+    const novo: Record<string, Calibracao> = {
+      ...calibracaoMap,
+      [String(pagina)]: {
+        p1: { x: 0, y: 0 }, p2: { x: 0, y: 0 }, metros: 0,
+        metrosPorUnidade: PT_TO_M * esc, fonte: "nominal", escalaNominal: esc, conferida: false,
+      },
+    };
+    off.calibrarPdf(pdfSel, JSON.stringify(novo));
+    setTool("conferir");
+    setCalibDraft([]);
+  }
+
+  // Rev. 4781 — camada 2: conferência OBRIGATÓRIA. Marca 2 pontos numa cota
+  // conhecida; o sistema mede, compara (±2%) e só então libera o desenho.
+  async function finalizarConferencia(p1: GeoPonto, p2: GeoPonto) {
+    if (!pdfSel) return;
+    const mpu = calibAtualEff?.metrosPorUnidade;
+    if (!mpu) { alert("Defina a escala primeiro: toque numa escala do carimbo (1:N) ou use Calibrar."); setTool("select"); return; }
+    const distPt = distancia(normToPt(p1), normToPt(p2));
+    if (!(distPt > 0)) { alert("Pontos muito próximos. Tente novamente."); return; }
+    const medido = distPt * mpu;
+    const sug = cotaProxima(p1, p2);
+    const esperado = await askNumber({
+      title: "Conferir escala",
+      hint: `O sistema mediu ${numFmt(medido, 2)} m entre os pontos. Informe a medida REAL da cota marcada.${sug ? ` Cota lida na planta: "${sug.raw}".` : ""}`,
+      suffix: "m",
+      initial: sug ? String(sug.metros).replace(".", ",") : undefined,
+    });
+    if (!(esperado && esperado > 0)) { setCalibDraft([]); return; }
+    const desvio = Math.abs(medido - esperado) / esperado;
+    if (desvio <= 0.02) {
+      const base: Calibracao = calibAtual ?? { p1, p2, metros: esperado, metrosPorUnidade: mpu };
+      const novo: Record<string, Calibracao> = { ...calibracaoMap, [String(pagina)]: { ...base, conferida: true } };
+      off.calibrarPdf(pdfSel, JSON.stringify(novo));
+      setTool("select");
+      alert(`Escala conferida ✓ (desvio de ${numFmt(desvio * 100, 1)}%). Pode medir.`);
+    } else {
+      askConfirm({
+        title: `Escala divergente em ${numFmt(desvio * 100, 1)}%`,
+        description: `O sistema mediu ${numFmt(medido, 2)} m, mas a cota real é ${numFmt(esperado, 2)} m. Corrigir a escala usando ESTA cota? Depois será preciso conferir com OUTRA cota.`,
+        confirmText: "Corrigir escala",
+        onConfirm: () => {
+          const mpuNovo = fatorCalibracao(distPt, esperado);
+          const novo: Record<string, Calibracao> = {
+            ...calibracaoMap,
+            [String(pagina)]: { p1, p2, metros: esperado, metrosPorUnidade: mpuNovo, fonte: "manual", conferida: false },
+          };
+          off.calibrarPdf(pdfSel, JSON.stringify(novo));
+          setTool("conferir");
+        },
+      });
+    }
   }
 
   function finalizarContorno(tipo: TipoContorno, ptsNorm: GeoPonto[], espessura: number, contagem: number) {
@@ -815,7 +944,13 @@ export default function MedicaoLevantamento() {
     if (!calibAtualEff?.metrosPorUnidade) {
       alert(isDxf
         ? "Este DXF não tem unidade definida — use a ferramenta Calibrar e marque 2 pontos de medida conhecida."
-        : "Calibre a escala desta página antes de medir (ferramenta Calibrar).");
+        : "Defina a escala desta página antes de medir (escala do carimbo 1:N ou ferramenta Calibrar).");
+      return;
+    }
+    if (escalaNaoConferida) {
+      alert("Escala definida mas ainda NÃO conferida. Toque em Conferir e marque os 2 extremos de uma cota conhecida da planta — só então o desenho é liberado (poka-yoke).");
+      setTool("conferir");
+      setCalibDraft([]);
       return;
     }
     const ptsPt = ptsNorm.map(normToPt);
@@ -881,7 +1016,7 @@ export default function MedicaoLevantamento() {
   }
 
   function desfazerPonto() {
-    if (tool === "calibrar") { setCalibDraft((d) => d.slice(0, -1)); return; }
+    if (tool === "calibrar" || tool === "conferir") { setCalibDraft((d) => d.slice(0, -1)); return; }
     setDraft((d) => d.slice(0, -1));
   }
 
@@ -1469,6 +1604,9 @@ export default function MedicaoLevantamento() {
                   <Button size="sm" variant={tool === "calibrar" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("calibrar"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
                     <Crosshair className="h-4 w-4" />Calibrar
                   </Button>
+                  <Button size="sm" variant={tool === "conferir" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("conferir"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
+                    <BadgeCheck className="h-4 w-4" />Conferir
+                  </Button>
                   <div className="h-6 w-px bg-border mx-1" />
                   {FERRAMENTAS_DESENHO.map((f) => (
                     <Button
@@ -1589,15 +1727,43 @@ export default function MedicaoLevantamento() {
                   Toque para marcar pontos · arraste com 1 dedo para mover (pan) · pinça com 2 dedos para zoom · a ferramenta permanece ativa após finalizar. Na ferramenta <b>Selecionar</b>, toque num contorno para selecioná-lo e arraste os pontos azuis (cantos/lados) para ajustar as dimensões.
                 </p>
 
-                {/* status calibração */}
-                <div className={`text-xs px-2 py-1 rounded ${calibAtualEff ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                  {isDxf && dxfAutoCalib
-                    ? `Escala automática do DXF: ${numFmt(dxfAutoCalib.metrosPorUnidade, 6)} m/unidade — não precisa calibrar.`
-                    : calibAtual
-                      ? `Escala calibrada: ${numFmt(calibAtual.metros, 2)} m de referência (${numFmt(calibAtual.metrosPorUnidade, 6)} m/ponto)`
-                      : isDxf
-                        ? "DXF sem unidade definida — use a ferramenta Calibrar e marque 2 pontos de medida conhecida."
-                        : "Página não calibrada — use a ferramenta Calibrar e marque 2 pontos de medida conhecida."}
+                {/* Rev. 4781 — escala à prova de erro (3 camadas) */}
+                <div className={`text-xs px-2 py-2 rounded space-y-1.5 ${escalaOk ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {escalaOk && <BadgeCheck className="h-4 w-4 shrink-0" />}
+                    <span>
+                      {isDxf && dxfAutoCalib
+                        ? `Escala automática do DXF: ${numFmt(dxfAutoCalib.metrosPorUnidade, 6)} m/unidade — não precisa calibrar.`
+                        : !calibAtual
+                          ? (isDxf
+                            ? "DXF sem unidade definida — use a ferramenta Calibrar e marque 2 pontos de medida conhecida."
+                            : "Defina a escala: toque na escala do carimbo (1:N) abaixo — ou use Calibrar (2 pontos de medida conhecida).")
+                          : escalaNaoConferida
+                            ? `Escala ${calibAtual.fonte === "nominal" ? `1:${calibAtual.escalaNominal}` : "calibrada"} definida — falta CONFERIR: toque em Conferir e marque os 2 extremos de uma cota conhecida. O desenho só libera depois disso.`
+                            : calibAtual.fonte === "nominal"
+                              ? `Escala 1:${calibAtual.escalaNominal} conferida ✓ (${numFmt(calibAtual.metrosPorUnidade, 6)} m/ponto)`
+                              : `Escala calibrada${calibAtual.conferida ? " e conferida ✓" : ""}: ${numFmt(calibAtual.metros, 2)} m de referência (${numFmt(calibAtual.metrosPorUnidade, 6)} m/ponto)`}
+                    </span>
+                  </div>
+                  {!isDxf && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-medium shrink-0">Escala do carimbo:</span>
+                      {ESCALAS_COMUNS.map((e) => (
+                        <Button
+                          key={e} size="sm"
+                          variant={calibAtual?.fonte === "nominal" && calibAtual?.escalaNominal === e ? "default" : "outline"}
+                          className="h-8 px-2 tabular-nums"
+                          onClick={() => void definirEscalaNominal(e)}
+                        >1:{e}</Button>
+                      ))}
+                      <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => void definirEscalaNominal(null)}>Outra…</Button>
+                      {calibAtualEff && escalaNaoConferida && (
+                        <Button size="sm" className="h-8 px-2 bg-amber-600 hover:bg-amber-700 text-white gap-1" onClick={() => { setTool("conferir"); setCalibDraft([]); setDraft([]); }}>
+                          <BadgeCheck className="h-4 w-4" />Conferir agora
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* navegação de página */}
@@ -1638,7 +1804,7 @@ export default function MedicaoLevantamento() {
                             width={pageWidth}
                             renderTextLayer={false}
                             renderAnnotationLayer={false}
-                            onLoadSuccess={(pg: any) => setPageDims({ w: pg.width, h: pg.height })}
+                            onLoadSuccess={(pg: any) => { setPageDims({ w: pg.width, h: pg.height }); void extrairTextosPagina(pg); }}
                             loading={<div className="py-16 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>}
                           />
                         </Document>

@@ -1,4 +1,20 @@
 /**
+ * Rev. 4781 - LEVANTAMENTO DE CAMPO: ESCALA A PROVA DE ERRO (poka-yoke, 3 camadas)
+ *
+ * Problema: calibracao manual errada = TODA a medicao errada, sem aviso.
+ * 1) ESCALA DO CARIMBO (automatica): botoes 1:25/50/75/100/125/200 (+Outra).
+ *    PDF plotado em escala tem matematica exata (1 ponto = N/72 pol) — define
+ *    a escala sem marcar ponto nenhum.
+ * 2) CONFERENCIA OBRIGATORIA: toda escala nova (nominal OU calibrada) nasce
+ *    "NAO conferida" e o desenho fica BLOQUEADO. Ferramenta "Conferir": marca
+ *    os 2 extremos de uma cota conhecida; o sistema mede, compara (tolerancia
+ *    2%) e so entao libera (selo verde). Se divergir, oferece corrigir a
+ *    escala pela propria cota — e exige conferir com OUTRA cota.
+ * 3) LEITURA AUTOMATICA DE COTAS: em Calibrar e Conferir, o sistema le o texto
+ *    vetorial do PDF perto do segmento marcado e PRE-PREENCHE o valor da cota
+ *    (heuristica cm/m). PDF rasterizado segue manual.
+ * Compat: calibracoes antigas e DXF com unidade continuam valendo sem conferencia.
+ *
  * Rev. 4780 - LEVANTAMENTO DE CAMPO: CLASSIFICACAO POR SERVICO (tablet-first)
  *
  * Pedido: classificar o que e alvenaria, chapisco, emboco, reboco na planta.
