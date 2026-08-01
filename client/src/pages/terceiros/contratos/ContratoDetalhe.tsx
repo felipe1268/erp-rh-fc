@@ -15,7 +15,7 @@ import {
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
   Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler, PenLine,
-  CheckCircle2,
+  CheckCircle2, FilePlus, Camera,
 } from "lucide-react";
 import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
 import { toast } from "sonner";
@@ -2032,6 +2032,31 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
   }, [initialMedicaoId]);
   const [rejeicaoModal, setRejeicaoModal] = useState<{ id: number; numero: number } | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
+  // Rev. 4802 — Aditivos de contrato (excedente de medição)
+  const utilsAd = trpc.useUtils();
+  const { data: aditivos } = trpc.terceiroContratos.listarAditivos.useQuery(
+    { contratoId: contrato.id, companyId: contrato.companyId },
+    { enabled: !!contrato?.id && !!contrato?.companyId },
+  );
+  const invalidarAditivos = () => {
+    utilsAd.terceiroContratos.listarAditivos.invalidate({ contratoId: contrato.id, companyId: contrato.companyId });
+    utilsAd.terceiroContratos.getContrato.invalidate({ id: contrato.id });
+  };
+  const [aditivoDialog, setAditivoDialog] = useState<{ item: any; medicaoId: number } | null>(null);
+  const [aditivoRejeicao, setAditivoRejeicao] = useState<{ id: number; numero: number } | null>(null);
+  const [aditivoMotivoRej, setAditivoMotivoRej] = useState("");
+  const aprovarAdGestorMut = trpc.terceiroContratos.aprovarAditivoGestor.useMutation({
+    onSuccess: () => { toast.success("Aditivo aprovado pelo gestor da obra — aguardando sócio adm."); invalidarAditivos(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const aprovarAdSocioMut = trpc.terceiroContratos.aprovarAditivoSocio.useMutation({
+    onSuccess: () => { toast.success("Aditivo aprovado! Quantidade e valor somados ao contrato."); invalidarAditivos(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const rejeitarAditivoMut = trpc.terceiroContratos.rejeitarAditivo.useMutation({
+    onSuccess: () => { toast.success("Aditivo rejeitado."); setAditivoRejeicao(null); setAditivoMotivoRej(""); invalidarAditivos(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const [editingItem, setEditingItem] = useState<{ id: number; valor: string } | null>(null);
   // Task #86 — lançamento manual do medido do período por item, em BRL pt-BR (V.Período).
   const [editingValor, setEditingValor] = useState<{ id: number; valor: string } | null>(null);
@@ -2124,6 +2149,16 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
         </div>
       )}
       <RetencaoTecnicaCard contrato={contrato} modoEdicao={modoEdicao} />
+      {(aditivos || []).length > 0 && (
+        <AditivosCard
+          aditivos={aditivos || []}
+          modoEdicao={modoEdicao}
+          onAprovarGestor={(a: any) => aprovarAdGestorMut.mutate({ id: a.id, companyId: contrato.companyId, aprovadoPor: "Gestor da Obra" })}
+          onAprovarSocio={(a: any) => aprovarAdSocioMut.mutate({ id: a.id, companyId: contrato.companyId, aprovadoPor: "Sócio Administrador" })}
+          onRejeitar={(a: any) => setAditivoRejeicao({ id: a.id, numero: a.numero })}
+          isPending={aprovarAdGestorMut.isPending || aprovarAdSocioMut.isPending}
+        />
+      )}
       {contrato.medicoes.map((m: any) => {
         // Rev. 4801 — status "Paga" derivado ao vivo do Financeiro (baixas do título)
         const pagto = (m as any).pagamento;
@@ -2599,6 +2634,36 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   </tfoot>
                     </table>
                     </div>
+                    {/* Rev. 4802 — excedente medido além do contratado → fluxo de Aditivo */}
+                    {(() => {
+                      const excedentes = itens.filter((it: any) => Number(it.quantidadeExcedente || 0) > 0.0001);
+                      if (excedentes.length === 0) return null;
+                      return (
+                        <div className="mx-4 mb-3 space-y-2">
+                          {excedentes.map((it: any) => {
+                            const adDoItem = (aditivos || []).filter((a: any) => a.contratoItemId === it.contratoItemId);
+                            const pendente = adDoItem.find((a: any) => a.status === "pendente");
+                            const qtdExc = Number(it.quantidadeExcedente || 0);
+                            return (
+                              <div key={it.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
+                                <span className="flex-1 min-w-[200px] break-words">
+                                  <strong>{qtdExc.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{it.unidade ? ` ${it.unidade}` : ""}</strong> medidos <strong>além do contratado</strong> em "{it.descricao}" — fora do valor a pagar até virar aditivo.
+                                </span>
+                                {pendente ? (
+                                  <Badge variant="outline" className="text-[10px] text-purple-700 border-purple-300 bg-purple-50">Aditivo #{pendente.numero} aguardando aprovação</Badge>
+                                ) : modoEdicao && editavel ? (
+                                  <Button size="sm" className="h-7 gap-1 text-[11px] bg-amber-600 hover:bg-amber-700"
+                                    onClick={() => setAditivoDialog({ item: it, medicaoId: m.id })}>
+                                    <FilePlus className="w-3 h-3" /> Gerar Aditivo
+                                  </Button>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                     <RetencoesSec m={m} contrato={contrato} isEditable={editavel} fdRows={fdsAll.filter((f: any) => f.medicaoId === m.id)} />
                   </>) : (
                     <div className="p-4 text-center text-xs text-gray-400">
@@ -2637,6 +2702,36 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
           </div>
         );
       })}
+
+      {aditivoDialog && (
+        <AditivoDialog
+          contrato={contrato}
+          item={aditivoDialog.item}
+          medicaoId={aditivoDialog.medicaoId}
+          onClose={() => setAditivoDialog(null)}
+          onCreated={() => { setAditivoDialog(null); invalidarAditivos(); }}
+        />
+      )}
+
+      {aditivoRejeicao && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setAditivoRejeicao(null)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900">Rejeitar Aditivo #{aditivoRejeicao.numero}</h3>
+            <div>
+              <Label className="text-xs">Motivo da rejeição</Label>
+              <textarea className="w-full mt-1 border border-gray-200 rounded-lg p-3 text-sm min-h-[80px]" placeholder="Descreva o motivo..."
+                value={aditivoMotivoRej} onChange={e => setAditivoMotivoRej(e.target.value)} />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setAditivoRejeicao(null)}>Cancelar</Button>
+              <Button size="sm" className="bg-red-600 hover:bg-red-700" disabled={aditivoMotivoRej.trim().length < 5 || rejeitarAditivoMut.isPending}
+                onClick={() => rejeitarAditivoMut.mutate({ id: aditivoRejeicao.id, companyId: contrato.companyId, motivo: aditivoMotivoRej.trim(), rejeitadoPor: "Responsável" })}>
+                Confirmar Rejeição
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {rejeicaoModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setRejeicaoModal(null)}>
@@ -3517,6 +3612,186 @@ function ItemsTreeTable({ contrato, id, pct, removerItemMut }: { contrato: any; 
 // Rev. 4801 — liberação da retenção técnica: aparece quando o contrato tem
 // retenção (%) configurada; abate automaticamente os débitos pendentes
 // (FD/EPI/insumo) e gera o título do líquido no Contas a Pagar.
+// Rev. 4802 — lista de aditivos do contrato com aprovação em 2 níveis (gestor → sócio adm).
+function AditivosCard({ aditivos, modoEdicao, onAprovarGestor, onAprovarSocio, onRejeitar, isPending }: {
+  aditivos: any[]; modoEdicao: boolean;
+  onAprovarGestor: (a: any) => void; onAprovarSocio: (a: any) => void; onRejeitar: (a: any) => void;
+  isPending: boolean;
+}) {
+  const STATUS_AD: Record<string, { label: string; cls: string }> = {
+    pendente: { label: "Aguardando aprovação", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    aprovado: { label: "Aprovado", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    rejeitado: { label: "Rejeitado", cls: "bg-red-50 text-red-600 border-red-200" },
+  };
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+  return (
+    <div className="bg-white rounded-xl border border-purple-200 overflow-hidden">
+      <div className="px-4 py-2.5 bg-purple-50/60 border-b border-purple-100 flex items-center gap-2">
+        <FilePlus className="w-4 h-4 text-purple-600" />
+        <h4 className="text-xs font-semibold text-purple-800 uppercase tracking-wide">Aditivos do Contrato</h4>
+        <span className="text-[10px] text-purple-500">({aditivos.length})</span>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {aditivos.map((a: any) => {
+          const st = STATUS_AD[a.status] || STATUS_AD.pendente;
+          return (
+            <div key={a.id} className="px-4 py-3 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-gray-900 text-sm">Aditivo #{a.numero}</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${st.cls}`}>{st.label}</span>
+                <span className="text-xs text-gray-400">{a.criadoEm ? fmtDate(String(a.criadoEm).slice(0, 10)) : ""}</span>
+                <span className="ml-auto font-bold text-purple-700 text-sm">+ {BRL(a.valorTotal)}</span>
+              </div>
+              <div className="text-xs text-gray-600 break-words">
+                {a.item?.eapCodigo && <span className="font-mono text-gray-400 mr-1">{a.item.eapCodigo}</span>}
+                {a.item?.descricao || `Item #${a.contratoItemId}`} — <strong>{Number(a.quantidade).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{a.item?.unidade ? ` ${a.item.unidade}` : ""}</strong> × {BRL(a.valorUnitario)}
+              </div>
+              <div className="text-[11px] text-gray-500 break-words"><strong>Justificativa:</strong> {a.justificativa}</div>
+              {a.status === "rejeitado" && a.motivoRejeicao && (
+                <div className="text-[11px] text-red-600 break-words"><strong>Motivo da rejeição:</strong> {a.motivoRejeicao}</div>
+              )}
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                {a.fotoUrl && (
+                  <button className="text-[11px] text-blue-600 hover:underline flex items-center gap-1" onClick={() => setFotoPreview(a.fotoUrl)}>
+                    <Camera className="w-3 h-3" /> Ver foto
+                  </button>
+                )}
+                <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                  <span className={a.nivelAprovacao >= 1 ? "text-emerald-600 font-semibold" : ""}>Gestor {a.nivelAprovacao >= 1 ? `✓ ${a.gestorAprovadoPor || ""}` : "pendente"}</span>
+                  <span>·</span>
+                  <span className={a.nivelAprovacao >= 2 ? "text-emerald-600 font-semibold" : ""}>Sócio Adm {a.nivelAprovacao >= 2 ? `✓ ${a.socioAprovadoPor || ""}` : "pendente"}</span>
+                </div>
+                {modoEdicao && a.status === "pendente" && (
+                  <div className="ml-auto flex gap-1.5">
+                    {(a.nivelAprovacao ?? 0) < 1 ? (
+                      <Button size="sm" className="h-7 text-[11px] bg-blue-600 hover:bg-blue-700" disabled={isPending} onClick={() => onAprovarGestor(a)}>Aprovar (Gestor)</Button>
+                    ) : (
+                      <Button size="sm" className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-700" disabled={isPending} onClick={() => onAprovarSocio(a)}>Aprovar (Sócio Adm)</Button>
+                    )}
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] text-red-600 border-red-200 hover:bg-red-50" onClick={() => onRejeitar(a)}>Rejeitar</Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {fotoPreview && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setFotoPreview(null)}>
+          <img src={fotoPreview} alt="Foto do aditivo" className="max-w-full max-h-full rounded-lg" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Rev. 4802 — formulário de criação do aditivo: quantidade + preço (pré-preenchidos),
+// justificativa e foto OBRIGATÓRIAS (poka-yoke: acréscimo fundamentado).
+function AditivoDialog({ contrato, item, medicaoId, onClose, onCreated }: {
+  contrato: any; item: any; medicaoId: number; onClose: () => void; onCreated: () => void;
+}) {
+  const [qtd, setQtd] = useState(String(Number(item.quantidadeExcedente || 0).toFixed(2)));
+  const [precoUnit, setPrecoUnit] = useState(String(Number(item.valorUnitario || 0).toFixed(2)));
+  const [justificativa, setJustificativa] = useState("");
+  const [fotoUrl, setFotoUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const parseNum = (s: string) => parseFloat(String(s).replace(",", ".")) || 0;
+  const total = Math.round(parseNum(qtd) * parseNum(precoUnit) * 100) / 100;
+
+  const criarMut = trpc.terceiroContratos.criarAditivo.useMutation({
+    onSuccess: () => { toast.success("Aditivo criado! Enviado para aprovação (gestor + sócio adm)."); onCreated(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleFoto = async (file: File) => {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("tipo", "aditivo-terceiro");
+      fd.append("companyId", String(contrato.companyId));
+      const r = await fetch("/api/upload/sst-document", { method: "POST", body: fd, credentials: "include" });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error((err as any)?.error ?? "Falha no upload"); }
+      const { url } = await r.json();
+      setFotoUrl(url);
+      toast.success("Foto anexada!");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao enviar foto.");
+    } finally { setUploading(false); }
+  };
+
+  const podeEnviar = parseNum(qtd) > 0 && justificativa.trim().length >= 15 && !!fotoUrl && !criarMut.isPending;
+
+  return (
+    <Dialog open onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-purple-800"><FilePlus className="w-4 h-4" /> Gerar Aditivo de Contrato</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div className="rounded-lg bg-gray-50 border border-gray-100 p-2.5 text-xs text-gray-600 break-words">
+            {item.eapCodigo && <span className="font-mono text-gray-400 mr-1">{item.eapCodigo}</span>}
+            {item.descricao}
+            <div className="text-[10px] text-gray-400 mt-0.5">Contratado: {Number(item.quantidade || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{item.unidade ? ` ${item.unidade}` : ""} · Excedente medido: {Number(item.quantidadeExcedente || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{item.unidade ? ` ${item.unidade}` : ""}</div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label className="text-xs">Quantidade{item.unidade ? ` (${item.unidade})` : ""}</Label>
+              <Input inputMode="decimal" value={qtd} onChange={e => setQtd(e.target.value)} className="text-sm h-9 mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">Preço unitário (R$)</Label>
+              <Input inputMode="decimal" value={precoUnit} onChange={e => setPrecoUnit(e.target.value)} className="text-sm h-9 mt-1" />
+              <p className="text-[10px] text-gray-400 mt-0.5">Preço do contrato pré-preenchido</p>
+            </div>
+            <div>
+              <Label className="text-xs">Estimativa</Label>
+              <div className="h-9 mt-1 flex items-center font-bold text-purple-700">{BRL(total)}</div>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Justificativa (obrigatória) — por que estourou?</Label>
+            <Textarea rows={3} className="text-sm mt-1 resize-none" placeholder="Fundamente o motivo do acréscimo (mín. 15 caracteres)..."
+              value={justificativa} onChange={e => setJustificativa(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-xs">Foto do acréscimo (obrigatória)</Label>
+            <div className="mt-1 flex items-center gap-2">
+              <label className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs cursor-pointer ${fotoUrl ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"}`}>
+                {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                {fotoUrl ? "Foto anexada ✓ (trocar)" : "Tirar foto / anexar"}
+                <input type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFoto(f); e.target.value = ""; }} />
+              </label>
+              {fotoUrl && <img src={fotoUrl} alt="Foto" className="h-10 w-10 object-cover rounded border" />}
+            </div>
+          </div>
+          <div className="rounded-lg bg-purple-50 border border-purple-100 p-2.5 text-[11px] text-purple-700">
+            Aprovação em 2 níveis: gestor da obra e <strong>sócio administrador (obrigatório)</strong>. Aprovado, a quantidade e o valor somam no contrato e o excedente libera para medição.
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+          <Button size="sm" className="bg-purple-600 hover:bg-purple-700 gap-1.5" disabled={!podeEnviar}
+            onClick={() => criarMut.mutate({
+              companyId: contrato.companyId,
+              contratoId: contrato.id,
+              contratoItemId: item.contratoItemId,
+              medicaoId,
+              quantidade: parseNum(qtd),
+              valorUnitario: parseNum(precoUnit),
+              justificativa: justificativa.trim(),
+              fotoUrl: fotoUrl!,
+            })}>
+            {criarMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            Enviar para aprovação
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RetencaoTecnicaCard({ contrato, modoEdicao }: { contrato: any; modoEdicao: boolean }) {
   const utils = trpc.useUtils();
   const [confirmando, setConfirmando] = useState(false);

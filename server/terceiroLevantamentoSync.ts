@@ -79,8 +79,13 @@ export async function aplicarLevantamentoNaMedicaoTerceiro(db: any, campoId: num
       const saldoValor = Math.max(0, ((100 - anterior) / 100) * valorTotalItem);
       const valorPeriodo = Math.max(0, Math.min(saldoValor, valorBrutoPeriodo));
       const percPeriodo = valorTotalItem > 0 ? (valorPeriodo / valorTotalItem) * 100 : 0;
+      // Rev. 4802 — quantidade medida ALÉM do saldo do contrato: fica registrada
+      // no item da medição (fora do valor a pagar) e alimenta o fluxo de Aditivo.
+      const saldoQtd = Math.max(0, ((100 - anterior) / 100) * qtdContratada);
+      const qtdExcedente = Math.max(0, Math.round((linha.quantidade - saldoQtd) * 10000) / 10000);
       if (Math.abs(valorPeriodo - n(item.valorMedidoPeriodo)) < 0.005
-        && Math.abs(percPeriodo - n(item.percentualMedidoPeriodo)) < 0.0005) continue; // já reflete
+        && Math.abs(percPeriodo - n(item.percentualMedidoPeriodo)) < 0.0005
+        && Math.abs(qtdExcedente - n((item as any).quantidadeExcedente)) < 0.0005) continue; // já reflete
       const percFisico = anterior + percPeriodo;
       await db.update(terceiroMedicaoItens).set({
         percentualMedidoPeriodo: String(percPeriodo),
@@ -91,6 +96,7 @@ export async function aplicarLevantamentoNaMedicaoTerceiro(db: any, campoId: num
         valorMdoPeriodo: String((percPeriodo / 100) * n(ci.vlrMdo ?? "0")),
         valorMatAcumulado: String((percFisico / 100) * n(ci.vlrMat ?? "0")),
         valorMdoAcumulado: String((percFisico / 100) * n(ci.vlrMdo ?? "0")),
+        quantidadeExcedente: String(qtdExcedente),
         editadoManualmente: false,
       } as any).where(eq(terceiroMedicaoItens.id, item.id));
       mudou = true;

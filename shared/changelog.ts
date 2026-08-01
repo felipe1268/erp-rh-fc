@@ -1,4 +1,33 @@
 /**
+ * Rev. 4802 - ADITIVO DE CONTRATO DE TERCEIRO (EXCEDENTE DE MEDICAO) + RASTREIO DE DESCONTOS
+ *
+ * Pedido do usuario: "no levantamento levanta-se tudo, na medicao libera-se
+ * so o saldo do contrato; o excedente e tratado como aditivo, com
+ * justificativa, foto e estimativa, subindo para aprovacao".
+ * - Levantamento continua livre (mede a realidade); a medicao entra capada no
+ *   saldo do contrato (ja era assim) e agora o excedente fica REGISTRADO por
+ *   item (quantidade_excedente) com aviso ambar na planilha: "X m2 medidos
+ *   alem do contratado — Gerar Aditivo?".
+ * - Gerar Aditivo: quantidade e preco unitario do contrato pre-preenchidos
+ *   (editaveis), JUSTIFICATIVA obrigatoria (min. 15 chars), FOTO obrigatoria
+ *   (camera/upload) e estimativa calculada. Nao permite 2 aditivos pendentes
+ *   do mesmo item.
+ * - Aprovacao em 2 niveis: gestor da obra -> SOCIO ADMINISTRADOR (obrigatorio).
+ *   Rejeicao exige motivo. Card roxo "Aditivos do Contrato" na aba Medicoes.
+ * - Aprovado: quantidade e valor somam no ITEM do contrato e no valor total
+ *   do contrato (mesma EAP do orcamento); % medido re-derivado do novo teto;
+ *   contrato encerrado/concluido REABRE (proxima medicao cobre so o aditivo).
+ *   Nao existe "medicao separada de aditivo" — e sempre o mesmo contrato.
+ * - Tabela nova terceiro_contrato_aditivos + coluna quantidade_excedente em
+ *   terceiro_medicao_itens (SyncSchema Rev. 4802). Lock 478005 na aprovacao.
+ * - RASTREIO DE DESCONTOS (mesma Rev.): card "FD / Descontos lancados" virou
+ *   clicavel — lista ponto a ponto (data, tipo, descricao, valor); descontos
+ *   de FD mostram chip azul da OC que abre o pedido de compra completo
+ *   (OcMiniDialog). PDF do boletim marca "(lancado fora da medicao)".
+ * - Botao "Gerar PDF" do boletim nao baixa mais automatico: abre o PDF numa
+ *   aba de visualizacao (iPad/Safari mostra o preview nativo; aba aberta
+ *   ANTES do fetch para nao ser bloqueada como popup).
+ *
  * Rev. 4801 - DESCONTOS GENERICOS NA MEDICAO DE TERCEIROS (CONTA-CORRENTE)
  *
  * Pedido do usuario: "tudo que e desconto necessario tem que vir aqui —

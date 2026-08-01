@@ -12,6 +12,7 @@ import {
   terceiroMedicoes,
   terceiroMedicaoItens,
   terceiroMedicaoFds,
+  terceiroContratoAditivos,
   medicaoConfig,
   medicaoCampo,
   terceiroDocumentos,
@@ -2689,6 +2690,214 @@ export const terceiroContratosRouter = router({
         console.error(`[aprovarNivelSocio] FALHA no sync financeiro pós-aprovação da medição #${input.id} (companyId=${input.companyId}):`, syncErr?.message || syncErr);
       }
       return { ...medicao, financeiroOk };
+    }),
+
+  // ============================================================
+  // Rev. 4802 — ADITIVOS DE CONTRATO (excedente de medição)
+  // Fluxo: medição libera só o saldo do contrato; o excedente vira proposta de
+  // aditivo com justificativa + foto + estimativa, aprovada em 2 níveis
+  // (gestor da obra → sócio adm). Aprovado → soma no item e no contrato.
+  // ============================================================
+  listarAditivos: protectedProcedure
+    .input(z.object({ contratoId: z.number(), companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const rows = await db.select().from(terceiroContratoAditivos)
+        .where(and(eq(terceiroContratoAditivos.contratoId, input.contratoId), eq(terceiroContratoAditivos.companyId, input.companyId)))
+        .orderBy(asc(terceiroContratoAditivos.numero));
+      // junta a descrição do item do contrato p/ exibição
+      const itens = await db.select({ id: terceiroContratoItens.id, descricao: terceiroContratoItens.descricao, unidade: terceiroContratoItens.unidade, eapCodigo: terceiroContratoItens.eapCodigo })
+        .from(terceiroContratoItens).where(eq(terceiroContratoItens.contratoId, input.contratoId));
+      const byId = new Map(itens.map((i: any) => [i.id, i]));
+      return rows.map((a: any) => ({ ...a, item: byId.get(a.contratoItemId) || null }));
+    }),
+
+  criarAditivo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      contratoId: z.number(),
+      contratoItemId: z.number(),
+      medicaoId: z.number().optional(),
+      quantidade: z.number().positive("Quantidade deve ser maior que zero"),
+      valorUnitario: z.number().min(0),
+      justificativa: z.string().trim().min(15, "Fundamente o motivo do acréscimo (mínimo 15 caracteres)"),
+      fotoUrl: z.string().trim().min(1, "Foto do acréscimo é obrigatória"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      return await db.transaction(async (tx: any) => {
+      // Lock por contrato: check-then-insert do "pendente único" sem corrida.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(478005, ${input.contratoId})`);
+      const [contrato] = await tx.select().from(terceiroContratos)
+        .where(and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
+      const [item] = await tx.select().from(terceiroContratoItens)
+        .where(and(eq(terceiroContratoItens.id, input.contratoItemId), eq(terceiroContratoItens.contratoId, input.contratoId), eq(terceiroContratoItens.companyId, input.companyId)));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item do contrato não encontrado" });
+      // Poka-yoke: aditivo precisa de LASTRO — nasce de uma medição do próprio
+      // contrato com excedente registrado neste item, e a quantidade não pode
+      // passar do excedente medido (evita "aumento contratual especulativo").
+      if (input.medicaoId) {
+        const [med] = await tx.select({ id: terceiroMedicoes.id }).from(terceiroMedicoes)
+          .where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.contratoId, input.contratoId), eq(terceiroMedicoes.companyId, input.companyId)));
+        if (!med) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada neste contrato" });
+        const [mi] = await tx.select({ quantidadeExcedente: terceiroMedicaoItens.quantidadeExcedente }).from(terceiroMedicaoItens)
+          .where(and(eq(terceiroMedicaoItens.medicaoId, input.medicaoId), eq(terceiroMedicaoItens.contratoItemId, input.contratoItemId)));
+        const excedente = n(mi?.quantidadeExcedente);
+        if (excedente <= 0.0001) throw new TRPCError({ code: "BAD_REQUEST", message: "Este item não tem excedente medido nesta medição." });
+        if (input.quantidade > excedente + 0.005) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Quantidade acima do excedente medido (${excedente.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}). O aditivo deve ter lastro no levantamento.` });
+        }
+      } else {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "O aditivo deve nascer de uma medição com excedente registrado." });
+      }
+      // Poka-yoke: não duplicar aditivo pendente do MESMO item.
+      const pendentes = await tx.select({ id: terceiroContratoAditivos.id }).from(terceiroContratoAditivos)
+        .where(and(
+          eq(terceiroContratoAditivos.contratoId, input.contratoId),
+          eq(terceiroContratoAditivos.contratoItemId, input.contratoItemId),
+          eq(terceiroContratoAditivos.status, "pendente"),
+        ));
+      if (pendentes.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe um aditivo PENDENTE para este item. Aprove ou rejeite antes de criar outro." });
+      const existentes = await tx.select({ numero: terceiroContratoAditivos.numero }).from(terceiroContratoAditivos)
+        .where(eq(terceiroContratoAditivos.contratoId, input.contratoId));
+      const numero = existentes.reduce((mx: number, r: any) => Math.max(mx, Number(r.numero) || 0), 0) + 1;
+      const valorTotal = Math.round(input.quantidade * input.valorUnitario * 100) / 100;
+      const [aditivo] = await tx.insert(terceiroContratoAditivos).values({
+        companyId: input.companyId,
+        contratoId: input.contratoId,
+        contratoItemId: input.contratoItemId,
+        medicaoId: input.medicaoId ?? null,
+        numero,
+        quantidade: String(input.quantidade),
+        valorUnitario: String(input.valorUnitario),
+        valorTotal: String(valorTotal),
+        justificativa: input.justificativa,
+        fotoUrl: input.fotoUrl,
+        status: "pendente",
+        criadoPor: (ctx.user as any)?.name || null,
+      } as any).returning();
+      return aditivo;
+      });
+    }),
+
+  aprovarAditivoGestor: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number(), aprovadoPor: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [a] = await db.select().from(terceiroContratoAditivos)
+        .where(and(eq(terceiroContratoAditivos.id, input.id), eq(terceiroContratoAditivos.companyId, input.companyId)));
+      if (!a) throw new TRPCError({ code: "NOT_FOUND", message: "Aditivo não encontrado" });
+      if (a.status !== "pendente") throw new TRPCError({ code: "BAD_REQUEST", message: `Aditivo não está pendente (status: ${a.status})` });
+      if ((a.nivelAprovacao ?? 0) >= 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Aditivo já aprovado pelo gestor da obra." });
+      const [upd] = await db.update(terceiroContratoAditivos).set({
+        nivelAprovacao: 1,
+        gestorAprovadoPor: input.aprovadoPor,
+        gestorAprovadoEm: new Date().toISOString(),
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(terceiroContratoAditivos.id, input.id)).returning();
+      return upd;
+    }),
+
+  // Aprovação FINAL (sócio adm obrigatório): soma quantidade/valor no item do
+  // contrato + no valor total do contrato; reabre contrato encerrado.
+  aprovarAditivoSocio: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number(), aprovadoPor: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      return await db.transaction(async (tx: any) => {
+        // lock por contrato: aprovação concorrente não pode somar 2×
+        const [a] = await tx.select().from(terceiroContratoAditivos)
+          .where(and(eq(terceiroContratoAditivos.id, input.id), eq(terceiroContratoAditivos.companyId, input.companyId)));
+        if (!a) throw new TRPCError({ code: "NOT_FOUND", message: "Aditivo não encontrado" });
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(478005, ${a.contratoId})`);
+        const [a2] = await tx.select().from(terceiroContratoAditivos).where(eq(terceiroContratoAditivos.id, input.id));
+        if (!a2 || a2.status !== "pendente") throw new TRPCError({ code: "BAD_REQUEST", message: `Aditivo não está pendente (status: ${a2?.status})` });
+        if ((a2.nivelAprovacao ?? 0) < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Aprove primeiro no nível do gestor da obra." });
+
+        const [item] = await tx.select().from(terceiroContratoItens)
+          .where(and(eq(terceiroContratoItens.id, a2.contratoItemId), eq(terceiroContratoItens.companyId, input.companyId)));
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item do contrato não encontrado" });
+        const [contrato] = await tx.select().from(terceiroContratos)
+          .where(and(eq(terceiroContratos.id, a2.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+        if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
+
+        const novaQtd = n(item.quantidade) + n(a2.quantidade);
+        const novoValorTotalItem = Math.round((n(item.valorTotal) + n(a2.valorTotal)) * 100) / 100;
+        // % medido acumulado precisa ser RE-DERIVADO do valor (o teto cresceu).
+        const novoPercMedido = novoValorTotalItem > 0 ? (n(item.valorMedidoAcumulado) / novoValorTotalItem) * 100 : 0;
+        await tx.update(terceiroContratoItens).set({
+          quantidade: String(novaQtd),
+          valorTotal: String(novoValorTotalItem),
+          percentualMedidoAcumulado: String(novoPercMedido),
+        } as any).where(eq(terceiroContratoItens.id, item.id));
+
+        const novoValorContrato = Math.round((n(contrato.valorTotal) + n(a2.valorTotal)) * 100) / 100;
+        await tx.update(terceiroContratos).set({
+          valorTotal: String(novoValorContrato),
+          // Aditivo aprovado REABRE o saldo de contrato encerrado/concluído.
+          ...(contrato.status === "encerrado" || contrato.status === "concluido" ? { status: "ativo" } : {}),
+          atualizadoEm: new Date().toISOString(),
+        } as any).where(eq(terceiroContratos.id, contrato.id));
+
+        const [upd] = await tx.update(terceiroContratoAditivos).set({
+          status: "aprovado",
+          nivelAprovacao: 2,
+          socioAprovadoPor: input.aprovadoPor,
+          socioAprovadoEm: new Date().toISOString(),
+          atualizadoEm: new Date().toISOString(),
+        } as any).where(eq(terceiroContratoAditivos.id, input.id)).returning();
+
+        // O teto (valorTotal do item) cresceu — TODO percentual gravado em cima
+        // do teto antigo precisa ser re-escalado (valores em R$ não mudam), senão
+        // o sync do levantamento volta a marcar excedente indevido e os % das
+        // medições abertas ficam inflados. Medições FINALIZADAS (aprovada/paga)
+        // ficam intactas: histórico.
+        const fator = novoValorTotalItem > 0 ? n(item.valorTotal) / novoValorTotalItem : 0;
+        await tx.execute(sql`
+          UPDATE terceiro_medicao_itens mi SET
+            percentual_acumulado_anterior = ROUND(COALESCE(mi.percentual_acumulado_anterior, 0) * ${fator}::numeric, 4),
+            percentual_medido_periodo     = ROUND(COALESCE(mi.percentual_medido_periodo, 0) * ${fator}::numeric, 4),
+            percentual_avanco_fisico      = ROUND(COALESCE(mi.percentual_avanco_fisico, 0) * ${fator}::numeric, 4),
+            quantidade_excedente          = 0
+          FROM terceiro_medicoes m
+          WHERE m.id = mi.medicao_id
+            AND mi.contrato_item_id = ${item.id}
+            AND m.contrato_id = ${contrato.id}
+            AND m.status NOT IN ('aprovada','paga')
+        `);
+        // % global das medições ABERTAS re-derivado do novo valor do contrato.
+        await tx.execute(sql`
+          UPDATE terceiro_medicoes SET
+            percentual_global = ROUND(COALESCE(valor_medido, 0) / NULLIF(${novoValorContrato}::numeric, 0) * 100, 4)
+          WHERE contrato_id = ${contrato.id}
+            AND status NOT IN ('aprovada','paga')
+        `);
+        return upd;
+      });
+    }),
+
+  rejeitarAditivo: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number(), rejeitadoPor: z.string(), motivo: z.string().trim().min(5, "Informe o motivo da rejeição") }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [a] = await db.select().from(terceiroContratoAditivos)
+        .where(and(eq(terceiroContratoAditivos.id, input.id), eq(terceiroContratoAditivos.companyId, input.companyId)));
+      if (!a) throw new TRPCError({ code: "NOT_FOUND", message: "Aditivo não encontrado" });
+      if (a.status !== "pendente") throw new TRPCError({ code: "BAD_REQUEST", message: `Aditivo não está pendente (status: ${a.status})` });
+      const [upd] = await db.update(terceiroContratoAditivos).set({
+        status: "rejeitado",
+        rejeitadoPor: input.rejeitadoPor,
+        rejeitadoEm: new Date().toISOString(),
+        motivoRejeicao: input.motivo,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(terceiroContratoAditivos.id, input.id)).returning();
+      return upd;
     }),
 
   // Rev. 4778 — Reenvio manual: medição aprovada sem título no Financeiro

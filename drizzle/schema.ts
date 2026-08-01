@@ -4513,6 +4513,40 @@ export const terceiroMedicaoFds = pgTable("terceiro_medicao_fds", {
   index("idx_tmfds_company").on(t.companyId),
 ]);
 
+// Rev. 4802 — Aditivo de contrato de terceiro (acréscimo de quantidade medida
+// além do contratado). Fluxo: medição libera só o saldo do contrato; o excedente
+// vira proposta de aditivo com justificativa + foto obrigatórias, aprovado em
+// 2 níveis (gestor da obra + sócio adm). Aprovado → soma quantidade/valor no
+// item do contrato e no valor total do contrato (mesma EAP do orçamento).
+export const terceiroContratoAditivos = pgTable("terceiro_contrato_aditivos", {
+  id:                serial().primaryKey(),
+  companyId:         integer("company_id").notNull(),
+  contratoId:        integer("contrato_id").notNull(),
+  contratoItemId:    integer("contrato_item_id").notNull(),
+  medicaoId:         integer("medicao_id"),
+  numero:            integer().default(1).notNull(),
+  quantidade:        numeric({ precision: 18, scale: 4 }).notNull(),
+  valorUnitario:     numeric("valor_unitario", { precision: 18, scale: 4 }).notNull(),
+  valorTotal:        numeric("valor_total", { precision: 18, scale: 2 }).notNull(),
+  justificativa:     text().notNull(),
+  fotoUrl:           varchar("foto_url", { length: 500 }),
+  status:            varchar({ length: 30 }).default("pendente").notNull(), // pendente | aprovado | rejeitado
+  nivelAprovacao:    integer("nivel_aprovacao").default(0).notNull(), // 0 criado, 1 gestor ok, 2 sócio ok (final)
+  gestorAprovadoPor: varchar("gestor_aprovado_por", { length: 255 }),
+  gestorAprovadoEm:  timestamp("gestor_aprovado_em", { mode: "string" }),
+  socioAprovadoPor:  varchar("socio_aprovado_por", { length: 255 }),
+  socioAprovadoEm:   timestamp("socio_aprovado_em", { mode: "string" }),
+  rejeitadoPor:      varchar("rejeitado_por", { length: 255 }),
+  rejeitadoEm:       timestamp("rejeitado_em", { mode: "string" }),
+  motivoRejeicao:    text("motivo_rejeicao"),
+  criadoPor:         varchar("criado_por", { length: 255 }),
+  criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_tca_contrato").on(t.contratoId),
+  index("idx_tca_company").on(t.companyId),
+]);
+
 export const terceiroMedicaoItens = pgTable("terceiro_medicao_itens", {
   id:                serial().primaryKey(),
   medicaoId:         integer("medicao_id").notNull(),
@@ -4530,6 +4564,9 @@ export const terceiroMedicaoItens = pgTable("terceiro_medicao_itens", {
   valorMdoPeriodo:          numeric("valor_mdo_periodo", { precision: 18, scale: 2 }).default("0"),
   valorMatAcumulado:        numeric("valor_mat_acumulado", { precision: 18, scale: 2 }).default("0"),
   valorMdoAcumulado:        numeric("valor_mdo_acumulado", { precision: 18, scale: 2 }).default("0"),
+  // Rev. 4802 — quantidade medida ALÉM do saldo do contrato (capada fora do valor
+  // a pagar); alimenta o aviso "Gerar aditivo?" na medição.
+  quantidadeExcedente:      numeric("quantidade_excedente", { precision: 18, scale: 4 }).default("0"),
   observacoes:       text(),
   criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 });

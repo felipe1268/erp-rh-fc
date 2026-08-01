@@ -2237,6 +2237,41 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4801: terceiro_medicao_fds.tipo/abatido_retencao garantidos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA tipo de desconto terceiro:`, e?.message || e); }
 
+        // Rev. 4802 — Aditivo de contrato de terceiro (excedente de medição) + excedente por item.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS terceiro_contrato_aditivos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              contrato_id INTEGER NOT NULL,
+              contrato_item_id INTEGER NOT NULL,
+              medicao_id INTEGER,
+              numero INTEGER NOT NULL DEFAULT 1,
+              quantidade NUMERIC(18,4) NOT NULL,
+              valor_unitario NUMERIC(18,4) NOT NULL,
+              valor_total NUMERIC(18,2) NOT NULL,
+              justificativa TEXT NOT NULL,
+              foto_url VARCHAR(500),
+              status VARCHAR(30) NOT NULL DEFAULT 'pendente',
+              nivel_aprovacao INTEGER NOT NULL DEFAULT 0,
+              gestor_aprovado_por VARCHAR(255),
+              gestor_aprovado_em TIMESTAMP,
+              socio_aprovado_por VARCHAR(255),
+              socio_aprovado_em TIMESTAMP,
+              rejeitado_por VARCHAR(255),
+              rejeitado_em TIMESTAMP,
+              motivo_rejeicao TEXT,
+              criado_por VARCHAR(255),
+              criado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+              atualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tca_contrato ON terceiro_contrato_aditivos(contrato_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tca_company ON terceiro_contrato_aditivos(company_id)`);
+          await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS quantidade_excedente NUMERIC(18,4) DEFAULT 0`);
+          console.log(`[SyncSchema+] Rev. 4802: terceiro_contrato_aditivos + quantidade_excedente garantidos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA aditivos de terceiro:`, e?.message || e); }
+
         // Rev. 3041 — CIPA: eleição digital (candidatos, eleitores c/ link, votos anônimos) + planos de ação.
         try {
           await db.execute(sql`
