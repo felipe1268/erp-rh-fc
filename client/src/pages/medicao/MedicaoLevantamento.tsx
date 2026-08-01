@@ -201,8 +201,8 @@ function RotuloInput({ value, onCommit }: { value: string; onCommit: (v: string)
     <input
       type="text"
       value={v}
-      onChange={(e) => setV(e.target.value)}
-      onBlur={() => { if (v !== value) onCommit(v); }}
+      onChange={(e) => setV(e.target.value.toUpperCase())}
+      onBlur={() => { if (v !== value) onCommit(v.toUpperCase()); }}
       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
       placeholder="Nome / local (ex.: APARTAMENTO 1402)"
       maxLength={255}
@@ -2477,7 +2477,12 @@ export default function MedicaoLevantamento() {
                         <label className="flex items-center gap-1.5 font-medium cursor-pointer select-none min-w-0" style={{ color: c.cor }}>
                           <Checkbox checked={sel} onCheckedChange={() => toggleSelContorno(c.id)} aria-label="Selecionar contorno" />
                           <span className="flex items-center gap-1 truncate">
-                            {ICON_TIPO[c.tipo as TipoContorno]} {LABEL_TIPO[c.tipo as TipoContorno]} #{String(c.numero ?? "").padStart(3, "0")}
+                            {ICON_TIPO[c.tipo as TipoContorno]}{" "}
+                            {/* Rev. 4790 — rótulo digitado (sempre MAIÚSCULO) manda no título;
+                                sem rótulo, cai no padrão "Área #002" */}
+                            {c.rotulo
+                              ? <>{String(c.rotulo).toUpperCase()} <span className="opacity-60 font-normal">#{String(c.numero ?? "").padStart(3, "0")}</span></>
+                              : <>{LABEL_TIPO[c.tipo as TipoContorno]} #{String(c.numero ?? "").padStart(3, "0")}</>}
                           </span>
                         </label>
                         <button className="text-red-600 shrink-0" onClick={() => askConfirm({ title: "Excluir contorno?", description: `${LABEL_TIPO[c.tipo as TipoContorno]} #${String(c.numero ?? "").padStart(3, "0")} será removido. Esta ação não pode ser desfeita.`, confirmText: "Excluir", onConfirm: () => off.excluirContorno(c) })}>
