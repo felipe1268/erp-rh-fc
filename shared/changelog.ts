@@ -1,4 +1,13 @@
 /**
+ * Rev. 4777 - SST: FILTRO DE PERIODO NO PADRAO DO SISTEMA (PeriodSelectorCard)
+ *
+ * O usuario nao gostou do card de filtros da Rev. 4776. Substituido pelo
+ * seletor padrao da plataforma (PeriodSelectorCard: navegacao de ano + 12
+ * pills de meses + "Ano todo"), com T1-T4, S1-S2 e botao "Personalizar" no
+ * cabecalho. Datas livres (inicio/fim + atalhos 3/6/12/24M) ficam num card
+ * colapsado que so abre ao tocar em "Personalizar". Resumo do periodo
+ * (intervalo, meses, colaboradores, HH) em badges soltas abaixo.
+ *
  * Rev. 4776 - SST: FILTROS DE ATESTADOS & ACIDENTES REPAGINADOS
  *
  * Tela "Analise de Atestados & Acidentes": card de filtros redesenhado —

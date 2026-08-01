@@ -21,6 +21,7 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line, ComposedChart, Area, AreaChart,
 } from "recharts";
 import { ChartCard } from "@/components/sst/ChartCard";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import { cidDescricao } from "@shared/cid10";
 import { EmployeeDetailDialog } from "@/components/sst/EmployeeDetailDialog";
 import { PersonPhoto } from "@/components/PersonPhoto";
@@ -348,6 +349,8 @@ export default function DashboardAtestadosAcidentes() {
 
   const hoje = new Date();
   const [anoSel, setAnoSel] = useState<number>(hoje.getFullYear());
+  // Rev. 4777 — painel de datas personalizadas colapsado por padrão
+  const [personalizadoAberto, setPersonalizadoAberto] = useState(false);
   const anosDisp = Array.from({ length: 5 }, (_, i) => hoje.getFullYear() - i);
   const mesesPt = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -406,122 +409,102 @@ export default function DashboardAtestadosAcidentes() {
           </Button>
         </div>
 
-        {/* Filtros — Rev. 4776: repaginado em seções empilhadas, sem sobreposição */}
-        <Card className="overflow-hidden">
-          <div className="bg-gray-50/80 border-b px-4 py-2.5 flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-emerald-600" />
-            <span className="text-sm font-semibold text-gray-800">Período da análise</span>
-          </div>
-          <CardContent className="p-0 divide-y divide-gray-100">
-            {/* Seção 1 — Atalhos rápidos */}
-            <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 sm:w-32 shrink-0">Atalhos</span>
-              <div className="flex flex-wrap gap-1.5">
-                <Button size="sm" variant="outline" onClick={() => setRange(1)}>Último mês</Button>
-                <Button size="sm" variant="outline" onClick={() => setRange(3)}>3 meses</Button>
-                <Button size="sm" variant="outline" onClick={() => setRange(6)}>6 meses</Button>
-                <Button size="sm" variant="outline" onClick={() => setRange(12)}>12 meses</Button>
-                <Button size="sm" variant="outline" onClick={() => setRange(24)}>24 meses</Button>
-              </div>
-            </div>
-
-            {/* Seção 2 — Ano / Trimestre / Semestre / Mês */}
-            <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 sm:w-32 shrink-0 sm:pt-1.5">Por calendário</span>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <select
-                    className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    value={anoSel}
-                    onChange={(e) => setAnoSel(parseInt(e.target.value, 10))}
-                  >
-                    {anosDisp.map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                  <Button
-                    size="sm"
-                    variant={anoCheioAtivo(anoSel) ? "default" : "outline"}
-                    onClick={() => setAnoCheio(anoSel)}
-                    title={`Período: 01/01/${anoSel} a 31/12/${anoSel}`}
-                  >
-                    Ano todo
-                  </Button>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {([1, 2, 3, 4] as const).map((q) => (
-                    <Button
-                      key={`t${q}`}
-                      size="sm"
-                      variant={trimAtivo(q) ? "default" : "outline"}
-                      onClick={() => setTrimestre(anoSel, q)}
-                      className="px-2.5"
-                    >
-                      T{q}
-                    </Button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {([1, 2] as const).map((s) => (
-                    <Button
-                      key={`s${s}`}
-                      size="sm"
-                      variant={semAtivo(s) ? "default" : "outline"}
-                      onClick={() => setSemestre(anoSel, s)}
-                      className="px-2.5"
-                    >
-                      S{s}
-                    </Button>
-                  ))}
-                </div>
-                <select
-                  className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-40"
-                  value={mesAtivoIdx}
-                  onChange={(e) => {
-                    const idx = parseInt(e.target.value, 10);
-                    if (idx >= 0) setMesAno(anoSel, idx);
-                  }}
+        {/* Filtros — Rev. 4777: seletor padrão do sistema (PeriodSelectorCard) */}
+        <PeriodSelectorCard
+          ano={anoSel}
+          mes={mesAtivoIdx >= 0 ? mesAtivoIdx + 1 : (anoCheioAtivo(anoSel) ? null : 0)}
+          onAno={(a) => {
+            const eraAnoCheio = anoCheioAtivo(anoSel);
+            const mesIdx = mesAtivoIdx;
+            setAnoSel(a);
+            if (eraAnoCheio) setAnoCheio(a);
+            else if (mesIdx >= 0) setMesAno(a, mesIdx);
+          }}
+          onMes={(m) => setMesAno(anoSel, m - 1)}
+          onAnoTodo={() => setAnoCheio(anoSel)}
+          actions={
+            <div className="flex flex-wrap items-center gap-1">
+              {([1, 2, 3, 4] as const).map((q) => (
+                <button
+                  key={`t${q}`}
+                  onClick={() => setTrimestre(anoSel, q)}
+                  title={`${q}º trimestre de ${anoSel}`}
+                  className={`px-2 py-1 rounded-md text-xs font-semibold border transition ${
+                    trimAtivo(q)
+                      ? "border-2 border-slate-800 bg-slate-50 text-slate-800"
+                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                  }`}
                 >
-                  <option value={-1}>Mês específico…</option>
-                  {mesesPt.map((m, i) => (
-                    <option key={m} value={i}>{m}/{String(anoSel).slice(2)}</option>
-                  ))}
-                </select>
-              </div>
+                  T{q}
+                </button>
+              ))}
+              <span className="w-px h-4 bg-slate-200 mx-1" />
+              {([1, 2] as const).map((s) => (
+                <button
+                  key={`s${s}`}
+                  onClick={() => setSemestre(anoSel, s)}
+                  title={`${s}º semestre de ${anoSel}`}
+                  className={`px-2 py-1 rounded-md text-xs font-semibold border transition ${
+                    semAtivo(s)
+                      ? "border-2 border-slate-800 bg-slate-50 text-slate-800"
+                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  S{s}
+                </button>
+              ))}
+              <span className="w-px h-4 bg-slate-200 mx-1" />
+              <button
+                onClick={() => setPersonalizadoAberto((v) => !v)}
+                className={`px-2 py-1 rounded-md text-xs font-semibold border transition inline-flex items-center gap-1 ${
+                  personalizadoAberto
+                    ? "border-2 border-slate-800 bg-slate-50 text-slate-800"
+                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <Calendar className="h-3 w-3" /> Personalizar
+              </button>
             </div>
+          }
+        />
 
-            {/* Seção 3 — Período personalizado (datas) */}
-            <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 sm:w-32 shrink-0">Personalizado</span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
-                <div className="min-w-0">
-                  <Label className="text-xs text-gray-600">Data Início</Label>
-                  <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="w-full mt-1" />
-                </div>
-                <div className="min-w-0">
-                  <Label className="text-xs text-gray-600">Data Fim</Label>
-                  <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-full mt-1" />
-                </div>
+        {/* Datas personalizadas — só quando o usuário pedir */}
+        {personalizadoAberto && (
+          <Card>
+            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-end gap-3">
+              <div className="min-w-0 flex-1 max-w-xs">
+                <Label className="text-xs text-gray-600">Data Início</Label>
+                <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="w-full mt-1" />
               </div>
-            </div>
+              <div className="min-w-0 flex-1 max-w-xs">
+                <Label className="text-xs text-gray-600">Data Fim</Label>
+                <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-full mt-1" />
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <Button size="sm" variant="outline" onClick={() => setRange(3)}>Últimos 3M</Button>
+                <Button size="sm" variant="outline" onClick={() => setRange(6)}>6M</Button>
+                <Button size="sm" variant="outline" onClick={() => setRange(12)}>12M</Button>
+                <Button size="sm" variant="outline" onClick={() => setRange(24)}>24M</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-            {/* Rodapé — resumo do período */}
-            {d && (
-              <div className="px-4 py-2.5 bg-gray-50/60 flex flex-wrap gap-2 text-xs text-gray-600">
-                <Badge variant="outline" className="gap-1 bg-white">
-                  <Calendar className="h-3 w-3" />
-                  {d.periodo.meses} {d.periodo.meses === 1 ? "mês" : "meses"}
-                </Badge>
-                <Badge variant="outline" className="gap-1 bg-white">
-                  <Users className="h-3 w-3" /> {fmtNum(d.headcount)} colaboradores ativos
-                </Badge>
-                <Badge variant="outline" className="gap-1 bg-white">
-                  <Clock className="h-3 w-3" /> {fmtNum(d.horasHomem)} HH no período (220h/mês)
-                </Badge>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Resumo do período */}
+        {d && (
+          <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+            <Badge variant="outline" className="gap-1 bg-white">
+              <Calendar className="h-3 w-3" />
+              {fmtDateBR(dataInicio)} — {fmtDateBR(dataFim)} · {d.periodo.meses} {d.periodo.meses === 1 ? "mês" : "meses"}
+            </Badge>
+            <Badge variant="outline" className="gap-1 bg-white">
+              <Users className="h-3 w-3" /> {fmtNum(d.headcount)} colaboradores ativos
+            </Badge>
+            <Badge variant="outline" className="gap-1 bg-white">
+              <Clock className="h-3 w-3" /> {fmtNum(d.horasHomem)} HH no período (220h/mês)
+            </Badge>
+          </div>
+        )}
 
         {!hasValidCompany && (
           <Card><CardContent className="p-8 text-center text-gray-500">Selecione uma empresa para visualizar.</CardContent></Card>

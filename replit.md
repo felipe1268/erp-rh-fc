@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4777** — SST: filtro da Análise de Atestados & Acidentes agora usa o PeriodSelectorCard padrão (ano + pills de meses + Ano todo) com T1–T4/S1–S2 e datas personalizadas colapsadas atrás do botão "Personalizar".
 - **Rev. 4776** — SST: card de filtros da Análise de Atestados & Acidentes repaginado em seções empilhadas (Atalhos / Por calendário / Personalizado + resumo), eliminando sobreposição no iPad.
 - **Rev. 4775** — Almoxarifado: nome do item emprestado sempre em MAIÚSCULA (grava em caixa alta no empréstimo + exibição `uppercase` nas telas de pendências, cobrindo registros antigos).
 - **Rev. 4774** — Almoxarifado: banner grande vermelho pulsante ("puxão de orelha") no topo das ações rápidas quando há ferramentas não devolvidas; toque abre o Fechar Dia.
