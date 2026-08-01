@@ -61,6 +61,9 @@
  *   enquadra a planta automaticamente mesmo quando o fit fino nao dispara
  *   (ex.: DXF sem unidade definida) — acabou o "tela em branco ate apertar
  *   o botao de enquadrar".
+ * - Categorias de PERIMETRO (sanca, tabica, rodape...) ganharam Retangulo e
+ *   Desenho livre alem dos Pontos: a forma fechada e convertida em metros
+ *   lineares do contorno automaticamente.
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO

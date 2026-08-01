@@ -1266,6 +1266,8 @@ export default function MedicaoLevantamento() {
   }
 
   // Retângulo: 2 cantos arrastados → área retangular (tipo "area").
+  // Rev. 4792 — em categoria de PERÍMETRO, o retângulo vira perímetro (m
+  // linear do contorno fechado), não área.
   function finalizarRetangulo() {
     const r = dragRect;
     setDragRect(null);
@@ -1275,6 +1277,11 @@ export default function MedicaoLevantamento() {
     const corners: GeoPonto[] = [
       { x: a.x, y: a.y }, { x: b.x, y: a.y }, { x: b.x, y: b.y }, { x: a.x, y: b.y },
     ];
+    if (svcAtivoObj?.tipoMedida === "perimetro") {
+      // fecha o laço repetindo o 1º ponto (o cálculo de perímetro é de linha aberta)
+      finalizarContorno("perimetro", [...corners, { ...corners[0] }], 0, 0);
+      return;
+    }
     finalizarContorno("area", corners, 0, 0); // ferramenta permanece ativa
   }
 
@@ -1297,6 +1304,12 @@ export default function MedicaoLevantamento() {
     if (pts.length < 3) return;
     const simp = simplificarPontos(pts, 0.004);
     if (simp.length < 3) return;
+    // Rev. 4792 — em categoria de PERÍMETRO, o traço livre mede o contorno
+    // fechado em metros lineares (não área).
+    if (svcAtivoObj?.tipoMedida === "perimetro") {
+      finalizarContorno("perimetro", [...simp, { ...simp[0] }], 0, 0);
+      return;
+    }
     finalizarContorno("area", simp, 0, 0); // ferramenta permanece ativa
   }
 
@@ -2330,11 +2343,18 @@ export default function MedicaoLevantamento() {
                       Só a forma de traçar aparece — e só quando a categoria é de área. */}
                   {/* Rev. 4792 — categorias de ÁREA e de PAREDE ganham as 4 formas de
                       traçar: Linha (L×A), Poligonal (pontos), Retângulo e Desenho livre. */}
-                  {svcAtivoObj && ["area", "parede", ""].includes(String(svcAtivoObj.tipoMedida ?? "")) && (
+                  {/* Rev. 4792 — categorias de PERÍMETRO (ex.: sanca, tabica, rodapé)
+                      também ganham Retângulo e Desenho livre: a forma fechada vira
+                      metros lineares do contorno. */}
+                  {svcAtivoObj && ["area", "parede", "perimetro", ""].includes(String(svcAtivoObj.tipoMedida ?? "")) && (
                     <>
                       <div className="h-6 w-px bg-border mx-1" />
                       {FERRAMENTAS_DESENHO.filter((f) =>
-                        (svcAtivoObj.tipoMedida === "parede" ? ["parede", "area", "retangulo", "livre"] : ["area", "retangulo", "livre"]).includes(f.key),
+                        (svcAtivoObj.tipoMedida === "parede"
+                          ? ["parede", "area", "retangulo", "livre"]
+                          : svcAtivoObj.tipoMedida === "perimetro"
+                            ? ["perimetro", "retangulo", "livre"]
+                            : ["area", "retangulo", "livre"]).includes(f.key),
                       ).map((f) => (
                         <Button
                           key={f.key} size="sm" variant={tool === f.key ? "default" : "ghost"} className="h-9 gap-1"
@@ -2342,12 +2362,12 @@ export default function MedicaoLevantamento() {
                           style={tool === f.key ? { backgroundColor: (svcAtivoObj?.cor as string) || f.cor } : {}}
                           title={f.label}
                         >
-                          {f.icon}{f.key === "area" ? "Pontos" : f.key === "parede" ? "Linha (L×A)" : f.label}
+                          {f.icon}{f.key === "area" ? "Pontos" : f.key === "perimetro" ? "Pontos (linear)" : f.key === "parede" ? "Linha (L×A)" : f.label}
                         </Button>
                       ))}
                     </>
                   )}
-                  {svcAtivoObj && !["area", "parede", ""].includes(String(svcAtivoObj.tipoMedida ?? "")) && (
+                  {svcAtivoObj && !["area", "parede", "perimetro", ""].includes(String(svcAtivoObj.tipoMedida ?? "")) && (
                     <span className="text-xs px-2 py-1 rounded font-medium text-white" style={{ backgroundColor: (svcAtivoObj.cor as string) || "#374151" }}>
                       {FERRAMENTAS_DESENHO.find((f) => f.key === svcAtivoObj.tipoMedida)?.label ?? svcAtivoObj.tipoMedida}
                     </span>
