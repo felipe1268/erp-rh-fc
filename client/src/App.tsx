@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/sonner";
+import { AppDialogHost } from "@/lib/appDialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -851,6 +852,7 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster position="bottom-left" />
+          <AppDialogHost />
           <CompanyProvider>
             <ModuleConfigProvider>
               <PermissionsProvider>

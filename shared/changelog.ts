@@ -1,4 +1,23 @@
 /**
+ * Rev. 4786 - LEVANTAMENTO: PERCENTUAL 0-100% NO ENVIO DA PLANTA
+ *
+ * O botao "Planta (DXF)" agora mostra o progresso do envio dentro do proprio
+ * botao (barra azul + "Enviando… N%"):
+ * - 0-40%: leitura real do arquivo no aparelho (FileReader onprogress);
+ * - 40-95%: envio a rede, estimado pelo tamanho do arquivo (curva suave);
+ * - 100%: so quando o servidor confirma; em erro o percentual some.
+ *
+ * Rev. 4785 - DIALOGOS DO ERP (fim do "dominio.replit.dev diz" nas mensagens)
+ *
+ * Os avisos nativos do navegador mostravam o dominio tecnico no topo (feio e
+ * confuso no iPad). Criado sistema proprio de dialogos (client/src/lib/appDialog):
+ * - window.alert SOBRESCRITO globalmente: TODA mensagem de aviso do ERP agora
+ *   abre num dialogo bonito com titulo "Atencao" (sem URL), em todas as telas.
+ * - appConfirm/appPrompt (Promise) para migrar confirm/prompt tela a tela
+ *   (sao sincronos no navegador, nao da para sobrescrever sem quebrar).
+ * - Levantamento de Campo ja migrado por completo: nome da planta e periodo
+ *   do boletim usam o dialogo novo (confirmacoes ja eram estilizadas).
+ *
  * Rev. 4784 - LEVANTAMENTO: PLANTA COM LEVANTAMENTO SO APAGA COM SENHA DO MASTER
  *
  * Poka-yoke pedido pelo usuario: remover uma planta que ja tem trechos medidos

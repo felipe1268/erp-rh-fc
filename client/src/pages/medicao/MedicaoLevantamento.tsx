@@ -27,6 +27,7 @@ import { VincularItemCombobox, buildItensVinculaveis } from "./VincularItemCombo
 import { parseDxfPlanta, type DxfPlanta } from "./dxfPlanta";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { appPrompt } from "@/lib/appDialog";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
@@ -163,11 +164,13 @@ const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency",
 const numFmt = (v: number, d = 2) =>
   (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
-function fileToBase64(file: File): Promise<string> {
+function fileToBase64(file: File, onProgress?: (frac: number) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
+    r.onprogress = (ev) => { if (ev.lengthComputable && ev.total > 0) onProgress?.(ev.loaded / ev.total); };
     r.onload = () => {
       const s = String(r.result || "");
+      onProgress?.(1);
       resolve(s.includes(",") ? s.split(",")[1] : s);
     };
     r.onerror = reject;
@@ -605,6 +608,36 @@ export default function MedicaoLevantamento() {
   // ferramenta sugerida). "" = sem serviço (comportamento antigo).
   const [servicoAtivo, setServicoAtivo] = useState<string>("");
   const [servicosDialogOpen, setServicosDialogOpen] = useState(false);
+  // Rev. 4786 — percentual 0–100% no envio da planta (leitura do arquivo é
+  // medida de verdade; a rede é estimada pelo tamanho e fecha em 100% no fim).
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
+  const uploadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  function enviarPlantaComProgresso(payload: any, fileSize: number) {
+    const estMs = Math.max(2000, (fileSize / 300_000) * 1000); // ~300KB/s estimado
+    const t0 = Date.now();
+    if (uploadTimerRef.current) clearInterval(uploadTimerRef.current);
+    uploadTimerRef.current = setInterval(() => {
+      // Watchdog: rede pendurada por >120s libera o botão (o erro real aparece
+      // pelo onSettled quando/se a mutação responder).
+      if (Date.now() - t0 > 120_000) {
+        if (uploadTimerRef.current) { clearInterval(uploadTimerRef.current); uploadTimerRef.current = null; }
+        setUploadPct(null);
+        alert("O envio está demorando demais (conexão instável?). Verifique a internet e tente de novo.");
+        return;
+      }
+      // 40% → 95% numa curva suave; os 100% só quando o servidor confirmar.
+      setUploadPct(Math.min(95, 40 + Math.round(55 * (1 - Math.exp(-(Date.now() - t0) / estMs)))));
+    }, 200);
+    uploadPdfM.mutate(payload, {
+      onSettled: (_d: any, err: any) => {
+        if (uploadTimerRef.current) { clearInterval(uploadTimerRef.current); uploadTimerRef.current = null; }
+        if (err) { setUploadPct(null); return; }
+        setUploadPct(100);
+        setTimeout(() => setUploadPct(null), 800);
+      },
+    });
+  }
+  useEffect(() => () => { if (uploadTimerRef.current) clearInterval(uploadTimerRef.current); }, []);
   // Rev. 4784 — remover planta COM levantamento exige senha do ADM Master.
   const [senhaPlantaDlg, setSenhaPlantaDlg] = useState<{ pdf: any; qtd: number } | null>(null);
   const [senhaPlanta, setSenhaPlanta] = useState("");
@@ -1078,14 +1111,22 @@ export default function MedicaoLevantamento() {
       );
       return;
     }
-    const nome = window.prompt("Nome desta planta (ex.: Pavimento Térreo):", file.name.replace(/\.(pdf|dxf)$/i, "")) || file.name;
+    const nomeDigitado = await appPrompt("Nome desta planta (ex.: Pavimento Térreo):", file.name.replace(/\.(pdf|dxf)$/i, ""), { title: "Nova planta" });
+    if (nomeDigitado === null) return; // cancelou o envio
+    const nome = nomeDigitado.trim() || file.name;
     // Rev. — DXF não passa pelo pdf.js; sobe direto como planta vetorial de 1 página.
     if (/\.dxf$/i.test(file.name)) {
-      const base64 = await fileToBase64(file);
-      uploadPdfM.mutate({
-        companyId, medicaoCampoId: campoId, nome, tipo: "pavimento",
-        base64, contentType: "image/vnd.dxf", arquivoNome: file.name, numPaginas: 1,
-      });
+      try {
+        setUploadPct(1);
+        const base64 = await fileToBase64(file, (f) => setUploadPct(Math.max(1, Math.round(f * 40))));
+        enviarPlantaComProgresso({
+          companyId, medicaoCampoId: campoId, nome, tipo: "pavimento",
+          base64, contentType: "image/vnd.dxf", arquivoNome: file.name, numPaginas: 1,
+        }, file.size);
+      } catch (err: any) {
+        setUploadPct(null);
+        alert("Não foi possível ler o arquivo no aparelho. Tente novamente.");
+      }
       return;
     }
     let np = 1;
@@ -1450,8 +1491,8 @@ export default function MedicaoLevantamento() {
     if (w) { w.document.write(html); w.document.close(); }
   }
 
-  function handleGerarBoletim() {
-    const periodo = window.prompt("Período de referência do boletim (AAAA-MM):", new Date().toISOString().slice(0, 7));
+  async function handleGerarBoletim() {
+    const periodo = await appPrompt("Período de referência do boletim (AAAA-MM):", new Date().toISOString().slice(0, 7), { title: "Gerar boletim" });
     if (!periodo) return;
     gerarBoletimM.mutate({ companyId, medicaoCampoId: campoId, contratoId, orcamentoId, periodoReferencia: periodo });
   }
@@ -1588,8 +1629,18 @@ export default function MedicaoLevantamento() {
                   }} />
                 </button>
               ))}
-              <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadPdfM.isPending} onClick={() => pdfInputRef.current?.click()} title="Somente DXF: medidas exatas do CAD, sem calibrar nem conferir escala. Tem DWG? O sistema explica como converter.">
-                {uploadPdfM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Planta (DXF)
+              <Button size="sm" variant="outline" className="gap-1.5 relative overflow-hidden" disabled={uploadPdfM.isPending || uploadPct !== null} onClick={() => pdfInputRef.current?.click()} title="Somente DXF: medidas exatas do CAD, sem calibrar nem conferir escala. Tem DWG? O sistema explica como converter.">
+                {uploadPct !== null ? (
+                  <>
+                    {/* Rev. 4786 — barra de progresso 0–100% dentro do próprio botão */}
+                    <span className="absolute inset-0 bg-blue-100 transition-all" style={{ width: `${uploadPct}%` }} />
+                    <span className="relative flex items-center gap-1.5 font-semibold text-blue-800">
+                      <Loader2 className="h-4 w-4 animate-spin" />Enviando… {uploadPct}%
+                    </span>
+                  </>
+                ) : (
+                  <><Plus className="h-4 w-4" />Planta (DXF)</>
+                )}
               </Button>
               <input ref={pdfInputRef} type="file" accept=".dxf,.dwg" className="hidden" onChange={onPdfSelected} />
               <Button

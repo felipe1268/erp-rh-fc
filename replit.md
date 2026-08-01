@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4786** — Levantamento: envio da planta DXF com percentual 0–100% dentro do botão (leitura do arquivo real + rede estimada; 100% só na confirmação do servidor).
+- **Rev. 4785** — Diálogos próprios do ERP (`client/src/lib/appDialog.tsx`): `window.alert` sobrescrito globalmente (some o "domínio.replit.dev diz"); `appConfirm`/`appPrompt` async p/ migração tela a tela; Levantamento 100% migrado.
 - **Rev. 4784** — Levantamento: planta com trechos medidos só pode ser removida com a senha do Administrador Master (validação no server via bcrypt; planta vazia segue com confirmação simples).
 - **Rev. 4783** — Levantamento: fluxo poka-yoke — planta nova só DXF (PDF legado segue abrindo), categoria comanda a ferramenta (sem fileira de ferramentas/"Sem serviço"), "+ Categoria" rápido na paleta, botão "Foto do trecho" vinculado ao último contorno.
 - **Rev. 4782** — Levantamento: layout limpo (plantas em 1 linha, gestos no "?", escala OK vira linha compacta) + orientação DWG→DXF no upload (DXF = medida exata sem calibrar).
