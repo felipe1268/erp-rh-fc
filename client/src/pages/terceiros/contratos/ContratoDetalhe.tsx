@@ -2019,6 +2019,8 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
   const tresNiveis = (medCfg?.aprovacaoTresNiveis ?? 1) === 1;
   const fdsAll: any[] = fdsTerceiro?.fds || [];
   const [expandedMedicao, setExpandedMedicao] = useState<number | null>(initialMedicaoId ?? null);
+  // Rev. 4800 — lista de medições enxuta: observações/aprovações/FD abrem em popup
+  const [detalheMedicaoId, setDetalheMedicaoId] = useState<number | null>(null);
   const medicaoRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -2154,26 +2156,106 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
 
         return (
           <div key={m.id} ref={m.id === initialMedicaoId ? medicaoRef : undefined} className={`bg-white rounded-xl border overflow-hidden ${m.id === initialMedicaoId ? "border-blue-400 ring-2 ring-blue-100" : "border-gray-200"}`}>
-            <div className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 cursor-pointer" onClick={() => setExpandedMedicao(isExpanded ? null : m.id)}>
-                  <div className="flex items-center gap-2 mb-1">
-                    {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                    <span className="font-semibold text-gray-900">Medição {String(m.numero).padStart(2, "0")}{m.dataInicio && m.dataFim ? ` — ${fmtDate(m.dataInicio)} a ${fmtDate(m.dataFim)}` : ` — ${m.periodo}`}</span>
-                    {Number((m as any).revisao || 0) > 0 && (
-                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5" title={`Revisada${(m as any).revisadoPorNome ? ` por ${(m as any).revisadoPorNome}` : ""}${(m as any).revisadoEm ? ` em ${fmtDate(String((m as any).revisadoEm).slice(0, 10))}` : ""}`}>
-                        REV. {Number((m as any).revisao)}
-                      </span>
-                    )}
-                    <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
-                    {m.geradoAutomaticamente && <Badge className="text-xs border bg-purple-100 text-purple-700 border-purple-200"><Zap className="w-3 h-3 mr-1" />Auto</Badge>}
-                  </div>
-                  <div className="text-xs text-gray-500 ml-6">
-                    Ref: {fmtDate(m.dataReferencia)} • Medido: {BRL(m.valorMedido)} • Acumulado: {BRL(m.valorAcumulado)} • {Number(m.percentualGlobal).toFixed(1)}% global
-                  </div>
+            <div className="px-4 py-3">
+              {/* Rev. 4800 — linha enxuta: só "Medição NN" + status; tudo o mais
+                  (observações, aprovações, FD, ações) abre no popup de detalhes. */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer" onClick={() => setExpandedMedicao(isExpanded ? null : m.id)}>
+                  {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+                  <span className="font-semibold text-gray-900 whitespace-nowrap">Medição {String(m.numero).padStart(2, "0")}</span>
+                  {Number((m as any).revisao || 0) > 0 && (
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5" title={`Revisada${(m as any).revisadoPorNome ? ` por ${(m as any).revisadoPorNome}` : ""}${(m as any).revisadoEm ? ` em ${fmtDate(String((m as any).revisadoEm).slice(0, 10))}` : ""}`}>
+                      REV. {Number((m as any).revisao)}
+                    </span>
+                  )}
+                  <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
+                  {m.geradoAutomaticamente && <Badge className="text-xs border bg-purple-100 text-purple-700 border-purple-200"><Zap className="w-3 h-3 mr-1" />Auto</Badge>}
+                  {m.alertaDivergencia && <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />}
+                  {m.motivoRejeicao && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
+                  <span className="text-xs text-gray-400 hidden sm:inline whitespace-nowrap">{m.dataInicio && m.dataFim ? `${fmtDate(m.dataInicio)} a ${fmtDate(m.dataFim)}` : m.periodo}</span>
                 </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs text-gray-500 hidden sm:inline">Medido <strong className="text-gray-800">{BRL(m.valorMedido)}</strong></span>
+                  <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setDetalheMedicaoId(m.id)}>
+                    <Eye className="w-3 h-3" /> Detalhes
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <Dialog open={detalheMedicaoId === m.id} onOpenChange={(o) => { if (!o) setDetalheMedicaoId(null); }}>
+              <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex flex-wrap items-center gap-2">
+                    Medição {String(m.numero).padStart(2, "0")}
+                    <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
+                    {Number((m as any).revisao || 0) > 0 && (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">REV. {Number((m as any).revisao)}</span>
+                    )}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="text-xs text-gray-500 -mt-1">
+                  {m.dataInicio && m.dataFim ? `${fmtDate(m.dataInicio)} a ${fmtDate(m.dataFim)}` : m.periodo} • Ref: {fmtDate(m.dataReferencia)}
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {[["Medido", BRL(m.valorMedido)], ["Acumulado", BRL(m.valorAcumulado)], ["% Global", `${Number(m.percentualGlobal).toFixed(1)}%`]].map(([l, v]) => (
+                    <div key={l} className="rounded-lg border border-gray-100 bg-gray-50 px-2 py-2">
+                      <p className="text-[10px] text-gray-400">{l}</p>
+                      <p className="text-sm font-bold text-gray-800 break-words">{v}</p>
+                    </div>
+                  ))}
+                </div>
+                {m.observacoes && (
+                  <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                    <p className="text-xs text-gray-600 break-words"><span className="font-semibold">Observações:</span> {m.observacoes}</p>
+                  </div>
+                )}
+                {m.aprovadoPor && <p className="text-xs text-gray-400">Aprovado por <span className="font-medium">{m.aprovadoPor}</span> em {fmtDate(m.aprovadoEm)}</p>}
+                {m.alertaDivergencia && (
+                  <div className="p-2.5 bg-orange-50 rounded-lg border border-orange-200">
+                    <p className="text-xs text-orange-700 font-medium break-words"><AlertTriangle className="w-3.5 h-3.5 inline mr-1.5 text-orange-500" />{m.alertaDivergencia}</p>
+                  </div>
+                )}
+                {m.levantamentoCampoId && (
+                  <div>
+                    <Badge variant="outline" className="gap-1 text-xs text-blue-700 border-blue-200 bg-blue-50">
+                      <Ruler className="w-3 h-3" /> Levantamento vinculado
+                    </Badge>
+                  </div>
+                )}
+                {m.motivoRejeicao && (
+                  <div className="p-2 bg-red-50 rounded-lg border border-red-100">
+                    <p className="text-xs text-red-600"><AlertTriangle className="w-3 h-3 inline mr-1" />Rejeitada{(m as any).rejeitadoPor ? ` por ${(m as any).rejeitadoPor}` : ""}{(m as any).rejeitadoEm ? ` em ${fmtDate((m as any).rejeitadoEm)}` : ""}</p>
+                    <p className="text-xs text-red-500 mt-0.5 break-words">{m.motivoRejeicao}</p>
+                  </div>
+                )}
+                {tresNiveis && m.status !== "rejeitada" && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    {[
+                      { lab: "Medido", done: true, who: m.criadoPor, when: m.criadoEm },
+                      { lab: "Gestor da Obra", done: (m.nivelAprovacao ?? 0) >= 1 || m.status === "aprovada" || m.status === "paga", who: m.gestorAprovadoPor, when: m.gestorAprovadoEm },
+                      { lab: "Sócio Adm", done: (m.nivelAprovacao ?? 0) >= 2 || m.status === "aprovada" || m.status === "paga", who: m.socioAprovadoPor, when: m.socioAprovadoEm },
+                    ].map((s, i) => (
+                      <span key={i} className="inline-flex items-center gap-1">
+                        {i > 0 && <ChevronRight className="w-3 h-3 text-gray-300" />}
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${s.done ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-400 border-gray-200"}`}>
+                          {s.done ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                          {s.lab}{s.done && s.who ? ` · ${s.who}` : ""}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <FdMedicaoPanel
+                  medicao={m}
+                  contrato={contrato}
+                  fds={fdsAll.filter((f: any) => f.medicaoId === m.id)}
+                  criarFdTerceiroMut={criarFdTerceiroMut}
+                  excluirFdTerceiroMut={excluirFdTerceiroMut}
+                  readOnly={!modoEdicao}
+                />
                 {modoEdicao && (
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
                   {m.status === "aguardando_aprovacao" && !tresNiveis && (
                     <>
                       <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" onClick={() => aprovarMut.mutate({ id: m.id, companyId: contrato.companyId, aprovadoPor: "Responsável" })}>
@@ -2238,53 +2320,8 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   )}
                 </div>
                 )}
-              </div>
-
-              {m.aprovadoPor && <p className="text-xs text-gray-400 mt-2 ml-6">Aprovado por <span className="font-medium">{m.aprovadoPor}</span> em {fmtDate(m.aprovadoEm)}</p>}
-              {m.alertaDivergencia && (
-                <div className="mt-2 ml-6 p-2.5 bg-orange-50 rounded-lg border border-orange-200">
-                  <p className="text-xs text-orange-700 font-medium"><AlertTriangle className="w-3.5 h-3.5 inline mr-1.5 text-orange-500" />{m.alertaDivergencia}</p>
-                </div>
-              )}
-              {m.levantamentoCampoId && (
-                <div className="mt-2 ml-6">
-                  <Badge variant="outline" className="gap-1 text-xs text-blue-700 border-blue-200 bg-blue-50">
-                    <Ruler className="w-3 h-3" /> Levantamento vinculado
-                  </Badge>
-                </div>
-              )}
-              {m.motivoRejeicao && (
-                <div className="mt-2 ml-6 p-2 bg-red-50 rounded-lg border border-red-100">
-                  <p className="text-xs text-red-600"><AlertTriangle className="w-3 h-3 inline mr-1" />Rejeitada{(m as any).rejeitadoPor ? ` por ${(m as any).rejeitadoPor}` : ""}{(m as any).rejeitadoEm ? ` em ${fmtDate((m as any).rejeitadoEm)}` : ""}</p>
-                  <p className="text-xs text-red-500 mt-0.5">{m.motivoRejeicao}</p>
-                </div>
-              )}
-              {tresNiveis && m.status !== "rejeitada" && (
-                <div className="mt-2 ml-6 flex flex-wrap items-center gap-1.5 text-[11px]">
-                  {[
-                    { lab: "Medido", done: true, who: m.criadoPor, when: m.criadoEm },
-                    { lab: "Gestor da Obra", done: (m.nivelAprovacao ?? 0) >= 1 || m.status === "aprovada" || m.status === "paga", who: m.gestorAprovadoPor, when: m.gestorAprovadoEm },
-                    { lab: "Sócio Adm", done: (m.nivelAprovacao ?? 0) >= 2 || m.status === "aprovada" || m.status === "paga", who: m.socioAprovadoPor, when: m.socioAprovadoEm },
-                  ].map((s, i) => (
-                    <span key={i} className="inline-flex items-center gap-1">
-                      {i > 0 && <ChevronRight className="w-3 h-3 text-gray-300" />}
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${s.done ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-400 border-gray-200"}`}>
-                        {s.done ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                        {s.lab}{s.done && s.who ? ` · ${s.who}` : ""}
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <FdMedicaoPanel
-                medicao={m}
-                contrato={contrato}
-                fds={fdsAll.filter((f: any) => f.medicaoId === m.id)}
-                criarFdTerceiroMut={criarFdTerceiroMut}
-                excluirFdTerceiroMut={excluirFdTerceiroMut}
-                readOnly={!modoEdicao}
-              />
-            </div>
+              </DialogContent>
+            </Dialog>
 
             {isExpanded && (
               <div className="border-t border-gray-100">
