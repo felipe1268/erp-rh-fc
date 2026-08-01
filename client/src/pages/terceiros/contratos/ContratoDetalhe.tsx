@@ -2293,9 +2293,9 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       <th className="px-2 py-2 text-right w-[80px]">V.Unit.</th>
                       <th className="px-2 py-2 text-right w-[80px]">V.Total</th>
                       <th className="px-2 py-2 text-center w-[55px] border-l border-gray-200">Ant.%</th>
-                      <th className="px-2 py-2 text-center w-[70px]">% Período</th>
+                      <th className="px-2 py-2 text-center w-[80px] bg-blue-50/70 text-blue-700">% Período</th>
                       <th className="px-2 py-2 text-center w-[55px]">Acum.%</th>
-                      <th className="px-2 py-2 text-right w-[90px]">V.Período</th>
+                      <th className="px-2 py-2 text-right w-[90px] bg-blue-50/70 text-blue-700">V.Período</th>
                       <th className="px-2 py-2 text-right w-[90px]">V.Acum.</th>
                       {mostrarRemover && <th className="px-2 py-2 text-center w-[35px]"></th>}
                     </tr>
@@ -2359,7 +2359,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                             <td className="px-2 py-2 text-right text-gray-500">{BRL(item.valorUnitario)}</td>
                             <td className="px-2 py-2 text-right text-gray-700 font-medium">{BRL(item.valorTotalItem)}</td>
                             <td className="px-2 py-2 text-center text-gray-500 border-l border-gray-100">{percAnterior.toFixed(1)}%</td>
-                            <td className="px-2 py-2 text-center">
+                            <td className="px-2 py-2 text-center bg-blue-50/40">
                               {editavel && isEditingThis ? (
                                 <div className="flex items-center gap-1 justify-center">
                                   <input
@@ -2387,9 +2387,18 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                                   {item.editadoManualmente && <AlertTriangle className="w-3 h-3 inline ml-0.5 text-orange-500" />}
                                 </span>
                               )}
+                              {/* Rev. 4793 — quantidade medida em NÚMEROS (conforme levantamento) */}
+                              {percPeriodo > 0 && Number(item.quantidade || 0) > 0 && (
+                                <div className="text-[10px] text-blue-600/80 mt-0.5 whitespace-nowrap">
+                                  {(Number(item.quantidade) * percPeriodo / 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}
+                                  {" de "}
+                                  {Number(item.quantidade).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}
+                                  {item.unidade ? ` ${item.unidade}` : ""}
+                                </div>
+                              )}
                             </td>
                             <td className="px-2 py-2 text-center font-semibold text-gray-700">{percAcumulado.toFixed(1)}%</td>
-                            <td className="px-2 py-2 text-right text-gray-600">
+                            <td className="px-2 py-2 text-right text-gray-600 bg-blue-50/40">
                               {editavel && editingValor?.id === item.id ? (
                                 <div className="flex items-center gap-1 justify-end">
                                   <span className="text-gray-400 text-[10px]">R$</span>

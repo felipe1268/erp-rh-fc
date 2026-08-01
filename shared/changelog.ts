@@ -103,6 +103,10 @@
  *   sincronizacao offline a medida e salva e so o vinculo errado e
  *   descartado (o trecho volta como "Sem item" p/ revincular) — assim a
  *   fila do aparelho nunca entra em loop de erro.
+ * - Planilha de Medicao (terceiros): colunas "% Periodo" e "V.Periodo" (a
+ *   medicao ATUAL) com fundo azul-claro p/ facilitar a leitura; abaixo do
+ *   percentual do periodo aparece a quantidade medida em numeros
+ *   ("27,31 de 87,86 m2"), conforme o levantamento.
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO
