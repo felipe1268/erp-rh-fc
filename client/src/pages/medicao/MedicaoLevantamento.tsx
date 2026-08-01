@@ -16,7 +16,7 @@ import {
   Hash, MousePointer2, Crosshair, ZoomIn, ZoomOut, Check, Camera, Image as ImageIcon,
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
-  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck,
+  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -369,6 +369,10 @@ export default function MedicaoLevantamento() {
   const [tool, setTool] = useState<Ferramenta>("select");
   const [draft, setDraft] = useState<GeoPonto[]>([]);
   const [calibDraft, setCalibDraft] = useState<GeoPonto[]>([]);
+  // Rev. 4782 — quando a escala já está OK, os botões 1:N ficam recolhidos.
+  const [escalaEdit, setEscalaEdit] = useState(false);
+  // Estado é contextual: trocar de planta/página volta ao modo colapsado.
+  useEffect(() => { setEscalaEdit(false); }, [pdfSelId, pagina]);
 
   // Rev. 3097 — PDF em preto-e-branco/alto contraste por padrão (destaca as
   // marcações coloridas por cima). Filtro VISUAL apenas (não altera o arquivo).
@@ -920,6 +924,7 @@ export default function MedicaoLevantamento() {
       const novo: Record<string, Calibracao> = { ...calibracaoMap, [String(pagina)]: { ...base, conferida: true } };
       off.calibrarPdf(pdfSel, JSON.stringify(novo));
       setTool("select");
+      setEscalaEdit(false);
       alert(`Escala conferida ✓ (desvio de ${numFmt(desvio * 100, 1)}%). Pode medir.`);
     } else {
       askConfirm({
@@ -1026,6 +1031,18 @@ export default function MedicaoLevantamento() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    // Rev. 4782 — DWG é formato binário proprietário (Autodesk): não dá para ler
+    // direto no navegador. Orienta a exportar DXF, que entra com medida EXATA.
+    if (/\.dwg$/i.test(file.name)) {
+      alert(
+        "Arquivo DWG não é suportado diretamente — mas o DXF é, e é ainda melhor: as medidas entram EXATAS do CAD, sem calibrar nada.\n\n" +
+        "Como converter (1 minuto):\n" +
+        "• AutoCAD: comando SALVARCOMO (SAVEAS) → tipo \"DXF 2013\" (ou anterior).\n" +
+        "• Sem AutoCAD: abra no DWG TrueView/ODA Viewer (gratuitos) e salve como DXF.\n\n" +
+        "Dica: mantenha o desenho na unidade real (1 unidade = 1 m ou 1 cm) — o sistema lê a unidade do arquivo ($INSUNITS) e define a escala sozinho."
+      );
+      return;
+    }
     const nome = window.prompt("Nome desta planta (ex.: Pavimento Térreo):", file.name.replace(/\.(pdf|dxf)$/i, "")) || file.name;
     // Rev. — DXF não passa pelo pdf.js; sobe direto como planta vetorial de 1 página.
     if (/\.dxf$/i.test(file.name)) {
@@ -1507,22 +1524,11 @@ export default function MedicaoLevantamento() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
           {/* Coluna do PDF */}
           <div className="space-y-2">
-            {/* seletor de plantas */}
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5" />Plantas do contrato (compartilhadas em todas as medições)
-              </p>
-              <Button
-                size="sm"
-                variant={verReferencia ? "default" : "outline"}
-                className="h-8 gap-1.5"
-                onClick={() => setVerReferencia((v) => !v)}
-                title="Mostra, em traço claro, os contornos já medidos em OUTRAS medições deste contrato"
-              >
-                <History className="h-4 w-4" />Ver medição anterior
-              </Button>
-            </div>
+            {/* seletor de plantas — Rev. 4782: 1 linha só (label + chips + ações) */}
             <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0" title="Plantas do contrato — compartilhadas em todas as medições">
+                <FileText className="h-3.5 w-3.5" />Plantas:
+              </span>
               {pdfs.map((p) => (
                 <button
                   key={p.id}
@@ -1533,10 +1539,19 @@ export default function MedicaoLevantamento() {
                   <X className="h-3 w-3 ml-1 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); askConfirm({ title: "Remover planta?", description: `A planta "${p.nome}" e todos os contornos desenhados nela serão removidos. Esta ação não pode ser desfeita.`, confirmText: "Remover", onConfirm: () => excluirPdfM.mutate({ id: p.id, companyId }) }); }} />
                 </button>
               ))}
-              <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadPdfM.isPending} onClick={() => pdfInputRef.current?.click()}>
+              <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadPdfM.isPending} onClick={() => pdfInputRef.current?.click()} title="PDF, DXF ou DWG. DXF é o melhor: medidas exatas do CAD, sem calibrar.">
                 {uploadPdfM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Planta (PDF/DXF)
               </Button>
-              <input ref={pdfInputRef} type="file" accept="application/pdf,.dxf" className="hidden" onChange={onPdfSelected} />
+              <input ref={pdfInputRef} type="file" accept="application/pdf,.dxf,.dwg" className="hidden" onChange={onPdfSelected} />
+              <Button
+                size="sm"
+                variant={verReferencia ? "default" : "outline"}
+                className="h-8 gap-1.5 ml-auto"
+                onClick={() => setVerReferencia((v) => !v)}
+                title="Mostra, em traço claro, os contornos já medidos em OUTRAS medições deste contrato"
+              >
+                <History className="h-4 w-4" />Ver medição anterior
+              </Button>
             </div>
 
             {/* Rev. 4780 — PALETA DE SERVIÇOS (tablet-first): toca no serviço 1x e sai
@@ -1722,10 +1737,25 @@ export default function MedicaoLevantamento() {
                       <Button size="sm" variant="ghost" className="h-9 text-red-600" onClick={() => { setDraft([]); setCalibDraft([]); }}>Limpar</Button>
                     </>
                   )}
+                  {/* Rev. 4782 — ajuda de gestos escondida num "?" (declutter) */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button size="sm" variant="ghost" className="h-9 w-9 p-0 ml-auto text-gray-400" title="Como usar (gestos)">
+                        <HelpCircle className="h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 p-3 text-xs text-gray-600 space-y-1.5" align="end">
+                      <p className="font-semibold text-gray-800">Gestos no tablet</p>
+                      <p>• Toque para marcar pontos.</p>
+                      <p>• Arraste com 1 dedo para mover (pan).</p>
+                      <p>• Pinça com 2 dedos para zoom.</p>
+                      <p>• A ferramenta permanece ativa após finalizar.</p>
+                      <p>• Em <b>Selecionar</b>, toque num contorno e arraste os pontos azuis (cantos/lados) para ajustar.</p>
+                      <p className="pt-1 border-t font-semibold text-gray-800">Melhor formato de planta</p>
+                      <p><b>DXF</b> na unidade real (1 un = 1 m ou 1 cm): medidas exatas do CAD, sem calibrar. Tem DWG? Exporte como DXF no CAD (SALVARCOMO → DXF).</p>
+                    </PopoverContent>
+                  </Popover>
                 </div>
-                <p className="text-[11px] text-gray-400 px-1">
-                  Toque para marcar pontos · arraste com 1 dedo para mover (pan) · pinça com 2 dedos para zoom · a ferramenta permanece ativa após finalizar. Na ferramenta <b>Selecionar</b>, toque num contorno para selecioná-lo e arraste os pontos azuis (cantos/lados) para ajustar as dimensões.
-                </p>
 
                 {/* Rev. 4781 — escala à prova de erro (3 camadas) */}
                 <div className={`text-xs px-2 py-2 rounded space-y-1.5 ${escalaOk ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
@@ -1745,7 +1775,10 @@ export default function MedicaoLevantamento() {
                               : `Escala calibrada${calibAtual.conferida ? " e conferida ✓" : ""}: ${numFmt(calibAtual.metros, 2)} m de referência (${numFmt(calibAtual.metrosPorUnidade, 6)} m/ponto)`}
                     </span>
                   </div>
-                  {!isDxf && (
+                  {escalaOk && !isDxf && !escalaEdit && (
+                    <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[11px] text-gray-500 -my-1" onClick={() => setEscalaEdit(true)}>Alterar escala…</Button>
+                  )}
+                  {!isDxf && (!escalaOk || escalaEdit) && (
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-medium shrink-0">Escala do carimbo:</span>
                       {ESCALAS_COMUNS.map((e) => (

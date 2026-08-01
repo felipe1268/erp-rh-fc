@@ -1,4 +1,16 @@
 /**
+ * Rev. 4782 - LEVANTAMENTO DE CAMPO: LAYOUT LIMPO + ORIENTACAO DWG
+ *
+ * Declutter da tela (estava com 6 barras empilhadas):
+ * 1) Plantas em 1 linha so (label + chips + enviar + "Ver medicao anterior").
+ * 2) Texto de gestos saiu da tela → botao "?" na toolbar (popover), junto com
+ *    a dica de melhor formato de planta (DXF).
+ * 3) Escala OK = 1 linha verde compacta com "Alterar escala..."; o bloco com
+ *    botoes 1:N so aparece quando falta definir/conferir.
+ * DWG: seletor aceita .dwg e explica na hora como converter (SALVARCOMO → DXF
+ * no AutoCAD, ou DWG TrueView/ODA gratuitos) — DXF entra com medida EXATA do
+ * CAD ($INSUNITS), sem calibrar nada.
+ *
  * Rev. 4781 - LEVANTAMENTO DE CAMPO: ESCALA A PROVA DE ERRO (poka-yoke, 3 camadas)
  *
  * Problema: calibracao manual errada = TODA a medicao errada, sem aviso.

@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4782** — Levantamento: layout limpo (plantas em 1 linha, gestos no "?", escala OK vira linha compacta) + orientação DWG→DXF no upload (DXF = medida exata sem calibrar).
 - **Rev. 4781** — Levantamento: escala à prova de erro (3 camadas) — escala do carimbo 1:N automática, conferência obrigatória de cota (±2%) que bloqueia o desenho até validar, e leitura automática das cotas do PDF pré-preenchendo os valores.
 - **Rev. 4780** — Levantamento de Campo: paleta de serviços (alvenaria, chapisco, emboço, reboco...) tablet-first; contorno nasce classificado; derivados automáticos por nº de faces; vínculo EAP 1x por serviço com consolidação automática em R$.
 - **Rev. 4779** — Medições de Terceiros: seletor de ano/mês movido para o topo da tela (principal); esteira e acompanhamento foram para baixo da lista.
