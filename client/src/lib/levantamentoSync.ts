@@ -29,11 +29,14 @@ export type SyncSummary = {
   conflicts: number;
   lastSyncAt: number | null;
   lastError: string | null;
+  // Rev. 4792 — progresso do envio (0..total) p/ barra de % no chip
+  progress: { done: number; total: number } | null;
 };
 
 let lastSyncAt: number | null = null;
 let lastError: string | null = null;
 let syncing = false;
+let progress: { done: number; total: number } | null = null;
 
 const listeners = new Set<(s: SyncSummary) => void>();
 
@@ -46,7 +49,7 @@ async function buildSummary(): Promise<SyncSummary> {
   const conflicts = ops.filter((o) => o.status === "error" && (o.error || "").startsWith("Conflito")).length;
   const errors = ops.filter((o) => o.status === "error").length - conflicts;
   const pending = ops.filter((o) => o.status === "pending" || o.status === "syncing").length;
-  return { online: isOnline(), syncing, pending, errors: Math.max(0, errors), conflicts, lastSyncAt, lastError };
+  return { online: isOnline(), syncing, pending, errors: Math.max(0, errors), conflicts, lastSyncAt, lastError, progress };
 }
 
 async function notify() {
@@ -80,6 +83,8 @@ export async function processQueue(): Promise<SyncSummary> {
   try {
     const all = await listOps();
     const pendentes = all.filter((o) => o.status === "pending" || o.status === "error");
+    progress = pendentes.length > 0 ? { done: 0, total: pendentes.length } : null;
+    await notify();
     // agrupa por companyId|contratoId
     const grupos = new Map<string, SyncOp[]>();
     for (const op of pendentes) {
@@ -113,6 +118,8 @@ export async function processQueue(): Promise<SyncSummary> {
             base64,
             contentType: op.contentType,
           });
+          // barra de % anda enquanto prepara/envia (fotos grandes demoram no base64)
+          if (progress) { progress = { done: Math.min(progress.total - 1, progress.done + 1), total: progress.total }; await notify(); }
         }
         try {
           const res = await client.medicao.sincronizarLote.mutate({ companyId, contratoId, operations });
@@ -132,6 +139,8 @@ export async function processQueue(): Promise<SyncSummary> {
           }
           lastSyncAt = Date.now();
           lastError = null;
+          // chunk confirmado no servidor → % espelha o que já foi de fato aceito
+          if (progress) { progress = { done: Math.min(progress.total, i + ops.length), total: progress.total }; await notify(); }
         } catch (e: any) {
           lastError = e?.message || "Falha de rede ao sincronizar.";
           // mantém ops como pending para nova tentativa
@@ -144,6 +153,7 @@ export async function processQueue(): Promise<SyncSummary> {
     }
   } finally {
     syncing = false;
+    progress = null;
     await notify();
   }
   return buildSummary();

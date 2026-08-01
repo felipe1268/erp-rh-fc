@@ -2063,21 +2063,44 @@ export default function MedicaoLevantamento() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-72 p-3 space-y-2 text-xs" align="end">
+                {/* Rev. 4792 — legenda CLARA: online = envio automático (sem botão);
+                    offline = fica guardado no aparelho; % de 0 a 100 no envio. */}
                 <div className="flex items-center gap-1.5">
                   {off.online
-                    ? <span className="flex items-center gap-1 text-emerald-700"><Wifi className="h-3.5 w-3.5" />Online</span>
-                    : <span className="flex items-center gap-1 text-amber-700"><WifiOff className="h-3.5 w-3.5" />Offline — edições salvas no aparelho</span>}
-                  {off.cached && <span className="text-gray-400">· disponível offline</span>}
+                    ? <span className="flex items-center gap-1 font-semibold text-emerald-700"><Wifi className="h-3.5 w-3.5" />Online — envio automático</span>
+                    : <span className="flex items-center gap-1 font-semibold text-amber-700"><WifiOff className="h-3.5 w-3.5" />Sem internet</span>}
+                  {off.cached && <span className="text-gray-400">· planta salva no aparelho</span>}
                 </div>
-                <div>
-                  {off.sync.syncing ? (
-                    <span className="flex items-center gap-1 text-blue-700"><Loader2 className="h-3.5 w-3.5 animate-spin" />Sincronizando…</span>
-                  ) : off.sync.pending > 0 ? (
-                    <span className="flex items-center gap-1 text-amber-700"><CloudOff className="h-3.5 w-3.5" />{off.sync.pending} pendente(s)</span>
+                {off.sync.syncing ? (
+                  (() => {
+                    const p = off.sync.progress;
+                    const pct = p && p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+                    return (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-blue-700">
+                          <span className="flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />Enviando medições…</span>
+                          <span className="font-bold tabular-nums">{pct}%</span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-blue-100 overflow-hidden">
+                          <div className="h-full bg-blue-600 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        {p && <div className="text-[10px] text-gray-500">{p.done} de {p.total} enviada(s)</div>}
+                      </div>
+                    );
+                  })()
+                ) : off.sync.pending > 0 ? (
+                  off.online ? (
+                    <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-amber-800">
+                      <b>{off.sync.pending}</b> medição(ões) na fila — o envio começa sozinho em instantes.
+                    </div>
                   ) : (
-                    <span className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Tudo sincronizado</span>
-                  )}
-                </div>
+                    <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-amber-800">
+                      <b>{off.sync.pending}</b> medição(ões) guardada(s) <b>no aparelho</b>. Nada se perde: quando a internet voltar, tudo sobe sozinho.
+                    </div>
+                  )
+                ) : (
+                  <span className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Tudo sincronizado — nenhuma pendência</span>
+                )}
                 {(off.sync.errors > 0 || off.sync.conflicts > 0) && (
                   <div className="flex items-center gap-1 text-red-600">
                     <AlertTriangle className="h-3.5 w-3.5" />
@@ -2086,12 +2109,9 @@ export default function MedicaoLevantamento() {
                   </div>
                 )}
                 <div className="flex items-center gap-1.5 pt-1 border-t">
-                  <Button size="sm" variant="outline" className="h-8 gap-1" disabled={!off.online || off.sync.syncing || off.sync.pending === 0} onClick={() => off.processNow()}>
-                    <RefreshCw className="h-3.5 w-3.5" />Sincronizar agora
-                  </Button>
                   <Button size="sm" variant="outline" className="h-8 gap-1" disabled={!off.online || off.prefetching} onClick={() => off.prefetch()}>
                     {off.prefetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                    {off.prefetching && off.prefetchProgress ? `Baixando ${off.prefetchProgress.done}/${off.prefetchProgress.total}` : "Baixar p/ offline"}
+                    {off.prefetching && off.prefetchProgress ? `Baixando ${off.prefetchProgress.done}/${off.prefetchProgress.total}` : "Baixar p/ trabalhar offline"}
                   </Button>
                 </div>
                 {off.storage && (

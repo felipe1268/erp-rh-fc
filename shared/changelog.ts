@@ -49,6 +49,10 @@
  *   area de 11,66 m2). Agora o fator e corrigido pelo proprio m2 salvo —
  *   largura x altura sempre fecham com a area do cartao (tambem no
  *   redimensionar por numero e na edicao de pontos).
+ * - Chip de sincronizacao redesenhado: barra de progresso 0-100% durante o
+ *   envio ("X de Y enviadas"); ONLINE = envio automatico (fila drena sozinha
+ *   a cada 15s, sem botao manual); OFFLINE = aviso claro de que as medicoes
+ *   ficam guardadas no aparelho e sobem sozinhas quando a internet voltar.
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO

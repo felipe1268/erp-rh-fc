@@ -161,6 +161,15 @@ export function useLevantamentoOffline(args: {
     return unsub;
   }, [campoId, companyId, reloadOps, utils]);
 
+  // Rev. 4792 — ONLINE = sync automática: se há pendências e não está
+  // sincronizando, drena a fila sozinho (a cada 15s). O botão manual some.
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (isOnline() && !sync.syncing && sync.pending > 0) void processQueue();
+    }, 15000);
+    return () => clearInterval(t);
+  }, [sync.syncing, sync.pending]);
+
   // persiste snapshot sempre que o servidor traz dados frescos (base p/ offline)
   useEffect(() => {
     if (campoQ.data && itensResolved) {
