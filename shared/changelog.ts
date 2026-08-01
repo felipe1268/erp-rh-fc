@@ -1,4 +1,22 @@
 /**
+ * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO
+ *
+ * Navegacao redesenhada (pedido: "tela retangular fixa; 2 dedos movem/zoom"):
+ * - A tela do desenho e um retangulo FIXO (sem barras de rolagem); a planta
+ *   flutua dentro via pan+zoom com liberdade total em qualquer direcao.
+ * - 2 dedos = mover a planta e zoom (pinca focal); 1 dedo = so desenhar,
+ *   tocar e selecionar (no mouse, arrastar ainda faz pan e a rodinha da zoom).
+ * - Botao "Ajustar a tela" (enquadra a planta inteira) e re-enquadre
+ *   automatico ao girar o iPad/redimensionar a janela.
+ * - Fundo pontilhado estilo mesa de CAD; planta com sombra.
+ * Camadas (estilo layers): com um servico ativo a planta mostra SO os
+ * contornos daquela categoria; botao "Camadas" alterna "So a ativa"/"Todas".
+ * Mover contorno inteiro: no Selecionar, arraste o proprio desenho para
+ * reposiciona-lo (tamanho preservado); pinca no meio do ajuste cancela sem
+ * salvar. Alcas de ajuste pequenas e fixas em pixels (nao crescem com zoom).
+ * Rotulo digitavel por contorno (sempre MAIUSCULO) exibido no cartao.
+ */
+/**
  * Rev. 4790 - LEVANTAMENTO: WORKSPACE DE TABLET (TELA INTEIRA, SEM ROLAGEM)
  *
  * Pedido do usuario: no tablet a tela de levantamento tem que aparecer TODA,

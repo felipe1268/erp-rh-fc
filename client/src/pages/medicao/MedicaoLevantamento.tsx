@@ -17,7 +17,7 @@ import {
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
   RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
-  Layers,
+  Layers, Maximize,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -424,13 +424,12 @@ export default function MedicaoLevantamento() {
     startMid: { x: number; y: number }; lastMid: { x: number; y: number }; ratio: number;
   } | null>(null);
   const zoomInnerRef = useRef<HTMLDivElement | null>(null);
-  const focusRef = useRef<{ fracX: number; fracY: number; cx: number; cy: number } | null>(null);
   const gestRef = useRef<{
     mode: "idle" | "pending" | "pan" | "rect" | "free";
     pointerId: number;
     startClient: { x: number; y: number };
     startNorm: GeoPonto;
-    startScroll: { l: number; t: number };
+    startPan: { x: number; y: number };
     moved: boolean;
   } | null>(null);
   const suppressRef = useRef(false); // após pinça, ignora o ponteiro remanescente até soltar tudo
@@ -595,90 +594,85 @@ export default function MedicaoLevantamento() {
     };
   };
 
-  // Rev. 3097 — Zoom focal: ao mudar o zoom por pinça, mantém o ponto sob os
-  // dedos fixo, ajustando o scroll do container DEPOIS do re-layout.
-  useLayoutEffect(() => {
-    const f = focusRef.current;
-    const cont = canvasWrapRef.current;
-    const inner = zoomInnerRef.current;
-    if (!f || !cont || !inner) return;
-    // Rev. 4789 — ancoragem MEDINDO o elemento (independe de padding/margens):
-    // desloca o scroll pelo delta entre onde o ponto está e onde deve ficar.
-    const ir = inner.getBoundingClientRect();
-    cont.scrollLeft += ir.left + f.fracX * ir.width - f.cx;
-    cont.scrollTop += ir.top + f.fracY * ir.height - f.cy;
-    focusRef.current = null;
-  }, [zoom, baseWidth, pageDims]);
-
-  // Rev. 4789 — "tela infinita": há uma moldura de folga (padding) em volta da
-  // planta p/ o pan nunca travar na borda. Ao trocar de planta/página, posiciona
-  // o scroll com o canto do conteúdo visível (senão abriria mostrando só folga).
-  const posKeyRef = useRef("");
-  const centerPendingRef = useRef(false);
-  useLayoutEffect(() => {
-    const cont = canvasWrapRef.current;
-    const inner = zoomInnerRef.current;
-    if (!cont || !inner) return;
-    // Guarda por chave ESTÁVEL (id da planta + página): refetches do sync
-    // offline recriam objetos a cada poll e re-rodavam este efeito, jogando o
-    // scroll de volta pro canto — era o "sempre volta pra posição inicial".
-    const key = `${pdfSelId}|${pagina}`;
-    if (posKeyRef.current !== key) {
-      // Só posiciona quando o conteúdo REAL está pronto — o loader/placeholder
-      // também tem largura, e posicionar sobre ele deixava a planta deslocada.
-      const pronto = isDxf ? !!dxfData?.ok : pageDims.w > 0;
-      if (!pronto) return;
-      // Espera o baseWidth REAL (o ResizeObserver mede depois do 1º paint):
-      // fit calculado com o default de 800px abria a planta fora da vista.
-      if (Math.abs((cont.clientWidth - 24) - baseWidth) > 2) return;
-      posKeyRef.current = key;
-      centerPendingRef.current = true;
-      // "Caber na tela": zoom inicial p/ a planta inteira caber na área visível.
-      const aspect = pageDims.w > 0 ? pageDims.h / pageDims.w : 1;
-      const fitW = (cont.clientWidth - 32) / Math.max(baseWidth, 1);
-      const fitH = (cont.clientHeight - 32) / Math.max(baseWidth * aspect, 1);
-      const fitZ = Math.min(6, Math.max(0.5, Math.min(fitW, fitH)));
-      if (Math.abs(fitZ - zoom) > 1e-3) { setZoom(fitZ); return; } // centraliza no próximo layout
-    }
-    if (centerPendingRef.current) {
-      const ir = inner.getBoundingClientRect();
-      if (ir.width < 4) return;
-      centerPendingRef.current = false;
-      const cr = cont.getBoundingClientRect();
-      cont.scrollLeft += ir.left - cr.left - (cont.clientWidth - ir.width) / 2;
-      cont.scrollTop += ir.top - cr.top - (cont.clientHeight - ir.height) / 2;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  });
-
-  // Rev. 3099 — Zoom pela rodinha do mouse (estilo AutoCAD): só na área de
-  // desenho, em direção ao cursor. Listener NATIVO {passive:false} para poder
-  // preventDefault (impede a página/container de rolar ou dar zoom-of-page).
+  // Rev. 4791 — VIEWPORT FIXO (estilo app de CAD): a tela do desenho é um
+  // retângulo FIXO (overflow hidden, sem scroll). A planta "flutua" dentro dele
+  // via posição (pan) + zoom — liberdade total em qualquer direção, sem clamps.
+  const [pan, setPan] = useState<{ x: number; y: number } | null>(null);
+  const panRef = useRef(pan); panRef.current = pan;
   const zoomRef = useRef(zoom); zoomRef.current = zoom;
   const baseWidthRef = useRef(baseWidth); baseWidthRef.current = baseWidth;
   const pageDimsRef = useRef(pageDims); pageDimsRef.current = pageDims;
+
+  // Aplica zoom ancorado num ponto de TELA (cx,cy): o trecho sob o ponto fica
+  // parado. Funciona pra pinça, rodinha e botões ±.
+  const zoomTo = useCallback((newZoom: number, cx: number, cy: number) => {
+    const cont = canvasWrapRef.current;
+    const inner = zoomInnerRef.current;
+    if (!cont || !inner) return;
+    const z = Math.min(6, Math.max(0.2, newZoom));
+    const ir = inner.getBoundingClientRect();
+    const cr = cont.getBoundingClientRect();
+    const fracX = (cx - ir.left) / Math.max(ir.width, 1);
+    const fracY = (cy - ir.top) / Math.max(ir.height, 1);
+    const pd = pageDimsRef.current;
+    const aspect = pd.w > 0 ? pd.h / pd.w : 1;
+    const W = baseWidthRef.current * z;
+    setPan({ x: cx - cr.left - fracX * W, y: cy - cr.top - fracY * W * aspect });
+    setZoom(z);
+  }, []);
+
+  // "Ajustar à tela": enquadra a planta inteira, centralizada, no viewport.
+  const fitView = useCallback(() => {
+    const cont = canvasWrapRef.current;
+    if (!cont) return;
+    const bw = baseWidthRef.current;
+    const pd = pageDimsRef.current;
+    const aspect = pd.w > 0 ? pd.h / pd.w : 1;
+    const fitW = (cont.clientWidth - 32) / Math.max(bw, 1);
+    const fitH = (cont.clientHeight - 32) / Math.max(bw * aspect, 1);
+    const fitZ = Math.min(6, Math.max(0.2, Math.min(fitW, fitH)));
+    const W = bw * fitZ;
+    setZoom(fitZ);
+    setPan({ x: (cont.clientWidth - W) / 2, y: (cont.clientHeight - W * aspect) / 2 });
+  }, []);
+
+  // Fit automático na 1ª abertura de cada planta/página…
+  const posKeyRef = useRef("");
+  useLayoutEffect(() => {
+    const cont = canvasWrapRef.current;
+    if (!cont) return;
+    const key = `${pdfSelId}|${pagina}`;
+    if (posKeyRef.current === key) return;
+    // só com o conteúdo REAL pronto e o baseWidth já medido (não o default 800)
+    const pronto = isDxf ? !!dxfData?.ok : pageDims.w > 0;
+    if (!pronto) return;
+    if (Math.abs((cont.clientWidth - 24) - baseWidth) > 2) return;
+    posKeyRef.current = key;
+    fitView();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+  // …e re-fit quando o viewport muda de tamanho (rotação do iPad, resize):
+  // pan antigo fica "stale" com a tela nova e a planta podia sumir da vista.
+  useEffect(() => {
+    const refit = () => { posKeyRef.current = ""; setPan((p) => (p ? { ...p } : p)); };
+    window.addEventListener("resize", refit);
+    window.addEventListener("orientationchange", refit);
+    return () => { window.removeEventListener("resize", refit); window.removeEventListener("orientationchange", refit); };
+  }, []);
+
+  // Zoom pela rodinha do mouse (estilo AutoCAD), em direção ao cursor.
   useEffect(() => {
     const cont = canvasWrapRef.current;
     if (!cont) return;
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey && e.deltaY === 0) return;
       e.preventDefault();
-      const z = zoomRef.current;
-      const inner = zoomInnerRef.current;
-      if (!inner) return;
-      const ir = inner.getBoundingClientRect();
-      const fracX = (e.clientX - ir.left) / Math.max(ir.width, 1);
-      const fracY = (e.clientY - ir.top) / Math.max(ir.height, 1);
-      // deltaY<0 = rolar p/ cima = aproximar; passo suave e clampado
       const step = Math.max(-0.4, Math.min(0.4, -e.deltaY * 0.0015));
-      const newZoom = Math.min(6, Math.max(0.5, z * Math.exp(step)));
-      if (newZoom === z) return;
-      focusRef.current = { fracX, fracY, cx: e.clientX, cy: e.clientY };
-      setZoom(newZoom);
+      zoomTo(zoomRef.current * Math.exp(step), e.clientX, e.clientY);
     };
     cont.addEventListener("wheel", onWheel, { passive: false });
     return () => cont.removeEventListener("wheel", onWheel);
-  }, [pdfSel]);
+  }, [pdfSel, zoomTo]);
 
   // ===================== OSnap (Object Snap estilo AutoCAD) =====================
   const [osnapOn, setOsnapOn] = useState(true);
@@ -937,6 +931,8 @@ export default function MedicaoLevantamento() {
       gestRef.current = null;
       setDragRect(null);
       setFreePts([]);
+      // ajuste de contorno em curso perde pro gesto de 2 dedos (sem salvar)
+      if (editRef.current) { editRef.current = null; setEditDrag(null); setSnapHit(null); }
       const pts = [...ptrsRef.current.values()];
       const a = pts[0], b = pts[1];
       const startDist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
@@ -966,7 +962,7 @@ export default function MedicaoLevantamento() {
     else if (tool === "livre") mode = "free";
     gestRef.current = {
       mode, pointerId: e.pointerId, startClient: { x: e.clientX, y: e.clientY },
-      startNorm, startScroll: { l: cont?.scrollLeft ?? 0, t: cont?.scrollTop ?? 0 }, moved: false,
+      startNorm, startPan: panRef.current ?? { x: 0, y: 0 }, moved: false,
     };
     if (mode === "rect") setDragRect({ a: startNorm, b: startNorm });
     if (mode === "free") setFreePts([startNorm]);
@@ -1001,12 +997,12 @@ export default function MedicaoLevantamento() {
       const dx = e.clientX - g.startClient.x, dy = e.clientY - g.startClient.y;
       if (!g.moved && Math.hypot(dx, dy) > PAN_THRESHOLD) {
         g.moved = true;
-        if (g.mode === "pending") g.mode = "pan"; // arrastar em ferramenta de toque/select = pan
+        // Rev. 4791 — no TOQUE, mover a planta é SEMPRE com 2 dedos; 1 dedo é só
+        // desenhar/selecionar. No mouse, arrastar continua fazendo pan.
+        if (g.mode === "pending") g.mode = e.pointerType === "touch" ? "pending" : "pan";
       }
-      const cont = canvasWrapRef.current;
-      if (g.mode === "pan" && cont) {
-        cont.scrollLeft = g.startScroll.l - dx;
-        cont.scrollTop = g.startScroll.t - dy;
+      if (g.mode === "pan" && g.moved) {
+        setPan({ x: g.startPan.x + dx, y: g.startPan.y + dy });
       } else if (g.mode === "rect") {
         const raw = getPtFromClient(e.clientX, e.clientY);
         const h = applySnap(raw); setSnapHit(h); // OSnap no canto oposto
@@ -1027,22 +1023,21 @@ export default function MedicaoLevantamento() {
     try { overlayRef.current?.releasePointerCapture(e.pointerId); } catch { /* */ }
     const size = ptrsRef.current.size;
     if (size < 2 && pinchRef.current) {
-      // Rev. 4789 — fim da pinça: limpa o transform e commita zoom+scroll no
-      // mesmo lugar visual (o ponto que estava entre os dedos continua lá).
+      // Rev. 4791 — fim da pinça: limpa o transform e commita zoom+pan de forma
+      // que o ponto que estava entre os dedos continue exatamente lá.
       const pr = pinchRef.current;
       pinchRef.current = null;
       const inner = zoomInnerRef.current;
-      if (inner) { inner.style.transform = ""; inner.style.willChange = ""; }
-      const newZoom = Math.min(6, Math.max(0.5, pr.startZoom * pr.ratio));
       const cont = canvasWrapRef.current;
-      if (Math.abs(newZoom - zoom) > 1e-4) {
-        focusRef.current = { fracX: pr.fracX, fracY: pr.fracY, cx: pr.lastMid.x, cy: pr.lastMid.y };
+      if (inner) { inner.style.transform = ""; inner.style.willChange = ""; }
+      if (cont) {
+        const newZoom = Math.min(6, Math.max(0.2, pr.startZoom * pr.ratio));
+        const cr = cont.getBoundingClientRect();
+        const pd = pageDimsRef.current;
+        const aspect = pd.w > 0 ? pd.h / pd.w : 1;
+        const W = baseWidthRef.current * newZoom;
+        setPan({ x: pr.lastMid.x - cr.left - pr.fracX * W, y: pr.lastMid.y - cr.top - pr.fracY * W * aspect });
         setZoom(newZoom);
-      } else if (cont && inner) {
-        // só pan (zoom igual): desloca o scroll pelo delta medido no elemento.
-        const ir = inner.getBoundingClientRect();
-        cont.scrollLeft += ir.left + pr.fracX * ir.width - pr.lastMid.x;
-        cont.scrollTop += ir.top + pr.fracY * ir.height - pr.lastMid.y;
       }
     }
     if (size === 0) suppressRef.current = false;
@@ -1592,18 +1587,25 @@ export default function MedicaoLevantamento() {
     e.stopPropagation();
     e.preventDefault();
     // Sessão única por dedo: se um 2º dedo encostar durante um arrasto (tentativa
-    // de pinça), CANCELA o arrasto sem salvar — nada de estado inconsistente.
+    // de pinça), CANCELA o arrasto sem salvar e entrega o gesto pra PINÇA global.
     if (editRef.current) {
-      if (e.pointerId !== editRef.current.pid) { editRef.current = null; setEditDrag(null); setSnapHit(null); }
+      if (e.pointerId !== editRef.current.pid) {
+        editRef.current = null; setEditDrag(null); setSnapHit(null);
+        onPdfPointerDown(e); // registra o 2º dedo → arma a pinça normalmente
+      }
       return;
     }
     try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* */ }
+    // registra no mapa global de ponteiros: se virar multi-touch, a pinça VENCE.
+    ptrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     let base: GeoPonto[] = [];
     try { base = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
     editRef.current = { cont: c, kind, idx, base, rect: detectRectBox(base), cur: base, p0: getPtFromClient(e.clientX, e.clientY), pid: e.pointerId };
     setEditDrag({ contId: c.id, pts: base });
   }
   function onHandleMove(e: React.PointerEvent) {
+    // pinça armada no meio do ajuste → encaminha pro pipeline global de 2 dedos
+    if (pinchRef.current) { onPdfPointerMove(e); return; }
     const ed = editRef.current;
     if (!ed || e.pointerId !== ed.pid) return;
     e.stopPropagation();
@@ -1625,6 +1627,8 @@ export default function MedicaoLevantamento() {
     setEditDrag({ contId: ed.cont.id, pts: next });
   }
   async function onHandleUp(e: React.PointerEvent) {
+    ptrsRef.current.delete(e.pointerId);
+    if (pinchRef.current) { onPdfPointerUp(e); return; }
     const ed = editRef.current;
     if (!ed || e.pointerId !== ed.pid) return;
     e.stopPropagation();
@@ -2109,9 +2113,10 @@ export default function MedicaoLevantamento() {
                     </PopoverContent>
                   </Popover>
                   <div className="h-6 w-px bg-border mx-1" />
-                  <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}><ZoomOut className="h-4 w-4" /></Button>
+                  <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => { const r = canvasWrapRef.current?.getBoundingClientRect(); if (r) zoomTo(zoom / 1.3, r.left + r.width / 2, r.top + r.height / 2); }}><ZoomOut className="h-4 w-4" /></Button>
                   <span className="text-xs tabular-nums w-10 text-center">{Math.round(zoom * 100)}%</span>
-                  <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => setZoom((z) => Math.min(6, z + 0.25))}><ZoomIn className="h-4 w-4" /></Button>
+                  <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => { const r = canvasWrapRef.current?.getBoundingClientRect(); if (r) zoomTo(zoom * 1.3, r.left + r.width / 2, r.top + r.height / 2); }}><ZoomIn className="h-4 w-4" /></Button>
+                  <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={fitView} title="Ajustar à tela: enquadra a planta inteira (se ela sumir da vista, use este botão)"><Maximize className="h-4 w-4" /></Button>
                   {/* finalizar / desfazer para ferramentas ponto-a-ponto */}
                   {TOOLS_POLILINHA.includes(tool as FerramentaDesenho) && (
                     <>
@@ -2153,8 +2158,8 @@ export default function MedicaoLevantamento() {
                     <PopoverContent className="w-72 p-3 text-xs text-gray-600 space-y-1.5" align="end">
                       <p className="font-semibold text-gray-800">Gestos no tablet</p>
                       <p>• Toque para marcar pontos.</p>
-                      <p>• Arraste com 1 dedo para mover (pan).</p>
-                      <p>• Pinça com 2 dedos para zoom.</p>
+                      <p>• Use 2 dedos para mover a planta e dar zoom (a tela é fixa).</p>
+                      <p>• 1 dedo é só para desenhar, tocar e selecionar.</p>
                       <p>• A ferramenta permanece ativa após finalizar.</p>
                       <p>• Em <b>Selecionar</b>, toque num contorno e arraste os pontos azuis (cantos/lados) para ajustar.</p>
                       <p className="pt-1 border-t font-semibold text-gray-800">Melhor formato de planta</p>
@@ -2217,15 +2222,22 @@ export default function MedicaoLevantamento() {
                 )}
 
                 {/* canvas */}
-                <div ref={canvasWrapRef} className="border rounded-lg bg-slate-200 overflow-auto flex-1 min-h-0">
-                  {/* Rev. 4789 — moldura de folga em volta da planta = "tela infinita":
-                      sempre há espaço de rolagem em todas as direções, então o pan
-                      da pinça nunca trava na borda (o scroll não clampa mais o gesto). */}
-                  {/* Folga = ~meia tela: o suficiente p/ levar QUALQUER trecho da planta
-                      ao centro no zoom (folga menor "clampava" o scroll e a vista pulava
-                      de volta ao soltar a pinça perto das bordas). */}
-                  <div className="w-fit" style={{ padding: "45vh 45vw", touchAction: "none" }}>
-                  <div ref={zoomInnerRef} className="relative w-fit" style={{ touchAction: "none" }}>
+                {/* Rev. 4791 — VIEWPORT FIXO: retângulo estável (overflow hidden,
+                    sem scroll). A planta flutua dentro via pan+zoom — 2 dedos movem
+                    e ampliam com liberdade total; 1 dedo desenha/seleciona. */}
+                <div
+                  ref={canvasWrapRef}
+                  className="relative rounded-xl overflow-hidden flex-1 min-h-0 border border-slate-300 shadow-inner"
+                  style={{
+                    touchAction: "none",
+                    background: "radial-gradient(circle, #cbd5e1 1px, transparent 1px) 0 0 / 22px 22px, #e2e8f0",
+                  }}
+                >
+                  <div
+                    ref={zoomInnerRef}
+                    className="absolute w-fit shadow-xl"
+                    style={{ touchAction: "none", left: pan?.x ?? 0, top: pan?.y ?? 0, visibility: pan ? "visible" : "hidden" }}
+                  >
                     {/* filtro P&B aplicado SÓ ao fundo (PDF/DXF), nunca ao overlay/SVG */}
                     <div style={{ filter: pdfPB ? "grayscale(1) contrast(1.25) brightness(1.02)" : "none" }}>
                       {isDxf ? (
@@ -2416,7 +2428,6 @@ export default function MedicaoLevantamento() {
                         </svg>
                       </div>
                     </div>
-                  </div>
                   </div>
               </>
             )}
