@@ -965,9 +965,36 @@ export default function MedicaoLevantamento() {
     return undefined;
   }, [tool, draft, calibDraft]);
 
+  // Rev. 4792 — perf iPad: o hover de snap era recalculado e re-renderizava a
+  // tela INTEIRA a cada movimento do dedo. Agora: 1 cálculo por frame (rAF) e
+  // só chama setState quando o resultado realmente mudou.
+  const snapRafRef = useRef<number | null>(null);
+  const snapLastRef = useRef<{ x: number; y: number; kind: string } | null>(null);
+  // Rev. 4792 — coalescing do arrasto de retângulo/linha (1 update por frame)
+  const dragRafRef = useRef<number | null>(null);
+  const dragMoveRef = useRef<{ x: number; y: number; mode: "rect" | "line"; start: GeoPonto } | null>(null);
+  const snapCoordRef = useRef<{ x: number; y: number } | null>(null);
+  const dragRectRef = useRef<{ a: GeoPonto; b: GeoPonto } | null>(null); // espelho síncrono p/ o finalizar
   const updateSnapHover = (clientX: number, clientY: number) => {
-    if (!osnapOn || !toolUsaSnap(tool)) { setSnapHit(null); return; }
-    setSnapHit(applySnap(getPtFromClient(clientX, clientY), snapFromPt()));
+    if (!osnapOn || !toolUsaSnap(tool)) {
+      if (snapLastRef.current !== null) { snapLastRef.current = null; setSnapHit(null); }
+      return;
+    }
+    snapCoordRef.current = { x: clientX, y: clientY }; // latest-wins
+    if (snapRafRef.current != null) return; // já tem um frame agendado
+    snapRafRef.current = requestAnimationFrame(() => {
+      snapRafRef.current = null;
+      const sc = snapCoordRef.current;
+      if (!sc) return;
+      const hit = applySnap(getPtFromClient(sc.x, sc.y), snapFromPt());
+      const last = snapLastRef.current;
+      const same = hit === null
+        ? last === null
+        : !!last && last.kind === hit.kind && Math.abs(last.x - hit.p.x) < 1e-6 && Math.abs(last.y - hit.p.y) < 1e-6;
+      if (same) return;
+      snapLastRef.current = hit ? { x: hit.p.x, y: hit.p.y, kind: hit.kind } : null;
+      setSnapHit(hit);
+    });
   };
   // ============================================================================
 
@@ -980,6 +1007,8 @@ export default function MedicaoLevantamento() {
       // 2 dedos = pinça (zoom) + pan. Cancela qualquer desenho de 1 dedo em curso.
       suppressRef.current = true;
       gestRef.current = null;
+      dragRectRef.current = null; dragMoveRef.current = null;
+      if (dragRafRef.current != null) { cancelAnimationFrame(dragRafRef.current); dragRafRef.current = null; }
       setDragRect(null);
       setFreePts([]);
       dragLineRef.current = null; setDragLine(null); // linha em curso perde pro gesto de 2 dedos
@@ -1017,7 +1046,7 @@ export default function MedicaoLevantamento() {
       mode, pointerId: e.pointerId, startClient: { x: e.clientX, y: e.clientY },
       startNorm, startPan: panRef.current ?? { x: 0, y: 0 }, moved: false,
     };
-    if (mode === "rect") setDragRect({ a: startNorm, b: startNorm });
+    if (mode === "rect") { dragRectRef.current = { a: startNorm, b: startNorm }; setDragRect({ a: startNorm, b: startNorm }); }
     if (mode === "free") setFreePts([startNorm]);
   }
 
@@ -1056,15 +1085,27 @@ export default function MedicaoLevantamento() {
       }
       if (g.mode === "pan" && g.moved) {
         setPan({ x: g.startPan.x + dx, y: g.startPan.y + dy });
-      } else if (g.mode === "rect") {
-        const raw = getPtFromClient(e.clientX, e.clientY);
-        const h = applySnap(raw); setSnapHit(h); // OSnap no canto oposto
-        setDragRect({ a: g.startNorm, b: h ? h.p : raw });
-      } else if (g.mode === "line" && g.moved) {
-        const raw = getPtFromClient(e.clientX, e.clientY);
-        const h = applySnap(raw); setSnapHit(h); // OSnap no 2º extremo
-        const l = { a: g.startNorm, b: h ? h.p : raw };
-        dragLineRef.current = l; setDragLine(l);
+      } else if (g.mode === "rect" || (g.mode === "line" && g.moved)) {
+        // Rev. 4792 — perf iPad: coalesce em 1 atualização por frame (rAF).
+        // Antes eram 2 setState + busca de snap POR EVENTO de movimento →
+        // a tela inteira re-renderizava dezenas de vezes por segundo.
+        dragMoveRef.current = { x: e.clientX, y: e.clientY, mode: g.mode, start: g.startNorm };
+        if (dragRafRef.current == null) {
+          dragRafRef.current = requestAnimationFrame(() => {
+            dragRafRef.current = null;
+            const mv = dragMoveRef.current;
+            if (!mv) return;
+            const raw = getPtFromClient(mv.x, mv.y);
+            const h = applySnap(raw); setSnapHit(h); // OSnap no canto oposto / 2º extremo
+            if (mv.mode === "rect") {
+              const r2 = { a: mv.start, b: h ? h.p : raw };
+              dragRectRef.current = r2; setDragRect(r2);
+            } else {
+              const l = { a: mv.start, b: h ? h.p : raw };
+              dragLineRef.current = l; setDragLine(l);
+            }
+          });
+        }
       } else if (g.mode === "free") {
         const p = getPtFromClient(e.clientX, e.clientY);
         setFreePts((prev) => {
@@ -1077,6 +1118,23 @@ export default function MedicaoLevantamento() {
   }
 
   function onPdfPointerUp(e: React.PointerEvent) {
+    // Rev. 4792 — FLUSH do último movimento antes de finalizar (senão o commit
+    // perde até 1 frame de arrasto) e cancela o rAF pendente (sem isso um rAF
+    // tardio "ressuscitava" o retângulo/linha depois do finalizar).
+    if (dragRafRef.current != null) { cancelAnimationFrame(dragRafRef.current); dragRafRef.current = null; }
+    {
+      const mv = dragMoveRef.current;
+      dragMoveRef.current = null;
+      if (mv) {
+        const raw = getPtFromClient(mv.x, mv.y);
+        const h = applySnap(raw);
+        if (mv.mode === "rect") {
+          dragRectRef.current = { a: mv.start, b: h ? h.p : raw }; // síncrono p/ o finalizar
+        } else {
+          dragLineRef.current = { a: mv.start, b: h ? h.p : raw };
+        }
+      }
+    }
     const had = ptrsRef.current.delete(e.pointerId);
     try { overlayRef.current?.releasePointerCapture(e.pointerId); } catch { /* */ }
     const size = ptrsRef.current.size;
@@ -1271,7 +1329,8 @@ export default function MedicaoLevantamento() {
   // Rev. 4792 — em categoria de PERÍMETRO, o retângulo vira perímetro (m
   // linear do contorno fechado), não área.
   function finalizarRetangulo() {
-    const r = dragRect;
+    const r = dragRectRef.current ?? dragRect; // ref síncrono: o flush do pointerup pode ainda não ter re-renderizado
+    dragRectRef.current = null;
     setDragRect(null);
     if (!r) return;
     const { a, b } = r;

@@ -1370,19 +1370,23 @@ export const medicaoRouter = router({
       // Rev. 4792 — numeração POR CATEGORIA (serviço; fallback tipo), ignorando
       // excluídos: cada categoria conta 1,2,3… sem repetir.
       const catKey = input.servico ?? input.tipo;
-      const [maxRow] = await db
-        .select({ max: sql<number>`COALESCE(MAX(numero),0)::int` })
+      const usados = await db
+        .select({ numero: medicaoCampoContornos.numero })
         .from(medicaoCampoContornos)
         .where(and(
           eq(medicaoCampoContornos.medicaoCampoId, input.medicaoCampoId),
           sql`deleted_at IS NULL`,
           sql`COALESCE(servico, tipo) = ${catKey}`,
         ));
+      const setUsados = new Set(usados.map((u: any) => u.numero ?? 0));
+      const maxUsado = usados.reduce((m: number, u: any) => Math.max(m, u.numero ?? 0), 0);
       const [row] = await db.insert(medicaoCampoContornos).values({
         companyId,
         ...rest,
-        numero: typeof numeroInput === "number" ? numeroInput : (maxRow?.max ?? 0) + 1,
+        // REGRA DE OURO: número repetido na categoria é impossível
+        numero: (typeof numeroInput === "number" && numeroInput > 0 && !setUsados.has(numeroInput)) ? numeroInput : maxUsado + 1,
       }).returning();
+      await dedupNumerosContornos(db, input.medicaoCampoId).catch((e: any) => console.error("[Medicao] dedupNumeros:", e));
       return row;
     }),
 
@@ -1770,6 +1774,7 @@ export const medicaoRouter = router({
       // Anti-colisão de IDs entre módulos: se o contratoId só existe num dos
       // módulos, o campo precisa ter a origem correspondente.
       const camposOk = new Map<number, boolean>();
+      const camposComContorno = new Set<number>(); // p/ dedup de numeração pós-lote
       async function campoValido(campoId: number): Promise<boolean> {
         if (camposOk.has(campoId)) return camposOk.get(campoId)!;
         const [c] = await db
@@ -1838,6 +1843,7 @@ export const medicaoRouter = router({
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "Medição não encontrada ou sem permissão." });
               continue;
             }
+            camposComContorno.add(campoId); // dedup de numeração pós-lote
             const fields = {
               pdfId: d.pdfId,
               pagina: d.pagina ?? 1,
@@ -1895,23 +1901,30 @@ export const medicaoRouter = router({
               continue;
             }
             // Rev. 4792 — numeração POR CATEGORIA (serviço; fallback tipo), sem
-            // excluídos; client offline pode mandar o numero otimista dele.
+            // excluídos. REGRA DE OURO: número repetido na mesma categoria é
+            // IMPOSSÍVEL — o otimista do aparelho só vale se estiver livre
+            // (dois aparelhos offline geravam "nº 1" duplicado ao sincronizar).
             const catKey = (d.servico ?? d.tipo) ?? "";
-            const [maxRow] = await db
-              .select({ max: sql<number>`COALESCE(MAX(numero),0)::int` })
+            const usados = await db
+              .select({ numero: medicaoCampoContornos.numero })
               .from(medicaoCampoContornos)
               .where(and(
                 eq(medicaoCampoContornos.medicaoCampoId, campoId),
                 sql`deleted_at IS NULL`,
                 sql`COALESCE(servico, tipo) = ${catKey}`,
               ));
+            const setUsados = new Set(usados.map((u) => u.numero ?? 0));
+            const maxUsado = usados.reduce((m, u) => Math.max(m, u.numero ?? 0), 0);
+            const numeroFinal = (typeof d.numero === "number" && d.numero > 0 && !setUsados.has(d.numero))
+              ? d.numero
+              : maxUsado + 1;
             const [row] = await db.insert(medicaoCampoContornos).values({
               companyId,
               medicaoCampoId: campoId,
               uuid: op.uuid,
               atualizadoEm: incoming,
               ...fields,
-              numero: typeof d.numero === "number" ? d.numero : (maxRow?.max ?? 0) + 1,
+              numero: numeroFinal,
             }).returning();
             resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: row.id, status: "ok" });
             continue;
@@ -2018,6 +2031,38 @@ export const medicaoRouter = router({
       const okCount = resultados.filter((r) => r.status === "ok").length;
       const conflitos = resultados.filter((r) => r.status === "conflito").length;
       const erros = resultados.filter((r) => r.status === "erro").length;
+
+      // Rev. 4792 — REGRA DE OURO (pós-lote): garante numeração única por
+      // categoria mesmo com lotes concorrentes (o check no INSERT não é
+      // atômico). Só mexe nos DUPLICADOS (o 1º de cada número fica; os demais
+      // vão para o próximo número livre) — nunca compacta buracos, para não
+      // trocar números que o usuário já conhece.
+      for (const campoId of camposComContorno) {
+        try { await dedupNumerosContornos(db, campoId); } catch (e) { console.error("[Medicao] dedupNumeros falhou:", e); }
+      }
       return { resultados, okCount, conflitos, erros };
     }),
 });
+
+// Rev. 4792 — renumera SOMENTE duplicados de uma medição: por categoria
+// (COALESCE(servico,tipo)), mantém o menor id em cada número repetido e move
+// os demais para max+1, max+2… Determinístico e idempotente.
+async function dedupNumerosContornos(db: any, campoId: number) {
+  await db.execute(sql`
+    WITH vivos AS (
+      SELECT id, COALESCE(servico, tipo) AS cat, numero,
+             ROW_NUMBER() OVER (PARTITION BY COALESCE(servico, tipo), numero ORDER BY id) AS dup_rn
+      FROM medicao_campo_contornos
+      WHERE medicao_campo_id = ${campoId} AND deleted_at IS NULL
+    ), maxes AS (
+      SELECT cat, MAX(numero) AS mx FROM vivos GROUP BY cat
+    ), dups AS (
+      SELECT v.id, v.cat, ROW_NUMBER() OVER (PARTITION BY v.cat ORDER BY v.numero, v.id) AS k
+      FROM vivos v WHERE v.dup_rn > 1
+    )
+    UPDATE medicao_campo_contornos m
+    SET numero = maxes.mx + dups.k
+    FROM dups JOIN maxes ON maxes.cat = dups.cat
+    WHERE m.id = dups.id
+  `);
+}

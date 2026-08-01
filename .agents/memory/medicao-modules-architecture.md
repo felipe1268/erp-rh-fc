@@ -30,3 +30,6 @@ origem pela ROTA e chama o `getContrato` da fonte certa; não confie só no `con
 ## Sync offline (sincronizarLote) valida contrato nos DOIS módulos
 O guard raiz do `sincronizarLote` deve aceitar contratoId de `medicao_contratos` OU `terceiro_contratos` (IDs colidem). Só validar um lado fez TODA sync de levantamento de terceiros falhar com "Contrato não encontrado" — pendências eternas, servidor sem NENHUM contorno, e cada aparelho com dados divergentes (deletes locais não propagavam = "fantasmas").
 **How to apply:** qualquer endpoint novo da engine compartilhada que receba contratoId precisa resolver o módulo (cliente × terceiro) e casar com `medicao_campo.origem`.
+
+## Numeração de contornos — regra de ouro
+Número é único POR CATEGORIA (COALESCE(servico,tipo)) dentro do campo. O check no INSERT não é atômico (lotes concorrentes) → todo caminho de escrita chama `dedupNumerosContornos` pós-gravação (move só duplicados p/ max+1, nunca compacta buracos, pois o usuário conhece os números). Não criar índice único: o Renumerar em massa gera colisões transitórias legítimas.

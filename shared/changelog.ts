@@ -80,6 +80,18 @@
  * - Paleta de servicos: categorias SEM lancamento agora ficam cinzinhas;
  *   so ganham a cor propria as que tem contorno medido (ou a selecionada).
  *   Vale tambem para as abinhas de subcategoria e para os derivados.
+ * - REGRA DE OURO da numeracao: o servidor agora RECUSA numero repetido na
+ *   mesma categoria (dois aparelhos offline geravam dois "n 1"); se o numero
+ *   otimista ja existe, o servidor atribui o proximo livre. Duplicados
+ *   existentes foram renumerados no banco.
+ * - Desenho mais fluido no iPad: o arrasto do retangulo/linha e o marcador de
+ *   OSnap agora atualizam no maximo 1x por frame (antes recalculavam e
+ *   re-renderizavam a tela inteira a cada movimento do dedo). No soltar do
+ *   dedo o ultimo movimento e aplicado (flush) antes de fechar a forma.
+ * - Dedup de numeracao pos-lote no servidor: apos cada sincronizacao (e apos
+ *   gravacao direta), duplicados sao movidos para o proximo numero livre da
+ *   categoria (nunca compacta buracos) — garante unicidade mesmo com dois
+ *   aparelhos sincronizando ao mesmo tempo.
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO
