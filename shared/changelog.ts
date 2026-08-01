@@ -69,6 +69,10 @@
  *   falhavam sempre com "Contrato nao encontrado" e NADA subia ao servidor
  *   (por isso pendencias eternas e dados divergentes entre aparelhos). Agora
  *   valida nos dois modulos, com anti-colisao de IDs pela origem do campo.
+ * - Botao "Limpar" no painel de contornos: limpa TUDO (todas as categorias e
+ *   plantas do levantamento), a categoria ativa + subcategorias, ou so a
+ *   categoria/subcategoria ativa — sempre levando as fotos vinculadas junto,
+ *   com confirmacao mostrando quantos contornos/fotos serao excluidos.
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO

@@ -1557,6 +1557,51 @@ export default function MedicaoLevantamento() {
   const [confirmDlg, setConfirmDlg] = useState<{ title: string; description?: string; confirmText?: string; onConfirm: () => void } | null>(null);
   const askConfirm = (opts: { title: string; description?: string; confirmText?: string; onConfirm: () => void }) => setConfirmDlg(opts);
 
+  // Rev. 4792 — Limpar em massa: TUDO, a categoria ativa (com subcategorias)
+  // ou só a categoria/subcategoria ativa. Leva junto as fotos vinculadas
+  // (e, no "tudo", também as fotos gerais). Passa pela fila offline normal.
+  async function limparContornos(escopo: "tudo" | "categoria" | "so-ativa") {
+    if (bulkBusy) return;
+    const todosC = ((campo?.contornos ?? []) as any[]).filter((c: any) => !c.deletedAt);
+    let alvos = todosC;
+    if (escopo !== "tudo" && servicoAtivo) {
+      const chaves = new Set<string>([servicoAtivo]);
+      if (escopo === "categoria") {
+        const pai = gruposSub.subPai.get(servicoAtivo) ?? servicoAtivo;
+        chaves.clear(); chaves.add(pai);
+        for (const s of gruposSub.map.get(pai) ?? []) chaves.add(s.chave);
+      }
+      alvos = todosC.filter((c: any) => chaves.has(String(c.servico ?? "")));
+    }
+    if (alvos.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const ids = new Set(alvos.map((c: any) => c.id));
+      const fotosAlvo = ((campo?.fotos ?? []) as any[]).filter((f: any) =>
+        !f.deletedAt && (escopo === "tudo" ? true : (f.contornoId != null && ids.has(f.contornoId))));
+      for (const f of fotosAlvo) await off.excluirFoto(f);
+      for (const c of alvos) await off.excluirContorno(c);
+    } finally { setBulkBusy(false); }
+  }
+  // contagens p/ os textos de confirmação do "Limpar"
+  function contarAlvosLimpar(escopo: "tudo" | "categoria" | "so-ativa"): { conts: number; fotos: number } {
+    const todosC = ((campo?.contornos ?? []) as any[]).filter((c: any) => !c.deletedAt);
+    let alvos = todosC;
+    if (escopo !== "tudo" && servicoAtivo) {
+      const chaves = new Set<string>([servicoAtivo]);
+      if (escopo === "categoria") {
+        const pai = gruposSub.subPai.get(servicoAtivo) ?? servicoAtivo;
+        chaves.clear(); chaves.add(pai);
+        for (const s of gruposSub.map.get(pai) ?? []) chaves.add(s.chave);
+      }
+      alvos = todosC.filter((c: any) => chaves.has(String(c.servico ?? "")));
+    }
+    const ids = new Set(alvos.map((c: any) => c.id));
+    const fotos = ((campo?.fotos ?? []) as any[]).filter((f: any) =>
+      !f.deletedAt && (escopo === "tudo" ? true : (f.contornoId != null && ids.has(f.contornoId)))).length;
+    return { conts: alvos.length, fotos };
+  }
+
   async function excluirSelecionados() {
     if (bulkBusy) return;
     const alvos = contornosPagina.filter((c) => selContornos.has(c.id));
@@ -2955,6 +3000,40 @@ export default function MedicaoLevantamento() {
                     >
                       {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ListOrdered className="h-3.5 w-3.5" />}Organizar números
                     </Button>
+                  )}
+                  {/* Rev. 4792 — Limpar em massa: tudo / categoria ativa (+subs) / só a ativa */}
+                  {((campo?.contornos ?? []) as any[]).some((c: any) => !c.deletedAt) && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] gap-1 text-red-600 border-red-300 hover:bg-red-50" disabled={bulkBusy} title="Limpar contornos e fotos em massa">
+                          {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}Limpar
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-2 space-y-1 text-xs" align="end">
+                        {servicoAtivo && (() => {
+                          const ehSub = gruposSub.subPai.has(servicoAtivo);
+                          const temSubs = (gruposSub.map.get(servicoAtivo) ?? []).length > 0;
+                          const nomeAtiva = (svcAtivoObj?.nome ?? servicoAtivo).toUpperCase();
+                          const paiChave = gruposSub.subPai.get(servicoAtivo) ?? servicoAtivo;
+                          const nomePai = (servicos.find((s: any) => s.chave === paiChave)?.nome ?? paiChave).toUpperCase();
+                          return (
+                            <>
+                              <Button size="sm" variant="outline" className="w-full h-8 justify-start gap-1.5" onClick={() => { const n = contarAlvosLimpar("so-ativa"); if (n.conts === 0) return; askConfirm({ title: `Limpar ${nomeAtiva}?`, description: `${n.conts} contorno(s)${n.fotos ? ` e ${n.fotos} foto(s)` : ""} desta categoria serão excluídos. Esta ação não pode ser desfeita.`, confirmText: "Limpar", onConfirm: () => { void limparContornos("so-ativa"); } }); }}>
+                                <Trash2 className="h-3.5 w-3.5 text-red-500" />Só {nomeAtiva}
+                              </Button>
+                              {(ehSub || temSubs) && (
+                                <Button size="sm" variant="outline" className="w-full h-8 justify-start gap-1.5" onClick={() => { const n = contarAlvosLimpar("categoria"); if (n.conts === 0) return; askConfirm({ title: `Limpar ${nomePai} + subcategorias?`, description: `${n.conts} contorno(s)${n.fotos ? ` e ${n.fotos} foto(s)` : ""} da categoria e das subcategorias serão excluídos. Esta ação não pode ser desfeita.`, confirmText: "Limpar", onConfirm: () => { void limparContornos("categoria"); } }); }}>
+                                  <Trash2 className="h-3.5 w-3.5 text-red-500" />{nomePai} + subcategorias
+                                </Button>
+                              )}
+                            </>
+                          );
+                        })()}
+                        <Button size="sm" variant="outline" className="w-full h-8 justify-start gap-1.5 text-red-600 border-red-300 hover:bg-red-50" onClick={() => { const n = contarAlvosLimpar("tudo"); askConfirm({ title: "Limpar TODO o levantamento?", description: `TODOS os ${n.conts} contorno(s) e ${n.fotos} foto(s) deste levantamento (todas as categorias, todas as plantas) serão excluídos. Esta ação não pode ser desfeita.`, confirmText: "Limpar tudo", onConfirm: () => { void limparContornos("tudo"); } }); }}>
+                          <AlertTriangle className="h-3.5 w-3.5" />Limpar TUDO
+                        </Button>
+                      </PopoverContent>
+                    </Popover>
                   )}
                   {/* Rev. 4791 — a lista segue a categoria ativa; este botãozinho libera todas */}
                   {servicoAtivo ? (
