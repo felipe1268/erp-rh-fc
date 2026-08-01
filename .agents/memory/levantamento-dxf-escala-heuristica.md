@@ -7,7 +7,7 @@ description: Como o Levantamento deriva a escala de DXFs com $INSUNITS errado e 
 1. Agrupa traços em aglomerados espaciais (grid-hash 1/40 da dimensão + BFS 8-conexo) — arquivos CAD reais trazem 2+ desenhos deslocados (planta + carimbo/cópias). Escolhe o aglomerado que casa com `$EXTMIN/$EXTMAX` (margem 30%); fallback: o com mais pontos.
 2. Plausibilidade: maior dimensão × mpu deve dar 3–1000 m; `$INSUNITS` fora disso → testa candidatos métricos/imperiais (`$MEASUREMENT`); único plausível → `escalaHeuristica=true`; ambíguo → `metrosPorUnidade=null` (usuário calibra).
 
-**Poka-yoke:** escala heurística NÃO é `escalaOk` — exige Conferir (2 pontos numa cota, ±2%) antes de liberar o desenho, igual à calibração manual.
+**Poka-yoke (decisão do usuário):** escala heurística LIBERA a medição direto (bloquear travava o levantamento no campo); banner informa as dimensões deduzidas e Conferir/Calibrar ficam visíveis como correção opcional. Não reintroduzir bloqueio obrigatório aqui.
 
 **Sidecar servidor:** DXF 50MB+ estoura o Safari/iPad → servidor pré-processa e grava `<key>.planta.json` (SVG+bbox+escala); rota `/api/upload/levantamento-planta/derivar` gera sob demanda (auth + tenant via prefixo da key, singleflight). `DXF_ALGO_VERSION` no JSON: qualquer mudança no parse DEVE bumpar a constante ou sidecars cacheados servem escala velha.
 

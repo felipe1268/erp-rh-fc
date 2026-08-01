@@ -490,11 +490,10 @@ export default function MedicaoLevantamento() {
   // Rev. 4781 — poka-yoke: escala com fonte declarada (nominal/manual nova)
   // só libera medição depois de CONFERIDA contra uma cota conhecida.
   // Calibração legada (sem `fonte`) e DXF com unidade não bloqueiam.
-  // Rev. 4789 — escala DEDUZIDA (cabeçalho do DXF implausível) também exige
-  // conferência antes de liberar o desenho; calibração manual em DXF idem.
-  const escalaNaoConferida =
-    (!!calibAtual?.fonte && !calibAtual?.conferida) ||
-    (isDxf && !calibAtual && !!dxfData?.escalaHeuristica);
+  // Rev. 4789 — escala DEDUZIDA (cabeçalho do DXF implausível) LIBERA a
+  // medição (a plausibilidade 3–1000 m + extents já filtram o absurdo);
+  // o banner pede conferência opcional e Calibrar/Conferir ficam à mão.
+  const escalaNaoConferida = !isDxf && !!calibAtual?.fonte && !calibAtual?.conferida;
   const escalaOk = !!calibAtualEff && !escalaNaoConferida;
 
   // Rev. 4781 — camada 3: textos (cotas) da página do PDF, extraídos do vetor.
@@ -1930,7 +1929,7 @@ export default function MedicaoLevantamento() {
                     <span>
                       {isDxf && dxfAutoCalib
                         ? (dxfData?.escalaHeuristica && !calibAtual
-                          ? `Escala deduzida do desenho (planta ≈ ${numFmt(dxfData.w * (dxfData.metrosPorUnidade || 0), 1)} × ${numFmt(dxfData.h * (dxfData.metrosPorUnidade || 0), 1)} m) — toque em Conferir e marque os 2 extremos de uma cota conhecida; se não bater, use Calibrar. O desenho só libera depois disso.`
+                          ? `Escala detectada automaticamente: planta ≈ ${numFmt(dxfData.w * (dxfData.metrosPorUnidade || 0), 1)} × ${numFmt(dxfData.h * (dxfData.metrosPorUnidade || 0), 1)} m — pode medir. Se alguma medida não bater, use Conferir (2 extremos de uma cota) ou Calibrar.`
                           : `Escala automática do DXF: ${numFmt((calibAtual || dxfAutoCalib).metrosPorUnidade, 6)} m/unidade — não precisa calibrar.`)
                         : !calibAtual
                           ? (isDxf
