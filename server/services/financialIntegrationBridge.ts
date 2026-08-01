@@ -183,6 +183,7 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
     const { rows } = await dbExecute(db,
       `SELECT tm.id, tm.contrato_id,
               tm.valor_medido, COALESCE(tm.valor_liquido_pagamento::numeric, 0) AS valor_liquido_pagamento,
+              COALESCE(tm.fd_total_abatido::numeric, 0) AS fd_total_abatido,
               tm.data_referencia, tm.status, tm.periodo, tm.obra_id,
               COALESCE(et.nome_fantasia, et.razao_social) AS nome_empresa,
               tc.descricao AS tipo_servico, tc.valor_total AS valor_contrato,
@@ -262,6 +263,15 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
           valorLiquido = valorBruto;
         }
       }
+
+      // Rev. 4798 — FD abatido SEMPRE desconta do título a pagar (Poka-Yoke:
+      // nunca pagar mais do que o combinado). valor_liquido_pagamento e as
+      // deduções acima NÃO incluem FD — o desconto entra só aqui.
+      const fdAbatido = parseFloat(r.fd_total_abatido ?? "0");
+      if (fdAbatido > 0) {
+        valorLiquido = Math.max(0, Math.round((valorLiquido - fdAbatido) * 100) / 100);
+      }
+      if (valorLiquido <= 0) continue; // 100% abatido em FD → nada a pagar
 
       const dataVenc = r.data_referencia
         ? r.data_referencia.toString().substring(0, 7) + "-25"

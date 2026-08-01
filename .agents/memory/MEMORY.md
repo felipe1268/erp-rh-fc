@@ -27,6 +27,7 @@
 - [OC entregue fora do fluxo padrão precisa de self-heal](oc-almox-entrega-sem-titulo.md) — todo caminho que marca OC entregue (Almoxarifado!) deve chamar garantirEntryDaOC ou a OC some do Contas a Pagar.
 - [Contas a Pagar — base da janela de fechamento](contas-pagar-ciclo-window-basis.md) — agrupar por ciclo de fornecedor usa data da COMPRA (competência), nunca vencimento (varia por OC).
 - [DXF escala heurística + sidecar](levantamento-dxf-escala-heuristica.md) — $INSUNITS mente; clustering espacial + plausibilidade 3–1000 m; mudou o parse → bump DXF_ALGO_VERSION; upload multipart ≤150MB.
+- [Levantamento consolidado = só-leitura](levantamento-consolidacao-lock.md) — todo write novo passa por assertCampoNaoConsolidado; sync offline descarta com "ok"; desconsolidar checa medição por consulta reversa; desaprovar gera REV. N.
 - [Levantamento — fluxo poka-yoke](levantamento-pokayoke-fluxo.md) — planta nova só DXF; categoria comanda a ferramenta (contorno sempre classificado); escala PDF legado exige conferência ±2%.
 - [Levantamento — catálogo de serviços](levantamento-servicos-catalogo.md) — seed sob advisory lock 478002; updates de contorno SEMPRE reenviam `servico` (sync preserva se ausente); derivado com medição manual suprime derivação.
 - [Medição gotchas](medicao-modules-architecture.md) — [FD ↔ Compras via compraId](medicao-fd-compras-link.md); [× Cronograma casar por atividadeId, não EAP](medicao-cronograma-atividade-id-match.md); [duplicada no Contas a Receber (2 escritas)](medicao-receita-dupla-escrita.md).
@@ -100,6 +101,7 @@
 - [Client-driven AI batching](client-driven-ai-batching.md) — loops de LLM por lote com cursor que só avança por efeito colateral precisam de guard de estagnação.
 - [terceiro_contratos.status não confiável](terceiro-contrato-status-unreliable.md) — "assinado" = envelope FcSign concluido+não-excluído, NÃO status="ativo" bruto.
 - [CIPA module write-path guards](cipa-module.md) — CIPA create/update/delete need companyFilter; update/delete-by-id are IDOR holes; abrirVotacao race fixed via UNIQUE+onConflictDoNothing.
+- [FD pendente trava aprovação](fd-pendente-trava-aprovacao.md) — FD de material não descontado bloqueia aprovar medição; puxar auto capado no medido (lock 478003); título líquido de FD; desaprovar apaga título sem baixa.
 - [Terceiros: título garantido no Financeiro](terceiros-medicao-titulo-garantido.md) — aprovar medição chama garantirTituloDaMedicao (bypassa toggle auto_import, xact_lock 478001, periodo YYYY-MM c/ fallback); novo caminho de aprovação deve propagar financeiroOk.
 - [Medição módulos cliente vs terceiros + shared engine](medicao-modules-architecture.md) — "medicao"=lado CLIENTE, terceiros é tabela separada, IDs colidem → medicao_campo precisa de `origem`; [sem origem = escopo CLIENTE nunca `true`](medicao-shared-engine-origem.md).
 - [/uploads DB-fallback MIME + traversal](uploads-db-fallback-mime.md) — off-disk attachments fall back to uploaded_files; octet-stream → Safari/iOS preview blank; derive MIME from extension; fallback needs path-traversal guard.

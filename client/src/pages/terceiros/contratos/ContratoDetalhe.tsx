@@ -502,6 +502,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           </div>
         )}
 
+        {/* Rev. 4798 — layout enxuto: os blocos gerais do contrato (objeto,
+            vigência, critérios, portal, resumo, barras) só aparecem na aba
+            "Contrato". Nas outras abas (Medições, Itens…) fica só o conteúdo
+            da aba — pedido do usuário: "quando clico em Medições, só medições". */}
+        {tab === "documento" && (<>
         {/* Objeto do Contrato — escopo resumido e legível, editável p/ padronização */}
         {!emModuloMedicoes && (
         <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -929,6 +934,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             </div>
           )}
         </div>
+        </>)}
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200">
@@ -2150,6 +2156,11 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   <div className="flex items-center gap-2 mb-1">
                     {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                     <span className="font-semibold text-gray-900">Medição {String(m.numero).padStart(2, "0")}{m.dataInicio && m.dataFim ? ` — ${fmtDate(m.dataInicio)} a ${fmtDate(m.dataFim)}` : ` — ${m.periodo}`}</span>
+                    {Number((m as any).revisao || 0) > 0 && (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5" title={`Revisada${(m as any).revisadoPorNome ? ` por ${(m as any).revisadoPorNome}` : ""}${(m as any).revisadoEm ? ` em ${fmtDate(String((m as any).revisadoEm).slice(0, 10))}` : ""}`}>
+                        REV. {Number((m as any).revisao)}
+                      </span>
+                    )}
                     <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
                     {m.geradoAutomaticamente && <Badge className="text-xs border bg-purple-100 text-purple-700 border-purple-200"><Zap className="w-3 h-3 mr-1" />Auto</Badge>}
                   </div>
@@ -2296,7 +2307,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       <th className="px-2 py-2 text-center w-[70px] bg-blue-50/70 text-blue-700">% Período</th>
                       <th className="px-2 py-2 text-right w-[95px] bg-blue-50/70 text-blue-700" title="Quantidade medida no período, conforme levantamento">Qtd. Medida</th>
                       <th className="px-2 py-2 text-right w-[90px] bg-blue-50/70 text-blue-700">V.Período</th>
-                      <th className="px-2 py-2 text-center w-[110px]" title="Avanço físico acumulado do item">% Médio</th>
+                      <th className="px-2 py-2 text-center w-[110px]" title="Avanço físico acumulado do item">% Medido</th>
                       <th className="px-2 py-2 text-right w-[90px]">V.Acum.</th>
                       {mostrarRemover && <th className="px-2 py-2 text-center w-[35px]"></th>}
                     </tr>
@@ -2323,36 +2334,16 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                               const nivel = depth;
                               const isTopLevel = nivel === 1;
                               const colCount = isPreApproval ? 13 : 12;
-                              // Rev. 4795 — % médio ponderado do grupo (pelo valor dos itens)
-                              const kids = sorted.filter((it: any) => (it.eapCodigo || "").startsWith(parentEap + "."));
-                              const grpVT = kids.reduce((s: number, it: any) => s + Number(it.valorTotalItem || 0), 0);
-                              const grpAcum = kids.reduce((s: number, it: any) => s + Number(it.valorAcumulado || 0), 0);
-                              const grpPer = kids.reduce((s: number, it: any) => s + Number(it.valorMedidoPeriodo || 0), 0);
-                              const pMedio = grpVT > 0 ? grpAcum / grpVT * 100 : 0;
-                              const pMedioPer = grpVT > 0 ? grpPer / grpVT * 100 : 0;
                               rows.push(
                                 <tr key={`grp-${parentEap}`}
                                   className={`${isTopLevel ? "bg-slate-100 border-l-[3px] border-l-amber-500" : "bg-gray-50/70"} ${isTopLevel && rows.length > 0 ? "border-t-2 border-t-gray-200" : ""}`}>
                                   <td className="px-3 py-1.5 font-mono text-gray-500 text-[11px]">{parentEap}</td>
                                   <td colSpan={colCount - 1} className="px-3 py-1.5">
-                                    <div className="flex items-center justify-between gap-3" style={{ paddingLeft: `${(nivel - 1) * 16}px` }}>
-                                      <div className="flex items-center min-w-0">
-                                        <ChevronDown className="w-3.5 h-3.5 text-gray-400 mr-1.5 flex-shrink-0" />
-                                        <span className={`font-semibold truncate ${isTopLevel ? "text-gray-800 text-[12px]" : "text-gray-700 text-[11px]"}`}>
-                                          {h?.nome || `Nível ${parentEap}`}
-                                        </span>
-                                      </div>
-                                      {grpVT > 0 && (
-                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                          {pMedioPer > 0 && (
-                                            <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-1.5 py-0.5">+{pMedioPer.toFixed(1)}% período</span>
-                                          )}
-                                          <div className="w-20 h-1.5 bg-gray-200/80 rounded-full overflow-hidden">
-                                            <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500" style={{ width: `${Math.min(100, pMedio)}%` }} />
-                                          </div>
-                                          <span className={`text-[10px] font-bold tabular-nums ${pMedio >= 100 ? "text-emerald-600" : "text-gray-600"}`}>{pMedio.toFixed(1)}%</span>
-                                        </div>
-                                      )}
+                                    <div className="flex items-center" style={{ paddingLeft: `${(nivel - 1) * 16}px` }}>
+                                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 mr-1.5 flex-shrink-0" />
+                                      <span className={`font-semibold ${isTopLevel ? "text-gray-800 text-[12px]" : "text-gray-700 text-[11px]"}`}>
+                                        {h?.nome || `Nível ${parentEap}`}
+                                      </span>
                                     </div>
                                   </td>
                                 </tr>
@@ -3365,6 +3356,20 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
   const totalFd = (fds || []).reduce((s: number, f: any) => s + (Number(f.valor) || 0), 0);
   const liquido = (Number(medicao.valorMedido) || 0) - totalFd;
 
+  // Rev. 4798 — débito de FD do contrato ainda não descontado em NENHUMA medição.
+  // O sistema avisa sozinho e oferece puxar o desconto; a aprovação fica
+  // bloqueada no servidor enquanto houver pendência.
+  const fdPendente = Math.max(0, (Number(contrato.fdMaterialTotal) || 0) - (Number(contrato.fdAbatidoTotal) || 0));
+  const utils = trpc.useUtils();
+  const puxarFdMut = trpc.terceiroContratos.puxarFdPendente.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(r?.criado ? `Débito de ${BRL(r.pendente)} descontado nesta medição.` : "Nenhum débito pendente.");
+      utils.terceiroContratos.listarFdsTerceiro.invalidate();
+      utils.terceiroContratos.getContrato.invalidate({ id: contrato.id });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const submit = () => {
     if (!desc.trim()) { toast.error("Informe a descrição do FD."); return; }
     if (parseBRLInput(valor) <= 0) { toast.error("Informe um valor de FD maior que zero."); return; }
@@ -3387,6 +3392,26 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
           </Button>
         )}
       </div>
+
+      {fdPendente > 0.01 && (
+        <div className="mt-2 rounded-md border border-red-300 bg-red-50 p-2.5">
+          <div className="flex items-start gap-2 text-xs text-red-700">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-bold">Existem débitos pendentes: {BRL(fdPendente)}</p>
+              <p className="mt-0.5">FD de material do contrato ainda não descontado de nenhuma medição. A aprovação fica <strong>bloqueada</strong> até o débito ser descontado.</p>
+            </div>
+          </div>
+          {!travado && (
+            <div className="mt-2 flex justify-end">
+              <Button size="sm" className="h-7 gap-1 text-[11px] bg-red-600 hover:bg-red-700" disabled={puxarFdMut.isPending}
+                onClick={() => puxarFdMut.mutate({ companyId: contrato.companyId, contratoId: contrato.id, medicaoId: medicao.id })}>
+                {puxarFdMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Truck className="w-3 h-3" />} Descontar nesta medição
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {open && !travado && (
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2 items-end bg-white rounded-md border border-amber-200 p-2">

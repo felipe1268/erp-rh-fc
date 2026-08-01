@@ -68,10 +68,39 @@ export async function buildBoletimMedicaoHtml(db: any, medicaoId: number, compan
   const liquido = totPeriodo - totalRet - descontos;
 
   const numStr = String(medicao.numero || 1).padStart(2, "0");
-  const titulo = `Boletim de Medição Nº ${numStr} — ${contrato.descricao || `Contrato #${contrato.id}`} — ${medicao.periodo || ""}`;
+  const revNum = Number((medicao as any).revisao || 0);
+  const revSuf = revNum > 0 ? ` · Rev. ${revNum}` : "";
+  const titulo = `Boletim de Medição Nº ${numStr}${revSuf} — ${contrato.descricao || `Contrato #${contrato.id}`} — ${medicao.periodo || ""}`;
   const logoUrl = (company as any)?.logoUrl || "";
-  const logoImg = logoUrl && (logoUrl.startsWith("data:image") || logoUrl.startsWith("/uploads/"))
+  const logoImg = logoUrl && (logoUrl.startsWith("data:image") || (logoUrl.startsWith("/") && !logoUrl.includes("..")))
     ? `<img src="${esc(logoUrl)}" style="height:44px;border-radius:4px" />` : "";
+
+  // Rev. 4796 — datas do contrato + ritmo (adiantado/em dia/atrasado)
+  const fmtBR = (d: unknown) => {
+    if (!d) return "-";
+    const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+    const [a, m2, dd] = s.split("-");
+    return dd && m2 && a ? `${dd}/${m2}/${a}` : s;
+  };
+  const toDate = (d: unknown) => {
+    if (!d) return null;
+    const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+    const t = new Date(s + "T12:00:00");
+    return isNaN(t.getTime()) ? null : t;
+  };
+  const percAcumGlobal = totContrato > 0 ? totAcum / totContrato * 100 : 0;
+  const ini = toDate((contrato as any).dataInicio);
+  const fimC = toDate((contrato as any).dataTermino);
+  const refD = toDate((medicao as any).dataFim) || new Date(new Date().toISOString());
+  let ritmoHtml = "";
+  if (ini && fimC && fimC.getTime() > ini.getTime()) {
+    const percTempo = Math.max(0, Math.min(100, (refD.getTime() - ini.getTime()) / (fimC.getTime() - ini.getTime()) * 100));
+    const delta = percAcumGlobal - percTempo;
+    const [label, cor, bg] = delta >= 5 ? ["ADIANTADO", "#065f46", "#d1fae5"] : delta <= -5 ? ["ATRASADO", "#991b1b", "#fee2e2"] : ["EM DIA", "#1e40af", "#dbeafe"];
+    ritmoHtml = `<span style="background:${bg};color:${cor};border-radius:10px;padding:2px 10px;font-weight:bold">${label}</span><br/><span style="font-size:8px;color:#7a8699">Físico ${percAcumGlobal.toFixed(1)}% × Prazo ${percTempo.toFixed(1)}%</span>`;
+  } else {
+    ritmoHtml = "Sem datas no contrato";
+  }
 
   const trs = rows.map((r: any, i: number) => `
     <tr style="background:${i % 2 ? "#fff" : "#fafbfc"}">
@@ -115,17 +144,21 @@ export async function buildBoletimMedicaoHtml(db: any, medicaoId: number, compan
     <div><div style="font-size:16px;font-weight:bold">${esc(company?.name || "FC Engenharia")}</div>
     <div style="font-size:9px;color:#ccd6e0">${company?.cnpj ? `CNPJ: ${esc(company.cnpj)} · ` : ""}BOLETIM DE MEDIÇÃO — CONTRATO DE TERCEIROS</div></div>
   </div>
-  <div class="numbox"><div style="font-size:8px">MEDIÇÃO · ${esc(medicao.periodo || "-")}</div><div style="font-size:18px;font-weight:bold">Nº ${numStr}</div></div>
+  <div class="numbox"><div style="font-size:8px">MEDIÇÃO · ${esc(medicao.periodo || "-")}</div><div style="font-size:18px;font-weight:bold">Nº ${numStr}${revNum > 0 ? ` · REV. ${revNum}` : ""}</div></div>
 </div>
 <div class="info">
-  <div><b>Contrato</b>${esc(contrato.descricao || `#${contrato.id}`)}</div>
+  <div><b>Nº do Contrato</b>${esc((contrato as any).numeroContrato || `#${contrato.id}`)}</div>
+  <div><b>Contrato</b>${esc(contrato.descricao || "-")}</div>
   <div><b>Terceiro (Contratada)</b>${esc(empresa?.razaoSocial || empresa?.nomeFantasia || "-")}</div>
   <div><b>CNPJ Terceiro</b>${esc(empresa?.cnpj || "-")}</div>
   <div><b>Obra</b>${esc(obraNome || "-")}</div>
+  <div><b>Início do Contrato</b>${fmtBR((contrato as any).dataInicio)}</div>
+  <div><b>Término do Contrato</b>${fmtBR((contrato as any).dataTermino)}</div>
   <div><b>Valor do Contrato</b>${BRL(num(contrato.valorTotal))}</div>
-  <div><b>Período Medido</b>${esc((medicao as any).dataInicio || "-")} a ${esc((medicao as any).dataFim || "-")}</div>
+  <div><b>Período Medido</b>${fmtBR((medicao as any).dataInicio)} a ${fmtBR((medicao as any).dataFim)}</div>
   <div><b>Medido no Período</b>${BRL(totPeriodo)}</div>
-  <div><b>Acumulado</b>${BRL(totAcum)} (${totContrato > 0 ? (totAcum / totContrato * 100).toFixed(1) : "0.0"}%)</div>
+  <div><b>Acumulado</b>${BRL(totAcum)} (${percAcumGlobal.toFixed(1)}%)</div>
+  <div><b>Ritmo do Contrato</b>${ritmoHtml}</div>
 </div>
 <table>
   <thead><tr>

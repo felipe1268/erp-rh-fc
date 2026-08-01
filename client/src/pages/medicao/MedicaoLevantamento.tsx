@@ -17,8 +17,9 @@ import {
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
   RectangleHorizontal, PencilLine, ListOrdered, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
-  Layers, Maximize, Link as LinkIcon,
+  Layers, Maximize, Link as LinkIcon, Lock, LockOpen,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
   calcularContorno, distancia, fatorCalibracao, simplificarPontos,
@@ -332,6 +333,17 @@ export default function MedicaoLevantamento() {
   const invalidate = () => {
     utils.medicao.getCampo.invalidate({ id: campoId, companyId });
   };
+
+  // Rev. 4797 — Consolidação (Poka-Yoke): consolidado = levantamento só-leitura.
+  const travado = !!(campo as any)?.consolidadoEm;
+  const consolidarM = trpc.medicao.consolidarLevantamento.useMutation({
+    onSuccess: invalidate,
+    onError: (e) => toast.error(e.message || "Falha ao consolidar."),
+  });
+  const desconsolidarM = trpc.medicao.desconsolidarLevantamento.useMutation({
+    onSuccess: invalidate,
+    onError: (e) => toast.error(e.message || "Falha ao desconsolidar."),
+  });
 
   // --- mutations ONLINE-only (envio/exclusão de PDF e geração de boletim
   //     ficam FORA do escopo offline; PDFs são pré-baixados para medir offline) ---
@@ -1285,6 +1297,12 @@ export default function MedicaoLevantamento() {
 
   function finalizarContorno(tipo: TipoContorno, ptsNorm: GeoPonto[], espessura: number, contagem: number) {
     if (!pdfSel) return;
+    // Rev. 4797 — consolidado = só-leitura: nada novo nasce no desenho
+    if (travado) {
+      toast.error("Levantamento consolidado — desconsolide para editar.");
+      setTool("select"); setDraft([]); setDragRect(null); setFreePts([]);
+      return;
+    }
     // Rev. 4783 — poka-yoke: todo contorno nasce classificado. Sem categoria
     // válida (ex.: ferramenta "sobrou" de sessão anterior) não desenha.
     if (!svcAtivoObj || svcAtivoObj.ativo === 0) {
@@ -1530,6 +1548,7 @@ export default function MedicaoLevantamento() {
   // Rev. 4792 — RENUMERAR: reordena os números da página em ordem de leitura
   // (esquerda→direita, cima→baixo, por faixas horizontais) — claro e organizado.
   async function renumerarContornos() {
+    if (travado) { toast.error("Levantamento consolidado — desconsolide para editar."); return; }
     const cs = [...contornosPagina];
     if (!cs.length) return;
     const anchor = (c: any): GeoPonto => {
@@ -1634,6 +1653,7 @@ export default function MedicaoLevantamento() {
   // ou só a categoria/subcategoria ativa. Leva junto as fotos vinculadas
   // (e, no "tudo", também as fotos gerais). Passa pela fila offline normal.
   async function limparContornos(escopo: "tudo" | "categoria" | "so-ativa") {
+    if (travado) { toast.error("Levantamento consolidado — desconsolide para editar."); return; }
     if (bulkBusy) return;
     const todosC = ((campo?.contornos ?? []) as any[]).filter((c: any) => !c.deletedAt);
     let alvos = todosC;
@@ -1692,6 +1712,7 @@ export default function MedicaoLevantamento() {
   }
 
   async function vincularItemSelecionados(orcamentoItemId: string) {
+    if (travado) { toast.error("Levantamento consolidado — desconsolide para editar."); return; }
     if (bulkBusy) return;
     const alvos = contornosPagina.filter((c) => selContornos.has(c.id));
     if (alvos.length === 0) return;
@@ -1864,6 +1885,7 @@ export default function MedicaoLevantamento() {
   function onHandleDown(e: React.PointerEvent, c: any, kind: "vertex" | "corner" | "edge" | "move", idx: number) {
     e.stopPropagation();
     e.preventDefault();
+    if (travado) return; // Rev. 4797 — consolidado = geometria intocável
     // Sessão única por dedo: se um 2º dedo encostar durante um arrasto (tentativa
     // de pinça), CANCELA o arrasto sem salvar e entrega o gesto pra PINÇA global.
     if (editRef.current) {
@@ -1942,6 +1964,7 @@ export default function MedicaoLevantamento() {
     return mpu0;
   }
   async function redimensionarContorno(c: any, dim: "largura" | "altura" | "comprimento", metrosNovo: number) {
+    if (travado) { toast.error("Levantamento consolidado — desconsolide para editar."); return; }
     if (!(metrosNovo > 0)) return;
     let pts: GeoPonto[] = [];
     try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
@@ -1971,6 +1994,7 @@ export default function MedicaoLevantamento() {
   // (que descolaria do desenho), o usuário edita as MEDIDAS e o desenho +
   // área são recalculados juntos — planta e número nunca divergem.
   async function alterarEspessuraContorno(c: any, novoM: number) {
+    if (travado) { toast.error("Levantamento consolidado — desconsolide para editar."); return; }
     if (!(novoM > 0)) return;
     let pts: GeoPonto[] = [];
     try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
@@ -2263,6 +2287,32 @@ export default function MedicaoLevantamento() {
                 )}
               </PopoverContent>
             </Popover>
+            {/* Rev. 4797 — Consolidar/Desconsolidar (Poka-Yoke) */}
+            {travado ? (
+              <Button size="sm" variant="outline" className="gap-1.5 h-9 border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                disabled={desconsolidarM.isPending}
+                onClick={() => askConfirm({
+                  title: "Desconsolidar levantamento?",
+                  description: `Consolidado${(campo as any)?.consolidadoPorNome ? ` por ${(campo as any).consolidadoPorNome}` : ""}. Desconsolidar libera a edição dos quantitativos. Se a medição vinculada estiver aprovada, desaprove-a primeiro.`,
+                  confirmText: "Desconsolidar",
+                  onConfirm: () => desconsolidarM.mutate({ companyId, medicaoCampoId: campoId }),
+                })}>
+                {desconsolidarM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                <span className="hidden md:inline">Consolidado</span>
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" className="gap-1.5 h-9"
+                disabled={consolidarM.isPending}
+                onClick={() => askConfirm({
+                  title: "Consolidar levantamento?",
+                  description: "O levantamento fica SÓ-LEITURA: nada pode ser desenhado, editado ou apagado (nem sem querer). Para editar depois, será preciso desconsolidar.",
+                  confirmText: "Consolidar",
+                  onConfirm: () => consolidarM.mutate({ companyId, medicaoCampoId: campoId }),
+                })}>
+                {consolidarM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockOpen className="h-4 w-4" />}
+                <span className="hidden md:inline">Consolidar</span>
+              </Button>
+            )}
             <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={gerarMemoriaCalculo}>
               <Calculator className="h-4 w-4" /><span className="hidden md:inline">Memória de cálculo</span>
             </Button>
@@ -3085,8 +3135,9 @@ export default function MedicaoLevantamento() {
                       {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ListOrdered className="h-3.5 w-3.5" />}Organizar números
                     </Button>
                   )}
-                  {/* Rev. 4792 — Limpar em massa: tudo / categoria ativa (+subs) / só a ativa */}
-                  {((campo?.contornos ?? []) as any[]).some((c: any) => !c.deletedAt) && (
+                  {/* Rev. 4792 — Limpar em massa: tudo / categoria ativa (+subs) / só a ativa.
+                      Rev. 4797 — some quando consolidado (Poka-Yoke). */}
+                  {!travado && ((campo?.contornos ?? []) as any[]).some((c: any) => !c.deletedAt) && (
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] gap-1 text-red-600 border-red-300 hover:bg-red-50" disabled={bulkBusy} title="Limpar contornos e fotos em massa">
@@ -3277,9 +3328,11 @@ export default function MedicaoLevantamento() {
                           <span className="font-bold text-[13px] tabular-nums text-gray-800 whitespace-nowrap">
                             {numFmt(parseFloat(c.quantidade || "0"), 2)} <span className="font-medium text-[10px] text-gray-500">{c.unidade}</span>
                           </span>
-                          <button className="text-red-500 hover:text-red-700" onClick={() => askConfirm({ title: "Excluir contorno?", description: `${catNomeCard} ${String(c.numero ?? "")} será removido. Esta ação não pode ser desfeita.`, confirmText: "Excluir", onConfirm: () => off.excluirContorno(c) })}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          {!travado && (
+                            <button className="text-red-500 hover:text-red-700" onClick={() => askConfirm({ title: "Excluir contorno?", description: `${catNomeCard} ${String(c.numero ?? "")} será removido. Esta ação não pode ser desfeita.`, confirmText: "Excluir", onConfirm: () => off.excluirContorno(c) })}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                       {/* Rev. 4792 — pills de conferência: foto e vínculo com a planilha */}
@@ -3366,9 +3419,11 @@ export default function MedicaoLevantamento() {
                           <span className="text-[11px] font-medium text-gray-500 flex items-center gap-1">
                             <ImageIcon className="h-3 w-3" />Fotos ({(fotosPorContorno.get(c.id) ?? []).length})
                           </span>
-                          <Button size="sm" variant="outline" className="h-6 gap-1 text-[11px] px-2" onClick={() => addFotoContorno(c)}>
-                            <Camera className="h-3 w-3" />Foto
-                          </Button>
+                          {!travado && (
+                            <Button size="sm" variant="outline" className="h-6 gap-1 text-[11px] px-2" onClick={() => addFotoContorno(c)}>
+                              <Camera className="h-3 w-3" />Foto
+                            </Button>
+                          )}
                         </div>
                         {(fotosPorContorno.get(c.id) ?? []).length > 0 && (
                           <div className="grid grid-cols-4 gap-1.5 mt-1.5">
@@ -3378,9 +3433,9 @@ export default function MedicaoLevantamento() {
                                   <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-14 object-cover rounded border" />
                                 </a>
                                 {f.__pending && <span className="absolute bottom-0.5 left-0.5 bg-amber-500/90 text-white text-[8px] px-1 rounded">pend.</span>}
-                                <button className="absolute top-0.5 right-0.5 bg-white/95 rounded-full p-0.5 text-red-600 shadow border" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste contorno. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
+                                {!travado && <button className="absolute top-0.5 right-0.5 bg-white/95 rounded-full p-0.5 text-red-600 shadow border" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste contorno. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
                                   <Trash2 className="h-3 w-3" />
-                                </button>
+                                </button>}
                               </div>
                             ))}
                           </div>
@@ -3507,7 +3562,7 @@ export default function MedicaoLevantamento() {
                       {tag && <span className="absolute bottom-1 right-1 max-w-[90%] truncate bg-blue-600/90 text-white text-[9px] px-1 rounded" title={tag}>{tag}</span>}
                       {f.__pending && <span className="absolute bottom-1 left-1 bg-amber-500/90 text-white text-[9px] px-1 rounded">pendente</span>}
                       {/* Rev. 4792 — sempre visível (iPad não tem hover) */}
-                      {fotoSel === null && (
+                      {fotoSel === null && !travado && (
                         <button className="absolute top-1 right-1 bg-white/95 rounded-full p-1 text-red-600 shadow border" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste levantamento. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>

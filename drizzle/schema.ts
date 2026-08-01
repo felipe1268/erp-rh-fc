@@ -4467,6 +4467,10 @@ export const terceiroMedicoes = pgTable("terceiro_medicoes", {
   socioAprovadoEm:   timestamp("socio_aprovado_em", { mode: "string" }),
   // Rev. 3078 — Vínculo com o levantamento de campo + snapshot p/ alerta de divergência.
   levantamentoCampoId:   integer("levantamento_campo_id"),
+  // Rev. 4797 — nº de revisão: incrementa a cada desaprovação p/ ajuste
+  revisao:               integer().default(0),
+  revisadoEm:            timestamp("revisado_em", { mode: "string" }),
+  revisadoPorNome:       varchar("revisado_por_nome", { length: 255 }),
   quantidadeLevantada:   numeric("quantidade_levantada", { precision: 18, scale: 4 }),
   unidadeLevantada:      varchar("unidade_levantada", { length: 20 }),
   percentualDivergencia: numeric("percentual_divergencia", { precision: 8, scale: 4 }),
@@ -8773,6 +8777,9 @@ export const medicaoCampo = pgTable("medicao_campo", {
   boletimId:        integer("boletim_id"),
   medicaoId:        integer("medicao_id"), // Rev. 3078 — vínculo ao terceiro_medicoes (levantamento da medição de terceiro)
   origem:           varchar({ length: 20 }).default("cliente").notNull(), // Rev. 3078 — cliente | terceiro (IDs de contrato colidem entre tabelas)
+  // Rev. 4797 — consolidação (Poka-Yoke): consolidado = levantamento só-leitura
+  consolidadoEm:    timestamp("consolidado_em"),
+  consolidadoPorNome: varchar("consolidado_por_nome", { length: 255 }),
   criadoPorId:      integer("criado_por_id"),
   criadoPorNome:    varchar("criado_por_nome", { length: 255 }),
   criadoEm:         timestamp("criado_em").defaultNow(),

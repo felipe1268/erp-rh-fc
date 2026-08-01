@@ -1,4 +1,49 @@
 /**
+ * Rev. 4798 - FD PENDENTE TRAVA APROVACAO + LAYOUT DO CONTRATO ENXUTO
+ *
+ * FD (Faturamento Direto) bem amarrado (pedido do usuario):
+ * - O sistema detecta sozinho FD de material do contrato ainda nao descontado
+ *   de nenhuma medicao e mostra o aviso "Existem debitos pendentes: R$ X" em
+ *   vermelho no bloco FD do Periodo da medicao.
+ * - Botao "Descontar nesta medicao": puxa o debito automaticamente (1 clique),
+ *   com a lista de OCs na descricao. Desconto nunca passa do valor medido do
+ *   periodo; o restante segue pendente para as proximas medicoes.
+ * - APROVACAO BLOQUEADA (gestor e socio) enquanto houver debito pendente -
+ *   excecao: medicao que ja descontou ate o teto (liquido zero) pode aprovar.
+ * - Titulo no Contas a Pagar agora desconta o FD abatido (nunca pagar mais do
+ *   que o combinado); liquido zero = nenhum titulo gerado.
+ * Layout do contrato enxuto (iPad):
+ * - Objeto, vigencia, criterios/fluxograma, portal, resumo e barras agora so
+ *   aparecem na aba "Contrato". Aba Medicoes mostra so as medicoes.
+ */
+/**
+ * Rev. 4797 - LEVANTAMENTO: CONSOLIDACAO (POKA-YOKE) + REVISAO DE MEDICAO
+ *
+ * Consolidar levantamento (pedido do usuario):
+ * - Novo botao "Consolidar" na tela do levantamento: consolidado = SO-LEITURA.
+ *   Nada pode ser desenhado, editado, redimensionado, renumerado, vinculado ou
+ *   apagado (nem sem querer): lixinhos e "Limpar" somem, desenho bloqueado.
+ * - Trava tambem no SERVIDOR: toda escrita de contorno/foto/servico e negada
+ *   com aviso claro; sync offline descarta a operacao sem travar a fila.
+ * - Aprovar a medicao CONSOLIDA o levantamento vinculado automaticamente
+ *   (quantitativo congelado enquanto aprovada). Desconsolidar exige medicao
+ *   nao-aprovada (desaprove primeiro) e nao e permitido a perfil viewer.
+ * Revisao da medicao:
+ * - Desaprovar uma medicao aprovada gera REV. 1, REV. 2... com autor e data.
+ * - Selo REV. N na lista de medicoes, no PDF do boletim e no documento FCSign.
+ * Fluxo completo de ajuste: desaprovar -> desconsolidar -> ajustar -> salvar
+ * -> consolidar -> reaprovar (vira nova revisao com rastro).
+ */
+/**
+ * Rev. 4796 - BOLETIM PDF: LOGO + DADOS DO CONTRATO + RITMO
+ *
+ * - Logo da empresa agora resolve tambem assets publicos (ex: /logo-fc.jpg).
+ * - Faixa de identificacao com N do contrato, inicio/termino e selo de RITMO
+ *   (ADIANTADO / EM DIA / ATRASADO) comparando fisico acumulado x prazo.
+ * - Planilha na tela: percentuais das linhas de fase removidos; avancao so na
+ *   linha de cada item (coluna "% Medido").
+ */
+/**
  * Rev. 4794 - MEDICAO DE TERCEIROS: PDF PAISAGEM PROFISSIONAL + ASSINATURA FCSIGN
  *
  * PDF do Boletim de Medicao redesenhado (pedido: "totalmente pessimo"):

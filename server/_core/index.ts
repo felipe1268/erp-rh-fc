@@ -1022,6 +1022,14 @@ Regras:
           await db.execute(sql`ALTER TABLE integrasign_envelopes ADD COLUMN IF NOT EXISTS medicao_terceiro_id INTEGER`);
           console.log(`[SyncSchema+] Rev. 4793: coluna medicao_terceiro_id garantida em integrasign_envelopes (assinatura de Boletim de Medição).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA integrasign_envelopes.medicao_terceiro_id:`, e?.message || e); }
+        try {
+          await db.execute(sql`ALTER TABLE medicao_campo ADD COLUMN IF NOT EXISTS consolidado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE medicao_campo ADD COLUMN IF NOT EXISTS consolidado_por_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS revisao INTEGER DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS revisado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS revisado_por_nome VARCHAR(255)`);
+          console.log(`[SyncSchema+] Rev. 4797: consolidação do levantamento (medicao_campo) + revisão de medição (terceiro_medicoes) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 4797 consolidacao/revisao:`, e?.message || e); }
 
         // Rev. 3179/3181 — soft-delete de linhas de extrato bancário ("Limpar extrato" sem
         // hard DELETE; TODAS as leituras/dedup filtram `excluido_em IS NULL`). O self-heal

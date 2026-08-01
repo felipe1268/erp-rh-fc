@@ -37,6 +37,7 @@ import {
   orcamentoItens,
   portalCredentials,
   financialEntries,
+  financialEntryBaixas,
   users,
   integrasignEnvelopes,
   integrasignSignatarios,
@@ -95,6 +96,20 @@ async function garantirTituloDaMedicao(companyId: number, medicaoId: number): Pr
 
 // Rev. 4778 — pós-aprovação: garante o título e, se falhar, avisa o aprovador
 // via alerta in-app (pop-up global) em vez de só logar no console.
+// Rev. 4797 — Poka-Yoke: aprovar a medição CONSOLIDA o levantamento vinculado
+// (quantitativo congelado). Idempotente: só grava se ainda não consolidado.
+async function _consolidarLevantamentoDaMedicao(db: any, medicao: any, companyId: number, nome: string | null) {
+  const campoId = medicao?.levantamentoCampoId;
+  if (!campoId) return;
+  await db.update(medicaoCampo)
+    .set({ consolidadoEm: new Date(), consolidadoPorNome: nome || null, atualizadoEm: new Date() })
+    .where(and(
+      eq(medicaoCampo.id, campoId),
+      eq(medicaoCampo.companyId, companyId),
+      sql`consolidado_em IS NULL`,
+    ));
+}
+
 async function _posAprovacaoFinanceiro(companyId: number, medicaoId: number, userId: number | null | undefined): Promise<boolean> {
   let ok = false;
   try {
@@ -198,6 +213,50 @@ async function _fdMaterialDoContrato(db: any, contrato: any): Promise<{
   } catch (e: any) {
     console.error("[_fdMaterialDoContrato] erro:", e?.message || e);
     return { registros: [], total: 0 };
+  }
+}
+
+// Rev. 4798 — FD PENDENTE do contrato: total de FD de material (OCs de Compras
+// marcadas FD) que ainda NÃO foi descontado em nenhuma medição (lançamentos em
+// terceiro_medicao_fds). Pedido do usuário: o sistema puxa o débito sozinho e
+// NÃO deixa aprovar medição com débito pendente ("não pagar mais que o combinado").
+async function _fdPendenteDoContrato(db: any, contrato: any): Promise<{
+  pendente: number; fdMaterialTotal: number; abatidoTotal: number;
+  registros: Array<{ id: number; numeroOc: string | null; descricao: string | null; valor: number; data: string | null }>;
+}> {
+  const fd = await _fdMaterialDoContrato(db, contrato);
+  const rows = await db.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
+    .where(and(eq(terceiroMedicaoFds.companyId, contrato.companyId), eq(terceiroMedicaoFds.contratoId, contrato.id)));
+  const abatidoTotal = rows.reduce((s: number, r: any) => s + n(r.valor), 0);
+  const pendente = Math.max(0, Math.round((fd.total - abatidoTotal) * 100) / 100);
+  return { pendente, fdMaterialTotal: fd.total, abatidoTotal, registros: fd.registros };
+}
+
+// Rev. 4798 — guarda de aprovação: se o contrato tem FD de material ainda não
+// descontado em medições, a aprovação é NEGADA com aviso claro.
+async function _assertSemFdPendente(db: any, medicaoId: number, companyId: number) {
+  const [med] = await db.select({ contratoId: terceiroMedicoes.contratoId }).from(terceiroMedicoes)
+    .where(and(eq(terceiroMedicoes.id, medicaoId), eq(terceiroMedicoes.companyId, companyId)));
+  if (!med?.contratoId) return;
+  const [contrato] = await db.select().from(terceiroContratos)
+    .where(and(eq(terceiroContratos.id, med.contratoId), eq(terceiroContratos.companyId, companyId)));
+  if (!contrato) return;
+  const { pendente } = await _fdPendenteDoContrato(db, contrato);
+  if (pendente > 0.01) {
+    // Débito maior que a medição: se ESTA medição já descontou até o teto
+    // (FD ≥ valor medido → líquido zero), ela pode ser aprovada; o restante
+    // continua bloqueando as PRÓXIMAS medições até zerar.
+    const [medFull] = await db.select({ valorMedido: terceiroMedicoes.valorMedido }).from(terceiroMedicoes)
+      .where(and(eq(terceiroMedicoes.id, medicaoId), eq(terceiroMedicoes.companyId, companyId)));
+    const fdsMed = await db.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
+      .where(and(eq(terceiroMedicaoFds.companyId, companyId), eq(terceiroMedicaoFds.medicaoId, medicaoId)));
+    const fdMedTotal = fdsMed.reduce((s: number, r: any) => s + n(r.valor), 0);
+    const medido = n((medFull as any)?.valorMedido);
+    if (medido > 0 && fdMedTotal >= medido - 0.01) return; // teto atingido — líquido 0
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Existem débitos de FD pendentes neste contrato (R$ ${pendente.toFixed(2).replace(".", ",")}) que ainda não foram descontados de nenhuma medição. Lance o desconto na medição (aba FD do Período → "Descontar nesta medição") antes de aprovar.`,
+    });
   }
 }
 
@@ -755,6 +814,14 @@ export const terceiroContratosRouter = router({
         saldoALiberar,
         fdMaterialTotal: fd.total,
         fdMaterialRegistros: fd.registros,
+        // Rev. 4798 — débito de FD ainda não descontado em medições.
+        fdAbatidoTotal: await (async () => {
+          try {
+            const rowsAb = await db.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
+              .where(and(eq(terceiroMedicaoFds.companyId, contrato.companyId), eq(terceiroMedicaoFds.contratoId, contrato.id)));
+            return rowsAb.reduce((s: number, r: any) => s + n(r.valor), 0);
+          } catch { return 0; }
+        })(),
         naturezaIncluiMaterial,
         valorLiquidoMdo,
         docsComPendencia: documentos.filter(d => d.status === "pendente" && d.bloqueiaPagemento).length,
@@ -2024,6 +2091,8 @@ export const terceiroContratosRouter = router({
       // Rev. 4778 — guarda de tenancy (review): a rota aceitava {id, companyId} sem
       // validar o acesso do chamador à empresa → IDOR de aprovação cross-tenant.
       await _assertCompanyAccess(ctx.user, input.companyId);
+      // Rev. 4798 — POKA-YOKE: FD de material pendente BLOQUEIA a aprovação.
+      await _assertSemFdPendente(db, input.id, input.companyId);
       // Rev. 1987 — BUGFIX A1 · Toda a aprovação agora roda em TRANSAÇÃO ATÔMICA.
       // Bug anterior: update medicao → loop update itens. Se o loop falhasse no
       // meio, a medição ficava "aprovada" mas itens do contrato meio-atualizados
@@ -2033,8 +2102,13 @@ export const terceiroContratosRouter = router({
         const [existing] = await tx.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
         if (!existing) throw new Error("Medição não encontrada");
         if (existing.status !== "aguardando_aprovacao") throw new Error(`Medição não pode ser aprovada (status: ${existing.status})`);
+        // Rev. 4798 — persiste o total de FD abatido também na aprovação simples
+        // (antes só o nível sócio gravava fd_total_abatido).
+        const fdRowsTx = await tx.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
+          .where(and(eq(terceiroMedicaoFds.companyId, input.companyId), eq(terceiroMedicaoFds.medicaoId, input.id)));
+        const fdTotalTx = fdRowsTx.reduce((s: number, r: any) => s + n(r.valor), 0);
         const [med] = await tx.update(terceiroMedicoes)
-          .set({ status: "aprovada", aprovadoPor: input.aprovadoPor, aprovadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() })
+          .set({ status: "aprovada", aprovadoPor: input.aprovadoPor, aprovadoEm: new Date().toISOString(), fdTotalAbatido: String(fdTotalTx), atualizadoEm: new Date().toISOString() } as any)
           .where(eq(terceiroMedicoes.id, input.id))
           .returning();
 
@@ -2059,6 +2133,10 @@ export const terceiroContratosRouter = router({
       // Agora: awaited, falhas logadas no console com contexto. A aprovação
       // permanece bem-sucedida mesmo se o sync falhar (medição já está commitada),
       // mas o erro fica VISÍVEL pra operação investigar e re-disparar manualmente.
+      // Rev. 4797 — Poka-Yoke: aprovar CONSOLIDA o levantamento vinculado
+      // automaticamente (quantitativo congelado enquanto a medição for aprovada).
+      await _consolidarLevantamentoDaMedicao(db, medicao, input.companyId, input.aprovadoPor).catch((e: any) =>
+        console.error(`[aprovarMedicao] FALHA ao consolidar levantamento:`, e?.message || e));
       // Rev. 4778 — POKA-YOKE: título garantido direto (bypassa o toggle auto_import);
       // sync geral continua como complemento (respeita o toggle, não bloqueia).
       const financeiroOk = await _posAprovacaoFinanceiro(input.companyId, input.id, ctx.user?.id);
@@ -2072,11 +2150,39 @@ export const terceiroContratosRouter = router({
 
   cancelarAprovacao: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const [existing] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!existing) throw new Error("Medição não encontrada");
       if (existing.status !== "aprovada") throw new Error(`Apenas medições aprovadas podem ter a aprovação cancelada (status: ${existing.status})`);
+
+      // Rev. 4798 (review) — reconcilia o FINANCEIRO ao desaprovar: o título da
+      // medição sai junto (senão a reaprovação com valores diferentes deixaria
+      // um título velho no Contas a Pagar). Título com BAIXA ATIVA é intocável:
+      // exige estornar o pagamento antes de desaprovar.
+      {
+        const titulos = await db.select({ id: financialEntries.id }).from(financialEntries)
+          .where(and(
+            eq(financialEntries.companyId, input.companyId),
+            eq(financialEntries.origemModulo, "terceiro_medicao"),
+            eq(financialEntries.origemId, input.id),
+          ));
+        for (const t of titulos) {
+          const baixas = await db.select({ id: financialEntryBaixas.id }).from(financialEntryBaixas)
+            .where(and(eq(financialEntryBaixas.entryId, t.id), sql`${financialEntryBaixas.estornadaEm} IS NULL`)).limit(1);
+          if (baixas.length > 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Esta medição já tem PAGAMENTO baixado no Contas a Pagar. Estorne a baixa do título antes de cancelar a aprovação." });
+          }
+        }
+        if (titulos.length > 0) {
+          await db.delete(financialEntries).where(and(
+            eq(financialEntries.companyId, input.companyId),
+            eq(financialEntries.origemModulo, "terceiro_medicao"),
+            eq(financialEntries.origemId, input.id),
+          ));
+        }
+      }
 
       const itensMedicao = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
 
@@ -2115,6 +2221,10 @@ export const terceiroContratosRouter = router({
           status: "aguardando_aprovacao",
           aprovadoPor: null,
           aprovadoEm: null,
+          // Rev. 4797 — desaprovar p/ ajuste gera uma REVISÃO da medição
+          revisao: sql`COALESCE(revisao, 0) + 1`,
+          revisadoEm: new Date().toISOString(),
+          revisadoPorNome: (ctx.user as any)?.name || null,
           atualizadoEm: new Date().toISOString(),
         } as any)
         .where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)))
@@ -2164,6 +2274,54 @@ export const terceiroContratosRouter = router({
         .orderBy(desc(terceiroMedicaoFds.dataFd), desc(terceiroMedicaoFds.id));
       const total = rows.reduce((s, r) => s + n(r.valor), 0);
       return { fds: rows, total };
+    }),
+
+  // Rev. 4798 — puxa AUTOMATICAMENTE os débitos de FD pendentes do contrato
+  // para dentro de uma medição (1 lançamento origem "auto" com o total pendente
+  // e a lista de OCs na descrição). Poka-Yoke: o usuário não precisa lembrar.
+  puxarFdPendente: protectedProcedure
+    .input(z.object({ companyId: z.number(), contratoId: z.number(), medicaoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const [contrato] = await db.select().from(terceiroContratos)
+        .where(and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado para esta empresa." });
+      const [med] = await db.select({ id: terceiroMedicoes.id, contratoId: terceiroMedicoes.contratoId, status: terceiroMedicoes.status, valorMedido: terceiroMedicoes.valorMedido })
+        .from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
+      if (!med || med.contratoId !== input.contratoId) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não pertence a este contrato/empresa." });
+      if (med.status === "aprovada" || med.status === "paga") throw new TRPCError({ code: "BAD_REQUEST", message: "Medição já aprovada/paga — não é possível alterar os FDs." });
+      // Rev. 4798 (review) — transação + advisory lock por medição: 2 cliques
+      // (ou 2 abas) não podem lançar o desconto em dobro; e o teto considera o
+      // que JÁ FOI lançado nesta medição (idempotente: esgotou → no-op).
+      return await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(478003, ${input.medicaoId})`);
+        const { pendente: pendenteTotal, registros } = await _fdPendenteDoContrato(tx, contrato);
+        if (pendenteTotal <= 0.01) return { criado: false, pendente: 0, restante: 0 };
+        const fdsJa = await tx.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
+          .where(and(eq(terceiroMedicaoFds.companyId, input.companyId), eq(terceiroMedicaoFds.medicaoId, input.medicaoId)));
+        const jaLancado = fdsJa.reduce((s: number, r: any) => s + n(r.valor), 0);
+        // O desconto NUNCA passa do valor medido do período (contando o que já
+        // está lançado) — o RESTANTE segue pendente para as próximas medições.
+        const medido = n((med as any).valorMedido);
+        const teto = medido > 0 ? Math.max(0, Math.round((medido - jaLancado) * 100) / 100) : pendenteTotal;
+        const pendente = Math.min(pendenteTotal, teto);
+        if (pendente <= 0.01) return { criado: false, pendente: 0, restante: pendenteTotal };
+        const restante = Math.round((pendenteTotal - pendente) * 100) / 100;
+        const ocsTxt = registros.map((r) => r.numeroOc || `OC #${r.id}`).join(", ");
+        const [fd] = await tx.insert(terceiroMedicaoFds).values({
+          companyId: input.companyId,
+          contratoId: input.contratoId,
+          medicaoId: input.medicaoId,
+          descricao: `FD de material pendente do contrato (${ocsTxt})`.slice(0, 500),
+          valor: String(pendente.toFixed(2)),
+          dataFd: new Date().toISOString().slice(0, 10),
+          origem: "auto",
+          observacoes: "Puxado automaticamente — débito de FD do contrato descontado do valor a pagar.",
+          criadoPor: (ctx.user as any)?.name || null,
+        } as any).returning();
+        return { criado: true, pendente, restante, fd };
+      });
     }),
 
   criarFdTerceiro: protectedProcedure
@@ -2337,6 +2495,8 @@ export const terceiroContratosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       await _assertCompanyAccess(ctx.user, input.companyId);
+      // Rev. 4798 — POKA-YOKE: FD de material pendente BLOQUEIA a aprovação final.
+      await _assertSemFdPendente(db, input.id, input.companyId);
       const fdRows = await db.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
         .where(and(eq(terceiroMedicaoFds.companyId, input.companyId), eq(terceiroMedicaoFds.medicaoId, input.id)));
       const fdTotal = fdRows.reduce((s, r) => s + n(r.valor), 0);
@@ -2367,6 +2527,9 @@ export const terceiroContratosRouter = router({
         return med;
       });
 
+      // Rev. 4797 — aprovação final também consolida o levantamento vinculado.
+      await _consolidarLevantamentoDaMedicao(db, medicao, input.companyId, (ctx.user as any)?.name || null).catch((e: any) =>
+        console.error(`[aprovarNivelSocio] FALHA ao consolidar levantamento:`, e?.message || e));
       // Rev. 4778 — POKA-YOKE: título garantido direto (bypassa o toggle auto_import).
       const financeiroOk = await _posAprovacaoFinanceiro(input.companyId, input.id, ctx.user?.id);
       try {
@@ -2501,6 +2664,15 @@ export const terceiroContratosRouter = router({
           const localPath = path.join(process.cwd(), "server", logoUrl);
           if (fs.existsSync(localPath)) return localPath;
         }
+        // Rev. 4796 — logo em asset público (ex.: /logo-fc.jpg). Anti-traversal:
+        // resolve e EXIGE que o caminho final continue dentro do diretório base.
+        if (logoUrl.startsWith("/")) {
+          for (const base of ["client/public", "dist/public"]) {
+            const baseDir = path.resolve(process.cwd(), base);
+            const p = path.resolve(baseDir, "." + path.posix.normalize(logoUrl));
+            if (p.startsWith(baseDir + path.sep) && fs.existsSync(p)) return p;
+          }
+        }
         return null;
       }
 
@@ -2564,7 +2736,8 @@ export const terceiroContratosRouter = router({
           .text(`${company?.cnpj ? `CNPJ: ${company.cnpj}   ·   ` : ""}BOLETIM DE MEDIÇÃO — CONTRATO DE TERCEIROS`, nameX, 32);
 
         const statusLabels: Record<string, string> = { rascunho: "Rascunho", aguardando_aprovacao: "Aguard. Aprovação", aprovada: "Aprovada", paga: "Paga", rejeitada: "Rejeitada" };
-        const numBox = `Nº ${String(medicao.numero || 1).padStart(2, "0")}`;
+        const revNum = Number((medicao as any).revisao || 0);
+        const numBox = `Nº ${String(medicao.numero || 1).padStart(2, "0")}${revNum > 0 ? ` · REV. ${revNum}` : ""}`;
         doc.roundedRect(doc.page.width - mR - 150, 9, 150, 40, 4).fill("#ffffff");
         doc.font("Helvetica").fontSize(6.5).fillColor(primary).text(`MEDIÇÃO · ${medicao.periodo || "-"}`, doc.page.width - mR - 145, 15, { width: 140, align: "center" });
         doc.font("Helvetica-Bold").fontSize(15).fillColor(primary).text(numBox, doc.page.width - mR - 145, 24, { width: 140, align: "center" });
@@ -2572,24 +2745,70 @@ export const terceiroContratosRouter = router({
 
         let y = headerH + 10;
 
-        // ── Faixa de identificação compacta (2 linhas × 4 colunas) ──
-        doc.roundedRect(mL, y, pageW, 46, 3).fill("#f4f6f9");
+        // Rev. 4796 — datas do contrato + ritmo (adiantado/em dia/atrasado)
+        const fmtBR = (d: any) => {
+          if (!d) return "-";
+          const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+          const [a, m2, dd] = s.split("-");
+          return dd && m2 && a ? `${dd}/${m2}/${a}` : s;
+        };
+        const toDate = (d: any) => {
+          if (!d) return null;
+          const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+          const t = new Date(s + "T12:00:00");
+          return isNaN(t.getTime()) ? null : t;
+        };
+        const percAcumGlobal = totalValorContrato > 0 ? totalValorAcumulado / totalValorContrato * 100 : 0;
+        const ini = toDate((contrato as any).dataInicio);
+        const fim = toDate((contrato as any).dataTermino);
+        const ref = toDate((medicao as any).dataFim) || new Date();
+        let ritmo: { label: string; cor: string; bg: string; detalhe: string } | null = null;
+        if (ini && fim && fim.getTime() > ini.getTime()) {
+          const percTempo = Math.max(0, Math.min(100, (ref.getTime() - ini.getTime()) / (fim.getTime() - ini.getTime()) * 100));
+          const delta = percAcumGlobal - percTempo;
+          const det = `Físico ${percAcumGlobal.toFixed(1)}% × Prazo ${percTempo.toFixed(1)}% (${delta >= 0 ? "+" : ""}${delta.toFixed(1)} p.p.)`;
+          if (delta >= 5) ritmo = { label: "ADIANTADO", cor: "#065f46", bg: "#d1fae5", detalhe: det };
+          else if (delta <= -5) ritmo = { label: "ATRASADO", cor: "#991b1b", bg: "#fee2e2", detalhe: det };
+          else ritmo = { label: "EM DIA", cor: "#1e40af", bg: "#dbeafe", detalhe: det };
+        }
+
+        // ── Faixa de identificação (3 linhas × 4 colunas) ──
+        doc.roundedRect(mL, y, pageW, 68, 3).fill("#f4f6f9");
         const infoColW = pageW / 4;
         const infoLine = (label: string, value: string, ci: number, row: number) => {
           const x = mL + 10 + ci * infoColW;
-          const yy = y + 6 + row * 22;
+          const yy = y + 6 + row * 21;
           doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#7a8699").text(label, x, yy);
           doc.font("Helvetica-Bold").fontSize(8).fillColor("#1a1a2e").text(value || "-", x, yy + 8, { width: infoColW - 16, height: 12, ellipsis: true });
         };
-        infoLine("CONTRATO", contrato.descricao || `#${contrato.id}`, 0, 0);
-        infoLine("TERCEIRO (CONTRATADA)", empresa?.razaoSocial || empresa?.nomeFantasia || "-", 1, 0);
-        infoLine("CNPJ TERCEIRO", empresa?.cnpj || "-", 2, 0);
-        infoLine("OBRA", obraNome || "-", 3, 0);
-        infoLine("VALOR DO CONTRATO", BRL(n(contrato.valorTotal)), 0, 1);
-        infoLine("PERÍODO MEDIDO", `${(medicao as any).dataInicio || "-"}  a  ${(medicao as any).dataFim || "-"}`, 1, 1);
-        infoLine("MEDIDO NO PERÍODO", BRL(totalValorPeriodo), 2, 1);
-        infoLine("ACUMULADO", `${BRL(totalValorAcumulado)}  (${totalValorContrato > 0 ? (totalValorAcumulado / totalValorContrato * 100).toFixed(1) : "0.0"}%)`, 3, 1);
-        y += 46 + 10;
+        infoLine("Nº DO CONTRATO", (contrato as any).numeroContrato || `#${contrato.id}`, 0, 0);
+        infoLine("CONTRATO", contrato.descricao || "-", 1, 0);
+        infoLine("TERCEIRO (CONTRATADA)", empresa?.razaoSocial || empresa?.nomeFantasia || "-", 2, 0);
+        infoLine("CNPJ TERCEIRO", empresa?.cnpj || "-", 3, 0);
+        infoLine("OBRA", obraNome || "-", 0, 1);
+        infoLine("INÍCIO DO CONTRATO", fmtBR((contrato as any).dataInicio), 1, 1);
+        infoLine("TÉRMINO DO CONTRATO", fmtBR((contrato as any).dataTermino), 2, 1);
+        infoLine("VALOR DO CONTRATO", BRL(n(contrato.valorTotal)), 3, 1);
+        infoLine("PERÍODO MEDIDO", `${fmtBR((medicao as any).dataInicio)}  a  ${fmtBR((medicao as any).dataFim)}`, 0, 2);
+        infoLine("MEDIDO NO PERÍODO", BRL(totalValorPeriodo), 1, 2);
+        infoLine("ACUMULADO", `${BRL(totalValorAcumulado)}  (${percAcumGlobal.toFixed(1)}%)`, 2, 2);
+        if (ritmo) {
+          const x = mL + 10 + 3 * infoColW;
+          doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#7a8699").text("RITMO DO CONTRATO", x, y + 6 + 2 * 21);
+          const bw = doc.widthOfString(ritmo.label, { size: 7.5 } as any) + 60;
+          doc.roundedRect(x, y + 6 + 2 * 21 + 8, Math.min(infoColW - 16, 88), 11, 5.5).fill(ritmo.bg);
+          doc.font("Helvetica-Bold").fontSize(7.5).fillColor(ritmo.cor).text(ritmo.label, x, y + 6 + 2 * 21 + 10.5, { width: Math.min(infoColW - 16, 88), align: "center" });
+          void bw;
+        } else {
+          infoLine("RITMO DO CONTRATO", "Sem datas no contrato", 3, 2);
+        }
+        y += 68 + 4;
+        if (ritmo) {
+          doc.font("Helvetica").fontSize(6.5).fillColor("#7a8699").text(`Ritmo: ${ritmo.detalhe} — referência: ${fmtBR(ref)}`, mL + 2, y);
+          y += 12;
+        } else {
+          y += 6;
+        }
 
         // Rev. 4793 — paisagem: contratado (Qtd/V.Total) + MEDIÇÃO ATUAL em
         // números (Qtd. medida do período destacada) + acumulado, tudo na tela.

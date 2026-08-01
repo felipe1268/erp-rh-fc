@@ -13,6 +13,7 @@ import {
   medicaoCampoFotos,
   terceiroContratos,
   terceiroContratoItens,
+  terceiroMedicoes,
   planejamentoProjetos,
   planejamentoAtividades,
   planejamentoAvancos,
@@ -142,6 +143,39 @@ async function migrarPlantasParaBiblioteca(
       sql`${medicaoCampoPdfs.medicaoCampoId} <> ${bibliotecaId}`,
       inArray(medicaoCampoPdfs.medicaoCampoId, camposNaoBiblioteca),
     ));
+}
+
+// Rev. 4797 — Poka-Yoke: levantamento CONSOLIDADO é só-leitura. Nenhum write
+// de contorno/foto/serviço passa; para editar é preciso desconsolidar (e a
+// medição vinculada não pode estar aprovada/paga).
+async function assertCampoNaoConsolidado(db: any, campoId: number, companyId: number) {
+  const [campo] = await db
+    .select({ consolidadoEm: medicaoCampo.consolidadoEm })
+    .from(medicaoCampo)
+    .where(and(eq(medicaoCampo.id, campoId), eq(medicaoCampo.companyId, companyId)))
+    .limit(1);
+  if (campo?.consolidadoEm) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Levantamento consolidado — desconsolide para editar." });
+  }
+}
+
+// Rev. 4797 — planta (PDF) com contornos de um levantamento CONSOLIDADO também
+// é intocável: excluir a planta apaga contornos; recalibrar muda quantitativos.
+async function assertPdfSemCampoConsolidado(db: any, pdfId: number, companyId: number) {
+  const rows = await db
+    .select({ campoId: medicaoCampoContornos.medicaoCampoId })
+    .from(medicaoCampoContornos)
+    .innerJoin(medicaoCampo, eq(medicaoCampo.id, medicaoCampoContornos.medicaoCampoId))
+    .where(and(
+      eq(medicaoCampoContornos.pdfId, pdfId),
+      eq(medicaoCampoContornos.companyId, companyId),
+      isNull(medicaoCampoContornos.deletedAt),
+      sql`${medicaoCampo.consolidadoEm} IS NOT NULL`,
+    ))
+    .limit(1);
+  if (rows.length > 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Esta planta tem levantamento CONSOLIDADO — desconsolide antes de alterar ou excluir a planta." });
+  }
 }
 
 export const medicaoRouter = router({
@@ -1304,6 +1338,9 @@ export const medicaoRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       const { id, companyId, ...data } = input;
+      // Rev. 4797 — recalibrar muda TODOS os quantitativos da planta: bloqueado
+      // se algum levantamento consolidado tem contornos nela.
+      if (data.calibracaoJson !== undefined) await assertPdfSemCampoConsolidado(db, id, companyId);
       await db.update(medicaoCampoPdfs)
         .set({ ...data, atualizadoEm: new Date() })
         .where(and(eq(medicaoCampoPdfs.id, id), eq(medicaoCampoPdfs.companyId, companyId)));
@@ -1315,6 +1352,9 @@ export const medicaoRouter = router({
     .mutation(async ({ input, ctx }) => {
       await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
+      // Rev. 4797 — excluir planta apaga contornos: bloqueado se houver
+      // levantamento consolidado com contornos nela.
+      await assertPdfSemCampoConsolidado(db, input.id, input.companyId);
       // Rev. 4784 — poka-yoke: planta COM levantamento (contornos ativos) só sai
       // com a senha do Administrador Master. Planta vazia pode sair direto.
       const [{ qtd } = { qtd: 0 }] = await db
@@ -1381,6 +1421,7 @@ export const medicaoRouter = router({
         .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
         .limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      await assertCampoNaoConsolidado(db, input.medicaoCampoId, input.companyId);
       const { id, companyId, numero: numeroInput, ...rest } = input;
       // Rev. 4792 — Poka-Yoke: unidade do trecho ≠ unidade do item = NÃO salva.
       const erroUnidade = await checarUnidadeVinculo(db, input.medicaoCampoId, input.orcamentoItemId, input.unidade);
@@ -1424,6 +1465,7 @@ export const medicaoRouter = router({
       const [alvo] = await db.select({ medicaoCampoId: medicaoCampoContornos.medicaoCampoId })
         .from(medicaoCampoContornos)
         .where(and(eq(medicaoCampoContornos.id, input.id), eq(medicaoCampoContornos.companyId, input.companyId))).limit(1);
+      if (alvo) await assertCampoNaoConsolidado(db, alvo.medicaoCampoId, input.companyId);
       await db.update(medicaoCampoContornos)
         .set({ deletedAt: new Date() })
         .where(and(eq(medicaoCampoContornos.id, input.id), eq(medicaoCampoContornos.companyId, input.companyId)));
@@ -1454,6 +1496,7 @@ export const medicaoRouter = router({
         .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
         .limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      await assertCampoNaoConsolidado(db, input.medicaoCampoId, input.companyId);
       const buf = Buffer.from(input.base64, "base64");
       const ext = (input.contentType || "").includes("png") ? "png" : "jpg";
       const key = `medicao-campo/${input.companyId}/${input.medicaoCampoId}/fotos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -1478,9 +1521,59 @@ export const medicaoRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const [foto] = await db.select({ medicaoCampoId: medicaoCampoFotos.medicaoCampoId })
+        .from(medicaoCampoFotos)
+        .where(and(eq(medicaoCampoFotos.id, input.id), eq(medicaoCampoFotos.companyId, input.companyId))).limit(1);
+      if (foto) await assertCampoNaoConsolidado(db, foto.medicaoCampoId, input.companyId);
       await db.update(medicaoCampoFotos)
         .set({ deletedAt: new Date() })
         .where(and(eq(medicaoCampoFotos.id, input.id), eq(medicaoCampoFotos.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  // Rev. 4797 — Consolidar / Desconsolidar levantamento (Poka-Yoke)
+  consolidarLevantamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), medicaoCampoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const [campo] = await db.select().from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId))).limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Levantamento não encontrado ou sem permissão." });
+      if ((campo as any).consolidadoEm) return { success: true, jaConsolidado: true };
+      await db.update(medicaoCampo)
+        .set({ consolidadoEm: new Date(), consolidadoPorNome: (ctx.user as any)?.name || (ctx.session as any)?.name || null, atualizadoEm: new Date() })
+        .where(eq(medicaoCampo.id, input.medicaoCampoId));
+      return { success: true };
+    }),
+
+  desconsolidarLevantamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), medicaoCampoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const role = (ctx.user as any)?.role || "";
+      if (role === "viewer") throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para desconsolidar." });
+      const [campo] = await db.select().from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId))).limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Levantamento não encontrado ou sem permissão." });
+      // Trava dupla: medição vinculada aprovada/paga → precisa desaprovar antes.
+      // Consulta REVERSA (terceiro_medicoes.levantamento_campo_id) — o vínculo
+      // principal vive na medição, não em campo.medicaoId (nem sempre populado).
+      const medsVinculadas = await db.select({ id: terceiroMedicoes.id, status: terceiroMedicoes.status }).from(terceiroMedicoes)
+        .where(and(eq(terceiroMedicoes.levantamentoCampoId, input.medicaoCampoId), eq(terceiroMedicoes.companyId, input.companyId)));
+      if ((campo as any).medicaoId) {
+        const [medDireta] = await db.select({ id: terceiroMedicoes.id, status: terceiroMedicoes.status }).from(terceiroMedicoes)
+          .where(and(eq(terceiroMedicoes.id, (campo as any).medicaoId), eq(terceiroMedicoes.companyId, input.companyId))).limit(1);
+        if (medDireta && !medsVinculadas.some((m: any) => m.id === medDireta.id)) medsVinculadas.push(medDireta);
+      }
+      const travada = medsVinculadas.find((m: any) => ["aprovada", "paga"].includes(m.status || ""));
+      if (travada) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `A medição vinculada está ${travada.status}. Desaprove a medição antes de desconsolidar o levantamento.` });
+      }
+      await db.update(medicaoCampo)
+        .set({ consolidadoEm: null, consolidadoPorNome: null, atualizadoEm: new Date() })
+        .where(eq(medicaoCampo.id, input.medicaoCampoId));
       return { success: true };
     }),
 
@@ -1617,6 +1710,7 @@ export const medicaoRouter = router({
       const [campo] = await db.select({ id: medicaoCampo.id }).from(medicaoCampo)
         .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId))).limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      await assertCampoNaoConsolidado(db, input.medicaoCampoId, input.companyId);
       // Rev. 4792 — Poka-Yoke de UNIDADE também no vínculo por serviço (server:
       // o client já bloqueia, mas chamada direta à API não pode furar a regra).
       if (input.orcamentoItemId) {
@@ -1649,6 +1743,10 @@ export const medicaoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       await assertCompanyAccess(ctx.user, input.companyId);
+      const [srvRow] = await db.select({ medicaoCampoId: medicaoLevantamentoServicos.medicaoCampoId })
+        .from(medicaoLevantamentoServicos)
+        .where(and(eq(medicaoLevantamentoServicos.id, input.id), eq(medicaoLevantamentoServicos.companyId, input.companyId))).limit(1);
+      if (srvRow) await assertCampoNaoConsolidado(db, srvRow.medicaoCampoId, input.companyId);
       await db.delete(medicaoLevantamentoServicos)
         .where(and(eq(medicaoLevantamentoServicos.id, input.id), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
       return { success: true };
@@ -1820,11 +1918,12 @@ export const medicaoRouter = router({
       // Anti-colisão de IDs entre módulos: se o contratoId só existe num dos
       // módulos, o campo precisa ter a origem correspondente.
       const camposOk = new Map<number, boolean>();
+      const camposConsolidados = new Set<number>(); // Rev. 4797 — consolidado = só-leitura
       const camposComContorno = new Set<number>(); // p/ dedup de numeração pós-lote
       async function campoValido(campoId: number): Promise<boolean> {
         if (camposOk.has(campoId)) return camposOk.get(campoId)!;
         const [c] = await db
-          .select({ id: medicaoCampo.id, origem: medicaoCampo.origem })
+          .select({ id: medicaoCampo.id, origem: medicaoCampo.origem, consolidadoEm: medicaoCampo.consolidadoEm })
           .from(medicaoCampo)
           .where(and(
             eq(medicaoCampo.id, campoId),
@@ -1837,10 +1936,16 @@ export const medicaoRouter = router({
           const ehTerceiro = c.origem === "terceiro";
           if (ehTerceiro && !contratoTer) ok = false;
           if (!ehTerceiro && !contratoCli) ok = false;
+          if ((c as any).consolidadoEm) camposConsolidados.add(campoId);
         }
         camposOk.set(campoId, ok);
         return ok;
       }
+      // Rev. 4797 — ops offline sobre campo consolidado NÃO falham (falha
+      // não-transitória = fila em loop no aparelho): são DESCARTADAS com "ok"
+      // e mensagem, preservando o que está consolidado no servidor.
+      const consolidadoSkip = (campoId: number | undefined | null): boolean =>
+        !!campoId && camposConsolidados.has(campoId);
 
       const tsIn = (s?: string): Date => {
         const d = s ? new Date(s) : new Date();
@@ -1877,6 +1982,10 @@ export const medicaoRouter = router({
               // Só apaga se a linha pertence a um campo deste contrato (guard cross-contrato).
               // Não-encontrada = idempotente (já apagada / nunca existiu aqui) → "ok".
               if (alvo && (await campoValido(alvo.medicaoCampoId))) {
+                if (consolidadoSkip(alvo.medicaoCampoId)) {
+                  resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "ok", mensagem: "Ignorado: levantamento consolidado." });
+                  continue;
+                }
                 await db.update(medicaoCampoContornos).set({ deletedAt: new Date() }).where(eq(medicaoCampoContornos.id, alvo.id));
               }
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "ok" });
@@ -1887,6 +1996,10 @@ export const medicaoRouter = router({
             const campoId = op.medicaoCampoId ?? d.medicaoCampoId;
             if (!campoId || !(await campoValido(campoId))) {
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "Medição não encontrada ou sem permissão." });
+              continue;
+            }
+            if (consolidadoSkip(campoId)) {
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "ok", mensagem: "Ignorado: levantamento consolidado." });
               continue;
             }
             camposComContorno.add(campoId); // dedup de numeração pós-lote
@@ -2000,6 +2113,10 @@ export const medicaoRouter = router({
               }
               // Guard cross-contrato; não-encontrada = idempotente → "ok".
               if (alvo && (await campoValido(alvo.medicaoCampoId))) {
+                if (consolidadoSkip(alvo.medicaoCampoId)) {
+                  resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "ok", mensagem: "Ignorado: levantamento consolidado." });
+                  continue;
+                }
                 await db.update(medicaoCampoFotos).set({ deletedAt: new Date() }).where(eq(medicaoCampoFotos.id, alvo.id));
               }
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "ok" });
@@ -2010,6 +2127,10 @@ export const medicaoRouter = router({
             const campoId = op.medicaoCampoId ?? d.medicaoCampoId;
             if (!campoId || !(await campoValido(campoId))) {
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "Medição não encontrada ou sem permissão." });
+              continue;
+            }
+            if (consolidadoSkip(campoId)) {
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "ok", mensagem: "Ignorado: levantamento consolidado." });
               continue;
             }
             if (op.uuid) {
@@ -2070,6 +2191,14 @@ export const medicaoRouter = router({
             }
             if (isNewer(existing.atualizadoEm, incoming)) {
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "conflito", mensagem: "Calibração no servidor é mais recente." });
+              continue;
+            }
+            // Rev. 4797 — recalibração offline sobre planta com levantamento
+            // consolidado: descarta com "ok" (fila não pode loopar).
+            try {
+              await assertPdfSemCampoConsolidado(db, op.id, companyId);
+            } catch {
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "ok", mensagem: "Ignorado: levantamento consolidado." });
               continue;
             }
             await db.update(medicaoCampoPdfs)
