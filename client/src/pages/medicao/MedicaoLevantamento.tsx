@@ -593,17 +593,24 @@ export default function MedicaoLevantamento() {
   // Rev. 4789 — "tela infinita": há uma moldura de folga (padding) em volta da
   // planta p/ o pan nunca travar na borda. Ao trocar de planta/página, posiciona
   // o scroll com o canto do conteúdo visível (senão abriria mostrando só folga).
+  const posKeyRef = useRef("");
   useLayoutEffect(() => {
     const cont = canvasWrapRef.current;
     const inner = zoomInnerRef.current;
     if (!cont || !inner) return;
-    const cr = cont.getBoundingClientRect();
     const ir = inner.getBoundingClientRect();
     if (ir.width < 4) return; // conteúdo ainda não carregou
+    // Guarda por chave ESTÁVEL (id da planta + página): refetches do sync
+    // offline recriam objetos a cada poll e re-rodavam este efeito, jogando o
+    // scroll de volta pro canto — era o "sempre volta pra posição inicial".
+    const key = `${pdfSelId}|${pagina}`;
+    if (posKeyRef.current === key) return;
+    posKeyRef.current = key;
+    const cr = cont.getBoundingClientRect();
     cont.scrollLeft += ir.left - cr.left - 24;
     cont.scrollTop += ir.top - cr.top - 24;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfSel, pagina, pageDims, isDxf ? !!dxfData?.ok : true]);
+  });
 
   // Rev. 3099 — Zoom pela rodinha do mouse (estilo AutoCAD): só na área de
   // desenho, em direção ao cursor. Listener NATIVO {passive:false} para poder
