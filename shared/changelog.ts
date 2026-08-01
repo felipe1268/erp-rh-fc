@@ -1,4 +1,14 @@
 /**
+ * Rev. 4799 - CONTRATO: BARRA FIXA NO TOPO (CABECALHO + ABAS)
+ *
+ * - O cabecalho do contrato (numero, tags, empreiteiro, obra, Nova Medicao) e a
+ *   barra de abas (Contrato, Itens, Medicoes, Comparativo, Docs, FD) agora ficam
+ *   SEMPRE fixos no topo da tela; o conteudo rola por baixo.
+ * - Visual: fundo branco translucido com blur, sombra sutil e abas com
+ *   indicador azul; abas com rolagem horizontal no iPad se nao couberem.
+ * - Barra "Admin Master" (cancelar/excluir) foi para dentro da aba "Contrato".
+ */
+/**
  * Rev. 4798 - FD PENDENTE TRAVA APROVACAO + LAYOUT DO CONTRATO ENXUTO
  *
  * FD (Faturamento Direto) bem amarrado (pedido do usuario):

@@ -370,7 +370,10 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
   return (
     <DashboardLayout>
-      <div className="p-5 space-y-5 max-w-5xl mx-auto">
+      <div className="p-5 pt-0 space-y-5 max-w-5xl mx-auto">
+        {/* Rev. 4799 — barra fixa: cabeçalho + abas ficam SEMPRE no topo;
+            o conteúdo rola por baixo (pedido do usuário, navegação no iPad). */}
+        <div className="sticky top-14 z-30 -mx-5 px-5 pt-3 pb-0 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm space-y-2">
         {/* Header */}
         <div className="flex items-start gap-3">
           <button onClick={() => navigate("/terceiros/contratos")} className="p-2 hover:bg-gray-100 rounded-lg mt-0.5 shrink-0">
@@ -459,6 +462,27 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           )}
         </div>
 
+        {/* Tabs — dentro da barra fixa */}
+        <div className="flex overflow-x-auto">
+          {((emModuloMedicoes
+            ? (["medicoes", "itens", "comparativo", "documentos"] as Tab[])
+            : (["documento", "itens", "medicoes", "comparativo", "documentos"] as Tab[])
+          ).concat(
+            (contrato.naturezaIncluiMaterial || (contrato.fdMaterialRegistros?.length || 0) > 0) ? (["fd"] as Tab[]) : []
+          )).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+              {t === "itens" ? `Itens (${contrato.itens.length})` :
+               t === "medicoes" ? `Medições (${contrato.medicoes.length})` :
+               t === "comparativo" ? <span className="flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" />Comparativo</span> :
+               t === "documentos" ? `Docs (${contrato.documentos.length})` :
+               t === "fd" ? <span className="flex items-center gap-1.5"><Truck className="w-3.5 h-3.5" />FD ({contrato.fdMaterialRegistros?.length || 0})</span> :
+               <span className="flex items-center gap-1.5"><FileEdit className="w-3.5 h-3.5" />Contrato</span>}
+            </button>
+          ))}
+        </div>
+        </div>
+
         {/* Contexto enxuto p/ medição — só no módulo de Medição de Terceiros */}
         {emModuloMedicoes && (
           <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
@@ -475,6 +499,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           </div>
         )}
 
+        {/* Rev. 4798 — layout enxuto: os blocos gerais do contrato (objeto,
+            vigência, critérios, portal, resumo, barras) só aparecem na aba
+            "Contrato". Nas outras abas (Medições, Itens…) fica só o conteúdo
+            da aba — pedido do usuário: "quando clico em Medições, só medições". */}
+        {tab === "documento" && (<>
         {/* Ações de Admin Master — cancelamento (soft) e exclusão definitiva (hard) */}
         {isMaster && !emModuloMedicoes && (
           <div className="flex items-center gap-2 flex-wrap rounded-xl border border-red-200 bg-red-50/40 px-3 py-2">
@@ -502,11 +531,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           </div>
         )}
 
-        {/* Rev. 4798 — layout enxuto: os blocos gerais do contrato (objeto,
-            vigência, critérios, portal, resumo, barras) só aparecem na aba
-            "Contrato". Nas outras abas (Medições, Itens…) fica só o conteúdo
-            da aba — pedido do usuário: "quando clico em Medições, só medições". */}
-        {tab === "documento" && (<>
         {/* Objeto do Contrato — escopo resumido e legível, editável p/ padronização */}
         {!emModuloMedicoes && (
         <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -935,26 +959,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           )}
         </div>
         </>)}
-
-        {/* Tabs */}
-        <div className="flex border-b border-gray-200">
-          {((emModuloMedicoes
-            ? (["medicoes", "itens", "comparativo", "documentos"] as Tab[])
-            : (["documento", "itens", "medicoes", "comparativo", "documentos"] as Tab[])
-          ).concat(
-            (contrato.naturezaIncluiMaterial || (contrato.fdMaterialRegistros?.length || 0) > 0) ? (["fd"] as Tab[]) : []
-          )).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${tab === t ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500 hover:text-gray-700"}`}>
-              {t === "itens" ? `Itens (${contrato.itens.length})` :
-               t === "medicoes" ? `Medições (${contrato.medicoes.length})` :
-               t === "comparativo" ? <span className="flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" />Comparativo</span> :
-               t === "documentos" ? `Docs (${contrato.documentos.length})` :
-               t === "fd" ? <span className="flex items-center gap-1.5"><Truck className="w-3.5 h-3.5" />FD ({contrato.fdMaterialRegistros?.length || 0})</span> :
-               <span className="flex items-center gap-1.5"><FileEdit className="w-3.5 h-3.5" />Contrato</span>}
-            </button>
-          ))}
-        </div>
 
         {/* Tab: Itens */}
         {tab === "itens" && (
