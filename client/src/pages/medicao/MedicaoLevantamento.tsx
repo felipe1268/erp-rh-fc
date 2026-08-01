@@ -664,6 +664,19 @@ export default function MedicaoLevantamento() {
     fitView();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   });
+  // Rev. 4792 — REDE DE SEGURANÇA: a planta NUNCA pode abrir invisível.
+  // O fit automático acima só roda com tudo "pronto" (escala/medidas ok);
+  // num DXF sem unidade definida, por ex., ele nunca disparava e a tela
+  // ficava em branco até apertar o botão de enquadrar. Se o pan continuar
+  // nulo logo após abrir/trocar de planta, enquadra à força — o fit fino
+  // refina depois quando o conteúdo termina de medir.
+  useEffect(() => {
+    if (pan) return;
+    const ts = [400, 1200, 3000].map((ms) => setTimeout(() => { if (!panRef.current) fitView(); }, ms));
+    return () => ts.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pan, pdfSelId, pagina]);
+
   // …e re-fit quando o viewport muda de tamanho (rotação do iPad, resize):
   // pan antigo fica "stale" com a tela nova e a planta podia sumir da vista.
   useEffect(() => {

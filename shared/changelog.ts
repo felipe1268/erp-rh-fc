@@ -57,6 +57,10 @@
  *   "N sem item da planilha" — verde quando tudo ok. Cada cartao da lista
  *   ganhou pills Foto/Planilha (verde = ok, vermelho = falta) p/ enxergar
  *   na hora onde esta correto e onde nao esta.
+ * - Planta SEMPRE visivel ao abrir/atualizar a tela: rede de seguranca
+ *   enquadra a planta automaticamente mesmo quando o fit fino nao dispara
+ *   (ex.: DXF sem unidade definida) — acabou o "tela em branco ate apertar
+ *   o botao de enquadrar".
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO
