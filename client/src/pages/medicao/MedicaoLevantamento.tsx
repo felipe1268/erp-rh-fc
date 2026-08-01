@@ -2320,7 +2320,10 @@ export default function MedicaoLevantamento() {
                             try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
                             if (editDrag && editDrag.contId === c.id) pts = editDrag.pts;
                             if (pts.length < 2) return null;
-                            const hr = 0.013;
+                            // Rev. 4790 — alças pequenas e proporcionais: tamanho fixo EM PIXELS
+                            // na tela (~7px de raio), independente do zoom — antes eram fração
+                            // da planta e viravam bolões ao aproximar.
+                            const hr = 7 / Math.max(pageWidth, 1);
                             const hp = (kind: "vertex" | "corner" | "edge", idx: number) => ({
                               onPointerDown: (e: React.PointerEvent) => onHandleDown(e, c, kind, idx),
                               onPointerMove: onHandleMove,
