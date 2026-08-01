@@ -40,6 +40,10 @@
  *   levantamento; registro fotografico (fotos sincronizadas, com referencia
  *   do contorno); bloco de assinaturas (responsavel FC x fornecedor de
  *   acordo). URLs de foto whitelisted + atributo escapado (anti-XSS).
+ * - MEDIDAS editaveis no cartao (Poka-Yoke): parede = comprimento + altura;
+ *   retangulo = largura x altura; linha = comprimento; volume = espessura.
+ *   Editar a medida re-escala o DESENHO e recalcula a area junto — o numero
+ *   nunca desgruda da planta (nada de quantidade digitada solta).
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO

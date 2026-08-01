@@ -1801,6 +1801,39 @@ export default function MedicaoLevantamento() {
     if (novos) await salvarGeometriaContorno(c, novos);
   }
 
+  // Rev. 4792 — Poka-Yoke do "plano B": em vez de digitar a quantidade solta
+  // (que descolaria do desenho), o usuário edita as MEDIDAS e o desenho +
+  // área são recalculados juntos — planta e número nunca divergem.
+  async function alterarEspessuraContorno(c: any, novoM: number) {
+    if (!(novoM > 0)) return;
+    let pts: GeoPonto[] = [];
+    try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+    const mpu = parseFloat(c.metrosPorUnidade || "0") || calibAtualEff?.metrosPorUnidade || 0;
+    if (!(mpu > 0) || pts.length < 2) return;
+    const r = calcularContorno(c.tipo as TipoContorno, pts.map(normToPt), mpu, novoM, c.contagem ?? 0);
+    await off.saveContorno({
+      id: c.id, uuid: c.uuid, pdfId: pdfSelId!,
+      pagina: c.pagina ?? pagina,
+      tipo: c.tipo as TipoContorno,
+      cor: c.cor ?? COR_TIPO[c.tipo as TipoContorno],
+      geometriaJson: c.geometriaJson,
+      espessura: String(novoM),
+      metrosPorUnidade: c.metrosPorUnidade ?? String(mpu),
+      area: r.area ? String(r.area) : null,
+      perimetro: r.perimetro ? String(r.perimetro) : null,
+      volume: r.volume ? String(r.volume) : null,
+      contagem: c.contagem ?? null,
+      quantidade: String(r.quantidade),
+      unidade: r.unidade ?? c.unidade ?? null,
+      numero: c.numero,
+      orcamentoItemId: c.orcamentoItemId ?? null,
+      itemEapCodigo: c.itemEapCodigo ?? null,
+      itemDescricao: c.itemDescricao ?? null,
+      rotulo: c.rotulo ?? null,
+      servico: c.servico ?? null,
+    });
+  }
+
   function gerarMemoriaCalculo() {
     const linhas = (consolidado?.linhas ?? []) as any[];
     const todos = (campo?.contornos ?? []) as any[];
@@ -2986,6 +3019,53 @@ export default function MedicaoLevantamento() {
                           onCommit={(v) => { void salvarRotulo(c, v); }}
                         />
                       </div>
+                      {/* Rev. 4792 — MEDIDAS editáveis no cartão (Poka-Yoke): editar a
+                          medida re-escala o desenho e recalcula a área junto — o número
+                          nunca desgruda da planta. */}
+                      {c.tipo !== "contagem" && (() => {
+                        let pts: GeoPonto[] = [];
+                        try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+                        const mpu = parseFloat(c.metrosPorUnidade || "0") || calibAtualEff?.metrosPorUnidade || 0;
+                        if (!(mpu > 0) || pts.length < 2) return null;
+                        const box = detectRectBox(pts);
+                        const linha = !box && pts.length === 2;
+                        const temEsp = c.tipo === "parede" || c.tipo === "volume";
+                        const espAtual = c.espessura ? parseFloat(c.espessura) : 0;
+                        type DimRow = { key: string; label: string; atual: number; commit: (v: number) => void };
+                        const rows: DimRow[] = [];
+                        if (box) {
+                          rows.push({ key: "largura", label: "Largura", atual: metrosEntre({ x: box.x0, y: box.y0 }, { x: box.x1, y: box.y0 }, mpu), commit: (v) => void redimensionarContorno(c, "largura", v) });
+                          rows.push({ key: "alturag", label: temEsp ? "Compr. vertical" : "Altura", atual: metrosEntre({ x: box.x0, y: box.y0 }, { x: box.x0, y: box.y1 }, mpu), commit: (v) => void redimensionarContorno(c, "altura", v) });
+                        } else if (linha) {
+                          rows.push({ key: "comprimento", label: "Comprimento", atual: metrosEntre(pts[0], pts[1], mpu), commit: (v) => void redimensionarContorno(c, "comprimento", v) });
+                        }
+                        if (temEsp) rows.push({ key: "esp", label: c.tipo === "parede" ? "Altura da parede" : "Espessura", atual: espAtual, commit: (v) => void alterarEspessuraContorno(c, v) });
+                        if (rows.length === 0) {
+                          // polígono livre — sem lados "digitáveis": orienta o ajuste pela planta
+                          return <div className="mt-1.5 text-[10px] text-gray-400">Medidas: contorno livre — ajuste os pontos na planta (modo Selecionar).</div>;
+                        }
+                        const parse = (s: string) => parseFloat(s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s);
+                        return (
+                          <div className="mt-1.5 rounded-md border border-dashed border-gray-300 bg-gray-50/60 px-2 py-1.5">
+                            <div className="text-[10px] font-medium text-gray-500 mb-1 flex items-center gap-1"><PencilLine className="h-3 w-3" />Medidas (editar recalcula o desenho e a área)</div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {rows.map((d) => (
+                                <label key={d.key} className="flex items-center gap-1 text-[11px] text-gray-600">
+                                  {d.label}:
+                                  <input
+                                    key={`${c.id}-${d.key}-${c.quantidade}-${c.espessura ?? ""}`}
+                                    type="text" inputMode="decimal" defaultValue={d.atual > 0 ? numFmt(d.atual, 2) : ""}
+                                    className="h-7 w-16 rounded border border-gray-300 bg-white px-1.5 text-right text-xs"
+                                    onBlur={(e) => { const v = parse(e.currentTarget.value.trim()); if (v > 0 && Math.abs(v - d.atual) > 0.004) d.commit(v); }}
+                                    onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
+                                  />
+                                  m
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                       <div className="mt-1.5">
                         <VincularItemCombobox
                           items={itensVinculaveis}
