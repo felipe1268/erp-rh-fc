@@ -11,5 +11,7 @@ description: Como o Levantamento deriva a escala de DXFs com $INSUNITS errado e 
 
 **Sidecar servidor:** DXF 50MB+ estoura o Safari/iPad → servidor pré-processa e grava `<key>.planta.json` (SVG+bbox+escala); rota `/api/upload/levantamento-planta/derivar` gera sob demanda (auth + tenant via prefixo da key, singleflight). `DXF_ALGO_VERSION` no JSON: qualquer mudança no parse DEVE bumpar a constante ou sidecars cacheados servem escala velha.
 
+**SVG:** `vector-effect="non-scaling-stroke"` NÃO é herdado do `<g>` — com bbox pequena (unidades = metros), stroke-width=1 vira traço de 1 m (planta = borrões pretos). Use stroke-width proporcional (~maxDim/1500) no grupo. Filtrar pontos não-finitos antes de emitir path (senão "LNaN NaN" quebra o desenho).
+
 **Why:** DXFs reais do usuário (TÉRREO 19×10 m com INSUNITS=4/mm e 2 clusters; POITA 40×29 m) saíam 2,7×0,26 m.
 **How to apply:** mudanças no motor DXF → bump `DXF_ALGO_VERSION`; upload de planta usa rota multipart (não base64 tRPC, teto 150MB por heap ~1GB com persistência base64 em DB).

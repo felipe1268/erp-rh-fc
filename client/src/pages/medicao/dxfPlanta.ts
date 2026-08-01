@@ -26,7 +26,7 @@ export interface DxfPlanta {
 }
 
 /** bump sempre que a lógica de parse/escala mudar — invalida sidecars cacheados no servidor. */
-export const DXF_ALGO_VERSION = 2;
+export const DXF_ALGO_VERSION = 3;
 
 type Pt = { x: number; y: number };
 type Poly = { pts: Pt[]; closed: boolean };
@@ -283,20 +283,26 @@ export function parseDxfPlanta(text: string): DxfPlanta {
   const fy = (y: number) => minY + maxY - y;
   const parts: string[] = [];
   for (const pl of polys) {
-    if (pl.pts.length < 2) continue;
+    // Rev. 4789 — pontos não-finitos geravam "LNaN NaN" e quebravam o path.
+    const pts = pl.pts.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    if (pts.length < 2) continue;
     let d = "";
-    for (let i = 0; i < pl.pts.length; i++) {
-      const p = pl.pts[i];
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
       d += `${i === 0 ? "M" : "L"}${p.x.toFixed(3)} ${fy(p.y).toFixed(3)} `;
     }
     if (pl.closed) d += "Z";
     parts.push(`<path d="${d.trim()}" />`);
   }
 
+  // Rev. 4789 — `vector-effect` NÃO é herdado do <g>: com bbox pequena (19
+  // unidades = metros), stroke-width=1 virava traço de 1 METRO (borrões
+  // pretos). Espessura proporcional à caixa (~1/1500 da maior dimensão).
+  const sw = (Math.max(w, h) / 1500).toPrecision(3);
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${w} ${h}" ` +
     `preserveAspectRatio="none" width="100%" height="100%">` +
-    `<g fill="none" stroke="#111827" stroke-width="1" vector-effect="non-scaling-stroke" ` +
+    `<g fill="none" stroke="#111827" stroke-width="${sw}" ` +
     `stroke-linecap="round" stroke-linejoin="round">${parts.join("")}</g></svg>`;
 
   // Rev. 4789 — plausibilidade da unidade: cabeçalhos de DXF frequentemente
