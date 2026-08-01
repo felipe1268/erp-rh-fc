@@ -2221,7 +2221,10 @@ export default function MedicaoLevantamento() {
                   {/* Rev. 4789 — moldura de folga em volta da planta = "tela infinita":
                       sempre há espaço de rolagem em todas as direções, então o pan
                       da pinça nunca trava na borda (o scroll não clampa mais o gesto). */}
-                  <div className="w-fit" style={{ padding: "120px", touchAction: "none" }}>
+                  {/* Folga = ~meia tela: o suficiente p/ levar QUALQUER trecho da planta
+                      ao centro no zoom (folga menor "clampava" o scroll e a vista pulava
+                      de volta ao soltar a pinça perto das bordas). */}
+                  <div className="w-fit" style={{ padding: "45vh 45vw", touchAction: "none" }}>
                   <div ref={zoomInnerRef} className="relative w-fit" style={{ touchAction: "none" }}>
                     {/* filtro P&B aplicado SÓ ao fundo (PDF/DXF), nunca ao overlay/SVG */}
                     <div style={{ filter: pdfPB ? "grayscale(1) contrast(1.25) brightness(1.02)" : "none" }}>
