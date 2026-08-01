@@ -1,4 +1,22 @@
 /**
+ * Rev. 4783 - LEVANTAMENTO DE CAMPO: FLUXO POKA-YOKE (categoria manda, DXF-only)
+ *
+ * Refeito o fluxo da pagina seguindo mistake-proofing:
+ * 1) PLANTA NOVA = SO DXF. PDF novo bloqueado com orientacao (era a maior fonte
+ *    de erro de escala); PDFs antigos continuam abrindo. Calibrar/Conferir e o
+ *    banner de escala SOMEM quando o DXF ja tem unidade (nada a errar).
+ * 2) CATEGORIA MANDA NA FERRAMENTA: sumiu a fileira de 7 ferramentas e o botao
+ *    "Sem servico". Toca na categoria → a ferramenta certa ja vem (parede L×A,
+ *    linear, volume, contagem); categoria de AREA mostra so a forma de tracar
+ *    (Pontos/Retangulo/Livre). Sem categoria = nao desenha (dica na toolbar).
+ * 3) "+ CATEGORIA" na paleta: dialog rapido nome + "o que ela mede" (area,
+ *    parede, linear, volume, contagem) com cor automatica; cria e ja comeca a
+ *    medir. Louças, metais, furos, revestimento, piso etc.
+ * 4) "FOTO DO TRECHO" na toolbar: fotografa vinculado ao ULTIMO contorno da
+ *    pagina (book de evidencias por trecho).
+ * Base p/ produtividade: cada contorno guarda categoria+quantidade+data/hora →
+ * comparativo entre medicoes da a producao por periodo/equipe/fornecedor.
+ *
  * Rev. 4782 - LEVANTAMENTO DE CAMPO: LAYOUT LIMPO + ORIENTACAO DWG
  *
  * Declutter da tela (estava com 6 barras empilhadas):

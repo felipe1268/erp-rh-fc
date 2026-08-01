@@ -27,6 +27,7 @@
 - [Unguarded tRPC endpoints](unguarded-trpc-endpoints.md) — frontend route gating ≠ backend authorization; verify role/tenant checks live IN the procedure, not just behind the UI route guard.
 - [OC entregue fora do fluxo padrão precisa de self-heal](oc-almox-entrega-sem-titulo.md) — todo caminho que marca OC entregue (Almoxarifado!) deve chamar garantirEntryDaOC ou a OC some do Contas a Pagar.
 - [Contas a Pagar — base da janela de fechamento](contas-pagar-ciclo-window-basis.md) — agrupar por ciclo de fornecedor usa data da COMPRA (competência), nunca vencimento (varia por OC).
+- [Levantamento — fluxo poka-yoke](levantamento-pokayoke-fluxo.md) — planta nova só DXF; categoria comanda a ferramenta (contorno sempre classificado); escala PDF legado exige conferência ±2%.
 - [Levantamento — catálogo de serviços](levantamento-servicos-catalogo.md) — seed sob advisory lock 478002; updates de contorno SEMPRE reenviam `servico` (sync preserva se ausente); derivado com medição manual suprime derivação.
 - [Medição FD ↔ Compras link](medicao-fd-compras-link.md) — medicao_fd_registros.compraId (coluna já existia sem uso) é o ponto de integração p/ puxar valor de OC de Faturamento Direto direto pro boletim.
 - [Medição × Cronograma: casar por atividadeId, não EAP](medicao-cronograma-atividade-id-match.md) — eap_codigo do cronograma real vem vazio na maioria das atividades; use a PK atividade_id (1:1, sempre presente).

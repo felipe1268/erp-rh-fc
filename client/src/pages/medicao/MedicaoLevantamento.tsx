@@ -605,7 +605,22 @@ export default function MedicaoLevantamento() {
   // ferramenta sugerida). "" = sem serviço (comportamento antigo).
   const [servicoAtivo, setServicoAtivo] = useState<string>("");
   const [servicosDialogOpen, setServicosDialogOpen] = useState(false);
+  // Rev. 4783 — "incluir categoria": criação rápida direto da paleta.
+  const [catDialogOpen, setCatDialogOpen] = useState(false);
+  const [catNome, setCatNome] = useState("");
+  const [catTipo, setCatTipo] = useState<string>("area");
   const svcAtivoObj = useMemo(() => servicos.find((s: any) => s.chave === servicoAtivo) ?? null, [servicos, servicoAtivo]);
+  // Rev. 4783 — reconciliação: se a categoria ativa sumiu/foi desativada,
+  // limpa a seleção e derruba a ferramenta de desenho (poka-yoke).
+  useEffect(() => {
+    if (!servicoAtivo || servicos.length === 0) return; // lista ainda carregando
+    const s = servicos.find((x: any) => x.chave === servicoAtivo);
+    if (!s || s.ativo === 0) {
+      setServicoAtivo("");
+      setTool("select"); setDraft([]); setDragRect(null); setFreePts([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [servicos, servicoAtivo]);
   const selecionarServico = (s: any | null) => {
     if (!s) { setServicoAtivo(""); return; }
     setServicoAtivo(s.chave);
@@ -946,6 +961,13 @@ export default function MedicaoLevantamento() {
 
   function finalizarContorno(tipo: TipoContorno, ptsNorm: GeoPonto[], espessura: number, contagem: number) {
     if (!pdfSel) return;
+    // Rev. 4783 — poka-yoke: todo contorno nasce classificado. Sem categoria
+    // válida (ex.: ferramenta "sobrou" de sessão anterior) não desenha.
+    if (!svcAtivoObj || svcAtivoObj.ativo === 0) {
+      alert("Escolha uma categoria de serviço na paleta acima antes de desenhar — todo trecho medido nasce classificado.");
+      setTool("select"); setDraft([]); setDragRect(null); setFreePts([]);
+      return;
+    }
     if (!calibAtualEff?.metrosPorUnidade) {
       alert(isDxf
         ? "Este DXF não tem unidade definida — use a ferramenta Calibrar e marque 2 pontos de medida conhecida."
@@ -1040,6 +1062,16 @@ export default function MedicaoLevantamento() {
         "• AutoCAD: comando SALVARCOMO (SAVEAS) → tipo \"DXF 2013\" (ou anterior).\n" +
         "• Sem AutoCAD: abra no DWG TrueView/ODA Viewer (gratuitos) e salve como DXF.\n\n" +
         "Dica: mantenha o desenho na unidade real (1 unidade = 1 m ou 1 cm) — o sistema lê a unidade do arquivo ($INSUNITS) e define a escala sozinho."
+      );
+      return;
+    }
+    // Rev. 4783 — poka-yoke: planta nova é SÓ DXF (medida exata, sem escala manual).
+    // PDFs antigos continuam abrindo; novos, não.
+    if (!/\.dxf$/i.test(file.name)) {
+      alert(
+        "Planta nova entra somente em DXF — é a garantia de medida EXATA (o sistema lê a unidade do CAD e dispensa calibrar/conferir escala).\n\n" +
+        "PDF não é mais aceito para plantas novas: a escala do PDF depende de como ele foi gerado e era a maior fonte de erro.\n\n" +
+        "Peça ao projetista o arquivo DXF (no AutoCAD: SALVARCOMO → DXF 2013), mantendo o desenho na unidade real (1 un = 1 m ou 1 cm)."
       );
       return;
     }
@@ -1539,10 +1571,10 @@ export default function MedicaoLevantamento() {
                   <X className="h-3 w-3 ml-1 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); askConfirm({ title: "Remover planta?", description: `A planta "${p.nome}" e todos os contornos desenhados nela serão removidos. Esta ação não pode ser desfeita.`, confirmText: "Remover", onConfirm: () => excluirPdfM.mutate({ id: p.id, companyId }) }); }} />
                 </button>
               ))}
-              <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadPdfM.isPending} onClick={() => pdfInputRef.current?.click()} title="PDF, DXF ou DWG. DXF é o melhor: medidas exatas do CAD, sem calibrar.">
-                {uploadPdfM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Planta (PDF/DXF)
+              <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadPdfM.isPending} onClick={() => pdfInputRef.current?.click()} title="Somente DXF: medidas exatas do CAD, sem calibrar nem conferir escala. Tem DWG? O sistema explica como converter.">
+                {uploadPdfM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Planta (DXF)
               </Button>
-              <input ref={pdfInputRef} type="file" accept="application/pdf,.dxf,.dwg" className="hidden" onChange={onPdfSelected} />
+              <input ref={pdfInputRef} type="file" accept=".dxf,.dwg" className="hidden" onChange={onPdfSelected} />
               <Button
                 size="sm"
                 variant={verReferencia ? "default" : "outline"}
@@ -1559,13 +1591,6 @@ export default function MedicaoLevantamento() {
             {pdfSel && (
               <div className="bg-white border rounded-lg p-2 flex items-center gap-2 overflow-x-auto">
                 <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide shrink-0">Serviço:</span>
-                <button
-                  type="button"
-                  onClick={() => selecionarServico(null)}
-                  className={`shrink-0 h-11 px-3 rounded-lg border-2 text-sm font-medium transition-colors ${servicoAtivo === "" ? "border-gray-800 bg-gray-100" : "border-gray-200 bg-white text-gray-500"}`}
-                >
-                  Sem serviço
-                </button>
                 {servicos.filter((s: any) => s.ativo !== 0 && !s.derivaDe).map((s: any) => {
                   const tot = totaisPorServico.get(s.chave) ?? 0;
                   const sel = servicoAtivo === s.chave;
@@ -1597,6 +1622,10 @@ export default function MedicaoLevantamento() {
                     </span>
                   );
                 })}
+                {/* Rev. 4783 — incluir categoria nova direto da paleta */}
+                <Button size="sm" variant="outline" className="h-11 shrink-0 gap-1 border-dashed text-gray-600" onClick={() => setCatDialogOpen(true)} title="Incluir uma categoria nova (louças, metais, furos, revestimento, piso…)">
+                  <Plus className="h-4 w-4" />Categoria
+                </Button>
                 <Button size="sm" variant="ghost" className="h-11 shrink-0 gap-1 text-gray-500" onClick={() => setServicosDialogOpen(true)} title="Configurar serviços: nomes, cores, faces dos derivados e vínculo com a EAP">
                   <Settings2 className="h-4 w-4" />Configurar
                 </Button>
@@ -1607,7 +1636,7 @@ export default function MedicaoLevantamento() {
               <div className="border-2 border-dashed rounded-xl py-16 text-center text-gray-400">
                 <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
                 <p className="font-medium">Nenhuma planta enviada</p>
-                <p className="text-sm">Envie o PDF do pavimento/setor para começar a medir</p>
+                <p className="text-sm">Envie o DXF do pavimento/setor — a escala entra exata do CAD, sem calibrar</p>
               </div>
             ) : (
               <>
@@ -1616,26 +1645,45 @@ export default function MedicaoLevantamento() {
                   <Button size="sm" variant={tool === "select" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("select"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
                     <MousePointer2 className="h-4 w-4" />Selecionar
                   </Button>
-                  <Button size="sm" variant={tool === "calibrar" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("calibrar"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
-                    <Crosshair className="h-4 w-4" />Calibrar
-                  </Button>
-                  <Button size="sm" variant={tool === "conferir" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("conferir"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
-                    <BadgeCheck className="h-4 w-4" />Conferir
-                  </Button>
-                  <div className="h-6 w-px bg-border mx-1" />
-                  {FERRAMENTAS_DESENHO.map((f) => (
-                    <Button
-                      key={f.key}
-                      size="sm"
-                      variant={tool === f.key ? "default" : "ghost"}
-                      className="h-9 gap-1"
-                      onClick={() => { setTool(f.key); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}
-                      style={tool === f.key ? { backgroundColor: f.cor } : {}}
-                      title={f.label}
-                    >
-                      {f.icon}{f.label}
-                    </Button>
-                  ))}
+                  {/* Rev. 4783 — poka-yoke: Calibrar/Conferir só aparecem quando fazem
+                      sentido (DXF com unidade não precisa de nada disso). */}
+                  {!(isDxf && dxfAutoCalib) && (
+                    <>
+                      <Button size="sm" variant={tool === "calibrar" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("calibrar"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
+                        <Crosshair className="h-4 w-4" />Calibrar
+                      </Button>
+                      {!isDxf && (
+                        <Button size="sm" variant={tool === "conferir" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("conferir"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
+                          <BadgeCheck className="h-4 w-4" />Conferir
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {/* Rev. 4783 — poka-yoke: a ferramenta vem da CATEGORIA (tipo de medida).
+                      Só a forma de traçar aparece — e só quando a categoria é de área. */}
+                  {svcAtivoObj && (svcAtivoObj.tipoMedida === "area" || !svcAtivoObj.tipoMedida) && (
+                    <>
+                      <div className="h-6 w-px bg-border mx-1" />
+                      {FERRAMENTAS_DESENHO.filter((f) => ["area", "retangulo", "livre"].includes(f.key)).map((f) => (
+                        <Button
+                          key={f.key} size="sm" variant={tool === f.key ? "default" : "ghost"} className="h-9 gap-1"
+                          onClick={() => { setTool(f.key); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}
+                          style={tool === f.key ? { backgroundColor: (svcAtivoObj?.cor as string) || f.cor } : {}}
+                          title={f.label}
+                        >
+                          {f.icon}{f.key === "area" ? "Pontos" : f.label}
+                        </Button>
+                      ))}
+                    </>
+                  )}
+                  {svcAtivoObj && !["area", ""].includes(String(svcAtivoObj.tipoMedida ?? "")) && (
+                    <span className="text-xs px-2 py-1 rounded font-medium text-white" style={{ backgroundColor: (svcAtivoObj.cor as string) || "#374151" }}>
+                      {FERRAMENTAS_DESENHO.find((f) => f.key === svcAtivoObj.tipoMedida)?.label ?? svcAtivoObj.tipoMedida}
+                    </span>
+                  )}
+                  {!svcAtivoObj && (
+                    <span className="text-xs text-gray-400 px-2">← toque num serviço acima para desenhar</span>
+                  )}
                   <div className="h-6 w-px bg-border mx-1" />
                   {/* PDF preto-e-branco (default ON) */}
                   <Button size="sm" variant={pdfPB ? "default" : "ghost"} className="h-9 gap-1" onClick={() => setPdfPB((v) => !v)} title="Alterna a planta entre preto-e-branco (alto contraste) e cores originais">
@@ -1736,6 +1784,20 @@ export default function MedicaoLevantamento() {
                       </Button>
                       <Button size="sm" variant="ghost" className="h-9 text-red-600" onClick={() => { setDraft([]); setCalibDraft([]); }}>Limpar</Button>
                     </>
+                  )}
+                  {/* Rev. 4783 — foto do TRECHO recém-medido (book de evidências):
+                      fotografa o último contorno desenhado nesta página. */}
+                  {contornosPagina.length > 0 && (
+                    <Button
+                      size="sm" variant="outline" className="h-9 gap-1 text-gray-700"
+                      title="Tirar foto vinculada ao último trecho medido nesta página"
+                      onClick={() => {
+                        const ult = [...contornosPagina].sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0) || (b.id ?? 0) - (a.id ?? 0))[0];
+                        if (ult) addFotoContorno(ult);
+                      }}
+                    >
+                      <Camera className="h-4 w-4" />Foto do trecho
+                    </Button>
                   )}
                   {/* Rev. 4782 — ajuda de gestos escondida num "?" (declutter) */}
                   <Popover>
@@ -2227,6 +2289,60 @@ export default function MedicaoLevantamento() {
       </AlertDialog>
 
       {/* Rev. 4780 — Configurar SERVIÇOS do levantamento (catálogo híbrido) */}
+      {/* Rev. 4783 — criação rápida de categoria (poka-yoke: nome + o que ela mede) */}
+      <Dialog open={catDialogOpen} onOpenChange={(v) => { setCatDialogOpen(v); if (!v) { setCatNome(""); setCatTipo("area"); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Plus className="h-4 w-4" />Incluir categoria</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-1">Nome da categoria</p>
+              <Input autoFocus value={catNome} onChange={(e) => setCatNome(e.target.value)} placeholder="Ex.: Revestimento, Piso, Louças, Metais, Furos…" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-1">O que ela mede?</p>
+              <div className="grid grid-cols-1 gap-1.5">
+                {[
+                  { v: "area", t: "Área (m²)", d: "contorno no piso/teto — contrapiso, piso, forro, pintura de teto" },
+                  { v: "parede", t: "Parede — L×A (m²)", d: "risca a parede em planta e informa a altura — alvenaria, revestimento" },
+                  { v: "perimetro", t: "Linear (m)", d: "comprimento — rodapé, tubulação, requadro" },
+                  { v: "volume", t: "Volume (m³)", d: "área × espessura — concreto, enchimento" },
+                  { v: "contagem", t: "Contagem (un)", d: "toques na planta — louças, metais, furos, pontos elétricos" },
+                ].map((o) => (
+                  <button
+                    key={o.v} type="button" onClick={() => setCatTipo(o.v)}
+                    className={`text-left rounded-lg border-2 px-3 py-2 ${catTipo === o.v ? "border-blue-600 bg-blue-50" : "border-gray-200"}`}
+                  >
+                    <p className="text-sm font-semibold">{o.t}</p>
+                    <p className="text-[11px] text-gray-500">{o.d}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Button
+              className="w-full" disabled={!catNome.trim() || salvarServicoMut.isPending}
+              onClick={() => {
+                const nome = catNome.trim();
+                const chaveBase = nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "categoria";
+                // chave única entre as existentes (poka-yoke: colisão vira sufixo)
+                let chave = chaveBase; let i = 2;
+                while (servicos.some((s: any) => s.chave === chave)) chave = `${chaveBase}_${i++}`;
+                const paletaCores = ["#dc2626", "#2563eb", "#059669", "#7c3aed", "#ea580c", "#db2777", "#0891b2", "#ca8a04", "#4f46e5", "#65a30d"];
+                const cor = paletaCores[servicos.length % paletaCores.length];
+                const ordem = Math.max(0, ...servicos.map((s: any) => s.ordem ?? 0)) + 1;
+                salvarServicoMut.mutate(
+                  { companyId, medicaoCampoId: campoId, chave, nome, cor, tipoMedida: catTipo as any, ordem, ativo: 1 },
+                  { onSuccess: () => { setCatDialogOpen(false); setCatNome(""); setCatTipo("area"); setServicoAtivo(chave); const t = (catTipo as FerramentaDesenho) || "area"; setTool(t); setDraft([]); } },
+                );
+              }}
+            >
+              {salvarServicoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar e começar a medir"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={servicosDialogOpen} onOpenChange={setServicosDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
