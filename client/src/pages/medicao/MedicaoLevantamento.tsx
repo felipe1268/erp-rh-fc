@@ -198,17 +198,21 @@ function escHtml(s: unknown): string {
 // estado local; só grava ao sair do campo (blur) ou Enter — evita uma op por tecla.
 function RotuloInput({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
   const [v, setV] = useState(value);
+  // Rev. 4792 — deixar ÓBVIO que o nome é editável: lápis dentro do campo.
   return (
-    <input
-      type="text"
-      value={v}
-      onChange={(e) => setV(e.target.value.toUpperCase())}
-      onBlur={() => { if (v !== value) onCommit(v.toUpperCase()); }}
-      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-      placeholder="Nome / local (ex.: APARTAMENTO 1402)"
-      maxLength={255}
-      className="w-full h-7 rounded-md border border-gray-200 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-    />
+    <div className="relative">
+      <PencilLine className="h-3.5 w-3.5 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <input
+        type="text"
+        value={v}
+        onChange={(e) => setV(e.target.value.toUpperCase())}
+        onBlur={() => { if (v !== value) onCommit(v.toUpperCase()); }}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        placeholder="Toque p/ nomear (ex.: CONTRAPISO APTO 1)"
+        maxLength={255}
+        className="w-full h-8 rounded-md border border-gray-300 pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+      />
+    </div>
   );
 }
 
@@ -392,6 +396,11 @@ export default function MedicaoLevantamento() {
   // gesto só (sem clicar ponto a ponto). Toque simples continua marcando ponto.
   const [dragLine, setDragLine] = useState<{ a: GeoPonto; b: GeoPonto } | null>(null);
   const dragLineRef = useRef<{ a: GeoPonto; b: GeoPonto } | null>(null); // espelho síncrono (pointerup não pode ler state atrasado)
+  // Rev. 4792 — posição CUSTOM das etiquetas (arrastáveis no modo Selecionar);
+  // se ficar longe da geometria, uma linha-guia com bolinha aponta o lugar.
+  const [labelPosMap, setLabelPosMap] = useState<Record<string, { x: number; y: number }>>({});
+  const labelPosLoadedRef = useRef(false);
+  const labelDragRef = useRef<{ key: string; contId: number; start: { x: number; y: number }; orig: { x: number; y: number }; moved: boolean } | null>(null);
   const [freePts, setFreePts] = useState<GeoPonto[]>([]);
 
   // Rev. 3111 — ajuste de um contorno JÁ criado (handles de redimensionamento).
@@ -1433,15 +1442,24 @@ export default function MedicaoLevantamento() {
       return { x: sx / pts.length, y: sy / pts.length };
     };
     const BANDA = 0.06; // faixa horizontal: contornos "na mesma linha" ordenam por x
-    const ordered = cs
-      .map((c) => ({ c, p: anchor(c) }))
-      .sort((a, b) => (Math.round(a.p.y / BANDA) - Math.round(b.p.y / BANDA)) || (a.p.x - b.p.x) || ((a.c.numero ?? 0) - (b.c.numero ?? 0)))
-      .map((x) => x.c);
+    // Rev. 4792 — numeração POR CATEGORIA: cada serviço recomeça do 1 (Contrapiso
+    // 1,2,3… / Forro 1,2,3…), sem repetir número dentro da categoria.
+    const porCategoria = new Map<string, any[]>();
+    for (const c of cs) {
+      const k = String(c.servico ?? c.tipo ?? "");
+      porCategoria.set(k, [...(porCategoria.get(k) ?? []), c]);
+    }
+    const planos: { c: any; novo: number }[] = [];
+    for (const grupo of porCategoria.values()) {
+      const ordered = grupo
+        .map((c) => ({ c, p: anchor(c) }))
+        .sort((a, b) => (Math.round(a.p.y / BANDA) - Math.round(b.p.y / BANDA)) || (a.p.x - b.p.x) || ((a.c.numero ?? 0) - (b.c.numero ?? 0)))
+        .map((x) => x.c);
+      ordered.forEach((c, i) => planos.push({ c, novo: i + 1 }));
+    }
     setBulkBusy(true);
     try {
-      for (let i = 0; i < ordered.length; i++) {
-        const c = ordered[i];
-        const novo = i + 1;
+      for (const { c, novo } of planos) {
         if ((c.numero ?? 0) === novo) continue;
         await off.saveContorno({
           id: c.id, uuid: c.uuid, pdfId: pdfSelId!,
@@ -1485,6 +1503,20 @@ export default function MedicaoLevantamento() {
       return next.size === prev.size ? prev : next;
     });
   }, [contornosPagina]);
+
+  // Rev. 4792 — etiquetas: carrega/persiste posições customizadas por medição.
+  useEffect(() => {
+    labelPosLoadedRef.current = false;
+    try {
+      const raw = localStorage.getItem(`medLabelPos:${campoId}`);
+      setLabelPosMap(raw ? JSON.parse(raw) : {});
+    } catch { setLabelPosMap({}); }
+    labelPosLoadedRef.current = true;
+  }, [campoId]);
+  useEffect(() => {
+    if (!labelPosLoadedRef.current) return;
+    try { localStorage.setItem(`medLabelPos:${campoId}`, JSON.stringify(labelPosMap)); } catch { /* */ }
+  }, [labelPosMap, campoId]);
 
   const toggleSelContorno = (id: number) =>
     setSelContornos((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -2537,6 +2569,30 @@ export default function MedicaoLevantamento() {
                             </>
                           )}
                           {/* preview do retângulo (arrasto) */}
+                          {/* Rev. 4792 — linha-guia da etiqueta deslocada: aponta da
+                              etiqueta até a geometria (bolinha no ponto de informação) */}
+                          {contornosVisiveis.map((c) => {
+                            if (c.tipo === "contagem") return null;
+                            const key = String(c.uuid || c.id);
+                            const lp = labelPosMap[key];
+                            if (!lp) return null;
+                            let pts: GeoPonto[] = [];
+                            try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+                            if (editDrag && editDrag.contId === c.id) pts = editDrag.pts;
+                            if (pts.length < 2) return null;
+                            const fecha = FECHA_POLIGONO(c.tipo);
+                            let ax = 0, ay = 0;
+                            if (fecha) { for (const p of pts) { ax += p.x; ay += p.y; } ax /= pts.length; ay /= pts.length; }
+                            else { const i = Math.floor((pts.length - 1) / 2); const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)]; ax = (a.x + b.x) / 2; ay = (a.y + b.y) / 2; }
+                            if (Math.hypot(lp.x - ax, lp.y - ay) < 0.035) return null; // perto = sem seta
+                            const cor = c.cor || COR_TIPO[c.tipo as TipoContorno] || "#2563eb";
+                            return (
+                              <g key={`leader-${c.id}`}>
+                                <line x1={lp.x} y1={lp.y} x2={ax} y2={ay} stroke={cor} strokeWidth={1.8} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
+                                <circle cx={ax} cy={ay} r={0.005} fill={cor} stroke="#fff" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+                              </g>
+                            );
+                          })}
                           {/* Rev. 4792 — preview da linha esticada (parede) */}
                           {dragLine && (
                             <g>
@@ -2608,6 +2664,10 @@ export default function MedicaoLevantamento() {
                             const len = Math.hypot(dx, dy) || 1;
                             lx = mx + (-dy / len) * 0.02; ly = my + (dx / len) * 0.02;
                           }
+                          // Rev. 4792 — posição customizada (etiqueta arrastável)
+                          const key = String(c.uuid || c.id);
+                          const custom = labelPosMap[key];
+                          if (custom) { lx = custom.x; ly = custom.y; }
                           return (
                             <button
                               key={`lab-${c.id}`}
@@ -2620,9 +2680,35 @@ export default function MedicaoLevantamento() {
                                 borderColor: sel ? "#1d4ed8" : cor,
                                 color: sel ? "#fff" : cor,
                                 pointerEvents: tool === "select" ? "auto" : "none",
+                                touchAction: "none",
+                                cursor: "grab",
                               }}
-                              onClick={(e) => { e.stopPropagation(); setSelContornos(new Set([c.id])); }}
-                              title={`${c.rotulo ? String(c.rotulo).toUpperCase() : LABEL_TIPO[c.tipo as TipoContorno] || c.tipo} #${String(c.numero ?? "").padStart(3, "0")}`}
+                              onPointerDown={(e) => {
+                                if (tool !== "select") return;
+                                e.stopPropagation();
+                                try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* */ }
+                                labelDragRef.current = { key, contId: c.id, start: { x: e.clientX, y: e.clientY }, orig: { x: lx, y: ly }, moved: false };
+                              }}
+                              onPointerMove={(e) => {
+                                const d = labelDragRef.current;
+                                if (!d || d.key !== key) return;
+                                if (!d.moved && Math.hypot(e.clientX - d.start.x, e.clientY - d.start.y) > 4) d.moved = true;
+                                if (!d.moved) return;
+                                const r = overlayRef.current?.getBoundingClientRect();
+                                if (!r || r.width < 1) return;
+                                const nx = Math.min(1, Math.max(0, d.orig.x + (e.clientX - d.start.x) / r.width));
+                                const ny = Math.min(1, Math.max(0, d.orig.y + (e.clientY - d.start.y) / r.height));
+                                setLabelPosMap((m) => ({ ...m, [key]: { x: nx, y: ny } }));
+                              }}
+                              onPointerUp={(e) => {
+                                const d = labelDragRef.current;
+                                if (!d || d.key !== key) return;
+                                labelDragRef.current = null;
+                                e.stopPropagation();
+                                if (!d.moved) setSelContornos(new Set([c.id])); // toque limpo = seleciona
+                              }}
+                              onPointerCancel={() => { labelDragRef.current = null; }}
+                              title={`${c.rotulo ? String(c.rotulo).toUpperCase() : LABEL_TIPO[c.tipo as TipoContorno] || c.tipo} ${String(c.numero ?? "")} — arraste p/ reposicionar`}
                             >
                               {c.numero ?? "•"}
                             </button>
@@ -2792,11 +2878,11 @@ export default function MedicaoLevantamento() {
                             {/* Rev. 4790 — rótulo digitado (sempre MAIÚSCULO) manda no título;
                                 sem rótulo, cai no padrão "Área #002" */}
                             {c.rotulo
-                              ? <>{String(c.rotulo).toUpperCase()} <span className="opacity-60 font-normal">#{String(c.numero ?? "").padStart(3, "0")}</span></>
-                              : <>{LABEL_TIPO[c.tipo as TipoContorno]} #{String(c.numero ?? "").padStart(3, "0")}</>}
+                              ? <>{String(c.rotulo).toUpperCase()} <span className="opacity-60 font-normal">{String(c.numero ?? "")}</span></>
+                              : <>{LABEL_TIPO[c.tipo as TipoContorno]} {String(c.numero ?? "")}</>}
                           </span>
                         </label>
-                        <button className="text-red-600 shrink-0" onClick={() => askConfirm({ title: "Excluir contorno?", description: `${LABEL_TIPO[c.tipo as TipoContorno]} #${String(c.numero ?? "").padStart(3, "0")} será removido. Esta ação não pode ser desfeita.`, confirmText: "Excluir", onConfirm: () => off.excluirContorno(c) })}>
+                        <button className="text-red-600 shrink-0" onClick={() => askConfirm({ title: "Excluir contorno?", description: `${LABEL_TIPO[c.tipo as TipoContorno]} ${String(c.numero ?? "")} será removido. Esta ação não pode ser desfeita.`, confirmText: "Excluir", onConfirm: () => off.excluirContorno(c) })}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -2908,7 +2994,7 @@ export default function MedicaoLevantamento() {
                   {fotos.map((f) => {
                     const cv = f.contornoId != null ? contornoById.get(f.contornoId) : null;
                     const tag = cv
-                      ? `#${String(cv.numero ?? "").padStart(3, "0")}${cv.rotulo ? " · " + cv.rotulo : ""}`
+                      ? `nº ${String(cv.numero ?? "")}${cv.rotulo ? " · " + cv.rotulo : ""}`
                       : null;
                     return (
                     <div key={f.id} className="relative group">
