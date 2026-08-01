@@ -1871,6 +1871,12 @@ export default function MedicaoLevantamento() {
     const obraNome = contrato?.obraNome || contrato?.nomeProjeto || contrato?.local || "—";
     const fornecedorNome = contrato?.empresa?.razaoSocial || contrato?.empresa?.nomeFantasia || contrato?.cliente || "—";
     const levantadoPor = campo?.criadoPorNome || "";
+    // Data da medição = criação do levantamento; se vazio (registro antigo),
+    // cai pra data do 1º contorno medido; em último caso, hoje.
+    const isoOf = (v: any) => { const m = /(\d{4}-\d{2}-\d{2})/.exec(String(v ?? "")); return m ? m[1] : ""; };
+    const dataMedicao = isoOf(campo?.criadoEm)
+      || todos.map((c) => isoOf(c.criadoEm)).filter(Boolean).sort()[0]
+      || new Date().toISOString().slice(0, 10);
     const infoCell = (label: string, valor: string) => `
       <td style="border:1px solid #d1d5db;padding:6px 8px;vertical-align:top">
         <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#6b7280">${label}</div>
@@ -1937,7 +1943,7 @@ export default function MedicaoLevantamento() {
         <tr>
           ${infoCell("Fornecedor / Executor", String(fornecedorNome))}
           ${infoCell("Levantamento realizado por", levantadoPor || "—")}
-          ${infoCell("Data do levantamento", campo?.criadoEm ? fmtD(String(campo.criadoEm).slice(0, 10)) : dataStr)}
+          ${infoCell("Data da medição", fmtD(dataMedicao))}
         </tr>
       </tbody></table>
       <h3 style="font-size:13px;margin:16px 0 6px">Contornos medidos</h3>
