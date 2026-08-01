@@ -1,5 +1,18 @@
 /**
- * Rev. 4789 - LEVANTAMENTO: ESCALA DO DXF ROBUSTA (aglomerados + plausibilidade)
+ * Rev. 4789 - LEVANTAMENTO: ESCALA DXF ROBUSTA + AJUSTE PRECISO DE CONTORNOS
+ *
+ * Ajuste preciso (pedido do usuario: "endpoints pra pegar certinho"):
+ * - OSnap na PROPRIA PLANTA DXF: endpoints dos tracos indexados em grade
+ *   espacial (barato mesmo com dezenas de milhares de pontos) — desenhar e
+ *   ajustar agora gruda nos cantos reais do desenho.
+ * - OSnap tambem nas ALCAS de ajuste (arrastar canto/lado/vertice de um
+ *   contorno ja criado); o proprio contorno em edicao sai dos candidatos
+ *   para nao "regrudar" na geometria errada.
+ * - Dimensoes DIGITAVEIS: contorno selecionado (1) mostra Largura x Altura
+ *   (retangulo) ou Comprimento (linha) em metros — corrigir erro digitando.
+ * - Escala deduzida LIBERA a medicao (plausibilidade ja filtra o absurdo);
+ *   Conferir/Calibrar viram correcao opcional. Espessura de traco do SVG
+ *   proporcional a caixa (vector-effect nao e herdado do <g>) + filtro NaN.
  *
  * Escala "totalmente equivocada": cabecalhos de DXF mentem ($INSUNITS=mm com
  * desenho em metros) e arquivos CAD carregam 2+ desenhos no espaco (planta +

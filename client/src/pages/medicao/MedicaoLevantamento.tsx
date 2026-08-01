@@ -746,7 +746,9 @@ export default function MedicaoLevantamento() {
         pushPoly(pts, FECHA_POLIGONO(c.tipo), c.tipo === "contagem");
       }
     };
-    consume(contornosPagina);
+    // Rev. 4789 — durante o ajuste por alça, o próprio contorno sai dos
+    // candidatos (senão o ponto arrastado "regruda" na geometria errada).
+    consume(editDrag ? contornosPagina.filter((c) => c.id !== editDrag.contId) : contornosPagina);
     consume(referenciaPagina);
     if (draft.length) pushPoly(draft, false, false);
     // interseções (custo O(n²) — limita p/ não travar com muitos segmentos).
@@ -758,7 +760,33 @@ export default function MedicaoLevantamento() {
         }
     }
     return { points, segments };
-  }, [contornosPagina, referenciaPagina, draft]);
+  }, [contornosPagina, referenciaPagina, draft, editDrag?.contId]);
+
+  // Rev. 4789 — OSnap na PRÓPRIA PLANTA (DXF): extrai os endpoints dos traços
+  // do SVG e indexa numa grade espacial (busca só nas células vizinhas — barato
+  // mesmo com dezenas de milhares de pontos). Coordenadas normalizadas [0..1].
+  const dxfSnapGrid = useMemo(() => {
+    if (!isDxf || !dxfData?.ok || !dxfData.svg) return null;
+    const vb = /viewBox="([-\d.eE]+) ([-\d.eE]+) ([-\d.eE]+) ([-\d.eE]+)"/.exec(dxfData.svg);
+    if (!vb) return null;
+    const [minX, minY, w, h] = [parseFloat(vb[1]), parseFloat(vb[2]), parseFloat(vb[3]), parseFloat(vb[4])];
+    if (!(w > 0 && h > 0)) return null;
+    const CELL = 1 / 160;
+    const grid = new Map<string, GeoPonto[]>();
+    const re = /[ML](-?[\d.]+) (-?[\d.]+)/g;
+    let m: RegExpExecArray | null;
+    let n = 0;
+    while ((m = re.exec(dxfData.svg)) && n < 200_000) {
+      const x = (parseFloat(m[1]) - minX) / w, y = (parseFloat(m[2]) - minY) / h;
+      if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) continue;
+      const k = `${Math.floor(x / CELL)}|${Math.floor(y / CELL)}`;
+      let arr = grid.get(k);
+      if (!arr) { arr = []; grid.set(k, arr); }
+      arr.push({ x, y });
+      n++;
+    }
+    return { grid, CELL };
+  }, [isDxf, dxfData]);
 
   // Acha o melhor snap p/ a posição normalizada `raw`. Tolerância em PIXELS de
   // tela (some quando o ponto visual está perto) usando o retângulo do overlay.
@@ -778,6 +806,16 @@ export default function MedicaoLevantamento() {
       if (!best || prio < best.prio || (prio === best.prio && d < best.d)) best = { p, kind, prio, d };
     };
     for (const c of snapData.points) consider(c.p, c.kind);
+    // Rev. 4789 — endpoints da própria planta DXF (grade espacial: só as
+    // células vizinhas ao ponto tocado entram na conta).
+    if (dxfSnapGrid && osnapModes.endpoint) {
+      const { grid, CELL } = dxfSnapGrid;
+      const gx = Math.floor(raw.x / CELL), gy = Math.floor(raw.y / CELL);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+        const arr = grid.get(`${gx + dx}|${gy + dy}`);
+        if (arr) for (const p of arr) consider(p, "endpoint");
+      }
+    }
     if (osnapModes.perpendicular && fromPt) {
       for (const [a, b] of snapData.segments) {
         const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
@@ -791,7 +829,7 @@ export default function MedicaoLevantamento() {
       for (const [a, b] of snapData.segments) consider(projetarNoSegmento(raw, a, b).pt, "nearest");
     }
     return best ? { p: best.p, kind: best.kind } : null;
-  }, [osnapOn, osnapModes, snapData]);
+  }, [osnapOn, osnapModes, snapData, dxfSnapGrid]);
 
   // ponto de referência p/ perpendicular = último vértice do desenho em curso.
   const snapFromPt = useCallback((): GeoPonto | undefined => {
@@ -1446,7 +1484,16 @@ export default function MedicaoLevantamento() {
     if (!ed) return;
     e.stopPropagation();
     e.preventDefault();
-    const p = getPtFromClient(e.clientX, e.clientY);
+    const raw = getPtFromClient(e.clientX, e.clientY);
+    // Rev. 4789 — OSnap também no ajuste por alça: o ponto arrastado gruda na
+    // geometria notável (cantos/interseções da planta e de outros contornos),
+    // ignorando os pontos ORIGINAIS do próprio contorno (senão "volta" pro erro).
+    let p = raw;
+    const hit = applySnap(raw);
+    if (hit && !ed.base.some((b) => Math.hypot(b.x - hit.p.x, b.y - hit.p.y) < 1e-6)) {
+      p = hit.p;
+      setSnapHit(hit);
+    } else setSnapHit(null);
     const next = pontosEditados(ed, p);
     ed.cur = next;
     setEditDrag({ contId: ed.cont.id, pts: next });
@@ -1458,7 +1505,40 @@ export default function MedicaoLevantamento() {
     try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch { /* */ }
     editRef.current = null;
     setEditDrag(null);
+    setSnapHit(null);
     if (ed.cur && ed.cur.length >= 2) await salvarGeometriaContorno(ed.cont, ed.cur);
+  }
+
+  // Rev. 4789 — redimensionar por NÚMERO (largura/altura do retângulo ou
+  // comprimento da linha, em metros). Escala proporcional ancorada no 1º ponto,
+  // sem depender da conversão norm→pt (razão nova/atual).
+  function metrosEntre(a: GeoPonto, b: GeoPonto, mpu: number): number {
+    return distancia(normToPt(a), normToPt(b)) * mpu;
+  }
+  async function redimensionarContorno(c: any, dim: "largura" | "altura" | "comprimento", metrosNovo: number) {
+    if (!(metrosNovo > 0)) return;
+    let pts: GeoPonto[] = [];
+    try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+    const mpu = parseFloat(c.metrosPorUnidade || "0") || calibAtualEff?.metrosPorUnidade || 0;
+    if (!(mpu > 0) || pts.length < 2) return;
+    const box = detectRectBox(pts);
+    let novos: GeoPonto[] | null = null;
+    if (box && (dim === "largura" || dim === "altura")) {
+      const atual = dim === "largura"
+        ? metrosEntre({ x: box.x0, y: box.y0 }, { x: box.x1, y: box.y0 }, mpu)
+        : metrosEntre({ x: box.x0, y: box.y0 }, { x: box.x0, y: box.y1 }, mpu);
+      if (!(atual > 0)) return;
+      const f = metrosNovo / atual;
+      novos = cantosDoBox(dim === "largura"
+        ? { ...box, x1: box.x0 + (box.x1 - box.x0) * f }
+        : { ...box, y1: box.y0 + (box.y1 - box.y0) * f });
+    } else if (pts.length === 2 && dim === "comprimento") {
+      const atual = metrosEntre(pts[0], pts[1], mpu);
+      if (!(atual > 0)) return;
+      const f = metrosNovo / atual;
+      novos = [pts[0], { x: pts[0].x + (pts[1].x - pts[0].x) * f, y: pts[0].y + (pts[1].y - pts[0].y) * f }];
+    }
+    if (novos) await salvarGeometriaContorno(c, novos);
   }
 
   function gerarMemoriaCalculo() {
@@ -2196,6 +2276,48 @@ export default function MedicaoLevantamento() {
                       <div className="text-[11px] font-medium text-blue-700">
                         Aplicar a {selContornos.size} contorno(s):
                       </div>
+                      {/* Rev. 4789 — dimensões digitáveis do contorno selecionado (1 só):
+                          retângulo → largura × altura; linha (2 pontos) → comprimento. */}
+                      {selContornos.size === 1 && (() => {
+                        const c = contornosPagina.find((x) => x.id === [...selContornos][0]);
+                        if (!c || c.tipo === "contagem") return null;
+                        let pts: GeoPonto[] = [];
+                        try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+                        const mpu = parseFloat(c.metrosPorUnidade || "0") || calibAtualEff?.metrosPorUnidade || 0;
+                        if (!(mpu > 0) || pts.length < 2) return null;
+                        const box = detectRectBox(pts);
+                        const linha = !box && pts.length === 2;
+                        if (!box && !linha) return null;
+                        const dims: { dim: "largura" | "altura" | "comprimento"; label: string; atual: number }[] = box
+                          ? [
+                            { dim: "largura", label: "Largura", atual: metrosEntre({ x: box.x0, y: box.y0 }, { x: box.x1, y: box.y0 }, mpu) },
+                            { dim: "altura", label: "Altura", atual: metrosEntre({ x: box.x0, y: box.y0 }, { x: box.x0, y: box.y1 }, mpu) },
+                          ]
+                          : [{ dim: "comprimento", label: "Comprimento", atual: metrosEntre(pts[0], pts[1], mpu) }];
+                        const commit = (dim: "largura" | "altura" | "comprimento", el: HTMLInputElement) => {
+                          const s = (el.value || "").trim();
+                          // BR-aware: "2,50" e "1.250,5" ok; "2.5" (ponto decimal) também.
+                          const v = parseFloat(s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s);
+                          if (v > 0) void redimensionarContorno(c, dim, v);
+                        };
+                        return (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {dims.map(({ dim, label, atual }) => (
+                              <label key={dim} className="flex items-center gap-1 text-[11px] text-blue-700">
+                                {label}:
+                                <input
+                                  key={`${c.id}-${dim}-${c.quantidade}`}
+                                  type="text" inputMode="decimal" defaultValue={numFmt(atual, 2)}
+                                  className="h-7 w-16 rounded border border-blue-300 bg-white px-1.5 text-right text-xs"
+                                  onBlur={(e) => commit(dim, e.currentTarget)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
+                                />
+                                m
+                              </label>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       <VincularItemCombobox
                         items={itensVinculaveis}
                         value=""
