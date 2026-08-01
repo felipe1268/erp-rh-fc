@@ -786,6 +786,26 @@ export default function MedicaoLevantamento() {
     return tot;
   }, [off, servicos]);
 
+  // Rev. 4792 — GRUPOS de subcategorias: "Pintura Teto/Parede/Piso" etc. viram
+  // abinhas sob um chip único da categoria mãe (menos poluição na paleta).
+  // Sub = chave começa com `${pai.chave}_` OU nome começa com "NomeDaMãe ".
+  const gruposSub = useMemo(() => {
+    const base = servicos.filter((s: any) => s.ativo !== 0 && !s.derivaDe);
+    const map = new Map<string, any[]>();
+    const subPai = new Map<string, string>();
+    for (const pai of base) {
+      if (subPai.has(pai.chave)) continue; // sub não vira mãe
+      for (const s of base) {
+        if (s.chave === pai.chave || subPai.has(s.chave)) continue;
+        if (String(s.chave).startsWith(`${pai.chave}_`) || String(s.nome).startsWith(`${pai.nome} `)) {
+          subPai.set(s.chave, pai.chave);
+          map.set(pai.chave, [...(map.get(pai.chave) ?? []), s]);
+        }
+      }
+    }
+    return { map, subPai };
+  }, [servicos]);
+
   // Cor efetiva para previews (rascunho/retângulo) = cor escolhida ou a do serviço ativo ou o azul de área.
   const corPreview = (svcAtivoObj?.cor as string) || corDesenho || COR_TIPO.area;
 
@@ -1926,16 +1946,18 @@ export default function MedicaoLevantamento() {
             {/* Rev. 4780 — PALETA DE SERVIÇOS (tablet-first): toca no serviço 1x e sai
                 desenhando; todo contorno nasce classificado (cor + chave + rótulo). */}
             {pdfSel && (
-              <div className="bg-white border rounded-lg p-2 flex items-center gap-2 overflow-x-auto">
+              <div className="bg-white border rounded-lg p-2 space-y-2">
+              <div className="flex items-center gap-2 overflow-x-auto">
                 <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide shrink-0">Serviço:</span>
-                {servicos.filter((s: any) => s.ativo !== 0 && !s.derivaDe).map((s: any) => {
-                  const tot = totaisPorServico.get(s.chave) ?? 0;
-                  const sel = servicoAtivo === s.chave;
+                {servicos.filter((s: any) => s.ativo !== 0 && !s.derivaDe && !gruposSub.subPai.has(s.chave)).map((s: any) => {
+                  const subs = gruposSub.map.get(s.chave) ?? [];
+                  const tot = (totaisPorServico.get(s.chave) ?? 0) + subs.reduce((a: number, x: any) => a + (totaisPorServico.get(x.chave) ?? 0), 0);
+                  const sel = servicoAtivo === s.chave || gruposSub.subPai.get(servicoAtivo) === s.chave;
                   return (
                     <button
                       key={s.chave}
                       type="button"
-                      onClick={() => selecionarServico(s)}
+                      onClick={() => selecionarServico(subs.length > 0 && !sel ? subs[0] : s)}
                       className={`shrink-0 h-11 px-3 rounded-lg border-2 text-sm font-semibold flex items-center gap-2 transition-colors ${sel ? "text-white" : "bg-white"}`}
                       style={sel ? { backgroundColor: s.cor || "#374151", borderColor: s.cor || "#374151" } : { borderColor: s.cor || "#d1d5db", color: s.cor || "#374151" }}
                     >
@@ -1976,6 +1998,36 @@ export default function MedicaoLevantamento() {
                 >
                   <Layers className="h-4 w-4" />{verTodasCamadas ? "Todas" : "Só a ativa"}
                 </Button>
+              </div>
+              {/* Rev. 4792 — ABINHAS de subcategoria (ex.: Pintura → Teto/Parede/Piso) */}
+              {(() => {
+                const paiChave = gruposSub.subPai.get(servicoAtivo) ?? (gruposSub.map.has(servicoAtivo) ? servicoAtivo : null);
+                if (!paiChave) return null;
+                const pai = servicos.find((s: any) => s.chave === paiChave);
+                if (!pai) return null;
+                const subs = gruposSub.map.get(paiChave) ?? [];
+                const abas = [pai, ...subs];
+                return (
+                  <div className="flex items-center gap-1.5 overflow-x-auto border-t pt-2">
+                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide shrink-0">{pai.nome}:</span>
+                    {abas.map((s: any) => {
+                      const sel = servicoAtivo === s.chave;
+                      const label = s.chave === pai.chave ? "Geral" : (String(s.nome).startsWith(`${pai.nome} `) ? String(s.nome).slice(pai.nome.length + 1) : s.nome);
+                      const tot = totaisPorServico.get(s.chave) ?? 0;
+                      return (
+                        <button
+                          key={s.chave} type="button" onClick={() => selecionarServico(s)}
+                          className={`shrink-0 h-9 px-3 rounded-full border text-xs font-semibold flex items-center gap-1.5 ${sel ? "text-white" : "bg-white"}`}
+                          style={sel ? { backgroundColor: s.cor || "#374151", borderColor: s.cor || "#374151" } : { borderColor: s.cor || "#d1d5db", color: s.cor || "#374151" }}
+                        >
+                          {label}
+                          {tot > 0 && <span className={`tabular-nums rounded px-1 ${sel ? "bg-white/25" : "bg-gray-100 text-gray-600"}`}>{tot.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
               </div>
             )}
 
