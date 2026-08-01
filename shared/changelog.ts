@@ -8,6 +8,9 @@
  * - OSnap tambem nas ALCAS de ajuste (arrastar canto/lado/vertice de um
  *   contorno ja criado); o proprio contorno em edicao sai dos candidatos
  *   para nao "regrudar" na geometria errada.
+ * - PINCA FLUIDA (iPad): zoom de 2 dedos agora e transform CSS ao vivo (GPU,
+ *   sem re-render) com pan simultaneo e zoom focal no ponto entre os dedos;
+ *   o zoom real e commitado no fim do gesto — sem tranco nem distorcao.
  * - Dimensoes DIGITAVEIS: contorno selecionado (1) mostra Largura x Altura
  *   (retangulo) ou Comprimento (linha) em metros — corrigir erro digitando.
  * - Escala deduzida LIBERA a medicao (plausibilidade ja filtra o absurdo);

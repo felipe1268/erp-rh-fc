@@ -414,7 +414,13 @@ export default function MedicaoLevantamento() {
 
   // Gesto de toque/caneta: pinça (2 ponteiros) = zoom+pan; 1 ponteiro = desenha/pan.
   const ptrsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
-  const pinchRef = useRef<{ startDist: number; startZoom: number; fracX: number; fracY: number } | null>(null);
+  // Rev. 4789 — pinça fluida: durante o gesto aplica transform CSS (GPU, sem
+  // re-render) no wrapper do conteúdo; o zoom real só é commitado no fim.
+  const pinchRef = useRef<{
+    startDist: number; startZoom: number; fracX: number; fracY: number;
+    startMid: { x: number; y: number }; lastMid: { x: number; y: number }; ratio: number;
+  } | null>(null);
+  const zoomInnerRef = useRef<HTMLDivElement | null>(null);
   const focusRef = useRef<{ fracX: number; fracY: number; cx: number; cy: number } | null>(null);
   const gestRef = useRef<{
     mode: "idle" | "pending" | "pan" | "rect" | "free";
@@ -859,16 +865,23 @@ export default function MedicaoLevantamento() {
       const a = pts[0], b = pts[1];
       const startDist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
       const cont = canvasWrapRef.current;
+      const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
       let fracX = 0.5, fracY = 0.5;
       if (cont) {
         const rect = cont.getBoundingClientRect();
-        const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
         const contentW = baseWidth * zoom;
         const contentH = pageDims.w > 0 ? contentW * (pageDims.h / pageDims.w) : contentW;
         fracX = (cont.scrollLeft + (midX - rect.left)) / Math.max(contentW, 1);
         fracY = (cont.scrollTop + (midY - rect.top)) / Math.max(contentH, 1);
       }
-      pinchRef.current = { startDist, startZoom: zoom, fracX, fracY };
+      // origem da escala = ponto entre os dedos, em coordenadas do wrapper.
+      const inner = zoomInnerRef.current;
+      if (inner) {
+        const ir = inner.getBoundingClientRect();
+        inner.style.transformOrigin = `${midX - ir.left}px ${midY - ir.top}px`;
+        inner.style.willChange = "transform";
+      }
+      pinchRef.current = { startDist, startZoom: zoom, fracX, fracY, startMid: { x: midX, y: midY }, lastMid: { x: midX, y: midY }, ratio: 1 };
       return;
     }
     if (suppressRef.current) return; // ponteiro remanescente após pinça
@@ -897,14 +910,19 @@ export default function MedicaoLevantamento() {
     ptrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const size = ptrsRef.current.size;
     if (size >= 2 && pinchRef.current) {
+      // Rev. 4789 — pinça ao vivo SEM re-render: translate acompanha os dedos
+      // (pan) e scale mantém o ponto entre eles fixo (zoom focal). Fluido no
+      // iPad; o zoom de verdade é commitado no pointerup.
+      const pr = pinchRef.current;
       const pts = [...ptrsRef.current.values()];
       const a = pts[0], b = pts[1];
       const dist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
       const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-      const ratio = dist / pinchRef.current.startDist;
-      const newZoom = Math.min(6, Math.max(0.5, pinchRef.current.startZoom * ratio));
-      focusRef.current = { fracX: pinchRef.current.fracX, fracY: pinchRef.current.fracY, cx, cy };
-      setZoom(newZoom);
+      const eff = Math.min(6, Math.max(0.5, pr.startZoom * (dist / pr.startDist)));
+      pr.ratio = eff / pr.startZoom;
+      pr.lastMid = { x: cx, y: cy };
+      const inner = zoomInnerRef.current;
+      if (inner) inner.style.transform = `translate(${cx - pr.startMid.x}px, ${cy - pr.startMid.y}px) scale(${pr.ratio})`;
       return;
     }
     const g = gestRef.current;
@@ -937,7 +955,27 @@ export default function MedicaoLevantamento() {
     const had = ptrsRef.current.delete(e.pointerId);
     try { overlayRef.current?.releasePointerCapture(e.pointerId); } catch { /* */ }
     const size = ptrsRef.current.size;
-    if (size < 2) pinchRef.current = null;
+    if (size < 2 && pinchRef.current) {
+      // Rev. 4789 — fim da pinça: limpa o transform e commita zoom+scroll no
+      // mesmo lugar visual (o ponto que estava entre os dedos continua lá).
+      const pr = pinchRef.current;
+      pinchRef.current = null;
+      const inner = zoomInnerRef.current;
+      if (inner) { inner.style.transform = ""; inner.style.willChange = ""; }
+      const newZoom = Math.min(6, Math.max(0.5, pr.startZoom * pr.ratio));
+      const cont = canvasWrapRef.current;
+      if (newZoom !== zoom) {
+        focusRef.current = { fracX: pr.fracX, fracY: pr.fracY, cx: pr.lastMid.x, cy: pr.lastMid.y };
+        setZoom(newZoom);
+      } else if (cont) {
+        // só pan (zoom igual): reposiciona o scroll direto.
+        const rect = cont.getBoundingClientRect();
+        const contentW = baseWidth * newZoom;
+        const contentH = pageDims.w > 0 ? contentW * (pageDims.h / pageDims.w) : contentW;
+        cont.scrollLeft = pr.fracX * contentW - (pr.lastMid.x - rect.left);
+        cont.scrollTop = pr.fracY * contentH - (pr.lastMid.y - rect.top);
+      }
+    }
     if (size === 0) suppressRef.current = false;
     const g = gestRef.current;
     if (!had || !g || g.pointerId !== e.pointerId) return;
@@ -2057,7 +2095,7 @@ export default function MedicaoLevantamento() {
 
                 {/* canvas */}
                 <div ref={canvasWrapRef} className="border rounded-lg bg-slate-200 overflow-auto" style={{ maxHeight: "72vh" }}>
-                  <div className="relative mx-auto w-fit" style={{ touchAction: "none" }}>
+                  <div ref={zoomInnerRef} className="relative mx-auto w-fit" style={{ touchAction: "none" }}>
                     {/* filtro P&B aplicado SÓ ao fundo (PDF/DXF), nunca ao overlay/SVG */}
                     <div style={{ filter: pdfPB ? "grayscale(1) contrast(1.25) brightness(1.02)" : "none" }}>
                       {isDxf ? (
