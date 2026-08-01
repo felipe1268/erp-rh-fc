@@ -20,6 +20,7 @@ import {
 import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
 import { toast } from "sonner";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
+import { OcMiniDialog } from "@/components/compras/ItemCatalogo";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useModule } from "@/contexts/ModuleContext";
 import { Textarea } from "@/components/ui/textarea";
@@ -2981,6 +2982,16 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
   // Rev. 4802 — card de descontos clicável: lista ponto a ponto (o que e quando).
   const fdTotal = fdRows.reduce((s: number, f: any) => s + (Number(f.valor) || 0), 0);
   const [fdListOpen, setFdListOpen] = useState(false);
+  // Rev. 4803 — rastreabilidade: clicar na OC do desconto abre o pedido de compra completo.
+  const [ocDialogId, setOcDialogId] = useState<number | null>(null);
+  const fdRegistros: any[] = contrato.fdMaterialRegistros || [];
+  // OCs referenciadas por uma linha de desconto automático (o nº da OC está na descrição).
+  const ocsDaLinha = (f: any): any[] => {
+    if ((f.tipo || "fd") !== "fd") return [];
+    const desc = String(f.descricao || "");
+    const hits = fdRegistros.filter((r: any) => r.numeroOc && desc.includes(r.numeroOc));
+    return hits.length > 0 ? hits : (f.origem === "auto" ? fdRegistros : []);
+  };
   const [editingDescontos, setEditingDescontos] = useState(false);
   const [editingConfig, setEditingConfig] = useState(false);
   const [descontos, setDescontos] = useState(Number(m.descontos || 0));
@@ -3289,6 +3300,20 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
                     {f.descricao}
                     {f.origem === "auto" && <span className="text-gray-400"> (automático)</span>}
                     {f.origem === "avulso" && <span className="text-gray-400"> (lançado fora da medição)</span>}
+                    {ocsDaLinha(f).length > 0 && (
+                      <span className="inline-flex flex-wrap gap-1 ml-1.5 align-middle">
+                        {ocsDaLinha(f).map((r: any) => (
+                          <button
+                            key={r.id}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                            onClick={(e) => { e.stopPropagation(); setOcDialogId(r.id); }}
+                            title="Ver pedido de compra"
+                          >
+                            {r.numeroOc ? formatNumeroOcDisplay(r.numeroOc) : `OC #${r.id}`} <ExternalLink className="w-2.5 h-2.5" />
+                          </button>
+                        ))}
+                      </span>
+                    )}
                   </span>
                   <span className="font-semibold text-amber-700 whitespace-nowrap">- {BRL(Number(f.valor) || 0)}</span>
                 </div>
@@ -3307,6 +3332,9 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
           <div className="col-span-5 text-[10px] text-gray-400">Obs.: {obsRetencao}</div>
         )}
       </div>
+      {ocDialogId != null && (
+        <OcMiniDialog companyId={contrato.companyId} ordemId={ocDialogId} onClose={() => setOcDialogId(null)} />
+      )}
     </div>
   );
 }
