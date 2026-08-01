@@ -6,7 +6,7 @@ import { useCompany } from "@/hooks/useCompany";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, ClipboardCheck, Zap, ChevronLeft, ChevronRight, AlertTriangle, ShieldCheck, UserCheck, Crown, FileSignature, Building2, Ruler } from "lucide-react";
+import { CheckCircle, XCircle, ClipboardCheck, Zap, ChevronLeft, ChevronRight, ChevronDown, AlertTriangle, ShieldCheck, UserCheck, Crown, FileSignature, Building2, Ruler, ShoppingCart, FileText, Banknote, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
@@ -61,6 +61,7 @@ export default function Medicoes() {
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mesSel, setMesSel] = useState(hoje.getMonth() + 1);
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [acompanhamentoAberto, setAcompanhamentoAberto] = useState(false);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [rejeitandoId, setRejeitandoId] = useState<number | null>(null);
 
@@ -83,10 +84,30 @@ export default function Medicoes() {
       { enabled: companyId > 0 }
     );
 
-  const invalidate = () => utils.terceiroContratos.listarMedicoes.invalidate();
+  // Rev. 4778 — Esteira do Terceiro: Compras → Contrato → Assinatura → Medição → Financeiro.
+  const { data: esteira } = trpc.terceiroContratos.esteiraTerceiros.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+
+  const invalidate = () => {
+    utils.terceiroContratos.listarMedicoes.invalidate();
+    utils.terceiroContratos.esteiraTerceiros.invalidate();
+  };
+
+  // Rev. 4778 — poka-yoke: se a aprovação voltar sem título no Financeiro, avisa NA HORA.
+  const avisarFinanceiro = (r: any) => {
+    if (r && r.financeiroOk === false) {
+      toast.error("Medição aprovada, mas o título NÃO nasceu no Financeiro. Use \"Reenviar ao Financeiro\" no card da medição.", { duration: 8000 });
+    }
+  };
 
   const aprovarMut = trpc.terceiroContratos.aprovarMedicao.useMutation({
-    onSuccess: () => { toast.success("Medição aprovada!"); invalidate(); },
+    onSuccess: (r: any) => { toast.success("Medição aprovada!"); avisarFinanceiro(r); invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const reenviarMut = trpc.terceiroContratos.reenviarMedicaoFinanceiro.useMutation({
+    onSuccess: () => { toast.success("Título criado no Financeiro (Contas a Pagar)."); invalidate(); },
     onError: (e) => toast.error(e.message),
   });
   const aprovarGestorMut = trpc.terceiroContratos.aprovarNivelGestor.useMutation({
@@ -94,7 +115,11 @@ export default function Medicoes() {
     onError: (e) => toast.error(e.message),
   });
   const aprovarSocioMut = trpc.terceiroContratos.aprovarNivelSocio.useMutation({
-    onSuccess: () => { toast.success("Liberado pelo Sócio Adm — enviado ao financeiro (a pagar)."); invalidate(); },
+    onSuccess: (r: any) => {
+      if ((r as any)?.financeiroOk === false) avisarFinanceiro(r);
+      else toast.success("Liberado pelo Sócio Adm — título criado no Financeiro (a pagar).");
+      invalidate();
+    },
     onError: (e) => toast.error(e.message),
   });
   const rejeitarMut = trpc.terceiroContratos.rejeitarMedicao.useMutation({
@@ -151,57 +176,6 @@ export default function Medicoes() {
               </Badge>
             )}
           </div>
-        </div>
-
-        {/* Rev. 3084 — Contratos ATIVOS prontos para medição (só após assinaturas concluídas). */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <FileSignature className="w-4 h-4 text-orange-600" />
-            <h2 className="text-sm font-semibold text-gray-800">Contratos ativos para medir</h2>
-            <Badge className="bg-orange-50 text-orange-700 border border-orange-200 text-xs">{contratosParaMedir.length}</Badge>
-          </div>
-          {loadingContratos ? (
-            <div className="py-6 text-center text-gray-400 text-sm">Carregando contratos...</div>
-          ) : contratosParaMedir.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-6 px-4 text-center">
-              <FileSignature className="w-7 h-7 mx-auto mb-2 text-gray-300" />
-              <p className="text-sm text-gray-500">Nenhum contrato pronto para medição.</p>
-              <p className="text-xs text-gray-400">Os contratos aparecem aqui somente após a finalização das assinaturas.</p>
-            </div>
-          ) : (
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {contratosParaMedir.map((c: any) => (
-                <button
-                  key={c.id}
-                  onClick={() => navigate(`/terceiros/contratos/${c.id}?tab=medicoes`)}
-                  className="text-left bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:border-orange-300 hover:shadow-md transition-all"
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-semibold text-gray-900 text-sm truncate">{c.numero || `Contrato #${c.id}`}</span>
-                    <Badge className="bg-green-100 text-green-700 border border-green-200 text-[10px]">Assinado</Badge>
-                  </div>
-                  <p className="text-xs text-gray-600 line-clamp-2 mb-2">{c.descricao}</p>
-                  <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-2">
-                    <Building2 className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate">{c.empresaNome}</span>
-                    {c.obraNome && <><span className="text-gray-300">•</span><span className="truncate">{c.obraNome}</span></>}
-                  </div>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-gray-500">Medido: <strong className="text-gray-800">{Number(c.percentualMedido).toFixed(1)}%</strong></span>
-                    <span className="inline-flex items-center gap-1 text-orange-700 font-medium">
-                      <Ruler className="w-3 h-3" /> Medir <ChevronRight className="w-3 h-3" />
-                    </span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full bg-orange-400 rounded-full" style={{ width: `${Math.min(Number(c.percentualMedido) || 0, 100)}%` }} />
-                  </div>
-                  <div className="mt-1 text-[10px] text-gray-400">
-                    Saldo a medir: <strong className="text-gray-600">{BRL(c.saldoAMedir)}</strong> de {BRL(c.valorTotal)}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         <div className="flex items-center gap-2 pt-1">
@@ -304,6 +278,18 @@ export default function Medicoes() {
                             <Zap className="w-3 h-3 mr-1" />Auto
                           </Badge>
                         )}
+                        {/* Rev. 4778 — poka-yoke: rastro do título no Financeiro */}
+                        {(m.status === "aprovada" || m.status === "paga" || m.status === "faturada") && (
+                          (m as any).temTituloFinanceiro ? (
+                            <Badge className="text-xs border bg-emerald-100 text-emerald-700 border-emerald-200">
+                              <Banknote className="w-3 h-3 mr-1" />No Financeiro ✓
+                            </Badge>
+                          ) : (
+                            <Badge className="text-xs border bg-red-100 text-red-700 border-red-300 animate-pulse font-semibold">
+                              <AlertTriangle className="w-3 h-3 mr-1" />SEM título no Financeiro
+                            </Badge>
+                          )
+                        )}
                         {m.alertaDivergencia && (
                           <Badge className="text-xs border bg-orange-100 text-orange-800 border-orange-300">
                             <AlertTriangle className="w-3 h-3 mr-1" />Divergência {m.percentualDivergencia != null ? `${Number(m.percentualDivergencia).toFixed(1)}%` : ""}
@@ -347,6 +333,13 @@ export default function Medicoes() {
 
                     <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                       <ChevronRight className="w-4 h-4 text-gray-400" />
+                      {(m.status === "aprovada" || m.status === "faturada" || m.status === "paga") && !(m as any).temTituloFinanceiro && (
+                        <Button size="sm" className="gap-1 bg-red-600 hover:bg-red-700 text-xs animate-pulse"
+                          onClick={() => reenviarMut.mutate({ id: m.id, companyId })}
+                          disabled={reenviarMut.isPending}>
+                          <RefreshCw className={`w-3 h-3 ${reenviarMut.isPending ? "animate-spin" : ""}`} /> Reenviar ao Financeiro
+                        </Button>
+                      )}
                       {aguardandoAprov && (
                         <>
                           {tresNiveis ? (
@@ -404,6 +397,152 @@ export default function Medicoes() {
             })}
           </div>
         )}
+        {/* Rev. 4778 — ESTEIRA DO TERCEIRO: fluxo completo visível (Compras → Financeiro). */}
+        {esteira && (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-sm font-semibold text-gray-800">Esteira do Terceiro</h2>
+              <span className="text-[11px] text-gray-400">do Compras ao pagamento</span>
+            </div>
+            <div className="flex items-stretch gap-1 overflow-x-auto pb-1">
+              {[
+                { icon: ShoppingCart, label: "Compras", sub: "cotações de serviço sem contrato", count: esteira.etapas.cotacoesSemContrato, alerta: esteira.etapas.cotacoesSemContrato > 0, to: "/compras/cotacoes" },
+                { icon: FileText, label: "Contrato", sub: "aguardando assinatura", count: esteira.etapas.contratosAguardandoAssinatura, alerta: esteira.etapas.contratosAguardandoAssinatura > 0, to: "/terceiros/contratos" },
+                { icon: FileSignature, label: "Assinados", sub: "prontos para medir", count: esteira.etapas.contratosAssinados, alerta: false, to: "/terceiros/contratos" },
+                { icon: ClipboardCheck, label: "Medição", sub: "aguardando aprovação", count: esteira.etapas.medicoesAguardando, alerta: esteira.etapas.medicoesAguardando > 0, to: null },
+                { icon: Banknote, label: "Financeiro", sub: `${esteira.etapas.titulosAbertos} a pagar • ${esteira.etapas.titulosPagos} pagos`, count: esteira.etapas.titulosAbertos + esteira.etapas.titulosPagos, alerta: false, to: "/financeiro/dashboards/pagar" },
+              ].map((s, i, arr) => (
+                <div key={s.label} className="flex items-center flex-1 min-w-[110px]">
+                  <button
+                    onClick={() => s.to && navigate(s.to)}
+                    className={`flex-1 text-left rounded-lg border p-2.5 transition-all ${s.to ? "hover:shadow-md cursor-pointer" : "cursor-default"} ${
+                      s.alerta ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <s.icon className={`w-3.5 h-3.5 ${s.alerta ? "text-amber-600" : "text-gray-500"}`} />
+                      <span className="text-xs font-semibold text-gray-800">{s.label}</span>
+                      <span className={`ml-auto text-xs font-bold rounded-full px-1.5 ${s.alerta ? "bg-amber-200 text-amber-900" : "bg-gray-200 text-gray-600"}`}>{s.count}</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">{s.sub}</p>
+                  </button>
+                  {i < arr.length - 1 && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />}
+                </div>
+              ))}
+            </div>
+            {esteira.etapas.aprovadasSemTitulo > 0 && (
+              <div className="mt-2 flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 animate-pulse">
+                <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                <p className="text-xs font-semibold text-red-800">
+                  {esteira.etapas.aprovadasSemTitulo} medição(ões) aprovada(s) SEM título no Financeiro — reenvie no card da medição abaixo.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Rev. 4778 — Acompanhamento por contrato (ciclo completo, colapsável). */}
+        {esteira && esteira.contratos.length > 0 && (
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <button className="w-full flex items-center gap-2 p-4" onClick={() => setAcompanhamentoAberto(v => !v)}>
+              <FileText className="w-4 h-4 text-blue-600" />
+              <h2 className="text-sm font-semibold text-gray-800">Acompanhamento dos contratos</h2>
+              <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-xs">{esteira.contratos.length}</Badge>
+              {esteira.contratos.some(c => c.medicoesSemTitulo > 0) && (
+                <Badge className="bg-red-100 text-red-700 border border-red-300 text-xs animate-pulse">pendência financeira</Badge>
+              )}
+              <ChevronDown className={`w-4 h-4 text-gray-400 ml-auto transition-transform ${acompanhamentoAberto ? "rotate-180" : ""}`} />
+            </button>
+            {acompanhamentoAberto && (
+              <div className="px-4 pb-4 space-y-2">
+                {esteira.contratos.map((c) => (
+                  <button key={c.id} onClick={() => navigate(`/terceiros/contratos/${c.id}`)}
+                    className="w-full text-left rounded-lg border border-gray-200 p-3 hover:border-blue-300 hover:shadow-sm transition-all">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-xs font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{c.numero}</span>
+                      <span className="text-sm font-semibold text-gray-900 truncate">{c.empresaNome}</span>
+                      {c.obraNome && <span className="text-[11px] text-gray-500">📍 {c.obraNome}</span>}
+                      <span className="ml-auto text-xs font-bold text-gray-800">{BRL(c.valorTotal)}</span>
+                    </div>
+                    <div className="flex items-center gap-1 flex-wrap text-[10px]">
+                      <span className={`px-1.5 py-0.5 rounded-full border ${c.assinado ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-300"}`}>
+                        {c.assinado ? "✓ Assinado" : "Falta assinatura"}
+                      </span>
+                      <ChevronRight className="w-3 h-3 text-gray-300" />
+                      <span className={`px-1.5 py-0.5 rounded-full border ${c.medicoes > 0 ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-400 border-gray-200"}`}>
+                        {c.medicoes} medição(ões) • {c.pctMedido.toFixed(0)}% medido
+                      </span>
+                      {c.medicoesAguardando > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full border bg-yellow-50 text-yellow-800 border-yellow-300">{c.medicoesAguardando} aguardando</span>
+                      )}
+                      <ChevronRight className="w-3 h-3 text-gray-300" />
+                      {c.medicoesSemTitulo > 0 ? (
+                        <span className="px-1.5 py-0.5 rounded-full border bg-red-100 text-red-700 border-red-300 font-semibold animate-pulse">{c.medicoesSemTitulo} sem título!</span>
+                      ) : (
+                        <span className={`px-1.5 py-0.5 rounded-full border ${c.medicoesNoFinanceiro > 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-50 text-gray-400 border-gray-200"}`}>
+                          {c.medicoesNoFinanceiro} no Financeiro • {c.medicoesPagas} pagas
+                        </span>
+                      )}
+                      <span className="ml-auto text-gray-500">Pago: <strong className="text-gray-700">{BRL(c.valorPago)}</strong></span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Rev. 3084 — Contratos ATIVOS prontos para medição (só após assinaturas concluídas). */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <FileSignature className="w-4 h-4 text-orange-600" />
+            <h2 className="text-sm font-semibold text-gray-800">Contratos ativos para medir</h2>
+            <Badge className="bg-orange-50 text-orange-700 border border-orange-200 text-xs">{contratosParaMedir.length}</Badge>
+          </div>
+          {loadingContratos ? (
+            <div className="py-6 text-center text-gray-400 text-sm">Carregando contratos...</div>
+          ) : contratosParaMedir.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-6 px-4 text-center">
+              <FileSignature className="w-7 h-7 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm text-gray-500">Nenhum contrato pronto para medição.</p>
+              <p className="text-xs text-gray-400">Os contratos aparecem aqui somente após a finalização das assinaturas.</p>
+            </div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {contratosParaMedir.map((c: any) => (
+                <button
+                  key={c.id}
+                  onClick={() => navigate(`/terceiros/contratos/${c.id}?tab=medicoes`)}
+                  className="text-left bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:border-orange-300 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-semibold text-gray-900 text-sm truncate">{c.numero || `Contrato #${c.id}`}</span>
+                    <Badge className="bg-green-100 text-green-700 border border-green-200 text-[10px]">Assinado</Badge>
+                  </div>
+                  <p className="text-xs text-gray-600 line-clamp-2 mb-2">{c.descricao}</p>
+                  <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-2">
+                    <Building2 className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">{c.empresaNome}</span>
+                    {c.obraNome && <><span className="text-gray-300">•</span><span className="truncate">{c.obraNome}</span></>}
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-gray-500">Medido: <strong className="text-gray-800">{Number(c.percentualMedido).toFixed(1)}%</strong></span>
+                    <span className="inline-flex items-center gap-1 text-orange-700 font-medium">
+                      <Ruler className="w-3 h-3" /> Medir <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                    <div className="h-full bg-orange-400 rounded-full" style={{ width: `${Math.min(Number(c.percentualMedido) || 0, 100)}%` }} />
+                  </div>
+                  <div className="mt-1 text-[10px] text-gray-400">
+                    Saldo a medir: <strong className="text-gray-600">{BRL(c.saldoAMedir)}</strong> de {BRL(c.valorTotal)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
     </DashboardLayout>
   );

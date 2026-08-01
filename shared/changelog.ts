@@ -1,4 +1,29 @@
 /**
+ * Rev. 4779 - TERCEIROS: DATAS (ANO/MES) NO TOPO DA TELA DE MEDICOES
+ *
+ * Pedido do usuario (IMG_4725): o seletor de periodo e o principal da tela.
+ * Nova ordem: cabecalho -> Medicoes registradas (ano + meses + filtro +
+ * lista) -> Contratos ativos para medir -> Esteira do Terceiro ->
+ * Acompanhamento dos contratos.
+ *
+ * Rev. 4778 - TERCEIROS: ESTEIRA COMPLETA + TITULO GARANTIDO NO FINANCEIRO (Poka-Yoke)
+ *
+ * 1) BUG CRITICO corrigido: medicao aprovada so virava titulo no Contas a
+ *    Pagar se o toggle "importacao automatica" da empresa estivesse LIGADO
+ *    (default OFF) — com ele desligado a aprovacao "dava certo" e o titulo
+ *    NUNCA nascia, silenciosamente. Agora a aprovacao (direta e Socio Adm)
+ *    chama o importador direcionado (idempotente) BYPASSANDO o toggle,
+ *    VERIFICA se o entry existe e, se falhar, dispara alerta in-app ao
+ *    aprovador + toast na tela.
+ * 2) Botao "Reenviar ao Financeiro" (self-heal manual) em medicao aprovada
+ *    sem titulo; badge "No Financeiro OK" / "SEM titulo" em cada medicao.
+ * 3) ESTEIRA DO TERCEIRO na tela de Medicoes: stepper Compras (cotacoes de
+ *    servico sem contrato) -> Contrato (falta assinatura) -> Assinados ->
+ *    Medicao (aguardando) -> Financeiro (a pagar/pagos), cada etapa
+ *    clicavel, com alerta ambar nas etapas com pendencia.
+ * 4) Acompanhamento por contrato (colapsavel): ciclo completo por contrato
+ *    (assinatura -> medicoes/% medido -> titulos no financeiro -> pago).
+ *
  * Rev. 4777 - SST: FILTRO DE PERIODO NO PADRAO DO SISTEMA (PeriodSelectorCard)
  *
  * O usuario nao gostou do card de filtros da Rev. 4776. Substituido pelo

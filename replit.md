@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4779** — Medições de Terceiros: seletor de ano/mês movido para o topo da tela (principal); esteira e acompanhamento foram para baixo da lista.
+- **Rev. 4778** — Terceiros: esteira completa Compras→Contrato→Assinatura→Medição→Financeiro na tela de Medições, acompanhamento por contrato, e título GARANTIDO no Contas a Pagar ao aprovar medição (bypassa toggle de auto-import, com badge/reenvio e alerta se falhar).
 - **Rev. 4777** — SST: filtro da Análise de Atestados & Acidentes agora usa o PeriodSelectorCard padrão (ano + pills de meses + Ano todo) com T1–T4/S1–S2 e datas personalizadas colapsadas atrás do botão "Personalizar".
 - **Rev. 4776** — SST: card de filtros da Análise de Atestados & Acidentes repaginado em seções empilhadas (Atalhos / Por calendário / Personalizado + resumo), eliminando sobreposição no iPad.
 - **Rev. 4775** — Almoxarifado: nome do item emprestado sempre em MAIÚSCULA (grava em caixa alta no empréstimo + exibição `uppercase` nas telas de pendências, cobrindo registros antigos).

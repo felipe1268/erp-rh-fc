@@ -102,6 +102,7 @@
 - [Client-driven AI batching](client-driven-ai-batching.md) — loops de LLM por lote com cursor que só avança por efeito colateral precisam de guard de estagnação.
 - [terceiro_contratos.status não confiável](terceiro-contrato-status-unreliable.md) — "assinado" = envelope FcSign concluido+não-excluído, NÃO status="ativo" bruto.
 - [CIPA module write-path guards](cipa-module.md) — CIPA create/update/delete need companyFilter; update/delete-by-id are IDOR holes; abrirVotacao race fixed via UNIQUE+onConflictDoNothing.
+- [Terceiros: título garantido no Financeiro](terceiros-medicao-titulo-garantido.md) — aprovar medição chama garantirTituloDaMedicao (bypassa toggle auto_import, xact_lock 478001, periodo YYYY-MM c/ fallback); novo caminho de aprovação deve propagar financeiroOk.
 - [Medição módulos cliente vs terceiros + shared engine](medicao-modules-architecture.md) — "medicao"=lado CLIENTE, terceiros é tabela separada, IDs colidem → medicao_campo precisa de `origem`; [sem origem = escopo CLIENTE nunca `true`](medicao-shared-engine-origem.md).
 - [/uploads DB-fallback MIME + traversal](uploads-db-fallback-mime.md) — off-disk attachments fall back to uploaded_files; octet-stream → Safari/iOS preview blank; derive MIME from extension; fallback needs path-traversal guard.
 - [NFS-e gotchas](nfse-valor-liquido-formula.md) — [Valor Líquido = Bruto − retenções](nfse-valor-liquido-formula.md); [SIAP GEO: nunca mapear "ISS devido" em iss_retido](nfse-siapgeo-issretido-vs-informado.md).

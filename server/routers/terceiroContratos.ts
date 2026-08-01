@@ -42,6 +42,80 @@ import {
 
 const n = (v: any) => parseFloat(String(v ?? 0)) || 0;
 
+// ============================================================
+// Rev. 4778 — POKA-YOKE FINANCEIRO (método do usuário): medição aprovada
+// SEMPRE tem que virar título no Contas a Pagar. Antes, o título só nascia
+// via triggerFinancialSyncAwaited, que é GATEADO pelo toggle por empresa
+// `auto_import_enabled` (default OFF) — ou seja, com o toggle desligado a
+// aprovação "dava certo" e o título NUNCA nascia, silenciosamente.
+// Este helper chama o importador direcionado (idempotente por
+// origem_modulo='terceiro_medicao' + origem_id) BYPASSANDO o toggle, e
+// verifica de fato se o entry existe depois. Retorna true = título garantido.
+// ============================================================
+async function garantirTituloDaMedicao(companyId: number, medicaoId: number): Promise<boolean> {
+  const db = await getDb();
+  const [med] = await db.select().from(terceiroMedicoes)
+    .where(and(eq(terceiroMedicoes.id, medicaoId), eq(terceiroMedicoes.companyId, companyId)));
+  if (!med) return false;
+  if (!["aprovada", "faturada", "paga"].includes(String(med.status))) return false;
+  const jaTem = async () => {
+    const rows = await db.select({ id: financialEntries.id }).from(financialEntries)
+      .where(and(
+        eq(financialEntries.companyId, companyId),
+        eq(financialEntries.origemModulo, "terceiro_medicao"),
+        eq(financialEntries.origemId, medicaoId),
+      )).limit(1);
+    return rows.length > 0;
+  };
+  if (await jaTem()) return true;
+  // Rev. 4778 — período normalizado: só usa `periodo` se estiver em YYYY-MM;
+  // senão cai pra dataReferencia (senão o import filtra por um mês inexistente
+  // e devolve falso "sem título").
+  let periodo: string | undefined = undefined;
+  const pRaw = String((med as any).periodo || "").slice(0, 7);
+  if (/^\d{4}-\d{2}$/.test(pRaw)) periodo = pRaw;
+  else {
+    const dRef = String((med as any).dataReferencia || "").slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(dRef)) periodo = dRef;
+  }
+  // Rev. 4778 — advisory XACT lock por medição: evita corrida aprovação×reenvio×retry
+  // criando título duplicado (o import é check-then-insert sem unique no banco).
+  // xact_lock em transação: solta sozinho no commit/rollback — com pool de conexões,
+  // lock/unlock manuais poderiam cair em sessões diferentes e vazar o lock.
+  return await db.transaction(async (tx: any) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(478001, ${medicaoId})`);
+    if (await jaTem()) return true;
+    const { importTerceirosToFinancial } = await import("../services/financialIntegrationBridge");
+    await importTerceirosToFinancial(companyId, periodo);
+    return await jaTem();
+  });
+}
+
+// Rev. 4778 — pós-aprovação: garante o título e, se falhar, avisa o aprovador
+// via alerta in-app (pop-up global) em vez de só logar no console.
+async function _posAprovacaoFinanceiro(companyId: number, medicaoId: number, userId: number | null | undefined): Promise<boolean> {
+  let ok = false;
+  try {
+    ok = await garantirTituloDaMedicao(companyId, medicaoId);
+  } catch (e: any) {
+    console.error(`[posAprovacaoFinanceiro] Falha ao garantir título da medição #${medicaoId}:`, e?.message || e);
+  }
+  if (!ok && userId) {
+    try {
+      const { criarUserAlert } = await import("../db");
+      await criarUserAlert({
+        userId,
+        companyId,
+        tipo: "medicao_sem_titulo",
+        titulo: "Medição aprovada SEM título no Financeiro",
+        mensagem: `A medição #${medicaoId} foi aprovada, mas o título NÃO foi criado no Contas a Pagar. Abra Medições de Terceiros e toque em "Reenviar ao Financeiro".`,
+        linkUrl: "/terceiros/medicoes",
+      });
+    } catch {}
+  }
+  return ok;
+}
+
 // Rev. 2830 — guarda de tenancy contra IDOR cross-tenant. Endpoints que recebem só
 // `{ id }` devem carregar a linha e validar o companyId contra os vínculos do chamador
 // (mesma semântica do _assertCompanyAccess de terceiros.ts: admin/admin_master livre;
@@ -1323,7 +1397,144 @@ export const terceiroContratosRouter = router({
         .where(eq(terceiroMedicoes.companyId, input.companyId))
         .orderBy(desc(terceiroMedicoes.numero));
       if (input.contratoId) rows = rows.filter(r => r.contratoId === input.contratoId);
-      return rows;
+      // Rev. 4778 — flag por medição: existe título no Financeiro? (poka-yoke visível
+      // na tela: medição aprovada sem título ganha alerta + botão de reenvio).
+      const comTitulo = new Set<number>();
+      try {
+        const ids = rows.map(r => r.id);
+        if (ids.length > 0) {
+          const entries = await db.select({ origemId: financialEntries.origemId }).from(financialEntries)
+            .where(and(
+              eq(financialEntries.companyId, input.companyId),
+              eq(financialEntries.origemModulo, "terceiro_medicao"),
+              inArray(financialEntries.origemId, ids),
+            ));
+          entries.forEach(e => { if (e.origemId != null) comTitulo.add(e.origemId); });
+        }
+      } catch {}
+      return rows.map(r => ({ ...r, temTituloFinanceiro: comTitulo.has(r.id) }));
+    }),
+
+  // Rev. 4778 — ESTEIRA DO TERCEIRO: visão única do fluxo
+  // Compras (cotação de serviço) → Contrato → Assinatura → Medição → Financeiro.
+  // Alimenta o stepper da tela de Medições e o acompanhamento por contrato.
+  esteiraTerceiros: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+
+      // 1) Cotações de SERVIÇO ainda sem contrato gerado (ponta solta no Compras).
+      const cotsServico = await db.select({
+        id: comprasCotacoes.id,
+        status: comprasCotacoes.status,
+        contratoTerceiroId: comprasCotacoes.contratoTerceiroId,
+      }).from(comprasCotacoes)
+        .where(and(
+          eq(comprasCotacoes.companyId, input.companyId),
+          eq(comprasCotacoes.tipo, "servico"),
+          notInArray(comprasCotacoes.status, ["cancelada", "rejeitada"]),
+        ));
+      const cotacoesSemContrato = cotsServico.filter(c => !c.contratoTerceiroId).length;
+
+      // 2) Contratos não-cancelados + status de assinatura (regra ADESIVA — envelope concluído).
+      const contratos = await db.select().from(terceiroContratos)
+        .where(and(
+          eq(terceiroContratos.companyId, input.companyId),
+          notInArray(terceiroContratos.status, ["cancelado", "cancelada", "rascunho"]),
+        ));
+      const contratoIds = contratos.map(c => c.id);
+      const assinadosSet = new Set<number>();
+      if (contratoIds.length > 0) {
+        try {
+          const envs = await db.select({
+            contratoTerceiroId: integrasignEnvelopes.contratoTerceiroId,
+            status: integrasignEnvelopes.status,
+          }).from(integrasignEnvelopes)
+            .where(and(
+              eq(integrasignEnvelopes.companyId, input.companyId),
+              inArray(integrasignEnvelopes.contratoTerceiroId, contratoIds),
+              isNull(integrasignEnvelopes.excluidoEm),
+            ));
+          envs.forEach(e => { if (e.status === "concluido" && e.contratoTerceiroId != null) assinadosSet.add(e.contratoTerceiroId); });
+        } catch {}
+      }
+
+      // 3) Medições + títulos no Financeiro.
+      const meds = contratoIds.length > 0
+        ? await db.select().from(terceiroMedicoes)
+            .where(and(eq(terceiroMedicoes.companyId, input.companyId), inArray(terceiroMedicoes.contratoId, contratoIds)))
+        : [];
+      const medIds = meds.map(m => m.id);
+      const comTitulo = new Set<number>();
+      const pagoSet = new Set<number>();
+      if (medIds.length > 0) {
+        try {
+          const entries = await db.select({ origemId: financialEntries.origemId, status: financialEntries.status }).from(financialEntries)
+            .where(and(
+              eq(financialEntries.companyId, input.companyId),
+              eq(financialEntries.origemModulo, "terceiro_medicao"),
+              inArray(financialEntries.origemId, medIds),
+            ));
+          entries.forEach(e => {
+            if (e.origemId == null) return;
+            comTitulo.add(e.origemId);
+            if (e.status === "pago") pagoSet.add(e.origemId);
+          });
+        } catch {}
+      }
+
+      const aprovadaOuAlem = (s: any) => ["aprovada", "faturada", "paga"].includes(String(s));
+      const medicoesAguardando = meds.filter(m => m.status === "aguardando_aprovacao").length;
+      const aprovadasSemTitulo = meds.filter(m => aprovadaOuAlem(m.status) && !comTitulo.has(m.id)).length;
+      const titulosAbertos = meds.filter(m => comTitulo.has(m.id) && !pagoSet.has(m.id)).length;
+      const titulosPagos = meds.filter(m => pagoSet.has(m.id)).length;
+
+      // 4) Acompanhamento por contrato (ciclo completo).
+      const empresas = await db.select({ id: empresasTerceiras.id, nomeFantasia: empresasTerceiras.nomeFantasia, razaoSocial: empresasTerceiras.razaoSocial })
+        .from(empresasTerceiras).where(eq(empresasTerceiras.companyId, input.companyId));
+      const empMap: Record<number, string> = {};
+      empresas.forEach(e => { empMap[e.id] = e.nomeFantasia || e.razaoSocial; });
+      const obrasRows = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(eq(obras.companyId, input.companyId));
+      const obraMap: Record<number, string> = {};
+      obrasRows.forEach(o => { obraMap[o.id] = o.nome; });
+
+      const porContrato = contratos.map(c => {
+        const mc = meds.filter(m => m.contratoId === c.id);
+        const valorTotal = n(c.valorTotal);
+        const valorMedido = mc.filter(m => aprovadaOuAlem(m.status)).reduce((s, m) => s + n(m.valorMedido), 0);
+        return {
+          id: c.id,
+          numero: (c as any).numeroContrato || `#${c.id}`,
+          descricao: c.descricao,
+          empresaNome: empMap[c.empresaTerceiraId] || "—",
+          obraNome: c.obraId ? (obraMap[c.obraId] || null) : null,
+          status: c.status,
+          assinado: assinadosSet.has(c.id),
+          valorTotal,
+          valorPago: n(c.valorPago),
+          valorMedido,
+          pctMedido: valorTotal > 0 ? (valorMedido / valorTotal) * 100 : 0,
+          medicoes: mc.length,
+          medicoesAguardando: mc.filter(m => m.status === "aguardando_aprovacao").length,
+          medicoesSemTitulo: mc.filter(m => aprovadaOuAlem(m.status) && !comTitulo.has(m.id)).length,
+          medicoesNoFinanceiro: mc.filter(m => comTitulo.has(m.id)).length,
+          medicoesPagas: mc.filter(m => pagoSet.has(m.id)).length,
+        };
+      }).sort((a, b) => (b.medicoesSemTitulo - a.medicoesSemTitulo) || (b.medicoesAguardando - a.medicoesAguardando) || b.id - a.id);
+
+      return {
+        etapas: {
+          cotacoesSemContrato,
+          contratosAguardandoAssinatura: contratos.filter(c => !assinadosSet.has(c.id)).length,
+          contratosAssinados: assinadosSet.size,
+          medicoesAguardando,
+          aprovadasSemTitulo,
+          titulosAbertos,
+          titulosPagos,
+        },
+        contratos: porContrato,
+      };
     }),
 
   gerarMedicao: protectedProcedure
@@ -1806,8 +2017,11 @@ export const terceiroContratosRouter = router({
 
   aprovarMedicao: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), aprovadoPor: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      // Rev. 4778 — guarda de tenancy (review): a rota aceitava {id, companyId} sem
+      // validar o acesso do chamador à empresa → IDOR de aprovação cross-tenant.
+      await _assertCompanyAccess(ctx.user, input.companyId);
       // Rev. 1987 — BUGFIX A1 · Toda a aprovação agora roda em TRANSAÇÃO ATÔMICA.
       // Bug anterior: update medicao → loop update itens. Se o loop falhasse no
       // meio, a medição ficava "aprovada" mas itens do contrato meio-atualizados
@@ -1843,12 +2057,15 @@ export const terceiroContratosRouter = router({
       // Agora: awaited, falhas logadas no console com contexto. A aprovação
       // permanece bem-sucedida mesmo se o sync falhar (medição já está commitada),
       // mas o erro fica VISÍVEL pra operação investigar e re-disparar manualmente.
+      // Rev. 4778 — POKA-YOKE: título garantido direto (bypassa o toggle auto_import);
+      // sync geral continua como complemento (respeita o toggle, não bloqueia).
+      const financeiroOk = await _posAprovacaoFinanceiro(input.companyId, input.id, ctx.user?.id);
       try {
         await triggerFinancialSyncAwaited(input.companyId);
       } catch (syncErr: any) {
         console.error(`[aprovarMedicao] FALHA no sync financeiro pós-aprovação da medição #${input.id} (companyId=${input.companyId}):`, syncErr?.message || syncErr);
       }
-      return medicao;
+      return { ...medicao, financeiroOk };
     }),
 
   cancelarAprovacao: protectedProcedure
@@ -2143,12 +2360,31 @@ export const terceiroContratosRouter = router({
         return med;
       });
 
+      // Rev. 4778 — POKA-YOKE: título garantido direto (bypassa o toggle auto_import).
+      const financeiroOk = await _posAprovacaoFinanceiro(input.companyId, input.id, ctx.user?.id);
       try {
         await triggerFinancialSyncAwaited(input.companyId);
       } catch (syncErr: any) {
         console.error(`[aprovarNivelSocio] FALHA no sync financeiro pós-aprovação da medição #${input.id} (companyId=${input.companyId}):`, syncErr?.message || syncErr);
       }
-      return medicao;
+      return { ...medicao, financeiroOk };
+    }),
+
+  // Rev. 4778 — Reenvio manual: medição aprovada sem título no Financeiro
+  // (self-heal acionável pelo usuário direto na tela de Medições).
+  reenviarMedicaoFinanceiro: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [med] = await db.select().from(terceiroMedicoes)
+        .where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
+      if (!med) throw new Error("Medição não encontrada");
+      if (!["aprovada", "faturada", "paga"].includes(String(med.status)))
+        throw new Error(`Só medições aprovadas podem ser reenviadas ao Financeiro (status: ${med.status})`);
+      const ok = await garantirTituloDaMedicao(input.companyId, input.id);
+      if (!ok) throw new Error("Não foi possível criar o título no Financeiro. Verifique se a medição tem valor medido > 0.");
+      return { ok };
     }),
 
   gerarPdfMedicao: protectedProcedure
