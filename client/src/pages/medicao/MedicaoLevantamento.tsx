@@ -625,6 +625,9 @@ export default function MedicaoLevantamento() {
       // também tem largura, e posicionar sobre ele deixava a planta deslocada.
       const pronto = isDxf ? !!dxfData?.ok : pageDims.w > 0;
       if (!pronto) return;
+      // Espera o baseWidth REAL (o ResizeObserver mede depois do 1º paint):
+      // fit calculado com o default de 800px abria a planta fora da vista.
+      if (Math.abs((cont.clientWidth - 24) - baseWidth) > 2) return;
       posKeyRef.current = key;
       centerPendingRef.current = true;
       // "Caber na tela": zoom inicial p/ a planta inteira caber na área visível.
@@ -2172,7 +2175,7 @@ export default function MedicaoLevantamento() {
                   {/* Rev. 4789 — moldura de folga em volta da planta = "tela infinita":
                       sempre há espaço de rolagem em todas as direções, então o pan
                       da pinça nunca trava na borda (o scroll não clampa mais o gesto). */}
-                  <div className="w-fit" style={{ padding: "65vh 65vw", touchAction: "none" }}>
+                  <div className="w-fit" style={{ padding: "120px", touchAction: "none" }}>
                   <div ref={zoomInnerRef} className="relative w-fit" style={{ touchAction: "none" }}>
                     {/* filtro P&B aplicado SÓ ao fundo (PDF/DXF), nunca ao overlay/SVG */}
                     <div style={{ filter: pdfPB ? "grayscale(1) contrast(1.25) brightness(1.02)" : "none" }}>
