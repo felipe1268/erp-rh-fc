@@ -7,6 +7,14 @@
  * - Visual: fundo branco translucido com blur, sombra sutil e abas com
  *   indicador azul; abas com rolagem horizontal no iPad se nao couberem.
  * - Barra "Admin Master" (cancelar/excluir) foi para dentro da aba "Contrato".
+ *
+ * FD 100% AUTOMATICO (pedido do usuario: "nao precisa clicar"):
+ * - Ao GERAR uma medicao (e tambem ao RECALCULAR), o sistema puxa sozinho todo
+ *   o FD de material pendente do contrato (OCs de Compras vinculadas) para a
+ *   medicao, capado no valor medido do periodo; o restante fica pendente para
+ *   as proximas. Sem clique do usuario; lancamento manual continua disponivel.
+ * - Retencao Tecnica de 5% ja e o padrao do contrato (praxe) e continua sendo
+ *   aplicada automaticamente nas retencoes da medicao.
  */
 /**
  * Rev. 4798 - FD PENDENTE TRAVA APROVACAO + LAYOUT DO CONTRATO ENXUTO

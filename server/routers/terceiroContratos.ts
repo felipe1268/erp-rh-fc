@@ -232,6 +232,44 @@ async function _fdPendenteDoContrato(db: any, contrato: any): Promise<{
   return { pendente, fdMaterialTotal: fd.total, abatidoTotal, registros: fd.registros };
 }
 
+// Rev. 4799 — puxa AUTOMATICAMENTE o débito de FD pendente do contrato para a
+// medição (transação + advisory lock: idempotente, sem desconto em dobro).
+// Capado no valor medido do período; o restante fica pendente pras próximas.
+// Chamado ao GERAR/RECALCULAR medição (usuário não precisa clicar em nada) e
+// também pela mutation manual (fallback p/ medições antigas).
+async function _puxarFdAutomatico(db: any, contrato: any, medicaoId: number, criadoPor?: string | null) {
+  return await db.transaction(async (tx: any) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(478003, ${medicaoId})`);
+    const { pendente: pendenteTotal, registros } = await _fdPendenteDoContrato(tx, contrato);
+    if (pendenteTotal <= 0.01) return { criado: false, pendente: 0, restante: 0 };
+    const [medRow] = await tx.select({ valorMedido: terceiroMedicoes.valorMedido, status: terceiroMedicoes.status })
+      .from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, medicaoId), eq(terceiroMedicoes.companyId, contrato.companyId)));
+    if (!medRow || medRow.status === "aprovada" || medRow.status === "paga") return { criado: false, pendente: 0, restante: pendenteTotal };
+    const fdsJa = await tx.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
+      .where(and(eq(terceiroMedicaoFds.companyId, contrato.companyId), eq(terceiroMedicaoFds.medicaoId, medicaoId)));
+    const jaLancado = fdsJa.reduce((s: number, r: any) => s + n(r.valor), 0);
+    const medido = n(medRow.valorMedido);
+    if (medido <= 0) return { criado: false, pendente: 0, restante: pendenteTotal }; // sem valor medido ainda — puxa no recálculo
+    const teto = Math.max(0, Math.round((medido - jaLancado) * 100) / 100);
+    const pendente = Math.min(pendenteTotal, teto);
+    if (pendente <= 0.01) return { criado: false, pendente: 0, restante: pendenteTotal };
+    const restante = Math.round((pendenteTotal - pendente) * 100) / 100;
+    const ocsTxt = registros.map((r) => r.numeroOc || `OC #${r.id}`).join(", ");
+    const [fd] = await tx.insert(terceiroMedicaoFds).values({
+      companyId: contrato.companyId,
+      contratoId: contrato.id,
+      medicaoId,
+      descricao: `FD de material pendente do contrato (${ocsTxt})`.slice(0, 500),
+      valor: String(pendente.toFixed(2)),
+      dataFd: new Date().toISOString().slice(0, 10),
+      origem: "auto",
+      observacoes: "Puxado automaticamente — débito de FD do contrato descontado do valor a pagar.",
+      criadoPor: criadoPor || null,
+    } as any).returning();
+    return { criado: true, pendente, restante, fd };
+  });
+}
+
 // Rev. 4798 — guarda de aprovação: se o contrato tem FD de material ainda não
 // descontado em medições, a aprovação é NEGADA com aviso claro.
 async function _assertSemFdPendente(db: any, medicaoId: number, companyId: number) {
@@ -1957,6 +1995,11 @@ export const terceiroContratosRouter = router({
 
       // Gatilho financeiro em tempo real — fire-and-forget
       triggerFinancialSync(input.companyId, input.periodo);
+      // Rev. 4799 — puxa o débito de FD do contrato AUTOMATICAMENTE ao gerar a
+      // medição (usuário não precisa clicar); capado no valor medido.
+      try { await _puxarFdAutomatico(db, contrato, medicao.id, input.criadoPor); }
+      catch (e: any) { console.warn("[gerarMedicao] Auto-FD falhou:", e?.message); }
+
       return { medicao, itens: itensMedicao.length, itensNaoVinculados };
     }),
 
@@ -2291,37 +2334,7 @@ export const terceiroContratosRouter = router({
         .from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!med || med.contratoId !== input.contratoId) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não pertence a este contrato/empresa." });
       if (med.status === "aprovada" || med.status === "paga") throw new TRPCError({ code: "BAD_REQUEST", message: "Medição já aprovada/paga — não é possível alterar os FDs." });
-      // Rev. 4798 (review) — transação + advisory lock por medição: 2 cliques
-      // (ou 2 abas) não podem lançar o desconto em dobro; e o teto considera o
-      // que JÁ FOI lançado nesta medição (idempotente: esgotou → no-op).
-      return await db.transaction(async (tx: any) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(478003, ${input.medicaoId})`);
-        const { pendente: pendenteTotal, registros } = await _fdPendenteDoContrato(tx, contrato);
-        if (pendenteTotal <= 0.01) return { criado: false, pendente: 0, restante: 0 };
-        const fdsJa = await tx.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
-          .where(and(eq(terceiroMedicaoFds.companyId, input.companyId), eq(terceiroMedicaoFds.medicaoId, input.medicaoId)));
-        const jaLancado = fdsJa.reduce((s: number, r: any) => s + n(r.valor), 0);
-        // O desconto NUNCA passa do valor medido do período (contando o que já
-        // está lançado) — o RESTANTE segue pendente para as próximas medições.
-        const medido = n((med as any).valorMedido);
-        const teto = medido > 0 ? Math.max(0, Math.round((medido - jaLancado) * 100) / 100) : pendenteTotal;
-        const pendente = Math.min(pendenteTotal, teto);
-        if (pendente <= 0.01) return { criado: false, pendente: 0, restante: pendenteTotal };
-        const restante = Math.round((pendenteTotal - pendente) * 100) / 100;
-        const ocsTxt = registros.map((r) => r.numeroOc || `OC #${r.id}`).join(", ");
-        const [fd] = await tx.insert(terceiroMedicaoFds).values({
-          companyId: input.companyId,
-          contratoId: input.contratoId,
-          medicaoId: input.medicaoId,
-          descricao: `FD de material pendente do contrato (${ocsTxt})`.slice(0, 500),
-          valor: String(pendente.toFixed(2)),
-          dataFd: new Date().toISOString().slice(0, 10),
-          origem: "auto",
-          observacoes: "Puxado automaticamente — débito de FD do contrato descontado do valor a pagar.",
-          criadoPor: (ctx.user as any)?.name || null,
-        } as any).returning();
-        return { criado: true, pendente, restante, fd };
-      });
+      return await _puxarFdAutomatico(db, contrato, input.medicaoId, (ctx.user as any)?.name);
     }),
 
   criarFdTerceiro: protectedProcedure
@@ -3300,6 +3313,11 @@ export const terceiroContratosRouter = router({
         percentualGlobal: String(percentualGlobal),
         alertaDivergencia: null,
       } as any).where(eq(terceiroMedicoes.id, input.medicaoId));
+
+      // Rev. 4799 — com o valor medido atualizado, completa (top-up) o desconto
+      // automático de FD pendente do contrato até o teto do período.
+      try { await _puxarFdAutomatico(db, contrato, input.medicaoId, null); }
+      catch (e: any) { console.warn("[recalcularMedicao] Auto-FD falhou:", e?.message); }
 
       const vinculados = itensResultado.filter(i => i.vinculado).length;
       const naoVinculados = itensResultado.filter(i => !i.vinculado).length;

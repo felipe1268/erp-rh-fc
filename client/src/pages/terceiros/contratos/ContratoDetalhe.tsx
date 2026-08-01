@@ -3403,7 +3403,7 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="font-bold">Existem débitos pendentes: {BRL(fdPendente)}</p>
-              <p className="mt-0.5">FD de material do contrato ainda não descontado de nenhuma medição. A aprovação fica <strong>bloqueada</strong> até o débito ser descontado.</p>
+              <p className="mt-0.5">FD de material do contrato ainda não descontado. O sistema desconta sozinho ao gerar/recalcular a medição; se necessário, use o botão abaixo. A aprovação fica <strong>bloqueada</strong> até o débito ser descontado.</p>
             </div>
           </div>
           {!travado && (
