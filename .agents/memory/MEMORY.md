@@ -1,12 +1,11 @@
 - [Motor de crédito do convênio](convenio-credito-engine.md) — limite>0 ativa regras fail-safe (erro=bloqueia); todo write em lancamentos_parceiros valida crédito + grava competência; edição não desconta o próprio valor se mudar competência.
-- [Fatura de cartão é cumulativa](cartao-fatura-cumulativa.md) — nunca somar histórico como "em aberto"; pagamentos negativo = crédito da fatura anterior; só vencimento >= hoje conta.
-- [Fatura de cartão ↔ Contas a Pagar](cartao-fatura-financeiro-link.md) — título único por fatura via índice parcial + ON CONFLICT; baixa faz fan-out p/ pagamentos; título com baixa ativa é intocável.
+- [Fatura de cartão gotchas](cartao-fatura-cumulativa.md) — [cumulativa: nunca somar histórico como "em aberto"](cartao-fatura-cumulativa.md); [título único por fatura + fan-out de baixas; título com baixa ativa é intocável](cartao-fatura-financeiro-link.md).
 - [QR Verificar Aptidão — live, não snapshot](qr-aptidao-live-not-snapshot.md) — employee_aptidao é snapshot manual defasado; leitores calculam ao vivo de asos/trainings (regras do recalcAll, apto|inapto).
 - [QR restrição operacional — saída canônica](qr-restricao-canonica-lgpd.md) — rota pública nunca faz pass-through de asos.restricoes; só frases fixas do dicionário canônico (blacklist de texto livre vaza — LGPD).
 - [Alertas pessoais in-app](user-alerts-inapp.md) — user_alerts + pop-up global; reprovação/rejeição avisa o criador via criarUserAlert; nunca zerar faltas de linha compartilhada no ponto.
 - [Recorrências — gap permanente](recorrencias-gap-proximo-vencimento.md) — materializeRecorrentes só anda pra frente; parcelas passadas excluídas nunca regeneram sozinhas; regenerar via INSERT dedup sem mexer no proximo_vencimento.
 - [Férias ↔ Contas a Pagar](ferias-financeiro-link.md) — férias agendada gera título automático; toda mutation que muda status de vacationPeriods deve reconciliar o título; parse de valor SEMPRE BR-aware.
-- [Aviso Prévio ↔ Contas a Pagar](aviso-previo-financeiro-link.md) — baixa manual e envio ao Financeiro são vias EXCLUSIVAS; advisory lock 477001 + índice único parcial (só no Neon); quitar baixa dispara conclusão/desligamento.
+- [Aviso Prévio gotchas](aviso-previo-financeiro-link.md) — [↔ Contas a Pagar: baixa manual × envio são vias exclusivas; lock 477001](aviso-previo-financeiro-link.md); [contar = UNIÃO de employees.status "Aviso" + módulo em_andamento](aviso-previo-two-sources.md).
 - [DIXI gotchas](dixi-auto-transfer-obra.md) — [transferência automática pelo ponto](dixi-auto-transfer-obra.md) (ponto > alocação; batida velha não desfaz manual; 2 obras no dia = alerta pendente); [group-key deve preservar dígitos](dixi-groupkey-digit-collision.md) ou funde 2 funcionários; [match por nome: >1 contendo todos os tokens = ambíguo](dixi-name-match-ambiguity.md).
 - [Equipamento utilização fonte de dados](equipamento-utilizacao-fonte-dados.md) — utilização diária vem de warehouse_loans (não equipamento_locado_eventos); link via almoxarifado_itens.equipamento_vinculado_id.
 - [Scorecard month-end date construction](scorecard-month-end-date.md) — `|| '-31'` rejeita junho/abr/set/nov/fev; sempre usar `|| '-01')::date + INTERVAL '1 month' - 1 day`.
@@ -16,7 +15,7 @@
 - [orcamentos valor_negociado snake_case](orcamentos-valor-negociado-snake.md) — `orcamentos.valorNegociado` tem nome explícito `"valor_negociado"` (snake); safe() engole erros → diagnose silent failures com logging antes de mudar query logic.
 - [date minus date is integer not interval](date-minus-date-integer.md) — No Postgres, (date - date) retorna INTEGER (dias); EXTRACT(days FROM integer) não existe → safe() captura silenciosamente. Use (date - date) direto para aritmética de dias.
 - [Billing module active/inactive toggle](billing-module-active-toggle.md) — isActive (comercializável) ≠ preço; grandfather: desativar módulo nunca revoga de quem já tem, só bloqueia ADICIONAR novo.
-- [Conciliação → sub-razões (Controle de Cheques)](conciliacao-fanout-subledgers.md) — conciliar lançamento não baixa cheque sozinho; toda mutation de conciliação deve varrer sub-razões dependentes com match inequívoco + try/catch não-bloqueante.
+- [Conciliação gotchas](conciliacao-so-sugestiva.md) — [só sugestiva: nada baixa sem confirmação explícita](conciliacao-so-sugestiva.md); [fan-out p/ sub-razões](conciliacao-fanout-subledgers.md); [cheque/boleto busca cross-month](conciliacao-cheque-cross-month.md); [desconciliar desfaz artefatos criados](desconciliar-releases-created-artifacts.md); [Caixa Interno no dashboard computa R$](caixa-interno-dashboard-status.md).
 - [Cross-company-group employee duplication](employee-cross-company-group-duplication.md) — sibling companies sharing recursos already share employees; re-registering the same CPF in the other company creates status-drifting duplicates.
 - [Usuário sempre por NOME, nunca #ID](usuario-sempre-nome-nunca-id.md) — regra de ouro: nome vazio → resolver em users; nunca exibir "Usuário #ID" em nenhuma tela/relatório.
 - [Poka-Yoke em toda revisão](poka-yoke-rule.md) — regra de ouro: toda revisão aplica mistake-proofing (design > bloqueio > aviso); validar valor/data no server, isPending nos botões.
@@ -27,10 +26,10 @@
 - [Unguarded tRPC endpoints](unguarded-trpc-endpoints.md) — frontend route gating ≠ backend authorization; verify role/tenant checks live IN the procedure, not just behind the UI route guard.
 - [OC entregue fora do fluxo padrão precisa de self-heal](oc-almox-entrega-sem-titulo.md) — todo caminho que marca OC entregue (Almoxarifado!) deve chamar garantirEntryDaOC ou a OC some do Contas a Pagar.
 - [Contas a Pagar — base da janela de fechamento](contas-pagar-ciclo-window-basis.md) — agrupar por ciclo de fornecedor usa data da COMPRA (competência), nunca vencimento (varia por OC).
+- [DXF escala heurística + sidecar](levantamento-dxf-escala-heuristica.md) — $INSUNITS mente; clustering espacial + plausibilidade 3–1000 m; mudou o parse → bump DXF_ALGO_VERSION; upload multipart ≤150MB.
 - [Levantamento — fluxo poka-yoke](levantamento-pokayoke-fluxo.md) — planta nova só DXF; categoria comanda a ferramenta (contorno sempre classificado); escala PDF legado exige conferência ±2%.
 - [Levantamento — catálogo de serviços](levantamento-servicos-catalogo.md) — seed sob advisory lock 478002; updates de contorno SEMPRE reenviam `servico` (sync preserva se ausente); derivado com medição manual suprime derivação.
-- [Medição FD ↔ Compras link](medicao-fd-compras-link.md) — medicao_fd_registros.compraId (coluna já existia sem uso) é o ponto de integração p/ puxar valor de OC de Faturamento Direto direto pro boletim.
-- [Medição × Cronograma: casar por atividadeId, não EAP](medicao-cronograma-atividade-id-match.md) — eap_codigo do cronograma real vem vazio na maioria das atividades; use a PK atividade_id (1:1, sempre presente).
+- [Medição gotchas](medicao-modules-architecture.md) — [FD ↔ Compras via compraId](medicao-fd-compras-link.md); [× Cronograma casar por atividadeId, não EAP](medicao-cronograma-atividade-id-match.md); [duplicada no Contas a Receber (2 escritas)](medicao-receita-dupla-escrita.md).
 - [SEFAZ sync gating & NSU](sefaz-nsu-rate-limit-loop.md) — cStat=656 deve persistir ultNSU (senão loop eterno); 4 fórmulas de gate DEVEM casar; elapsed via SQL/EXTRACT EPOCH não `new Date()` JS (skew 3h).
 - [Dissídio — HE excluída da base retroativa](dissidio-he-excluded-from-base.md) — toda HE vira banco de horas, nunca é paga em dinheiro; nunca somar HE na base de diferença salarial retroativa/reajuste.
 - [VR/VT desconto de falta não misturado](folha-vr-vt-faltas-not-mixed.md) — VT de falta entra na Folha (coluna VT); VR/VA de falta NUNCA entra na Folha (só no Vale Alimentação).
@@ -42,7 +41,6 @@
 - [Sidebar menu visibility](sidebar-menu-visibility.md) — Rev.3795: acesso ao módulo = acesso pleno por padrão; groupCanAccessRoute usa fallback de prefixo URL; deny explícito (view=false) ainda funciona.
 - [Dedicated module registration](dedicated-module-registration.md) — a new ModuleId must be added to ALL exhaustive Record<ModuleId,...> (ModuleContext + DashboardLayout) + localStorage validation.
 - [Module toggle surfaces](module-toggle-surfaces.md) — toggle "Módulos do Sistema" must sync 4 places (ALL_MODULES + MODULE_INFO + ModuleHub + DashboardLayout); toggle key ≠ permission key.
-- ["Aviso Prévio" tem 2 fontes](aviso-previo-two-sources.md) — contar aviso prévio = UNIÃO de `employees.status==="Aviso"` + módulo `avisoPrevio` `em_andamento`; uma fonte só perde gente.
 - [Drizzle schema/self-heal gotchas](drizzle-schema-neon-sync.md) — new column needs explicit `ADD COLUMN IF NOT EXISTS` in `[SyncSchema+]`; casing isn't uniform — name explicitly or queries throw.
 - [dbExecute/db.execute param-binding gotchas](dbexecute-param-binding-gotchas.md) — dbExecute binds by text-appearance order not $N (reorder/skip/duplicate placeholder traps); db.execute ignores param arrays entirely.
 - [Curva S week-keying & earned-value](curva-s-week-keying.md) — MSP snapshot must anchor to status WEEK (toMondayStr), not exact day; BCWS/BCWP must share one data-date.
@@ -94,7 +92,6 @@
 - [resolveCompanyIds trusts input](resolvecompanyids-no-intersect.md) — resolveCompanyIds/companyFilter don't intersect with user's allowed companies; per-company endpoints must call assert guard explicitly.
 - [Backup diário — streaming obrigatório](backup-streaming-oom.md) — nunca acumular tabelas em RAM (OOM derrubava o servidor); lote adaptativo por ctid; uploaded_files usa pg_column_size, nunca LENGTH.
 - [Migração export/import](migration-export-streaming.md) — export grande = rota GET streaming (archiver.pipe+ctid); import precisa whitelist de identificadores.
-- [Medição duplicada no Contas a Receber](medicao-receita-dupla-escrita.md) — medição é escrita 2x (planejamento_medicao + revenue→entries); dedup contra o par canônico.
 - [Recebíveis só entram manualmente](recebiveis-previstos-manual.md) — nenhum importer materializa receita em financial_entries; user lança via "Recebíveis Previstos"; dedup revenue ignora cancelado.
 - [AI JSON quebra com número BR](ai-json-br-number-salvage.md) — LLM emite `2.500,00` → JSON.parse estrito aborta o lote; try-parse→catch-salvage por regex + parser BR-aware.
 - [SC → cotação tipo propagation](sc-cotacao-tipo-propagation.md) — editar SC deve reconciliar `tipo` nas cotações vinculadas; TODO caminho de criação de cotação deve semear `tipo: sc.tipo ?? "material"`.
@@ -115,7 +112,6 @@
 - [Fluxo de Caixa dup/origens excluídas](fluxo-caixa-dup-conferencia.md) — Saídas excluem 'aplicacao_financeira'+'transferencia_interna'; detector de duplicidade exige token de texto; tag [dup-ok:<id>] em observacoes.
 - [Financeiro "só real" lock](financeiro-so-real-trava.md) — flag global esconde projeções; despesa via sqlNotProjecao no server; receita do Fluxo de Caixa vem do getContasReceberMatrix (split client-side).
 - [canAccessObra true só p/ admin_master](canaccessobra-admin-semantics.md) — canAccessObra é true-p/-todas só quando allowedObraIds===null (admin_master); isAdmin comum=[] → lista filtrada fica VAZIA.
-- [Conciliação só sugestiva](conciliacao-so-sugestiva.md) — nada concilia/baixa sem confirmação EXPLÍCITA do usuário; "Selecionar todas" só pré-seleciona. Não reintroduzir one-click bulk apply.
 - [Vale snapshot congela e é fonte de leitura](vale-snapshot-desligado-cutoff.md) — Folha lê do snapshot; sanitização de LEITURA deve espelhar a geração em TODO sink.
 - [Payroll rounding carry-forward](payroll-rounding-carry.md) — pago=round(exato+ÚLTIMO residual anterior); TODO writer do pago deve reaplicar arred + atualizar ledger, ou o carry quebra.
 - [Blacklist visibility backend gate](blacklist-visibility-backend-gate.md) — Lista_Negra é admin_master-only; gateie em employees.list E faça o cacheKey variar por papel.
@@ -124,12 +120,10 @@
 - [RQ cache-hit hydration race](rq-cache-hit-hydration-race.md) — dois useEffects (um hidrata de query.data, outro reseta) anulam estado em cache hit; unifique num só effect.
 - [Conceder obra implica empresa](grant-obra-implies-company.md) — usuário comum: empresas visíveis = user_companies + DONAS das obras de getEffectiveAllowedObraIds.
 - [criarManual explicit-id IDOR](cheques-criar-manual-idor.md) — INSERT que aceita FK id explícito deve validar ownership da empresa; assertCompanyAccess só autoriza a empresa, não o recurso referenciado.
-- [Conciliação cheque/boleto cross-month](conciliacao-cheque-cross-month.md) — sugestão de cheque/boleto deve buscar lançamentos de OUTROS meses (janela ampla); demais formas seguem estritas ao período.
 - [HTML cache stale post-deploy](html-cache-stale-deploy.md) — express.static com maxAge=1h serve index.html stale após deploy → chunks 404. Fix: setHeaders para .html/.sw.js = no-cache,no-store.
 - [Baixa parcial financeiro](financeiro-baixa-parcial.md) — rollup=SUM(baixas ativas); estornos LEGADOS devem soft-estornar baixas; concorrência via advisory lock por entry em db.transaction.
 - [Conta da baixa não propaga pro entry](conta-bancaria-rollup-propagation.md) — registrarBaixa grava conta só no histórico; rollup deve setar entry.conta_bancaria_id=COALESCE(última baixa ativa, atual).
 - [ORDER BY alias-in-expression throws](orderby-alias-expression-postgres.md) — `ORDER BY (aliasA+aliasB)` no Postgres → "column does not exist"; wrap em subquery.
-- [Caixa Interno no dashboard de Conciliação](caixa-interno-dashboard-status.md) — CI não tem extrato; getBankAccountsConciliacaoStatus deve computar R$ (não só COUNT), senão barra/KPIs zeram.
 - [Panorama Fiscal — duas noções de "com nota"](panorama-fiscal-cobertura-two-notions.md) — gauge Saúde Fiscal = ratio de VOLUME (NF-e/débitos); split entradas/saidasComNota = vínculo LINHA-A-LINHA. Divergem por design.
 - [DRE drill-down single-source](dre-drilldown-single-source.md) — detalhe clicável reusa `dreLinhaPredicate` + a MESMA CTE de calcularDRE; impostos tem 2 fontes a espelhar.
 - [Folha: relatórios secundários sem filtro CLT](folha-relatorios-secundarios-sem-filtro-clt.md) — `simularPagamento` já filtra CLT; vazamentos de PJ tendem a estar em relatórios SECUNDÁRIOS que cruzam folhaItens/employees sem checar tipoContrato.
@@ -149,7 +143,6 @@
 - [Renovação de locação — vencimento da parcela](locacao-renovacao-parcela-vencimento.md) — parcela vence no FIM do novo ciclo; usar o início gera entry vencida no passado que "some" do Contas a Pagar.
 - [Fluxo de Caixa gotchas](fluxo-caixa-bucket-conta-rules.md) — [baldes CONTA_RULES](fluxo-caixa-bucket-conta-rules.md); [cheque float nunca nas Saídas](fluxo-caixa-cheque-float.md); [aplicação financeira fora das Saídas](aplicacao-financeira-nao-e-despesa.md); [CONTAMAX = sweep diário neutro](contamax-sweep-neutral.md).
 - [Fluxo público identify anti-enum + Puppeteer sanitize](public-token-identify-antienum.md) — falha genérica + rate-limit token+IP em identify público; HTML de usuário no Puppeteer exige DOMPurify server-side + JS off + requests bloqueados.
-- [Desconciliar desfaz o que a conciliação criou](desconciliar-releases-created-artifacts.md) — estorno deve cancelar entries origem cheque_conciliacao e liberar cheques com lancamento_id revertido; senão duplicidades + cheque preso.
 - [Neon template republish tx](neon-template-republish-tx.md) — erro em statement dentro de BEGIN aborta a tx; COMMIT vira ROLLBACK silencioso após RETURNING "de sucesso"; sempre re-verificar com SELECT pós-commit.
 - [Scorecard MO gotchas](scorecard-mo-multi-obra.md) — [equipe duplicada multi-obra](scorecard-mo-multi-obra.md); [floor de período](scorecard-mo-site-periods-floor.md); [isActive fallback](site-periods-isactive-fallback.md).
 - [Banco de Horas gotchas](rescisao-banco-horas-integration.md) — rescisão: positivo=provento×1,5, negativo=valor cheio ([detalhe](rescisao-banco-horas-integration.md)); [saldo list `<> 0`](banco-horas-saldo-list-filter.md); [tipos de débito discriminados](banco-horas-debito-tipos.md).

@@ -490,7 +490,11 @@ export default function MedicaoLevantamento() {
   // Rev. 4781 — poka-yoke: escala com fonte declarada (nominal/manual nova)
   // só libera medição depois de CONFERIDA contra uma cota conhecida.
   // Calibração legada (sem `fonte`) e DXF com unidade não bloqueiam.
-  const escalaNaoConferida = !isDxf && !!calibAtual?.fonte && !calibAtual?.conferida;
+  // Rev. 4789 — escala DEDUZIDA (cabeçalho do DXF implausível) também exige
+  // conferência antes de liberar o desenho; calibração manual em DXF idem.
+  const escalaNaoConferida =
+    (!!calibAtual?.fonte && !calibAtual?.conferida) ||
+    (isDxf && !calibAtual && !!dxfData?.escalaHeuristica);
   const escalaOk = !!calibAtualEff && !escalaNaoConferida;
 
   // Rev. 4781 — camada 3: textos (cotas) da página do PDF, extraídos do vetor.
@@ -1748,16 +1752,15 @@ export default function MedicaoLevantamento() {
                   </Button>
                   {/* Rev. 4783 — poka-yoke: Calibrar/Conferir só aparecem quando fazem
                       sentido (DXF com unidade não precisa de nada disso). */}
-                  {!(isDxf && dxfAutoCalib) && (
+                  {/* Rev. 4789 — escala deduzida (cabeçalho implausível) mantém o Calibrar visível p/ correção */}
+                  {!(isDxf && dxfAutoCalib && !dxfData?.escalaHeuristica) && (
                     <>
                       <Button size="sm" variant={tool === "calibrar" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("calibrar"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
                         <Crosshair className="h-4 w-4" />Calibrar
                       </Button>
-                      {!isDxf && (
-                        <Button size="sm" variant={tool === "conferir" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("conferir"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
-                          <BadgeCheck className="h-4 w-4" />Conferir
-                        </Button>
-                      )}
+                      <Button size="sm" variant={tool === "conferir" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("conferir"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
+                        <BadgeCheck className="h-4 w-4" />Conferir
+                      </Button>
                     </>
                   )}
                   {/* Rev. 4783 — poka-yoke: a ferramenta vem da CATEGORIA (tipo de medida).
@@ -1926,7 +1929,9 @@ export default function MedicaoLevantamento() {
                     {escalaOk && <BadgeCheck className="h-4 w-4 shrink-0" />}
                     <span>
                       {isDxf && dxfAutoCalib
-                        ? `Escala automática do DXF: ${numFmt(dxfAutoCalib.metrosPorUnidade, 6)} m/unidade — não precisa calibrar.`
+                        ? (dxfData?.escalaHeuristica && !calibAtual
+                          ? `Escala deduzida do desenho (planta ≈ ${numFmt(dxfData.w * (dxfData.metrosPorUnidade || 0), 1)} × ${numFmt(dxfData.h * (dxfData.metrosPorUnidade || 0), 1)} m) — toque em Conferir e marque os 2 extremos de uma cota conhecida; se não bater, use Calibrar. O desenho só libera depois disso.`
+                          : `Escala automática do DXF: ${numFmt((calibAtual || dxfAutoCalib).metrosPorUnidade, 6)} m/unidade — não precisa calibrar.`)
                         : !calibAtual
                           ? (isDxf
                             ? "DXF sem unidade definida — use a ferramenta Calibrar e marque 2 pontos de medida conhecida."

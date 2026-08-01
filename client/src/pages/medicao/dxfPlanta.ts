@@ -17,9 +17,16 @@ export interface DxfPlanta {
   h: number;
   /** metros por unidade do DXF (do $INSUNITS); null = unidade desconhecida → calibrar manual */
   metrosPorUnidade: number | null;
+  /** Rev. 4789 — true quando a unidade do cabeçalho era implausível e a escala foi deduzida do tamanho do desenho */
+  escalaHeuristica?: boolean;
+  /** Rev. 4789 — versão do algoritmo (sidecar do servidor é regenerado quando muda) */
+  algoVersion?: number;
   ok: boolean;
   erro?: string;
 }
+
+/** bump sempre que a lógica de parse/escala mudar — invalida sidecars cacheados no servidor. */
+export const DXF_ALGO_VERSION = 2;
 
 type Pt = { x: number; y: number };
 type Poly = { pts: Pt[]; closed: boolean };
@@ -180,20 +187,93 @@ export function parseDxfPlanta(text: string): DxfPlanta {
   if (!dxf) return fail("DXF vazio ou inválido.");
 
   const blocks: Record<string, any> = dxf.blocks || {};
-  const polys: Poly[] = [];
+  let polys: Poly[] = [];
   coletar(dxf.entities || [], blocks, IDENT, polys, 0);
 
   if (!polys.length) return fail("Nenhum desenho reconhecido no DXF (somente texto/cotas?).");
 
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const pl of polys) for (const p of pl.pts) {
-    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
+  const bboxDe = (pls: Poly[]) => {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const pl of pls) for (const p of pl.pts) {
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return { minX, minY, maxX, maxY };
+  };
+
+  // Rev. 4789 — arquivos CAD costumam ter mais de um "desenho" no espaço
+  // (planta + carimbo/legenda/cópias deslocadas). Agrupa os traços em
+  // AGLOMERADOS espaciais e escolhe o da planta:
+  //   1º critério: o que casa com os extents do cabeçalho ($EXTMIN/$EXTMAX);
+  //   2º critério: o com mais geometria.
+  let bb = bboxDe(polys);
+  {
+    const rawDim = Math.max(bb.maxX - bb.minX, bb.maxY - bb.minY) || 1;
+    // grid-hash: célula = 1/40 da dimensão bruta; células vizinhas (8-conexas)
+    // com traços formam o mesmo aglomerado.
+    const cell = rawDim / 40;
+    const cellKey = (cx: number, cy: number) => `${cx}|${cy}`;
+    const cellOf = new Map<string, number[]>(); // key -> índices de polys
+    const centers = polys.map((pl, i) => {
+      const b = bboxDe([pl]);
+      const c = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+      const k = cellKey(Math.floor(c.x / cell), Math.floor(c.y / cell));
+      if (!cellOf.has(k)) cellOf.set(k, []);
+      cellOf.get(k)!.push(i);
+      return c;
+    });
+    // BFS sobre células ocupadas
+    const clusterOf = new Array(polys.length).fill(-1);
+    let nClusters = 0;
+    const seen = new Set<string>();
+    for (const startKey of cellOf.keys()) {
+      if (seen.has(startKey)) continue;
+      const fila = [startKey];
+      seen.add(startKey);
+      const cid = nClusters++;
+      while (fila.length) {
+        const k = fila.pop()!;
+        for (const i of cellOf.get(k) || []) clusterOf[i] = cid;
+        const [cx, cy] = k.split("|").map(Number);
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+          const nk = cellKey(cx + dx, cy + dy);
+          if (!seen.has(nk) && cellOf.has(nk)) { seen.add(nk); fila.push(nk); }
+        }
+      }
+    }
+    if (nClusters > 1) {
+      // pontuação por aglomerado: nº de pontos (peso de geometria)
+      const pontos = new Array(nClusters).fill(0);
+      for (let i = 0; i < polys.length; i++) pontos[clusterOf[i]] += polys[i].pts.length;
+      // extents do cabeçalho, quando válidos, apontam o desenho "oficial"
+      const exMin = dxf.header?.$EXTMIN, exMax = dxf.header?.$EXTMAX;
+      const extOk = exMin && exMax && [exMin.x, exMin.y, exMax.x, exMax.y].every((v: any) => Number.isFinite(v))
+        && exMax.x - exMin.x > 0 && exMax.y - exMin.y > 0
+        && (exMax.x - exMin.x) < rawDim * 0.9; // extents ≈ bbox bruta não decide nada
+      let escolhido = pontos.indexOf(Math.max(...pontos));
+      if (extOk) {
+        // aglomerado cujo centro médio cai dentro dos extents (com margem 30%)
+        const mX = (exMax.x - exMin.x) * 0.3, mY = (exMax.y - exMin.y) * 0.3;
+        const dentroExt = new Array(nClusters).fill(0);
+        for (let i = 0; i < polys.length; i++) {
+          const c = centers[i];
+          if (c.x >= exMin.x - mX && c.x <= exMax.x + mX && c.y >= exMin.y - mY && c.y <= exMax.y + mY) dentroExt[clusterOf[i]] += polys[i].pts.length;
+        }
+        const melhorExt = dentroExt.indexOf(Math.max(...dentroExt));
+        if (dentroExt[melhorExt] > 0) escolhido = melhorExt;
+      }
+      const doCluster = polys.filter((_, i) => clusterOf[i] === escolhido);
+      if (doCluster.length >= 3) {
+        polys = doCluster;
+        bb = bboxDe(polys);
+      }
+    }
   }
-  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return fail("Coordenadas do DXF inválidas.");
+  if (!Number.isFinite(bb.minX) || !Number.isFinite(bb.minY)) return fail("Coordenadas do DXF inválidas.");
+  const minX = bb.minX, minY = bb.minY, maxX = bb.maxX, maxY = bb.maxY;
   let w = maxX - minX;
   let h = maxY - minY;
   if (!(w > 0)) w = 1;
@@ -219,5 +299,26 @@ export function parseDxfPlanta(text: string): DxfPlanta {
     `<g fill="none" stroke="#111827" stroke-width="1" vector-effect="non-scaling-stroke" ` +
     `stroke-linecap="round" stroke-linejoin="round">${parts.join("")}</g></svg>`;
 
-  return { svg, w, h, metrosPorUnidade: metrosPorUnidadeDe(dxf.header?.$INSUNITS), ok: true };
+  // Rev. 4789 — plausibilidade da unidade: cabeçalhos de DXF frequentemente
+  // mentem ($INSUNITS=mm com desenho em metros). Um pavimento plausível tem
+  // maior dimensão entre 3m e 1000m; se a unidade declarada cair fora disso,
+  // deduz a unidade métrica que encaixa (se for UMA só). Ambíguo → calibrar.
+  const maxDim = Math.max(w, h);
+  const plaus = (m: number) => maxDim * m >= 3 && maxDim * m <= 1000;
+  const insM = metrosPorUnidadeDe(dxf.header?.$INSUNITS);
+  let metrosPorUnidade: number | null = insM;
+  let escalaHeuristica = false;
+  if (insM == null || !plaus(insM)) {
+    const imperial = Number(dxf.header?.$MEASUREMENT ?? 1) === 0;
+    const cands = imperial ? [0.0254, 0.3048, 1] : [1, 0.01, 0.001];
+    const ok = cands.filter(plaus);
+    if (ok.length === 1) {
+      metrosPorUnidade = ok[0];
+      escalaHeuristica = true;
+    } else {
+      metrosPorUnidade = null; // ambíguo → usuário calibra com 1 medida conhecida
+    }
+  }
+
+  return { svg, w, h, metrosPorUnidade, escalaHeuristica, algoVersion: DXF_ALGO_VERSION, ok: true };
 }

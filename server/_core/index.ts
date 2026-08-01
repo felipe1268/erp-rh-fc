@@ -507,11 +507,17 @@ Regras:
         try { await plantaDerivarInflight.get(key); } catch { /* segue e tenta o cache */ }
       }
       const { dbRetrieve, storagePut: sPut } = await import("../storage");
-      // cache: sidecar já existe?
+      // cache: sidecar já existe E é da versão atual do algoritmo?
+      const { DXF_ALGO_VERSION } = await import("../../client/src/pages/medicao/dxfPlanta");
       const side = await dbRetrieve(`${key}.planta.json`);
       if (side) {
-        res.setHeader("Content-Type", "application/json");
-        return res.send(side.buffer);
+        try {
+          const cached = JSON.parse(side.buffer.toString("utf8"));
+          if (cached?.algoVersion === DXF_ALGO_VERSION) {
+            res.setHeader("Content-Type", "application/json");
+            return res.send(side.buffer);
+          }
+        } catch { /* sidecar corrompido → regenera */ }
       }
       const work = (async () => {
         const orig = await dbRetrieve(key);

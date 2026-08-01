@@ -1,4 +1,18 @@
 /**
+ * Rev. 4789 - LEVANTAMENTO: ESCALA DO DXF ROBUSTA (aglomerados + plausibilidade)
+ *
+ * Escala "totalmente equivocada": cabecalhos de DXF mentem ($INSUNITS=mm com
+ * desenho em metros) e arquivos CAD carregam 2+ desenhos no espaco (planta +
+ * carimbo/copias deslocadas), inflando a bounding box. Agora o parser:
+ * - Agrupa os tracos em AGLOMERADOS espaciais (grid-hash + BFS) e escolhe o
+ *   da planta: 1o o que casa com $EXTMIN/$EXTMAX; 2o o com mais geometria.
+ * - Plausibilidade de unidade: maior dimensao deve dar 3-1000m; se o
+ *   $INSUNITS cair fora, deduz a unidade metrica que encaixa (se for UMA so);
+ *   ambiguo -> escala null (usuario calibra com 1 medida conhecida).
+ * - escalaHeuristica=true mantem o botao Calibrar visivel e o banner pede
+ *   conferencia de uma medida conhecida (poka-yoke).
+ * - DXF_ALGO_VERSION no sidecar: cache regenerado quando o algoritmo muda.
+ *
  * Rev. 4788 - LEVANTAMENTO: DXF GRANDE PRE-PROCESSADO NO SERVIDOR
  *
  * "Nao foi possivel ler o arquivo DXF": o parse de um DXF de 50MB+ estoura a
