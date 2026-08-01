@@ -580,14 +580,30 @@ export default function MedicaoLevantamento() {
   useLayoutEffect(() => {
     const f = focusRef.current;
     const cont = canvasWrapRef.current;
-    if (!f || !cont) return;
-    const rect = cont.getBoundingClientRect();
-    const contentW = baseWidth * zoom;
-    const contentH = pageDims.w > 0 ? contentW * (pageDims.h / pageDims.w) : contentW;
-    cont.scrollLeft = f.fracX * contentW - (f.cx - rect.left);
-    cont.scrollTop = f.fracY * contentH - (f.cy - rect.top);
+    const inner = zoomInnerRef.current;
+    if (!f || !cont || !inner) return;
+    // Rev. 4789 — ancoragem MEDINDO o elemento (independe de padding/margens):
+    // desloca o scroll pelo delta entre onde o ponto está e onde deve ficar.
+    const ir = inner.getBoundingClientRect();
+    cont.scrollLeft += ir.left + f.fracX * ir.width - f.cx;
+    cont.scrollTop += ir.top + f.fracY * ir.height - f.cy;
     focusRef.current = null;
   }, [zoom, baseWidth, pageDims]);
+
+  // Rev. 4789 — "tela infinita": há uma moldura de folga (padding) em volta da
+  // planta p/ o pan nunca travar na borda. Ao trocar de planta/página, posiciona
+  // o scroll com o canto do conteúdo visível (senão abriria mostrando só folga).
+  useLayoutEffect(() => {
+    const cont = canvasWrapRef.current;
+    const inner = zoomInnerRef.current;
+    if (!cont || !inner) return;
+    const cr = cont.getBoundingClientRect();
+    const ir = inner.getBoundingClientRect();
+    if (ir.width < 4) return; // conteúdo ainda não carregou
+    cont.scrollLeft += ir.left - cr.left - 24;
+    cont.scrollTop += ir.top - cr.top - 24;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfSel, pagina, pageDims, isDxf ? !!dxfData?.ok : true]);
 
   // Rev. 3099 — Zoom pela rodinha do mouse (estilo AutoCAD): só na área de
   // desenho, em direção ao cursor. Listener NATIVO {passive:false} para poder
@@ -601,12 +617,12 @@ export default function MedicaoLevantamento() {
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey && e.deltaY === 0) return;
       e.preventDefault();
-      const z = zoomRef.current, bw = baseWidthRef.current, pd = pageDimsRef.current;
-      const rect = cont.getBoundingClientRect();
-      const contentW = bw * z;
-      const contentH = pd.w > 0 ? contentW * (pd.h / pd.w) : contentW;
-      const fracX = (cont.scrollLeft + (e.clientX - rect.left)) / Math.max(contentW, 1);
-      const fracY = (cont.scrollTop + (e.clientY - rect.top)) / Math.max(contentH, 1);
+      const z = zoomRef.current;
+      const inner = zoomInnerRef.current;
+      if (!inner) return;
+      const ir = inner.getBoundingClientRect();
+      const fracX = (e.clientX - ir.left) / Math.max(ir.width, 1);
+      const fracY = (e.clientY - ir.top) / Math.max(ir.height, 1);
       // deltaY<0 = rolar p/ cima = aproximar; passo suave e clampado
       const step = Math.max(-0.4, Math.min(0.4, -e.deltaY * 0.0015));
       const newZoom = Math.min(6, Math.max(0.5, z * Math.exp(step)));
@@ -864,20 +880,15 @@ export default function MedicaoLevantamento() {
       const pts = [...ptrsRef.current.values()];
       const a = pts[0], b = pts[1];
       const startDist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-      const cont = canvasWrapRef.current;
       const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
       let fracX = 0.5, fracY = 0.5;
-      if (cont) {
-        const rect = cont.getBoundingClientRect();
-        const contentW = baseWidth * zoom;
-        const contentH = pageDims.w > 0 ? contentW * (pageDims.h / pageDims.w) : contentW;
-        fracX = (cont.scrollLeft + (midX - rect.left)) / Math.max(contentW, 1);
-        fracY = (cont.scrollTop + (midY - rect.top)) / Math.max(contentH, 1);
-      }
-      // origem da escala = ponto entre os dedos, em coordenadas do wrapper.
+      // origem da escala = ponto entre os dedos; fração medida no PRÓPRIO
+      // elemento (independe de padding/margens do container).
       const inner = zoomInnerRef.current;
       if (inner) {
         const ir = inner.getBoundingClientRect();
+        fracX = (midX - ir.left) / Math.max(ir.width, 1);
+        fracY = (midY - ir.top) / Math.max(ir.height, 1);
         inner.style.transformOrigin = `${midX - ir.left}px ${midY - ir.top}px`;
         inner.style.willChange = "transform";
       }
@@ -964,16 +975,14 @@ export default function MedicaoLevantamento() {
       if (inner) { inner.style.transform = ""; inner.style.willChange = ""; }
       const newZoom = Math.min(6, Math.max(0.5, pr.startZoom * pr.ratio));
       const cont = canvasWrapRef.current;
-      if (newZoom !== zoom) {
+      if (Math.abs(newZoom - zoom) > 1e-4) {
         focusRef.current = { fracX: pr.fracX, fracY: pr.fracY, cx: pr.lastMid.x, cy: pr.lastMid.y };
         setZoom(newZoom);
-      } else if (cont) {
-        // só pan (zoom igual): reposiciona o scroll direto.
-        const rect = cont.getBoundingClientRect();
-        const contentW = baseWidth * newZoom;
-        const contentH = pageDims.w > 0 ? contentW * (pageDims.h / pageDims.w) : contentW;
-        cont.scrollLeft = pr.fracX * contentW - (pr.lastMid.x - rect.left);
-        cont.scrollTop = pr.fracY * contentH - (pr.lastMid.y - rect.top);
+      } else if (cont && inner) {
+        // só pan (zoom igual): desloca o scroll pelo delta medido no elemento.
+        const ir = inner.getBoundingClientRect();
+        cont.scrollLeft += ir.left + pr.fracX * ir.width - pr.lastMid.x;
+        cont.scrollTop += ir.top + pr.fracY * ir.height - pr.lastMid.y;
       }
     }
     if (size === 0) suppressRef.current = false;
@@ -2095,7 +2104,11 @@ export default function MedicaoLevantamento() {
 
                 {/* canvas */}
                 <div ref={canvasWrapRef} className="border rounded-lg bg-slate-200 overflow-auto" style={{ maxHeight: "72vh" }}>
-                  <div ref={zoomInnerRef} className="relative mx-auto w-fit" style={{ touchAction: "none" }}>
+                  {/* Rev. 4789 — moldura de folga em volta da planta = "tela infinita":
+                      sempre há espaço de rolagem em todas as direções, então o pan
+                      da pinça nunca trava na borda (o scroll não clampa mais o gesto). */}
+                  <div className="w-fit" style={{ padding: "65vh 65vw", touchAction: "none" }}>
+                  <div ref={zoomInnerRef} className="relative w-fit" style={{ touchAction: "none" }}>
                     {/* filtro P&B aplicado SÓ ao fundo (PDF/DXF), nunca ao overlay/SVG */}
                     <div style={{ filter: pdfPB ? "grayscale(1) contrast(1.25) brightness(1.02)" : "none" }}>
                       {isDxf ? (
@@ -2273,6 +2286,7 @@ export default function MedicaoLevantamento() {
                         </svg>
                       </div>
                     </div>
+                  </div>
                   </div>
               </>
             )}

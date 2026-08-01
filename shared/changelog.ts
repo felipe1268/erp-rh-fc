@@ -11,6 +11,9 @@
  * - PINCA FLUIDA (iPad): zoom de 2 dedos agora e transform CSS ao vivo (GPU,
  *   sem re-render) com pan simultaneo e zoom focal no ponto entre os dedos;
  *   o zoom real e commitado no fim do gesto — sem tranco nem distorcao.
+ * - TELA INFINITA: moldura de folga (padding) em volta da planta — o pan de
+ *   2 dedos nunca mais "volta" ao soltar (o scroll nao clampa na borda);
+ *   ancoragem do zoom/pan agora mede o elemento (independe de margens).
  * - Dimensoes DIGITAVEIS: contorno selecionado (1) mostra Largura x Altura
  *   (retangulo) ou Comprimento (linha) em metros — corrigir erro digitando.
  * - Escala deduzida LIBERA a medicao (plausibilidade ja filtra o absurdo);
