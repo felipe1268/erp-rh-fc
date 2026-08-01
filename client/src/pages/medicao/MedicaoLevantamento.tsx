@@ -539,15 +539,21 @@ export default function MedicaoLevantamento() {
 
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  // largura disponível
+  // largura disponível + altura da área de trabalho (preenche o resto da tela
+  // do tablet: do topo do canvas até a borda inferior da janela).
+  const [canvasH, setCanvasH] = useState(480);
   useEffect(() => {
     const el = canvasWrapRef.current;
     if (!el) return;
-    const measure = () => setBaseWidth(Math.max(280, el.clientWidth - 24));
+    const measure = () => {
+      setBaseWidth(Math.max(280, el.clientWidth - 24));
+      setCanvasH(Math.max(360, window.innerHeight - el.getBoundingClientRect().top - 12));
+    };
     const ro = new ResizeObserver(measure);
     ro.observe(el);
+    window.addEventListener("resize", measure);
     measure();
-    return () => ro.disconnect();
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
   }, []);
 
   const contornosPagina = useMemo(
@@ -594,21 +600,37 @@ export default function MedicaoLevantamento() {
   // planta p/ o pan nunca travar na borda. Ao trocar de planta/página, posiciona
   // o scroll com o canto do conteúdo visível (senão abriria mostrando só folga).
   const posKeyRef = useRef("");
+  const centerPendingRef = useRef(false);
   useLayoutEffect(() => {
     const cont = canvasWrapRef.current;
     const inner = zoomInnerRef.current;
     if (!cont || !inner) return;
-    const ir = inner.getBoundingClientRect();
-    if (ir.width < 4) return; // conteúdo ainda não carregou
     // Guarda por chave ESTÁVEL (id da planta + página): refetches do sync
     // offline recriam objetos a cada poll e re-rodavam este efeito, jogando o
     // scroll de volta pro canto — era o "sempre volta pra posição inicial".
     const key = `${pdfSelId}|${pagina}`;
-    if (posKeyRef.current === key) return;
-    posKeyRef.current = key;
-    const cr = cont.getBoundingClientRect();
-    cont.scrollLeft += ir.left - cr.left - 24;
-    cont.scrollTop += ir.top - cr.top - 24;
+    if (posKeyRef.current !== key) {
+      // Só posiciona quando o conteúdo REAL está pronto — o loader/placeholder
+      // também tem largura, e posicionar sobre ele deixava a planta deslocada.
+      const pronto = isDxf ? !!dxfData?.ok : pageDims.w > 0;
+      if (!pronto) return;
+      posKeyRef.current = key;
+      centerPendingRef.current = true;
+      // "Caber na tela": zoom inicial p/ a planta inteira caber na área visível.
+      const aspect = pageDims.w > 0 ? pageDims.h / pageDims.w : 1;
+      const fitW = (cont.clientWidth - 32) / Math.max(baseWidth, 1);
+      const fitH = (cont.clientHeight - 32) / Math.max(baseWidth * aspect, 1);
+      const fitZ = Math.min(6, Math.max(0.5, Math.min(fitW, fitH)));
+      if (Math.abs(fitZ - zoom) > 1e-3) { setZoom(fitZ); return; } // centraliza no próximo layout
+    }
+    if (centerPendingRef.current) {
+      const ir = inner.getBoundingClientRect();
+      if (ir.width < 4) return;
+      centerPendingRef.current = false;
+      const cr = cont.getBoundingClientRect();
+      cont.scrollLeft += ir.left - cr.left - (cont.clientWidth - ir.width) / 2;
+      cont.scrollTop += ir.top - cr.top - (cont.clientHeight - ir.height) / 2;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   });
 
@@ -2110,7 +2132,7 @@ export default function MedicaoLevantamento() {
                 )}
 
                 {/* canvas */}
-                <div ref={canvasWrapRef} className="border rounded-lg bg-slate-200 overflow-auto" style={{ maxHeight: "72vh" }}>
+                <div ref={canvasWrapRef} className="border rounded-lg bg-slate-200 overflow-auto" style={{ height: canvasH }}>
                   {/* Rev. 4789 — moldura de folga em volta da planta = "tela infinita":
                       sempre há espaço de rolagem em todas as direções, então o pan
                       da pinça nunca trava na borda (o scroll não clampa mais o gesto). */}
