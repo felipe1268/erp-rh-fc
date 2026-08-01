@@ -2171,87 +2171,131 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
             </div>
 
             <Dialog open={detalheMedicaoId === m.id} onOpenChange={(o) => { if (!o) setDetalheMedicaoId(null); }}>
-              <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="flex flex-wrap items-center gap-2">
-                    Medição {String(m.numero).padStart(2, "0")}
-                    <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
-                    {Number((m as any).revisao || 0) > 0 && (
-                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">REV. {Number((m as any).revisao)}</span>
-                    )}
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="text-xs text-gray-500 -mt-1">
-                  {m.dataInicio && m.dataFim ? `${fmtDate(m.dataInicio)} a ${fmtDate(m.dataFim)}` : m.periodo} • Ref: {fmtDate(m.dataReferencia)}
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  {[["Medido", BRL(m.valorMedido)], ["Acumulado", BRL(m.valorAcumulado)], ["% Global", `${Number(m.percentualGlobal).toFixed(1)}%`]].map(([l, v]) => (
-                    <div key={l} className="rounded-lg border border-gray-100 bg-gray-50 px-2 py-2">
-                      <p className="text-[10px] text-gray-400">{l}</p>
-                      <p className="text-sm font-bold text-gray-800 break-words">{v}</p>
+              <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0 [&>button]:text-white [&>button]:opacity-80">
+                {/* Rev. 4801 — popup moderno: header escuro com progresso, tiles, timeline */}
+                <div className="bg-gradient-to-br from-slate-800 via-slate-800 to-blue-900 px-5 pt-5 pb-4 text-white">
+                  <DialogHeader>
+                    <DialogTitle className="flex flex-wrap items-center gap-2 text-white">
+                      <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 flex-shrink-0"><ClipboardCheck className="w-5 h-5 text-blue-300" /></span>
+                      Medição {String(m.numero).padStart(2, "0")}
+                      <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
+                      {Number((m as any).revisao || 0) > 0 && (
+                        <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-400/40 rounded-full px-1.5 py-0.5">REV. {Number((m as any).revisao)}</span>
+                      )}
+                      {m.geradoAutomaticamente && <Badge className="text-xs border bg-purple-500/20 text-purple-200 border-purple-400/40"><Zap className="w-3 h-3 mr-1" />Auto</Badge>}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <p className="text-xs text-slate-300 mt-1 ml-11">
+                    {m.dataInicio && m.dataFim ? `${fmtDate(m.dataInicio)} a ${fmtDate(m.dataFim)}` : m.periodo}{m.dataReferencia ? ` • Ref: ${fmtDate(m.dataReferencia)}` : ""}
+                  </p>
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-[11px] text-slate-300">
+                      <span>Avanço global do contrato</span>
+                      <span className="font-bold text-white text-sm">{Number(m.percentualGlobal).toFixed(1)}%</span>
                     </div>
-                  ))}
-                </div>
-                {pagto?.pago && (
-                  <div className="p-2.5 bg-blue-50 rounded-lg border border-blue-200 space-y-1">
-                    <p className="text-xs text-blue-800 font-semibold"><CheckCircle className="w-3.5 h-3.5 inline mr-1.5" />Paga pelo Financeiro — {BRL(pagto.valorPago)}</p>
-                    {(pagto.baixas || []).map((b: any, i: number) => (
-                      <p key={i} className="text-xs text-blue-700 break-words">
-                        {fmtDate(b.data)} • {BRL(b.valor)}{b.formaPagamento ? ` • ${b.formaPagamento}` : ""}{b.conta ? ` • ${b.conta}` : ""}
-                      </p>
+                    <div className="h-2 rounded-full bg-white/15 mt-1.5 overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-blue-400 to-cyan-300 transition-all duration-700" style={{ width: `${Math.min(100, Math.max(0, Number(m.percentualGlobal) || 0))}%` }} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2.5 mt-4">
+                    {[
+                      ["Medido no período", BRL(m.valorMedido), "text-cyan-300"],
+                      ["Acumulado", BRL(m.valorAcumulado), "text-blue-200"],
+                      ["% do contrato", `${Number(m.percentualGlobal).toFixed(1)}%`, "text-emerald-300"],
+                    ].map(([l, v, c]) => (
+                      <div key={l as string} className="rounded-xl bg-white/10 border border-white/10 px-3 py-2.5">
+                        <p className="text-[10px] text-slate-300">{l}</p>
+                        <p className={`text-base font-bold break-words ${c}`}>{v}</p>
+                      </div>
                     ))}
+                  </div>
+                </div>
+
+                <div className="p-5 space-y-4">
+                {pagto?.pago && (
+                  <div className="rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-3.5">
+                    <p className="text-sm text-emerald-800 font-bold flex items-center gap-2"><CheckCircle className="w-4 h-4" />Paga pelo Financeiro — {BRL(pagto.valorPago)}</p>
+                    <div className="mt-2 space-y-1.5">
+                      {(pagto.baixas || []).map((b: any, i: number) => (
+                        <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-emerald-700 bg-white/60 rounded-lg px-2.5 py-1.5 border border-emerald-100">
+                          <span className="font-semibold">{fmtDate(b.data)}</span>
+                          <span className="font-bold">{BRL(b.valor)}</span>
+                          {b.formaPagamento && <span className="capitalize">{String(b.formaPagamento).replace(/_/g, " ")}</span>}
+                          {b.conta && <span className="text-emerald-600 break-words">{b.conta}</span>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {pagto?.parcial && (
-                  <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 space-y-1">
-                    <p className="text-xs text-amber-800 font-semibold">Pagamento parcial: {BRL(pagto.valorPago)} de {BRL(pagto.valorTitulo)}</p>
-                    {(pagto.baixas || []).map((b: any, i: number) => (
-                      <p key={i} className="text-xs text-amber-700 break-words">
-                        {fmtDate(b.data)} • {BRL(b.valor)}{b.formaPagamento ? ` • ${b.formaPagamento}` : ""}{b.conta ? ` • ${b.conta}` : ""}
-                      </p>
-                    ))}
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+                    <p className="text-sm text-amber-800 font-bold">Pagamento parcial: {BRL(pagto.valorPago)} de {BRL(pagto.valorTitulo)}</p>
+                    <div className="h-1.5 rounded-full bg-amber-200/70 mt-2 overflow-hidden">
+                      <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.min(100, (pagto.valorPago / Math.max(pagto.valorTitulo, 0.01)) * 100)}%` }} />
+                    </div>
+                    <div className="mt-2 space-y-1.5">
+                      {(pagto.baixas || []).map((b: any, i: number) => (
+                        <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-amber-700 bg-white/60 rounded-lg px-2.5 py-1.5 border border-amber-100">
+                          <span className="font-semibold">{fmtDate(b.data)}</span>
+                          <span className="font-bold">{BRL(b.valor)}</span>
+                          {b.formaPagamento && <span className="capitalize">{String(b.formaPagamento).replace(/_/g, " ")}</span>}
+                          {b.conta && <span className="break-words">{b.conta}</span>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
-                {m.observacoes && (
-                  <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
-                    <p className="text-xs text-gray-600 break-words"><span className="font-semibold">Observações:</span> {m.observacoes}</p>
-                  </div>
-                )}
-                {m.aprovadoPor && <p className="text-xs text-gray-400">Aprovado por <span className="font-medium">{m.aprovadoPor}</span> em {fmtDate(m.aprovadoEm)}</p>}
                 {m.alertaDivergencia && (
-                  <div className="p-2.5 bg-orange-50 rounded-lg border border-orange-200">
-                    <p className="text-xs text-orange-700 font-medium break-words"><AlertTriangle className="w-3.5 h-3.5 inline mr-1.5 text-orange-500" />{m.alertaDivergencia}</p>
-                  </div>
-                )}
-                {m.levantamentoCampoId && (
-                  <div>
-                    <Badge variant="outline" className="gap-1 text-xs text-blue-700 border-blue-200 bg-blue-50">
-                      <Ruler className="w-3 h-3" /> Levantamento vinculado
-                    </Badge>
+                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-3.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-orange-500 mb-1 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" />Comparativo com o avanço da obra</p>
+                    <p className="text-xs text-orange-700 break-words leading-relaxed">{m.alertaDivergencia}</p>
                   </div>
                 )}
                 {m.motivoRejeicao && (
-                  <div className="p-2 bg-red-50 rounded-lg border border-red-100">
-                    <p className="text-xs text-red-600"><AlertTriangle className="w-3 h-3 inline mr-1" />Rejeitada{(m as any).rejeitadoPor ? ` por ${(m as any).rejeitadoPor}` : ""}{(m as any).rejeitadoEm ? ` em ${fmtDate((m as any).rejeitadoEm)}` : ""}</p>
-                    <p className="text-xs text-red-500 mt-0.5 break-words">{m.motivoRejeicao}</p>
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-red-500 mb-1 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" />Rejeitada{(m as any).rejeitadoPor ? ` por ${(m as any).rejeitadoPor}` : ""}{(m as any).rejeitadoEm ? ` em ${fmtDate((m as any).rejeitadoEm)}` : ""}</p>
+                    <p className="text-xs text-red-600 break-words">{m.motivoRejeicao}</p>
                   </div>
                 )}
                 {tresNiveis && m.status !== "rejeitada" && (
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                    {[
-                      { lab: "Medido", done: true, who: m.criadoPor, when: m.criadoEm },
-                      { lab: "Gestor da Obra", done: (m.nivelAprovacao ?? 0) >= 1 || m.status === "aprovada" || m.status === "paga", who: m.gestorAprovadoPor, when: m.gestorAprovadoEm },
-                      { lab: "Sócio Adm", done: (m.nivelAprovacao ?? 0) >= 2 || m.status === "aprovada" || m.status === "paga", who: m.socioAprovadoPor, when: m.socioAprovadoEm },
-                    ].map((s, i) => (
-                      <span key={i} className="inline-flex items-center gap-1">
-                        {i > 0 && <ChevronRight className="w-3 h-3 text-gray-300" />}
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${s.done ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-400 border-gray-200"}`}>
-                          {s.done ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                          {s.lab}{s.done && s.who ? ` · ${s.who}` : ""}
-                        </span>
-                      </span>
-                    ))}
+                  <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-2.5">Fluxo de aprovação</p>
+                    <div className="space-y-0">
+                      {[
+                        { lab: "Medido", done: true, who: m.criadoPor, when: m.criadoEm },
+                        { lab: "Gestor da Obra", done: (m.nivelAprovacao ?? 0) >= 1 || m.status === "aprovada" || m.status === "paga", who: m.gestorAprovadoPor, when: m.gestorAprovadoEm },
+                        { lab: "Sócio Adm", done: (m.nivelAprovacao ?? 0) >= 2 || m.status === "aprovada" || m.status === "paga", who: m.socioAprovadoPor, when: m.socioAprovadoEm },
+                        ...(pagto?.pago ? [{ lab: "Paga pelo Financeiro", done: true, who: pagto.conta, when: pagto.dataPagamento }] : []),
+                      ].map((s: any, i: number, arr: any[]) => (
+                        <div key={i} className="flex gap-3">
+                          <div className="flex flex-col items-center">
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${s.done ? "bg-emerald-500 text-white" : "bg-gray-200 text-gray-400"}`}>
+                              {s.done ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                            </span>
+                            {i < arr.length - 1 && <span className={`w-0.5 flex-1 min-h-[14px] ${s.done ? "bg-emerald-300" : "bg-gray-200"}`} />}
+                          </div>
+                          <div className="pb-3">
+                            <p className={`text-xs font-semibold ${s.done ? "text-gray-800" : "text-gray-400"}`}>{s.lab}</p>
+                            {(s.who || s.when) && <p className="text-[11px] text-gray-400 break-words">{s.who || ""}{s.when ? ` • ${fmtDate(String(s.when).slice(0, 10))}` : ""}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )}
+                {!tresNiveis && m.aprovadoPor && (
+                  <p className="text-xs text-gray-400">Aprovado por <span className="font-medium">{m.aprovadoPor}</span> em {fmtDate(m.aprovadoEm)}</p>
+                )}
+                {m.observacoes && (
+                  <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1">Observações</p>
+                    <p className="text-xs text-gray-600 break-words leading-relaxed">{m.observacoes}</p>
+                  </div>
+                )}
+                {m.levantamentoCampoId && (
+                  <Badge variant="outline" className="gap-1 text-xs text-blue-700 border-blue-200 bg-blue-50">
+                    <Ruler className="w-3 h-3" /> Levantamento vinculado
+                  </Badge>
                 )}
                 <FdMedicaoPanel
                   medicao={m}
@@ -2262,7 +2306,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   readOnly={!modoEdicao}
                 />
                 {modoEdicao && (
-                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
                   {m.status === "aguardando_aprovacao" && !tresNiveis && (
                     <>
                       <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" onClick={() => aprovarMut.mutate({ id: m.id, companyId: contrato.companyId, aprovadoPor: "Responsável" })}>
@@ -2327,6 +2371,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   )}
                 </div>
                 )}
+                </div>
               </DialogContent>
             </Dialog>
 
