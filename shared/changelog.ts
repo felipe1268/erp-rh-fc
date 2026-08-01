@@ -1,4 +1,23 @@
 /**
+ * Rev. 4794 - MEDICAO DE TERCEIROS: PDF PAISAGEM PROFISSIONAL + ASSINATURA FCSIGN
+ *
+ * PDF do Boletim de Medicao redesenhado (pedido: "totalmente pessimo"):
+ * - Formato PAISAGEM sempre: toda a informacao cabe na pagina, sem colunas
+ *   sobrepostas (V.Total/Ant.% consertado).
+ * - Logo da empresa no cabecalho + faixa de identificacao compacta (contrato,
+ *   terceiro, CNPJ, obra, valor do contrato, periodo, medido, acumulado).
+ * - Quantidades em NUMEROS: Qtd. Contratada, Qtd. do Periodo e Qtd. Acumulada
+ *   (com unidade), alem de V.Total contratado, V.Periodo e V.Acumulado.
+ * - Colunas do periodo destacadas em azul; valor liquido em selo verde.
+ * - Bloco de ASSINATURA DIGITAL: mostra o status do envelope FCSign (quem
+ *   assinou e quando) ou orienta o envio sem papel.
+ * Assinatura pelo FCSign (performance sem papel):
+ * - Botao "Assinar no FCSign" ao lado do Gerar PDF na medicao: cria envelope
+ *   com o boletim completo (gerado do banco, fiel aos dados) e 2 signatarios
+ *   (contratada + gestor); redireciona para o FCSign para envio.
+ * - Envelope vinculado a medicao (nova coluna medicao_terceiro_id).
+ */
+/**
  * Rev. 4792 - LEVANTAMENTO: SUBCATEGORIAS (ABINHAS), LINHA ESTICADA E ETIQUETAS
  *
  * Subcategorias de servico (pedido: pintura de teto/parede/piso):

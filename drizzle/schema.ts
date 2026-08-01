@@ -9181,6 +9181,8 @@ export const integrasignEnvelopes = pgTable("integrasign_envelopes", {
   contratoTerceiroId: integer("contrato_terceiro_id"),
   ordemCompraId: integer("ordem_compra_id"),
   obraId: integer("obra_id"),
+  // Rev. 4793 — assinatura digital do Boletim de Medição de terceiros (sem papel)
+  medicaoTerceiroId: integer("medicao_terceiro_id"),
   titulo: varchar({ length: 500 }).notNull(),
   descricao: text(),
   status: varchar({ length: 50 }).notNull().default("rascunho"),

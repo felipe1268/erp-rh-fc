@@ -14,7 +14,7 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler, PenLine
 } from "lucide-react";
 import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
 import { toast } from "sonner";
@@ -2293,9 +2293,10 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       <th className="px-2 py-2 text-right w-[80px]">V.Unit.</th>
                       <th className="px-2 py-2 text-right w-[80px]">V.Total</th>
                       <th className="px-2 py-2 text-center w-[55px] border-l border-gray-200">Ant.%</th>
-                      <th className="px-2 py-2 text-center w-[80px] bg-blue-50/70 text-blue-700">% Período</th>
-                      <th className="px-2 py-2 text-center w-[55px]">Acum.%</th>
+                      <th className="px-2 py-2 text-center w-[70px] bg-blue-50/70 text-blue-700">% Período</th>
+                      <th className="px-2 py-2 text-right w-[95px] bg-blue-50/70 text-blue-700" title="Quantidade medida no período, conforme levantamento">Qtd. Medida</th>
                       <th className="px-2 py-2 text-right w-[90px] bg-blue-50/70 text-blue-700">V.Período</th>
+                      <th className="px-2 py-2 text-center w-[110px]" title="Avanço físico acumulado do item">% Médio</th>
                       <th className="px-2 py-2 text-right w-[90px]">V.Acum.</th>
                       {mostrarRemover && <th className="px-2 py-2 text-center w-[35px]"></th>}
                     </tr>
@@ -2321,17 +2322,37 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                               const h = hierMap.get(parentEap);
                               const nivel = depth;
                               const isTopLevel = nivel === 1;
-                              const colCount = isPreApproval ? 12 : 11;
+                              const colCount = isPreApproval ? 13 : 12;
+                              // Rev. 4795 — % médio ponderado do grupo (pelo valor dos itens)
+                              const kids = sorted.filter((it: any) => (it.eapCodigo || "").startsWith(parentEap + "."));
+                              const grpVT = kids.reduce((s: number, it: any) => s + Number(it.valorTotalItem || 0), 0);
+                              const grpAcum = kids.reduce((s: number, it: any) => s + Number(it.valorAcumulado || 0), 0);
+                              const grpPer = kids.reduce((s: number, it: any) => s + Number(it.valorMedidoPeriodo || 0), 0);
+                              const pMedio = grpVT > 0 ? grpAcum / grpVT * 100 : 0;
+                              const pMedioPer = grpVT > 0 ? grpPer / grpVT * 100 : 0;
                               rows.push(
                                 <tr key={`grp-${parentEap}`}
                                   className={`${isTopLevel ? "bg-slate-100 border-l-[3px] border-l-amber-500" : "bg-gray-50/70"} ${isTopLevel && rows.length > 0 ? "border-t-2 border-t-gray-200" : ""}`}>
                                   <td className="px-3 py-1.5 font-mono text-gray-500 text-[11px]">{parentEap}</td>
                                   <td colSpan={colCount - 1} className="px-3 py-1.5">
-                                    <div className="flex items-center" style={{ paddingLeft: `${(nivel - 1) * 16}px` }}>
-                                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 mr-1.5 flex-shrink-0" />
-                                      <span className={`font-semibold ${isTopLevel ? "text-gray-800 text-[12px]" : "text-gray-700 text-[11px]"}`}>
-                                        {h?.nome || `Nível ${parentEap}`}
-                                      </span>
+                                    <div className="flex items-center justify-between gap-3" style={{ paddingLeft: `${(nivel - 1) * 16}px` }}>
+                                      <div className="flex items-center min-w-0">
+                                        <ChevronDown className="w-3.5 h-3.5 text-gray-400 mr-1.5 flex-shrink-0" />
+                                        <span className={`font-semibold truncate ${isTopLevel ? "text-gray-800 text-[12px]" : "text-gray-700 text-[11px]"}`}>
+                                          {h?.nome || `Nível ${parentEap}`}
+                                        </span>
+                                      </div>
+                                      {grpVT > 0 && (
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                          {pMedioPer > 0 && (
+                                            <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-1.5 py-0.5">+{pMedioPer.toFixed(1)}% período</span>
+                                          )}
+                                          <div className="w-20 h-1.5 bg-gray-200/80 rounded-full overflow-hidden">
+                                            <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500" style={{ width: `${Math.min(100, pMedio)}%` }} />
+                                          </div>
+                                          <span className={`text-[10px] font-bold tabular-nums ${pMedio >= 100 ? "text-emerald-600" : "text-gray-600"}`}>{pMedio.toFixed(1)}%</span>
+                                        </div>
+                                      )}
                                     </div>
                                   </td>
                                 </tr>
@@ -2387,17 +2408,23 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                                   {item.editadoManualmente && <AlertTriangle className="w-3 h-3 inline ml-0.5 text-orange-500" />}
                                 </span>
                               )}
-                              {/* Rev. 4793 — quantidade medida em NÚMEROS (conforme levantamento) */}
-                              {percPeriodo > 0 && Number(item.quantidade || 0) > 0 && (
-                                <div className="text-[10px] text-blue-600/80 mt-0.5 whitespace-nowrap">
-                                  {(Number(item.quantidade) * percPeriodo / 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}
-                                  {" de "}
-                                  {Number(item.quantidade).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}
-                                  {item.unidade ? ` ${item.unidade}` : ""}
-                                </div>
+                            </td>
+                            {/* Rev. 4795 — Qtd. Medida no período (conforme levantamento) */}
+                            <td className="px-2 py-2 text-right bg-blue-50/40 whitespace-nowrap">
+                              {percPeriodo > 0 && Number(item.quantidade || 0) > 0 ? (
+                                <>
+                                  <div className="font-semibold text-blue-700 tabular-nums">
+                                    {(Number(item.quantidade) * percPeriodo / 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}
+                                    {item.unidade ? ` ${item.unidade}` : ""}
+                                  </div>
+                                  <div className="text-[10px] text-gray-400 tabular-nums">
+                                    de {Number(item.quantidade).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{item.unidade ? ` ${item.unidade}` : ""}
+                                  </div>
+                                </>
+                              ) : (
+                                <span className="text-gray-300">—</span>
                               )}
                             </td>
-                            <td className="px-2 py-2 text-center font-semibold text-gray-700">{percAcumulado.toFixed(1)}%</td>
                             <td className="px-2 py-2 text-right text-gray-600 bg-blue-50/40">
                               {editavel && editingValor?.id === item.id ? (
                                 <div className="flex items-center gap-1 justify-end">
@@ -2432,6 +2459,20 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                                 </div>
                               )}
                             </td>
+                            {/* Rev. 4795 — % Médio (avanço acumulado) com barra de progresso */}
+                            <td className="px-2 py-2">
+                              <div className="flex items-center gap-1.5">
+                                <div className="flex-1 min-w-[36px] h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500" style={{ width: `${Math.min(100, percAcumulado)}%` }} />
+                                </div>
+                                <span className={`text-[11px] font-semibold tabular-nums ${percAcumulado >= 100 ? "text-emerald-600" : "text-gray-700"}`}>{percAcumulado.toFixed(1)}%</span>
+                              </div>
+                              {percAcumulado > 0 && Number(item.quantidade || 0) > 0 && (
+                                <div className="text-[10px] text-gray-400 text-right tabular-nums mt-0.5 whitespace-nowrap">
+                                  {(Number(item.quantidade) * percAcumulado / 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{item.unidade ? ` ${item.unidade}` : ""} acum.
+                                </div>
+                              )}
+                            </td>
                             <td className="px-2 py-2 text-right font-semibold text-gray-900">
                               {BRL(item.valorAcumulado)}
                               {(parseFloat((item as any).valorMatAcumulado ?? "0") > 0 || parseFloat((item as any).valorMdoAcumulado ?? "0") > 0) && (
@@ -2459,6 +2500,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                     <tr className="bg-gray-50 font-semibold text-xs">
                       <td className="px-3 py-2 text-right text-gray-600" colSpan={9}>Total Período</td>
                       <td className="px-2 py-2 text-right text-blue-700">{BRL(m.valorMedido)}</td>
+                      <td />
                       <td className="px-2 py-2 text-right text-gray-900">{BRL(m.valorAcumulado)}</td>
                       {mostrarRemover && <td />}
                     </tr>
@@ -2850,6 +2892,13 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
   const [descontos, setDescontos] = useState(Number(m.descontos || 0));
   const [obsRetencao, setObsRetencao] = useState(m.observacoesRetencao || "");
   const [pdfLoading, setPdfLoading] = useState(false);
+  // Rev. 4793 — assinatura digital do boletim via FCSign (sem papel)
+  const [fcsignOpen, setFcsignOpen] = useState(false);
+  const [fcsignSigs, setFcsignSigs] = useState<{ nome: string; email: string }[]>([
+    { nome: contrato.empresa?.responsavelNome || contrato.empresa?.razaoSocial || "", email: contrato.empresa?.email || "" },
+    { nome: "", email: "" },
+  ]);
+  const [, navigate] = useLocation();
 
   const [percConfig, setPercConfig] = useState({
     percISS: String(Number(contrato.percISS || 0)),
@@ -2869,6 +2918,30 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
     onError: (e: any) => toast.error(e.message),
   });
   const parsePct = (s: string) => Math.min(100, Math.max(0, parseFloat(String(s).replace(",", ".")) || 0));
+
+  const criarEnvelopeMut = trpc.integrasign.criarEnvelope.useMutation({
+    onSuccess: (env: any) => {
+      toast.success("Envelope criado! Revise e envie para assinatura no FCSign.");
+      setFcsignOpen(false);
+      navigate(`/integrasign?envelope=${env?.id ?? ""}`);
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao criar envelope"),
+  });
+  const handleFcsign = () => {
+    const [contratada, gestor] = fcsignSigs;
+    if (!contratada.nome.trim() || !contratada.email.trim()) { toast.error("Informe nome e e-mail do responsável da contratada."); return; }
+    if (!gestor.nome.trim() || !gestor.email.trim()) { toast.error("Informe nome e e-mail do responsável da contratante."); return; }
+    criarEnvelopeMut.mutate({
+      companyId: contrato.companyId,
+      medicaoTerceiroId: m.id,
+      obraId: contrato.obraId ?? undefined,
+      titulo: "auto",
+      signatarios: [
+        { papel: "fornecedor", ordemAssinatura: 1, nome: contratada.nome.trim(), email: contratada.email.trim(), cargo: "Representante Legal", empresaNome: contrato.empresa?.razaoSocial || undefined },
+        { papel: "gestor_projeto", ordemAssinatura: 2, nome: gestor.nome.trim(), email: gestor.email.trim(), cargo: "Gestor de Projeto", empresaNome: "Contratante" },
+      ],
+    } as any);
+  };
 
   const valorBruto = Number(m.valorMedido || 0);
   const pISS = Number(contrato.percISS || 0);
@@ -2938,8 +3011,46 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
           <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handlePdf} disabled={pdfLoading}>
             {pdfLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />} Gerar PDF
           </Button>
+          <Button size="sm" className="gap-1 text-xs bg-blue-700 hover:bg-blue-800 text-white" onClick={() => setFcsignOpen(true)}>
+            <PenLine className="w-3 h-3" /> Assinar no FCSign
+          </Button>
         </div>
       </div>
+
+      <Dialog open={fcsignOpen} onOpenChange={setFcsignOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assinatura digital do boletim — FCSign</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-gray-500 break-words">
+            Fluxo sem papel: o boletim desta medição vira um envelope no FCSign e os dois responsáveis
+            assinam digitalmente pelo link recebido por e-mail, com hash e trilha de auditoria.
+          </p>
+          {[
+            { titulo: "Contratada (terceiro)", idx: 0 },
+            { titulo: "Contratante (gestor)", idx: 1 },
+          ].map(({ titulo, idx }) => (
+            <div key={idx} className="space-y-1.5 border border-gray-200 rounded-lg p-3">
+              <div className="text-xs font-semibold text-gray-600">{titulo}</div>
+              <Input
+                placeholder="Nome completo"
+                value={fcsignSigs[idx].nome}
+                onChange={(e) => setFcsignSigs(s => s.map((x, i) => i === idx ? { ...x, nome: e.target.value } : x))}
+              />
+              <Input
+                type="email"
+                placeholder="E-mail"
+                value={fcsignSigs[idx].email}
+                onChange={(e) => setFcsignSigs(s => s.map((x, i) => i === idx ? { ...x, email: e.target.value } : x))}
+              />
+            </div>
+          ))}
+          <Button className="w-full" onClick={handleFcsign} disabled={criarEnvelopeMut.isPending}>
+            {criarEnvelopeMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <PenLine className="w-4 h-4 mr-1" />}
+            Criar envelope e assinar
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       {!hasPerc && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">

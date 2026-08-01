@@ -39,6 +39,7 @@ import {
   financialEntries,
   users,
   integrasignEnvelopes,
+  integrasignSignatarios,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(String(v ?? 0)) || 0;
@@ -2503,8 +2504,30 @@ export const terceiroContratosRouter = router({
         return null;
       }
 
+      // Rev. 4793 — assinatura digital (FCSign): mostra no PDF o status do envelope
+      let envelopeAss: any = null;
+      try {
+        const envs = await db.select().from(integrasignEnvelopes)
+          .where(and(
+            eq(integrasignEnvelopes.companyId, input.companyId),
+            eq((integrasignEnvelopes as any).medicaoTerceiroId, input.medicaoId),
+            sql`${integrasignEnvelopes.excluidoEm} IS NULL`,
+          )).orderBy(desc(integrasignEnvelopes.id)).limit(1);
+        envelopeAss = envs[0] ?? null;
+      } catch { /* coluna pode não existir ainda */ }
+      let signatariosAss: any[] = [];
+      if (envelopeAss) {
+        try {
+          signatariosAss = await db.select().from(integrasignSignatarios)
+            .where(eq(integrasignSignatarios.envelopeId, envelopeAss.id))
+            .orderBy(asc(integrasignSignatarios.ordemAssinatura));
+        } catch {}
+      }
+
       return new Promise<{ base64: string; filename: string }>((resolve, reject) => {
-        const doc = new PDFDocument({ size: "A4", margin: 40, bufferPages: true });
+        // Rev. 4793 — PAISAGEM: a medição inteira cabe na largura (qtds medidas
+        // em números + valores), leitura muito mais fácil no iPad e impressa.
+        const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 36, bufferPages: true });
         const chunks: Buffer[] = [];
         doc.on("data", (c: Buffer) => chunks.push(c));
         doc.on("end", () => {
@@ -2522,79 +2545,81 @@ export const terceiroContratosRouter = router({
         const primary = "#1B3A5C";
         const accent = "#2980b9";
 
-        const headerH = 75;
+        const pageBottom = doc.page.height - 44;
+
+        const headerH = 58;
         doc.rect(0, 0, doc.page.width, headerH).fill(primary);
 
         const logoSrc = resolveLogoSource((company as any)?.logoUrl);
         let logoRendered = false;
-        const logoSize = 55;
+        const logoSize = 42;
         if (logoSrc) {
-          try { doc.image(logoSrc, mL, 10, { fit: [logoSize, logoSize] }); logoRendered = true; } catch { logoRendered = false; }
+          try { doc.image(logoSrc, mL, 8, { fit: [logoSize, logoSize] }); logoRendered = true; } catch { logoRendered = false; }
         }
 
-        const nameX = logoRendered ? mL + logoSize + 12 : mL + 10;
+        const nameX = logoRendered ? mL + logoSize + 12 : mL;
         doc.font("Helvetica-Bold").fontSize(14).fillColor("#ffffff")
-          .text(company?.name || "FC Engenharia", nameX, 16);
-        doc.font("Helvetica").fontSize(8).fillColor("#ccd6e0")
-          .text(company?.cnpj ? `CNPJ: ${company.cnpj}` : "", nameX, 34);
-        doc.font("Helvetica").fontSize(7).fillColor("#ccd6e0")
-          .text(`BOLETIM DE MEDIÇÃO`, nameX, 47);
+          .text(company?.name || "FC Engenharia", nameX, 12);
+        doc.font("Helvetica").fontSize(7.5).fillColor("#ccd6e0")
+          .text(`${company?.cnpj ? `CNPJ: ${company.cnpj}   ·   ` : ""}BOLETIM DE MEDIÇÃO — CONTRATO DE TERCEIROS`, nameX, 32);
 
-        const numBox = `Nº ${String(medicao.numero || 1).padStart(2, "0")}`;
-        doc.roundedRect(doc.page.width - mR - 80, 15, 80, 45, 4).fill("#ffffff");
-        doc.font("Helvetica").fontSize(7).fillColor(primary).text("MEDIÇÃO", doc.page.width - mR - 75, 22, { width: 70, align: "center" });
-        doc.font("Helvetica-Bold").fontSize(16).fillColor(primary).text(numBox, doc.page.width - mR - 75, 35, { width: 70, align: "center" });
-
-        let y = headerH + 15;
-
-        doc.fontSize(8).font("Helvetica").fillColor("#333");
-        const col1 = mL, col2 = 310;
-        const infoLine = (label: string, value: string, x: number, yy: number) => {
-          doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#666").text(label, x, yy);
-          doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#1a1a2e").text(value, x, yy + 10, { width: 240 });
-        };
-
-        infoLine("CONTRATO", contrato.descricao || `#${contrato.id}`, col1, y);
-        infoLine("PERÍODO", medicao.periodo || "-", col2, y);
-        y += 28;
-        infoLine("TERCEIRO", empresa?.razaoSocial || empresa?.nomeFantasia || "-", col1, y);
-        infoLine("CNPJ TERCEIRO", empresa?.cnpj || "-", col2, y);
-        y += 28;
-        infoLine("OBRA", obraNome || "-", col1, y);
         const statusLabels: Record<string, string> = { rascunho: "Rascunho", aguardando_aprovacao: "Aguard. Aprovação", aprovada: "Aprovada", paga: "Paga", rejeitada: "Rejeitada" };
-        infoLine("STATUS", statusLabels[medicao.status || "rascunho"] || medicao.status || "-", col2, y);
-        y += 28;
-        if ((medicao as any).dataInicio || (medicao as any).dataFim) {
-          infoLine("DATA INÍCIO", (medicao as any).dataInicio || "-", col1, y);
-          infoLine("DATA FIM", (medicao as any).dataFim || "-", col2, y);
-          y += 28;
-        }
-        infoLine("VALOR DO CONTRATO", BRL(n(contrato.valorTotal)), col1, y);
-        y += 28;
+        const numBox = `Nº ${String(medicao.numero || 1).padStart(2, "0")}`;
+        doc.roundedRect(doc.page.width - mR - 150, 9, 150, 40, 4).fill("#ffffff");
+        doc.font("Helvetica").fontSize(6.5).fillColor(primary).text(`MEDIÇÃO · ${medicao.periodo || "-"}`, doc.page.width - mR - 145, 15, { width: 140, align: "center" });
+        doc.font("Helvetica-Bold").fontSize(15).fillColor(primary).text(numBox, doc.page.width - mR - 145, 24, { width: 140, align: "center" });
+        doc.font("Helvetica").fontSize(6.5).fillColor("#666").text(statusLabels[medicao.status || "rascunho"] || medicao.status || "-", doc.page.width - mR - 145, 41, { width: 140, align: "center" });
 
-        doc.strokeColor("#dde3ea").lineWidth(0.5).moveTo(mL, y).lineTo(mL + pageW, y).stroke();
-        y += 10;
+        let y = headerH + 10;
 
+        // ── Faixa de identificação compacta (2 linhas × 4 colunas) ──
+        doc.roundedRect(mL, y, pageW, 46, 3).fill("#f4f6f9");
+        const infoColW = pageW / 4;
+        const infoLine = (label: string, value: string, ci: number, row: number) => {
+          const x = mL + 10 + ci * infoColW;
+          const yy = y + 6 + row * 22;
+          doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#7a8699").text(label, x, yy);
+          doc.font("Helvetica-Bold").fontSize(8).fillColor("#1a1a2e").text(value || "-", x, yy + 8, { width: infoColW - 16, height: 12, ellipsis: true });
+        };
+        infoLine("CONTRATO", contrato.descricao || `#${contrato.id}`, 0, 0);
+        infoLine("TERCEIRO (CONTRATADA)", empresa?.razaoSocial || empresa?.nomeFantasia || "-", 1, 0);
+        infoLine("CNPJ TERCEIRO", empresa?.cnpj || "-", 2, 0);
+        infoLine("OBRA", obraNome || "-", 3, 0);
+        infoLine("VALOR DO CONTRATO", BRL(n(contrato.valorTotal)), 0, 1);
+        infoLine("PERÍODO MEDIDO", `${(medicao as any).dataInicio || "-"}  a  ${(medicao as any).dataFim || "-"}`, 1, 1);
+        infoLine("MEDIDO NO PERÍODO", BRL(totalValorPeriodo), 2, 1);
+        infoLine("ACUMULADO", `${BRL(totalValorAcumulado)}  (${totalValorContrato > 0 ? (totalValorAcumulado / totalValorContrato * 100).toFixed(1) : "0.0"}%)`, 3, 1);
+        y += 46 + 10;
+
+        // Rev. 4793 — paisagem: contratado (Qtd/V.Total) + MEDIÇÃO ATUAL em
+        // números (Qtd. medida do período destacada) + acumulado, tudo na tela.
         const cols = [
-          { label: "EAP", width: 45, align: "left" as const },
-          { label: "Atividade", width: 130, align: "left" as const },
-          { label: "Unid.", width: 30, align: "center" as const },
-          { label: "Qtd.", width: 45, align: "right" as const },
-          { label: "V.Unit.", width: 55, align: "right" as const },
-          { label: "V.Total", width: 55, align: "right" as const },
-          { label: "Ant.%", width: 35, align: "right" as const },
-          { label: "Per.%", width: 35, align: "right" as const },
-          { label: "Acum.%", width: 35, align: "right" as const },
-          { label: "V.Período", width: 55, align: "right" as const },
-        ];
+          { label: "EAP", width: 52, align: "left" as const },
+          { label: "Atividade", width: 168, align: "left" as const },
+          { label: "Unid.", width: 32, align: "center" as const },
+          { label: "Qtd. Contr.", width: 52, align: "right" as const },
+          { label: "V.Unit.", width: 54, align: "right" as const },
+          { label: "V.Total Contr.", width: 62, align: "right" as const },
+          { label: "Ant.%", width: 36, align: "right" as const },
+          { label: "Per.%", width: 36, align: "right" as const, destaque: true },
+          { label: "Qtd. Período", width: 56, align: "right" as const, destaque: true },
+          { label: "V.Período", width: 62, align: "right" as const, destaque: true },
+          { label: "Acum.%", width: 40, align: "right" as const },
+          { label: "Qtd. Acum.", width: 56, align: "right" as const },
+          { label: "V.Acum.", width: 62, align: "right" as const },
+        ] as Array<{ label: string; width: number; align: "left" | "center" | "right"; destaque?: boolean }>;
+        const tableW = cols.reduce((s, c) => s + c.width, 0);
+        const DESTAQUE_BG = "#dbeafe";
+        const destaqueX = mL + cols.slice(0, 7).reduce((s, c) => s + c.width, 0);
+        const destaqueW = cols[7].width + cols[8].width + cols[9].width;
 
         const drawTableHeader = (yPos: number) => {
           let xOff = mL;
-          doc.rect(mL, yPos, pageW, 16).fill(primary);
+          doc.rect(mL, yPos, tableW, 16).fill(primary);
+          doc.rect(destaqueX, yPos, destaqueW, 16).fill("#2d5a8a");
           doc.fillColor("#fff").fontSize(6.5).font("Helvetica-Bold");
           for (const c of cols) {
-            const tx = c.align === "right" ? xOff + c.width - 3 : c.align === "center" ? xOff + c.width / 2 : xOff + 3;
-            doc.text(c.label, tx, yPos + 4, { width: c.width, align: c.align });
+            doc.text(c.label, xOff + 2, yPos + 5, { width: c.width - 5, align: c.align });
             xOff += c.width;
           }
           return yPos + 16;
@@ -2613,65 +2638,71 @@ export const terceiroContratosRouter = router({
               const parentEap = parts.slice(0, depth).join(".");
               if (!renderedGroups.has(parentEap)) {
                 renderedGroups.add(parentEap);
-                if (y > 750) { doc.addPage(); y = 40; y = drawTableHeader(y); }
+                if (y > pageBottom - 30) { doc.addPage(); y = 36; y = drawTableHeader(y); }
                 const isTop = depth === 1;
                 const bgColor = isTop ? "#e8edf4" : "#f3f5f8";
-                doc.rect(mL, y, pageW, 14).fill(bgColor);
+                doc.rect(mL, y, tableW, 14).fill(bgColor);
                 if (isTop) doc.rect(mL, y, 3, 14).fill("#d4a017");
                 doc.fillColor(primary).font("Helvetica-Bold").fontSize(7);
-                doc.text(parentEap, mL + 5, y + 3);
+                doc.text(parentEap, mL + 5, y + 4);
                 const indent = 5 + (depth - 1) * 10;
                 const nome = hierMap.get(parentEap) || `Nível ${parentEap}`;
-                doc.text(`▸ ${nome}`, mL + 45 + indent, y + 3, { width: pageW - 50 - indent });
+                doc.text(`» ${nome}`, mL + 52 + indent, y + 4, { width: tableW - 60 - indent, height: 10, ellipsis: true });
                 y += 14;
                 rowIdx = 0;
               }
             }
           }
 
-          if (y > 750) { doc.addPage(); y = 40; y = drawTableHeader(y); }
-          if (rowIdx % 2 === 0) doc.rect(mL, y, pageW, 13).fill("#fafbfc");
+          if (y > pageBottom - 20) { doc.addPage(); y = 36; y = drawTableHeader(y); }
+          if (rowIdx % 2 === 0) doc.rect(mL, y, tableW, 13).fill("#fafbfc");
+          doc.rect(destaqueX, y, destaqueW, 13).fill(rowIdx % 2 === 0 ? "#e3eefc" : DESTAQUE_BG);
           doc.fillColor("#333").font("Helvetica").fontSize(6.5);
           let xOff = mL;
           const indent = eap ? Math.max(0, (eap.split(".").length - 1) * 6) : 0;
+          const QTD = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const qtdPeriodo = item.quantidade * item.percPeriodo / 100;
+          const qtdAcumulada = item.quantidade * item.percAcumulado / 100;
           const vals = [
             { v: eap || "-", a: "left" as const },
-            { v: item.descricao.substring(0, 28), a: "left" as const },
+            { v: item.descricao.substring(0, 42), a: "left" as const },
             { v: item.unidade, a: "center" as const },
-            { v: item.quantidade.toFixed(2), a: "right" as const },
+            { v: QTD(item.quantidade), a: "right" as const },
             { v: BRL(item.valorUnitario), a: "right" as const },
             { v: BRL(item.valorTotal), a: "right" as const },
             { v: PCT(item.percAnterior), a: "right" as const },
             { v: PCT(item.percPeriodo), a: "right" as const },
-            { v: PCT(item.percAcumulado), a: "right" as const },
+            { v: `${QTD(qtdPeriodo)} ${item.unidade !== "-" ? item.unidade : ""}`.trim(), a: "right" as const },
             { v: BRL(item.valorPeriodo), a: "right" as const },
+            { v: PCT(item.percAcumulado), a: "right" as const },
+            { v: `${QTD(qtdAcumulada)} ${item.unidade !== "-" ? item.unidade : ""}`.trim(), a: "right" as const },
+            { v: BRL(item.valorAcumulado), a: "right" as const },
           ];
           for (let ci = 0; ci < cols.length; ci++) {
             const c = cols[ci];
             const cellX = ci === 1 ? xOff + indent : xOff;
             const cellW = ci === 1 ? c.width - indent : c.width;
-            const tx = c.align === "right" ? cellX + cellW - 3 : c.align === "center" ? cellX + cellW / 2 : cellX + 3;
-            doc.text(vals[ci].v, tx, y + 3, { width: cellW, align: vals[ci].a });
+            if (c.destaque) doc.font("Helvetica-Bold").fillColor("#1d4ed8"); else doc.font("Helvetica").fillColor("#333");
+            doc.text(vals[ci].v, cellX + 2, y + 4, { width: cellW - 5, align: vals[ci].a, lineBreak: false });
             xOff += c.width;
           }
-          doc.strokeColor("#e5e7eb").lineWidth(0.3).moveTo(mL, y + 13).lineTo(mL + pageW, y + 13).stroke();
+          doc.strokeColor("#e5e7eb").lineWidth(0.3).moveTo(mL, y + 13).lineTo(mL + tableW, y + 13).stroke();
           y += 13;
           rowIdx++;
         }
 
-        if (y > 750) { doc.addPage(); y = 40; }
-        doc.rect(mL, y, pageW, 16).fill("#e2e8f0");
+        if (y > pageBottom - 20) { doc.addPage(); y = 36; }
+        doc.rect(mL, y, tableW, 16).fill("#e2e8f0");
         doc.fillColor("#1e293b").font("Helvetica-Bold").fontSize(7);
-        doc.text("TOTAL", mL + 5, y + 4);
-        let totX = mL;
-        for (let i = 0; i < 5; i++) totX += cols[i].width;
-        doc.text(BRL(totalValorContrato), totX - 3, y + 4, { width: cols[5].width, align: "right" });
-        let vPerX = totX + cols[5].width + cols[6].width + cols[7].width + cols[8].width;
-        doc.text(BRL(totalValorPeriodo), vPerX - 3, y + 4, { width: cols[9].width, align: "right" });
+        doc.text("TOTAL", mL + 5, y + 5);
+        const colX = (i: number) => mL + cols.slice(0, i).reduce((s, c) => s + c.width, 0);
+        doc.text(BRL(totalValorContrato), colX(5) + 2, y + 5, { width: cols[5].width - 5, align: "right", lineBreak: false });
+        doc.fillColor("#1d4ed8").text(BRL(totalValorPeriodo), colX(9) + 2, y + 5, { width: cols[9].width - 5, align: "right", lineBreak: false });
+        doc.fillColor("#1e293b").text(BRL(totalValorAcumulado), colX(12) + 2, y + 5, { width: cols[12].width - 5, align: "right", lineBreak: false });
         y += 24;
 
         if (totalRetencoes > 0 || descontos > 0) {
-          if (y > 700) { doc.addPage(); y = 40; }
+          if (y > pageBottom - 120) { doc.addPage(); y = 36; }
           doc.font("Helvetica-Bold").fontSize(9).fillColor(primary).text("RETENÇÕES E DESCONTOS", mL, y);
           y += 14;
           doc.strokeColor(accent).lineWidth(0.8).moveTo(mL, y).lineTo(mL + 200, y).stroke();
@@ -2689,30 +2720,51 @@ export const terceiroContratosRouter = router({
           y += 8;
         }
 
-        if (y > 700) { doc.addPage(); y = 40; }
-        doc.roundedRect(mL, y, pageW, 55, 4).lineWidth(1.2).stroke(primary);
-        doc.font("Helvetica-Bold").fontSize(9).fillColor(primary).text("RESUMO FINANCEIRO", mL + 12, y + 8);
-        doc.fontSize(8).font("Helvetica").fillColor("#333");
-        const summCol = (pageW - 24) / 3;
-        doc.text(`Valor Bruto Período:`, mL + 12, y + 22);
-        doc.font("Helvetica-Bold").text(BRL(totalValorPeriodo), mL + 12, y + 32);
-        doc.font("Helvetica").text(`Retenções:`, mL + 12 + summCol, y + 22);
-        doc.font("Helvetica-Bold").text(BRL(totalRetencoes), mL + 12 + summCol, y + 32);
-        doc.font("Helvetica").text(`Descontos:`, mL + 12 + summCol * 2, y + 22);
-        doc.font("Helvetica-Bold").text(BRL(descontos), mL + 12 + summCol * 2, y + 32);
-        doc.font("Helvetica-Bold").fontSize(11).fillColor(primary);
-        doc.text(`Valor Líquido: ${BRL(valorLiquido)}`, mL + 12, y + 45);
-        y += 65;
+        if (y > pageBottom - 70) { doc.addPage(); y = 36; }
+        // ── Resumo financeiro em linha (paisagem) ──
+        doc.roundedRect(mL, y, pageW, 44, 4).lineWidth(1.2).stroke(primary);
+        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(primary).text("RESUMO FINANCEIRO", mL + 12, y + 7);
+        const summCol = (pageW - 200) / 3;
+        const summItem = (label: string, valor: string, ci: number, bold = false) => {
+          const x = mL + 12 + ci * summCol;
+          doc.font("Helvetica").fontSize(7).fillColor("#666").text(label, x, y + 20);
+          doc.font("Helvetica-Bold").fontSize(9).fillColor("#333").text(valor, x, y + 29);
+        };
+        summItem("Valor Bruto do Período", BRL(totalValorPeriodo), 0);
+        summItem("Retenções", `- ${BRL(totalRetencoes)}`, 1);
+        summItem("Descontos", `- ${BRL(descontos)}`, 2);
+        doc.roundedRect(mL + pageW - 185, y + 8, 173, 28, 3).fill("#d1fae5");
+        doc.font("Helvetica").fontSize(6.5).fillColor("#065f46").text("VALOR LÍQUIDO A PAGAR", mL + pageW - 177, y + 13);
+        doc.font("Helvetica-Bold").fontSize(12).fillColor("#065f46").text(BRL(valorLiquido), mL + pageW - 177, y + 21);
+        y += 44 + 12;
 
-        if (y > 690) { doc.addPage(); y = 40; }
-        y += 35;
-        const sigW = 180;
-        doc.strokeColor("#888").lineWidth(0.5);
-        doc.moveTo(mL + 30, y).lineTo(mL + 30 + sigW, y).stroke();
-        doc.moveTo(mL + pageW - 30 - sigW, y).lineTo(mL + pageW - 30, y).stroke();
-        doc.fontSize(7).font("Helvetica").fillColor("#666");
-        doc.text("Contratante", mL + 30, y + 5, { width: sigW, align: "center" });
-        doc.text("Contratada", mL + pageW - 30 - sigW, y + 5, { width: sigW, align: "center" });
+        // ── Assinatura digital — FCSign (sem papel) ──
+        if (y > pageBottom - 66) { doc.addPage(); y = 36; }
+        doc.roundedRect(mL, y, pageW, 58, 4).fill("#f4f6f9");
+        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(primary).text("ASSINATURA DIGITAL — FCSIGN", mL + 12, y + 8);
+        if (envelopeAss) {
+          const envStatus: Record<string, string> = { rascunho: "Envelope criado (aguardando envio)", enviado: "Enviado para assinatura", em_andamento: "Assinaturas em andamento", concluido: "ASSINADO DIGITALMENTE", cancelado: "Envelope cancelado", recusado: "Assinatura recusada" };
+          doc.font("Helvetica").fontSize(7).fillColor("#333")
+            .text(`Envelope #${envelopeAss.id} · ${envStatus[envelopeAss.status] || envelopeAss.status}${envelopeAss.dataConclusao ? ` em ${new Date(envelopeAss.dataConclusao).toLocaleDateString("pt-BR")}` : ""} · Documento com hash e trilha de auditoria no módulo FCSign.`, mL + 12, y + 20, { width: pageW - 24 });
+          let sx = mL + 12;
+          const sigColW = Math.min(240, (pageW - 24) / Math.max(1, signatariosAss.length));
+          for (const s of signatariosAss) {
+            const assinado = !!s.dataAssinatura;
+            doc.font("Helvetica-Bold").fontSize(7.5).fillColor(assinado ? "#065f46" : "#92600a").text(`${assinado ? "✓" : "…"} ${s.nome}`, sx, y + 34, { width: sigColW - 10, height: 9, ellipsis: true });
+            doc.font("Helvetica").fontSize(6.5).fillColor("#666").text(`${s.papel === "fornecedor" ? "Contratada" : "Contratante"}${assinado ? ` — assinado em ${new Date(s.dataAssinatura).toLocaleDateString("pt-BR")}` : " — pendente"}`, sx, y + 44, { width: sigColW - 10 });
+            sx += sigColW;
+          }
+        } else {
+          doc.font("Helvetica").fontSize(7).fillColor("#333")
+            .text("Este boletim é validado por assinatura eletrônica no módulo FCSign (sem papel): contratante e contratada assinam pelo link recebido, com hash do documento e trilha de auditoria. Envie para assinatura pelo botão \"Assinar no FCSign\" na medição.", mL + 12, y + 20, { width: pageW - 24 });
+          const sigW = 220;
+          doc.strokeColor("#9aa7b8").lineWidth(0.5);
+          doc.moveTo(mL + 40, y + 46).lineTo(mL + 40 + sigW, y + 46).stroke();
+          doc.moveTo(mL + pageW - 40 - sigW, y + 46).lineTo(mL + pageW - 40, y + 46).stroke();
+          doc.fontSize(6.5).font("Helvetica").fillColor("#666");
+          doc.text(`Contratante — ${company?.name || ""}`, mL + 40, y + 49, { width: sigW, align: "center" });
+          doc.text(`Contratada — ${empresa?.razaoSocial || empresa?.nomeFantasia || ""}`, mL + pageW - 40 - sigW, y + 49, { width: sigW, align: "center" });
+        }
 
         doc.end();
       });

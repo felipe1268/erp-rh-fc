@@ -231,6 +231,7 @@ export const integrasignRouter = router({
       contratoTerceiroId: z.number().optional(),
       ordemCompraId: z.number().optional(),
       obraId: z.number().optional(),
+      medicaoTerceiroId: z.number().optional(),
       titulo: z.string(),
       descricao: z.string().optional(),
       textoContrato: z.string().optional(),
@@ -245,6 +246,8 @@ export const integrasignRouter = router({
       })),
     }))
     .mutation(async ({ input, ctx }) => {
+      // Rev. 4794 — tenancy guard (antes o endpoint confiava em input.companyId)
+      await assertIntegraSignCompanyAccess((ctx as any).user, input.companyId);
       const db = await getDb();
       const userId = (ctx as any).session?.userId;
       const userName = (ctx as any).session?.name || "Sistema";
@@ -349,14 +352,26 @@ export const integrasignRouter = router({
         signatariosFinais.push(...reordenados.map((s, i) => ({ ...s, ordemAssinatura: i + 1 })));
       }
 
+      // Rev. 4793 — Boletim de Medição de terceiros: o documento é gerado
+      // server-side a partir do banco (fiel aos dados no momento do envio).
+      let textoDocumento = input.textoContrato ?? null;
+      let tituloFinal = input.titulo;
+      if (input.medicaoTerceiroId && !textoDocumento) {
+        const { buildBoletimMedicaoHtml } = await import("../boletimMedicaoHtml");
+        const boletim = await buildBoletimMedicaoHtml(db, input.medicaoTerceiroId, input.companyId);
+        textoDocumento = boletim.html;
+        if (!tituloFinal || tituloFinal === "auto") tituloFinal = boletim.titulo;
+      }
+
       const [envelope] = await db.insert(integrasignEnvelopes).values({
         companyId: input.companyId,
         contratoTerceiroId: input.contratoTerceiroId ?? null,
         ordemCompraId: input.ordemCompraId ?? null,
         obraId: input.obraId ?? null,
-        titulo: input.titulo,
+        medicaoTerceiroId: input.medicaoTerceiroId ?? null,
+        titulo: tituloFinal,
         descricao: input.descricao ?? null,
-        textoContrato: input.textoContrato ?? null,
+        textoContrato: textoDocumento,
         status: "rascunho",
         totalSignatariosObrigatorios: signatariosFinais.filter(s => s.papel !== "testemunha").length,
         criadoPorId: userId,

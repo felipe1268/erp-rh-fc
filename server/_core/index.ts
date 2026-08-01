@@ -1018,6 +1018,10 @@ Regras:
           await db.execute(sql`ALTER TABLE integrasign_envelopes ADD COLUMN IF NOT EXISTS excluido_em TIMESTAMP`);
           console.log(`[SyncSchema+] Rev. 2898: coluna excluido_em garantida em integrasign_envelopes (soft-delete).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA integrasign_envelopes.excluido_em:`, e?.message || e); }
+        try {
+          await db.execute(sql`ALTER TABLE integrasign_envelopes ADD COLUMN IF NOT EXISTS medicao_terceiro_id INTEGER`);
+          console.log(`[SyncSchema+] Rev. 4793: coluna medicao_terceiro_id garantida em integrasign_envelopes (assinatura de Boletim de Medição).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA integrasign_envelopes.medicao_terceiro_id:`, e?.message || e); }
 
         // Rev. 3179/3181 — soft-delete de linhas de extrato bancário ("Limpar extrato" sem
         // hard DELETE; TODAS as leituras/dedup filtram `excluido_em IS NULL`). O self-heal
