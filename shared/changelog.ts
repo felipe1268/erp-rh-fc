@@ -1,4 +1,16 @@
 /**
+ * Rev. 4784 - LEVANTAMENTO: PLANTA COM LEVANTAMENTO SO APAGA COM SENHA DO MASTER
+ *
+ * Poka-yoke pedido pelo usuario: remover uma planta que ja tem trechos medidos
+ * (contornos ativos) exige a senha do Administrador Master.
+ * - SERVER (autoridade): excluirPdf conta contornos ativos da planta; se >0 e
+ *   nao veio senha, retorna PRECONDITION_FAILED; com senha, valida via bcrypt
+ *   contra os usuarios admin_master. Planta vazia sai direto.
+ * - CLIENT: ao tocar no X, se a planta tem contornos abre dialog vermelho com
+ *   a contagem de trechos + campo de senha; planta vazia mantem a confirmacao
+ *   simples. Fallback: se o server achar contornos que o client nao viu, o
+ *   dialog de senha abre do mesmo jeito.
+ *
  * Rev. 4783 - LEVANTAMENTO DE CAMPO: FLUXO POKA-YOKE (categoria manda, DXF-only)
  *
  * Refeito o fluxo da pagina seguindo mistake-proofing:

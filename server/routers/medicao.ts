@@ -20,6 +20,7 @@ import {
   orcamentos,
   obras,
   comprasOrdens,
+  users,
 } from "../../drizzle/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
@@ -1264,9 +1265,30 @@ export const medicaoRouter = router({
     }),
 
   excluirPdf: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({ id: z.number(), companyId: z.number(), senhaMaster: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
+      // Rev. 4784 — poka-yoke: planta COM levantamento (contornos ativos) só sai
+      // com a senha do Administrador Master. Planta vazia pode sair direto.
+      const [{ qtd } = { qtd: 0 }] = await db
+        .select({ qtd: sql<number>`COUNT(*)::int` })
+        .from(medicaoCampoContornos)
+        .where(and(
+          eq(medicaoCampoContornos.pdfId, input.id),
+          eq(medicaoCampoContornos.companyId, input.companyId),
+          isNull(medicaoCampoContornos.deletedAt),
+        ));
+      if (Number(qtd) > 0) {
+        if (!input.senhaMaster) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: `PLANTA_COM_LEVANTAMENTO:${qtd}` });
+        }
+        const masters = await db.select({ password: users.password }).from(users)
+          .where(and(eq(users.role, "admin_master"), isNull(users.deletedAt)));
+        const bcrypt = await import("bcryptjs");
+        const ok = masters.some((m) => m.password && bcrypt.compareSync(input.senhaMaster!, m.password));
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Senha do Administrador Master incorreta. Exclusão negada." });
+      }
       await db.update(medicaoCampoPdfs)
         .set({ deletedAt: new Date() })
         .where(and(eq(medicaoCampoPdfs.id, input.id), eq(medicaoCampoPdfs.companyId, input.companyId)));

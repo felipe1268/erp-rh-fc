@@ -605,6 +605,9 @@ export default function MedicaoLevantamento() {
   // ferramenta sugerida). "" = sem serviço (comportamento antigo).
   const [servicoAtivo, setServicoAtivo] = useState<string>("");
   const [servicosDialogOpen, setServicosDialogOpen] = useState(false);
+  // Rev. 4784 — remover planta COM levantamento exige senha do ADM Master.
+  const [senhaPlantaDlg, setSenhaPlantaDlg] = useState<{ pdf: any; qtd: number } | null>(null);
+  const [senhaPlanta, setSenhaPlanta] = useState("");
   // Rev. 4783 — "incluir categoria": criação rápida direto da paleta.
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [catNome, setCatNome] = useState("");
@@ -1568,7 +1571,21 @@ export default function MedicaoLevantamento() {
                   className={`px-3 py-1.5 rounded-lg border text-sm flex items-center gap-1.5 ${pdfSelId === p.id ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-gray-400"}`}
                 >
                   <FileText className="h-3.5 w-3.5" />{p.nome}
-                  <X className="h-3 w-3 ml-1 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); askConfirm({ title: "Remover planta?", description: `A planta "${p.nome}" e todos os contornos desenhados nela serão removidos. Esta ação não pode ser desfeita.`, confirmText: "Remover", onConfirm: () => excluirPdfM.mutate({ id: p.id, companyId }) }); }} />
+                  <X className="h-3 w-3 ml-1 opacity-50 hover:opacity-100" onClick={(e) => {
+                    e.stopPropagation();
+                    // Rev. 4784 — poka-yoke: planta com levantamento NÃO apaga sem a
+                    // senha do ADM Master (o server valida de novo, aqui é só a UX).
+                    const qtd = ((campo?.contornos ?? []) as any[]).filter((c: any) => c.pdfId === p.id && !c.deletedAt).length;
+                    if (qtd > 0) { setSenhaPlanta(""); setSenhaPlantaDlg({ pdf: p, qtd }); return; }
+                    askConfirm({ title: "Remover planta?", description: `A planta "${p.nome}" será removida. Esta ação não pode ser desfeita.`, confirmText: "Remover", onConfirm: () => excluirPdfM.mutate({ id: p.id, companyId }, {
+                      // fallback: se o server achar contornos que o client não viu, pede a senha
+                      onError: (err: any) => {
+                        const m = String(err?.message || "").match(/PLANTA_COM_LEVANTAMENTO:(\d+)/);
+                        if (m) { setSenhaPlanta(""); setSenhaPlantaDlg({ pdf: p, qtd: Number(m[1]) }); }
+                        else alert(err?.message || "Erro ao remover a planta.");
+                      },
+                    }) });
+                  }} />
                 </button>
               ))}
               <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadPdfM.isPending} onClick={() => pdfInputRef.current?.click()} title="Somente DXF: medidas exatas do CAD, sem calibrar nem conferir escala. Tem DWG? O sistema explica como converter.">
@@ -2289,6 +2306,48 @@ export default function MedicaoLevantamento() {
       </AlertDialog>
 
       {/* Rev. 4780 — Configurar SERVIÇOS do levantamento (catálogo híbrido) */}
+      {/* Rev. 4784 — remover planta com levantamento: senha do ADM Master */}
+      <Dialog open={!!senhaPlantaDlg} onOpenChange={(v) => { if (!v) { setSenhaPlantaDlg(null); setSenhaPlanta(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-700">Planta com levantamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-700 break-words">
+              A planta <span className="font-semibold">"{senhaPlantaDlg?.pdf?.nome}"</span> tem{" "}
+              <span className="font-semibold">{senhaPlantaDlg?.qtd} trecho(s) medido(s)</span>. Remover a planta apaga
+              todo esse levantamento — e esta ação não pode ser desfeita.
+            </p>
+            <p className="text-sm font-bold text-red-900">A exclusão exige a senha do Administrador Master.</p>
+            <Input
+              type="password"
+              autoComplete="off"
+              placeholder="Senha do Administrador Master…"
+              value={senhaPlanta}
+              onChange={(e) => setSenhaPlanta(e.target.value)}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setSenhaPlantaDlg(null); setSenhaPlanta(""); }}>Cancelar</Button>
+              <Button
+                variant="destructive"
+                disabled={!senhaPlanta.trim() || excluirPdfM.isPending}
+                onClick={() =>
+                  excluirPdfM.mutate(
+                    { id: senhaPlantaDlg!.pdf.id, companyId, senhaMaster: senhaPlanta.trim() },
+                    {
+                      onSuccess: () => { setSenhaPlantaDlg(null); setSenhaPlanta(""); },
+                      onError: (err: any) => alert(err?.message || "Senha incorreta. Exclusão negada."),
+                    },
+                  )
+                }
+              >
+                {excluirPdfM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remover planta e levantamento"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Rev. 4783 — criação rápida de categoria (poka-yoke: nome + o que ela mede) */}
       <Dialog open={catDialogOpen} onOpenChange={(v) => { setCatDialogOpen(v); if (!v) { setCatNome(""); setCatTipo("area"); } }}>
         <DialogContent className="max-w-md">
