@@ -1,4 +1,26 @@
 /**
+ * Rev. 4792 - LEVANTAMENTO: SUBCATEGORIAS (ABINHAS), LINHA ESTICADA E ETIQUETAS
+ *
+ * Subcategorias de servico (pedido: pintura de teto/parede/piso):
+ * - Pintura nasce com 3 subcategorias (Teto/Parede/Piso); catalogos antigos
+ *   ganham as 3 automaticamente (self-heal, sem duplicar).
+ * - "+ Categoria" agora cria SUBCATEGORIA de qualquer categoria (Chapisco
+ *   Teto, Pastilha Parede...): herda cor (tom mais escuro) e tipo de medida.
+ * - Paleta agrupada: um chip unico por categoria-mae; ao seleciona-lo aparecem
+ *   ABINHAS embaixo (Geral/Teto/Parede/Piso) com totais individuais.
+ * - Lista lateral tambem filtra pela categoria ativa ("Ver todos" libera).
+ * Ferramenta Linha (L x A) mais pratica:
+ * - Alem do ponto-a-ponto, da para ESTICAR a linha num gesto so (arrastar do
+ *   inicio ao fim da parede, com OSnap nos 2 extremos); solta, digita a
+ *   altura e a area = comprimento x altura ja entra numerada.
+ * Demarcacao visivel das paredes medidas:
+ * - Linha GROSSA (espessura fixa em pixels) com bolinhas nos extremos.
+ * - Etiqueta numerada (bolinha com o nº do contorno) ao lado de cada medicao
+ *   (tambem nas areas, no centro); no Selecionar, tocar na etiqueta seleciona.
+ * - Botao RENUMERAR: reordena os numeros da pagina em ordem de leitura
+ *   (esquerda p/ direita, cima p/ baixo), com confirmacao.
+ */
+/**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO
  *
  * Navegacao redesenhada (pedido: "tela retangular fixa; 2 dedos movem/zoom"):

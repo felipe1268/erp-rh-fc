@@ -388,6 +388,10 @@ export default function MedicaoLevantamento() {
 
   // Pré-visualização do arrasto (retângulo) e do traço livre.
   const [dragRect, setDragRect] = useState<{ a: GeoPonto; b: GeoPonto } | null>(null);
+  // Rev. 4792 — Linha (L×A) esticada: arrasta do início ao fim da parede num
+  // gesto só (sem clicar ponto a ponto). Toque simples continua marcando ponto.
+  const [dragLine, setDragLine] = useState<{ a: GeoPonto; b: GeoPonto } | null>(null);
+  const dragLineRef = useRef<{ a: GeoPonto; b: GeoPonto } | null>(null); // espelho síncrono (pointerup não pode ler state atrasado)
   const [freePts, setFreePts] = useState<GeoPonto[]>([]);
 
   // Rev. 3111 — ajuste de um contorno JÁ criado (handles de redimensionamento).
@@ -425,7 +429,7 @@ export default function MedicaoLevantamento() {
   } | null>(null);
   const zoomInnerRef = useRef<HTMLDivElement | null>(null);
   const gestRef = useRef<{
-    mode: "idle" | "pending" | "pan" | "rect" | "free";
+    mode: "idle" | "pending" | "pan" | "rect" | "free" | "line";
     pointerId: number;
     startClient: { x: number; y: number };
     startNorm: GeoPonto;
@@ -954,6 +958,7 @@ export default function MedicaoLevantamento() {
       gestRef.current = null;
       setDragRect(null);
       setFreePts([]);
+      dragLineRef.current = null; setDragLine(null); // linha em curso perde pro gesto de 2 dedos
       // ajuste de contorno em curso perde pro gesto de 2 dedos (sem salvar)
       if (editRef.current) { editRef.current = null; setEditDrag(null); setSnapHit(null); }
       const pts = [...ptrsRef.current.values()];
@@ -978,11 +983,12 @@ export default function MedicaoLevantamento() {
     e.preventDefault();
     try { overlayRef.current?.setPointerCapture(e.pointerId); } catch { /* */ }
     let startNorm = getPtFromClient(e.clientX, e.clientY);
-    if (tool === "retangulo") { const h = applySnap(startNorm); if (h) { startNorm = h.p; setSnapHit(h); } } // OSnap no 1º canto
+    if (tool === "retangulo" || tool === "parede") { const h = applySnap(startNorm); if (h) { startNorm = h.p; setSnapHit(h); } } // OSnap no 1º ponto
     const cont = canvasWrapRef.current;
-    let mode: "pending" | "rect" | "free" = "pending";
+    let mode: "pending" | "rect" | "free" | "line" = "pending";
     if (tool === "retangulo") mode = "rect";
     else if (tool === "livre") mode = "free";
+    else if (tool === "parede") mode = "line"; // arrastou = estica a linha; toque = ponto
     gestRef.current = {
       mode, pointerId: e.pointerId, startClient: { x: e.clientX, y: e.clientY },
       startNorm, startPan: panRef.current ?? { x: 0, y: 0 }, moved: false,
@@ -1030,6 +1036,11 @@ export default function MedicaoLevantamento() {
         const raw = getPtFromClient(e.clientX, e.clientY);
         const h = applySnap(raw); setSnapHit(h); // OSnap no canto oposto
         setDragRect({ a: g.startNorm, b: h ? h.p : raw });
+      } else if (g.mode === "line" && g.moved) {
+        const raw = getPtFromClient(e.clientX, e.clientY);
+        const h = applySnap(raw); setSnapHit(h); // OSnap no 2º extremo
+        const l = { a: g.startNorm, b: h ? h.p : raw };
+        dragLineRef.current = l; setDragLine(l);
       } else if (g.mode === "free") {
         const p = getPtFromClient(e.clientX, e.clientY);
         setFreePts((prev) => {
@@ -1071,6 +1082,7 @@ export default function MedicaoLevantamento() {
     if (g.mode === "pan") return;          // só arrastou (pan)
     if (g.mode === "rect") { finalizarRetangulo(); return; }
     if (g.mode === "free") { finalizarLivre(); return; }
+    if (g.mode === "line" && g.moved) { void finalizarLinha(); return; }
     if (!g.moved) onTap(g.startNorm);      // toque limpo = adiciona ponto
   }
 
@@ -1244,6 +1256,18 @@ export default function MedicaoLevantamento() {
     finalizarContorno("area", corners, 0, 0); // ferramenta permanece ativa
   }
 
+  // Rev. 4792 — Linha esticada (parede): 2 extremos arrastados → pergunta a
+  // altura e a área = comprimento × altura. Numeração é automática (numero).
+  async function finalizarLinha() {
+    const l = dragLineRef.current; // ref síncrona: o último move pode ainda não ter re-renderizado
+    dragLineRef.current = null;
+    setDragLine(null); setSnapHit(null);
+    if (!l || distancia(l.a, l.b) < 0.004) return; // muito curta
+    const v = await askNumber({ title: "Parede", hint: "Altura da parede — a área = comprimento × altura.", suffix: "m" });
+    if (!(v && v > 0)) return;
+    finalizarContorno("parede", [l.a, l.b], v, 0); // ferramenta permanece ativa
+  }
+
   // Desenho livre: traço da caneta/dedo → polígono simplificado (tipo "area").
   function finalizarLivre() {
     const pts = freePts;
@@ -1393,6 +1417,55 @@ export default function MedicaoLevantamento() {
       rotulo: c.rotulo ?? null,
       servico: c.servico ?? null,
     });
+  }
+
+  // Rev. 4792 — RENUMERAR: reordena os números da página em ordem de leitura
+  // (esquerda→direita, cima→baixo, por faixas horizontais) — claro e organizado.
+  async function renumerarContornos() {
+    const cs = [...contornosPagina];
+    if (!cs.length) return;
+    const anchor = (c: any): GeoPonto => {
+      let pts: GeoPonto[] = [];
+      try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+      if (!pts.length) return { x: 0.5, y: 0.5 };
+      let sx = 0, sy = 0;
+      for (const p of pts) { sx += p.x; sy += p.y; }
+      return { x: sx / pts.length, y: sy / pts.length };
+    };
+    const BANDA = 0.06; // faixa horizontal: contornos "na mesma linha" ordenam por x
+    const ordered = cs
+      .map((c) => ({ c, p: anchor(c) }))
+      .sort((a, b) => (Math.round(a.p.y / BANDA) - Math.round(b.p.y / BANDA)) || (a.p.x - b.p.x) || ((a.c.numero ?? 0) - (b.c.numero ?? 0)))
+      .map((x) => x.c);
+    setBulkBusy(true);
+    try {
+      for (let i = 0; i < ordered.length; i++) {
+        const c = ordered[i];
+        const novo = i + 1;
+        if ((c.numero ?? 0) === novo) continue;
+        await off.saveContorno({
+          id: c.id, uuid: c.uuid, pdfId: pdfSelId!,
+          pagina: c.pagina ?? pagina,
+          tipo: c.tipo as TipoContorno,
+          cor: c.cor ?? COR_TIPO[c.tipo as TipoContorno],
+          geometriaJson: c.geometriaJson ?? "[]",
+          espessura: c.espessura ?? null,
+          metrosPorUnidade: c.metrosPorUnidade ?? null,
+          area: c.area ?? null,
+          perimetro: c.perimetro ?? null,
+          volume: c.volume ?? null,
+          contagem: c.contagem ?? null,
+          quantidade: c.quantidade ?? null,
+          unidade: c.unidade ?? null,
+          numero: novo,
+          orcamentoItemId: c.orcamentoItemId ?? null,
+          itemEapCodigo: c.itemEapCodigo ?? null,
+          itemDescricao: c.itemDescricao ?? null,
+          rotulo: c.rotulo ?? null,
+          servico: c.servico ?? null,
+        });
+      }
+    } finally { setBulkBusy(false); }
   }
 
   function bindItem(contornoId: number, orcamentoItemId: string) {
@@ -2384,6 +2457,18 @@ export default function MedicaoLevantamento() {
                               onPointerCancel: onHandleUp,
                               style: { cursor: "move" as const, pointerEvents: "all" as const },
                             } : {};
+                            // Rev. 4792 — linha (parede/linear) DEMARCADA: traço grosso
+                            // em px de tela (vectorEffect) + bolinha nos extremos.
+                            if (!fecha) {
+                              return (
+                                <g key={c.id}>
+                                  <path d={d} fill="none" stroke={sel ? "#1d4ed8" : cor} strokeOpacity={0.9} strokeWidth={sel ? 7 : 5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" {...moveProps} />
+                                  {pts.map((p, i) => (
+                                    <circle key={`e-${i}`} cx={p.x} cy={p.y} r={0.006} fill="#fff" stroke={sel ? "#1d4ed8" : cor} strokeWidth={2.2} vectorEffect="non-scaling-stroke" />
+                                  ))}
+                                </g>
+                              );
+                            }
                             return (
                               <path key={c.id} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? (sel ? Math.min(0.55, fillOpacity + 0.18) : fillOpacity) : 0} stroke={sel ? "#1d4ed8" : cor} strokeWidth={(fecha ? 0.003 : 0.004) + (sel ? 0.0025 : 0)} vectorEffect="non-scaling-stroke" {...moveProps} />
                             );
@@ -2452,6 +2537,14 @@ export default function MedicaoLevantamento() {
                             </>
                           )}
                           {/* preview do retângulo (arrasto) */}
+                          {/* Rev. 4792 — preview da linha esticada (parede) */}
+                          {dragLine && (
+                            <g>
+                              <line x1={dragLine.a.x} y1={dragLine.a.y} x2={dragLine.b.x} y2={dragLine.b.y} stroke={corPreview} strokeWidth={5} strokeLinecap="round" strokeDasharray="8 6" vectorEffect="non-scaling-stroke" />
+                              <circle cx={dragLine.a.x} cy={dragLine.a.y} r={0.006} fill="#fff" stroke={corPreview} strokeWidth={2.2} vectorEffect="non-scaling-stroke" />
+                              <circle cx={dragLine.b.x} cy={dragLine.b.y} r={0.006} fill="#fff" stroke={corPreview} strokeWidth={2.2} vectorEffect="non-scaling-stroke" />
+                            </g>
+                          )}
                           {dragRect && (
                             <rect
                               x={Math.min(dragRect.a.x, dragRect.b.x)}
@@ -2490,6 +2583,51 @@ export default function MedicaoLevantamento() {
                             return <circle cx={p.x} cy={p.y} r={r} {...common} />; // node
                           })()}
                         </svg>
+                        {/* Rev. 4792 — ETIQUETAS numeradas ("target"): bolinha com o nº do
+                            contorno, deslocada da geometria (setinha implícita no leader do
+                            SVG p/ linhas). Toca na etiqueta = seleciona o contorno. */}
+                        {contornosVisiveis.map((c) => {
+                          if (c.tipo === "contagem") return null;
+                          let pts: GeoPonto[] = [];
+                          try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+                          if (editDrag && editDrag.contId === c.id) pts = editDrag.pts;
+                          if (pts.length < 2) return null;
+                          const fecha = FECHA_POLIGONO(c.tipo);
+                          const cor = c.cor || COR_TIPO[c.tipo as TipoContorno] || "#2563eb";
+                          const sel = selContornos.has(c.id);
+                          let lx = 0, ly = 0;
+                          if (fecha) {
+                            for (const p of pts) { lx += p.x; ly += p.y; }
+                            lx /= pts.length; ly /= pts.length;
+                          } else {
+                            // ponto médio do segmento central + deslocamento perpendicular
+                            const i = Math.floor((pts.length - 1) / 2);
+                            const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)];
+                            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+                            const dx = b.x - a.x, dy = b.y - a.y;
+                            const len = Math.hypot(dx, dy) || 1;
+                            lx = mx + (-dy / len) * 0.02; ly = my + (dx / len) * 0.02;
+                          }
+                          return (
+                            <button
+                              key={`lab-${c.id}`}
+                              type="button"
+                              className="absolute z-10 rounded-full font-bold tabular-nums shadow-sm border-2 flex items-center justify-center"
+                              style={{
+                                left: `${lx * 100}%`, top: `${ly * 100}%`, transform: "translate(-50%, -50%)",
+                                width: 22, height: 22, fontSize: 10,
+                                backgroundColor: sel ? "#1d4ed8" : "#fff",
+                                borderColor: sel ? "#1d4ed8" : cor,
+                                color: sel ? "#fff" : cor,
+                                pointerEvents: tool === "select" ? "auto" : "none",
+                              }}
+                              onClick={(e) => { e.stopPropagation(); setSelContornos(new Set([c.id])); }}
+                              title={`${c.rotulo ? String(c.rotulo).toUpperCase() : LABEL_TIPO[c.tipo as TipoContorno] || c.tipo} #${String(c.numero ?? "").padStart(3, "0")}`}
+                            >
+                              {c.numero ?? "•"}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -2511,12 +2649,29 @@ export default function MedicaoLevantamento() {
                       : "Contornos desta página"}
                   </span>
                 </h3>
-                {/* Rev. 4791 — a lista segue a categoria ativa; este botãozinho libera todas */}
-                {servicoAtivo ? (
-                  <Button size="sm" variant={verTodasCamadas ? "secondary" : "outline"} className="h-7 px-2 text-[11px] gap-1 shrink-0" onClick={() => setVerTodasCamadas((v) => !v)}>
-                    <Layers className="h-3.5 w-3.5" />{verTodasCamadas ? "Só a categoria" : "Ver todos"}
-                  </Button>
-                ) : null}
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Rev. 4792 — renumera na ordem de leitura (esq→dir, cima→baixo) */}
+                  {contornosPagina.length > 1 && (
+                    <Button
+                      size="sm" variant="outline" className="h-7 px-2 text-[11px] gap-1" disabled={bulkBusy}
+                      title="Renumerar todos os contornos desta página da esquerda para a direita e de cima para baixo"
+                      onClick={() => askConfirm({
+                        title: "Renumerar contornos?",
+                        description: "Todos os contornos desta página serão renumerados da esquerda para a direita e de cima para baixo (1, 2, 3…).",
+                        confirmText: "Renumerar",
+                        onConfirm: () => { void renumerarContornos(); },
+                      })}
+                    >
+                      {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Hash className="h-3.5 w-3.5" />}Renumerar
+                    </Button>
+                  )}
+                  {/* Rev. 4791 — a lista segue a categoria ativa; este botãozinho libera todas */}
+                  {servicoAtivo ? (
+                    <Button size="sm" variant={verTodasCamadas ? "secondary" : "outline"} className="h-7 px-2 text-[11px] gap-1" onClick={() => setVerTodasCamadas((v) => !v)}>
+                      <Layers className="h-3.5 w-3.5" />{verTodasCamadas ? "Só a categoria" : "Ver todos"}
+                    </Button>
+                  ) : null}
+                </div>
               </div>
               {vincularEmptyHint && contornosPagina.length > 0 ? (
                 <div className="mb-2 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700">

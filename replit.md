@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4792** — Levantamento: subcategorias com abinhas (Pintura Teto/Parede/Piso, "+ Categoria" cria sub de qualquer uma, chip único por mãe); linha esticada L×A num gesto só; traço grosso + etiquetas numeradas (bolinha com nº) nas medições; lista lateral filtra pela categoria ativa.
 - **Rev. 4791** — Levantamento: viewport FIXO estilo CAD (sem scroll; 2 dedos movem/zoom livre, 1 dedo só desenha/seleciona; botão Ajustar à tela + re-fit ao girar o iPad); camadas por serviço (só a ativa/todas); arrastar contorno inteiro no Selecionar; alças fixas em px; rótulo MAIÚSCULO por contorno.
 - **Rev. 4790** — Levantamento: workspace de tablet — página de altura fixa sem rolagem (planta ocupa todo o espaço, painel lateral com rolagem própria, cabeçalho 1 linha com sync em popover); abre centralizada e inteira (fit); em pé (<md) 2 linhas travadas (planta ~62% + painel).
 - **Rev. 4789** — Levantamento: escala do DXF robusta — aglomerados espaciais (escolhe a planta via extents/geometria), plausibilidade de unidade (3–1000 m), escala deduzida mantém Calibrar visível; sidecar versionado (DXF_ALGO_VERSION).
