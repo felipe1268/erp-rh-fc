@@ -3101,7 +3101,8 @@ export const terceiroContratosRouter = router({
             for (const f of fdsDaMedicao) {
               if (y > pageBottom - 20) { doc.addPage(); y = 36; doc.font("Helvetica").fontSize(7.5).fillColor("#555"); }
               const dt = f.dataFd ? new Date(`${String(f.dataFd).slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR") : "-";
-              doc.text(`   • ${dt} — [${tipoLabelPdf[(f as any).tipo || "fd"] || "Outro"}] ${f.descricao}${f.origem === "auto" ? " (desconto automático)" : ""}: - ${BRL(n(f.valor))}`, mL, y, { width: pageW - 20 });
+              const origemTxt = f.origem === "auto" ? " (desconto automático)" : f.origem === "avulso" ? " (lançado fora da medição)" : "";
+              doc.text(`   • ${dt} — [${tipoLabelPdf[(f as any).tipo || "fd"] || "Outro"}] ${f.descricao}${origemTxt}: - ${BRL(n(f.valor))}`, mL, y, { width: pageW - 20 });
               y += 12;
             }
             doc.fontSize(8).fillColor("#333");

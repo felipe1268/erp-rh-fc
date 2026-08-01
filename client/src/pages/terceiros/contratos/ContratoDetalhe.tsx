@@ -2598,7 +2598,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   </tfoot>
                     </table>
                     </div>
-                    <RetencoesSec m={m} contrato={contrato} isEditable={editavel} fdTotal={fdsAll.filter((f: any) => f.medicaoId === m.id).reduce((s: number, f: any) => s + (Number(f.valor) || 0), 0)} />
+                    <RetencoesSec m={m} contrato={contrato} isEditable={editavel} fdRows={fdsAll.filter((f: any) => f.medicaoId === m.id)} />
                   </>) : (
                     <div className="p-4 text-center text-xs text-gray-400">
                       Itens da medição não carregados. Expanda para ver detalhes.
@@ -2977,7 +2977,10 @@ function ComparativoTab({ contrato, id }: { contrato: any; id: number }) {
   );
 }
 
-function RetencoesSec({ m, contrato, isEditable, fdTotal = 0 }: { m: any; contrato: any; isEditable: boolean; fdTotal?: number }) {
+function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contrato: any; isEditable: boolean; fdRows?: any[] }) {
+  // Rev. 4802 — card de descontos clicável: lista ponto a ponto (o que e quando).
+  const fdTotal = fdRows.reduce((s: number, f: any) => s + (Number(f.valor) || 0), 0);
+  const [fdListOpen, setFdListOpen] = useState(false);
   const [editingDescontos, setEditingDescontos] = useState(false);
   const [editingConfig, setEditingConfig] = useState(false);
   const [descontos, setDescontos] = useState(Number(m.descontos || 0));
@@ -3257,15 +3260,43 @@ function RetencoesSec({ m, contrato, isEditable, fdTotal = 0 }: { m: any; contra
             <div className="font-semibold text-orange-600">{descontos > 0 ? `- ${BRL(descontos)}` : BRL(0)}</div>
           )}
         </div>
-        <div className="bg-amber-50 rounded-lg p-2.5">
-          <div className="text-gray-400 text-[10px]">FD / Descontos lançados</div>
+        <div
+          className={`bg-amber-50 rounded-lg p-2.5 ${fdRows.length > 0 ? "cursor-pointer hover:bg-amber-100 transition" : ""}`}
+          onClick={() => fdRows.length > 0 && setFdListOpen(v => !v)}
+          role={fdRows.length > 0 ? "button" : undefined}
+        >
+          <div className="text-gray-400 text-[10px] flex items-center gap-1">
+            FD / Descontos lançados
+            {fdRows.length > 0 && (fdListOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />)}
+          </div>
           <div className="font-semibold text-amber-700">{fdTotal > 0 ? `- ${BRL(fdTotal)}` : BRL(0)}</div>
-          {fdTotal > 0 && <div className="text-[10px] text-gray-400 mt-0.5">detalhe no popup Detalhes</div>}
+          {fdRows.length > 0 && <div className="text-[10px] text-gray-400 mt-0.5">{fdListOpen ? "toque para ocultar" : `${fdRows.length} lançamento(s) — toque para ver`}</div>}
         </div>
         <div className="bg-blue-50 rounded-lg p-2.5">
           <div className="text-gray-400 text-[10px]">Valor Líquido</div>
           <div className="font-bold text-blue-700">{BRL(valorLiquido)}</div>
         </div>
+        {fdListOpen && fdRows.length > 0 && (
+          <div className="col-span-2 md:col-span-5 bg-white border border-amber-200 rounded-lg p-2 space-y-1">
+            <div className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide">Descontos deste período — ponto a ponto</div>
+            {[...fdRows].sort((a: any, b: any) => String(a.dataFd || "").localeCompare(String(b.dataFd || "")) || (a.id - b.id)).map((f: any) => {
+              const td = TIPO_DESCONTO[f.tipo || "fd"] || TIPO_DESCONTO.outro;
+              return (
+                <div key={f.id} className="flex items-start gap-2 text-[11px] border-b border-gray-50 last:border-0 pb-1 last:pb-0">
+                  <span className="text-gray-400 whitespace-nowrap">{f.dataFd ? fmtDate(String(f.dataFd).slice(0, 10)) : "—"}</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${td.cls} whitespace-nowrap`}>{td.label}</span>
+                  <span className="text-gray-700 break-words min-w-0 flex-1">
+                    {f.descricao}
+                    {f.origem === "auto" && <span className="text-gray-400"> (automático)</span>}
+                    {f.origem === "avulso" && <span className="text-gray-400"> (lançado fora da medição)</span>}
+                  </span>
+                  <span className="font-semibold text-amber-700 whitespace-nowrap">- {BRL(Number(f.valor) || 0)}</span>
+                </div>
+              );
+            })}
+            <div className="flex justify-end text-[11px] font-bold text-amber-800 pt-1">Total: - {BRL(fdTotal)}</div>
+          </div>
+        )}
         {pRetTecnica > 0 && (
           <div className="col-span-5 bg-amber-50 border border-amber-200 rounded p-2 text-[10px] text-amber-700 space-y-0.5">
             <div className="font-semibold">* Retenção Técnica ({pRetTecnica}%) — liberada somente após a última medição do contrato.</div>
