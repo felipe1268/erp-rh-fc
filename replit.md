@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4780** — Levantamento de Campo: paleta de serviços (alvenaria, chapisco, emboço, reboco...) tablet-first; contorno nasce classificado; derivados automáticos por nº de faces; vínculo EAP 1x por serviço com consolidação automática em R$.
 - **Rev. 4779** — Medições de Terceiros: seletor de ano/mês movido para o topo da tela (principal); esteira e acompanhamento foram para baixo da lista.
 - **Rev. 4778** — Terceiros: esteira completa Compras→Contrato→Assinatura→Medição→Financeiro na tela de Medições, acompanhamento por contrato, e título GARANTIDO no Contas a Pagar ao aprovar medição (bypassa toggle de auto-import, com badge/reenvio e alerta se falhar).
 - **Rev. 4777** — SST: filtro da Análise de Atestados & Acidentes agora usa o PeriodSelectorCard padrão (ano + pills de meses + Ano todo) com T1–T4/S1–S2 e datas personalizadas colapsadas atrás do botão "Personalizar".

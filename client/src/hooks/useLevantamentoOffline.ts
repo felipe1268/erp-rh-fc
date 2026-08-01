@@ -105,8 +105,11 @@ export function useLevantamentoOffline(args: {
   // `undefined` = caminho normal (cliente/obra); `null` = override carregando;
   // array = itens resolvidos (já no formato consolidável).
   itensOverride?: any[] | null;
+  // Rev. 4780 — catálogo de serviços do levantamento (vínculo EAP por serviço +
+  // derivados chapisco/emboço/reboco na consolidação local).
+  servicos?: any[];
 }): UseLevantamentoOffline {
-  const { campoId, companyId, contratoId, orcamentoId, itensOverride } = args;
+  const { campoId, companyId, contratoId, orcamentoId, itensOverride, servicos } = args;
   const overriding = itensOverride !== undefined;
   const utils = trpc.useUtils();
 
@@ -179,8 +182,8 @@ export function useLevantamentoOffline(args: {
 
   const consolidado = useMemo(() => {
     const cs = (campo?.contornos ?? []).filter((c: any) => !c.deletedAt);
-    return consolidarContornos(cs as any, itensOrcamento as any);
-  }, [campo, itensOrcamento]);
+    return consolidarContornos(cs as any, itensOrcamento as any, servicos as any);
+  }, [campo, itensOrcamento, servicos]);
 
   // ── resolução de blob URLs (PDF/foto offline) ──
   const ensureBlobUrl = useCallback(async (key: string) => {

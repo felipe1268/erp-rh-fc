@@ -8818,6 +8818,8 @@ export const medicaoCampoContornos = pgTable("medicao_campo_contornos", {
   contagem:         integer(),
   quantidade:       numeric({ precision: 18, scale: 4 }),
   unidade:          varchar({ length: 10 }),
+  // Rev. 4780 — classificação por SERVIÇO (alvenaria, chapisco, emboço...).
+  servico:          varchar({ length: 50 }),
   orcamentoItemId:  integer("orcamento_item_id"),
   itemEapCodigo:    varchar("item_eap_codigo", { length: 50 }),
   itemDescricao:    varchar("item_descricao", { length: 500 }),
@@ -8829,6 +8831,32 @@ export const medicaoCampoContornos = pgTable("medicao_campo_contornos", {
   index("idx_mccont_campo").on(t.medicaoCampoId),
   index("idx_mccont_pdf").on(t.pdfId),
   index("idx_mccont_company").on(t.companyId),
+]);
+
+// Rev. 4780 — Catálogo de SERVIÇOS do levantamento de campo (por levantamento).
+// Híbrido: seed padrão (alvenaria, chapisco, emboço, reboco...) + editável +
+// mapeável a um item da EAP/orçamento (vínculo 1x por serviço, não por contorno).
+// Derivados: derivaDe + fator (ex.: reboco = área da alvenaria × 2 faces).
+export const medicaoLevantamentoServicos = pgTable("medicao_levantamento_servicos", {
+  id:              serial().primaryKey(),
+  companyId:       integer("company_id").notNull(),
+  medicaoCampoId:  integer("medicao_campo_id").notNull(),
+  chave:           varchar({ length: 50 }).notNull(),
+  nome:            varchar({ length: 100 }).notNull(),
+  cor:             varchar({ length: 20 }),
+  tipoMedida:      varchar("tipo_medida", { length: 20 }).default("area"), // area|parede|perimetro|volume|contagem
+  derivaDe:        varchar("deriva_de", { length: 50 }),                    // chave do serviço base (derivado)
+  fator:           numeric({ precision: 10, scale: 4 }).default("1"),      // nº de faces / multiplicador
+  orcamentoItemId: integer("orcamento_item_id"),
+  itemEapCodigo:   varchar("item_eap_codigo", { length: 50 }),
+  itemDescricao:   varchar("item_descricao", { length: 500 }),
+  ordem:           integer().default(0),
+  ativo:           integer().default(1),
+  criadoEm:        timestamp("criado_em").defaultNow(),
+  atualizadoEm:    timestamp("atualizado_em").defaultNow(),
+}, (t) => [
+  index("idx_mls_campo").on(t.medicaoCampoId),
+  index("idx_mls_company").on(t.companyId),
 ]);
 
 export const medicaoCampoFotos = pgTable("medicao_campo_fotos", {

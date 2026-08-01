@@ -11,7 +11,6 @@
 - [Equipamento utilização fonte de dados](equipamento-utilizacao-fonte-dados.md) — utilização diária vem de warehouse_loans (não equipamento_locado_eventos); link via almoxarifado_itens.equipamento_vinculado_id.
 - [Scorecard month-end date construction](scorecard-month-end-date.md) — `|| '-31'` rejeita junho/abr/set/nov/fev; sempre usar `|| '-01')::date + INTERVAL '1 month' - 1 day`.
 - [Férias custo via JOIN cross-company](ferias-custo-join-cross-company.md) — empSalarioMap filtrado por companyFilter perde funcionários de empresa irmã; fix: incluir salarioBase no SELECT do JOIN que já existe.
-- [NFS-e Nacional SPED/RFB format](nfse-nacional-sped-format.md) — XMLs da Prefeitura de Guaratinguetá (e outros municípios RFB) usam root `<NFSe xmlns="sped.fazenda..."><infNFSe>`, campos abreviados (nNFSe/dhEmi/prest/toma/serv/valores), completamente diferente do ABRASF/SIAP GEO.
 - [Preço "impossível" no dash = cotação com BDI](dashboard-preco-fd-bdi.md) — conversão kg↔saco certa; raiz = preço de orçamento c/ BDI digitado na cotação (FD); rascunho fora da análise; OC-510 itens duplicados 2×.
 - [Cotacao preco_unitario vs total drift](cotacao-preco-unitario-total-drift.md) — preco_unitario (4dp roundeado) × qty ≠ total salvo; usar resp.total para itens não-alterados; só recomputar preco*qty para itens mudados.
 - [orcamentos valor_negociado snake_case](orcamentos-valor-negociado-snake.md) — `orcamentos.valorNegociado` tem nome explícito `"valor_negociado"` (snake); safe() engole erros → diagnose silent failures com logging antes de mudar query logic.
@@ -28,6 +27,7 @@
 - [Unguarded tRPC endpoints](unguarded-trpc-endpoints.md) — frontend route gating ≠ backend authorization; verify role/tenant checks live IN the procedure, not just behind the UI route guard.
 - [OC entregue fora do fluxo padrão precisa de self-heal](oc-almox-entrega-sem-titulo.md) — todo caminho que marca OC entregue (Almoxarifado!) deve chamar garantirEntryDaOC ou a OC some do Contas a Pagar.
 - [Contas a Pagar — base da janela de fechamento](contas-pagar-ciclo-window-basis.md) — agrupar por ciclo de fornecedor usa data da COMPRA (competência), nunca vencimento (varia por OC).
+- [Levantamento — catálogo de serviços](levantamento-servicos-catalogo.md) — seed sob advisory lock 478002; updates de contorno SEMPRE reenviam `servico` (sync preserva se ausente); derivado com medição manual suprime derivação.
 - [Medição FD ↔ Compras link](medicao-fd-compras-link.md) — medicao_fd_registros.compraId (coluna já existia sem uso) é o ponto de integração p/ puxar valor de OC de Faturamento Direto direto pro boletim.
 - [Medição × Cronograma: casar por atividadeId, não EAP](medicao-cronograma-atividade-id-match.md) — eap_codigo do cronograma real vem vazio na maioria das atividades; use a PK atividade_id (1:1, sempre presente).
 - [SEFAZ sync gating & NSU](sefaz-nsu-rate-limit-loop.md) — cStat=656 deve persistir ultNSU (senão loop eterno); 4 fórmulas de gate DEVEM casar; elapsed via SQL/EXTRACT EPOCH não `new Date()` JS (skew 3h).
@@ -105,7 +105,7 @@
 - [Terceiros: título garantido no Financeiro](terceiros-medicao-titulo-garantido.md) — aprovar medição chama garantirTituloDaMedicao (bypassa toggle auto_import, xact_lock 478001, periodo YYYY-MM c/ fallback); novo caminho de aprovação deve propagar financeiroOk.
 - [Medição módulos cliente vs terceiros + shared engine](medicao-modules-architecture.md) — "medicao"=lado CLIENTE, terceiros é tabela separada, IDs colidem → medicao_campo precisa de `origem`; [sem origem = escopo CLIENTE nunca `true`](medicao-shared-engine-origem.md).
 - [/uploads DB-fallback MIME + traversal](uploads-db-fallback-mime.md) — off-disk attachments fall back to uploaded_files; octet-stream → Safari/iOS preview blank; derive MIME from extension; fallback needs path-traversal guard.
-- [NFS-e gotchas](nfse-valor-liquido-formula.md) — [Valor Líquido = Bruto − retenções](nfse-valor-liquido-formula.md); [SIAP GEO: nunca mapear "ISS devido" em iss_retido](nfse-siapgeo-issretido-vs-informado.md).
+- [NFS-e gotchas](nfse-valor-liquido-formula.md) — [Líquido = Bruto − retenções](nfse-valor-liquido-formula.md); [SIAP GEO: "ISS devido" ≠ iss_retido](nfse-siapgeo-issretido-vs-informado.md); [formato SPED/RFB Guaratinguetá ≠ ABRASF](nfse-nacional-sped-format.md).
 - [PJ payments grouping frontend-only](financeiro-pj-grouping.md) — PJ (origem 'pagamento_pj') agrupa por mês SÓ na UI; entries ficam individuais no banco p/ preservar baixa/conciliação por item.
 - [Centro de Custo na Análise de Custos](centro-custo-analise-custos.md) — "centro de custo" = financial_cost_centers (cadastro), NÃO obra; edição usa "-1=manter atual".
 - [PDF export XSS / per-function esc](pdf-export-xss-esc-scope.md) — print/PDF builders (document.write) define esc LOCALLY; new fields (esp. AI-sourced) must esc()/escAttr().
@@ -146,8 +146,7 @@
 - [Lógica % Previsto CONGELADA](planejamento-previsto-logic-frozen.md) — usuário exige: NÃO alterar motor/literal/precedência do Previsto (Planejamento) sem alertar e confirmar; toda 'melhoria' nessa área já quebrou o sistema.
 - [Almox leitura global, escrita por obra](almox-global-read-obra-write.md) — reads globais por empresa exigem guard de empresa explícito; writes validam obra do RECURSO via getAlmoxAllowedObraIdSet.
 - [Renovação de locação — vencimento da parcela](locacao-renovacao-parcela-vencimento.md) — parcela vence no FIM do novo ciclo; usar o início gera entry vencida no passado que "some" do Contas a Pagar.
-- [CONTAMAX é sweep de liquidez diária](contamax-sweep-neutral.md) — aplica/resgata o MESMO dinheiro todo dia; fora de Saídas e da linha azul; classificador exige %CONTAMAX%+APLIC/RESGAT.
-- [Fluxo de Caixa gotchas](fluxo-caixa-bucket-conta-rules.md) — [baldes CONTA_RULES](fluxo-caixa-bucket-conta-rules.md); [cheque float informativo, nunca nas Saídas](fluxo-caixa-cheque-float.md); [aplicação financeira fora das Saídas](aplicacao-financeira-nao-e-despesa.md).
+- [Fluxo de Caixa gotchas](fluxo-caixa-bucket-conta-rules.md) — [baldes CONTA_RULES](fluxo-caixa-bucket-conta-rules.md); [cheque float nunca nas Saídas](fluxo-caixa-cheque-float.md); [aplicação financeira fora das Saídas](aplicacao-financeira-nao-e-despesa.md); [CONTAMAX = sweep diário neutro](contamax-sweep-neutral.md).
 - [Fluxo público identify anti-enum + Puppeteer sanitize](public-token-identify-antienum.md) — falha genérica + rate-limit token+IP em identify público; HTML de usuário no Puppeteer exige DOMPurify server-side + JS off + requests bloqueados.
 - [Desconciliar desfaz o que a conciliação criou](desconciliar-releases-created-artifacts.md) — estorno deve cancelar entries origem cheque_conciliacao e liberar cheques com lancamento_id revertido; senão duplicidades + cheque preso.
 - [Neon template republish tx](neon-template-republish-tx.md) — erro em statement dentro de BEGIN aborta a tx; COMMIT vira ROLLBACK silencioso após RETURNING "de sucesso"; sempre re-verificar com SELECT pós-commit.

@@ -1,4 +1,23 @@
 /**
+ * Rev. 4780 - LEVANTAMENTO DE CAMPO: CLASSIFICACAO POR SERVICO (tablet-first)
+ *
+ * Pedido: classificar o que e alvenaria, chapisco, emboco, reboco na planta.
+ * 1) PALETA DE SERVICOS acima da planta: chips grandes coloridos (Alvenaria,
+ *    Contrapiso, Forro, Pintura, Contagem...). Toca 1x e sai desenhando —
+ *    todo contorno nasce classificado (cor + servico + rotulo) e a ferramenta
+ *    certa e ativada (Parede LxA p/ alvenaria, area, contagem). Cada chip
+ *    mostra o total ja medido.
+ * 2) SERVICOS DERIVADOS (poka-yoke): chapisco/emboco/reboco sao calculados
+ *    sozinhos = area da alvenaria x n. de faces (configuravel). Mede 1x,
+ *    gera os 4 servicos — sem remedir e sem esquecer.
+ * 3) VINCULO EAP POR SERVICO (hibrido): em "Configurar", vincula-se cada
+ *    servico a um item da EAP UMA vez; todos os contornos daquele servico
+ *    consolidam automaticamente em R$ (fim do vincular contorno a contorno).
+ *    Contorno com vinculo proprio continua valendo (prioridade).
+ * 4) Catalogo padrao com seed automatico por levantamento; cores, faces e
+ *    ativo/inativo editaveis; funciona online e offline (consolidacao local
+ *    usa o mesmo motor compartilhado).
+ *
  * Rev. 4779 - TERCEIROS: DATAS (ANO/MES) NO TOPO DA TELA DE MEDICOES
  *
  * Pedido do usuario (IMG_4725): o seletor de periodo e o principal da tela.

@@ -9,6 +9,7 @@ import {
   medicaoCampo,
   medicaoCampoPdfs,
   medicaoCampoContornos,
+  medicaoLevantamentoServicos,
   medicaoCampoFotos,
   terceiroContratos,
   planejamentoProjetos,
@@ -1297,6 +1298,7 @@ export const medicaoRouter = router({
       contagem: z.number().nullable().optional(),
       quantidade: z.string().nullable().optional(),
       unidade: z.string().nullable().optional(),
+      servico: z.string().max(50).nullable().optional(),
       orcamentoItemId: z.number().nullable().optional(),
       itemEapCodigo: z.string().nullable().optional(),
       itemDescricao: z.string().nullable().optional(),
@@ -1422,8 +1424,99 @@ export const medicaoRouter = router({
             .from(orcamentoItens)
             .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))
         : [];
+      // Rev. 4780 — serviços do levantamento entram na consolidação (vínculo EAP
+      // por serviço + linhas derivadas chapisco/emboço/reboco).
+      const servicos = await db
+        .select()
+        .from(medicaoLevantamentoServicos)
+        .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
       // Consolidação via função PURA compartilhada (mesma usada no MODO OFFLINE do cliente).
-      return consolidarContornos(contornos as any, itensOrc as any);
+      return consolidarContornos(contornos as any, itensOrc as any, servicos as any);
+    }),
+
+  // ═══════════ Rev. 4780 — Catálogo de SERVIÇOS do levantamento ═══════════
+  // Híbrido: seed padrão na 1ª leitura + editável + vínculo EAP por serviço.
+  listServicosLevantamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), medicaoCampoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const [campo] = await db.select({ id: medicaoCampo.id }).from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId))).limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      let rows = await db.select().from(medicaoLevantamentoServicos)
+        .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
+      if (rows.length === 0) {
+        // Seed do catálogo padrão (poka-yoke: nasce pronto p/ obra de vedação).
+        // Advisory XACT lock por campo: 2 aberturas simultâneas não duplicam o seed.
+        const seed = [
+          { chave: "alvenaria",  nome: "Alvenaria",  cor: "#dc2626", tipoMedida: "parede",   derivaDe: null,        fator: "1", ordem: 1 },
+          { chave: "chapisco",   nome: "Chapisco",   cor: "#ea580c", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", ordem: 2 },
+          { chave: "emboco",     nome: "Emboço",     cor: "#ca8a04", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", ordem: 3 },
+          { chave: "reboco",     nome: "Reboco",     cor: "#059669", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", ordem: 4 },
+          { chave: "contrapiso", nome: "Contrapiso", cor: "#2563eb", tipoMedida: "area",     derivaDe: null,        fator: "1", ordem: 5 },
+          { chave: "forro",      nome: "Forro",      cor: "#7c3aed", tipoMedida: "area",     derivaDe: null,        fator: "1", ordem: 6 },
+          { chave: "pintura",    nome: "Pintura",    cor: "#db2777", tipoMedida: "area",     derivaDe: null,        fator: "1", ordem: 7 },
+          { chave: "pontos",     nome: "Contagem",   cor: "#0891b2", tipoMedida: "contagem", derivaDe: null,        fator: "1", ordem: 8 },
+        ];
+        await db.transaction(async (tx: any) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(478002, ${input.medicaoCampoId})`);
+          const [ja] = await tx.select({ id: medicaoLevantamentoServicos.id }).from(medicaoLevantamentoServicos)
+            .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId))).limit(1);
+          if (ja) return; // outra sessão semeou primeiro
+          await tx.insert(medicaoLevantamentoServicos).values(seed.map((s) => ({
+            companyId: input.companyId, medicaoCampoId: input.medicaoCampoId, ...s, ativo: 1,
+          })));
+        });
+        rows = await db.select().from(medicaoLevantamentoServicos)
+          .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
+      }
+      return rows.sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+    }),
+
+  salvarServicoLevantamento: protectedProcedure
+    .input(z.object({
+      id: z.number().optional(),
+      companyId: z.number(),
+      medicaoCampoId: z.number(),
+      chave: z.string().min(1).max(50),
+      nome: z.string().min(1).max(100),
+      cor: z.string().max(20).nullable().optional(),
+      tipoMedida: z.enum(["area", "parede", "perimetro", "volume", "contagem"]).optional(),
+      derivaDe: z.string().max(50).nullable().optional(),
+      fator: z.string().nullable().optional(),
+      orcamentoItemId: z.number().nullable().optional(),
+      itemEapCodigo: z.string().nullable().optional(),
+      itemDescricao: z.string().nullable().optional(),
+      ordem: z.number().optional(),
+      ativo: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const [campo] = await db.select({ id: medicaoCampo.id }).from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId))).limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      const { id, companyId, medicaoCampoId, ...rest } = input;
+      if (id) {
+        await db.update(medicaoLevantamentoServicos)
+          .set({ ...rest, atualizadoEm: new Date() })
+          .where(and(eq(medicaoLevantamentoServicos.id, id), eq(medicaoLevantamentoServicos.companyId, companyId), eq(medicaoLevantamentoServicos.medicaoCampoId, medicaoCampoId)));
+        return { id };
+      }
+      const [row] = await db.insert(medicaoLevantamentoServicos)
+        .values({ companyId, medicaoCampoId, ...rest }).returning();
+      return row;
+    }),
+
+  excluirServicoLevantamento: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertCompanyAccess(ctx.user, input.companyId);
+      await db.delete(medicaoLevantamentoServicos)
+        .where(and(eq(medicaoLevantamentoServicos.id, input.id), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
+      return { success: true };
     }),
 
   // --- Gera um boletim de medição a partir do levantamento consolidado ---
@@ -1658,6 +1751,7 @@ export const medicaoRouter = router({
               contagem: d.contagem ?? null,
               quantidade: d.quantidade ?? null,
               unidade: d.unidade ?? null,
+              servico: d.servico ?? null,
               orcamentoItemId: d.orcamentoItemId ?? null,
               itemEapCodigo: d.itemEapCodigo ?? null,
               itemDescricao: d.itemDescricao ?? null,
@@ -1683,7 +1777,10 @@ export const medicaoRouter = router({
                 continue;
               }
               await db.update(medicaoCampoContornos)
-                .set({ ...fields, atualizadoEm: incoming })
+                // Rev. 4780 — patch parcial de `servico`: se o client (versão antiga
+                // offline) não mandar o campo, PRESERVA a classificação existente
+                // em vez de zerar com null cego.
+                .set({ ...fields, servico: d.servico !== undefined ? (d.servico ?? null) : (existing as any).servico, atualizadoEm: incoming })
                 .where(and(eq(medicaoCampoContornos.id, existing.id), eq(medicaoCampoContornos.companyId, companyId)));
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "ok" });
               continue;

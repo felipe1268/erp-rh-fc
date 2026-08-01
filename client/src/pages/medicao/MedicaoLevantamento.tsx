@@ -10,12 +10,13 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ArrowLeft, Plus, Loader2, FileText, Trash2, Ruler, Square, Box, Spline,
   Hash, MousePointer2, Crosshair, ZoomIn, ZoomOut, Check, Camera, Image as ImageIcon,
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
-  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet, Palette,
+  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -243,8 +244,19 @@ export default function MedicaoLevantamento() {
     }));
   }, [isTerceiro, terceiroItensQ.data]);
 
+  // Rev. 4780 — Catálogo de SERVIÇOS do levantamento (alvenaria, chapisco, emboço,
+  // reboco...). Híbrido: seed padrão + editável + vínculo EAP 1x por serviço.
+  const servicosQ = trpc.medicao.listServicosLevantamento.useQuery(
+    { companyId, medicaoCampoId: campoId },
+    { enabled: companyId > 0 && campoId > 0 },
+  );
+  const servicos: any[] = (servicosQ.data as any[]) ?? [];
+  const salvarServicoMut = trpc.medicao.salvarServicoLevantamento.useMutation({
+    onSuccess: () => utils.medicao.listServicosLevantamento.invalidate({ companyId, medicaoCampoId: campoId }),
+  });
+
   // Camada offline-first (Rev. 2895): une servidor + snapshot local + fila otimista.
-  const off = useLevantamentoOffline({ campoId, companyId, contratoId, orcamentoId, itensOverride });
+  const off = useLevantamentoOffline({ campoId, companyId, contratoId, orcamentoId, itensOverride, servicos });
   const campo = off.campo;
   const loadingCampo = off.loading;
   const itensOrcamento = off.itensOrcamento;
@@ -533,8 +545,33 @@ export default function MedicaoLevantamento() {
   });
   useEffect(() => { try { localStorage.setItem("medCorDesenho", corDesenho); } catch { /* */ } }, [corDesenho]);
   useEffect(() => { try { localStorage.setItem("medFillOpacity", String(fillOpacity)); } catch { /* */ } }, [fillOpacity]);
-  // Cor efetiva para previews (rascunho/retângulo) = cor escolhida ou o azul de área.
-  const corPreview = corDesenho || COR_TIPO.area;
+  // Rev. 4780 — serviço ATIVO: todo contorno novo nasce classificado (chave, cor,
+  // ferramenta sugerida). "" = sem serviço (comportamento antigo).
+  const [servicoAtivo, setServicoAtivo] = useState<string>("");
+  const [servicosDialogOpen, setServicosDialogOpen] = useState(false);
+  const svcAtivoObj = useMemo(() => servicos.find((s: any) => s.chave === servicoAtivo) ?? null, [servicos, servicoAtivo]);
+  const selecionarServico = (s: any | null) => {
+    if (!s) { setServicoAtivo(""); return; }
+    setServicoAtivo(s.chave);
+    const t = (s.tipoMedida as FerramentaDesenho) || "area";
+    setTool(t); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]);
+  };
+  // Totais medidos por serviço (contornos vivos desta medição + derivados por fator).
+  const totaisPorServico = useMemo(() => {
+    const tot = new Map<string, number>();
+    const cs = ((off as any)?.campo?.contornos ?? []).filter((c: any) => !c.deletedAt);
+    for (const c of cs) if (c.servico) tot.set(c.servico, (tot.get(c.servico) ?? 0) + (parseFloat(String(c.quantidade ?? 0)) || 0));
+    for (const s of servicos) {
+      if (!s.derivaDe || s.ativo === 0) continue;
+      if (tot.has(s.chave)) continue; // medido manualmente → não deriva (anti-dupla-contagem)
+      const base = tot.get(s.derivaDe) ?? 0;
+      if (base > 0) tot.set(s.chave, base * (parseFloat(String(s.fator ?? 1)) || 1));
+    }
+    return tot;
+  }, [off, servicos]);
+
+  // Cor efetiva para previews (rascunho/retângulo) = cor escolhida ou a do serviço ativo ou o azul de área.
+  const corPreview = (svcAtivoObj?.cor as string) || corDesenho || COR_TIPO.area;
 
   // F3 alterna o OSnap (atalho AutoCAD).
   useEffect(() => {
@@ -787,7 +824,9 @@ export default function MedicaoLevantamento() {
       pdfId: pdfSel.id,
       pagina,
       tipo,
-      cor: corDesenho || COR_TIPO[tipo],
+      servico: servicoAtivo || null,
+      rotulo: svcAtivoObj ? svcAtivoObj.nome : undefined,
+      cor: (svcAtivoObj?.cor as string) || corDesenho || COR_TIPO[tipo],
       geometriaJson: JSON.stringify(ptsNorm),
       espessura: espessura ? String(espessura) : null,
       metrosPorUnidade: String(calibAtualEff.metrosPorUnidade),
@@ -925,6 +964,7 @@ export default function MedicaoLevantamento() {
       itemEapCodigo: it?.eapCodigo ?? null,
       itemDescricao: it?.descricao ?? null,
       rotulo: c.rotulo ?? null,
+      servico: c.servico ?? null,
     });
   }
 
@@ -1004,6 +1044,7 @@ export default function MedicaoLevantamento() {
       itemEapCodigo: c.itemEapCodigo ?? null,
       itemDescricao: c.itemDescricao ?? null,
       rotulo: c.rotulo ?? null,
+      servico: c.servico ?? null,
     });
   }
 
@@ -1031,6 +1072,7 @@ export default function MedicaoLevantamento() {
       itemEapCodigo: c.itemEapCodigo ?? null,
       itemDescricao: c.itemDescricao ?? null,
       rotulo: novo,
+      servico: c.servico ?? null,
     });
   }
 
@@ -1095,6 +1137,7 @@ export default function MedicaoLevantamento() {
       itemEapCodigo: c.itemEapCodigo ?? null,
       itemDescricao: c.itemDescricao ?? null,
       rotulo: c.rotulo ?? null,
+      servico: c.servico ?? null,
     });
   }
 
@@ -1360,6 +1403,55 @@ export default function MedicaoLevantamento() {
               </Button>
               <input ref={pdfInputRef} type="file" accept="application/pdf,.dxf" className="hidden" onChange={onPdfSelected} />
             </div>
+
+            {/* Rev. 4780 — PALETA DE SERVIÇOS (tablet-first): toca no serviço 1x e sai
+                desenhando; todo contorno nasce classificado (cor + chave + rótulo). */}
+            {pdfSel && (
+              <div className="bg-white border rounded-lg p-2 flex items-center gap-2 overflow-x-auto">
+                <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide shrink-0">Serviço:</span>
+                <button
+                  type="button"
+                  onClick={() => selecionarServico(null)}
+                  className={`shrink-0 h-11 px-3 rounded-lg border-2 text-sm font-medium transition-colors ${servicoAtivo === "" ? "border-gray-800 bg-gray-100" : "border-gray-200 bg-white text-gray-500"}`}
+                >
+                  Sem serviço
+                </button>
+                {servicos.filter((s: any) => s.ativo !== 0 && !s.derivaDe).map((s: any) => {
+                  const tot = totaisPorServico.get(s.chave) ?? 0;
+                  const sel = servicoAtivo === s.chave;
+                  return (
+                    <button
+                      key={s.chave}
+                      type="button"
+                      onClick={() => selecionarServico(s)}
+                      className={`shrink-0 h-11 px-3 rounded-lg border-2 text-sm font-semibold flex items-center gap-2 transition-colors ${sel ? "text-white" : "bg-white"}`}
+                      style={sel ? { backgroundColor: s.cor || "#374151", borderColor: s.cor || "#374151" } : { borderColor: s.cor || "#d1d5db", color: s.cor || "#374151" }}
+                    >
+                      <span className="inline-block h-3 w-3 rounded-full border border-white/50" style={{ backgroundColor: s.cor || "#9ca3af" }} />
+                      {s.nome}
+                      {tot > 0 && (
+                        <span className={`text-[11px] font-bold tabular-nums rounded px-1 ${sel ? "bg-white/25" : "bg-gray-100 text-gray-600"}`}>
+                          {tot.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+                {/* derivados: aparecem como "pastilhas" informativas (medem-se sozinhos) */}
+                {servicos.filter((s: any) => s.ativo !== 0 && s.derivaDe).map((s: any) => {
+                  const tot = totaisPorServico.get(s.chave) ?? 0;
+                  return (
+                    <span key={s.chave} className="shrink-0 h-11 px-3 rounded-lg border border-dashed text-xs flex items-center gap-1.5 text-gray-500" style={{ borderColor: s.cor || "#d1d5db" }} title={`Derivado de ${s.derivaDe} × ${s.fator} face(s) — calculado automaticamente`}>
+                      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.cor || "#9ca3af" }} />
+                      {s.nome} <b className="tabular-nums text-gray-700">{tot > 0 ? tot.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : "auto"}</b>
+                    </span>
+                  );
+                })}
+                <Button size="sm" variant="ghost" className="h-11 shrink-0 gap-1 text-gray-500" onClick={() => setServicosDialogOpen(true)} title="Configurar serviços: nomes, cores, faces dos derivados e vínculo com a EAP">
+                  <Settings2 className="h-4 w-4" />Configurar
+                </Button>
+              </div>
+            )}
 
             {!pdfSel ? (
               <div className="border-2 border-dashed rounded-xl py-16 text-center text-gray-400">
@@ -1934,6 +2026,82 @@ export default function MedicaoLevantamento() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Rev. 4780 — Configurar SERVIÇOS do levantamento (catálogo híbrido) */}
+      <Dialog open={servicosDialogOpen} onOpenChange={setServicosDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Settings2 className="h-4 w-4" />Serviços do levantamento</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-gray-500 -mt-2">
+            Serviços <b>base</b> são medidos na planta. Serviços <b>derivados</b> (ex.: chapisco/emboço/reboco) são calculados
+            sozinhos: quantidade do serviço base × nº de faces. Vincule cada serviço a um item da EAP <b>uma única vez</b> —
+            todos os contornos daquele serviço consolidam automaticamente em R$.
+          </p>
+          <div className="space-y-2">
+            {servicos.map((s: any) => (
+              <div key={s.id} className={`border rounded-lg p-3 flex flex-wrap items-center gap-3 ${s.ativo === 0 ? "opacity-50" : ""}`}>
+                <label className="h-8 w-8 rounded-md border cursor-pointer shrink-0" style={{ backgroundColor: s.cor || "#9ca3af" }} title="Cor do serviço">
+                  <input
+                    type="color" value={s.cor || "#9ca3af"} className="sr-only"
+                    onChange={(e) => salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, cor: e.target.value })}
+                  />
+                </label>
+                <div className="min-w-[120px]">
+                  <p className="text-sm font-semibold">{s.nome}</p>
+                  <p className="text-[11px] text-gray-500">
+                    {s.derivaDe
+                      ? <>derivado de <b>{servicos.find((b: any) => b.chave === s.derivaDe)?.nome ?? s.derivaDe}</b></>
+                      : <>base · {s.tipoMedida === "parede" ? "Parede L×A" : s.tipoMedida === "contagem" ? "Contagem" : "Área"}</>}
+                  </p>
+                </div>
+                {s.derivaDe && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Faces:</span>
+                    <Input
+                      type="text" inputMode="decimal" className="h-9 w-16 text-center"
+                      defaultValue={String(s.fator ?? "1").replace(".", ",")}
+                      onBlur={(e) => {
+                        const v = parseFloat(e.target.value.replace(",", "."));
+                        if (Number.isFinite(v) && v > 0 && v !== parseFloat(String(s.fator ?? 1)))
+                          salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, fator: String(v) });
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-w-[220px]">
+                  <VincularItemCombobox
+                    items={itensVinculaveis}
+                    value={s.orcamentoItemId ? String(s.orcamentoItemId) : ""}
+                    jaMedidoMap={jaMedidoMap}
+                    emptyHint={vincularEmptyHint}
+                    placeholder="Vincular item da EAP (1x por serviço)…"
+                    onChange={(idStr) => {
+                      const itemId = idStr ? parseInt(idStr) : null;
+                      const it = itemId ? itensVinculaveis.find((i) => i.id === itemId) : null;
+                      salvarServicoMut.mutate({
+                        id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome,
+                        orcamentoItemId: itemId, itemEapCodigo: it?.eapCodigo ?? null, itemDescricao: it?.descricao ?? null,
+                      });
+                    }}
+                  />
+                </div>
+                <Button
+                  size="sm" variant="ghost"
+                  className={`h-9 shrink-0 ${s.ativo === 0 ? "text-emerald-600" : "text-gray-400"}`}
+                  disabled={salvarServicoMut.isPending}
+                  onClick={() => salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, ativo: s.ativo === 0 ? 1 : 0 })}
+                >
+                  {s.ativo === 0 ? "Reativar" : "Desativar"}
+                </Button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-gray-400">
+            Desativar um serviço só o esconde da paleta e da consolidação — os contornos já desenhados não são apagados.
+          </p>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
