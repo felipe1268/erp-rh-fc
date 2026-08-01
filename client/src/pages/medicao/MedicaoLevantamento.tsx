@@ -394,11 +394,12 @@ export default function MedicaoLevantamento() {
   const [editDrag, setEditDrag] = useState<{ contId: number; pts: GeoPonto[] } | null>(null);
   const editRef = useRef<{
     cont: any;
-    kind: "vertex" | "corner" | "edge";
+    kind: "vertex" | "corner" | "edge" | "move";
     idx: number;
     base: GeoPonto[];
     rect: { x0: number; y0: number; x1: number; y1: number } | null;
     cur: GeoPonto[];
+    p0?: GeoPonto; // ponto inicial do arrasto (kind="move": deslocamento do contorno inteiro)
   } | null>(null);
 
   // Diálogo numérico no app (substitui window.prompt p/ altura/escala — máscara pt-BR).
@@ -1538,6 +1539,16 @@ export default function MedicaoLevantamento() {
     ed: { kind: "vertex" | "corner" | "edge"; idx: number; base: GeoPonto[]; rect: { x0: number; y0: number; x1: number; y1: number } | null },
     p: GeoPonto,
   ): GeoPonto[] {
+    if (ed.kind === "move") {
+      // arrasto do contorno INTEIRO: translada todos os pontos pelo delta,
+      // clampado pra forma não sair da planta.
+      const dx0 = p.x - (ed.p0?.x ?? p.x), dy0 = p.y - (ed.p0?.y ?? p.y);
+      const minX = Math.min(...ed.base.map((q) => q.x)), maxX = Math.max(...ed.base.map((q) => q.x));
+      const minY = Math.min(...ed.base.map((q) => q.y)), maxY = Math.max(...ed.base.map((q) => q.y));
+      const dx = Math.max(-minX, Math.min(1 - maxX, dx0));
+      const dy = Math.max(-minY, Math.min(1 - maxY, dy0));
+      return ed.base.map((q) => ({ x: q.x + dx, y: q.y + dy }));
+    }
     if (ed.kind === "vertex" || !ed.rect) {
       const next = ed.base.map((q) => ({ ...q }));
       if (next[ed.idx]) next[ed.idx] = { x: p.x, y: p.y };
@@ -1560,13 +1571,13 @@ export default function MedicaoLevantamento() {
     return cantosDoBox({ x0, y0, x1, y1 });
   }
 
-  function onHandleDown(e: React.PointerEvent, c: any, kind: "vertex" | "corner" | "edge", idx: number) {
+  function onHandleDown(e: React.PointerEvent, c: any, kind: "vertex" | "corner" | "edge" | "move", idx: number) {
     e.stopPropagation();
     e.preventDefault();
     try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* */ }
     let base: GeoPonto[] = [];
     try { base = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
-    editRef.current = { cont: c, kind, idx, base, rect: detectRectBox(base), cur: base };
+    editRef.current = { cont: c, kind, idx, base, rect: detectRectBox(base), cur: base, p0: getPtFromClient(e.clientX, e.clientY) };
     setEditDrag({ contId: c.id, pts: base });
   }
   function onHandleMove(e: React.PointerEvent) {
@@ -1579,11 +1590,13 @@ export default function MedicaoLevantamento() {
     // geometria notável (cantos/interseções da planta e de outros contornos),
     // ignorando os pontos ORIGINAIS do próprio contorno (senão "volta" pro erro).
     let p = raw;
-    const hit = applySnap(raw);
-    if (hit && !ed.base.some((b) => Math.hypot(b.x - hit.p.x, b.y - hit.p.y) < 1e-6)) {
-      p = hit.p;
-      setSnapHit(hit);
-    } else setSnapHit(null);
+    if (ed.kind !== "move") {
+      const hit = applySnap(raw);
+      if (hit && !ed.base.some((b) => Math.hypot(b.x - hit.p.x, b.y - hit.p.y) < 1e-6)) {
+        p = hit.p;
+        setSnapHit(hit);
+      } else setSnapHit(null);
+    }
     const next = pontosEditados(ed, p);
     ed.cur = next;
     setEditDrag({ contId: ed.cont.id, pts: next });
@@ -2249,8 +2262,18 @@ export default function MedicaoLevantamento() {
                             }
                             const fecha = FECHA_POLIGONO(c.tipo);
                             const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (fecha ? " Z" : "");
+                            // Rev. 4790 — contorno selecionado (único) pode ser ARRASTADO
+                            // inteiro pra posição correta (segurar e mover).
+                            const movable = tool === "select" && sel && selContornos.size === 1;
+                            const moveProps = movable ? {
+                              onPointerDown: (e: React.PointerEvent) => onHandleDown(e, c, "move" as const, -1),
+                              onPointerMove: onHandleMove,
+                              onPointerUp: onHandleUp,
+                              onPointerCancel: onHandleUp,
+                              style: { cursor: "move" as const, pointerEvents: "all" as const },
+                            } : {};
                             return (
-                              <path key={c.id} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? (sel ? Math.min(0.55, fillOpacity + 0.18) : fillOpacity) : 0} stroke={sel ? "#1d4ed8" : cor} strokeWidth={(fecha ? 0.003 : 0.004) + (sel ? 0.0025 : 0)} vectorEffect="non-scaling-stroke" />
+                              <path key={c.id} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? (sel ? Math.min(0.55, fillOpacity + 0.18) : fillOpacity) : 0} stroke={sel ? "#1d4ed8" : cor} strokeWidth={(fecha ? 0.003 : 0.004) + (sel ? 0.0025 : 0)} vectorEffect="non-scaling-stroke" {...moveProps} />
                             );
                           })}
                           {/* Rev. 3111 — handles de ajuste do contorno selecionado (só 1).
