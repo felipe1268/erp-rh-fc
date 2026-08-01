@@ -14,6 +14,13 @@
  * - Futuro (combinado): comparar tambem com a medicao do CLIENTE - o avanco
  *   pago ao terceiro nao deve superar o avanco recebido do cliente.
  *
+ * MEDICAO RESPEITA O QUANTITATIVO DO LEVANTAMENTO:
+ * - O valor do periodo agora e QTD MEDIDA x PRECO UNITARIO (exato); o % e
+ *   derivado do valor, nunca o contrario (o % arredondado distorcia o valor).
+ * - "Comparar c/ Avanco da Obra" reaplica o levantamento vinculado antes de
+ *   qualquer conta - a planilha sempre volta ao quantitativo oficial do campo
+ *   (itens editados manualmente continuam intocaveis).
+ *
  * FD MAIS DISCRETO + DETALHADO NO BOLETIM:
  * - O aviso vermelho de debito pendente virou um link discreto ("ver
  *   detalhes") - o desconto ja entra sozinho na medicao.

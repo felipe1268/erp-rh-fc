@@ -3069,6 +3069,13 @@ export const terceiroContratosRouter = router({
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, medicao.contratoId));
       if (!contrato) throw new Error("Contrato não encontrado");
 
+      // Rev. 4800 — a medição RESPEITA O QUANTITATIVO do levantamento: antes de
+      // qualquer conta, reaplica o levantamento vinculado (qtd × preço unit.).
+      if ((medicao as any).levantamentoCampoId) {
+        try { await aplicarLevantamentoNaMedicaoTerceiro(db, (medicao as any).levantamentoCampoId); }
+        catch (e: any) { console.warn("[recalcularMedicao] reaplicar levantamento falhou:", e?.message); }
+      }
+
       const itensContrato = await db.select().from(terceiroContratoItens)
         .where(eq(terceiroContratoItens.contratoId, medicao.contratoId))
         .orderBy(asc(terceiroContratoItens.ordem));

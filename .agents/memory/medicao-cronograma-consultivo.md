@@ -12,4 +12,6 @@ Regra (pedido explícito do usuário, ago/2026): na medição de terceiros o **m
 
 **Why:** o campo é soberano; puxar do cronograma sobrescrevia o levantamento real (2.891 → 5.572 num recálculo) e podia pagar mais do que o executado.
 
+**Quantitativo do levantamento é soberano:** `terceiroLevantamentoSync` calcula valor do período = qtd medida × preço unitário (exato) e deriva o % do valor (nunca o contrário — % arredondado distorcia centavos). `recalcularMedicao` reaplica o levantamento vinculado antes de recomputar totais; item `editadoManualmente` nunca é sobrescrito.
+
 **Futuro combinado:** comparar também com a medição do CLIENTE — % pago ao terceiro não deve superar o % medido/recebido do cliente.

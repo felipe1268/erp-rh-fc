@@ -66,18 +66,27 @@ export async function aplicarLevantamentoNaMedicaoTerceiro(db: any, campoId: num
       if (!ci || linha === undefined) continue; // sem levantamento p/ este item → não mexe
       const qtdContratada = n(ci.quantidade);
       const valorTotalItem = n(ci.valorTotal);
-      const percBruto = qtdContratada > 0
-        ? (linha.quantidade / qtdContratada) * 100
-        : (valorTotalItem > 0 ? (linha.valorTotal / valorTotalItem) * 100 : 0);
+      const valorUnit = n(ci.valorUnitario);
       const anterior = n(item.percentualAcumuladoAnterior);
-      const percPeriodo = Math.max(0, Math.min(100 - anterior, percBruto));
-      if (Math.abs(percPeriodo - n(item.percentualMedidoPeriodo)) < 0.005) continue; // já reflete
+      // Rev. 4800 — RESPEITA O QUANTITATIVO do levantamento: o valor do período
+      // é qtd medida × preço unitário (exato), e o % é derivado do valor —
+      // nunca o contrário (o % arredondado distorcia centavos do quantitativo).
+      const valorBrutoPeriodo = qtdContratada > 0 && valorUnit > 0
+        ? linha.quantidade * valorUnit
+        : (qtdContratada > 0 && valorTotalItem > 0
+          ? (linha.quantidade / qtdContratada) * valorTotalItem
+          : n(linha.valorTotal));
+      const saldoValor = Math.max(0, ((100 - anterior) / 100) * valorTotalItem);
+      const valorPeriodo = Math.max(0, Math.min(saldoValor, valorBrutoPeriodo));
+      const percPeriodo = valorTotalItem > 0 ? (valorPeriodo / valorTotalItem) * 100 : 0;
+      if (Math.abs(valorPeriodo - n(item.valorMedidoPeriodo)) < 0.005
+        && Math.abs(percPeriodo - n(item.percentualMedidoPeriodo)) < 0.0005) continue; // já reflete
       const percFisico = anterior + percPeriodo;
       await db.update(terceiroMedicaoItens).set({
         percentualMedidoPeriodo: String(percPeriodo),
         percentualAvancoFisico: String(percFisico),
-        valorMedidoPeriodo: String((percPeriodo / 100) * valorTotalItem),
-        valorAcumulado: String((percFisico / 100) * valorTotalItem),
+        valorMedidoPeriodo: String(valorPeriodo),
+        valorAcumulado: String((anterior / 100) * valorTotalItem + valorPeriodo),
         valorMatPeriodo: String((percPeriodo / 100) * n(ci.vlrMat ?? "0")),
         valorMdoPeriodo: String((percPeriodo / 100) * n(ci.vlrMdo ?? "0")),
         valorMatAcumulado: String((percFisico / 100) * n(ci.vlrMat ?? "0")),
