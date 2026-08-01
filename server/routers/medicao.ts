@@ -1345,6 +1345,7 @@ export const medicaoRouter = router({
       quantidade: z.string().nullable().optional(),
       unidade: z.string().nullable().optional(),
       servico: z.string().max(50).nullable().optional(),
+      numero: z.number().nullable().optional(),
       orcamentoItemId: z.number().nullable().optional(),
       itemEapCodigo: z.string().nullable().optional(),
       itemDescricao: z.string().nullable().optional(),
@@ -1358,21 +1359,29 @@ export const medicaoRouter = router({
         .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
         .limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
-      const { id, companyId, ...rest } = input;
+      const { id, companyId, numero: numeroInput, ...rest } = input;
       if (id) {
         await db.update(medicaoCampoContornos)
-          .set({ ...rest, atualizadoEm: new Date() })
+          // Rev. 4792 — numero agora persiste (patch parcial: só se veio no input)
+          .set({ ...rest, ...(typeof numeroInput === "number" ? { numero: numeroInput } : {}), atualizadoEm: new Date() })
           .where(and(eq(medicaoCampoContornos.id, id), eq(medicaoCampoContornos.companyId, companyId)));
         return { id };
       }
+      // Rev. 4792 — numeração POR CATEGORIA (serviço; fallback tipo), ignorando
+      // excluídos: cada categoria conta 1,2,3… sem repetir.
+      const catKey = input.servico ?? input.tipo;
       const [maxRow] = await db
         .select({ max: sql<number>`COALESCE(MAX(numero),0)::int` })
         .from(medicaoCampoContornos)
-        .where(eq(medicaoCampoContornos.medicaoCampoId, input.medicaoCampoId));
+        .where(and(
+          eq(medicaoCampoContornos.medicaoCampoId, input.medicaoCampoId),
+          sql`deleted_at IS NULL`,
+          sql`COALESCE(servico, tipo) = ${catKey}`,
+        ));
       const [row] = await db.insert(medicaoCampoContornos).values({
         companyId,
         ...rest,
-        numero: (maxRow?.max ?? 0) + 1,
+        numero: typeof numeroInput === "number" ? numeroInput : (maxRow?.max ?? 0) + 1,
       }).returning();
       return row;
     }),
@@ -1856,22 +1865,36 @@ export const medicaoRouter = router({
                 // Rev. 4780 — patch parcial de `servico`: se o client (versão antiga
                 // offline) não mandar o campo, PRESERVA a classificação existente
                 // em vez de zerar com null cego.
-                .set({ ...fields, servico: d.servico !== undefined ? (d.servico ?? null) : (existing as any).servico, atualizadoEm: incoming })
+                .set({
+                  ...fields,
+                  servico: d.servico !== undefined ? (d.servico ?? null) : (existing as any).servico,
+                  // Rev. 4792 — numero também sincroniza (patch parcial): sem isso o
+                  // Renumerar só valia no aparelho e os duplicados voltavam do servidor.
+                  numero: typeof d.numero === "number" ? d.numero : (existing as any).numero,
+                  atualizadoEm: incoming,
+                })
                 .where(and(eq(medicaoCampoContornos.id, existing.id), eq(medicaoCampoContornos.companyId, companyId)));
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "ok" });
               continue;
             }
+            // Rev. 4792 — numeração POR CATEGORIA (serviço; fallback tipo), sem
+            // excluídos; client offline pode mandar o numero otimista dele.
+            const catKey = (d.servico ?? d.tipo) ?? "";
             const [maxRow] = await db
               .select({ max: sql<number>`COALESCE(MAX(numero),0)::int` })
               .from(medicaoCampoContornos)
-              .where(eq(medicaoCampoContornos.medicaoCampoId, campoId));
+              .where(and(
+                eq(medicaoCampoContornos.medicaoCampoId, campoId),
+                sql`deleted_at IS NULL`,
+                sql`COALESCE(servico, tipo) = ${catKey}`,
+              ));
             const [row] = await db.insert(medicaoCampoContornos).values({
               companyId,
               medicaoCampoId: campoId,
               uuid: op.uuid,
-              numero: (maxRow?.max ?? 0) + 1,
               atualizadoEm: incoming,
               ...fields,
+              numero: typeof d.numero === "number" ? d.numero : (maxRow?.max ?? 0) + 1,
             }).returning();
             resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: row.id, status: "ok" });
             continue;

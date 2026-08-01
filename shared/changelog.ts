@@ -19,6 +19,14 @@
  *   (tambem nas areas, no centro); no Selecionar, tocar na etiqueta seleciona.
  * - Botao RENUMERAR: reordena os numeros da pagina em ordem de leitura
  *   (esquerda p/ direita, cima p/ baixo), com confirmacao.
+ * - Numeracao POR CATEGORIA sem repetir: cada servico conta 1,2,3... e o
+ *   `numero` agora PERSISTE no servidor (estava fora da whitelist do salvar
+ *   e do sync offline — renumerar so valia no aparelho e os duplicados
+ *   voltavam); insert usa max+1 da categoria ignorando excluidos.
+ * - Etiquetas sem "#", arrastaveis no Selecionar; se ficar longe da medicao,
+ *   linha-guia tracejada com bolinha aponta o ponto exato.
+ * - Campo de nome com lapis ("Toque p/ nomear") p/ rastreabilidade por
+ *   ambiente (ex.: CONTRAPISO APTO 1).
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO
