@@ -389,6 +389,8 @@ export default function MedicaoLevantamento() {
   // Rev. 3101 — multi-seleção de contornos (apagar/vincular vários de uma vez).
   const [selContornos, setSelContornos] = useState<Set<number>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Rev. 4792 — seleção múltipla de fotos p/ exclusão em massa (null = modo normal)
+  const [fotoSel, setFotoSel] = useState<Set<string> | null>(null);
 
   // Pré-visualização do arrasto (retângulo) e do traço livre.
   const [dragRect, setDragRect] = useState<{ a: GeoPonto; b: GeoPonto } | null>(null);
@@ -2273,15 +2275,22 @@ export default function MedicaoLevantamento() {
                   const subs = gruposSub.map.get(s.chave) ?? [];
                   const tot = (totaisPorServico.get(s.chave) ?? 0) + subs.reduce((a: number, x: any) => a + (totaisPorServico.get(x.chave) ?? 0), 0);
                   const sel = servicoAtivo === s.chave || gruposSub.subPai.get(servicoAtivo) === s.chave;
+                  // Rev. 4792 — só destaca em cor quem TEM lançamento (ou está selecionado);
+                  // o resto fica cinzinha para o olho achar rápido onde já foi medido.
+                  const temLanc = tot > 0;
                   return (
                     <button
                       key={s.chave}
                       type="button"
                       onClick={() => selecionarServico(subs.length > 0 && !sel ? subs[0] : s)}
                       className={`shrink-0 h-11 px-3 rounded-lg border-2 text-sm font-semibold flex items-center gap-2 transition-colors ${sel ? "text-white" : "bg-white"}`}
-                      style={sel ? { backgroundColor: s.cor || "#374151", borderColor: s.cor || "#374151" } : { borderColor: s.cor || "#d1d5db", color: s.cor || "#374151" }}
+                      style={sel
+                        ? { backgroundColor: s.cor || "#374151", borderColor: s.cor || "#374151" }
+                        : temLanc
+                          ? { borderColor: s.cor || "#d1d5db", color: s.cor || "#374151" }
+                          : { borderColor: "#e5e7eb", color: "#9ca3af" }}
                     >
-                      <span className="inline-block h-3 w-3 rounded-full border border-white/50" style={{ backgroundColor: s.cor || "#9ca3af" }} />
+                      <span className="inline-block h-3 w-3 rounded-full border border-white/50" style={{ backgroundColor: sel || temLanc ? (s.cor || "#9ca3af") : "#d1d5db" }} />
                       {s.nome}
                       {tot > 0 && (
                         <span className={`text-[11px] font-bold tabular-nums rounded px-1 ${sel ? "bg-white/25" : "bg-gray-100 text-gray-600"}`}>
@@ -2295,8 +2304,8 @@ export default function MedicaoLevantamento() {
                 {servicos.filter((s: any) => s.ativo !== 0 && s.derivaDe).map((s: any) => {
                   const tot = totaisPorServico.get(s.chave) ?? 0;
                   return (
-                    <span key={s.chave} className="shrink-0 h-11 px-3 rounded-lg border border-dashed text-xs flex items-center gap-1.5 text-gray-500" style={{ borderColor: s.cor || "#d1d5db" }} title={`Derivado de ${s.derivaDe} × ${s.fator} face(s) — calculado automaticamente`}>
-                      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.cor || "#9ca3af" }} />
+                    <span key={s.chave} className="shrink-0 h-11 px-3 rounded-lg border border-dashed text-xs flex items-center gap-1.5 text-gray-500" style={{ borderColor: tot > 0 ? (s.cor || "#d1d5db") : "#e5e7eb" }} title={`Derivado de ${s.derivaDe} × ${s.fator} face(s) — calculado automaticamente`}>
+                      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tot > 0 ? (s.cor || "#9ca3af") : "#d1d5db" }} />
                       {s.nome} <b className="tabular-nums text-gray-700">{tot > 0 ? tot.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : "auto"}</b>
                     </span>
                   );
@@ -2338,7 +2347,11 @@ export default function MedicaoLevantamento() {
                         <button
                           key={s.chave} type="button" onClick={() => selecionarServico(s)}
                           className={`shrink-0 h-9 px-3 rounded-full border text-xs font-semibold flex items-center gap-1.5 ${sel ? "text-white" : "bg-white"}`}
-                          style={sel ? { backgroundColor: s.cor || "#374151", borderColor: s.cor || "#374151" } : { borderColor: s.cor || "#d1d5db", color: s.cor || "#374151" }}
+                          style={sel
+                            ? { backgroundColor: s.cor || "#374151", borderColor: s.cor || "#374151" }
+                            : tot > 0
+                              ? { borderColor: s.cor || "#d1d5db", color: s.cor || "#374151" }
+                              : { borderColor: "#e5e7eb", color: "#9ca3af" }}
                         >
                           {label}
                           {tot > 0 && <span className={`tabular-nums rounded px-1 ${sel ? "bg-white/25" : "bg-gray-100 text-gray-600"}`}>{tot.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</span>}
@@ -3294,7 +3307,7 @@ export default function MedicaoLevantamento() {
                                   <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-14 object-cover rounded border" />
                                 </a>
                                 {f.__pending && <span className="absolute bottom-0.5 left-0.5 bg-amber-500/90 text-white text-[8px] px-1 rounded">pend.</span>}
-                                <button className="absolute top-0.5 right-0.5 bg-white/90 rounded-full p-0.5 text-red-600 opacity-0 group-hover:opacity-100" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste contorno. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
+                                <button className="absolute top-0.5 right-0.5 bg-white/95 rounded-full p-0.5 text-red-600 shadow border" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste contorno. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
                                   <Trash2 className="h-3 w-3" />
                                 </button>
                               </div>
@@ -3354,9 +3367,41 @@ export default function MedicaoLevantamento() {
             <div className="border rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold flex items-center gap-1.5"><ImageIcon className="h-4 w-4" />Fotos ({fotos.length})</h3>
-                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => fotoInputRef.current?.click()}>
-                  <Camera className="h-3.5 w-3.5" />Adicionar
-                </Button>
+                <div className="flex items-center gap-1">
+                  {fotos.length > 0 && (
+                    fotoSel === null ? (
+                      <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setFotoSel(new Set())}>
+                        <CheckCircle2 className="h-3.5 w-3.5" />Selecionar
+                      </Button>
+                    ) : (
+                      <>
+                        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setFotoSel(null)}>Cancelar</Button>
+                        <Button
+                          size="sm" className="h-7 gap-1 text-xs bg-red-600 hover:bg-red-700 text-white"
+                          disabled={fotoSel.size === 0}
+                          onClick={() => {
+                            const alvos = fotos.filter((f: any) => fotoSel.has(String(f.uuid ?? f.id)));
+                            askConfirm({
+                              title: `Excluir ${alvos.length} foto(s)?`,
+                              description: "As fotos selecionadas serão removidas deste levantamento. Esta ação não pode ser desfeita.",
+                              confirmText: "Excluir",
+                              onConfirm: () => {
+                                void (async () => { for (const f of alvos) await off.excluirFoto(f); setFotoSel(null); })();
+                              },
+                            });
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />Excluir ({fotoSel.size})
+                        </Button>
+                      </>
+                    )
+                  )}
+                  {fotoSel === null && (
+                    <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => fotoInputRef.current?.click()}>
+                      <Camera className="h-3.5 w-3.5" />Adicionar
+                    </Button>
+                  )}
+                </div>
                 <input ref={fotoInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFotoSelected} />
                 <input ref={fotoContornoInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFotoContornoSelected} />
               </div>
@@ -3369,16 +3414,33 @@ export default function MedicaoLevantamento() {
                     const tag = cv
                       ? `nº ${String(cv.numero ?? "")}${cv.rotulo ? " · " + cv.rotulo : ""}`
                       : null;
+                    const fk = String(f.uuid ?? f.id);
+                    const marcada = fotoSel?.has(fk) ?? false;
                     return (
                     <div key={f.id} className="relative group">
-                      <a href={off.fotoSrcFor(f)} target="_blank" rel="noopener noreferrer">
-                        <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-20 object-cover rounded-md border" />
-                      </a>
+                      {fotoSel !== null ? (
+                        <button
+                          className="block w-full"
+                          onClick={() => setFotoSel((prev) => { const n = new Set(prev ?? []); if (n.has(fk)) n.delete(fk); else n.add(fk); return n; })}
+                        >
+                          <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className={`w-full h-20 object-cover rounded-md border-2 ${marcada ? "border-red-500 opacity-80" : "border-transparent"}`} />
+                          <span className={`absolute top-1 left-1 h-5 w-5 rounded-full border-2 flex items-center justify-center text-white text-[10px] ${marcada ? "bg-red-600 border-red-600" : "bg-white/80 border-gray-400"}`}>
+                            {marcada ? "✓" : ""}
+                          </span>
+                        </button>
+                      ) : (
+                        <a href={off.fotoSrcFor(f)} target="_blank" rel="noopener noreferrer">
+                          <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-20 object-cover rounded-md border" />
+                        </a>
+                      )}
                       {tag && <span className="absolute bottom-1 right-1 max-w-[90%] truncate bg-blue-600/90 text-white text-[9px] px-1 rounded" title={tag}>{tag}</span>}
                       {f.__pending && <span className="absolute bottom-1 left-1 bg-amber-500/90 text-white text-[9px] px-1 rounded">pendente</span>}
-                      <button className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 text-red-600 opacity-0 group-hover:opacity-100" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste levantamento. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {/* Rev. 4792 — sempre visível (iPad não tem hover) */}
+                      {fotoSel === null && (
+                        <button className="absolute top-1 right-1 bg-white/95 rounded-full p-1 text-red-600 shadow border" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste levantamento. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                     );
                   })}

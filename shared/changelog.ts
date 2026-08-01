@@ -73,6 +73,13 @@
  *   plantas do levantamento), a categoria ativa + subcategorias, ou so a
  *   categoria/subcategoria ativa — sempre levando as fotos vinculadas junto,
  *   com confirmacao mostrando quantos contornos/fotos serao excluidos.
+ * - Fotos: o botao de excluir agora fica SEMPRE visivel (no iPad nao existe
+ *   "passar o mouse", entao ele nunca aparecia — por isso "nao apagava").
+ *   Novo modo "Selecionar" no card de Fotos: toque nas fotos para marcar
+ *   varias e exclua todas de uma vez com confirmacao.
+ * - Paleta de servicos: categorias SEM lancamento agora ficam cinzinhas;
+ *   so ganham a cor propria as que tem contorno medido (ou a selecionada).
+ *   Vale tambem para as abinhas de subcategoria e para os derivados.
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO
