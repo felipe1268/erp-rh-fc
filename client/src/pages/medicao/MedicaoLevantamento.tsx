@@ -2227,9 +2227,12 @@ export default function MedicaoLevantamento() {
                     e ampliam com liberdade total; 1 dedo desenha/seleciona. */}
                 <div
                   ref={canvasWrapRef}
-                  className="relative rounded-xl overflow-hidden flex-1 min-h-0 border border-slate-300 shadow-inner"
+                  className="relative rounded-xl overflow-hidden shrink-0 border border-slate-300 shadow-inner"
                   style={{
                     touchAction: "none",
+                    // Rev. 4791 — espaço TRAVADO: altura definida (não a tela inteira);
+                    // o usuário navega DENTRO dele com 2 dedos (zoom/mover à vontade).
+                    height: "clamp(360px, 52vh, 640px)",
                     background: "radial-gradient(circle, #cbd5e1 1px, transparent 1px) 0 0 / 22px 22px, #e2e8f0",
                   }}
                 >
