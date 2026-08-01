@@ -2214,8 +2214,13 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   {(m.status === "aguardando_aprovacao" || m.status === "rascunho") && (
                     <Button size="sm" variant="outline" className="gap-1 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
                       disabled={recalcularMut.isPending}
-                      onClick={() => recalcularMut.mutate({ medicaoId: m.id, companyId: contrato.companyId }, { onSuccess: (data: any) => setRecalcResult(data) })}>
-                      <RefreshCw className={`w-3 h-3 ${recalcularMut.isPending ? "animate-spin" : ""}`} /> Recalcular
+                      title="Cruza o medido com o avanço do cronograma da obra (consultivo — não altera o medido)"
+                      onClick={() => recalcularMut.mutate({ medicaoId: m.id, companyId: contrato.companyId }, { onSuccess: (data: any) => {
+                        setRecalcResult(data);
+                        if (data?.alertaDivergencia) toast.warning(data.alertaDivergencia);
+                        else toast.success("Medido compatível com o avanço da obra.");
+                      } })}>
+                      <BarChart3 className={`w-3 h-3 ${recalcularMut.isPending ? "animate-pulse" : ""}`} /> Comparar c/ Avanço da Obra
                     </Button>
                   )}
                   {isPreApproval && (

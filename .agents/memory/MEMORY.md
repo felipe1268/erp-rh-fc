@@ -101,6 +101,7 @@
 - [Client-driven AI batching](client-driven-ai-batching.md) — loops de LLM por lote com cursor que só avança por efeito colateral precisam de guard de estagnação.
 - [terceiro_contratos.status não confiável](terceiro-contrato-status-unreliable.md) — "assinado" = envelope FcSign concluido+não-excluído, NÃO status="ativo" bruto.
 - [CIPA module write-path guards](cipa-module.md) — CIPA create/update/delete need companyFilter; update/delete-by-id are IDOR holes; abrirVotacao race fixed via UNIQUE+onConflictDoNothing.
+- [Cronograma consultivo na medição](medicao-cronograma-consultivo.md) — avanço do cronograma NUNCA escreve o medido (campo é soberano); só comparativo com alerta acima/abaixo (tol. 3%).
 - [FD pendente trava aprovação](fd-pendente-trava-aprovacao.md) — FD de material não descontado bloqueia aprovar medição; puxar auto capado no medido (lock 478003); título líquido de FD; desaprovar apaga título sem baixa.
 - [Terceiros: título garantido no Financeiro](terceiros-medicao-titulo-garantido.md) — aprovar medição chama garantirTituloDaMedicao (bypassa toggle auto_import, xact_lock 478001, periodo YYYY-MM c/ fallback); novo caminho de aprovação deve propagar financeiroOk.
 - [Medição módulos cliente vs terceiros + shared engine](medicao-modules-architecture.md) — "medicao"=lado CLIENTE, terceiros é tabela separada, IDs colidem → medicao_campo precisa de `origem`; [sem origem = escopo CLIENTE nunca `true`](medicao-shared-engine-origem.md).

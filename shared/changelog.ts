@@ -1,4 +1,20 @@
 /**
+ * Rev. 4800 - CRONOGRAMA CONSULTIVO NA MEDICAO DE TERCEIROS
+ *
+ * Pedido do usuario: "o valor que vem do cronograma nao pode vir na medicao
+ * automaticamente, tem que ser apenas consultivo".
+ * - O medido OFICIAL agora vem SO do Levantamento de Campo ou da digitacao
+ *   manual. Gerar medicao cria a planilha ZERADA (o avanco do cronograma nao
+ *   preenche mais os percentuais).
+ * - Botao "Recalcular" virou "Comparar c/ Avanco da Obra": cruza o medido
+ *   acumulado de cada item com o avanco do cronograma (tolerancia 3%) e avisa
+ *   "medido ACIMA do avanco da obra" (risco de pagar mais que o executado) ou
+ *   "medido ABAIXO". Nao bloqueia - o campo e soberano.
+ * - O alerta fica gravado na medicao e aparece para o aprovador.
+ * - Futuro (combinado): comparar tambem com a medicao do CLIENTE - o avanco
+ *   pago ao terceiro nao deve superar o avanco recebido do cliente.
+ */
+/**
  * Rev. 4799 - CONTRATO: BARRA FIXA NO TOPO (CABECALHO + ABAS)
  *
  * - O cabecalho do contrato (numero, tags, empreiteiro, obra, Nova Medicao) e a

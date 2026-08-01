@@ -1943,13 +1943,12 @@ export const terceiroContratosRouter = router({
         }
 
         const percentualAnterior = n(item.percentualMedidoAcumulado);
-        const percentualPeriodo = Math.max(0, percentualFisico - percentualAnterior);
-        const valorPeriodo = (percentualPeriodo / 100) * n(item.valorTotal);
-        const valorAcumuladoItem = (percentualFisico / 100) * n(item.valorTotal);
+        // Rev. 4800 — cronograma é CONSULTIVO: a medição nasce ZERADA e o medido
+        // oficial vem do LEVANTAMENTO DE CAMPO ou da digitação manual. O avanço
+        // da obra fica gravado só como referência (percentualAvancoFisico) para
+        // o comparativo "medido × avanço da obra".
         const vlrMatItem = n((item as any).vlrMat ?? "0");
         const vlrMdoItem = n((item as any).vlrMdo ?? "0");
-
-        valorMedidoPeriodo += valorPeriodo;
 
         itensMedicao.push({
           contratoItemId: item.id,
@@ -1957,13 +1956,13 @@ export const terceiroContratosRouter = router({
           descricao: item.descricao,
           percentualAvancoFisico: String(percentualFisico),
           percentualAcumuladoAnterior: String(percentualAnterior),
-          percentualMedidoPeriodo: String(percentualPeriodo),
-          valorMedidoPeriodo: String(valorPeriodo),
-          valorAcumulado: String(valorAcumuladoItem),
-          valorMatPeriodo: String((percentualPeriodo / 100) * vlrMatItem),
-          valorMdoPeriodo: String((percentualPeriodo / 100) * vlrMdoItem),
-          valorMatAcumulado: String((percentualFisico / 100) * vlrMatItem),
-          valorMdoAcumulado: String((percentualFisico / 100) * vlrMdoItem),
+          percentualMedidoPeriodo: "0",
+          valorMedidoPeriodo: "0",
+          valorAcumulado: String((percentualAnterior / 100) * n(item.valorTotal)),
+          valorMatPeriodo: "0",
+          valorMdoPeriodo: "0",
+          valorMatAcumulado: String((percentualAnterior / 100) * vlrMatItem),
+          valorMdoAcumulado: String((percentualAnterior / 100) * vlrMdoItem),
         });
       }
 
@@ -2160,7 +2159,9 @@ export const terceiroContratosRouter = router({
         for (const im of itensMedicao) {
           await tx.update(terceiroContratoItens)
             .set({
-              percentualMedidoAcumulado: im.percentualAvancoFisico,
+              // Rev. 4800 — consolida o MEDIDO (anterior + período), nunca o
+              // avanço do cronograma (percentualAvancoFisico é só consultivo).
+              percentualMedidoAcumulado: String(n(im.percentualAcumuladoAnterior) + n(im.percentualMedidoPeriodo)),
               valorMedidoAcumulado: im.valorAcumulado,
             })
             .where(eq(terceiroContratoItens.id, im.contratoItemId));
@@ -2533,7 +2534,8 @@ export const terceiroContratosRouter = router({
         const itensMedicao = await tx.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
         for (const im of itensMedicao) {
           await tx.update(terceiroContratoItens).set({
-            percentualMedidoAcumulado: im.percentualAvancoFisico,
+            // Rev. 4800 — consolida o MEDIDO, nunca o avanço consultivo.
+            percentualMedidoAcumulado: String(n(im.percentualAcumuladoAnterior) + n(im.percentualMedidoPeriodo)),
             valorMedidoAcumulado: im.valorAcumulado,
           }).where(eq(terceiroContratoItens.id, im.contratoItemId));
         }
@@ -2599,7 +2601,7 @@ export const terceiroContratosRouter = router({
           valorTotal: n(ci?.valorTotal),
           percAnterior: n(im.percentualAcumuladoAnterior),
           percPeriodo: n(im.percentualMedidoPeriodo),
-          percAcumulado: n(im.percentualAvancoFisico),
+          percAcumulado: n(im.percentualAcumuladoAnterior) + n(im.percentualMedidoPeriodo), // Rev. 4800 — acumulado MEDIDO
           valorPeriodo: n(im.valorMedidoPeriodo),
           valorAcumulado: n(im.valorAcumulado),
         };
@@ -3015,8 +3017,8 @@ export const terceiroContratosRouter = router({
       if (medicao.status === "aprovada") {
         const itensMedicao = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
         for (const im of itensMedicao) {
-          const prevAcum = n(im.percentualAvancoFisico);
-          const prevValAcum = n(im.valorAcumulado);
+          const prevAcum = n(im.percentualMedidoPeriodo); // Rev. 4800 — reverte o PERÍODO medido, não o avanço consultivo
+          const prevValAcum = n(im.valorMedidoPeriodo); // idem: reverte o VALOR do período
           const [contratoItem] = await db.select().from(terceiroContratoItens).where(eq(terceiroContratoItens.id, im.contratoItemId));
           if (contratoItem) {
             const novoPerc = Math.max(0, n(contratoItem.percentualMedidoAcumulado) - prevAcum);
@@ -3190,6 +3192,9 @@ export const terceiroContratosRouter = router({
 
       let valorMedidoPeriodo = 0;
       const itensResultado: { descricao: string; eapCodigo: string | null; vinculado: boolean; percentual: number }[] = [];
+      // Rev. 4800 — cronograma é CONSULTIVO: coleta divergências medido × obra
+      const divergencias: { descricao: string; medidoAcum: number; avancoObra: number; tipo: "acima" | "abaixo" }[] = [];
+      const TOLERANCIA_PCT = 3;
       for (const itemMed of itensMedicao) {
         const itemContrato = itensContrato.find(ic => ic.id === itemMed.contratoItemId);
         if (!itemContrato) continue;
@@ -3265,9 +3270,15 @@ export const terceiroContratosRouter = router({
         console.log(`[recalcularMedicao] Item "${itemContrato.descricao}" ativId=${atividadeId} → ${percentualFisico}% valorTotal=${itemContrato.valorTotal} valorUnit=${itemContrato.valorUnitario} qtd=${itemContrato.quantidade}`);
 
         const percentualAnterior = percAcumAnteriorPorItem[itemContrato.id] || 0;
-        const percentualPeriodo = Math.max(0, percentualFisico - percentualAnterior);
-        const valorPeriodo = (percentualPeriodo / 100) * n(itemContrato.valorTotal);
-        const valorAcumuladoItem = (percentualFisico / 100) * n(itemContrato.valorTotal);
+        // Rev. 4800 — o cronograma NÃO escreve mais o medido (pedido do usuário:
+        // "o valor do cronograma não pode vir na medição, tem que ser apenas
+        // consultivo"). O medido oficial vem do LEVANTAMENTO DE CAMPO ou da
+        // digitação manual; aqui só recalculamos os TOTAIS a partir do que já
+        // está na planilha e gravamos o avanço da obra como referência.
+        const percentualPeriodo = n(itemMed.percentualMedidoPeriodo);
+        const valorPeriodo = n(itemMed.valorMedidoPeriodo) || (percentualPeriodo / 100) * n(itemContrato.valorTotal);
+        const medidoAcum = percentualAnterior + percentualPeriodo;
+        const valorAcumuladoItem = (medidoAcum / 100) * n(itemContrato.valorTotal);
         valorMedidoPeriodo += valorPeriodo;
         itensResultado.push({
           descricao: itemContrato.descricao,
@@ -3277,14 +3288,25 @@ export const terceiroContratosRouter = router({
         });
 
         await db.update(terceiroMedicaoItens).set({
+          // consultivo: avanço da obra fica gravado só como referência visual
           percentualAvancoFisico: String(percentualFisico),
-          percentualAcumuladoAnterior: String(percentualAnterior),
-          percentualMedidoPeriodo: String(percentualPeriodo),
           percentualFisicoReal: String(percentualFisico),
-          editadoManualmente: false,
-          valorMedidoPeriodo: String(valorPeriodo),
+          percentualAcumuladoAnterior: String(percentualAnterior),
           valorAcumulado: String(valorAcumuladoItem),
         } as any).where(eq(terceiroMedicaoItens.id, itemMed.id));
+
+        // Cruzamento medido × avanço da obra (só p/ itens vinculados com avanço)
+        if (atividadeId && (percentualFisico > 0 || medidoAcum > 0)) {
+          const diff = medidoAcum - percentualFisico;
+          if (Math.abs(diff) > TOLERANCIA_PCT) {
+            divergencias.push({
+              descricao: itemContrato.descricao || `Item #${itemContrato.id}`,
+              medidoAcum: Math.round(medidoAcum * 10) / 10,
+              avancoObra: Math.round(percentualFisico * 10) / 10,
+              tipo: diff > 0 ? "acima" : "abaixo",
+            });
+          }
+        }
       }
 
       for (const itemMed of itensMedicao) {
@@ -3307,11 +3329,22 @@ export const terceiroContratosRouter = router({
       const valorAcumulado = valorAcumuladoAnterior + valorMedidoPeriodo;
       const percentualGlobal = n(contrato.valorTotal) > 0 ? (valorAcumulado / n(contrato.valorTotal)) * 100 : 0;
 
+      // Rev. 4800 — grava o RESULTADO do comparativo (consultivo, não bloqueia)
+      const acima = divergencias.filter(d => d.tipo === "acima");
+      const abaixo = divergencias.filter(d => d.tipo === "abaixo");
+      let alertaTexto: string | null = null;
+      if (divergencias.length > 0) {
+        const partes: string[] = [];
+        if (acima.length > 0) partes.push(`${acima.length} item(ns) com medido ACIMA do avanço da obra (ex.: ${acima[0].descricao}: medido ${acima[0].medidoAcum}% × obra ${acima[0].avancoObra}%)`);
+        if (abaixo.length > 0) partes.push(`${abaixo.length} item(ns) com medido ABAIXO do avanço da obra (ex.: ${abaixo[0].descricao}: medido ${abaixo[0].medidoAcum}% × obra ${abaixo[0].avancoObra}%)`);
+        alertaTexto = `Comparativo com o avanço da obra: ${partes.join("; ")}.`;
+      }
+
       await db.update(terceiroMedicoes).set({
         valorMedido: String(valorMedidoPeriodo),
         valorAcumulado: String(valorAcumulado),
         percentualGlobal: String(percentualGlobal),
-        alertaDivergencia: null,
+        alertaDivergencia: alertaTexto,
       } as any).where(eq(terceiroMedicoes.id, input.medicaoId));
 
       // Rev. 4799 — com o valor medido atualizado, completa (top-up) o desconto
@@ -3321,7 +3354,7 @@ export const terceiroContratosRouter = router({
 
       const vinculados = itensResultado.filter(i => i.vinculado).length;
       const naoVinculados = itensResultado.filter(i => !i.vinculado).length;
-      return { ok: true, valorMedido: valorMedidoPeriodo, percentualGlobal, itens: itensResultado, vinculados, naoVinculados, totalEaps: Object.keys(eapToAtividadeId).length, totalAvancos: Object.keys(avancoMap).length };
+      return { ok: true, valorMedido: valorMedidoPeriodo, percentualGlobal, itens: itensResultado, vinculados, naoVinculados, divergencias, alertaDivergencia: alertaTexto, totalEaps: Object.keys(eapToAtividadeId).length, totalAvancos: Object.keys(avancoMap).length };
     }),
 
   editarMedicao: protectedProcedure
@@ -3586,7 +3619,7 @@ export const terceiroContratosRouter = router({
             periodo: m.periodo,
             status: m.status,
             percentualPeriodo: n(item.percentualMedidoPeriodo),
-            percentualAcumulado: n(item.percentualAvancoFisico),
+            percentualAcumulado: n(item.percentualAcumuladoAnterior) + n(item.percentualMedidoPeriodo), // Rev. 4800 — acumulado MEDIDO
             valorPeriodo: n(item.valorMedidoPeriodo),
             valorAcumulado: n(item.valorAcumulado),
           });
