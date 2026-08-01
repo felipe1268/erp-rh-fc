@@ -26,3 +26,7 @@ do contrato terceiro 5" também traria os do contrato cliente 5.
 Para vincular um levantamento a UMA medição de terceiro específica use `medicao_campo.medicao_id`
 → `terceiro_medicoes.id` (coluna adicionada junto). A engine (`MedicaoLevantamento.tsx`) sabe a
 origem pela ROTA e chama o `getContrato` da fonte certa; não confie só no `contrato_id`.
+
+## Sync offline (sincronizarLote) valida contrato nos DOIS módulos
+O guard raiz do `sincronizarLote` deve aceitar contratoId de `medicao_contratos` OU `terceiro_contratos` (IDs colidem). Só validar um lado fez TODA sync de levantamento de terceiros falhar com "Contrato não encontrado" — pendências eternas, servidor sem NENHUM contorno, e cada aparelho com dados divergentes (deletes locais não propagavam = "fantasmas").
+**How to apply:** qualquer endpoint novo da engine compartilhada que receba contratoId precisa resolver o módulo (cliente × terceiro) e casar com `medicao_campo.origem`.

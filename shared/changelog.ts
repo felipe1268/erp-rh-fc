@@ -64,6 +64,11 @@
  * - Categorias de PERIMETRO (sanca, tabica, rodape...) ganharam Retangulo e
  *   Desenho livre alem dos Pontos: a forma fechada e convertida em metros
  *   lineares do contorno automaticamente.
+ * - BUG CRITICO de sincronizacao corrigido: a validacao do sincronizarLote so
+ *   aceitava contratos da Medicao de CLIENTE — levantamentos de TERCEIROS
+ *   falhavam sempre com "Contrato nao encontrado" e NADA subia ao servidor
+ *   (por isso pendencias eternas e dados divergentes entre aparelhos). Agora
+ *   valida nos dois modulos, com anti-colisao de IDs pela origem do campo.
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO

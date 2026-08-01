@@ -1749,19 +1749,31 @@ export const medicaoRouter = router({
       const { companyId, contratoId } = input;
 
       // Guard de tenant raiz: o contrato precisa ser desta empresa.
-      const [contrato] = await db
+      // Rev. 4792 — BUG CRÍTICO corrigido: o levantamento roda em DOIS módulos
+      // (Medição de Cliente = medicao_contratos; Medição de Terceiros =
+      // terceiro_contratos) e os IDs colidem entre as tabelas. A validação só
+      // olhava medicao_contratos → TODA sync de levantamento de TERCEIROS
+      // falhava com "Contrato não encontrado" e nada chegava ao servidor.
+      const [contratoCli] = await db
         .select({ id: medicaoContratos.id })
         .from(medicaoContratos)
         .where(and(eq(medicaoContratos.id, contratoId), eq(medicaoContratos.companyId, companyId)))
         .limit(1);
-      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado ou sem permissão." });
+      const [contratoTer] = await db
+        .select({ id: terceiroContratos.id })
+        .from(terceiroContratos)
+        .where(and(eq(terceiroContratos.id, contratoId), eq(terceiroContratos.companyId, companyId)))
+        .limit(1);
+      if (!contratoCli && !contratoTer) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado ou sem permissão." });
 
       // cache de campos validados (medicaoCampoId → pertence à empresa+contrato)
+      // Anti-colisão de IDs entre módulos: se o contratoId só existe num dos
+      // módulos, o campo precisa ter a origem correspondente.
       const camposOk = new Map<number, boolean>();
       async function campoValido(campoId: number): Promise<boolean> {
         if (camposOk.has(campoId)) return camposOk.get(campoId)!;
         const [c] = await db
-          .select({ id: medicaoCampo.id })
+          .select({ id: medicaoCampo.id, origem: medicaoCampo.origem })
           .from(medicaoCampo)
           .where(and(
             eq(medicaoCampo.id, campoId),
@@ -1769,7 +1781,12 @@ export const medicaoRouter = router({
             eq(medicaoCampo.contratoId, contratoId),
           ))
           .limit(1);
-        const ok = !!c;
+        let ok = !!c;
+        if (ok && c) {
+          const ehTerceiro = c.origem === "terceiro";
+          if (ehTerceiro && !contratoTer) ok = false;
+          if (!ehTerceiro && !contratoCli) ok = false;
+        }
         camposOk.set(campoId, ok);
         return ok;
       }
