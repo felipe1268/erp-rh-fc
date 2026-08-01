@@ -1234,6 +1234,11 @@ export const medicaoRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Arquivo não pertence a esta empresa." });
         }
         key = input.arquivoKey;
+        // Existência real: a chave deve estar persistida (rota multipart grava
+        // no DB) — bloqueia registrar referência quebrada/forjada.
+        const existsRes = await db.execute(sql`SELECT 1 AS ok FROM uploaded_files WHERE file_key = ${key} LIMIT 1`);
+        const existsRows: any[] = (existsRes as any).rows ?? (existsRes as any) ?? [];
+        if (!existsRows[0]) throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo da planta não encontrado no servidor. Envie novamente." });
         const { storageGet } = await import("../storage");
         ({ url } = await storageGet(key));
       } else {

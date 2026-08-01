@@ -1,4 +1,16 @@
 /**
+ * Rev. 4788 - LEVANTAMENTO: DXF GRANDE PRE-PROCESSADO NO SERVIDOR
+ *
+ * "Nao foi possivel ler o arquivo DXF": o parse de um DXF de 50MB+ estoura a
+ * memoria do Safari/iPad. Agora o SERVIDOR pre-processa o DXF (Node aguenta)
+ * e grava um sidecar JSON compacto (~2MB: SVG + bbox + escala) junto do
+ * arquivo:
+ * - No upload multipart, o sidecar e gerado na hora.
+ * - Plantas legadas: rota POST /api/upload/levantamento-planta/derivar gera
+ *   (e cacheia) o sidecar sob demanda, com auth + guard de empresa.
+ * - Cliente: tenta o sidecar primeiro; se offline/indisponivel, cai no parse
+ *   local antigo (arquivos pequenos continuam funcionando offline).
+ *
  * Rev. 4787 - LEVANTAMENTO: PLANTA GRANDE (100MB+) SEM LIMITE + PROGRESSO REAL
  *
  * O envio antigo (base64 dentro do tRPC) tinha teto de ~30MB e travava em 41%

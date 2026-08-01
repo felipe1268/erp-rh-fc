@@ -3,3 +3,5 @@ attached_assets/INTEGRAÇÃO_FC_ENGENHARIA__1779047279184.MP4 filter=lfs diff=
 server/uploads/backups/erp-fc-backup-2026-07-26T20-28-52.json.gz filter=lfs diff=lfs merge=lfs -text
 server/uploads/backups/erp-fc-backup-2026-07-27T03-00-00.json.gz filter=lfs diff=lfs merge=lfs -text
 server/uploads/backups/erp-fc-backup-2026-07-31T03-00-01.json.gz filter=lfs diff=lfs merge=lfs -text
+attached_assets/POITA-ARQ-004-PE-PL-LAYT-TER-R03_1785579223403.dxf filter=lfs diff=lfs merge=lfs -text
+server/uploads/medicao-campo/60002/upload/1785579170988-gcwc78.dxf filter=lfs diff=lfs merge=lfs -text

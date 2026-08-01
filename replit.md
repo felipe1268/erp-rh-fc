@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4788** — Levantamento: DXF grande pré-processado no servidor (sidecar JSON com SVG+bbox+escala); rota `derivar` p/ plantas legadas; cliente usa sidecar e só parseia localmente como fallback offline.
 - **Rev. 4787** — Levantamento: planta DXF grande (100MB+) sem limite prático — rota multipart `/api/upload/levantamento-planta` (até 1GB) + XHR com progresso real de bytes; `uploadPdf` aceita `arquivoKey`/`arquivoUrl` com validação de tenant.
 - **Rev. 4786** — Levantamento: envio da planta DXF com percentual 0–100% dentro do botão (leitura do arquivo real + rede estimada; 100% só na confirmação do servidor).
 - **Rev. 4785** — Diálogos próprios do ERP (`client/src/lib/appDialog.tsx`): `window.alert` sobrescrito globalmente (some o "domínio.replit.dev diz"); `appConfirm`/`appPrompt` async p/ migração tela a tela; Levantamento 100% migrado.

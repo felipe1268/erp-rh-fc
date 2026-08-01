@@ -425,7 +425,9 @@ Regras:
       destination: (_req, _file, cb) => cb(null, plantaTmpDir),
       filename: (_req, file, cb) => cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`),
     }),
-    limits: { fileSize: 512 * 1024 * 1024 },
+    // 150MB: teto compatível com o heap do Node (~1GB) — a persistência em DB
+    // exige buffer + base64 em memória (150MB → ~350MB transitórios).
+    limits: { fileSize: 150 * 1024 * 1024 },
   });
   app.post("/api/upload/levantamento-planta", apiRateLimit, plantaUpload.single("file"), async (req: any, res: any) => {
     const tmpPath: string | undefined = req.file?.path;
@@ -456,12 +458,77 @@ Regras:
       const { storagePut: sPut } = await import("../storage");
       const buf = await fsPlanta.promises.readFile(file.path);
       const { url } = await sPut(key, buf, ct);
+      // Rev. 4788 — DXF grande: o iPad não aguenta parsear 50MB+ de texto no
+      // navegador. Pré-processa AQUI (Node aguenta) e grava um sidecar JSON
+      // compacto (SVG + bbox + escala) que o cliente carrega em segundos.
+      if (ext === "dxf") {
+        try {
+          const { parseDxfPlanta } = await import("../../client/src/pages/medicao/dxfPlanta");
+          const parsed = parseDxfPlanta(buf.toString("utf8"));
+          await sPut(`${key}.planta.json`, JSON.stringify(parsed), "application/json");
+        } catch (e: any) {
+          console.error("[Planta Upload] Falha ao pré-processar DXF (cliente fará fallback):", e?.message);
+        }
+      }
       res.json({ key, url, contentType: ct });
     } catch (err: any) {
       console.error("[Planta Upload] Erro:", err);
       res.status(500).json({ error: err?.message || "Erro ao enviar a planta" });
     } finally {
       if (tmpPath) fsPlanta.promises.unlink(tmpPath).catch(() => {});
+    }
+  });
+
+  const plantaDerivarInflight = new Map<string, Promise<void>>();
+  // Rev. 4788 — deriva (ou devolve) o sidecar pré-processado de uma planta DXF
+  // já enviada (plantas legadas, de antes do pré-processamento no upload).
+  app.post("/api/upload/levantamento-planta/derivar", apiRateLimit, express.json({ limit: "64kb" }), async (req: any, res: any) => {
+    try {
+      let user: any;
+      try {
+        user = await sdk.authenticateRequest(req);
+      } catch {
+        return res.status(401).json({ error: "Não autenticado" });
+      }
+      const key = String(req.body?.key || "");
+      const m = key.match(/^medicao-campo\/(\d+)\/.+\.dxf$/);
+      if (!m) return res.status(400).json({ error: "Chave inválida" });
+      const companyId = Number(m[1]);
+      const role = String(user?.role || "");
+      if (role !== "admin_master" && role !== "admin") {
+        const { getUserCompanyLinks } = await import("../db");
+        const links = await getUserCompanyLinks(user.id);
+        if (!links.some((l: any) => Number(l.companyId) === companyId)) {
+          return res.status(403).json({ error: "Sem acesso a esta empresa" });
+        }
+      }
+      // Singleflight: evita 2+ parses pesados simultâneos da MESMA planta.
+      if (plantaDerivarInflight.has(key)) {
+        try { await plantaDerivarInflight.get(key); } catch { /* segue e tenta o cache */ }
+      }
+      const { dbRetrieve, storagePut: sPut } = await import("../storage");
+      // cache: sidecar já existe?
+      const side = await dbRetrieve(`${key}.planta.json`);
+      if (side) {
+        res.setHeader("Content-Type", "application/json");
+        return res.send(side.buffer);
+      }
+      const work = (async () => {
+        const orig = await dbRetrieve(key);
+        if (!orig) return null;
+        const { parseDxfPlanta } = await import("../../client/src/pages/medicao/dxfPlanta");
+        const parsed = parseDxfPlanta(orig.buffer.toString("utf8"));
+        if (parsed.ok) { try { await sPut(`${key}.planta.json`, JSON.stringify(parsed), "application/json"); } catch { /* cache é best-effort */ } }
+        return parsed;
+      })();
+      plantaDerivarInflight.set(key, work.then(() => {}, () => {}));
+      let parsed: any;
+      try { parsed = await work; } finally { plantaDerivarInflight.delete(key); }
+      if (!parsed) return res.status(404).json({ error: "Arquivo da planta não encontrado" });
+      res.json(parsed);
+    } catch (err: any) {
+      console.error("[Planta Derivar] Erro:", err);
+      res.status(500).json({ error: err?.message || "Erro ao processar a planta" });
     }
   });
 

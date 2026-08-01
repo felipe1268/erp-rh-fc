@@ -441,6 +441,27 @@ export default function MedicaoLevantamento() {
     setDxfLoading(true); setDxfData(null);
     (async () => {
       try {
+        // Rev. 4788 — DXF grande: pede o sidecar PRÉ-PROCESSADO ao servidor
+        // (SVG+bbox+escala já prontos, ~2MB) em vez de parsear 50MB no iPad.
+        const key = (pdfSel as any)?.arquivoKey
+          || ((pdfSel?.arquivoUrl || "").startsWith("/uploads/") ? decodeURIComponent((pdfSel!.arquivoUrl as string).slice("/uploads/".length).split("?")[0]) : "");
+        if (key && navigator.onLine !== false) {
+          try {
+            const r = await fetch("/api/upload/levantamento-planta/derivar", {
+              method: "POST", credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ key }),
+            });
+            if (r.ok) {
+              const parsed = await r.json();
+              if (parsed && typeof parsed.svg === "string") {
+                if (!cancel) setDxfData(parsed);
+                return;
+              }
+            }
+          } catch { /* cai no fallback local */ }
+        }
+        // Fallback (offline/blob local ou sidecar indisponível): parse no aparelho.
         const resp = await fetch(dxfUrl);
         const text = await resp.text();
         const parsed = parseDxfPlanta(text);
