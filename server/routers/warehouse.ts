@@ -1771,10 +1771,45 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       obraNome:          z.string().optional(),
       motivo:            z.string().optional(),
       observacoes:       z.string().optional(),
+      // Rev. 4801 — saída p/ terceiro SEMPRE pergunta de quem é o custo (poka-yoke).
+      // 'terceiro' exige o contrato: vira débito pendente descontado na próxima medição.
+      custoDe:            z.enum(["nosso", "terceiro"]).optional(),
+      terceiroContratoId: z.number().optional(),
+      descontoTipo:       z.enum(["epi", "ferramental", "insumo", "outro"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Rev. 4801 — mesmos guards de escrita do registerExit (Rev. 4539):
+      // empresa do CHAMADOR + item da MESMA empresa + permissão na obra do item.
+      const [itemGuard] = await db.select({ companyId: almoxarifadoItens.companyId, obraId: almoxarifadoItens.obraId })
+        .from(almoxarifadoItens).where(eq(almoxarifadoItens.id, input.itemId));
+      if (!itemGuard) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
+      const allowedCompaniesIns = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompaniesIns.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      if (itemGuard.companyId !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Item não pertence a esta empresa." });
+      }
+      if (itemGuard.obraId != null) {
+        const allowedObrasIns = await getAlmoxAllowedObraIdSet(ctx.user.id, ctx.user.role, ctx.user.email);
+        if (allowedObrasIns !== null && !allowedObrasIns.has(Number(itemGuard.obraId))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para operar o almoxarifado desta obra (somente leitura)." });
+        }
+      }
+
+      // Rev. 4801 — valida o vínculo com contrato ANTES de mexer no estoque.
+      let contratoDesconto: any = null;
+      if (input.terceiroNome && input.custoDe === "terceiro") {
+        if (!input.terceiroContratoId) throw new TRPCError({ code: "BAD_REQUEST", message: "Escolha o contrato do terceiro para lançar o desconto." });
+        const { terceiroContratos } = await import("../../drizzle/schema");
+        const [tc] = await db.select({ id: terceiroContratos.id, companyId: terceiroContratos.companyId, numero: terceiroContratos.numero })
+          .from(terceiroContratos).where(eq(terceiroContratos.id, input.terceiroContratoId));
+        if (!tc || tc.companyId !== input.companyId) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato do terceiro não encontrado nesta empresa." });
+        contratoDesconto = tc;
+      }
 
       // Rev. 4005 — Saída de Insumos agora aceita terceiro (igual Empréstimo de Ferramentas)
       let funcionarioId: number | null = null;
@@ -1845,7 +1880,31 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         usuarioNome:  ctx.user.name || "Sistema",
       } as any);
 
-      return { funcionarioNome, itemNome: item.nome };
+      // Rev. 4801 — custo do TERCEIRO: gera débito avulso no contrato (conta-corrente
+      // de descontos). Preço = valor unitário do item no almoxarifado (mesma base do
+      // desconto por mau uso dos funcionários próprios). Desconta na próxima medição.
+      let descontoGerado: { contratoId: number; valor: number } | null = null;
+      if (contratoDesconto) {
+        const vu = parseFloat(String(item.valorUnitario ?? "0").replace(",", "."));
+        const valorDesc = Math.round(vu * input.quantidade * 100) / 100;
+        if (valorDesc <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: `O item "${item.nome}" está sem valor unitário no almoxarifado — cadastre o valor para poder descontar do terceiro.` });
+        const { terceiroMedicaoFds } = await import("../../drizzle/schema");
+        await db.insert(terceiroMedicaoFds).values({
+          companyId: input.companyId,
+          contratoId: contratoDesconto.id,
+          medicaoId: null,
+          descricao: `Almoxarifado: ${input.quantidade}× ${item.nome} — ${funcionarioNome}`.slice(0, 500),
+          valor: String(valorDesc.toFixed(2)),
+          dataFd: new Date().toISOString().slice(0, 10),
+          origem: "avulso",
+          tipo: input.descontoTipo || "insumo",
+          observacoes: `Saída de almoxarifado com custo do terceiro${input.terceiroEmpresa ? ` (${input.terceiroEmpresa})` : ""}. Será descontado na próxima medição do contrato.`,
+          criadoPor: ctx.user.name || null,
+        } as any);
+        descontoGerado = { contratoId: contratoDesconto.id, valor: valorDesc };
+      }
+
+      return { funcionarioNome, itemNome: item.nome, descontoGerado };
     }),
 
   listInsumos: protectedProcedure

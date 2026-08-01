@@ -226,10 +226,17 @@ async function _fdPendenteDoContrato(db: any, contrato: any): Promise<{
   registros: Array<{ id: number; numeroOc: string | null; descricao: string | null; valor: number; data: string | null }>;
 }> {
   const fd = await _fdMaterialDoContrato(db, contrato);
-  const rows = await db.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
+  const rows = await db.select({ valor: terceiroMedicaoFds.valor, medicaoId: terceiroMedicaoFds.medicaoId, origem: terceiroMedicaoFds.origem, abatidoRetencao: terceiroMedicaoFds.abatidoRetencao }).from(terceiroMedicaoFds)
     .where(and(eq(terceiroMedicaoFds.companyId, contrato.companyId), eq(terceiroMedicaoFds.contratoId, contrato.id)));
-  const abatidoTotal = rows.reduce((s: number, r: any) => s + n(r.valor), 0);
-  const pendente = Math.max(0, Math.round((fd.total - abatidoTotal) * 100) / 100);
+  // Rev. 4801 — conta-corrente de descontos:
+  // · origem 'avulso' = débito lançado FORA de medição (ex.: insumo do almox com
+  //   custo do terceiro). Enquanto solto (sem medição e sem abatido_retencao),
+  //   SOMA na pendência; quando puxado p/ medição ou abatido da retenção, zera.
+  // · demais origens com medição/abatido_retencao = abatimento do débito de FD das OCs.
+  const settled = (r: any) => typeof r.medicaoId === "number" || Number(r.abatidoRetencao) === 1;
+  const avulsoPendente = rows.filter((r: any) => r.origem === "avulso" && !settled(r)).reduce((s: number, r: any) => s + n(r.valor), 0);
+  const abatidoTotal = rows.filter((r: any) => r.origem !== "avulso" && settled(r)).reduce((s: number, r: any) => s + n(r.valor), 0);
+  const pendente = Math.max(0, Math.round((fd.total + avulsoPendente - abatidoTotal) * 100) / 100);
   return { pendente, fdMaterialTotal: fd.total, abatidoTotal, registros: fd.registros };
 }
 
@@ -240,7 +247,9 @@ async function _fdPendenteDoContrato(db: any, contrato: any): Promise<{
 // também pela mutation manual (fallback p/ medições antigas).
 async function _puxarFdAutomatico(db: any, contrato: any, medicaoId: number, criadoPor?: string | null) {
   return await db.transaction(async (tx: any) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(478003, ${medicaoId})`);
+    // Rev. 4801 — lock por CONTRATO (não por medição): o recurso disputado são os
+    // débitos avulsos pendentes + o saldo de FD das OCs do contrato inteiro.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(478003, ${contrato.id})`);
     const { pendente: pendenteTotal, registros } = await _fdPendenteDoContrato(tx, contrato);
     if (pendenteTotal <= 0.01) return { criado: false, pendente: 0, restante: 0 };
     const [medRow] = await tx.select({ valorMedido: terceiroMedicoes.valorMedido, status: terceiroMedicoes.status })
@@ -252,22 +261,74 @@ async function _puxarFdAutomatico(db: any, contrato: any, medicaoId: number, cri
     const medido = n(medRow.valorMedido);
     if (medido <= 0) return { criado: false, pendente: 0, restante: pendenteTotal }; // sem valor medido ainda — puxa no recálculo
     const teto = Math.max(0, Math.round((medido - jaLancado) * 100) / 100);
-    const pendente = Math.min(pendenteTotal, teto);
-    if (pendente <= 0.01) return { criado: false, pendente: 0, restante: pendenteTotal };
-    const restante = Math.round((pendenteTotal - pendente) * 100) / 100;
-    const ocsTxt = registros.map((r) => r.numeroOc || `OC #${r.id}`).join(", ");
-    const [fd] = await tx.insert(terceiroMedicaoFds).values({
-      companyId: contrato.companyId,
-      contratoId: contrato.id,
-      medicaoId,
-      descricao: `FD de material pendente do contrato (${ocsTxt})`.slice(0, 500),
-      valor: String(pendente.toFixed(2)),
-      dataFd: new Date().toISOString().slice(0, 10),
-      origem: "auto",
-      observacoes: "Puxado automaticamente — débito de FD do contrato descontado do valor a pagar.",
-      criadoPor: criadoPor || null,
-    } as any).returning();
-    return { criado: true, pendente, restante, fd };
+    if (Math.min(pendenteTotal, teto) <= 0.01) return { criado: false, pendente: 0, restante: pendenteTotal };
+    let tetoLivre = teto;
+    let lancado = 0;
+
+    // Rev. 4801 — 1º) débitos AVULSOS pendentes (EPI, insumo do almox, etc.) são
+    // atribuídos à medição um a um (mantêm tipo/descrição próprios no boletim).
+    // Se o último não couber inteiro no teto, a linha é DIVIDIDA: a parte que
+    // coube entra na medição, o resto vira nova linha avulsa pendente.
+    const avulsos = await tx.select().from(terceiroMedicaoFds)
+      .where(and(
+        eq(terceiroMedicaoFds.companyId, contrato.companyId),
+        eq(terceiroMedicaoFds.contratoId, contrato.id),
+        eq(terceiroMedicaoFds.origem, "avulso"),
+        sql`${terceiroMedicaoFds.medicaoId} IS NULL`,
+        eq(terceiroMedicaoFds.abatidoRetencao, 0),
+      )).orderBy(asc(terceiroMedicaoFds.dataFd), asc(terceiroMedicaoFds.id));
+    for (const av of avulsos) {
+      if (tetoLivre <= 0.01) break;
+      const v = n(av.valor);
+      if (v <= tetoLivre + 0.005) {
+        await tx.update(terceiroMedicaoFds).set({ medicaoId, atualizadoEm: new Date().toISOString() })
+          .where(eq(terceiroMedicaoFds.id, av.id));
+        tetoLivre = Math.round((tetoLivre - v) * 100) / 100;
+        lancado = Math.round((lancado + v) * 100) / 100;
+      } else {
+        const cabe = Math.round(tetoLivre * 100) / 100;
+        const resto = Math.round((v - cabe) * 100) / 100;
+        await tx.update(terceiroMedicaoFds).set({ medicaoId, valor: String(cabe.toFixed(2)), atualizadoEm: new Date().toISOString() })
+          .where(eq(terceiroMedicaoFds.id, av.id));
+        await tx.insert(terceiroMedicaoFds).values({
+          companyId: contrato.companyId, contratoId: contrato.id, medicaoId: null,
+          descricao: `${av.descricao} (saldo restante)`.slice(0, 500),
+          valor: String(resto.toFixed(2)), dataFd: av.dataFd, origem: "avulso",
+          tipo: (av as any).tipo || "outro", observacoes: av.observacoes, criadoPor: av.criadoPor,
+        } as any);
+        lancado = Math.round((lancado + cabe) * 100) / 100;
+        tetoLivre = 0;
+      }
+    }
+
+    // 2º) débito de FD de material das OCs (agregado, como antes), no teto restante.
+    if (tetoLivre > 0.01) {
+      const rowsAb = await tx.select({ valor: terceiroMedicaoFds.valor, origem: terceiroMedicaoFds.origem, medicaoId: terceiroMedicaoFds.medicaoId, abatidoRetencao: terceiroMedicaoFds.abatidoRetencao }).from(terceiroMedicaoFds)
+        .where(and(eq(terceiroMedicaoFds.companyId, contrato.companyId), eq(terceiroMedicaoFds.contratoId, contrato.id)));
+      const abatidoOc = rowsAb.filter((r: any) => r.origem !== "avulso" && (typeof r.medicaoId === "number" || Number(r.abatidoRetencao) === 1)).reduce((s: number, r: any) => s + n(r.valor), 0);
+      const fdTotal = (await _fdMaterialDoContrato(tx, contrato)).total;
+      const ocPend = Math.max(0, Math.round((fdTotal - abatidoOc) * 100) / 100);
+      const parcela = Math.min(ocPend, tetoLivre);
+      if (parcela > 0.01) {
+        const ocsTxt = registros.map((r) => r.numeroOc || `OC #${r.id}`).join(", ");
+        await tx.insert(terceiroMedicaoFds).values({
+          companyId: contrato.companyId,
+          contratoId: contrato.id,
+          medicaoId,
+          descricao: `FD de material pendente do contrato (${ocsTxt})`.slice(0, 500),
+          valor: String(parcela.toFixed(2)),
+          dataFd: new Date().toISOString().slice(0, 10),
+          origem: "auto",
+          tipo: "fd",
+          observacoes: "Puxado automaticamente — débito de FD do contrato descontado do valor a pagar.",
+          criadoPor: criadoPor || null,
+        } as any);
+        lancado = Math.round((lancado + parcela) * 100) / 100;
+      }
+    }
+
+    const restante = Math.max(0, Math.round((pendenteTotal - lancado) * 100) / 100);
+    return { criado: lancado > 0.01, pendente: lancado, restante };
   });
 }
 
@@ -903,12 +964,26 @@ export const terceiroContratosRouter = router({
         fdMaterialTotal: fd.total,
         fdMaterialRegistros: fd.registros,
         // Rev. 4798 — débito de FD ainda não descontado em medições.
-        fdAbatidoTotal: await (async () => {
+        // Rev. 4801 — pendência agora inclui débitos AVULSOS (EPI/insumo do almox);
+        // fonte única: _fdPendenteDoContrato.
+        ...await (async () => {
           try {
-            const rowsAb = await db.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
-              .where(and(eq(terceiroMedicaoFds.companyId, contrato.companyId), eq(terceiroMedicaoFds.contratoId, contrato.id)));
-            return rowsAb.reduce((s: number, r: any) => s + n(r.valor), 0);
-          } catch { return 0; }
+            const { pendente, abatidoTotal } = await _fdPendenteDoContrato(db, contrato);
+            return { fdPendenteTotal: pendente, fdAbatidoTotal: abatidoTotal };
+          } catch { return { fdPendenteTotal: 0, fdAbatidoTotal: 0 }; }
+        })(),
+        // Rev. 4801 — retenção técnica já liberada? (título origem 'terceiro_retencao')
+        retencaoLiberacao: await (async () => {
+          try {
+            const [t] = await db.select({ id: financialEntries.id, valor: financialEntries.valorPrevisto, status: financialEntries.status }).from(financialEntries)
+              .where(and(
+                eq(financialEntries.companyId, contrato.companyId),
+                eq(financialEntries.origemModulo, "terceiro_retencao"),
+                eq(financialEntries.origemId, contrato.id),
+                sql`${financialEntries.status} <> 'cancelado'`,
+              )).limit(1);
+            return t ? { liberada: true, valor: n(t.valor), status: t.status } : { liberada: false };
+          } catch { return { liberada: false }; }
         })(),
         naturezaIncluiMaterial,
         valorLiquidoMdo,
@@ -2407,6 +2482,8 @@ export const terceiroContratosRouter = router({
       anexoUrl: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
       criadoPor: z.string().nullable().optional(),
+      // Rev. 4801 — desconto genérico: fd | epi | ferramental | insumo | outro
+      tipo: z.enum(["fd", "epi", "ferramental", "insumo", "outro"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -2430,6 +2507,7 @@ export const terceiroContratosRouter = router({
         dataFd: input.dataFd,
         anexoUrl: input.anexoUrl ?? null,
         origem: "manual",
+        tipo: input.tipo ?? "fd",
         observacoes: input.observacoes ?? null,
         criadoPor: input.criadoPor ?? null,
       } as any).returning();
@@ -3016,12 +3094,14 @@ export const terceiroContratosRouter = router({
           if (descontos > 0) { doc.text(`Descontos: ${BRL(descontos)}`, mL, y); y += 13; }
           // Rev. 4800 — cada FD descontado sai discriminado no boletim
           if (totalFdPdf > 0) {
-            doc.font("Helvetica-Bold").fillColor("#92400e").text(`Faturamento Direto (FD) descontado neste período: - ${BRL(totalFdPdf)}`, mL, y); y += 13;
+            doc.font("Helvetica-Bold").fillColor("#92400e").text(`Descontos lançados neste período (FD, EPI, ferramental...): - ${BRL(totalFdPdf)}`, mL, y); y += 13;
             doc.font("Helvetica").fontSize(7.5).fillColor("#555");
+            // Rev. 4801 — cada desconto sai discriminado com o TIPO no boletim
+            const tipoLabelPdf: Record<string, string> = { fd: "FD Compra", epi: "EPI", ferramental: "Ferramental", insumo: "Insumo", outro: "Outro" };
             for (const f of fdsDaMedicao) {
               if (y > pageBottom - 20) { doc.addPage(); y = 36; doc.font("Helvetica").fontSize(7.5).fillColor("#555"); }
               const dt = f.dataFd ? new Date(`${String(f.dataFd).slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR") : "-";
-              doc.text(`   • ${dt} — ${f.descricao}${f.origem === "auto" ? " (desconto automático)" : ""}: - ${BRL(n(f.valor))}`, mL, y, { width: pageW - 20 });
+              doc.text(`   • ${dt} — [${tipoLabelPdf[(f as any).tipo || "fd"] || "Outro"}] ${f.descricao}${f.origem === "auto" ? " (desconto automático)" : ""}: - ${BRL(n(f.valor))}`, mL, y, { width: pageW - 20 });
               y += 12;
             }
             doc.fontSize(8).fillColor("#333");
@@ -3084,34 +3164,161 @@ export const terceiroContratosRouter = router({
 
   excluirMedicao: protectedProcedure
     .input(z.object({ id: z.number(), contratoId: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId); // Rev. 4801 — tenancy guard
       const [medicao] = await db.select().from(terceiroMedicoes).where(
         and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId))
       );
       if (!medicao) throw new Error("Medição não encontrada");
       if (medicao.status === "paga") throw new Error("Não é possível excluir uma medição já paga");
 
-      if (medicao.status === "aprovada") {
-        const itensMedicao = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
-        for (const im of itensMedicao) {
-          const prevAcum = n(im.percentualMedidoPeriodo); // Rev. 4800 — reverte o PERÍODO medido, não o avanço consultivo
-          const prevValAcum = n(im.valorMedidoPeriodo); // idem: reverte o VALOR do período
-          const [contratoItem] = await db.select().from(terceiroContratoItens).where(eq(terceiroContratoItens.id, im.contratoItemId));
-          if (contratoItem) {
-            const novoPerc = Math.max(0, n(contratoItem.percentualMedidoAcumulado) - prevAcum);
-            const novoVal = Math.max(0, n(contratoItem.valorMedidoAcumulado) - prevValAcum);
-            await db.update(terceiroContratoItens).set({
-              percentualMedidoAcumulado: String(novoPerc),
-              valorMedidoAcumulado: String(novoVal),
-            }).where(eq(terceiroContratoItens.id, im.contratoItemId));
+      // Rev. 4801 — tudo atômico: reversão de acumulados + descontos + deleções.
+      await db.transaction(async (tx: any) => {
+        if (medicao.status === "aprovada") {
+          const itensMedicao = await tx.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
+          for (const im of itensMedicao) {
+            const prevAcum = n(im.percentualMedidoPeriodo); // Rev. 4800 — reverte o PERÍODO medido, não o avanço consultivo
+            const prevValAcum = n(im.valorMedidoPeriodo); // idem: reverte o VALOR do período
+            const [contratoItem] = await tx.select().from(terceiroContratoItens).where(eq(terceiroContratoItens.id, im.contratoItemId));
+            if (contratoItem) {
+              const novoPerc = Math.max(0, n(contratoItem.percentualMedidoAcumulado) - prevAcum);
+              const novoVal = Math.max(0, n(contratoItem.valorMedidoAcumulado) - prevValAcum);
+              await tx.update(terceiroContratoItens).set({
+                percentualMedidoAcumulado: String(novoPerc),
+                valorMedidoAcumulado: String(novoVal),
+              }).where(eq(terceiroContratoItens.id, im.contratoItemId));
+            }
           }
         }
-      }
 
-      await db.delete(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
-      await db.delete(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.id));
+        // Rev. 4801 — descontos da medição excluída: avulsos (EPI/insumo) voltam a
+        // ficar PENDENTES no contrato (não somem); os agregados de FD auto são
+        // apagados (o pendente das OCs volta a contar sozinho pela fórmula).
+        await tx.update(terceiroMedicaoFds).set({ medicaoId: null, atualizadoEm: new Date().toISOString() })
+          .where(and(eq(terceiroMedicaoFds.medicaoId, input.id), eq(terceiroMedicaoFds.companyId, input.companyId), eq(terceiroMedicaoFds.origem, "avulso")));
+        await tx.delete(terceiroMedicaoFds)
+          .where(and(eq(terceiroMedicaoFds.medicaoId, input.id), eq(terceiroMedicaoFds.companyId, input.companyId)));
+
+        await tx.delete(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
+        await tx.delete(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.id));
+      });
       return { ok: true };
+    }),
+
+  // Rev. 4801 — LIBERAÇÃO DA RETENÇÃO TÉCNICA (após a última medição do contrato).
+  // Decisão do usuário: débito pendente (FD/EPI/insumo) ABATE AUTOMATICAMENTE da
+  // retenção na liberação final; o líquido vira título no Contas a Pagar.
+  liberarRetencaoTecnica: protectedProcedure
+    .input(z.object({ contratoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const [contrato] = await db.select().from(terceiroContratos)
+        .where(and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado." });
+      const perc = n((contrato as any).percRetencaoTecnica);
+      if (perc <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Este contrato não tem Retenção Técnica configurada." });
+
+      return await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(478004, ${input.contratoId})`);
+        // Idempotência: só uma liberação por contrato.
+        const [jaTem] = await tx.select({ id: financialEntries.id }).from(financialEntries)
+          .where(and(
+            eq(financialEntries.companyId, input.companyId),
+            eq(financialEntries.origemModulo, "terceiro_retencao"),
+            eq(financialEntries.origemId, input.contratoId),
+            sql`${financialEntries.status} <> 'cancelado'`,
+          )).limit(1);
+        if (jaTem) throw new TRPCError({ code: "BAD_REQUEST", message: "A retenção técnica deste contrato já foi liberada." });
+
+        const meds = await tx.select().from(terceiroMedicoes)
+          .where(and(eq(terceiroMedicoes.contratoId, input.contratoId), eq(terceiroMedicoes.companyId, input.companyId)));
+        const abertas = meds.filter((m: any) => m.status === "rascunho" || m.status === "aguardando_aprovacao");
+        if (abertas.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Ainda há ${abertas.length} medição(ões) em rascunho/aguardando aprovação. Finalize todas antes de liberar a retenção.` });
+        const fechadas = meds.filter((m: any) => m.status === "aprovada" || m.status === "paga");
+        if (fechadas.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma medição aprovada/paga — não há retenção acumulada para liberar." });
+        const retAcumulada = Math.round(fechadas.reduce((s: number, m: any) => s + n(m.valorMedido) * perc / 100, 0) * 100) / 100;
+
+        // Débitos pendentes abatem da retenção (decisão do usuário).
+        const { pendente, registros } = await _fdPendenteDoContrato(tx, contrato);
+        let abatido = 0;
+        if (pendente > 0.01) {
+          let livre = retAcumulada;
+          const avulsos = await tx.select().from(terceiroMedicaoFds)
+            .where(and(
+              eq(terceiroMedicaoFds.companyId, input.companyId),
+              eq(terceiroMedicaoFds.contratoId, input.contratoId),
+              eq(terceiroMedicaoFds.origem, "avulso"),
+              sql`${terceiroMedicaoFds.medicaoId} IS NULL`,
+              eq(terceiroMedicaoFds.abatidoRetencao, 0),
+            )).orderBy(asc(terceiroMedicaoFds.dataFd), asc(terceiroMedicaoFds.id));
+          for (const av of avulsos) {
+            if (livre <= 0.01) break;
+            const v = n(av.valor);
+            if (v <= livre + 0.005) {
+              await tx.update(terceiroMedicaoFds).set({ abatidoRetencao: 1, observacoes: `${av.observacoes ? av.observacoes + " — " : ""}Abatido da retenção técnica na liberação final.`, atualizadoEm: new Date().toISOString() })
+                .where(eq(terceiroMedicaoFds.id, av.id));
+              livre = Math.round((livre - v) * 100) / 100;
+              abatido = Math.round((abatido + v) * 100) / 100;
+            } else {
+              const cabe = Math.round(livre * 100) / 100;
+              const resto = Math.round((v - cabe) * 100) / 100;
+              await tx.update(terceiroMedicaoFds).set({ abatidoRetencao: 1, valor: String(cabe.toFixed(2)), observacoes: `${av.observacoes ? av.observacoes + " — " : ""}Abatido da retenção técnica na liberação final.`, atualizadoEm: new Date().toISOString() })
+                .where(eq(terceiroMedicaoFds.id, av.id));
+              await tx.insert(terceiroMedicaoFds).values({
+                companyId: input.companyId, contratoId: input.contratoId, medicaoId: null,
+                descricao: `${av.descricao} (saldo restante)`.slice(0, 500),
+                valor: String(resto.toFixed(2)), dataFd: av.dataFd, origem: "avulso",
+                tipo: (av as any).tipo || "outro", observacoes: av.observacoes, criadoPor: av.criadoPor,
+              } as any);
+              abatido = Math.round((abatido + cabe) * 100) / 100;
+              livre = 0;
+            }
+          }
+          // Parte de FD das OCs que ainda resta, no espaço livre.
+          if (livre > 0.01) {
+            const restoOc = Math.min(Math.round((pendente - abatido) * 100) / 100, livre);
+            if (restoOc > 0.01) {
+              const ocsTxt = registros.map((r: any) => r.numeroOc || `OC #${r.id}`).join(", ");
+              await tx.insert(terceiroMedicaoFds).values({
+                companyId: input.companyId, contratoId: input.contratoId, medicaoId: null,
+                descricao: `FD de material abatido da retenção técnica (${ocsTxt})`.slice(0, 500),
+                valor: String(restoOc.toFixed(2)),
+                dataFd: new Date().toISOString().slice(0, 10),
+                origem: "auto", tipo: "fd", abatidoRetencao: 1,
+                observacoes: "Abatido da retenção técnica na liberação final.",
+                criadoPor: ctx.user?.name || null,
+              } as any);
+              abatido = Math.round((abatido + restoOc) * 100) / 100;
+            }
+          }
+        }
+
+        const liquido = Math.max(0, Math.round((retAcumulada - abatido) * 100) / 100);
+        let entryId: number | null = null;
+        if (liquido > 0.005) {
+          const hoje = new Date().toISOString().slice(0, 10);
+          const [fe] = await tx.insert(financialEntries).values({
+            companyId: input.companyId,
+            obraId: (contrato as any).obraId ?? null,
+            contaNome: "Serviços de Terceiros",
+            tipo: "despesa",
+            natureza: "variavel",
+            valorPrevisto: String(liquido.toFixed(2)),
+            dataCompetencia: hoje.slice(0, 7) + "-01",
+            dataVencimento: hoje,
+            status: "a_pagar",
+            origemModulo: "terceiro_retencao",
+            origemId: input.contratoId,
+            origemDescricao: `Liberação da Retenção Técnica (${perc}%) — contrato ${(contrato as any).numero || `#${input.contratoId}`}`,
+            descricao: `Retenção Técnica liberada — contrato ${(contrato as any).numero || `#${input.contratoId}`}`,
+          } as any).returning({ id: financialEntries.id });
+          entryId = fe?.id ?? null;
+        }
+        const restantePosLiberacao = Math.max(0, Math.round((pendente - abatido) * 100) / 100);
+        return { ok: true, retAcumulada, abatido, liquido, entryId, debitoRestante: restantePosLiberacao };
+      });
     }),
 
   recalcularMedicao: protectedProcedure

@@ -14,7 +14,8 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler, PenLine
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler, PenLine,
+  CheckCircle2,
 } from "lucide-react";
 import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
 import { toast } from "sonner";
@@ -2121,6 +2122,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
           </Button>
         </div>
       )}
+      <RetencaoTecnicaCard contrato={contrato} modoEdicao={modoEdicao} />
       {contrato.medicoes.map((m: any) => {
         // Rev. 4801 — status "Paga" derivado ao vivo do Financeiro (baixas do título)
         const pagto = (m as any).pagamento;
@@ -2596,7 +2598,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   </tfoot>
                     </table>
                     </div>
-                    <RetencoesSec m={m} contrato={contrato} isEditable={editavel} />
+                    <RetencoesSec m={m} contrato={contrato} isEditable={editavel} fdTotal={fdsAll.filter((f: any) => f.medicaoId === m.id).reduce((s: number, f: any) => s + (Number(f.valor) || 0), 0)} />
                   </>) : (
                     <div className="p-4 text-center text-xs text-gray-400">
                       Itens da medição não carregados. Expanda para ver detalhes.
@@ -2975,7 +2977,7 @@ function ComparativoTab({ contrato, id }: { contrato: any; id: number }) {
   );
 }
 
-function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEditable: boolean }) {
+function RetencoesSec({ m, contrato, isEditable, fdTotal = 0 }: { m: any; contrato: any; isEditable: boolean; fdTotal?: number }) {
   const [editingDescontos, setEditingDescontos] = useState(false);
   const [editingConfig, setEditingConfig] = useState(false);
   const [descontos, setDescontos] = useState(Number(m.descontos || 0));
@@ -3045,7 +3047,8 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
   const retOutras = valorBruto * pOutras / 100;
   const retTecnica = valorBruto * pRetTecnica / 100;
   const totalRet = retISS + retINSS + retIRRF + retOutras + retTecnica;
-  const valorLiquido = valorBruto - totalRet - descontos;
+  // Rev. 4801 — o Líquido do rodapé abate também os descontos de FD/EPI/etc. da medição
+  const valorLiquido = valorBruto - totalRet - descontos - fdTotal;
 
   const retTecnicaAcumulada = pRetTecnica > 0
     ? (contrato.medicoes || [])
@@ -3067,8 +3070,14 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
     });
   };
 
+  // Rev. 4802 — pedido do usuário: NÃO baixar automaticamente. Abre o PDF numa
+  // aba de visualização; lá o usuário decide se baixa (Safari/iPad mostra o
+  // preview nativo com botão de compartilhar/baixar).
+  // Detalhe iOS: a aba precisa ser aberta ANTES do fetch (window.open depois de
+  // um await é bloqueado como popup pelo Safari).
   const handlePdf = async () => {
     setPdfLoading(true);
+    const win = window.open("about:blank", "_blank");
     try {
       const inputPayload = { json: { medicaoId: m.id, companyId: contrato.companyId } };
       const res = await fetch(`/api/trpc/terceiroContratos.gerarPdfMedicao?input=${encodeURIComponent(JSON.stringify(inputPayload))}`);
@@ -3080,13 +3089,14 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
       for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
       const blob = new Blob([byteArr], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = data.filename || "medicao.pdf";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("PDF gerado com sucesso");
-    } catch (e: any) { toast.error(e.message || "Erro ao gerar PDF"); }
+      if (win && !win.closed) win.location.href = url;
+      else window.open(url, "_blank"); // fallback (pode ser bloqueado, mas tenta)
+      // não revogar já — a aba ainda vai carregar o blob; libera depois.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) {
+      try { win?.close(); } catch { /* noop */ }
+      toast.error(e.message || "Erro ao gerar PDF");
+    }
     setPdfLoading(false);
   };
 
@@ -3246,6 +3256,11 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
           ) : (
             <div className="font-semibold text-orange-600">{descontos > 0 ? `- ${BRL(descontos)}` : BRL(0)}</div>
           )}
+        </div>
+        <div className="bg-amber-50 rounded-lg p-2.5">
+          <div className="text-gray-400 text-[10px]">FD / Descontos lançados</div>
+          <div className="font-semibold text-amber-700">{fdTotal > 0 ? `- ${BRL(fdTotal)}` : BRL(0)}</div>
+          {fdTotal > 0 && <div className="text-[10px] text-gray-400 mt-0.5">detalhe no popup Detalhes</div>}
         </div>
         <div className="bg-blue-50 rounded-lg p-2.5">
           <div className="text-gray-400 text-[10px]">Valor Líquido</div>
@@ -3439,12 +3454,93 @@ function ItemsTreeTable({ contrato, id, pct, removerItemMut }: { contrato: any; 
 
 // Rev. 3079 — Painel de FD do período da medição (Terceiros · a pagar).
 // FD manual lançado por medição; soma OBRIGATORIAMENTE abate o valor a pagar (líquido).
+// Rev. 4801 — conta-corrente de descontos do terceiro (FD, EPI, ferramental, insumo, outro)
+// Rev. 4801 — liberação da retenção técnica: aparece quando o contrato tem
+// retenção (%) configurada; abate automaticamente os débitos pendentes
+// (FD/EPI/insumo) e gera o título do líquido no Contas a Pagar.
+function RetencaoTecnicaCard({ contrato, modoEdicao }: { contrato: any; modoEdicao: boolean }) {
+  const utils = trpc.useUtils();
+  const [confirmando, setConfirmando] = useState(false);
+  const perc = Number(contrato.percRetencaoTecnica) || 0;
+  const lib = contrato.retencaoLiberacao;
+  const meds = contrato.medicoes || [];
+  const fechadas = meds.filter((m: any) => m.status === "aprovada" || m.status === "paga");
+  const abertas = meds.filter((m: any) => m.status === "rascunho" || m.status === "aguardando_aprovacao");
+  const retAcumulada = Math.round(fechadas.reduce((s: number, m: any) => s + (Number(m.valorMedido) || 0) * perc / 100, 0) * 100) / 100;
+  const debitoPendente = Number(contrato.fdPendenteTotal) || 0;
+  const liberarMut = trpc.terceiroContratos.liberarRetencaoTecnica.useMutation({
+    onSuccess: (d: any) => {
+      toast.success(`Retenção liberada: ${BRL(d.liquido)} a pagar${d.abatido > 0 ? ` (débitos abatidos: ${BRL(d.abatido)})` : ""}.`);
+      setConfirmando(false);
+      utils.terceiroContratos.getContrato.invalidate();
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao liberar retenção."),
+  });
+  if (perc <= 0 || fechadas.length === 0) return null;
+  if (lib?.liberada) {
+    return (
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-sm text-emerald-800 flex items-center gap-2">
+        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+        Retenção técnica ({perc}%) já liberada — título de {BRL(Number(lib.valor) || 0)} no Contas a Pagar.
+      </div>
+    );
+  }
+  if (!modoEdicao) return null;
+  const liquidoPrevisto = Math.max(0, Math.round((retAcumulada - Math.min(debitoPendente, retAcumulada)) * 100) / 100);
+  return (
+    <div className="bg-white border border-purple-200 rounded-xl px-4 py-3 space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm">
+          <span className="font-semibold text-purple-800">Retenção técnica ({perc}%):</span>{" "}
+          <span className="text-gray-700">{BRL(retAcumulada)} acumulada em {fechadas.length} medição(ões)</span>
+          {debitoPendente > 0.01 && <span className="text-amber-700"> • débitos pendentes: {BRL(debitoPendente)}</span>}
+        </div>
+        <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50"
+          disabled={abertas.length > 0 || liberarMut.isPending}
+          onClick={() => setConfirmando(true)}>
+          Liberar Retenção
+        </Button>
+      </div>
+      {abertas.length > 0 && (
+        <p className="text-xs text-gray-400">Finalize as medições em rascunho/aguardando aprovação para liberar a retenção.</p>
+      )}
+      {confirmando && (
+        <div className="rounded-lg bg-purple-50 border border-purple-200 p-3 text-sm space-y-2">
+          <p className="text-gray-700">
+            Liberar agora? Débitos pendentes ({BRL(Math.min(debitoPendente, retAcumulada))}) serão abatidos automaticamente
+            e o líquido de <b>{BRL(liquidoPrevisto)}</b> vira título no Contas a Pagar.
+            {debitoPendente > retAcumulada + 0.01 && (
+              <span className="text-amber-700"> Atenção: sobra débito de {BRL(Math.round((debitoPendente - retAcumulada) * 100) / 100)} mesmo após o abate.</span>
+            )}
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" className="bg-purple-600 hover:bg-purple-700" disabled={liberarMut.isPending}
+              onClick={() => liberarMut.mutate({ contratoId: contrato.id, companyId: contrato.companyId })}>
+              {liberarMut.isPending ? "Liberando..." : "Confirmar liberação"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirmando(false)}>Cancelar</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TIPO_DESCONTO: Record<string, { label: string; cls: string }> = {
+  fd:          { label: "FD Compra",   cls: "bg-amber-100 text-amber-700 border-amber-200" },
+  epi:         { label: "EPI",         cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  ferramental: { label: "Ferramental", cls: "bg-purple-100 text-purple-700 border-purple-200" },
+  insumo:      { label: "Insumo",      cls: "bg-teal-100 text-teal-700 border-teal-200" },
+  outro:       { label: "Outro",       cls: "bg-gray-100 text-gray-600 border-gray-200" },
+};
+
 function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdTerceiroMut, readOnly }: any) {
   const [open, setOpen] = useState(false);
   const [pendenteAberto, setPendenteAberto] = useState(false);
   const [desc, setDesc] = useState("");
   const [valor, setValor] = useState("");
   const [data, setData] = useState("");
+  const [tipo, setTipo] = useState("outro");
   // Rev. 3082 (T007) — readOnly desliga o lançamento/exclusão de FD na aba-espelho.
   const travado = readOnly || medicao.status === "aprovada" || medicao.status === "paga";
 
@@ -3458,7 +3554,8 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
   // Rev. 4798 — débito de FD do contrato ainda não descontado em NENHUMA medição.
   // O sistema avisa sozinho e oferece puxar o desconto; a aprovação fica
   // bloqueada no servidor enquanto houver pendência.
-  const fdPendente = Math.max(0, (Number(contrato.fdMaterialTotal) || 0) - (Number(contrato.fdAbatidoTotal) || 0));
+  // Rev. 4801 — pendência vem do servidor (fonte única: inclui débitos avulsos de EPI/insumo).
+  const fdPendente = Number(contrato.fdPendenteTotal ?? Math.max(0, (Number(contrato.fdMaterialTotal) || 0) - (Number(contrato.fdAbatidoTotal) || 0)));
   const utils = trpc.useUtils();
   const puxarFdMut = trpc.terceiroContratos.puxarFdPendente.useMutation({
     onSuccess: (r: any) => {
@@ -3474,8 +3571,8 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
     if (parseBRLInput(valor) <= 0) { toast.error("Informe um valor de FD maior que zero."); return; }
     if (!data) { toast.error("Informe a data do FD."); return; }
     criarFdTerceiroMut.mutate(
-      { companyId: contrato.companyId, contratoId: contrato.id, medicaoId: medicao.id, descricao: desc.trim(), valor: String(parseBRLInput(valor)), dataFd: data, criadoPor: "Responsável" },
-      { onSuccess: () => { setDesc(""); setValor(""); setData(""); setOpen(false); } },
+      { companyId: contrato.companyId, contratoId: contrato.id, medicaoId: medicao.id, descricao: desc.trim(), valor: String(parseBRLInput(valor)), dataFd: data, tipo, criadoPor: "Responsável" },
+      { onSuccess: () => { setDesc(""); setValor(""); setData(""); setTipo("outro"); setOpen(false); } },
     );
   };
 
@@ -3483,11 +3580,11 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
     <div className="mt-3 ml-6 mr-1 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs font-semibold text-amber-800">
-          <Truck className="w-3.5 h-3.5" /> FD do Período <span className="text-amber-600 font-normal">(desconta do valor a pagar)</span>
+          <Truck className="w-3.5 h-3.5" /> Descontos do Período <span className="text-amber-600 font-normal">(FD, EPI, ferramental... — desconta do valor a pagar)</span>
         </div>
         {!travado && (
           <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px] text-amber-700 border-amber-300 hover:bg-amber-100" onClick={() => setOpen(o => !o)}>
-            <Plus className="w-3 h-3" /> Lançar FD
+            <Plus className="w-3 h-3" /> Lançar Desconto
           </Button>
         )}
       </div>
@@ -3498,7 +3595,7 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
         <div className="mt-2">
           <button type="button" className="text-[11px] text-amber-700 underline underline-offset-2 hover:text-amber-900"
             onClick={() => setPendenteAberto(o => !o)}>
-            Débito de FD do contrato: {BRL(fdPendente)} — {pendenteAberto ? "ocultar" : "ver detalhes"}
+            Débitos pendentes do contrato (FD, EPI, insumo...): {BRL(fdPendente)} — {pendenteAberto ? "ocultar" : "ver detalhes"}
           </button>
           {pendenteAberto && (
             <div className="mt-1.5 rounded-md border border-amber-200 bg-white p-2.5 text-xs text-gray-600">
@@ -3517,10 +3614,16 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
       )}
 
       {open && !travado && (
-        <div className="mt-2 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2 items-end bg-white rounded-md border border-amber-200 p-2">
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-[auto_1fr_auto_auto_auto] gap-2 items-end bg-white rounded-md border border-amber-200 p-2">
+          <div>
+            <Label className="text-[10px] text-gray-500">Tipo</Label>
+            <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="h-8 text-xs border border-gray-200 rounded-md px-2 bg-white">
+              {Object.entries(TIPO_DESCONTO).filter(([k]) => k !== "fd").map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </div>
           <div>
             <Label className="text-[10px] text-gray-500">Descrição</Label>
-            <Input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Ex.: Material adiantado, retrabalho..." className="h-8 text-xs" />
+            <Input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Ex.: EPI entregue ao colaborador, insumo do almox..." className="h-8 text-xs" />
           </div>
           <div>
             <Label className="text-[10px] text-gray-500">Valor (R$)</Label>
@@ -3540,9 +3643,10 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
         <div className="mt-2 space-y-1">
           {(fds || []).map((f: any) => (
             <div key={f.id} className="flex items-center justify-between gap-2 text-xs bg-white rounded-md border border-amber-100 px-2 py-1.5">
-              <div className="min-w-0">
-                <span className="font-medium text-gray-800 truncate">{f.descricao}</span>
-                <span className="text-gray-400 ml-2">{fmtDate(f.dataFd)}</span>
+              <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
+                <span className={`text-[10px] font-semibold border rounded-full px-1.5 py-0.5 flex-shrink-0 ${(TIPO_DESCONTO[f.tipo || "fd"] || TIPO_DESCONTO.outro).cls}`}>{(TIPO_DESCONTO[f.tipo || "fd"] || TIPO_DESCONTO.outro).label}</span>
+                <span className="font-medium text-gray-800 truncate" title={f.descricao}>{f.descricao}</span>
+                <span className="text-gray-400">{fmtDate(f.dataFd)}</span>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <span className="font-semibold text-amber-700">− {BRL(f.valor)}</span>
@@ -3557,12 +3661,12 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
           ))}
         </div>
       ) : (
-        <p className="mt-2 text-[11px] text-amber-600/80">Nenhum FD lançado neste período.</p>
+        <p className="mt-2 text-[11px] text-amber-600/80">Nenhum desconto lançado neste período.</p>
       )}
 
       <div className="mt-2 flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs border-t border-amber-200 pt-2">
         <span className="text-gray-500">Medido: <strong className="text-gray-800">{BRL(medicao.valorMedido)}</strong></span>
-        <span className="text-amber-700">Total FD: <strong>− {BRL(totalFd)}</strong></span>
+        <span className="text-amber-700">Total descontos: <strong>− {BRL(totalFd)}</strong></span>
         <span className="text-blue-700">Líquido a pagar: <strong>{BRL(liquido)}</strong></span>
       </div>
     </div>

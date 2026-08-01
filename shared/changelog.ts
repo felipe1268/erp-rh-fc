@@ -1,4 +1,36 @@
 /**
+ * Rev. 4801 - DESCONTOS GENERICOS NA MEDICAO DE TERCEIROS (CONTA-CORRENTE)
+ *
+ * Pedido do usuario: "tudo que e desconto necessario tem que vir aqui —
+ * EPI, ferramental, insumo do almoxarifado, qualquer coisa".
+ * - O painel "FD do Periodo" virou "Descontos do Periodo": alem do FD de
+ *   compra (automatico, como ja era), da para lancar manualmente descontos
+ *   de EPI, Ferramental, Insumo do almoxarifado ou Outro, cada um com tipo,
+ *   descricao, valor e data. Cada linha mostra a etiqueta do tipo.
+ * - O rodape "RETENCOES E DESCONTOS" do boletim ganhou o card
+ *   "FD / Descontos lancados" e o Valor Liquido passou a abater esses
+ *   descontos (antes o FD so aparecia no popup Detalhes).
+ * - O PDF do boletim discrimina cada desconto com o tipo entre colchetes.
+ * - INTEGRACOES AUTOMATICAS (mesma Rev.):
+ *   1) Almoxarifado -> contrato: toda saida de insumo para TERCEIRO agora
+ *      pergunta obrigatoriamente "De quem e o custo?" (Nosso / Do terceiro).
+ *      Se for do terceiro, escolhe o contrato e o tipo (EPI/Ferramental/
+ *      Insumo/Outro); o valor (preco do item no almox x quantidade — mesma
+ *      base do desconto por mau uso dos proprios) vira DEBITO AVULSO do
+ *      contrato, pendente ate ser descontado.
+ *   2) Puxada automatica na medicao: alem do FD de compra, os debitos
+ *      avulsos pendentes entram sozinhos na proxima medicao (um a um, com
+ *      divisao da linha se nao couber no teto do valor medido). Excluir a
+ *      medicao devolve os avulsos para pendentes.
+ *   3) Liberacao da Retencao Tecnica: novo card na aba Medicoes (quando o
+ *      contrato tem % de retencao). Ao liberar, os debitos pendentes sao
+ *      abatidos automaticamente da retencao acumulada e o LIQUIDO vira
+ *      titulo no Contas a Pagar (origem terceiro_retencao, uma vez so,
+ *      exige todas as medicoes finalizadas).
+ *   Obs.: EPI de terceiro sai pelo ALMOXARIFADO (tipo EPI) ou lancamento
+ *   manual — o modulo de EPI atende so funcionarios proprios. Emprestimo
+ *   de ferramenta (comodato) fica fora: desconto de ferramental e manual.
+ *
  * Rev. 4800 - CRONOGRAMA CONSULTIVO NA MEDICAO DE TERCEIROS
  *
  * Pedido do usuario: "o valor que vem do cronograma nao pode vir na medicao

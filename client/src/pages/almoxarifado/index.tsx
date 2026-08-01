@@ -1708,6 +1708,14 @@ export default function AlmoxarifadoPage() {
   const [insMotivo, setInsMotivo] = useState("");
   const [insOk, setInsOk] = useState<null | { nome: string; item: string }>(null);
   const [insErr, setInsErr] = useState<string | null>(null);
+  // Rev. 4801 — saída p/ terceiro SEMPRE pergunta de quem é o custo (poka-yoke).
+  const [insCustoDe, setInsCustoDe] = useState<"" | "nosso" | "terceiro">("");
+  const [insContratoId, setInsContratoId] = useState<number>(0);
+  const [insDescTipo, setInsDescTipo] = useState<"epi" | "ferramental" | "insumo" | "outro">("insumo");
+  const { data: contratosTerceiro = [] } = trpc.terceiroContratos.listarContratos.useQuery(
+    { companyId },
+    { enabled: modalInsumo && insTipo === "terceiro" && insCustoDe === "terceiro" },
+  );
   const { data: insSugestoes = [] } = trpc.warehouse.searchFuncionarios.useQuery(
     { companyId, q: insSearch },
     { enabled: insSearch.length >= 2 && !insSelecionado }
@@ -1722,6 +1730,7 @@ export default function AlmoxarifadoPage() {
     setInsItemId(0); setInsItemSearch(""); setInsItemFocused(false); setInsQtd("1");
     setInsObraId(typeof obraContexto === "number" ? obraContexto : 0);
     setInsMotivo(""); setInsOk(null); setInsErr(null);
+    setInsCustoDe(""); setInsContratoId(0); setInsDescTipo("insumo");
   }
   function selecionarFuncionarioIns(f: any) { setInsSelecionado(f); setInsCodigo(f.codigoInterno); setInsSearch(f.nomeCompleto); setInsShowSug(false); }
 
@@ -4280,6 +4289,43 @@ export default function AlmoxarifadoPage() {
                         onChange={e => setInsTerceiroEmpresa(e.target.value)}
                       />
                     </div>
+                    {/* Rev. 4801 — poka-yoke: TODA saída p/ terceiro pergunta de quem é o custo */}
+                    <div className="rounded-xl border-2 border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                      <label className="text-sm font-semibold text-gray-700 block">De quem é o custo? *</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => { setInsCustoDe("nosso"); setInsContratoId(0); }}
+                          className={`py-3 rounded-xl border-2 text-sm font-bold transition ${insCustoDe === "nosso" ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-gray-200 text-gray-600"}`}>
+                          Custo NOSSO
+                        </button>
+                        <button type="button" onClick={() => setInsCustoDe("terceiro")}
+                          className={`py-3 rounded-xl border-2 text-sm font-bold transition ${insCustoDe === "terceiro" ? "bg-amber-500 border-amber-500 text-white" : "bg-white border-gray-200 text-gray-600"}`}>
+                          DO TERCEIRO (descontar)
+                        </button>
+                      </div>
+                      {insCustoDe === "terceiro" && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-xs font-semibold text-gray-600 block mb-1">Contrato do terceiro *</label>
+                            <select className="w-full border-2 rounded-xl p-3 text-base" value={insContratoId} onChange={e => setInsContratoId(Number(e.target.value))}>
+                              <option value={0}>— selecione o contrato —</option>
+                              {(contratosTerceiro as any[]).filter((c: any) => !String(c.status || "").startsWith("cancelad")).map((c: any) => (
+                                <option key={c.id} value={c.id}>{c.numero || `#${c.id}`} — {c.empresaNome || c.empresa?.razaoSocial || c.descricao || ""}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-gray-600 block mb-1">Tipo do desconto</label>
+                            <select className="w-full border-2 rounded-xl p-3 text-base" value={insDescTipo} onChange={e => setInsDescTipo(e.target.value as any)}>
+                              <option value="insumo">Insumo</option>
+                              <option value="epi">EPI</option>
+                              <option value="ferramental">Ferramental</option>
+                              <option value="outro">Outro</option>
+                            </select>
+                          </div>
+                          <p className="text-xs text-amber-700">O valor (preço do item no almoxarifado × quantidade) entra como débito do contrato e é descontado na próxima medição.</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   )}
                   {/* Item */}
@@ -4363,7 +4409,7 @@ export default function AlmoxarifadoPage() {
                   {insErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{insErr}</p>}
                   <button
                     className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                    disabled={(insTipo === "mao_obra" ? !insSelecionado : !insTerceiroNome.trim()) || !insItemId || !insQtd || (typeof obraContexto !== "number" && !insObraId) || registerInsumo.isPending}
+                    disabled={(insTipo === "mao_obra" ? !insSelecionado : (!insTerceiroNome.trim() || !insCustoDe || (insCustoDe === "terceiro" && !insContratoId))) || !insItemId || !insQtd || (typeof obraContexto !== "number" && !insObraId) || registerInsumo.isPending}
                     onClick={() => {
                       const efectiveObraId = typeof obraContexto === "number" ? obraContexto : insObraId;
                       const obraSel = (obrasAtivas as any[]).find((o: any) => o.id === efectiveObraId);
@@ -4371,7 +4417,11 @@ export default function AlmoxarifadoPage() {
                         companyId, itemId: insItemId,
                         quantidade: parseFloat(insQtd),
                         ...(insTipo === "terceiro"
-                          ? { terceiroNome: insTerceiroNome.trim(), terceiroEmpresa: insTerceiroEmpresa.trim() || undefined }
+                          ? {
+                              terceiroNome: insTerceiroNome.trim(), terceiroEmpresa: insTerceiroEmpresa.trim() || undefined,
+                              custoDe: insCustoDe || undefined,
+                              ...(insCustoDe === "terceiro" ? { terceiroContratoId: insContratoId, descontoTipo: insDescTipo } : {}),
+                            }
                           : { funcionarioCodigo: insSelecionado?.codigoInterno || insCodigo }),
                         obraId: efectiveObraId || undefined,
                         obraNome: obraSel ? (obraSel.codigo ? `${obraSel.codigo} – ${obraSel.nome}` : obraSel.nome) : undefined,

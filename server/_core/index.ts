@@ -2230,6 +2230,13 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 3078: medição de terceiros — 3º nível + vínculo levantamento + terceiro_medicao_fds garantidos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA medição terceiros (3 níveis/FD):`, e?.message || e); }
 
+        // Rev. 4801 — descontos genéricos do terceiro (FD, EPI, ferramental, insumo, outro)
+        try {
+          await db.execute(sql`ALTER TABLE terceiro_medicao_fds ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'fd'`);
+          await db.execute(sql`ALTER TABLE terceiro_medicao_fds ADD COLUMN IF NOT EXISTS abatido_retencao INTEGER NOT NULL DEFAULT 0`);
+          console.log(`[SyncSchema+] Rev. 4801: terceiro_medicao_fds.tipo/abatido_retencao garantidos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA tipo de desconto terceiro:`, e?.message || e); }
+
         // Rev. 3041 — CIPA: eleição digital (candidatos, eleitores c/ link, votos anônimos) + planos de ação.
         try {
           await db.execute(sql`

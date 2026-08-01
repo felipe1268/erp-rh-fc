@@ -4497,6 +4497,12 @@ export const terceiroMedicaoFds = pgTable("terceiro_medicao_fds", {
   dataFd:       date("data_fd").notNull(),
   anexoUrl:     varchar("anexo_url", { length: 500 }),
   origem:       varchar({ length: 20 }).default("manual").notNull(), // manual | auto
+  // Rev. 4801 — conta-corrente de descontos do terceiro: fd | epi | ferramental | insumo | outro
+  tipo:         varchar({ length: 20 }).default("fd").notNull(),
+  // Rev. 4801 — origem 'avulso' = débito lançado FORA de medição (ex.: saída do
+  // almoxarifado com custo do terceiro); fica pendente até ser puxado numa medição
+  // (ganha medicao_id) ou abatido da retenção técnica (abatido_retencao=1).
+  abatidoRetencao: integer("abatido_retencao").default(0).notNull(),
   observacoes:  text(),
   criadoPor:    varchar("criado_por", { length: 255 }),
   criadoEm:     timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
