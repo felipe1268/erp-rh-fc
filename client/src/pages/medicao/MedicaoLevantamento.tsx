@@ -17,6 +17,7 @@ import {
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
   RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
+  Layers,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -400,6 +401,7 @@ export default function MedicaoLevantamento() {
     rect: { x0: number; y0: number; x1: number; y1: number } | null;
     cur: GeoPonto[];
     p0?: GeoPonto; // ponto inicial do arrasto (kind="move": deslocamento do contorno inteiro)
+    pid: number;   // pointerId dono da sessão — outros dedos são ignorados/cancelam
   } | null>(null);
 
   // Diálogo numérico no app (substitui window.prompt p/ altura/escala — máscara pt-BR).
@@ -742,6 +744,20 @@ export default function MedicaoLevantamento() {
   const [catNome, setCatNome] = useState("");
   const [catTipo, setCatTipo] = useState<string>("area");
   const svcAtivoObj = useMemo(() => servicos.find((s: any) => s.chave === servicoAtivo) ?? null, [servicos, servicoAtivo]);
+
+  // Rev. 4790 — CAMADAS (estilo layers de CAD): com um serviço ativo, a planta
+  // mostra SÓ os contornos daquela categoria (os demais somem, nada sobreposto).
+  // O botão "Todas" volta a exibir tudo. Persistido por usuário.
+  const [verTodasCamadas, setVerTodasCamadas] = useState<boolean>(() => {
+    try { return localStorage.getItem("medVerTodasCamadas") === "1"; } catch { return false; }
+  });
+  useEffect(() => { try { localStorage.setItem("medVerTodasCamadas", verTodasCamadas ? "1" : "0"); } catch { /* */ } }, [verTodasCamadas]);
+  const contornosVisiveis = useMemo(
+    () => (servicoAtivo && !verTodasCamadas)
+      ? contornosPagina.filter((c: any) => !c.servico || c.servico === servicoAtivo)
+      : contornosPagina,
+    [contornosPagina, servicoAtivo, verTodasCamadas],
+  );
   // Rev. 4783 — reconciliação: se a categoria ativa sumiu/foi desativada,
   // limpa a seleção e derruba a ferramenta de desenho (poka-yoke).
   useEffect(() => {
@@ -814,7 +830,7 @@ export default function MedicaoLevantamento() {
     };
     // Rev. 4789 — durante o ajuste por alça, o próprio contorno sai dos
     // candidatos (senão o ponto arrastado "regruda" na geometria errada).
-    consume(editDrag ? contornosPagina.filter((c) => c.id !== editDrag.contId) : contornosPagina);
+    consume(editDrag ? contornosVisiveis.filter((c) => c.id !== editDrag.contId) : contornosVisiveis);
     consume(referenciaPagina);
     if (draft.length) pushPoly(draft, false, false);
     // interseções (custo O(n²) — limita p/ não travar com muitos segmentos).
@@ -826,7 +842,7 @@ export default function MedicaoLevantamento() {
         }
     }
     return { points, segments };
-  }, [contornosPagina, referenciaPagina, draft, editDrag?.contId]);
+  }, [contornosVisiveis, referenciaPagina, draft, editDrag?.contId]);
 
   // Rev. 4789 — OSnap na PRÓPRIA PLANTA (DXF): extrai os endpoints dos traços
   // do SVG e indexa numa grade espacial (busca só nas células vizinhas — barato
@@ -1483,8 +1499,9 @@ export default function MedicaoLevantamento() {
   // tocando na planta. Fechados = ponto-dentro OU perto da borda; abertos = perto
   // da linha; contagem = perto de um marcador.
   function contornoSobPonto(pt: GeoPonto): any | null {
-    for (let i = contornosPagina.length - 1; i >= 0; i--) {
-      const c = contornosPagina[i];
+    // só as camadas VISÍVEIS são tocáveis (categoria oculta não "rouba" o toque)
+    for (let i = contornosVisiveis.length - 1; i >= 0; i--) {
+      const c = contornosVisiveis[i];
       let pts: GeoPonto[] = [];
       try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
       if (c.tipo === "contagem") {
@@ -1574,15 +1591,21 @@ export default function MedicaoLevantamento() {
   function onHandleDown(e: React.PointerEvent, c: any, kind: "vertex" | "corner" | "edge" | "move", idx: number) {
     e.stopPropagation();
     e.preventDefault();
+    // Sessão única por dedo: se um 2º dedo encostar durante um arrasto (tentativa
+    // de pinça), CANCELA o arrasto sem salvar — nada de estado inconsistente.
+    if (editRef.current) {
+      if (e.pointerId !== editRef.current.pid) { editRef.current = null; setEditDrag(null); setSnapHit(null); }
+      return;
+    }
     try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* */ }
     let base: GeoPonto[] = [];
     try { base = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
-    editRef.current = { cont: c, kind, idx, base, rect: detectRectBox(base), cur: base, p0: getPtFromClient(e.clientX, e.clientY) };
+    editRef.current = { cont: c, kind, idx, base, rect: detectRectBox(base), cur: base, p0: getPtFromClient(e.clientX, e.clientY), pid: e.pointerId };
     setEditDrag({ contId: c.id, pts: base });
   }
   function onHandleMove(e: React.PointerEvent) {
     const ed = editRef.current;
-    if (!ed) return;
+    if (!ed || e.pointerId !== ed.pid) return;
     e.stopPropagation();
     e.preventDefault();
     const raw = getPtFromClient(e.clientX, e.clientY);
@@ -1603,7 +1626,7 @@ export default function MedicaoLevantamento() {
   }
   async function onHandleUp(e: React.PointerEvent) {
     const ed = editRef.current;
-    if (!ed) return;
+    if (!ed || e.pointerId !== ed.pid) return;
     e.stopPropagation();
     try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch { /* */ }
     editRef.current = null;
@@ -1934,6 +1957,16 @@ export default function MedicaoLevantamento() {
                 <Button size="sm" variant="ghost" className="h-11 shrink-0 gap-1 text-gray-500" onClick={() => setServicosDialogOpen(true)} title="Configurar serviços: nomes, cores, faces dos derivados e vínculo com a EAP">
                   <Settings2 className="h-4 w-4" />Configurar
                 </Button>
+                {/* Rev. 4790 — camadas: com serviço ativo mostra SÓ a categoria dele;
+                    este botão liga/desliga a exibição de TODAS ao mesmo tempo. */}
+                <Button
+                  size="sm" variant={verTodasCamadas ? "default" : "outline"}
+                  className="h-11 shrink-0 gap-1.5"
+                  onClick={() => setVerTodasCamadas((v) => !v)}
+                  title={verTodasCamadas ? "Mostrando TODAS as categorias — toque p/ ver só a categoria selecionada" : "Mostrando só a categoria selecionada — toque p/ ver todas"}
+                >
+                  <Layers className="h-4 w-4" />{verTodasCamadas ? "Todas" : "Só a ativa"}
+                </Button>
               </div>
             )}
 
@@ -2249,8 +2282,8 @@ export default function MedicaoLevantamento() {
                               <path key={`ref-${c.id}`} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? 0.06 : 0} stroke={cor} strokeOpacity={0.5} strokeWidth={0.0025} strokeDasharray="0.012 0.008" vectorEffect="non-scaling-stroke" />
                             );
                           })}
-                          {/* contornos salvos */}
-                          {contornosPagina.map((c) => {
+                          {/* contornos salvos — só a CAMADA ativa (ou todas) */}
+                          {contornosVisiveis.map((c) => {
                             let pts: GeoPonto[] = [];
                             try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
                             // Rev. 3111 — durante o ajuste, desenha o preview ao vivo.
@@ -2281,7 +2314,7 @@ export default function MedicaoLevantamento() {
                               (1 dimensão); demais polígonos → 1 handle por vértice. */}
                           {tool === "select" && selContornos.size === 1 && (() => {
                             const cid = [...selContornos][0];
-                            const c = contornosPagina.find((x) => x.id === cid);
+                            const c = contornosVisiveis.find((x) => x.id === cid);
                             if (!c || c.tipo === "contagem") return null;
                             let pts: GeoPonto[] = [];
                             try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
