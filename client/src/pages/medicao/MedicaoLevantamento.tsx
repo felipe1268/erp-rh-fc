@@ -16,7 +16,7 @@ import {
   Hash, MousePointer2, Crosshair, ZoomIn, ZoomOut, Check, Camera, Image as ImageIcon,
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
-  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
+  RectangleHorizontal, PencilLine, ListOrdered, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
   Layers, Maximize,
 } from "lucide-react";
 import {
@@ -2739,8 +2739,8 @@ export default function MedicaoLevantamento() {
                   {/* Rev. 4792 — renumera na ordem de leitura (esq→dir, cima→baixo) */}
                   {contornosPagina.length > 1 && (
                     <Button
-                      size="sm" variant="outline" className="h-7 px-2 text-[11px] gap-1" disabled={bulkBusy}
-                      title="Renumerar todos os contornos desta página da esquerda para a direita e de cima para baixo"
+                      size="sm" className="h-7 px-2.5 text-[11px] gap-1 bg-blue-600 hover:bg-blue-700 text-white" disabled={bulkBusy}
+                      title="Reorganiza a numeração de cada categoria: 1, 2, 3… da esquerda para a direita, de cima para baixo"
                       onClick={() => askConfirm({
                         title: "Renumerar contornos?",
                         description: "Todos os contornos desta página serão renumerados da esquerda para a direita e de cima para baixo (1, 2, 3…).",
@@ -2748,7 +2748,7 @@ export default function MedicaoLevantamento() {
                         onConfirm: () => { void renumerarContornos(); },
                       })}
                     >
-                      {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Hash className="h-3.5 w-3.5" />}Renumerar
+                      {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ListOrdered className="h-3.5 w-3.5" />}Organizar números
                     </Button>
                   )}
                   {/* Rev. 4791 — a lista segue a categoria ativa; este botãozinho libera todas */}
