@@ -3352,6 +3352,7 @@ function ItemsTreeTable({ contrato, id, pct, removerItemMut }: { contrato: any; 
 // FD manual lançado por medição; soma OBRIGATORIAMENTE abate o valor a pagar (líquido).
 function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdTerceiroMut, readOnly }: any) {
   const [open, setOpen] = useState(false);
+  const [pendenteAberto, setPendenteAberto] = useState(false);
   const [desc, setDesc] = useState("");
   const [valor, setValor] = useState("");
   const [data, setData] = useState("");
@@ -3402,21 +3403,25 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
         )}
       </div>
 
+      {/* Rev. 4800 — banner discreto: o desconto entra sozinho lá embaixo;
+          detalhe só aparece se a pessoa quiser clicar. */}
       {fdPendente > 0.01 && (
-        <div className="mt-2 rounded-md border border-red-300 bg-red-50 p-2.5">
-          <div className="flex items-start gap-2 text-xs text-red-700">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <p className="font-bold">Existem débitos pendentes: {BRL(fdPendente)}</p>
-              <p className="mt-0.5">FD de material do contrato ainda não descontado. O sistema desconta sozinho ao gerar/recalcular a medição; se necessário, use o botão abaixo. A aprovação fica <strong>bloqueada</strong> até o débito ser descontado.</p>
-            </div>
-          </div>
-          {!travado && (
-            <div className="mt-2 flex justify-end">
-              <Button size="sm" className="h-7 gap-1 text-[11px] bg-red-600 hover:bg-red-700" disabled={puxarFdMut.isPending}
-                onClick={() => puxarFdMut.mutate({ companyId: contrato.companyId, contratoId: contrato.id, medicaoId: medicao.id })}>
-                {puxarFdMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Truck className="w-3 h-3" />} Descontar nesta medição
-              </Button>
+        <div className="mt-2">
+          <button type="button" className="text-[11px] text-amber-700 underline underline-offset-2 hover:text-amber-900"
+            onClick={() => setPendenteAberto(o => !o)}>
+            Débito de FD do contrato: {BRL(fdPendente)} — {pendenteAberto ? "ocultar" : "ver detalhes"}
+          </button>
+          {pendenteAberto && (
+            <div className="mt-1.5 rounded-md border border-amber-200 bg-white p-2.5 text-xs text-gray-600">
+              <p>FD de material do contrato ainda não descontado. O sistema desconta sozinho ao gerar/recalcular a medição; a aprovação fica <strong>bloqueada</strong> enquanto houver débito.</p>
+              {!travado && (
+                <div className="mt-2 flex justify-end">
+                  <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px] text-amber-700 border-amber-300 hover:bg-amber-100" disabled={puxarFdMut.isPending}
+                    onClick={() => puxarFdMut.mutate({ companyId: contrato.companyId, contratoId: contrato.id, medicaoId: medicao.id })}>
+                    {puxarFdMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Truck className="w-3 h-3" />} Descontar nesta medição
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>

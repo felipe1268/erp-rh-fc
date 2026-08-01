@@ -2650,7 +2650,15 @@ export const terceiroContratosRouter = router({
       const retTecnica = pRetTecnica > 0 ? totalValorPeriodo * pRetTecnica / 100 : n((medicao as any).retencaoTecnica);
       const descontos = n((medicao as any).descontos);
       const totalRetencoes = retISS + retINSS + retIRRF + retOutras + retTecnica;
-      const valorLiquido = totalValorPeriodo - totalRetencoes - descontos;
+      // Rev. 4800 — FDs do período no relatório: lista item a item o que foi
+      // descontado (descrição + data + valor), para não haver dúvida.
+      const fdsDaMedicao = await db.select().from(terceiroMedicaoFds)
+        .where(and(
+          eq(terceiroMedicaoFds.medicaoId, input.medicaoId),
+          eq(terceiroMedicaoFds.companyId, input.companyId),
+        )).orderBy(asc(terceiroMedicaoFds.dataFd), asc(terceiroMedicaoFds.id));
+      const totalFdPdf = fdsDaMedicao.reduce((s: number, f: any) => s + n(f.valor), 0);
+      const valorLiquido = totalValorPeriodo - totalRetencoes - descontos - totalFdPdf;
 
       let retTecnicaAcumulada = 0;
       if (pRetTecnica > 0) {
@@ -2935,8 +2943,8 @@ export const terceiroContratosRouter = router({
         doc.fillColor("#1e293b").text(BRL(totalValorAcumulado), colX(12) + 2, y + 5, { width: cols[12].width - 5, align: "right", lineBreak: false });
         y += 24;
 
-        if (totalRetencoes > 0 || descontos > 0) {
-          if (y > pageBottom - 120) { doc.addPage(); y = 36; }
+        if (totalRetencoes > 0 || descontos > 0 || totalFdPdf > 0) {
+          if (y > pageBottom - (120 + fdsDaMedicao.length * 13)) { doc.addPage(); y = 36; }
           doc.font("Helvetica-Bold").fontSize(9).fillColor(primary).text("RETENÇÕES E DESCONTOS", mL, y);
           y += 14;
           doc.strokeColor(accent).lineWidth(0.8).moveTo(mL, y).lineTo(mL + 200, y).stroke();
@@ -2948,6 +2956,18 @@ export const terceiroContratosRouter = router({
           if (retOutras > 0) { doc.text(`Outras Retenções${pOutras > 0 ? ` (${pOutras}%)` : ""}: ${BRL(retOutras)}`, mL, y); y += 13; }
           if (retTecnica > 0) { doc.text(`Retenção Técnica${pRetTecnica > 0 ? ` (${pRetTecnica}%)` : ""}: ${BRL(retTecnica)} *`, mL, y); y += 13; }
           if (descontos > 0) { doc.text(`Descontos: ${BRL(descontos)}`, mL, y); y += 13; }
+          // Rev. 4800 — cada FD descontado sai discriminado no boletim
+          if (totalFdPdf > 0) {
+            doc.font("Helvetica-Bold").fillColor("#92400e").text(`Faturamento Direto (FD) descontado neste período: - ${BRL(totalFdPdf)}`, mL, y); y += 13;
+            doc.font("Helvetica").fontSize(7.5).fillColor("#555");
+            for (const f of fdsDaMedicao) {
+              if (y > pageBottom - 20) { doc.addPage(); y = 36; doc.font("Helvetica").fontSize(7.5).fillColor("#555"); }
+              const dt = f.dataFd ? new Date(`${String(f.dataFd).slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR") : "-";
+              doc.text(`   • ${dt} — ${f.descricao}${f.origem === "auto" ? " (desconto automático)" : ""}: - ${BRL(n(f.valor))}`, mL, y, { width: pageW - 20 });
+              y += 12;
+            }
+            doc.fontSize(8).fillColor("#333");
+          }
           doc.font("Helvetica-Bold").text(`Total Retenções: ${BRL(totalRetencoes)}`, mL, y); y += 13;
           if (retTecnica > 0) { doc.font("Helvetica").fontSize(7).fillColor("#666").text(`* Retenção Técnica: valor retido e liberado somente após a última medição do contrato. Acumulado: ${BRL(retTecnicaAcumulada)}`, mL, y); y += 13; }
           if ((medicao as any).observacoesRetencao) { doc.font("Helvetica").fontSize(7).text(`Obs.: ${(medicao as any).observacoesRetencao}`, mL, y); y += 13; }
@@ -2966,7 +2986,7 @@ export const terceiroContratosRouter = router({
         };
         summItem("Valor Bruto do Período", BRL(totalValorPeriodo), 0);
         summItem("Retenções", `- ${BRL(totalRetencoes)}`, 1);
-        summItem("Descontos", `- ${BRL(descontos)}`, 2);
+        summItem("Descontos + FD", `- ${BRL(descontos + totalFdPdf)}`, 2);
         doc.roundedRect(mL + pageW - 185, y + 8, 173, 28, 3).fill("#d1fae5");
         doc.font("Helvetica").fontSize(6.5).fillColor("#065f46").text("VALOR LÍQUIDO A PAGAR", mL + pageW - 177, y + 13);
         doc.font("Helvetica-Bold").fontSize(12).fillColor("#065f46").text(BRL(valorLiquido), mL + pageW - 177, y + 21);

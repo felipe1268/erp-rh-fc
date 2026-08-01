@@ -13,6 +13,12 @@
  * - O alerta fica gravado na medicao e aparece para o aprovador.
  * - Futuro (combinado): comparar tambem com a medicao do CLIENTE - o avanco
  *   pago ao terceiro nao deve superar o avanco recebido do cliente.
+ *
+ * FD MAIS DISCRETO + DETALHADO NO BOLETIM:
+ * - O aviso vermelho de debito pendente virou um link discreto ("ver
+ *   detalhes") - o desconto ja entra sozinho na medicao.
+ * - O PDF da medicao agora discrimina CADA FD descontado (data, descricao,
+ *   automatico ou manual, valor), com total de FD e liquido ja com FD.
  */
 /**
  * Rev. 4799 - CONTRATO: BARRA FIXA NO TOPO (CABECALHO + ABAS)
