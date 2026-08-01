@@ -1198,7 +1198,12 @@ export const medicaoRouter = router({
       medicaoCampoId: z.number(),
       nome: z.string(),
       tipo: z.enum(["pavimento", "setor", "outro"]).default("pavimento"),
-      base64: z.string().max(40_000_000),
+      // Rev. 4787 — base64 opcional: arquivo grande sobe antes via
+      // /api/upload/levantamento-planta (multipart, progresso real) e chega
+      // aqui só com arquivoKey/arquivoUrl.
+      base64: z.string().max(40_000_000).optional(),
+      arquivoKey: z.string().optional(),
+      arquivoUrl: z.string().optional(),
       contentType: z.string().default("application/pdf"),
       arquivoNome: z.string().optional(),
       numPaginas: z.number().optional(),
@@ -1220,12 +1225,26 @@ export const medicaoRouter = router({
       const destinoCampoId = campo.status === "biblioteca"
         ? campo.id
         : (await resolverBibliotecaPlantas(db, input.companyId, campo.contratoId, origemNorm)).id;
-      const buf = Buffer.from(input.base64, "base64");
-      // Rev. — extensão da chave derivada do nome/contentType (DXF além de PDF).
-      const extNome = (input.arquivoNome || input.nome || "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
-      const ext = extNome === "dxf" || (input.contentType || "").includes("dxf") ? "dxf" : "pdf";
-      const key = `medicao-campo/${input.companyId}/${destinoCampoId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { url } = await storagePut(key, buf, input.contentType || "application/pdf");
+      let key: string;
+      let url: string;
+      if (input.arquivoKey) {
+        // Rev. 4787 — arquivo já subiu via rota multipart; valida que a chave é
+        // desta empresa (anti-IDOR) e deriva a URL no SERVER (ignora a do client).
+        if (!input.arquivoKey.startsWith(`medicao-campo/${input.companyId}/`)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Arquivo não pertence a esta empresa." });
+        }
+        key = input.arquivoKey;
+        const { storageGet } = await import("../storage");
+        ({ url } = await storageGet(key));
+      } else {
+        if (!input.base64) throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo ausente." });
+        const buf = Buffer.from(input.base64, "base64");
+        // Rev. — extensão da chave derivada do nome/contentType (DXF além de PDF).
+        const extNome = (input.arquivoNome || input.nome || "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
+        const ext = extNome === "dxf" || (input.contentType || "").includes("dxf") ? "dxf" : "pdf";
+        key = `medicao-campo/${input.companyId}/${destinoCampoId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        ({ url } = await storagePut(key, buf, input.contentType || "application/pdf"));
+      }
       const [ordemRow] = await db
         .select({ max: sql<number>`COALESCE(MAX(ordem),0)::int` })
         .from(medicaoCampoPdfs)

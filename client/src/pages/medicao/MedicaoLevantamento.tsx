@@ -608,36 +608,42 @@ export default function MedicaoLevantamento() {
   // ferramenta sugerida). "" = sem serviço (comportamento antigo).
   const [servicoAtivo, setServicoAtivo] = useState<string>("");
   const [servicosDialogOpen, setServicosDialogOpen] = useState(false);
-  // Rev. 4786 — percentual 0–100% no envio da planta (leitura do arquivo é
-  // medida de verdade; a rede é estimada pelo tamanho e fecha em 100% no fim).
+  // Rev. 4787 — percentual REAL 0–100% no envio da planta: multipart via XHR
+  // (onprogress mede os bytes de verdade — funciona p/ arquivos de 100MB+).
   const [uploadPct, setUploadPct] = useState<number | null>(null);
-  const uploadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  function enviarPlantaComProgresso(payload: any, fileSize: number) {
-    const estMs = Math.max(2000, (fileSize / 300_000) * 1000); // ~300KB/s estimado
-    const t0 = Date.now();
-    if (uploadTimerRef.current) clearInterval(uploadTimerRef.current);
-    uploadTimerRef.current = setInterval(() => {
-      // Watchdog: rede pendurada por >120s libera o botão (o erro real aparece
-      // pelo onSettled quando/se a mutação responder).
-      if (Date.now() - t0 > 120_000) {
-        if (uploadTimerRef.current) { clearInterval(uploadTimerRef.current); uploadTimerRef.current = null; }
-        setUploadPct(null);
-        alert("O envio está demorando demais (conexão instável?). Verifique a internet e tente de novo.");
-        return;
-      }
-      // 40% → 95% numa curva suave; os 100% só quando o servidor confirmar.
-      setUploadPct(Math.min(95, 40 + Math.round(55 * (1 - Math.exp(-(Date.now() - t0) / estMs)))));
-    }, 200);
-    uploadPdfM.mutate(payload, {
-      onSettled: (_d: any, err: any) => {
-        if (uploadTimerRef.current) { clearInterval(uploadTimerRef.current); uploadTimerRef.current = null; }
-        if (err) { setUploadPct(null); return; }
-        setUploadPct(100);
-        setTimeout(() => setUploadPct(null), 800);
-      },
+  function uploadPlantaMultipart(file: File): Promise<{ key: string; url: string; contentType: string }> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      let lastProgressAt = Date.now();
+      // Watchdog de ESTAGNAÇÃO: só aborta se ficar 90s sem NENHUM byte subir.
+      const watchdog = setInterval(() => {
+        if (Date.now() - lastProgressAt > 90_000) { clearInterval(watchdog); xhr.abort(); }
+      }, 5_000);
+      xhr.upload.onprogress = (ev) => {
+        lastProgressAt = Date.now();
+        if (ev.lengthComputable && ev.total > 0) {
+          // 0–95%: envio real; os 5% finais são o registro no servidor.
+          setUploadPct(Math.min(95, Math.round((ev.loaded / ev.total) * 95)));
+        }
+      };
+      xhr.onload = () => {
+        clearInterval(watchdog);
+        try {
+          const resp = JSON.parse(xhr.responseText || "{}");
+          if (xhr.status >= 200 && xhr.status < 300 && resp.key) resolve(resp);
+          else reject(new Error(resp?.error || `Falha no envio (HTTP ${xhr.status}).`));
+        } catch { reject(new Error(`Falha no envio (HTTP ${xhr.status}).`)); }
+      };
+      xhr.onerror = () => { clearInterval(watchdog); reject(new Error("Falha de rede no envio da planta.")); };
+      xhr.onabort = () => { clearInterval(watchdog); reject(new Error("Envio interrompido: a conexão ficou 90s sem progresso. Verifique a internet e tente de novo.")); };
+      const fd = new FormData();
+      fd.append("companyId", String(companyId));
+      fd.append("file", file, file.name);
+      xhr.open("POST", "/api/upload/levantamento-planta");
+      xhr.withCredentials = true;
+      xhr.send(fd);
     });
   }
-  useEffect(() => () => { if (uploadTimerRef.current) clearInterval(uploadTimerRef.current); }, []);
   // Rev. 4784 — remover planta COM levantamento exige senha do ADM Master.
   const [senhaPlantaDlg, setSenhaPlantaDlg] = useState<{ pdf: any; qtd: number } | null>(null);
   const [senhaPlanta, setSenhaPlanta] = useState("");
@@ -1117,15 +1123,21 @@ export default function MedicaoLevantamento() {
     // Rev. — DXF não passa pelo pdf.js; sobe direto como planta vetorial de 1 página.
     if (/\.dxf$/i.test(file.name)) {
       try {
-        setUploadPct(1);
-        const base64 = await fileToBase64(file, (f) => setUploadPct(Math.max(1, Math.round(f * 40))));
-        enviarPlantaComProgresso({
+        setUploadPct(0);
+        // 1) sobe o arquivo bruto com progresso REAL (sem limite prático de tamanho)
+        const up = await uploadPlantaMultipart(file);
+        // 2) registra a planta (rápido) — 95→100%
+        setUploadPct(97);
+        await uploadPdfM.mutateAsync({
           companyId, medicaoCampoId: campoId, nome, tipo: "pavimento",
-          base64, contentType: "image/vnd.dxf", arquivoNome: file.name, numPaginas: 1,
-        }, file.size);
+          arquivoKey: up.key, arquivoUrl: up.url,
+          contentType: up.contentType || "image/vnd.dxf", arquivoNome: file.name, numPaginas: 1,
+        } as any);
+        setUploadPct(100);
+        setTimeout(() => setUploadPct(null), 800);
       } catch (err: any) {
         setUploadPct(null);
-        alert("Não foi possível ler o arquivo no aparelho. Tente novamente.");
+        alert(err?.message || "Não foi possível enviar a planta. Tente novamente.");
       }
       return;
     }

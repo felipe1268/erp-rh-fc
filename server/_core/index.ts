@@ -410,6 +410,61 @@ Regras:
     }
   });
 
+  // Rev. 4787 — Upload de planta do Levantamento (DXF grande, sem limite prático).
+  // Multipart com progresso REAL no cliente (XHR); o registro da planta é
+  // finalizado depois via tRPC medicao.uploadPdf com arquivoKey/arquivoUrl.
+  // diskStorage: o multer vai gravando em disco durante o upload (não segura o
+  // arquivo inteiro na RAM enquanto a rede está lenta) — anti-OOM.
+  const fsPlanta = (await import("fs")).default;
+  const pathPlanta = (await import("path")).default;
+  const osPlanta = (await import("os")).default;
+  const plantaTmpDir = pathPlanta.join(osPlanta.tmpdir(), "levantamento-planta-uploads");
+  if (!fsPlanta.existsSync(plantaTmpDir)) fsPlanta.mkdirSync(plantaTmpDir, { recursive: true });
+  const plantaUpload = multer({
+    storage: multer.diskStorage({
+      destination: (_req, _file, cb) => cb(null, plantaTmpDir),
+      filename: (_req, file, cb) => cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`),
+    }),
+    limits: { fileSize: 512 * 1024 * 1024 },
+  });
+  app.post("/api/upload/levantamento-planta", apiRateLimit, plantaUpload.single("file"), async (req: any, res: any) => {
+    const tmpPath: string | undefined = req.file?.path;
+    try {
+      let user: any;
+      try {
+        user = await sdk.authenticateRequest(req);
+      } catch {
+        return res.status(401).json({ error: "Não autenticado" });
+      }
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      const companyId = Number(req.body.companyId || 0);
+      if (!companyId) return res.status(400).json({ error: "companyId obrigatório" });
+      // Guard de empresa (mesma regra do assertCompanyAccess do router).
+      const { getUserCompanyLinks } = await import("../db");
+      const role = String(user?.role || "");
+      if (role !== "admin_master" && role !== "admin") {
+        const links = await getUserCompanyLinks(user.id);
+        if (!links.some((l: any) => Number(l.companyId) === companyId)) {
+          return res.status(403).json({ error: "Sem acesso a esta empresa" });
+        }
+      }
+      const ext = (file.originalname.split(".").pop() || "dxf").toLowerCase().replace(/[^a-z0-9]/g, "") || "dxf";
+      if (!["dxf", "pdf"].includes(ext)) return res.status(400).json({ error: "Apenas DXF (ou PDF legado)." });
+      const ct = ext === "dxf" ? "image/vnd.dxf" : "application/pdf";
+      const key = `medicao-campo/${companyId}/upload/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { storagePut: sPut } = await import("../storage");
+      const buf = await fsPlanta.promises.readFile(file.path);
+      const { url } = await sPut(key, buf, ct);
+      res.json({ key, url, contentType: ct });
+    } catch (err: any) {
+      console.error("[Planta Upload] Erro:", err);
+      res.status(500).json({ error: err?.message || "Erro ao enviar a planta" });
+    } finally {
+      if (tmpPath) fsPlanta.promises.unlink(tmpPath).catch(() => {});
+    }
+  });
+
   // Rev. 2013 — Upload de vídeos de Integração SST SEM LIMITE de tamanho.
   // Pedido do usuário: "Quero poder subir vídeo sem limite de tamanho".
   // Estratégia: multer diskStorage (não trava RAM) + move pro server/uploads em disco

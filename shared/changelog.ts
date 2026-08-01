@@ -1,4 +1,16 @@
 /**
+ * Rev. 4787 - LEVANTAMENTO: PLANTA GRANDE (100MB+) SEM LIMITE + PROGRESSO REAL
+ *
+ * O envio antigo (base64 dentro do tRPC) tinha teto de ~30MB e travava em 41%
+ * com arquivos grandes. Agora:
+ * - Nova rota multipart /api/upload/levantamento-planta (multer, ate 1GB) com
+ *   autenticacao + guard de empresa; grava no storage e devolve key/url.
+ * - Cliente envia via XHR com PROGRESSO REAL de bytes (0-95%); registro da
+ *   planta finaliza via tRPC uploadPdf com arquivoKey/arquivoUrl (95-100%).
+ * - uploadPdf valida que a arquivoKey pertence a empresa (anti-IDOR).
+ * - Watchdog de ESTAGNACAO: so aborta se ficar 90s sem subir nenhum byte
+ *   (upload longo de arquivo grande nao e mais interrompido por tempo total).
+ *
  * Rev. 4786 - LEVANTAMENTO: PERCENTUAL 0-100% NO ENVIO DA PLANTA
  *
  * O botao "Planta (DXF)" agora mostra o progresso do envio dentro do proprio
