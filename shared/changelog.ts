@@ -53,6 +53,10 @@
  *   envio ("X de Y enviadas"); ONLINE = envio automatico (fila drena sozinha
  *   a cada 15s, sem botao manual); OFFLINE = aviso claro de que as medicoes
  *   ficam guardadas no aparelho e sobem sozinhas quando a internet voltar.
+ * - Card de conferencia flutuante na planta: "X/Y completos", "N sem foto",
+ *   "N sem item da planilha" — verde quando tudo ok. Cada cartao da lista
+ *   ganhou pills Foto/Planilha (verde = ok, vermelho = falta) p/ enxergar
+ *   na hora onde esta correto e onde nao esta.
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO

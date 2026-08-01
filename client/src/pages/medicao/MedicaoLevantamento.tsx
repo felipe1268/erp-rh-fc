@@ -17,7 +17,7 @@ import {
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
   RectangleHorizontal, PencilLine, ListOrdered, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
-  Layers, Maximize,
+  Layers, Maximize, Link as LinkIcon,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -2546,6 +2546,34 @@ export default function MedicaoLevantamento() {
                     background: "radial-gradient(circle, #cbd5e1 1px, transparent 1px) 0 0 / 22px 22px, #e2e8f0",
                   }}
                 >
+                  {/* Rev. 4792 — card de conferência flutuante: mostra na hora o que
+                      está completo (foto + item da planilha/RP) e o que falta. */}
+                  {(() => {
+                    const vivos = contornosVisiveis.filter((c: any) => !c.excluido);
+                    if (vivos.length === 0) return null;
+                    const semFoto = vivos.filter((c: any) => (fotosPorContorno.get(c.id) ?? []).length === 0).length;
+                    const semVinculo = vivos.filter((c: any) => !c.orcamentoItemId).length;
+                    const completos = vivos.filter((c: any) => (fotosPorContorno.get(c.id) ?? []).length > 0 && c.orcamentoItemId).length;
+                    const tudoOk = semFoto === 0 && semVinculo === 0;
+                    return (
+                      <div className={`absolute top-2 right-2 z-10 pointer-events-none rounded-lg border shadow-md px-2.5 py-1.5 text-[11px] leading-tight space-y-0.5 ${tudoOk ? "bg-emerald-50/95 border-emerald-300" : "bg-white/95 border-amber-300"}`}>
+                        <div className="flex items-center gap-1 font-semibold text-emerald-700">
+                          <CheckCircle2 className="h-3 w-3" />{completos}/{vivos.length} completos
+                        </div>
+                        {semFoto > 0 && (
+                          <div className="flex items-center gap-1 text-red-600 font-medium">
+                            <Camera className="h-3 w-3" />{semFoto} sem foto
+                          </div>
+                        )}
+                        {semVinculo > 0 && (
+                          <div className="flex items-center gap-1 text-red-600 font-medium">
+                            <LinkIcon className="h-3 w-3" />{semVinculo} sem item da planilha
+                          </div>
+                        )}
+                        {tudoOk && <div className="text-emerald-700">foto + planilha em todos ✓</div>}
+                      </div>
+                    );
+                  })()}
                   <div
                     ref={zoomInnerRef}
                     className="absolute w-fit shadow-xl"
@@ -3057,6 +3085,19 @@ export default function MedicaoLevantamento() {
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
+                      </div>
+                      {/* Rev. 4792 — pills de conferência: foto e vínculo com a planilha */}
+                      <div className="flex items-center gap-1.5 px-2 pt-1.5">
+                        {(fotosPorContorno.get(c.id) ?? []).length > 0 ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-semibold"><Camera className="h-3 w-3" />Foto ✓</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-semibold"><Camera className="h-3 w-3" />Sem foto</span>
+                        )}
+                        {c.orcamentoItemId ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-semibold"><LinkIcon className="h-3 w-3" />Planilha ✓</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-semibold"><LinkIcon className="h-3 w-3" />Sem item</span>
+                        )}
                       </div>
                       <div className="p-2">
                       {/* Nome/rótulo do contorno (ex.: "APARTAMENTO 1402") */}
