@@ -1502,8 +1502,12 @@ export const medicaoRouter = router({
           { chave: "reboco",     nome: "Reboco",     cor: "#059669", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", ordem: 4 },
           { chave: "contrapiso", nome: "Contrapiso", cor: "#2563eb", tipoMedida: "area",     derivaDe: null,        fator: "1", ordem: 5 },
           { chave: "forro",      nome: "Forro",      cor: "#7c3aed", tipoMedida: "area",     derivaDe: null,        fator: "1", ordem: 6 },
-          { chave: "pintura",    nome: "Pintura",    cor: "#db2777", tipoMedida: "area",     derivaDe: null,        fator: "1", ordem: 7 },
-          { chave: "pontos",     nome: "Contagem",   cor: "#0891b2", tipoMedida: "contagem", derivaDe: null,        fator: "1", ordem: 8 },
+          // Rev. 4792 — Pintura em SUBCATEGORIAS (teto/parede/piso): parede usa a
+          // ferramenta Linha (L×A — risca a parede e informa a altura).
+          { chave: "pintura_teto",   nome: "Pintura Teto",   cor: "#db2777", tipoMedida: "area",   derivaDe: null, fator: "1", ordem: 7 },
+          { chave: "pintura_parede", nome: "Pintura Parede", cor: "#be185d", tipoMedida: "parede", derivaDe: null, fator: "1", ordem: 8 },
+          { chave: "pintura_piso",   nome: "Pintura Piso",   cor: "#9d174d", tipoMedida: "area",   derivaDe: null, fator: "1", ordem: 9 },
+          { chave: "pontos",     nome: "Contagem",   cor: "#0891b2", tipoMedida: "contagem", derivaDe: null,        fator: "1", ordem: 10 },
         ];
         await db.transaction(async (tx: any) => {
           await tx.execute(sql`SELECT pg_advisory_xact_lock(478002, ${input.medicaoCampoId})`);
@@ -1516,8 +1520,34 @@ export const medicaoRouter = router({
         });
         rows = await db.select().from(medicaoLevantamentoServicos)
           .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
+      } else {
+        // Rev. 4792 — self-heal p/ catálogos JÁ semeados antes das subcategorias
+        // de pintura: se existe "pintura" e nenhuma "pintura_*", acrescenta as 3.
+        const temPintura = rows.some((r: any) => r.chave === "pintura");
+        const temSub = rows.some((r: any) => String(r.chave).startsWith("pintura_"));
+        if (temPintura && !temSub) {
+          const base = rows.find((r: any) => r.chave === "pintura");
+          const ord = (base?.ordem ?? 7);
+          const subs = [
+            { chave: "pintura_teto",   nome: "Pintura Teto",   cor: "#db2777", tipoMedida: "area",   ordem: ord },
+            { chave: "pintura_parede", nome: "Pintura Parede", cor: "#be185d", tipoMedida: "parede", ordem: ord },
+            { chave: "pintura_piso",   nome: "Pintura Piso",   cor: "#9d174d", tipoMedida: "area",   ordem: ord },
+          ];
+          await db.transaction(async (tx: any) => {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(478002, ${input.medicaoCampoId})`);
+            const atuais = await tx.select({ chave: medicaoLevantamentoServicos.chave }).from(medicaoLevantamentoServicos)
+              .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
+            const setChaves = new Set(atuais.map((r: any) => r.chave));
+            const faltam = subs.filter((s) => !setChaves.has(s.chave));
+            if (faltam.length) await tx.insert(medicaoLevantamentoServicos).values(faltam.map((s) => ({
+              companyId: input.companyId, medicaoCampoId: input.medicaoCampoId, derivaDe: null, fator: "1", ativo: 1, ...s,
+            })));
+          });
+          rows = await db.select().from(medicaoLevantamentoServicos)
+            .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
+        }
       }
-      return rows.sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      return rows.sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0) || (a.id ?? 0) - (b.id ?? 0));
     }),
 
   salvarServicoLevantamento: protectedProcedure

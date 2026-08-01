@@ -737,6 +737,9 @@ export default function MedicaoLevantamento() {
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [catNome, setCatNome] = useState("");
   const [catTipo, setCatTipo] = useState<string>("area");
+  // Rev. 4792 — subcategoria: opcionalmente vinculada a uma categoria "mãe"
+  // (Chapisco Teto, Reboco Parede, Pastilha…) — herda a cor e fica agrupada.
+  const [catPai, setCatPai] = useState<string>("");
   const svcAtivoObj = useMemo(() => servicos.find((s: any) => s.chave === servicoAtivo) ?? null, [servicos, servicoAtivo]);
 
   // Rev. 4790 — CAMADAS (estilo layers de CAD): com um serviço ativo, a planta
@@ -2011,22 +2014,26 @@ export default function MedicaoLevantamento() {
                   )}
                   {/* Rev. 4783 — poka-yoke: a ferramenta vem da CATEGORIA (tipo de medida).
                       Só a forma de traçar aparece — e só quando a categoria é de área. */}
-                  {svcAtivoObj && (svcAtivoObj.tipoMedida === "area" || !svcAtivoObj.tipoMedida) && (
+                  {/* Rev. 4792 — categorias de ÁREA e de PAREDE ganham as 4 formas de
+                      traçar: Linha (L×A), Poligonal (pontos), Retângulo e Desenho livre. */}
+                  {svcAtivoObj && ["area", "parede", ""].includes(String(svcAtivoObj.tipoMedida ?? "")) && (
                     <>
                       <div className="h-6 w-px bg-border mx-1" />
-                      {FERRAMENTAS_DESENHO.filter((f) => ["area", "retangulo", "livre"].includes(f.key)).map((f) => (
+                      {FERRAMENTAS_DESENHO.filter((f) =>
+                        (svcAtivoObj.tipoMedida === "parede" ? ["parede", "area", "retangulo", "livre"] : ["area", "retangulo", "livre"]).includes(f.key),
+                      ).map((f) => (
                         <Button
                           key={f.key} size="sm" variant={tool === f.key ? "default" : "ghost"} className="h-9 gap-1"
                           onClick={() => { setTool(f.key); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}
                           style={tool === f.key ? { backgroundColor: (svcAtivoObj?.cor as string) || f.cor } : {}}
                           title={f.label}
                         >
-                          {f.icon}{f.key === "area" ? "Pontos" : f.label}
+                          {f.icon}{f.key === "area" ? "Pontos" : f.key === "parede" ? "Linha (L×A)" : f.label}
                         </Button>
                       ))}
                     </>
                   )}
-                  {svcAtivoObj && !["area", ""].includes(String(svcAtivoObj.tipoMedida ?? "")) && (
+                  {svcAtivoObj && !["area", "parede", ""].includes(String(svcAtivoObj.tipoMedida ?? "")) && (
                     <span className="text-xs px-2 py-1 rounded font-medium text-white" style={{ backgroundColor: (svcAtivoObj.cor as string) || "#374151" }}>
                       {FERRAMENTAS_DESENHO.find((f) => f.key === svcAtivoObj.tipoMedida)?.label ?? svcAtivoObj.tipoMedida}
                     </span>
@@ -2782,7 +2789,7 @@ export default function MedicaoLevantamento() {
       </Dialog>
 
       {/* Rev. 4783 — criação rápida de categoria (poka-yoke: nome + o que ela mede) */}
-      <Dialog open={catDialogOpen} onOpenChange={(v) => { setCatDialogOpen(v); if (!v) { setCatNome(""); setCatTipo("area"); } }}>
+      <Dialog open={catDialogOpen} onOpenChange={(v) => { setCatDialogOpen(v); if (!v) { setCatNome(""); setCatTipo("area"); setCatPai(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Plus className="h-4 w-4" />Incluir categoria</DialogTitle>
@@ -2790,7 +2797,31 @@ export default function MedicaoLevantamento() {
           <div className="space-y-3">
             <div>
               <p className="text-xs font-medium text-gray-600 mb-1">Nome da categoria</p>
-              <Input autoFocus value={catNome} onChange={(e) => setCatNome(e.target.value)} placeholder="Ex.: Revestimento, Piso, Louças, Metais, Furos…" />
+              <Input autoFocus value={catNome} onChange={(e) => setCatNome(e.target.value)} placeholder="Ex.: Revestimento, Pastilha, Teto, Parede, Piso…" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-1">Subcategoria de (opcional)</p>
+              <select
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={catPai}
+                onChange={(e) => {
+                  const chave = e.target.value;
+                  setCatPai(chave);
+                  // herda o tipo de medida da mãe como sugestão
+                  const pai = servicos.find((s: any) => s.chave === chave);
+                  if (pai?.tipoMedida) setCatTipo(String(pai.tipoMedida));
+                }}
+              >
+                <option value="">— nenhuma (categoria nova) —</option>
+                {servicos.filter((s: any) => s.ativo !== 0).map((s: any) => (
+                  <option key={s.chave} value={s.chave}>{s.nome}</option>
+                ))}
+              </select>
+              {catPai ? (
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Vai chamar <b>{(servicos.find((s: any) => s.chave === catPai)?.nome ?? catPai) + " " + (catNome.trim() || "…")}</b>, herdar a cor e ficar ao lado da categoria mãe.
+                </p>
+              ) : null}
             </div>
             <div>
               <p className="text-xs font-medium text-gray-600 mb-1">O que ela mede?</p>
@@ -2815,17 +2846,30 @@ export default function MedicaoLevantamento() {
             <Button
               className="w-full" disabled={!catNome.trim() || salvarServicoMut.isPending}
               onClick={() => {
-                const nome = catNome.trim();
+                const pai = catPai ? servicos.find((s: any) => s.chave === catPai) : null;
+                // Rev. 4792 — subcategoria: nome composto "Mãe Filho", cor da mãe
+                // levemente escurecida (mesma família visual) e ordem colada na mãe.
+                const nome = pai ? `${pai.nome} ${catNome.trim()}` : catNome.trim();
                 const chaveBase = nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "categoria";
                 // chave única entre as existentes (poka-yoke: colisão vira sufixo)
                 let chave = chaveBase; let i = 2;
                 while (servicos.some((s: any) => s.chave === chave)) chave = `${chaveBase}_${i++}`;
+                const escurecer = (hex: string) => {
+                  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+                  if (!m) return hex;
+                  const n = parseInt(m[1], 16);
+                  const f = (v: number) => Math.max(0, Math.round(v * 0.82));
+                  return `#${((f(n >> 16 & 255) << 16) | (f(n >> 8 & 255) << 8) | f(n & 255)).toString(16).padStart(6, "0")}`;
+                };
                 const paletaCores = ["#dc2626", "#2563eb", "#059669", "#7c3aed", "#ea580c", "#db2777", "#0891b2", "#ca8a04", "#4f46e5", "#65a30d"];
-                const cor = paletaCores[servicos.length % paletaCores.length];
-                const ordem = Math.max(0, ...servicos.map((s: any) => s.ordem ?? 0)) + 1;
+                const nSubs = pai ? servicos.filter((s: any) => String(s.nome).startsWith(`${pai.nome} `)).length : 0;
+                let corSub = pai?.cor ? String(pai.cor) : "";
+                for (let k = 0; k <= nSubs && corSub; k++) corSub = escurecer(corSub); // cada irmã um tom mais escuro
+                const cor = pai ? (corSub || paletaCores[servicos.length % paletaCores.length]) : paletaCores[servicos.length % paletaCores.length];
+                const ordem = pai ? (pai.ordem ?? 0) : Math.max(0, ...servicos.map((s: any) => s.ordem ?? 0)) + 1;
                 salvarServicoMut.mutate(
                   { companyId, medicaoCampoId: campoId, chave, nome, cor, tipoMedida: catTipo as any, ordem, ativo: 1 },
-                  { onSuccess: () => { setCatDialogOpen(false); setCatNome(""); setCatTipo("area"); setServicoAtivo(chave); const t = (catTipo as FerramentaDesenho) || "area"; setTool(t); setDraft([]); } },
+                  { onSuccess: () => { setCatDialogOpen(false); setCatNome(""); setCatTipo("area"); setCatPai(""); setServicoAtivo(chave); const t = (catTipo as FerramentaDesenho) || "area"; setTool(t); setDraft([]); } },
                 );
               }}
             >
