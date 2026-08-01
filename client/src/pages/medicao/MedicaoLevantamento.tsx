@@ -1393,9 +1393,11 @@ export default function MedicaoLevantamento() {
   const toggleSelContorno = (id: number) =>
     setSelContornos((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const allSelecionados = contornosPagina.length > 0 && selContornos.size === contornosPagina.length;
+  // Rev. 4791 — a lista lateral segue as CAMADAS: "selecionar todos" opera só
+  // sobre os contornos visíveis (categoria ativa, ou todas quando liberado).
+  const allSelecionados = contornosVisiveis.length > 0 && selContornos.size === contornosVisiveis.length;
   const toggleSelTodos = () =>
-    setSelContornos((prev) => (prev.size === contornosPagina.length ? new Set() : new Set(contornosPagina.map((c) => c.id))));
+    setSelContornos((prev) => (prev.size === contornosVisiveis.length ? new Set() : new Set(contornosVisiveis.map((c) => c.id))));
 
   // Confirmação estilizada (substitui o window.confirm nativo, que exibia o domínio/URL no topo).
   const [confirmDlg, setConfirmDlg] = useState<{ title: string; description?: string; confirmText?: string; onConfirm: () => void } | null>(null);
@@ -2441,15 +2443,34 @@ export default function MedicaoLevantamento() {
           <div className="min-h-0 overflow-y-auto space-y-3 pb-2 overscroll-contain">
             {/* contornos da página */}
             <div className="border rounded-lg p-3">
-              <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Ruler className="h-4 w-4" />Contornos desta página</h3>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold flex items-center gap-1.5 min-w-0">
+                  <Ruler className="h-4 w-4 shrink-0" />
+                  <span className="truncate">
+                    {servicoAtivo && !verTodasCamadas
+                      ? `Levantamento — ${(svcAtivoObj?.nome ?? servicoAtivo).toUpperCase()}`
+                      : "Contornos desta página"}
+                  </span>
+                </h3>
+                {/* Rev. 4791 — a lista segue a categoria ativa; este botãozinho libera todas */}
+                {servicoAtivo ? (
+                  <Button size="sm" variant={verTodasCamadas ? "secondary" : "outline"} className="h-7 px-2 text-[11px] gap-1 shrink-0" onClick={() => setVerTodasCamadas((v) => !v)}>
+                    <Layers className="h-3.5 w-3.5" />{verTodasCamadas ? "Só a categoria" : "Ver todos"}
+                  </Button>
+                ) : null}
+              </div>
               {vincularEmptyHint && contornosPagina.length > 0 ? (
                 <div className="mb-2 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                   <span>{vincularEmptyHint}</span>
                 </div>
               ) : null}
-              {contornosPagina.length === 0 ? (
-                <p className="text-xs text-gray-400">Nenhum contorno. Escolha uma ferramenta e marque na planta.</p>
+              {contornosVisiveis.length === 0 ? (
+                <p className="text-xs text-gray-400">
+                  {contornosPagina.length > 0
+                    ? "Nenhum contorno desta categoria. Toque em \"Ver todos\" para exibir os demais."
+                    : "Nenhum contorno. Escolha uma ferramenta e marque na planta."}
+                </p>
               ) : (
                 <div className="space-y-2">
                   {/* barra de seleção em massa */}
@@ -2545,7 +2566,7 @@ export default function MedicaoLevantamento() {
                     </div>
                   )}
 
-                  {contornosPagina.map((c) => {
+                  {contornosVisiveis.map((c) => {
                     const sel = selContornos.has(c.id);
                     return (
                     <div key={c.id} className={`border rounded-md p-2 text-xs ${sel ? "border-blue-400 bg-blue-50/40" : ""}`}>
