@@ -33,6 +33,13 @@
  * - Cartoes da lista PROFISSIONAIS: ordenados por categoria e numero, barra
  *   lateral e cabecalho na cor da categoria, bolinha numerada igual a da
  *   planta, quantidade em destaque no topo.
+ * - Botao "Renumerar" virou "Organizar numeros" (azul, icone de lista) —
+ *   claro pra equipe.
+ * - Memoria de Calculo COMPLETA: logo FC, grade com levantamento/contrato/
+ *   emissao/obra/inicio-termino do contrato/fornecedor/quem fez e data do
+ *   levantamento; registro fotografico (fotos sincronizadas, com referencia
+ *   do contorno); bloco de assinaturas (responsavel FC x fornecedor de
+ *   acordo). URLs de foto whitelisted + atributo escapado (anti-XSS).
  */
 /**
  * Rev. 4791 - LEVANTAMENTO: VIEWPORT FIXO ESTILO CAD + CAMADAS + MOVER CONTORNO

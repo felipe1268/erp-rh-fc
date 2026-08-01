@@ -1806,6 +1806,43 @@ export default function MedicaoLevantamento() {
     const todos = (campo?.contornos ?? []) as any[];
     const origin = window.location.origin;
     const dataStr = new Date().toLocaleDateString("pt-BR");
+    // Rev. 4792 — cabeçalho completo: contrato, período, obra, fornecedor e
+    // responsável pelo levantamento + fotos + bloco de assinaturas.
+    const fmtD = (s: any) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s ?? ""));
+      return m ? `${m[3]}/${m[2]}/${m[1]}` : "—";
+    };
+    const numContrato = contrato?.numeroContrato || contrato?.numero || `#${contratoId}`;
+    const obraNome = contrato?.obraNome || contrato?.nomeProjeto || contrato?.local || "—";
+    const fornecedorNome = contrato?.empresa?.razaoSocial || contrato?.empresa?.nomeFantasia || contrato?.cliente || "—";
+    const levantadoPor = campo?.criadoPorNome || "";
+    const infoCell = (label: string, valor: string) => `
+      <td style="border:1px solid #d1d5db;padding:6px 8px;vertical-align:top">
+        <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#6b7280">${label}</div>
+        <div style="font-size:11.5px;font-weight:bold;color:#111827">${escHtml(valor) || "—"}</div>
+      </td>`;
+    // Fotos do levantamento (rastreio) — agrupadas com referência do contorno
+    const fotosAll = ((campo?.fotos ?? []) as any[]).filter((f) => f.arquivoUrl && !f.__pending);
+    const contornoById = new Map(todos.map((c) => [c.id, c]));
+    const fotosHtml = fotosAll.length === 0 ? "" : `
+      <h3 style="font-size:13px;margin:18px 0 6px">Registro fotográfico (${fotosAll.length})</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${fotosAll.map((f) => {
+          const c = f.contornoId != null ? contornoById.get(f.contornoId) : null;
+          const ref = c ? (c.rotulo ? String(c.rotulo).toUpperCase() : `${LABEL_TIPO[c.tipo as TipoContorno] || c.tipo} ${c.numero ?? ""}`) : "Geral";
+          // Anti-XSS: só http(s) absoluto ou caminho relativo interno; escapa o atributo.
+          const rawUrl = String(f.arquivoUrl);
+          const okUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : (rawUrl.startsWith("/") ? origin + rawUrl : "");
+          if (!okUrl) return "";
+          const srcAttr = okUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+          return `<div style="width:160px;border:1px solid #d1d5db;border-radius:4px;overflow:hidden;page-break-inside:avoid">
+            <img src="${srcAttr}" style="width:160px;height:110px;object-fit:cover;display:block" />
+            <div style="font-size:9px;padding:3px 5px;background:#f8fafc;border-top:1px solid #e5e7eb">
+              <b>${escHtml(ref)}</b>${f.legenda ? " — " + escHtml(f.legenda) : ""}
+            </div>
+          </div>`;
+        }).join("")}
+      </div>`;
     const rowsContornos = todos.map((c) => `
       <tr>
         <td style="border:1px solid #ccc;padding:5px;text-align:center">${String(c.numero ?? "").padStart(3, "0")}</td>
@@ -1831,10 +1868,23 @@ export default function MedicaoLevantamento() {
       <div style="background:#1B2A4A;border:2px solid #fff;padding:12px;text-align:center;margin:12px 0;-webkit-print-color-adjust:exact;print-color-adjust:exact">
         <span style="color:#fff;text-transform:uppercase;font-size:13px;letter-spacing:3px">Memória de Cálculo — Levantamento de Campo</span>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px">
-        <span>Levantamento nº ${String(campo?.numero ?? "").padStart(3, "0")}${campo?.titulo ? " — " + campo.titulo : ""}</span>
-        <span>Emissão: ${dataStr}</span>
-      </div>
+      <table style="border-collapse:collapse;width:100%;margin-bottom:14px"><tbody>
+        <tr>
+          ${infoCell("Levantamento", `Nº ${String(campo?.numero ?? "").padStart(3, "0")}${campo?.titulo ? " — " + campo.titulo : ""}`)}
+          ${infoCell("Contrato", String(numContrato))}
+          ${infoCell("Emissão", dataStr)}
+        </tr>
+        <tr>
+          ${infoCell("Obra", String(obraNome))}
+          ${infoCell("Início do contrato", fmtD(contrato?.dataInicio))}
+          ${infoCell("Término do contrato", fmtD(contrato?.dataTermino ?? contrato?.dataFim))}
+        </tr>
+        <tr>
+          ${infoCell("Fornecedor / Executor", String(fornecedorNome))}
+          ${infoCell("Levantamento realizado por", levantadoPor || "—")}
+          ${infoCell("Data do levantamento", campo?.criadoEm ? fmtD(String(campo.criadoEm).slice(0, 10)) : dataStr)}
+        </tr>
+      </tbody></table>
       <h3 style="font-size:13px;margin:16px 0 6px">Contornos medidos</h3>
       <table style="border-collapse:collapse;width:100%;font-size:11px">
         <thead><tr style="background:#f1f5f9">
@@ -1860,6 +1910,19 @@ export default function MedicaoLevantamento() {
           <td style="border:1px solid #ccc;padding:5px;text-align:right">${brl(consolidado?.totalGeral ?? 0)}</td>
         </tr></tfoot>
       </table>
+      ${fotosHtml}
+      <!-- Assinaturas: responsável pelo levantamento × fornecedor -->
+      <table style="border-collapse:collapse;width:100%;margin-top:56px;page-break-inside:avoid"><tbody><tr>
+        <td style="width:46%;text-align:center;vertical-align:bottom">
+          <div style="border-top:1px solid #111;padding-top:6px;font-size:11px;font-weight:bold">${escHtml(levantadoPor) || "&nbsp;"}</div>
+          <div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px">Responsável pelo levantamento — FC Engenharia</div>
+        </td>
+        <td style="width:8%"></td>
+        <td style="width:46%;text-align:center;vertical-align:bottom">
+          <div style="border-top:1px solid #111;padding-top:6px;font-size:11px;font-weight:bold">${escHtml(fornecedorNome !== "—" ? fornecedorNome : "") || "&nbsp;"}</div>
+          <div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px">Fornecedor — de acordo com o levantamento</div>
+        </td>
+      </tr></tbody></table>
       <p style="font-size:9px;color:#6b7280;margin-top:24px">Quantidades obtidas por levantamento sobre planta (PDF) com calibração de escala. Fator m/ponto = medida real informada ÷ distância marcada (em pontos de PDF). Área = polígono (shoelace) × fator²; perímetro/linear = soma dos segmentos × fator; volume = área × espessura.</p>
       <script>window.onload=function(){setTimeout(function(){window.print();},300);}</script>
     </body></html>`;
