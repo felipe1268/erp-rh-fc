@@ -50,6 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4790** — Levantamento: workspace de tablet — página de altura fixa sem rolagem (planta ocupa todo o espaço, painel lateral com rolagem própria, cabeçalho 1 linha com sync em popover); abre centralizada e inteira (fit); em pé (<md) 2 linhas travadas (planta ~62% + painel).
 - **Rev. 4789** — Levantamento: escala do DXF robusta — aglomerados espaciais (escolhe a planta via extents/geometria), plausibilidade de unidade (3–1000 m), escala deduzida mantém Calibrar visível; sidecar versionado (DXF_ALGO_VERSION).
 - **Rev. 4788** — Levantamento: DXF grande pré-processado no servidor (sidecar JSON com SVG+bbox+escala); rota `derivar` p/ plantas legadas; cliente usa sidecar e só parseia localmente como fallback offline.
 - **Rev. 4787** — Levantamento: planta DXF grande (100MB+) sem limite prático — rota multipart `/api/upload/levantamento-planta` (até 1GB) + XHR com progresso real de bytes; `uploadPdf` aceita `arquivoKey`/`arquivoUrl` com validação de tenant.

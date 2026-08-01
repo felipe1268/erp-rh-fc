@@ -539,21 +539,32 @@ export default function MedicaoLevantamento() {
 
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  // largura disponível + altura da área de trabalho (preenche o resto da tela
-  // do tablet: do topo do canvas até a borda inferior da janela).
-  const [canvasH, setCanvasH] = useState(480);
+  // largura disponível do canvas (o canvas em si é flex-1 dentro do workspace
+  // de altura fixa — ver pageH abaixo).
   useEffect(() => {
     const el = canvasWrapRef.current;
     if (!el) return;
-    const measure = () => {
-      setBaseWidth(Math.max(280, el.clientWidth - 24));
-      setCanvasH(Math.max(360, window.innerHeight - el.getBoundingClientRect().top - 12));
-    };
+    const measure = () => setBaseWidth(Math.max(280, el.clientWidth - 24));
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     window.addEventListener("resize", measure);
     measure();
     return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
+
+  // Rev. 4790 — workspace de tablet: a página inteira vira um "app" de altura
+  // fixa (do topo até a borda de baixo da janela), SEM rolagem da página.
+  // Planta e painel lateral rolam internamente; tudo fica sempre à mão.
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [pageH, setPageH] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!el) return;
+    const measure = () => setPageH(Math.max(420, window.innerHeight - el.getBoundingClientRect().top - 8));
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    return () => { window.removeEventListener("resize", measure); window.removeEventListener("orientationchange", measure); };
   }, []);
 
   const contornosPagina = useMemo(
@@ -1720,33 +1731,84 @@ export default function MedicaoLevantamento() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-4">
-        {/* Cabeçalho */}
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setLocation(voltarHref)} className="gap-1">
-              <ArrowLeft className="h-4 w-4" />Voltar
-            </Button>
-            <div>
-              <h1 className="text-lg font-bold flex items-center gap-2">
-                <Ruler className="h-5 w-5 text-blue-600" />
-                Levantamento {String(campo.numero).padStart(3, "0")}{campo.titulo ? ` — ${campo.titulo}` : ""}
-              </h1>
-              <p className="text-xs text-gray-500">
-                {isTerceiro
-                  ? `${contrato?.numero ?? ""}${contrato?.objeto ? ` · ${contrato.objeto}` : ""}${contrato?.empresaTerceiraNome ? ` · ${contrato.empresaTerceiraNome}` : ""}`
-                  : `${contrato?.nomeProjeto ?? ""} · ${contrato?.cliente ?? ""}`}
-              </p>
-            </div>
+      <div ref={pageRef} className="flex flex-col gap-2 min-h-0" style={pageH ? { height: pageH } : undefined}>
+        {/* Cabeçalho compacto (1 linha) — Rev. 4790 tablet-first: título + status
+            de sincronização (chip com popover) + ações, sem gastar altura. */}
+        <div className="flex items-center gap-2 min-w-0 shrink-0">
+          <Button variant="ghost" size="sm" onClick={() => setLocation(voltarHref)} className="gap-1 h-9 shrink-0">
+            <ArrowLeft className="h-4 w-4" />Voltar
+          </Button>
+          <div className="min-w-0">
+            <h1 className="text-base font-bold flex items-center gap-1.5 leading-tight">
+              <Ruler className="h-4 w-4 text-blue-600 shrink-0" />
+              <span className="truncate">Levantamento {String(campo.numero).padStart(3, "0")}{campo.titulo ? ` — ${campo.titulo}` : ""}</span>
+            </h1>
+            <p className="text-[11px] text-gray-500 truncate leading-tight">
+              {isTerceiro
+                ? `${contrato?.numero ?? ""}${contrato?.objeto ? ` · ${contrato.objeto}` : ""}${contrato?.empresaTerceiraNome ? ` · ${contrato.empresaTerceiraNome}` : ""}`
+                : `${contrato?.nomeProjeto ?? ""} · ${contrato?.cliente ?? ""}`}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={gerarMemoriaCalculo}>
-              <Calculator className="h-4 w-4" />Memória de cálculo
+          <div className="ml-auto flex items-center gap-1.5 shrink-0">
+            {/* status offline/sync condensado num chip; ações no popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="h-9 gap-1.5" title="Sincronização e uso offline">
+                  {off.online ? <Wifi className="h-4 w-4 text-emerald-600" /> : <WifiOff className="h-4 w-4 text-amber-600" />}
+                  {off.sync.syncing ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                  ) : off.sync.pending > 0 ? (
+                    <span className="text-[11px] font-semibold text-amber-700 tabular-nums">{off.sync.pending} pend.</span>
+                  ) : (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  )}
+                  {(off.sync.errors > 0 || off.sync.conflicts > 0) && <AlertTriangle className="h-3.5 w-3.5 text-red-600" />}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-3 space-y-2 text-xs" align="end">
+                <div className="flex items-center gap-1.5">
+                  {off.online
+                    ? <span className="flex items-center gap-1 text-emerald-700"><Wifi className="h-3.5 w-3.5" />Online</span>
+                    : <span className="flex items-center gap-1 text-amber-700"><WifiOff className="h-3.5 w-3.5" />Offline — edições salvas no aparelho</span>}
+                  {off.cached && <span className="text-gray-400">· disponível offline</span>}
+                </div>
+                <div>
+                  {off.sync.syncing ? (
+                    <span className="flex items-center gap-1 text-blue-700"><Loader2 className="h-3.5 w-3.5 animate-spin" />Sincronizando…</span>
+                  ) : off.sync.pending > 0 ? (
+                    <span className="flex items-center gap-1 text-amber-700"><CloudOff className="h-3.5 w-3.5" />{off.sync.pending} pendente(s)</span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Tudo sincronizado</span>
+                  )}
+                </div>
+                {(off.sync.errors > 0 || off.sync.conflicts > 0) && (
+                  <div className="flex items-center gap-1 text-red-600">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {off.sync.conflicts > 0 ? `${off.sync.conflicts} conflito(s)` : ""}
+                    {off.sync.errors > 0 ? `${off.sync.conflicts > 0 ? " · " : ""}${off.sync.errors} erro(s)` : ""}
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5 pt-1 border-t">
+                  <Button size="sm" variant="outline" className="h-8 gap-1" disabled={!off.online || off.sync.syncing || off.sync.pending === 0} onClick={() => off.processNow()}>
+                    <RefreshCw className="h-3.5 w-3.5" />Sincronizar agora
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 gap-1" disabled={!off.online || off.prefetching} onClick={() => off.prefetch()}>
+                    {off.prefetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    {off.prefetching && off.prefetchProgress ? `Baixando ${off.prefetchProgress.done}/${off.prefetchProgress.total}` : "Baixar p/ offline"}
+                  </Button>
+                </div>
+                {off.storage && (
+                  <span className="flex items-center gap-1 text-gray-500"><HardDrive className="h-3.5 w-3.5" />{(off.storage.blobsBytes / 1048576).toFixed(1)} MB · {off.storage.blobsCount} arq.</span>
+                )}
+              </PopoverContent>
+            </Popover>
+            <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={gerarMemoriaCalculo}>
+              <Calculator className="h-4 w-4" /><span className="hidden md:inline">Memória de cálculo</span>
             </Button>
             {/* "Gerar boletim" é exclusivo da Medição de Cliente. No fluxo de Terceiros o
                 levantamento é vinculado à medição na aba "Medições" do contrato. */}
             {!isTerceiro && (
-              <Button size="sm" className="gap-1.5" disabled={gerarBoletimM.isPending} onClick={handleGerarBoletim}>
+              <Button size="sm" className="gap-1.5 h-9" disabled={gerarBoletimM.isPending} onClick={handleGerarBoletim}>
                 {gerarBoletimM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
                 Gerar boletim
               </Button>
@@ -1754,44 +1816,11 @@ export default function MedicaoLevantamento() {
           </div>
         </div>
 
-        {/* Barra de status offline / sincronização (PWA — Rev. 2895) */}
-        <div className="flex items-center gap-2 flex-wrap text-xs bg-white border rounded-lg px-3 py-2">
-          {off.online ? (
-            <span className="flex items-center gap-1 text-emerald-700"><Wifi className="h-3.5 w-3.5" />Online</span>
-          ) : (
-            <span className="flex items-center gap-1 text-amber-700"><WifiOff className="h-3.5 w-3.5" />Offline — edições salvas no aparelho</span>
-          )}
-          <span className="h-3 w-px bg-border" />
-          {off.sync.syncing ? (
-            <span className="flex items-center gap-1 text-blue-700"><Loader2 className="h-3.5 w-3.5 animate-spin" />Sincronizando…</span>
-          ) : off.sync.pending > 0 ? (
-            <span className="flex items-center gap-1 text-amber-700"><CloudOff className="h-3.5 w-3.5" />{off.sync.pending} pendente(s)</span>
-          ) : (
-            <span className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Tudo sincronizado</span>
-          )}
-          {(off.sync.errors > 0 || off.sync.conflicts > 0) && (
-            <span className="flex items-center gap-1 text-red-600">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              {off.sync.conflicts > 0 ? `${off.sync.conflicts} conflito(s)` : ""}
-              {off.sync.errors > 0 ? `${off.sync.conflicts > 0 ? " · " : ""}${off.sync.errors} erro(s)` : ""}
-            </span>
-          )}
-          {off.cached && <span className="text-gray-400">· disponível offline</span>}
-          <Button size="sm" variant="ghost" className="h-7 gap-1 ml-auto" disabled={!off.online || off.sync.syncing || off.sync.pending === 0} onClick={() => off.processNow()}>
-            <RefreshCw className="h-3.5 w-3.5" />Sincronizar agora
-          </Button>
-          <Button size="sm" variant="outline" className="h-7 gap-1" disabled={!off.online || off.prefetching} onClick={() => off.prefetch()}>
-            {off.prefetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {off.prefetching && off.prefetchProgress ? `Baixando ${off.prefetchProgress.done}/${off.prefetchProgress.total}` : "Baixar p/ offline"}
-          </Button>
-          {off.storage && (
-            <span className="flex items-center gap-1 text-gray-500"><HardDrive className="h-3.5 w-3.5" />{(off.storage.blobsBytes / 1048576).toFixed(1)} MB · {off.storage.blobsCount} arq.</span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
-          {/* Coluna do PDF */}
-          <div className="space-y-2">
+        {/* <md (tablet em pé): 2 LINHAS de altura travada — planta em cima (~62%),
+            painel embaixo com rolagem própria. md+: 2 colunas lado a lado. */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 grid-rows-[minmax(0,1.6fr)_minmax(0,1fr)] md:grid-rows-1 md:grid-cols-[minmax(0,1fr)_330px] gap-3">
+          {/* Coluna do PDF — flex column: a planta (flex-1) ocupa TODO o espaço restante */}
+          <div className="flex flex-col gap-2 min-h-0 min-w-0">
             {/* seletor de plantas — Rev. 4782: 1 linha só (label + chips + ações) */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0" title="Plantas do contrato — compartilhadas em todas as medições">
@@ -1893,11 +1922,18 @@ export default function MedicaoLevantamento() {
             )}
 
             {!pdfSel ? (
-              <div className="border-2 border-dashed rounded-xl py-16 text-center text-gray-400">
-                <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                <p className="font-medium">Nenhuma planta enviada</p>
-                <p className="text-sm">Envie o DXF do pavimento/setor — a escala entra exata do CAD, sem calibrar</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => pdfInputRef.current?.click()}
+                className="flex-1 min-h-0 border-2 border-dashed rounded-xl grid place-items-center text-center text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/40 transition-colors cursor-pointer"
+                title="Enviar a planta DXF"
+              >
+                <div>
+                  <FileText className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                  <p className="font-semibold text-base">Toque aqui para enviar a planta (DXF)</p>
+                  <p className="text-sm mt-1">Envie o DXF do pavimento/setor — a escala entra exata do CAD, sem calibrar</p>
+                </div>
+              </button>
             ) : (
               <>
                 {/* toolbar de medição (tátil, fixa no topo) */}
@@ -2132,7 +2168,7 @@ export default function MedicaoLevantamento() {
                 )}
 
                 {/* canvas */}
-                <div ref={canvasWrapRef} className="border rounded-lg bg-slate-200 overflow-auto" style={{ height: canvasH }}>
+                <div ref={canvasWrapRef} className="border rounded-lg bg-slate-200 overflow-auto flex-1 min-h-0">
                   {/* Rev. 4789 — moldura de folga em volta da planta = "tela infinita":
                       sempre há espaço de rolagem em todas as direções, então o pan
                       da pinça nunca trava na borda (o scroll não clampa mais o gesto). */}
@@ -2321,8 +2357,9 @@ export default function MedicaoLevantamento() {
             )}
           </div>
 
-          {/* Coluna lateral: contornos + consolidado + fotos */}
-          <div className="space-y-4">
+          {/* Coluna lateral: contornos + consolidado + fotos — rolagem PRÓPRIA
+              (a página não rola; o painel fica sempre visível ao lado da planta) */}
+          <div className="min-h-0 overflow-y-auto space-y-3 pb-2 overscroll-contain">
             {/* contornos da página */}
             <div className="border rounded-lg p-3">
               <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Ruler className="h-4 w-4" />Contornos desta página</h3>

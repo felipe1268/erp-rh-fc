@@ -1,4 +1,21 @@
 /**
+ * Rev. 4790 - LEVANTAMENTO: WORKSPACE DE TABLET (TELA INTEIRA, SEM ROLAGEM)
+ *
+ * Pedido do usuario: no tablet a tela de levantamento tem que aparecer TODA,
+ * com planta, contornos e planilha sempre a mao, sem a pagina rolar.
+ * - Pagina vira um "app" de altura fixa (topo ate a borda da janela): a
+ *   planta ocupa TODO o espaco restante (flex-1) e o painel lateral
+ *   (contornos + planilha + fotos) tem rolagem PROPRIA.
+ * - Cabecalho em 1 linha: titulo + chip de sincronizacao (status offline,
+ *   pendentes e acoes num popover) + Memoria de calculo + Gerar boletim.
+ * - Planta abre CENTRALIZADA e INTEIRA (fit-to-screen): o posicionamento
+ *   inicial agora espera o conteudo REAL carregar (antes rodava sobre o
+ *   "carregando" e a planta abria deslocada pra direita) e ajusta o zoom
+ *   pra planta caber na area visivel, centralizada.
+ * - Sem planta: area de trabalho vira um alvo grande "Toque aqui para
+ *   enviar a planta (DXF)" ocupando o espaco todo.
+ */
+/**
  * Rev. 4789 - LEVANTAMENTO: ESCALA DXF ROBUSTA + AJUSTE PRECISO DE CONTORNOS
  *
  * Ajuste preciso (pedido do usuario: "endpoints pra pegar certinho"):
