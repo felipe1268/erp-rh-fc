@@ -2072,41 +2072,18 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
     );
   };
   const levantando = criarLevantamentoMut.isPending || vincularLevantamentoMut.isPending;
-  // Rev. 3082 (T007) — Esta aba é ESPELHO SÓ-LEITURA. As medições de terceiros são
-  // geridas no módulo dedicado (/terceiros/medicoes). A edição inline fica desligada por
-  // padrão; abre-se com "Editar nesta aba" (ou deep-link ?edit=1 vindo do módulo).
-  // Quando aberto DENTRO do módulo "Medição Terceiros" (botão "Medir"), a aba já é o
-  // espaço oficial de trabalho: edição ligada por padrão e SEM a contradição "abra o
-  // módulo de medições" (o usuário já está nele). Pelo módulo "Terceiros" continua
-  // sendo um espelho só-leitura (edição opcional via "Editar nesta aba" ou ?edit=1).
-  const [modoEdicao, setModoEdicao] = useState(() => {
-    if (emModuloMedicoes) return true;
-    try { return new URLSearchParams(window.location.search).get("edit") === "1"; } catch { return false; }
-  });
+  // Rev. 4800 — fim do "espelho só-leitura": esta aba É o espaço oficial de
+  // trabalho das medições do contrato (pedido do usuário). O módulo dedicado
+  // (/terceiros/medicoes) segue existindo como PAINEL central de todos os
+  // contratos — fica só um atalho discreto pra lá.
+  const modoEdicao = true;
 
-  const banner = emModuloMedicoes ? (
-    <div className="flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-800">
-      <Ruler className="w-3.5 h-3.5 flex-shrink-0" />
-      <span>Medições deste contrato. Gere, edite e acompanhe a aprovação aqui mesmo.</span>
-    </div>
-  ) : (
-    <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${modoEdicao ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-blue-50 border-blue-200 text-blue-800"}`}>
-      <div className="flex items-center gap-1.5">
-        {modoEdicao ? <Pencil className="w-3.5 h-3.5 flex-shrink-0" /> : <Eye className="w-3.5 h-3.5 flex-shrink-0" />}
-        <span>
-          {modoEdicao
-            ? "Modo edição ativo. O fluxo oficial das medições de terceiros vive no módulo dedicado."
-            : "Espelho só-leitura. As medições de terceiros são geridas no módulo dedicado."}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]" onClick={() => navigate("/terceiros/medicoes")}>
-          <ExternalLink className="w-3 h-3" /> Abrir módulo de Medições
-        </Button>
-        <Button size="sm" variant={modoEdicao ? "default" : "outline"} className="h-7 gap-1 text-[11px]" onClick={() => setModoEdicao(v => !v)}>
-          {modoEdicao ? <><CheckCircle className="w-3 h-3" /> Concluir edição</> : <><Pencil className="w-3 h-3" /> Editar nesta aba</>}
-        </Button>
-      </div>
+  const banner = emModuloMedicoes ? null : (
+    <div className="flex justify-end">
+      <button type="button" className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-600"
+        onClick={() => navigate("/terceiros/medicoes")}>
+        <ExternalLink className="w-3 h-3" /> Painel de Medições (todos os contratos)
+      </button>
     </div>
   );
 
@@ -2145,7 +2122,9 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
         </div>
       )}
       {contrato.medicoes.map((m: any) => {
-        const st = STATUS_MEDICAO[m.status || "rascunho"] || STATUS_MEDICAO.rascunho;
+        // Rev. 4801 — status "Paga" derivado ao vivo do Financeiro (baixas do título)
+        const pagto = (m as any).pagamento;
+        const st = pagto?.pago ? STATUS_MEDICAO.paga : (STATUS_MEDICAO[m.status || "rascunho"] || STATUS_MEDICAO.rascunho);
         const isExpanded = expandedMedicao === m.id;
         const isEditable = m.status !== "paga";
         const isPreApproval = m.status === "aguardando_aprovacao" || m.status === "rascunho";
@@ -2173,6 +2152,14 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   {m.alertaDivergencia && <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />}
                   {m.motivoRejeicao && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
                   <span className="text-xs text-gray-400 hidden sm:inline whitespace-nowrap">{m.dataInicio && m.dataFim ? `${fmtDate(m.dataInicio)} a ${fmtDate(m.dataFim)}` : m.periodo}</span>
+                  {pagto?.pago && (
+                    <span className="text-[11px] text-blue-700 hidden md:inline whitespace-nowrap">
+                      Pago em {fmtDate(pagto.dataPagamento)}{pagto.formaPagamento ? ` • ${pagto.formaPagamento}` : ""}{pagto.conta ? ` • ${pagto.conta}` : ""}
+                    </span>
+                  )}
+                  {pagto?.parcial && (
+                    <span className="text-[11px] text-amber-700 hidden md:inline whitespace-nowrap">Pago parcial: {BRL(pagto.valorPago)}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span className="text-xs text-gray-500 hidden sm:inline">Medido <strong className="text-gray-800">{BRL(m.valorMedido)}</strong></span>
@@ -2205,6 +2192,26 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                     </div>
                   ))}
                 </div>
+                {pagto?.pago && (
+                  <div className="p-2.5 bg-blue-50 rounded-lg border border-blue-200 space-y-1">
+                    <p className="text-xs text-blue-800 font-semibold"><CheckCircle className="w-3.5 h-3.5 inline mr-1.5" />Paga pelo Financeiro — {BRL(pagto.valorPago)}</p>
+                    {(pagto.baixas || []).map((b: any, i: number) => (
+                      <p key={i} className="text-xs text-blue-700 break-words">
+                        {fmtDate(b.data)} • {BRL(b.valor)}{b.formaPagamento ? ` • ${b.formaPagamento}` : ""}{b.conta ? ` • ${b.conta}` : ""}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {pagto?.parcial && (
+                  <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 space-y-1">
+                    <p className="text-xs text-amber-800 font-semibold">Pagamento parcial: {BRL(pagto.valorPago)} de {BRL(pagto.valorTitulo)}</p>
+                    {(pagto.baixas || []).map((b: any, i: number) => (
+                      <p key={i} className="text-xs text-amber-700 break-words">
+                        {fmtDate(b.data)} • {BRL(b.valor)}{b.formaPagamento ? ` • ${b.formaPagamento}` : ""}{b.conta ? ` • ${b.conta}` : ""}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 {m.observacoes && (
                   <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
                     <p className="text-xs text-gray-600 break-words"><span className="font-semibold">Observações:</span> {m.observacoes}</p>

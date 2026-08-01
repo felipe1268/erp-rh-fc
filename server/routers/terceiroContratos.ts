@@ -38,6 +38,7 @@ import {
   portalCredentials,
   financialEntries,
   financialEntryBaixas,
+  companyBankAccounts,
   users,
   integrasignEnvelopes,
   integrasignSignatarios,
@@ -785,6 +786,55 @@ export const terceiroContratosRouter = router({
             };
           }),
       }));
+
+      // Rev. 4801 — info de pagamento vinda do Financeiro (live, das baixas ativas):
+      // quando o título da medição é quitado, a medição exibe Paga + dia/forma/conta.
+      if (medicoes.length > 0) {
+        try {
+          const entries = await db.select().from(financialEntries).where(and(
+            eq(financialEntries.companyId, contrato.companyId),
+            eq(financialEntries.origemModulo, "terceiro_medicao"),
+            inArray(financialEntries.origemId, medicoes.map((m: any) => m.id)),
+            sql`${financialEntries.status} <> 'cancelado'`,
+          ));
+          const entryIds = entries.map(e => e.id);
+          const baixas = entryIds.length > 0
+            ? await db.select().from(financialEntryBaixas).where(and(
+                inArray(financialEntryBaixas.entryId, entryIds),
+                sql`${financialEntryBaixas.estornadaEm} IS NULL`,
+              ))
+            : [];
+          const contaIds = [...new Set(baixas.map(b => b.contaBancariaId).filter(Boolean))] as number[];
+          const contas = contaIds.length > 0
+            ? await db.select().from(companyBankAccounts).where(inArray(companyBankAccounts.id, contaIds))
+            : [];
+          const contaNome = (cid: number | null) => {
+            const c = contas.find(x => x.id === cid);
+            return c ? (c.apelido || `${c.banco} ${c.agencia}/${c.conta}`) : null;
+          };
+          medicoes = medicoes.map((m: any) => {
+            const entry = entries.find(e => e.origemId === m.id);
+            if (!entry) return m;
+            const bs = baixas.filter(b => b.entryId === entry.id).sort((a, b) => String(a.data).localeCompare(String(b.data)));
+            const totalBaixado = bs.reduce((s, b) => s + n(b.valor), 0);
+            const pago = ["pago", "recebido"].includes(String(entry.status)) || (totalBaixado >= n(entry.valorPrevisto) - 0.005 && bs.length > 0);
+            const ult = bs[bs.length - 1];
+            return {
+              ...m,
+              pagamento: {
+                pago,
+                parcial: !pago && totalBaixado > 0,
+                valorPago: totalBaixado,
+                valorTitulo: n(entry.valorPrevisto),
+                dataPagamento: ult?.data || null,
+                formaPagamento: ult?.formaPagamento || entry.formaPagamento || null,
+                conta: contaNome(ult?.contaBancariaId ?? entry.contaBancariaId ?? null),
+                baixas: bs.map(b => ({ data: b.data, valor: n(b.valor), formaPagamento: b.formaPagamento, conta: contaNome(b.contaBancariaId) })),
+              },
+            };
+          });
+        } catch (e) { console.warn("[getContrato] pagamento das medições:", e); }
+      }
 
       const valorMedidoAcumulado = itensRaw.reduce((s, i) => s + n(i.valorMedidoAcumulado), 0);
       const percentualMedidoGlobal = n(contrato.valorTotal) > 0 ? (valorMedidoAcumulado / n(contrato.valorTotal)) * 100 : 0;
@@ -1749,7 +1799,11 @@ export const terceiroContratosRouter = router({
       // Contagem de medições anteriores
       const medicoesAnteriores = await db.select().from(terceiroMedicoes)
         .where(eq(terceiroMedicoes.contratoId, input.contratoId));
-      const numero = medicoesAnteriores.length + 1;
+      // Rev. 4801 — numeração sequencial que REAPROVEITA lacunas: se a Medição 01
+      // for excluída, a próxima medição criada recebe o número 01 (menor livre).
+      const numerosUsados = new Set(medicoesAnteriores.map(m => Number(m.numero) || 0));
+      let numero = 1;
+      while (numerosUsados.has(numero)) numero++;
       const valorAcumuladoAnterior = medicoesAnteriores
         .filter(m => m.status === "aprovada" || m.status === "paga")
         .reduce((s, m) => s + n(m.valorMedido), 0);
@@ -2062,7 +2116,11 @@ export const terceiroContratosRouter = router({
 
       const medicoesAnteriores = await db.select().from(terceiroMedicoes)
         .where(eq(terceiroMedicoes.contratoId, input.contratoId));
-      const numero = medicoesAnteriores.length + 1;
+      // Rev. 4801 — numeração sequencial que REAPROVEITA lacunas: se a Medição 01
+      // for excluída, a próxima medição criada recebe o número 01 (menor livre).
+      const numerosUsados = new Set(medicoesAnteriores.map(m => Number(m.numero) || 0));
+      let numero = 1;
+      while (numerosUsados.has(numero)) numero++;
       const valorAcumuladoAnterior = medicoesAnteriores
         .filter(m => m.status === "aprovada" || m.status === "paga")
         .reduce((s, m) => s + n(m.valorMedido), 0);

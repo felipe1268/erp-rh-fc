@@ -14,6 +14,23 @@
  * - Futuro (combinado): comparar tambem com a medicao do CLIENTE - o avanco
  *   pago ao terceiro nao deve superar o avanco recebido do cliente.
  *
+ * NUMERACAO DE MEDICAO REAPROVEITA LACUNAS + STATUS PAGA DO FINANCEIRO:
+ * - Nova medicao recebe o MENOR numero livre do contrato (excluiu a 01,
+ *   a proxima criada vira 01 de novo) — em gerar automatico e manual.
+ * - A medicao mostra "Paga" ao vivo quando o titulo dela e quitado no
+ *   Financeiro: dia do pagamento, forma e conta bancaria na linha e no
+ *   popup de detalhes (inclui cada baixa; pagamento parcial destacado).
+ *
+ * ABA DE MEDICOES DO CONTRATO SEMPRE EDITAVEL:
+ * - Removido o banner "Espelho so-leitura" e o botao "Editar nesta aba"
+ *   (heranca de quando a edicao vivia so no modulo dedicado). A aba do
+ *   contrato e o espaco oficial de trabalho; ficou so um atalho discreto
+ *   "Painel de Medicoes (todos os contratos)".
+ *
+ * LISTA DE MEDICOES ENXUTA + POPUP DE DETALHES:
+ * - Cada medicao vira uma linha ("Medicao NN" + status + valor); alertas,
+ *   aprovacoes, FD e botoes de acao abrem no popup "Detalhes".
+ *
  * MEDICAO RESPEITA O QUANTITATIVO DO LEVANTAMENTO:
  * - O valor do periodo agora e QTD MEDIDA x PRECO UNITARIO (exato); o % e
  *   derivado do valor, nunca o contrario (o % arredondado distorcia o valor).
