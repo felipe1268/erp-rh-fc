@@ -2643,16 +2643,42 @@ export default function MedicaoLevantamento() {
             if (isFinite(qtd)) { somaQtd += qtd; if (un) unidadeCamada = un; }
             const medidas: string[] = [];
             const f = parseFloat(String(c.metrosPorUnidade ?? ""));
+            const temEscala = isFinite(f) && f > 0 && pw > 0 && ph > 0;
+            // Rev. 4843 — transparência: comprimento REAL de cada lado do
+            // desenho (em metros), para conferência lado a lado.
+            const lados: number[] = [];
+            if (temEscala && pts.length >= 2 && c.tipo !== "contagem") {
+              const nSeg = FECHA_POLIGONO(c.tipo) ? pts.length : pts.length - 1;
+              for (let i = 0; i < nSeg; i++) {
+                const a = pts[i], b = pts[(i + 1) % pts.length];
+                const L = Math.hypot((b.x - a.x) * pw, (b.y - a.y) * ph) * f;
+                if (isFinite(L) && L > 0.005) lados.push(L);
+              }
+            }
+            const ladosStr = (max: number) => {
+              const vis = lados.slice(0, max).map((L) => numFmt(L, 2));
+              return vis.join(" + ") + (lados.length > max ? " + …" : "");
+            };
             if (c.tipo === "area" || c.tipo === "volume") {
               // largura × altura reais quando o desenho é um retângulo
               const box = detectRectBox(pts as any);
-              if (box && isFinite(f) && f > 0 && pw > 0 && ph > 0) {
+              let retangulo = false;
+              if (box && temEscala) {
                 const lw = (box.x1 - box.x0) * pw * f, lh = (box.y1 - box.y0) * ph * f;
-                if (isFinite(lw) && isFinite(lh) && lw > 0 && lh > 0) medidas.push(`${numFmt(lw, 2)} × ${numFmt(lh, 2)} m`);
+                if (isFinite(lw) && isFinite(lh) && lw > 0 && lh > 0) {
+                  medidas.push(`${numFmt(lw, 2)} × ${numFmt(lh, 2)} m`);
+                  retangulo = true;
+                }
+              }
+              // polígono irregular: mostra os lados + método (fórmula de Gauss
+              // pelos vértices) — o mais transparente possível p/ conferência
+              if (!retangulo && lados.length >= 3) {
+                medidas.push(`lados: ${ladosStr(10)} m`);
+                medidas.push(`área pelos vértices (fórmula de Gauss)`);
               }
               if (c.tipo === "volume") {
                 const ar = m2(c.area); if (ar) medidas.push(`área ${ar} m²`);
-                const es = parseFloat(String(c.espessura ?? "")); if (isFinite(es) && es > 0) medidas.push(`esp. ${numFmt(es, 2)} m`);
+                const es = parseFloat(String(c.espessura ?? "")); if (isFinite(es) && es > 0) medidas.push(`× esp. ${numFmt(es, 2)} m`);
                 if (isFinite(qtd)) medidas.push(`<b>${numFmt(qtd, 2)} m³</b>`);
               } else if (isFinite(qtd)) {
                 medidas.push(`<b>área ${numFmt(qtd, 2)} m²</b>`);
@@ -2660,7 +2686,9 @@ export default function MedicaoLevantamento() {
             } else if (c.tipo === "contagem") {
               if (isFinite(qtd)) medidas.push(`<b>${numFmt(qtd, 0)} un</b>`);
             } else {
-              if (isFinite(qtd)) medidas.push(`<b>comprimento ${numFmt(qtd, 2)} m</b>`);
+              // perímetro/linear: soma de TODOS os trechos = total
+              if (lados.length >= 2) medidas.push(`${ladosStr(14)}`);
+              if (isFinite(qtd)) medidas.push(`<b>= ${numFmt(qtd, 2)} m</b>`);
             }
             itensLegenda.push(`<div style="display:flex;align-items:flex-start;gap:5px;padding:3px 0;border-bottom:1px solid #f1f5f9">
               <span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;border:1.5px solid ${cor};font-size:8.5px;font-weight:bold;color:#111827;-webkit-print-color-adjust:exact;print-color-adjust:exact">${isFinite(num) ? num : "•"}</span>

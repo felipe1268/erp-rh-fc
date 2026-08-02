@@ -1,4 +1,15 @@
 /**
+ * Rev. 4843 - MEMORIA DE CALCULO: CONTA ABERTA NA LEGENDA (TRANSPARENCIA)
+ *
+ * - Perimetro/comprimento: a legenda mostra TODOS os trechos somados
+ *   (ex.: 3,96 + 2,95 + 4,10 + ... = 13,75 m) para conferencia direta.
+ * - Area poligonal (nao retangular): mostra o comprimento de cada lado e
+ *   indica o metodo de calculo (area pelos vertices — formula de Gauss).
+ * - Retangulo continua com largura × altura + area; volume mostra
+ *   area × espessura = m3.
+ */
+
+/**
  * Rev. 4842 - ETIQUETA DE CONTORNO LINEAR: DENTRO + LINHA-GUIA QUE GRUDA
  *
  * - Contornos lineares (perimetro/tabica) tambem colocam a etiqueta do
