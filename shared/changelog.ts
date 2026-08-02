@@ -1,4 +1,16 @@
 /**
+ * Rev. 4846 - PLANTA DXF: FOLGA DE 1 M EM VOLTA DO DESENHO
+ *
+ * - A planta nao "morre" mais no limite do projeto: sobra 1 m real de area
+ *   branca em cada lado (na escala 1:1) para medir fachada/perimetro
+ *   EXTERNO e fazer anotacoes fora do desenho.
+ * - Da pra desenhar, arrastar etiquetas e usar OSnap tambem na folga; as
+ *   medidas continuam exatas (mesma escala da planta).
+ * - A mesma folga aparece nos croquis da Memoria de Calculo, entao o
+ *   contorno externo sai inteiro no documento.
+ */
+
+/**
  * Rev. 4845 - MEMORIA DE CALCULO: COLUNA "M/PONTO" REMOVIDA
  *
  * - A coluna tecnica m/ponto (fator interno de escala) saiu da tabela de

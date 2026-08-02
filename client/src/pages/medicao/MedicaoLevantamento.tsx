@@ -91,6 +91,9 @@ function ehVideoMidia(f: any): boolean {
 }
 
 const FECHA_POLIGONO = (t: string) => t === "area" || t === "volume";
+// Rev. 4846 — folga em volta da planta DXF (1 m real por lado, na escala 1:1)
+// p/ medir fachada/perímetro EXTERNO e ter área de anotações fora do limite.
+const FOLGA_PLANTA_M = 1;
 
 // Rev. 4840 — etiqueta SEMPRE dentro da área: se o centroide cair fora do
 // polígono (forma em L, côncava), varre bandas horizontais e usa o meio do
@@ -888,6 +891,20 @@ export default function MedicaoLevantamento() {
   }, [isDxf, dxfData]);
   const calibAtualEff = calibAtual || dxfAutoCalib;
 
+  // Rev. 4846 — folga de 1 m (escala real) por lado na planta DXF: o desenho
+  // não morre no limite do projeto; dá pra contornar a fachada por FORA.
+  // Só camada de exibição: as coordenadas 0..1 continuam relativas à planta
+  // (pontos na folga ficam <0 ou >1 e as contas seguem exatas).
+  const folga = useMemo(() => {
+    const mpu = calibAtualEff?.metrosPorUnidade;
+    if (!isDxf || !dxfData?.ok || !mpu || mpu <= 0 || !(dxfData.w > 0) || !(dxfData.h > 0)) return { x: 0, y: 0 };
+    return {
+      x: Math.min(0.3, (FOLGA_PLANTA_M / mpu) / dxfData.w),
+      y: Math.min(0.3, (FOLGA_PLANTA_M / mpu) / dxfData.h),
+    };
+  }, [isDxf, dxfData, calibAtualEff]);
+  const folgaRef = useRef(folga); folgaRef.current = folga;
+
   // Rev. 4781 — poka-yoke: escala com fonte declarada (nominal/manual nova)
   // só libera medição depois de CONFERIDA contra uma cota conhecida.
   // Calibração legada (sem `fonte`) e DXF com unidade não bloqueiam.
@@ -981,9 +998,14 @@ export default function MedicaoLevantamento() {
   // --- coordenada normalizada [0..1] a partir do ponto de tela ---
   const getPtFromClient = (clientX: number, clientY: number): GeoPonto => {
     const rect = overlayRef.current!.getBoundingClientRect();
+    // Rev. 4846 — overlay cobre planta + folga; converte de volta p/ coords da
+    // planta (a folga permite valores fora de 0..1, limitados à área visível)
+    const fx = folgaRef.current.x, fy = folgaRef.current.y;
+    const rx = (clientX - rect.left) / Math.max(rect.width, 1);
+    const ry = (clientY - rect.top) / Math.max(rect.height, 1);
     return {
-      x: Math.min(1, Math.max(0, (clientX - rect.left) / Math.max(rect.width, 1))),
-      y: Math.min(1, Math.max(0, (clientY - rect.top) / Math.max(rect.height, 1))),
+      x: Math.min(1 + fx, Math.max(-fx, rx * (1 + 2 * fx) - fx)),
+      y: Math.min(1 + fy, Math.max(-fy, ry * (1 + 2 * fy) - fy)),
     };
   };
 
@@ -1009,8 +1031,11 @@ export default function MedicaoLevantamento() {
     const fracY = (cy - ir.top) / Math.max(ir.height, 1);
     const pd = pageDimsRef.current;
     const aspect = pd.w > 0 ? pd.h / pd.w : 1;
-    const W = baseWidthRef.current * z;
-    setPan({ x: cx - cr.left - fracX * W, y: cy - cr.top - fracY * W * aspect });
+    // Rev. 4846 — caixa renderizada inclui a folga (padding em volta da planta)
+    const fg = folgaRef.current;
+    const W = baseWidthRef.current * z * (1 + 2 * fg.x);
+    const Hh = baseWidthRef.current * z * aspect * (1 + 2 * fg.y);
+    setPan({ x: cx - cr.left - fracX * W, y: cy - cr.top - fracY * Hh });
     setZoom(z);
   }, []);
 
@@ -1021,12 +1046,15 @@ export default function MedicaoLevantamento() {
     const bw = baseWidthRef.current;
     const pd = pageDimsRef.current;
     const aspect = pd.w > 0 ? pd.h / pd.w : 1;
-    const fitW = (cont.clientWidth - 32) / Math.max(bw, 1);
-    const fitH = (cont.clientHeight - 32) / Math.max(bw * aspect, 1);
+    // Rev. 4846 — enquadra a caixa COM a folga (planta + 1 m por lado)
+    const fg = folgaRef.current;
+    const bwT = bw * (1 + 2 * fg.x);
+    const bhT = bw * aspect * (1 + 2 * fg.y);
+    const fitW = (cont.clientWidth - 32) / Math.max(bwT, 1);
+    const fitH = (cont.clientHeight - 32) / Math.max(bhT, 1);
     const fitZ = Math.min(6, Math.max(0.2, Math.min(fitW, fitH)));
-    const W = bw * fitZ;
     setZoom(fitZ);
-    setPan({ x: (cont.clientWidth - W) / 2, y: (cont.clientHeight - W * aspect) / 2 });
+    setPan({ x: (cont.clientWidth - bwT * fitZ) / 2, y: (cont.clientHeight - bhT * fitZ) / 2 });
   }, []);
 
   // Fit automático na 1ª abertura de cada planta/página…
@@ -1309,7 +1337,9 @@ export default function MedicaoLevantamento() {
     if (!osnapOn) return null;
     const rect = overlayRef.current?.getBoundingClientRect();
     if (!rect) return null;
-    const rw = Math.max(rect.width, 1), rh = Math.max(rect.height, 1);
+    // Rev. 4846 — px por fração DA PLANTA (overlay inclui a folga)
+    const rw = Math.max(rect.width / (1 + 2 * folgaRef.current.x), 1);
+    const rh = Math.max(rect.height / (1 + 2 * folgaRef.current.y), 1);
     const TOL = 14; // px
     const cx = raw.x * rw, cy = raw.y * rh;
     let best: { p: GeoPonto; kind: SnapKind; prio: number; d: number } | null = null;
@@ -1539,8 +1569,11 @@ export default function MedicaoLevantamento() {
         const cr = cont.getBoundingClientRect();
         const pd = pageDimsRef.current;
         const aspect = pd.w > 0 ? pd.h / pd.w : 1;
-        const W = baseWidthRef.current * newZoom;
-        setPan({ x: pr.lastMid.x - cr.left - pr.fracX * W, y: pr.lastMid.y - cr.top - pr.fracY * W * aspect });
+        // Rev. 4846 — caixa renderizada inclui a folga
+        const fg = folgaRef.current;
+        const W = baseWidthRef.current * newZoom * (1 + 2 * fg.x);
+        const Hh = baseWidthRef.current * newZoom * aspect * (1 + 2 * fg.y);
+        setPan({ x: pr.lastMid.x - cr.left - pr.fracX * W, y: pr.lastMid.y - cr.top - pr.fracY * Hh });
         setZoom(newZoom);
       }
     }
@@ -2348,12 +2381,13 @@ export default function MedicaoLevantamento() {
   ): GeoPonto[] {
     if (ed.kind === "move") {
       // arrasto do contorno INTEIRO: translada todos os pontos pelo delta,
-      // clampado pra forma não sair da planta.
+      // clampado pra forma não sair da área visível (planta + folga).
+      const fg = folgaRef.current;
       const dx0 = p.x - (ed.p0?.x ?? p.x), dy0 = p.y - (ed.p0?.y ?? p.y);
       const minX = Math.min(...ed.base.map((q) => q.x)), maxX = Math.max(...ed.base.map((q) => q.x));
       const minY = Math.min(...ed.base.map((q) => q.y)), maxY = Math.max(...ed.base.map((q) => q.y));
-      const dx = Math.max(-minX, Math.min(1 - maxX, dx0));
-      const dy = Math.max(-minY, Math.min(1 - maxY, dy0));
+      const dx = Math.max(-fg.x - minX, Math.min(1 + fg.x - maxX, dx0));
+      const dy = Math.max(-fg.y - minY, Math.min(1 + fg.y - maxY, dy0));
       return ed.base.map((q) => ({ x: q.x + dx, y: q.y + dy }));
     }
     if (ed.kind === "vertex" || !ed.rect) {
@@ -2542,6 +2576,7 @@ export default function MedicaoLevantamento() {
       for (const pag of pags) {
         const cs = grupos.get(`${pdf.id}|${pag}`)!;
         let bg = ""; let ratio = 1.4; let pw = 0, ph = 0; // pw/ph = página em unidades do arquivo (p/ largura×altura reais)
+        let fgx = 0, fgy = 0; // Rev. 4846 — folga de 1 m em volta da planta DXF (contorno externo)
         try {
           const src = off.pdfFileFor(pdf);
           const nomeArq = String(pdf.arquivoNome || pdf.nome || pdf.arquivoUrl || "").toLowerCase();
@@ -2564,7 +2599,14 @@ export default function MedicaoLevantamento() {
             if (!parsed?.svg) continue;
             pw = parsed.w || 0; ph = parsed.h || 0;
             ratio = (parsed.w || 1) / (parsed.h || 1);
-            bg = String(parsed.svg).replace("<svg ", '<svg style="position:absolute;inset:0;width:100%;height:100%" ');
+            const mpuP = parseFloat(String(parsed.metrosPorUnidade ?? ""));
+            if (isFinite(mpuP) && mpuP > 0 && pw > 0 && ph > 0) {
+              fgx = Math.min(0.3, (FOLGA_PLANTA_M / mpuP) / pw);
+              fgy = Math.min(0.3, (FOLGA_PLANTA_M / mpuP) / ph);
+            }
+            // planta inset na folga (mesma geometria da tela)
+            const stl = `position:absolute;left:${((fgx / (1 + 2 * fgx)) * 100).toFixed(3)}%;top:${((fgy / (1 + 2 * fgy)) * 100).toFixed(3)}%;width:${(100 / (1 + 2 * fgx)).toFixed(3)}%;height:${(100 / (1 + 2 * fgy)).toFixed(3)}%`;
+            bg = String(parsed.svg).replace("<svg ", `<svg style="${stl}" `);
           } else {
             if (!src) continue;
             const doc = await pdfjs.getDocument(src).promise;
@@ -2700,8 +2742,8 @@ export default function MedicaoLevantamento() {
           blocos.push(`<div style="page-break-inside:avoid;margin-bottom:16px">
             <div style="font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#374151;margin:0 0 4px">${titulo} — <span style="color:#1B2A4A">${escHtml(camadaNome)}</span> <span style="color:#6b7280;font-weight:normal;text-transform:none">(${ccs.length} medição(ões)${totalCamada ? ` — total ${totalCamada}` : ""})</span></div>
             <div style="display:flex;gap:8px;align-items:flex-start">
-              <div style="position:relative;flex:1 1 72%;aspect-ratio:${ratio};border:1px solid #d1d5db;background:#fff;overflow:hidden">${bg}
-                <svg viewBox="0 0 ${W} ${H.toFixed(1)}" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">${shapes.join("")}${badges.join("")}</svg>
+              <div style="position:relative;flex:1 1 72%;aspect-ratio:${ratio * (1 + 2 * fgx) / (1 + 2 * fgy)};border:1px solid #d1d5db;background:#fff;overflow:hidden">${bg}
+                <svg viewBox="${(-fgx * W).toFixed(1)} ${(-fgy * H).toFixed(1)} ${(W * (1 + 2 * fgx)).toFixed(1)} ${(H * (1 + 2 * fgy)).toFixed(1)}" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">${shapes.join("")}${badges.join("")}</svg>
               </div>
               <div style="flex:1 1 28%;min-width:150px;border:1px solid #e5e7eb;border-radius:4px;padding:5px 7px">
                 <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:2px">Legenda — ${escHtml(camadaNome)}</div>
@@ -3589,11 +3631,14 @@ export default function MedicaoLevantamento() {
                         dxfLoading ? (
                           <div className="py-16 text-center text-gray-400" style={{ width: pageWidth }}><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
                         ) : dxfData?.ok ? (
-                          <div
-                            className="bg-white"
-                            style={{ width: pageWidth, height: pageWidth * (pageDims.w > 0 ? pageDims.h / pageDims.w : 1) }}
-                            dangerouslySetInnerHTML={{ __html: dxfData.svg }}
-                          />
+                          // Rev. 4846 — folga branca de 1 m (escala real) em volta da
+                          // planta: dá pra desenhar contorno EXTERNO (fachada) e anotar.
+                          <div className="bg-white" style={{ padding: `${(pageWidth * (pageDims.w > 0 ? pageDims.h / pageDims.w : 1)) * folga.y}px ${pageWidth * folga.x}px` }}>
+                            <div
+                              style={{ width: pageWidth, height: pageWidth * (pageDims.w > 0 ? pageDims.h / pageDims.w : 1) }}
+                              dangerouslySetInnerHTML={{ __html: dxfData.svg }}
+                            />
+                          </div>
                         ) : (
                           <div className="py-16 text-center text-red-500 px-4" style={{ width: pageWidth }}>{dxfData?.erro || "Erro ao carregar DXF"}</div>
                         )
@@ -3626,7 +3671,7 @@ export default function MedicaoLevantamento() {
                         onPointerCancel={onPdfPointerUp}
                         onPointerLeave={() => setSnapHit(null)}
                       >
-                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1 1" preserveAspectRatio="none">
+                        <svg className="absolute inset-0 w-full h-full" viewBox={`${-folga.x} ${-folga.y} ${1 + 2 * folga.x} ${1 + 2 * folga.y}`} preserveAspectRatio="none">
                           {/* Rev. 3093 — REFERÊNCIA (medições anteriores): traço claro
                               tracejado, renderizado ATRÁS dos contornos desta medição. */}
                           {referenciaPagina.map((c) => {
@@ -3871,7 +3916,7 @@ export default function MedicaoLevantamento() {
                               type="button"
                               className="absolute z-10 rounded-full font-bold tabular-nums shadow-sm border-2 flex items-center justify-center"
                               style={{
-                                left: `${lx * 100}%`, top: `${ly * 100}%`, transform: "translate(-50%, -50%)",
+                                left: `${((lx + folga.x) / (1 + 2 * folga.x)) * 100}%`, top: `${((ly + folga.y) / (1 + 2 * folga.y)) * 100}%`, transform: "translate(-50%, -50%)",
                                 width: 22, height: 22, fontSize: 10,
                                 backgroundColor: sel ? "#1d4ed8" : "#fff",
                                 borderColor: sel ? "#1d4ed8" : cor,
@@ -3893,8 +3938,9 @@ export default function MedicaoLevantamento() {
                                 if (!d.moved) return;
                                 const r = overlayRef.current?.getBoundingClientRect();
                                 if (!r || r.width < 1) return;
-                                const nx = Math.min(1, Math.max(0, d.orig.x + (e.clientX - d.start.x) / r.width));
-                                const ny = Math.min(1, Math.max(0, d.orig.y + (e.clientY - d.start.y) / r.height));
+                                const fx = folgaRef.current.x, fy = folgaRef.current.y;
+                                const nx = Math.min(1 + fx, Math.max(-fx, d.orig.x + ((e.clientX - d.start.x) / r.width) * (1 + 2 * fx)));
+                                const ny = Math.min(1 + fy, Math.max(-fy, d.orig.y + ((e.clientY - d.start.y) / r.height) * (1 + 2 * fy)));
                                 setLabelPosMap((m) => ({ ...m, [key]: { x: nx, y: ny } }));
                               }}
                               onPointerUp={(e) => {
