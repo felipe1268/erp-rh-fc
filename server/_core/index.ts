@@ -2280,6 +2280,33 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4817: fonte de verba do aditivo garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA fonte de verba aditivo:`, e?.message || e); }
 
+        // Rev. 4819 — Catálogo GLOBAL de serviços do levantamento (por empresa):
+        // categoria criada em qualquer contrato vale para todos. Subcategoria
+        // explícita via parent_chave (antes era convenção de prefixo).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS medicao_servicos_catalogo (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              chave VARCHAR(50) NOT NULL,
+              nome VARCHAR(100) NOT NULL,
+              cor VARCHAR(20),
+              tipo_medida VARCHAR(20) DEFAULT 'area',
+              deriva_de VARCHAR(50),
+              fator NUMERIC(10,4) DEFAULT 1,
+              parent_chave VARCHAR(50),
+              ordem INTEGER DEFAULT 0,
+              ativo INTEGER DEFAULT 1,
+              criado_em TIMESTAMP DEFAULT NOW(),
+              atualizado_em TIMESTAMP DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_msc_company ON medicao_servicos_catalogo(company_id)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_msc_company_chave ON medicao_servicos_catalogo(company_id, chave)`);
+          await db.execute(sql`ALTER TABLE medicao_levantamento_servicos ADD COLUMN IF NOT EXISTS parent_chave VARCHAR(50)`);
+          console.log(`[SyncSchema+] Rev. 4819: catálogo global de serviços do levantamento garantido.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA catálogo global de serviços:`, e?.message || e); }
+
         // Rev. 4805 — Projetos para Medição (pavimentos da OBRA): cadastro no
         // cadastro de obras, com pé-direito (default 3,00 m) e arquivo DXF 1:100.
         // Plantas importadas do projeto ganham vínculo pavimento_id.

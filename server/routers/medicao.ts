@@ -10,6 +10,7 @@ import {
   medicaoCampoPdfs,
   medicaoCampoContornos,
   medicaoLevantamentoServicos,
+  medicaoServicosCatalogo,
   medicaoCampoFotos,
   terceiroContratos,
   terceiroContratoItens,
@@ -158,6 +159,73 @@ async function assertCampoNaoConsolidado(db: any, campoId: number, companyId: nu
   if (campo?.consolidadoEm) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Levantamento consolidado — desconsolide para editar." });
   }
+}
+
+// Rev. 4819 — Catálogo GLOBAL de serviços (por EMPRESA): fonte única de
+// categorias/subcategorias do levantamento. Seed padrão na 1ª leitura +
+// migração dos serviços custom já criados por levantamento (viram globais).
+const SEED_SERVICOS = [
+  { chave: "alvenaria",  nome: "Alvenaria",  cor: "#dc2626", tipoMedida: "parede",   derivaDe: null,        fator: "1", parentChave: null, ordem: 1 },
+  { chave: "chapisco",   nome: "Chapisco",   cor: "#ea580c", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", parentChave: null, ordem: 2 },
+  { chave: "emboco",     nome: "Emboço",     cor: "#ca8a04", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", parentChave: null, ordem: 3 },
+  { chave: "reboco",     nome: "Reboco",     cor: "#059669", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", parentChave: null, ordem: 4 },
+  { chave: "contrapiso", nome: "Contrapiso", cor: "#2563eb", tipoMedida: "area",     derivaDe: null,        fator: "1", parentChave: null, ordem: 5 },
+  { chave: "forro",      nome: "Forro",      cor: "#7c3aed", tipoMedida: "area",     derivaDe: null,        fator: "1", parentChave: null, ordem: 6 },
+  { chave: "pintura",        nome: "Pintura",        cor: "#db2777", tipoMedida: "area",   derivaDe: null, fator: "1", parentChave: null,      ordem: 7 },
+  { chave: "pintura_teto",   nome: "Pintura Teto",   cor: "#db2777", tipoMedida: "area",   derivaDe: null, fator: "1", parentChave: "pintura", ordem: 7 },
+  { chave: "pintura_parede", nome: "Pintura Parede", cor: "#be185d", tipoMedida: "parede", derivaDe: null, fator: "1", parentChave: "pintura", ordem: 8 },
+  { chave: "pintura_piso",   nome: "Pintura Piso",   cor: "#9d174d", tipoMedida: "area",   derivaDe: null, fator: "1", parentChave: "pintura", ordem: 9 },
+  { chave: "pontos",     nome: "Contagem",   cor: "#0891b2", tipoMedida: "contagem", derivaDe: null,        fator: "1", parentChave: null, ordem: 10 },
+];
+
+// Deriva a chave da mãe pela CONVENÇÃO antiga (prefixo de chave ou de nome) —
+// usada só na migração de serviços pré-catálogo.
+function inferirParentChave(s: any, todos: any[]): string | null {
+  if (s.parentChave) return s.parentChave;
+  for (const pai of todos) {
+    if (pai.chave === s.chave || pai.derivaDe) continue;
+    if (String(s.chave).startsWith(`${pai.chave}_`) || String(s.nome).startsWith(`${pai.nome} `)) return pai.chave;
+  }
+  return null;
+}
+
+async function ensureCatalogoServicos(db: any, companyId: number) {
+  let rows = await db.select().from(medicaoServicosCatalogo)
+    .where(eq(medicaoServicosCatalogo.companyId, companyId));
+  if (rows.length === 0) {
+    await db.transaction(async (tx: any) => {
+      // lock por EMPRESA (478007): duas aberturas simultâneas não duplicam o seed
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(478007, ${companyId})`);
+      const [ja] = await tx.select({ id: medicaoServicosCatalogo.id }).from(medicaoServicosCatalogo)
+        .where(eq(medicaoServicosCatalogo.companyId, companyId)).limit(1);
+      if (ja) return;
+      // 1) padrão de fábrica
+      const valores: any[] = SEED_SERVICOS.map((s) => ({ companyId, ...s, ativo: 1 }));
+      // 2) migração: serviços custom já criados em QUALQUER levantamento viram globais
+      const existentes = await tx.execute(sql`
+        SELECT DISTINCT ON (chave) chave, nome, cor, tipo_medida, deriva_de, fator, ordem
+        FROM medicao_levantamento_servicos
+        WHERE company_id = ${companyId}
+        ORDER BY chave, id DESC
+      `);
+      const jaTem = new Set(valores.map((v) => v.chave));
+      const customs = ((existentes as any).rows ?? existentes ?? []).filter((r: any) => !jaTem.has(r.chave));
+      for (const r of customs) {
+        valores.push({
+          companyId, chave: r.chave, nome: r.nome, cor: r.cor,
+          tipoMedida: r.tipo_medida ?? "area", derivaDe: r.deriva_de ?? null,
+          fator: r.fator != null ? String(r.fator) : "1", parentChave: null,
+          ordem: r.ordem ?? 99, ativo: 1,
+        });
+      }
+      // parent das customs pela convenção antiga (prefixo)
+      for (const v of valores) if (!v.parentChave) v.parentChave = inferirParentChave(v, valores);
+      await tx.insert(medicaoServicosCatalogo).values(valores);
+    });
+    rows = await db.select().from(medicaoServicosCatalogo)
+      .where(eq(medicaoServicosCatalogo.companyId, companyId));
+  }
+  return rows;
 }
 
 // Rev. 4797 — planta (PDF) com contornos de um levantamento CONSOLIDADO também
@@ -1904,90 +1972,185 @@ export const medicaoRouter = router({
       const [campo] = await db.select({ id: medicaoCampo.id }).from(medicaoCampo)
         .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId))).limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      // Rev. 4819 — fonte única = catálogo GLOBAL da empresa; o levantamento
+      // materializa as linhas dele a partir do catálogo (o vínculo EAP e o
+      // desativar continuam POR levantamento). Campo consolidado é só-leitura:
+      // não sofre sync (snapshot preservado).
+      const catalogo = await ensureCatalogoServicos(db, input.companyId);
       let rows = await db.select().from(medicaoLevantamentoServicos)
         .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
-      if (rows.length === 0) {
-        // Seed do catálogo padrão (poka-yoke: nasce pronto p/ obra de vedação).
-        // Advisory XACT lock por campo: 2 aberturas simultâneas não duplicam o seed.
-        const seed = [
-          { chave: "alvenaria",  nome: "Alvenaria",  cor: "#dc2626", tipoMedida: "parede",   derivaDe: null,        fator: "1", ordem: 1 },
-          { chave: "chapisco",   nome: "Chapisco",   cor: "#ea580c", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", ordem: 2 },
-          { chave: "emboco",     nome: "Emboço",     cor: "#ca8a04", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", ordem: 3 },
-          { chave: "reboco",     nome: "Reboco",     cor: "#059669", tipoMedida: "area",     derivaDe: "alvenaria", fator: "2", ordem: 4 },
-          { chave: "contrapiso", nome: "Contrapiso", cor: "#2563eb", tipoMedida: "area",     derivaDe: null,        fator: "1", ordem: 5 },
-          { chave: "forro",      nome: "Forro",      cor: "#7c3aed", tipoMedida: "area",     derivaDe: null,        fator: "1", ordem: 6 },
-          // Rev. 4792 — Pintura em SUBCATEGORIAS (teto/parede/piso): parede usa a
-          // ferramenta Linha (L×A — risca a parede e informa a altura).
-          // Rev. 4810 — categoria-MÃE "Pintura" no seed: sem ela as 3 subs viravam
-          // chips soltos na paleta (o agrupamento em abinhas exige a mãe).
-          { chave: "pintura",        nome: "Pintura",        cor: "#db2777", tipoMedida: "area",   derivaDe: null, fator: "1", ordem: 7 },
-          { chave: "pintura_teto",   nome: "Pintura Teto",   cor: "#db2777", tipoMedida: "area",   derivaDe: null, fator: "1", ordem: 7 },
-          { chave: "pintura_parede", nome: "Pintura Parede", cor: "#be185d", tipoMedida: "parede", derivaDe: null, fator: "1", ordem: 8 },
-          { chave: "pintura_piso",   nome: "Pintura Piso",   cor: "#9d174d", tipoMedida: "area",   derivaDe: null, fator: "1", ordem: 9 },
-          { chave: "pontos",     nome: "Contagem",   cor: "#0891b2", tipoMedida: "contagem", derivaDe: null,        fator: "1", ordem: 10 },
-        ];
-        await db.transaction(async (tx: any) => {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(478002, ${input.medicaoCampoId})`);
-          const [ja] = await tx.select({ id: medicaoLevantamentoServicos.id }).from(medicaoLevantamentoServicos)
-            .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId))).limit(1);
-          if (ja) return; // outra sessão semeou primeiro
-          await tx.insert(medicaoLevantamentoServicos).values(seed.map((s) => ({
-            companyId: input.companyId, medicaoCampoId: input.medicaoCampoId, ...s, ativo: 1,
-          })));
+      const [campoCons] = await db.select({ consolidadoEm: medicaoCampo.consolidadoEm }).from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId))).limit(1);
+      if (!campoCons?.consolidadoEm) {
+        const porChave = new Map(rows.map((r: any) => [r.chave, r]));
+        const faltam = catalogo.filter((c: any) => c.ativo !== 0 && !porChave.has(c.chave));
+        // drift de nome/cor/parent (renomeou no catálogo → propaga)
+        const drift = rows.filter((r: any) => {
+          const c = catalogo.find((x: any) => x.chave === r.chave);
+          return c && (c.nome !== r.nome || (c.cor ?? null) !== (r.cor ?? null) || (c.parentChave ?? null) !== (r.parentChave ?? null));
         });
-        rows = await db.select().from(medicaoLevantamentoServicos)
-          .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
-      } else {
-        // Rev. 4792 — self-heal p/ catálogos JÁ semeados antes das subcategorias
-        // de pintura: se existe "pintura" e nenhuma "pintura_*", acrescenta as 3.
-        const temPintura = rows.some((r: any) => r.chave === "pintura");
-        const temSub = rows.some((r: any) => String(r.chave).startsWith("pintura_"));
-        // Rev. 4810 — self-heal INVERSO: catálogos semeados com as 3 subs mas SEM a
-        // mãe "Pintura" (seed 4792-4809) mostravam 3 chips soltos. Cria a mãe para
-        // as abinhas agruparem (Pintura → Geral/Teto/Parede/Piso).
-        if (temSub && !temPintura) {
-          const sub = rows.find((r: any) => r.chave === "pintura_teto") ?? rows.find((r: any) => String(r.chave).startsWith("pintura_"));
-          await db.transaction(async (tx: any) => {
-            await tx.execute(sql`SELECT pg_advisory_xact_lock(478002, ${input.medicaoCampoId})`);
-            const [ja] = await tx.select({ id: medicaoLevantamentoServicos.id }).from(medicaoLevantamentoServicos)
-              .where(and(
-                eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId),
-                eq(medicaoLevantamentoServicos.companyId, input.companyId),
-                eq(medicaoLevantamentoServicos.chave, "pintura"),
-              )).limit(1);
-            if (ja) return;
-            await tx.insert(medicaoLevantamentoServicos).values({
-              companyId: input.companyId, medicaoCampoId: input.medicaoCampoId,
-              chave: "pintura", nome: "Pintura", cor: sub?.cor ?? "#db2777",
-              tipoMedida: "area", derivaDe: null, fator: "1", ordem: sub?.ordem ?? 7, ativo: 1,
-            });
-          });
-          rows = await db.select().from(medicaoLevantamentoServicos)
-            .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
-        }
-        if (temPintura && !temSub) {
-          const base = rows.find((r: any) => r.chave === "pintura");
-          const ord = (base?.ordem ?? 7);
-          const subs = [
-            { chave: "pintura_teto",   nome: "Pintura Teto",   cor: "#db2777", tipoMedida: "area",   ordem: ord },
-            { chave: "pintura_parede", nome: "Pintura Parede", cor: "#be185d", tipoMedida: "parede", ordem: ord },
-            { chave: "pintura_piso",   nome: "Pintura Piso",   cor: "#9d174d", tipoMedida: "area",   ordem: ord },
-          ];
+        // Rev. 4819 (review) — órfãos: linha do campo cuja chave NÃO está mais no
+        // catálogo. Sem contorno aqui → recolhe (evita "ressuscitar" categoria
+        // excluída numa corrida). Com contorno → re-registra no catálogo (fonte
+        // única não pode perder categoria que tem medição desenhada).
+        const orfaos = rows.filter((r: any) => !catalogo.some((c: any) => c.chave === r.chave));
+        if (faltam.length || drift.length || orfaos.length) {
           await db.transaction(async (tx: any) => {
             await tx.execute(sql`SELECT pg_advisory_xact_lock(478002, ${input.medicaoCampoId})`);
             const atuais = await tx.select({ chave: medicaoLevantamentoServicos.chave }).from(medicaoLevantamentoServicos)
               .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
             const setChaves = new Set(atuais.map((r: any) => r.chave));
-            const faltam = subs.filter((s) => !setChaves.has(s.chave));
-            if (faltam.length) await tx.insert(medicaoLevantamentoServicos).values(faltam.map((s) => ({
-              companyId: input.companyId, medicaoCampoId: input.medicaoCampoId, derivaDe: null, fator: "1", ativo: 1, ...s,
+            const inserir = faltam.filter((c: any) => !setChaves.has(c.chave));
+            if (inserir.length) await tx.insert(medicaoLevantamentoServicos).values(inserir.map((c: any) => ({
+              companyId: input.companyId, medicaoCampoId: input.medicaoCampoId,
+              chave: c.chave, nome: c.nome, cor: c.cor, tipoMedida: c.tipoMedida,
+              derivaDe: c.derivaDe, fator: c.fator != null ? String(c.fator) : "1",
+              parentChave: c.parentChave, ordem: c.ordem ?? 0, ativo: 1,
             })));
+            for (const r of drift) {
+              const c = catalogo.find((x: any) => x.chave === r.chave)!;
+              await tx.update(medicaoLevantamentoServicos)
+                .set({ nome: c.nome, cor: c.cor, parentChave: c.parentChave, atualizadoEm: new Date() })
+                .where(eq(medicaoLevantamentoServicos.id, r.id));
+            }
+            for (const r of orfaos) {
+              const uso = await tx.execute(sql`
+                SELECT COUNT(*)::int AS n FROM medicao_campo_contornos
+                WHERE company_id = ${input.companyId} AND medicao_campo_id = ${input.medicaoCampoId} AND servico = ${r.chave}
+              `);
+              const n = Number(((uso as any).rows ?? uso ?? [])[0]?.n ?? 0);
+              if (n === 0) {
+                // categoria excluída do catálogo e sem medição aqui → recolhe
+                await tx.delete(medicaoLevantamentoServicos).where(eq(medicaoLevantamentoServicos.id, r.id));
+              } else {
+                // tem medição desenhada → volta pro catálogo (fonte única íntegra)
+                await tx.insert(medicaoServicosCatalogo).values({
+                  companyId: input.companyId, chave: r.chave, nome: r.nome, cor: r.cor,
+                  tipoMedida: r.tipoMedida ?? "area", derivaDe: r.derivaDe ?? null,
+                  fator: r.fator != null ? String(r.fator) : "1", parentChave: r.parentChave ?? null,
+                  ordem: r.ordem ?? 99, ativo: 1,
+                }).onConflictDoNothing();
+              }
+            }
           });
           rows = await db.select().from(medicaoLevantamentoServicos)
             .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
         }
       }
       return rows.sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0) || (a.id ?? 0) - (b.id ?? 0));
+    }),
+
+  // ═══════════ Rev. 4819 — Catálogo GLOBAL (categorias padrão da empresa) ═══════════
+  listCatalogoServicos: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const rows = await ensureCatalogoServicos(db, input.companyId);
+      return rows.sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0) || (a.id ?? 0) - (b.id ?? 0));
+    }),
+
+  // Cria (sem chave) ou atualiza (com chave) uma categoria GLOBAL. Renomear/
+  // recolorir propaga para os levantamentos NÃO consolidados de todos os contratos.
+  salvarCatalogoServico: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      chave: z.string().max(50).optional(),
+      nome: z.string().min(1).max(100),
+      cor: z.string().max(20).nullable().optional(),
+      tipoMedida: z.enum(["area", "parede", "perimetro", "volume", "contagem"]).optional(),
+      parentChave: z.string().max(50).nullable().optional(),
+      fator: z.string().nullable().optional(),
+      ordem: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertCompanyAccess(ctx.user, input.companyId);
+      await ensureCatalogoServicos(db, input.companyId);
+      const nome = input.nome.trim();
+      if (input.chave) {
+        const [atual] = await db.select().from(medicaoServicosCatalogo)
+          .where(and(eq(medicaoServicosCatalogo.companyId, input.companyId), eq(medicaoServicosCatalogo.chave, input.chave))).limit(1);
+        if (!atual) throw new TRPCError({ code: "NOT_FOUND", message: "Categoria não encontrada no catálogo." });
+        await db.update(medicaoServicosCatalogo)
+          .set({
+            nome,
+            ...(input.cor !== undefined ? { cor: input.cor } : {}),
+            ...(input.tipoMedida ? { tipoMedida: input.tipoMedida } : {}),
+            ...(input.parentChave !== undefined ? { parentChave: input.parentChave } : {}),
+            ...(input.fator !== undefined && input.fator !== null ? { fator: input.fator } : {}),
+            ...(input.ordem !== undefined ? { ordem: input.ordem } : {}),
+            atualizadoEm: new Date(),
+          })
+          .where(eq(medicaoServicosCatalogo.id, (atual as any).id));
+        // propaga p/ levantamentos não consolidados (nome/cor); snapshot consolidado fica intacto
+        await db.execute(sql`
+          UPDATE medicao_levantamento_servicos s
+          SET nome = ${nome},
+              cor = COALESCE(${input.cor !== undefined ? input.cor : null}, s.cor),
+              atualizado_em = NOW()
+          FROM medicao_campo c
+          WHERE s.medicao_campo_id = c.id
+            AND s.company_id = ${input.companyId}
+            AND s.chave = ${input.chave}
+            AND c.consolidado_em IS NULL
+        `);
+        return { chave: input.chave };
+      }
+      // criação: chave = slug único do nome (colisão vira sufixo — poka-yoke)
+      const chaveBase = nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "categoria";
+      const existentes = await db.select({ chave: medicaoServicosCatalogo.chave }).from(medicaoServicosCatalogo)
+        .where(eq(medicaoServicosCatalogo.companyId, input.companyId));
+      const setCh = new Set(existentes.map((r: any) => r.chave));
+      let chave = chaveBase; let i = 2;
+      while (setCh.has(chave)) chave = `${chaveBase}_${i++}`;
+      const ordem = input.ordem ?? 99;
+      const [row] = await db.insert(medicaoServicosCatalogo).values({
+        companyId: input.companyId, chave, nome, cor: input.cor ?? null,
+        tipoMedida: input.tipoMedida ?? "area", derivaDe: null,
+        fator: input.fator ?? "1", parentChave: input.parentChave ?? null, ordem, ativo: 1,
+      }).returning();
+      return row;
+    }),
+
+  // Exclui uma categoria GLOBAL. Poka-yoke: bloqueia se tiver subcategorias,
+  // derivados ou contornos já desenhados com ela (em qualquer contrato).
+  excluirCatalogoServico: protectedProcedure
+    .input(z.object({ companyId: z.number(), chave: z.string().min(1).max(50) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertCompanyAccess(ctx.user, input.companyId);
+      // Rev. 4819 (review) — TUDO numa transação sob o lock do catálogo da
+      // empresa (478007): checagens e deletes atômicos; nenhuma corrida com o
+      // sync do list (que também recolhe órfãos) ressuscita a categoria.
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(478007, ${input.companyId})`);
+        const [filho] = await tx.select({ nome: medicaoServicosCatalogo.nome }).from(medicaoServicosCatalogo)
+          .where(and(eq(medicaoServicosCatalogo.companyId, input.companyId), eq(medicaoServicosCatalogo.parentChave, input.chave))).limit(1);
+        if (filho) throw new TRPCError({ code: "BAD_REQUEST", message: `Esta categoria tem subcategorias (ex.: ${(filho as any).nome}). Exclua as subcategorias primeiro.` });
+        const [derivado] = await tx.select({ nome: medicaoServicosCatalogo.nome }).from(medicaoServicosCatalogo)
+          .where(and(eq(medicaoServicosCatalogo.companyId, input.companyId), eq(medicaoServicosCatalogo.derivaDe, input.chave))).limit(1);
+        if (derivado) throw new TRPCError({ code: "BAD_REQUEST", message: `O serviço derivado "${(derivado as any).nome}" depende desta categoria. Exclua-o primeiro.` });
+        const uso = await tx.execute(sql`
+          SELECT COUNT(*)::int AS n FROM medicao_campo_contornos
+          WHERE company_id = ${input.companyId} AND servico = ${input.chave}
+        `);
+        const n = Number(((uso as any).rows ?? uso ?? [])[0]?.n ?? 0);
+        if (n > 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Há ${n} medição(ões) desenhada(s) com esta categoria — ela não pode ser excluída. Use "Desativar" para escondê-la.` });
+        // sem contornos em lugar nenhum: remove das listas dos levantamentos abertos + do catálogo
+        await tx.execute(sql`
+          DELETE FROM medicao_levantamento_servicos s
+          USING medicao_campo c
+          WHERE s.medicao_campo_id = c.id
+            AND s.company_id = ${input.companyId}
+            AND s.chave = ${input.chave}
+            AND c.consolidado_em IS NULL
+        `);
+        await tx.delete(medicaoServicosCatalogo)
+          .where(and(eq(medicaoServicosCatalogo.companyId, input.companyId), eq(medicaoServicosCatalogo.chave, input.chave)));
+      });
+      return { success: true };
     }),
 
   salvarServicoLevantamento: protectedProcedure

@@ -8930,11 +8930,36 @@ export const medicaoLevantamentoServicos = pgTable("medicao_levantamento_servico
   itemDescricao:   varchar("item_descricao", { length: 500 }),
   ordem:           integer().default(0),
   ativo:           integer().default(1),
+  // Rev. 4819 — subcategoria explícita (chave da mãe); antes era só convenção de prefixo.
+  parentChave:     varchar("parent_chave", { length: 50 }),
   criadoEm:        timestamp("criado_em").defaultNow(),
   atualizadoEm:    timestamp("atualizado_em").defaultNow(),
 }, (t) => [
   index("idx_mls_campo").on(t.medicaoCampoId),
   index("idx_mls_company").on(t.companyId),
+]);
+
+// Rev. 4819 — Catálogo GLOBAL de serviços/categorias do levantamento (por EMPRESA).
+// Fonte única: categoria criada em qualquer contrato vale para todos; cada
+// levantamento materializa suas linhas (medicao_levantamento_servicos) a partir
+// daqui na listagem (o vínculo EAP continua por levantamento).
+export const medicaoServicosCatalogo = pgTable("medicao_servicos_catalogo", {
+  id:          serial().primaryKey(),
+  companyId:   integer("company_id").notNull(),
+  chave:       varchar({ length: 50 }).notNull(),
+  nome:        varchar({ length: 100 }).notNull(),
+  cor:         varchar({ length: 20 }),
+  tipoMedida:  varchar("tipo_medida", { length: 20 }).default("area"),
+  derivaDe:    varchar("deriva_de", { length: 50 }),
+  fator:       numeric({ precision: 10, scale: 4 }).default("1"),
+  parentChave: varchar("parent_chave", { length: 50 }),
+  ordem:       integer().default(0),
+  ativo:       integer().default(1),
+  criadoEm:    timestamp("criado_em").defaultNow(),
+  atualizadoEm: timestamp("atualizado_em").defaultNow(),
+}, (t) => [
+  index("idx_msc_company").on(t.companyId),
+  uniqueIndex("uq_msc_company_chave").on(t.companyId, t.chave),
 ]);
 
 export const medicaoCampoFotos = pgTable("medicao_campo_fotos", {

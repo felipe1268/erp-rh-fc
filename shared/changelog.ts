@@ -1,4 +1,20 @@
 /**
+ * Rev. 4819 - CATEGORIAS DO LEVANTAMENTO VIRAM PADRAO DA EMPRESA
+ *
+ * - As categorias/subcategorias de servico do Levantamento de Campo agora
+ *   sao um CATALOGO GLOBAL da empresa: criar uma categoria em um contrato
+ *   faz ela aparecer em TODOS os contratos.
+ * - Tela "Configurar" redesenhada em hierarquia: categoria -> subcategorias
+ *   -> derivados, com renomear (lapis), trocar cor e excluir (lixeira) —
+ *   tudo valendo para todos os contratos.
+ * - Excluir so e permitido se NENHUMA medicao foi desenhada com a categoria
+ *   (em qualquer contrato); caso contrario use Desativar. Categoria com
+ *   subcategorias ou derivados tambem nao sai antes deles (poka-yoke).
+ * - O vinculo com a EAP e o Desativar continuam POR levantamento.
+ * - Levantamento consolidado nao e tocado (snapshot preservado).
+ */
+
+/**
  * Rev. 4818 - EXCLUIR MEDICAO DERRUBA O ADITIVO QUE ELA ORIGINOU
  *
  * - A medicao que originou um aditivo e o LASTRO dele: ao excluir essa

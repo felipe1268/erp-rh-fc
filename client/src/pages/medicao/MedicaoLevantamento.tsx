@@ -275,6 +275,16 @@ export default function MedicaoLevantamento() {
   const salvarServicoMut = trpc.medicao.salvarServicoLevantamento.useMutation({
     onSuccess: () => utils.medicao.listServicosLevantamento.invalidate({ companyId, medicaoCampoId: campoId }),
   });
+  // Rev. 4819 — categorias são GLOBAIS (catálogo da empresa): criar/renomear/
+  // recolorir/excluir vale para TODOS os contratos.
+  const salvarCatalogoMut = trpc.medicao.salvarCatalogoServico.useMutation({
+    onSuccess: () => utils.medicao.listServicosLevantamento.invalidate({ companyId, medicaoCampoId: campoId }),
+    onError: (e: any) => toast.error(e?.message || "Não foi possível salvar a categoria."),
+  });
+  const excluirCatalogoMut = trpc.medicao.excluirCatalogoServico.useMutation({
+    onSuccess: () => { utils.medicao.listServicosLevantamento.invalidate({ companyId, medicaoCampoId: campoId }); toast.success("Categoria excluída do padrão da empresa."); },
+    onError: (e: any) => toast.error(e?.message || "Não foi possível excluir a categoria."),
+  });
 
   // Camada offline-first (Rev. 2895): une servidor + snapshot local + fila otimista.
   const off = useLevantamentoOffline({ campoId, companyId, contratoId, orcamentoId, itensOverride, servicos });
@@ -836,6 +846,8 @@ export default function MedicaoLevantamento() {
   // Rev. 4792 — subcategoria: opcionalmente vinculada a uma categoria "mãe"
   // (Chapisco Teto, Reboco Parede, Pastilha…) — herda a cor e fica agrupada.
   const [catPai, setCatPai] = useState<string>("");
+  // Rev. 4819 — renomeio inline de categoria (catálogo global da empresa)
+  const [renomearCat, setRenomearCat] = useState<{ chave: string; nome: string } | null>(null);
   const svcAtivoObj = useMemo(() => servicos.find((s: any) => s.chave === servicoAtivo) ?? null, [servicos, servicoAtivo]);
 
   // Rev. 4790 — CAMADAS (estilo layers de CAD): com um serviço ativo, a planta
@@ -893,7 +905,9 @@ export default function MedicaoLevantamento() {
       if (subPai.has(pai.chave)) continue; // sub não vira mãe
       for (const s of base) {
         if (s.chave === pai.chave || subPai.has(s.chave)) continue;
-        if (String(s.chave).startsWith(`${pai.chave}_`) || String(s.nome).startsWith(`${pai.nome} `)) {
+        // Rev. 4819 — parentChave explícito (catálogo global) tem prioridade;
+        // convenção de prefixo continua como fallback p/ dados antigos.
+        if (s.parentChave ? s.parentChave === pai.chave : (String(s.chave).startsWith(`${pai.chave}_`) || String(s.nome).startsWith(`${pai.nome} `))) {
           subPai.set(s.chave, pai.chave);
           map.set(pai.chave, [...(map.get(pai.chave) ?? []), s]);
         }
@@ -3816,10 +3830,6 @@ export default function MedicaoLevantamento() {
                 // Rev. 4792 — subcategoria: nome composto "Mãe Filho", cor da mãe
                 // levemente escurecida (mesma família visual) e ordem colada na mãe.
                 const nome = pai ? `${pai.nome} ${catNome.trim()}` : catNome.trim();
-                const chaveBase = nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "categoria";
-                // chave única entre as existentes (poka-yoke: colisão vira sufixo)
-                let chave = chaveBase; let i = 2;
-                while (servicos.some((s: any) => s.chave === chave)) chave = `${chaveBase}_${i++}`;
                 const escurecer = (hex: string) => {
                   const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
                   if (!m) return hex;
@@ -3833,101 +3843,167 @@ export default function MedicaoLevantamento() {
                 for (let k = 0; k <= nSubs && corSub; k++) corSub = escurecer(corSub); // cada irmã um tom mais escuro
                 const cor = pai ? (corSub || paletaCores[servicos.length % paletaCores.length]) : paletaCores[servicos.length % paletaCores.length];
                 const ordem = pai ? (pai.ordem ?? 0) : Math.max(0, ...servicos.map((s: any) => s.ordem ?? 0)) + 1;
-                salvarServicoMut.mutate(
-                  { companyId, medicaoCampoId: campoId, chave, nome, cor, tipoMedida: catTipo as any, ordem, ativo: 1 },
-                  { onSuccess: () => { setCatDialogOpen(false); setCatNome(""); setCatTipo("area"); setCatPai(""); setServicoAtivo(chave); const t = (catTipo as FerramentaDesenho) || "area"; setTool(t); setDraft([]); } },
+                // Rev. 4819 — cria no catálogo GLOBAL: vale p/ todos os contratos.
+                salvarCatalogoMut.mutate(
+                  { companyId, nome, cor, tipoMedida: catTipo as any, parentChave: catPai || null, ordem },
+                  { onSuccess: async (row: any) => { setCatDialogOpen(false); setCatNome(""); setCatTipo("area"); setCatPai(""); await utils.medicao.listServicosLevantamento.invalidate({ companyId, medicaoCampoId: campoId }); if (row?.chave) setServicoAtivo(row.chave); const t = (catTipo as FerramentaDesenho) || "area"; setTool(t); setDraft([]); } },
                 );
               }}
             >
-              {salvarServicoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar e começar a medir"}
+              {salvarCatalogoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar e começar a medir"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={servicosDialogOpen} onOpenChange={setServicosDialogOpen}>
+      <Dialog open={servicosDialogOpen} onOpenChange={(v) => { setServicosDialogOpen(v); if (!v) setRenomearCat(null); }}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Settings2 className="h-4 w-4" />Serviços do levantamento</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Settings2 className="h-4 w-4" />Categorias de serviço</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-gray-500 -mt-2">
-            Serviços <b>base</b> são medidos na planta. Serviços <b>derivados</b> (ex.: chapisco/emboço/reboco) são calculados
-            sozinhos: quantidade do serviço base × nº de faces. Vincule cada serviço a um item da EAP <b>uma única vez</b> —
-            todos os contornos daquele serviço consolidam automaticamente em R$.
+            As categorias são o <b>padrão da empresa</b>: valem para todos os contratos. Criar, renomear ou excluir aqui
+            reflete em todos os levantamentos. O <b>vínculo com a EAP</b> e o <b>Desativar</b> valem só para este levantamento.
           </p>
-          <div className="space-y-2">
-            {servicos.map((s: any) => (
-              <div key={s.id} className={`border rounded-lg p-3 flex flex-wrap items-center gap-3 ${s.ativo === 0 ? "opacity-50" : ""}`}>
-                <label className="h-8 w-8 rounded-md border cursor-pointer shrink-0" style={{ backgroundColor: s.cor || "#9ca3af" }} title="Cor do serviço">
-                  <input
-                    type="color" value={s.cor || "#9ca3af"} className="sr-only"
-                    onChange={(e) => salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, cor: e.target.value })}
-                  />
-                </label>
-                <div className="min-w-[120px]">
-                  <p className="text-sm font-semibold">{s.nome}</p>
-                  <p className="text-[11px] text-gray-500">
-                    {s.derivaDe
-                      ? <>derivado de <b>{servicos.find((b: any) => b.chave === s.derivaDe)?.nome ?? s.derivaDe}</b></>
-                      : <>base · {s.tipoMedida === "parede" ? "Parede L×A" : s.tipoMedida === "contagem" ? "Contagem" : "Área"}</>}
-                  </p>
-                </div>
-                {s.derivaDe && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-500">Faces:</span>
-                    <Input
-                      type="text" inputMode="decimal" className="h-9 w-16 text-center"
-                      defaultValue={String(s.fator ?? "1").replace(".", ",")}
-                      onBlur={(e) => {
-                        const v = parseFloat(e.target.value.replace(",", "."));
-                        if (Number.isFinite(v) && v > 0 && v !== parseFloat(String(s.fator ?? 1)))
-                          salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, fator: String(v) });
-                      }}
-                    />
+          <div className="space-y-3">
+            {(() => {
+              // Rev. 4819 — visão hierárquica: categoria → subcategorias → derivados.
+              const subDe = new Map<string, string>();
+              for (const s of servicos) {
+                if (s.derivaDe) continue;
+                if (s.parentChave) { subDe.set(s.chave, s.parentChave); continue; }
+                for (const p of servicos) {
+                  if (p.chave === s.chave || p.derivaDe || p.parentChave) continue;
+                  if (String(s.chave).startsWith(`${p.chave}_`) || String(s.nome).startsWith(`${p.nome} `)) { subDe.set(s.chave, p.chave); break; }
+                }
+              }
+              const pais = servicos.filter((s: any) => !s.derivaDe && !subDe.has(s.chave));
+              const renderRow = (s: any, nivel: number) => {
+                const emRenomeio = renomearCat?.chave === s.chave;
+                return (
+                  <div key={s.id} className={`border rounded-lg p-3 flex flex-wrap items-center gap-3 ${s.ativo === 0 ? "opacity-50" : ""} ${nivel > 0 ? "ml-6 border-dashed bg-gray-50/60" : ""}`}>
+                    <label className={`${nivel > 0 ? "h-7 w-7" : "h-8 w-8"} rounded-md border cursor-pointer shrink-0`} style={{ backgroundColor: s.cor || "#9ca3af" }} title="Cor (padrão p/ todos os contratos)">
+                      <input
+                        type="color" value={s.cor || "#9ca3af"} className="sr-only"
+                        onChange={(e) => salvarCatalogoMut.mutate({ companyId, chave: s.chave, nome: s.nome, cor: e.target.value })}
+                      />
+                    </label>
+                    <div className="min-w-[140px]">
+                      {emRenomeio ? (
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            autoFocus className="h-8 w-44 text-sm" value={renomearCat!.nome}
+                            onChange={(e) => setRenomearCat({ chave: s.chave, nome: e.target.value })}
+                            onKeyDown={(e) => { if (e.key === "Enter" && renomearCat!.nome.trim()) { salvarCatalogoMut.mutate({ companyId, chave: s.chave, nome: renomearCat!.nome.trim() }, { onSuccess: () => setRenomearCat(null) }); } if (e.key === "Escape") setRenomearCat(null); }}
+                          />
+                          <Button size="sm" className="h-8" disabled={!renomearCat!.nome.trim() || salvarCatalogoMut.isPending}
+                            onClick={() => salvarCatalogoMut.mutate({ companyId, chave: s.chave, nome: renomearCat!.nome.trim() }, { onSuccess: () => setRenomearCat(null) })}>
+                            {salvarCatalogoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "OK"}
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm font-semibold flex items-center gap-1.5">
+                          {s.nome}
+                          <button type="button" className="text-gray-400 hover:text-blue-600" title="Renomear (vale p/ todos os contratos)" onClick={() => setRenomearCat({ chave: s.chave, nome: s.nome })}>
+                            <PencilLine className="h-3.5 w-3.5" />
+                          </button>
+                        </p>
+                      )}
+                      <p className="text-[11px] text-gray-500">
+                        {s.derivaDe
+                          ? <>derivado de <b>{servicos.find((b: any) => b.chave === s.derivaDe)?.nome ?? s.derivaDe}</b></>
+                          : <>{nivel > 0 ? "subcategoria" : "categoria"} · {s.tipoMedida === "parede" ? "Parede L×A" : s.tipoMedida === "contagem" ? "Contagem" : s.tipoMedida === "perimetro" ? "Linear" : s.tipoMedida === "volume" ? "Volume" : "Área"}</>}
+                      </p>
+                    </div>
+                    {s.derivaDe ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-500">Faces:</span>
+                        <Input
+                          type="text" inputMode="decimal" className="h-9 w-16 text-center"
+                          defaultValue={String(s.fator ?? "1").replace(".", ",")}
+                          onBlur={(e) => {
+                            const v = parseFloat(e.target.value.replace(",", "."));
+                            if (Number.isFinite(v) && v > 0 && v !== parseFloat(String(s.fator ?? 1)))
+                              salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, fator: String(v) });
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                    <div className="flex-1 min-w-[220px]">
+                      <VincularItemCombobox
+                        items={itensVinculaveis}
+                        value={s.orcamentoItemId ? String(s.orcamentoItemId) : ""}
+                        jaMedidoMap={jaMedidoMap}
+                        emptyHint={vincularEmptyHint}
+                        placeholder="Vincular item da EAP (1x por serviço)…"
+                        onChange={(idStr) => {
+                          const itemId = idStr ? parseInt(idStr) : null;
+                          const it = itemId ? itensVinculaveis.find((i) => i.id === itemId) : null;
+                          // Rev. 4792 — Poka-Yoke de UNIDADE também no vínculo por serviço
+                          const unidadeServico = ({ area: "m²", parede: "m²", perimetro: "m", volume: "m³", contagem: "un" } as Record<string, string>)[s.tipoMedida ?? "area"];
+                          if (it && unidadeServico && !unidadesCompativeis(unidadeServico, (it as any).unidade)) {
+                            askConfirm({
+                              title: "Unidade errada — verifique",
+                              description: `O serviço "${s.nome}" mede em "${unidadeServico}" e o item da planilha está em "${(it as any).unidade}". O vínculo não foi salvo.`,
+                              confirmText: "Entendi",
+                              onConfirm: () => {},
+                            });
+                            return;
+                          }
+                          salvarServicoMut.mutate({
+                            id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome,
+                            orcamentoItemId: itemId, itemEapCodigo: it?.eapCodigo ?? null, itemDescricao: it?.descricao ?? null,
+                          });
+                        }}
+                      />
+                    </div>
+                    <Button
+                      size="sm" variant="ghost"
+                      className={`h-9 shrink-0 ${s.ativo === 0 ? "text-emerald-600" : "text-gray-400"}`}
+                      disabled={salvarServicoMut.isPending}
+                      title="Vale só para ESTE levantamento (esconde da paleta)"
+                      onClick={() => salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, ativo: s.ativo === 0 ? 1 : 0 })}
+                    >
+                      {s.ativo === 0 ? "Reativar" : "Desativar"}
+                    </Button>
+                    <button
+                      type="button"
+                      className="shrink-0 text-gray-300 hover:text-red-600 disabled:opacity-40"
+                      title="Excluir do padrão da empresa (todos os contratos)"
+                      disabled={excluirCatalogoMut.isPending}
+                      onClick={() => askConfirm({
+                        title: `Excluir "${s.nome}"?`,
+                        description: "A categoria sai do padrão da EMPRESA — deixa de aparecer em todos os contratos. Só é possível excluir se não houver nenhuma medição desenhada com ela; caso haja, use \"Desativar\".",
+                        confirmText: "Excluir",
+                        onConfirm: () => excluirCatalogoMut.mutate({ companyId, chave: s.chave }),
+                      })}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
-                )}
-                <div className="flex-1 min-w-[220px]">
-                  <VincularItemCombobox
-                    items={itensVinculaveis}
-                    value={s.orcamentoItemId ? String(s.orcamentoItemId) : ""}
-                    jaMedidoMap={jaMedidoMap}
-                    emptyHint={vincularEmptyHint}
-                    placeholder="Vincular item da EAP (1x por serviço)…"
-                    onChange={(idStr) => {
-                      const itemId = idStr ? parseInt(idStr) : null;
-                      const it = itemId ? itensVinculaveis.find((i) => i.id === itemId) : null;
-                      // Rev. 4792 — Poka-Yoke de UNIDADE também no vínculo por serviço
-                      const unidadeServico = ({ area: "m²", parede: "m²", perimetro: "m", volume: "m³", contagem: "un" } as Record<string, string>)[s.tipoMedida ?? "area"];
-                      if (it && unidadeServico && !unidadesCompativeis(unidadeServico, (it as any).unidade)) {
-                        askConfirm({
-                          title: "Unidade errada — verifique",
-                          description: `O serviço "${s.nome}" mede em "${unidadeServico}" e o item da planilha está em "${(it as any).unidade}". O vínculo não foi salvo.`,
-                          confirmText: "Entendi",
-                          onConfirm: () => {},
-                        });
-                        return;
-                      }
-                      salvarServicoMut.mutate({
-                        id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome,
-                        orcamentoItemId: itemId, itemEapCodigo: it?.eapCodigo ?? null, itemDescricao: it?.descricao ?? null,
-                      });
-                    }}
-                  />
-                </div>
-                <Button
-                  size="sm" variant="ghost"
-                  className={`h-9 shrink-0 ${s.ativo === 0 ? "text-emerald-600" : "text-gray-400"}`}
-                  disabled={salvarServicoMut.isPending}
-                  onClick={() => salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, ativo: s.ativo === 0 ? 1 : 0 })}
-                >
-                  {s.ativo === 0 ? "Reativar" : "Desativar"}
-                </Button>
-              </div>
-            ))}
+                );
+              };
+              return pais.map((pai: any) => {
+                const subs = servicos.filter((s: any) => subDe.get(s.chave) === pai.chave);
+                const derivados = servicos.filter((s: any) => s.derivaDe === pai.chave);
+                return (
+                  <div key={pai.chave} className="space-y-1.5">
+                    {renderRow(pai, 0)}
+                    {subs.map((s: any) => renderRow(s, 1))}
+                    {derivados.map((s: any) => renderRow(s, 1))}
+                  </div>
+                );
+              });
+            })()}
           </div>
-          <p className="text-[11px] text-gray-400">
-            Desativar um serviço só o esconde da paleta e da consolidação — os contornos já desenhados não são apagados.
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-gray-400">
+              Renomear, recolorir e excluir valem para <b>todos os contratos</b>. Desativar esconde só neste levantamento — os contornos já desenhados não são apagados.
+            </p>
+            <Button size="sm" variant="outline" className="shrink-0 gap-1 border-dashed" onClick={() => { setServicosDialogOpen(false); setCatDialogOpen(true); }}>
+              <Plus className="h-4 w-4" />Nova categoria
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
