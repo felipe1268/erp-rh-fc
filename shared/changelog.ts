@@ -1,4 +1,14 @@
 /**
+ * Rev. 4815 - DIALOG "GERAR ADITIVO" MODERNIZADO (padrao BR)
+ *
+ * - Quantidade e preco unitario agora exibem numeros no padrao brasileiro
+ *   (virgula decimal, ponto de milhar) e reformatam ao sair do campo.
+ * - Simbolo R$ separado do numero: prefixo discreto dentro do campo de preco
+ *   e ao lado da estimativa (numero em destaque, tabular).
+ * - Parse aceita "1.234,56" sem quebrar o calculo da estimativa.
+ */
+
+/**
  * Rev. 4814 - ABA "ADITIVOS" NO CONTRATO DE TERCEIROS
  *
  * - Nova aba na barra do contrato (ao lado de Medicoes): lista os aditivos

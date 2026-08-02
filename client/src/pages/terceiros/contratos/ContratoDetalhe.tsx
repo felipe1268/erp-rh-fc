@@ -3903,12 +3903,15 @@ function AditivosCard({ aditivos, modoEdicao, onAprovarGestor, onAprovarSocio, o
 function AditivoDialog({ contrato, item, medicaoId, onClose, onCreated }: {
   contrato: any; item: any; medicaoId: number; onClose: () => void; onCreated: () => void;
 }) {
-  const [qtd, setQtd] = useState(String(Number(item.quantidadeExcedente || 0).toFixed(2)));
-  const [precoUnit, setPrecoUnit] = useState(String(Number(item.valorUnitario || 0).toFixed(2)));
+  // Rev. 4815 — números no padrão BR (vírgula decimal, milhar com ponto)
+  const fmtBR = (v: number, d = 2) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const [qtd, setQtd] = useState(fmtBR(Number(item.quantidadeExcedente || 0)));
+  const [precoUnit, setPrecoUnit] = useState(fmtBR(Number(item.valorUnitario || 0)));
   const [justificativa, setJustificativa] = useState("");
   const [fotoUrl, setFotoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const parseNum = (s: string) => parseFloat(String(s).replace(",", ".")) || 0;
+  // Parse BR-aware: remove pontos de milhar, vírgula vira decimal
+  const parseNum = (s: string) => parseFloat(String(s).replace(/\./g, "").replace(",", ".")) || 0;
   const total = Math.round(parseNum(qtd) * parseNum(precoUnit) * 100) / 100;
 
   const criarMut = trpc.terceiroContratos.criarAditivo.useMutation({
@@ -3950,16 +3953,24 @@ function AditivoDialog({ contrato, item, medicaoId, onClose, onCreated }: {
           <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-xs">Quantidade{item.unidade ? ` (${item.unidade})` : ""}</Label>
-              <Input inputMode="decimal" value={qtd} onChange={e => setQtd(e.target.value)} className="text-sm h-9 mt-1" />
+              <Input inputMode="decimal" value={qtd} onChange={e => setQtd(e.target.value)}
+                onBlur={() => setQtd(fmtBR(parseNum(qtd)))} className="text-sm h-9 mt-1 tabular-nums" />
             </div>
             <div>
-              <Label className="text-xs">Preço unitário (R$)</Label>
-              <Input inputMode="decimal" value={precoUnit} onChange={e => setPrecoUnit(e.target.value)} className="text-sm h-9 mt-1" />
+              <Label className="text-xs">Preço unitário</Label>
+              <div className="relative mt-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-gray-400 pointer-events-none">R$</span>
+                <Input inputMode="decimal" value={precoUnit} onChange={e => setPrecoUnit(e.target.value)}
+                  onBlur={() => setPrecoUnit(fmtBR(parseNum(precoUnit)))} className="text-sm h-9 pl-9 tabular-nums" />
+              </div>
               <p className="text-[10px] text-gray-400 mt-0.5">Preço do contrato pré-preenchido</p>
             </div>
             <div>
               <Label className="text-xs">Estimativa</Label>
-              <div className="h-9 mt-1 flex items-center font-bold text-purple-700">{BRL(total)}</div>
+              <div className="h-9 mt-1 flex items-baseline gap-1 text-purple-700">
+                <span className="text-[11px] font-medium text-purple-400 self-center">R$</span>
+                <span className="font-bold tabular-nums self-center">{fmtBR(total)}</span>
+              </div>
             </div>
           </div>
           <div>
