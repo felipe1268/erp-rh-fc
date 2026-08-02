@@ -12,6 +12,9 @@
  *   financeiro pagar?"): medicao aprovada mostra selo azul "No Contas a
  *   Pagar • vence dd/mm" (titulo lancado); quitada mostra selo verde
  *   "Paga em dd/mm"; parcial mostra o valor ja pago.
+ * - LINHA DA MEDICAO mostra "A pagar" (valor liquido do titulo) em vez do
+ *   medido bruto (pedido do usuario); o medido continua no tooltip e nos
+ *   detalhes.
  * - FIX VALOR DO TITULO: a ponte com o Financeiro nao descontava as
  *   RETENCOES DA MEDICAO (tecnica + ISS/INSS/IRRF/outras + descontos) — o
  *   titulo saia maior que o "Valor Liquido" da tela (ex.: R$ 4.015,77 em vez

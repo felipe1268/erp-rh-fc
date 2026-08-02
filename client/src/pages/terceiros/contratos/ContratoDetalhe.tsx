@@ -2315,7 +2315,22 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   ) : null}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <span className="text-xs text-gray-500 hidden sm:inline mr-0.5">Medido <strong className="text-gray-800">{BRL(m.valorMedido)}</strong></span>
+                  {/* Rev. 4859 — na linha mostra o VALOR A SER PAGO (líquido), não o
+                      medido bruto (pedido do usuário: "hoje está uma confusão").
+                      Prioridade: valor do título no Contas a Pagar; senão, líquido
+                      calculado = medido − retenções − descontos − FD. */}
+                  <span className="text-xs text-gray-500 hidden sm:inline mr-0.5" title={`Medido bruto: ${BRL(m.valorMedido)} · A pagar = medido − retenções − descontos − FD`}>
+                    A pagar <strong className="text-gray-800">{BRL(
+                      (pagto as any)?.valorTitulo != null && (pagto as any)?.statusTitulo && (pagto as any)?.statusTitulo !== "cancelado"
+                        ? (pagto as any).valorTitulo
+                        : Math.max(0,
+                            Number(m.valorMedido ?? 0)
+                            - Number(m.retencaoTecnica ?? 0) - Number(m.retencaoISS ?? 0)
+                            - Number(m.retencaoINSS ?? 0) - Number(m.retencaoIRRF ?? 0)
+                            - Number(m.outrasRetencoes ?? 0) - Number(m.descontos ?? 0)
+                            - Number(m.fdTotalAbatido ?? 0))
+                    )}</strong>
+                  </span>
                   <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setDetalheMedicaoId(m.id)}>
                     <Eye className="w-3 h-3" /> Detalhes
                   </Button>
