@@ -145,10 +145,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [showExcluirContrato, setShowExcluirContrato] = useState(false);
   const [contratoMotivo, setContratoMotivo] = useState("");
   const [contratoSenha, setContratoSenha] = useState("");
-  // Rev. 4859 — destravar medição PAGA (LGPD/ISO 9001): só admin master com senha;
-  // o servidor faz a volta completa (estorna baixa → remove título → desaprova).
-  const [destravar, setDestravar] = useState<{ id: number; numero: string } | null>(null);
-  const [senhaDestravar, setSenhaDestravar] = useState("");
 
   const utils = trpc.useUtils();
   const { data: contrato, isLoading } = trpc.terceiroContratos.getContrato.useQuery(
@@ -2065,40 +2061,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        {/* Rev. 4859 — destravar medição PAGA: só admin master com senha; o servidor
-            faz a volta completa (estorna baixa → remove título → cancela aprovação). */}
-        <Dialog open={!!destravar} onOpenChange={v => { if (!v) setDestravar(null); }}>
-          <DialogContent className="border-slate-300 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
-            <DialogHeader>
-              <DialogTitle className="text-slate-800 flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5" /> Destravar Medição {destravar?.numero} (paga)
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3 pt-1">
-              <div className="rounded-lg bg-amber-50 border border-amber-300 p-3 text-xs text-amber-900 space-y-1">
-                <p className="font-semibold">Medição paga é imutável (LGPD/ISO 9001).</p>
-                <p>Com a sua senha de admin master, o sistema fará a <strong>volta completa</strong>, na ordem correta:</p>
-                <p>1. Estorna a baixa do pagamento no Contas a Pagar;<br />2. Remove o título do Financeiro;<br />3. Cancela a aprovação (a medição volta para "Aguardando Aprovação" como nova revisão).</p>
-                <p>Nada é apagado sem esse caminho — o histórico do estorno fica registrado.</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-gray-700">Senha do admin master <span className="text-red-500">*</span></Label>
-                <Input type="password" placeholder="Confirme sua senha" value={senhaDestravar} onChange={e => setSenhaDestravar(e.target.value)} className="text-sm" />
-              </div>
-            </div>
-            <DialogFooter className="pt-2">
-              <Button variant="outline" onClick={() => setDestravar(null)} disabled={cancelarAprovacaoMut.isPending}>Voltar</Button>
-              <Button
-                className="bg-slate-700 hover:bg-slate-600 text-white gap-1.5"
-                disabled={!senhaDestravar || cancelarAprovacaoMut.isPending}
-                onClick={() => destravar && cancelarAprovacaoMut.mutate({ id: destravar.id, companyId: contrato.companyId, senhaMaster: senhaDestravar }, { onSuccess: () => setDestravar(null) })}
-              >
-                {cancelarAprovacaoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                Destravar e Desfazer Pagamento
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
         <ConfirmBox state={confirmarMain} onClose={() => setConfirmarMain(null)} />
       </div>
     </DashboardLayout>
@@ -2163,6 +2125,12 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
   const [rejeicaoModal, setRejeicaoModal] = useState<{ id: number; numero: number } | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [confirmar, setConfirmar] = useState<ConfirmState>(null);
+  // Rev. 4859 — destravar medição PAGA (LGPD/ISO 9001): só admin master com senha;
+  // o servidor faz a volta completa (estorna baixa → remove título → desaprova).
+  const { user: userTab } = useAuth();
+  const isMaster = userTab?.role === "admin_master";
+  const [destravar, setDestravar] = useState<{ id: number; numero: string } | null>(null);
+  const [senhaDestravar, setSenhaDestravar] = useState("");
   // Rev. 4803 — quem fez a medição SOLICITA a aprovação (rascunho → aguardando gestor)
   const solicitarAprovacaoMut = trpc.terceiroContratos.solicitarAprovacaoMedicao.useMutation({
     onSuccess: () => { toast.success("Aprovação solicitada! A medição aguarda o gestor da obra."); utilsAd.terceiroContratos.getContrato.invalidate({ id: contrato.id }); },
@@ -2992,6 +2960,40 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
         </div>
       )}
 
+      {/* Rev. 4859 — destravar medição PAGA: só admin master com senha; o servidor
+          faz a volta completa (estorna baixa → remove título → cancela aprovação). */}
+      <Dialog open={!!destravar} onOpenChange={v => { if (!v) setDestravar(null); }}>
+        <DialogContent className="border-slate-300 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-slate-800 flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" /> Destravar Medição {destravar?.numero} (paga)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="rounded-lg bg-amber-50 border border-amber-300 p-3 text-xs text-amber-900 space-y-1">
+              <p className="font-semibold">Medição paga é imutável (LGPD/ISO 9001).</p>
+              <p>Com a sua senha de admin master, o sistema fará a <strong>volta completa</strong>, na ordem correta:</p>
+              <p>1. Estorna a baixa do pagamento no Contas a Pagar;<br />2. Remove o título do Financeiro;<br />3. Cancela a aprovação (a medição volta para "Aguardando Aprovação" como nova revisão).</p>
+              <p>Nada é apagado sem esse caminho — o histórico do estorno fica registrado.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-gray-700">Senha do admin master <span className="text-red-500">*</span></Label>
+              <Input type="password" placeholder="Confirme sua senha" value={senhaDestravar} onChange={e => setSenhaDestravar(e.target.value)} className="text-sm" />
+            </div>
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setDestravar(null)} disabled={cancelarAprovacaoMut.isPending}>Voltar</Button>
+            <Button
+              className="bg-slate-700 hover:bg-slate-600 text-white gap-1.5"
+              disabled={!senhaDestravar || cancelarAprovacaoMut.isPending}
+              onClick={() => destravar && cancelarAprovacaoMut.mutate({ id: destravar.id, companyId: contrato.companyId, senhaMaster: senhaDestravar }, { onSuccess: () => setDestravar(null) })}
+            >
+              {cancelarAprovacaoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+              Destravar e Desfazer Pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {rejeicaoModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setRejeicaoModal(null)}>
           <div className="bg-white rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
