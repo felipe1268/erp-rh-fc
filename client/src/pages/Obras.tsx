@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building, PackageOpen, ArrowLeftRight, ShieldCheck, HardHat } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building, PackageOpen, ArrowLeftRight, ShieldCheck, HardHat, Handshake, Ruler } from "lucide-react";
 import ModalAprovadoresEstoque from "@/components/obras/ModalAprovadoresEstoque";
 import { TimeCombobox, ENTRADA_OPTIONS, INTERVALO_OPTIONS, SAIDA_OPTIONS } from "@/components/TimeCombobox";
 import { useLocation } from "wouter";
@@ -207,6 +207,8 @@ export default function Obras() {
   });
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Rev. 4833 — abas do formulário de obra (pedido do usuário: separar os cadastros)
+  const [formTab, setFormTab] = useState<"geral" | "terceiros" | "ponto" | "projetos">("geral");
   const [editingId, setEditingId] = useState<number | null>(null);
 
   // Rev. 3451 — Múltiplos clientes por obra (movido para após editingId — fix Rev. 3453)
@@ -355,7 +357,7 @@ export default function Obras() {
     return list;
   }, [obras, search, statusFilter, snsByObra]);
 
-  const openNew = () => { setEditingId(null); setForm(emptyForm); setJornadaForm({}); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca(""); setTstOpen(false); setTstBusca(""); setEncarregadoOpen(false); setEncarregadoBusca(""); setDialogOpen(true); };
+  const openNew = () => { setEditingId(null); setForm(emptyForm); setJornadaForm({}); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca(""); setTstOpen(false); setTstBusca(""); setEncarregadoOpen(false); setEncarregadoBusca(""); setFormTab("geral"); setDialogOpen(true); };
   const openEdit = (obra: any) => {
     setEditingId(obra.id);
     setForm({
@@ -395,6 +397,7 @@ export default function Obras() {
     setJornadaForm(decomporJornadaObra(obra.jornadaTrabalho));
     setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setNomeError(false);
     setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca("");
+    setFormTab("geral");
     setDialogOpen(true);
   };
 
@@ -519,9 +522,14 @@ export default function Obras() {
     const nomeEfetivo = form.nome.trim() || form.numOrcamento.trim();
     if (!nomeEfetivo) {
       setNomeError(true);
+      setFormTab("geral"); // Poka-Yoke: o campo Nome vive na aba "Dados Gerais"
       toast.error("Informe o Nome da Obra ou o Nº do Orçamento");
-      document.getElementById("input-nome-obra")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      document.getElementById("input-nome-obra")?.focus();
+      // Espera o commit da troca de aba (a aba escondida tem display:none e
+      // scroll/focus não funcionam nela) antes de rolar/focar o campo.
+      setTimeout(() => {
+        document.getElementById("input-nome-obra")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        document.getElementById("input-nome-obra")?.focus();
+      }, 50);
       return;
     }
     setNomeError(false);
@@ -741,7 +749,52 @@ export default function Obras() {
 
       <FullScreenDialog open={dialogOpen} onClose={() => { setDialogOpen(false); setSaving(false); }} title={editingId ? "Editar Obra" : "Nova Obra"} icon={<Landmark className="h-5 w-5 text-white" />}>
         <div className="w-full">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Rev. 4833 — abas do cadastro da obra (Poka-Yoke: status por aba) */}
+          {(() => {
+            const nomeOk = !!(form.nome.trim() || form.numOrcamento.trim());
+            const geralOk = nomeOk && !!form.cliente;
+            const terceirosOk =
+              form.terceiroDiaMedicao != null || form.terceiroDiaPagamento != null ||
+              form.terceiroPrazoAprovacaoDias != null || form.terceiroPagamentoConformeRecebimento === 1 ||
+              Object.values(jornadaForm).some(v => !!v);
+            const pontoOk = editingId
+              ? obraSns.some((s: any) => s.status === "ativo")
+              : pendingSns.length > 0;
+            const tabs = [
+              { key: "geral" as const, label: "Dados Gerais", Icon: Landmark, ok: geralOk, alerta: !nomeOk },
+              { key: "terceiros" as const, label: "Terceiros & Jornada", Icon: Handshake, ok: terceirosOk, alerta: false },
+              { key: "ponto" as const, label: "Ponto & Convenção", Icon: Wifi, ok: pontoOk, alerta: false },
+              { key: "projetos" as const, label: "Projetos (Medição)", Icon: Ruler, ok: false, alerta: false },
+            ];
+            return (
+              <div className="sticky top-0 z-10 -mx-1 px-1 pt-1 pb-3 bg-white/95 backdrop-blur mb-3">
+                <div className="flex gap-1.5 overflow-x-auto rounded-xl bg-slate-100 p-1.5">
+                  {tabs.map(t => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setFormTab(t.key)}
+                      className={`relative flex items-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition-all flex-1 justify-center ${
+                        formTab === t.key
+                          ? "bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-200"
+                          : "text-slate-500 hover:text-slate-700 hover:bg-white/60"
+                      }`}
+                    >
+                      <t.Icon className={`h-4 w-4 shrink-0 ${formTab === t.key ? "text-indigo-600" : "text-slate-400"}`} />
+                      <span>{t.label}</span>
+                      {/* Poka-Yoke: bolinha de status — verde = preenchido; âmbar = falta o obrigatório */}
+                      {t.alerta ? (
+                        <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-white" title="Falta o nome da obra" />
+                      ) : t.ok ? (
+                        <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" title="Preenchido" />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+          <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${formTab === "geral" ? "" : "hidden"}`}>
             <div className="sm:col-span-2">
               <Label>Nome da Obra <span className="text-muted-foreground text-xs">(ou preencha o Nº do Orçamento abaixo)</span></Label>
               <Input
@@ -1366,7 +1419,10 @@ export default function Obras() {
               <Label>Observações</Label>
               <Textarea value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} rows={3} />
             </div>
+          </div>
 
+          {/* ══════ ABA: TERCEIROS & JORNADA ══════ */}
+          <div className={`space-y-4 ${formTab === "terceiros" ? "" : "hidden"}`}>
             {/* Rev. 4832 — Condição de Pagamento padrão de TERCEIROS (herdada pelos contratos) */}
             <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
               <div>
@@ -1481,7 +1537,10 @@ export default function Obras() {
                 </table>
               </div>
             </div>
+          </div>
 
+          {/* ══════ ABA: PONTO & CONVENÇÃO ══════ */}
+          <div className={`space-y-4 ${formTab === "ponto" ? "" : "hidden"}`}>
             {/* Seção de SNs (Relógios de Ponto) - NOVA OBRA */}
             {!editingId && (
               <div className="sm:col-span-2 border-t pt-4 mt-2">
@@ -1701,9 +1760,6 @@ export default function Obras() {
               </div>
             )}
 
-
-          </div>
-
           {/* ═══════════ CONVENÇÃO COLETIVA ═══════════ */}
           <ConvencaoSection
             companyId={companyId}
@@ -1809,7 +1865,10 @@ export default function Obras() {
               </div>
             )}
           </div>
+          </div>
 
+          {/* ══════ ABA: PROJETOS (MEDIÇÃO) ══════ */}
+          <div className={formTab === "projetos" ? "" : "hidden"}>
           {/* ── Rev. 4805 — PROJETOS PARA MEDIÇÃO (pavimentos) ─────────── */}
           {editingId ? (
             <ProjetosMedicaoSection companyId={companyId} obraId={editingId} />
@@ -1818,6 +1877,7 @@ export default function Obras() {
               📐 <b>Projetos para Medição</b> — salve a obra primeiro; depois volte em Editar para cadastrar os pavimentos e subir os projetos (DXF 1:100).
             </div>
           )}
+          </div>
 
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => { setDialogOpen(false); setSaving(false); }}>Cancelar</Button>
