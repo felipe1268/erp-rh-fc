@@ -2822,7 +2822,8 @@ export const terceiroContratosRouter = router({
       if ((a.nivelAprovacao ?? 0) >= 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Aditivo já aprovado pelo gestor da obra." });
       const [upd] = await db.update(terceiroContratoAditivos).set({
         nivelAprovacao: 1,
-        gestorAprovadoPor: input.aprovadoPor,
+        // Rev. 4816 — rastreabilidade: grava o usuário LOGADO, não texto do client
+        gestorAprovadoPor: (ctx.user as any)?.name || (ctx.user as any)?.email || input.aprovadoPor,
         gestorAprovadoEm: new Date().toISOString(),
         atualizadoEm: new Date().toISOString(),
       } as any).where(eq(terceiroContratoAditivos.id, input.id)).returning();
@@ -2874,7 +2875,7 @@ export const terceiroContratosRouter = router({
         const [upd] = await tx.update(terceiroContratoAditivos).set({
           status: "aprovado",
           nivelAprovacao: 2,
-          socioAprovadoPor: input.aprovadoPor,
+          socioAprovadoPor: (ctx.user as any)?.name || (ctx.user as any)?.email || input.aprovadoPor,
           socioAprovadoEm: new Date().toISOString(),
           atualizadoEm: new Date().toISOString(),
         } as any).where(eq(terceiroContratoAditivos.id, input.id)).returning();
@@ -2919,7 +2920,7 @@ export const terceiroContratosRouter = router({
       if (a.status !== "pendente") throw new TRPCError({ code: "BAD_REQUEST", message: `Aditivo não está pendente (status: ${a.status})` });
       const [upd] = await db.update(terceiroContratoAditivos).set({
         status: "rejeitado",
-        rejeitadoPor: input.rejeitadoPor,
+        rejeitadoPor: (ctx.user as any)?.name || (ctx.user as any)?.email || input.rejeitadoPor,
         rejeitadoEm: new Date().toISOString(),
         motivoRejeicao: input.motivo,
         atualizadoEm: new Date().toISOString(),

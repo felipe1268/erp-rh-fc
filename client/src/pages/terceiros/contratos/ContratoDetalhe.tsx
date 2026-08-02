@@ -3837,6 +3837,13 @@ function AditivosCard({ aditivos, modoEdicao, onAprovarGestor, onAprovarSocio, o
     rejeitado: { label: "Rejeitado", cls: "bg-red-50 text-red-600 border-red-200" },
   };
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+  // Rev. 4816 — data/hora no padrão brasileiro, fuso de Brasília
+  const fmtDataHoraBR = (ts: any) => {
+    if (!ts) return "";
+    const d = ts instanceof Date ? ts : new Date(String(ts).includes("T") ? String(ts) : String(ts).replace(" ", "T") + (String(ts).endsWith("Z") ? "" : "Z"));
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", " às");
+  };
   return (
     <div className="bg-white rounded-xl border border-purple-200 overflow-hidden">
       <div className="px-4 py-2.5 bg-purple-50/60 border-b border-purple-100 flex items-center gap-2">
@@ -3860,6 +3867,19 @@ function AditivosCard({ aditivos, modoEdicao, onAprovarGestor, onAprovarSocio, o
                 {a.item?.descricao || `Item #${a.contratoItemId}`} — <strong>{Number(a.quantidade).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{a.item?.unidade ? ` ${a.item.unidade}` : ""}</strong> × {BRL(a.valorUnitario)}
               </div>
               <div className="text-[11px] text-gray-500 break-words"><strong>Justificativa:</strong> {a.justificativa}</div>
+              {/* Rev. 4816 — trilha de auditoria: quem solicitou e quem aprovou, com data/hora de Brasília */}
+              <div className="rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5 space-y-0.5 text-[10px] text-gray-500">
+                <div><span className="font-semibold text-gray-600">Solicitado por:</span> {a.criadoPor || "—"}{a.criadoEm ? ` · ${fmtDataHoraBR(a.criadoEm)}` : ""}</div>
+                {a.nivelAprovacao >= 1 && (
+                  <div className="text-emerald-700"><span className="font-semibold">Aprovado (Gestor da Obra):</span> {a.gestorAprovadoPor || "—"}{a.gestorAprovadoEm ? ` · ${fmtDataHoraBR(a.gestorAprovadoEm)}` : ""}</div>
+                )}
+                {a.nivelAprovacao >= 2 && (
+                  <div className="text-emerald-700"><span className="font-semibold">Aprovado (Sócio Adm):</span> {a.socioAprovadoPor || "—"}{a.socioAprovadoEm ? ` · ${fmtDataHoraBR(a.socioAprovadoEm)}` : ""}</div>
+                )}
+                {a.status === "rejeitado" && (
+                  <div className="text-red-600"><span className="font-semibold">Rejeitado por:</span> {a.rejeitadoPor || "—"}{a.rejeitadoEm ? ` · ${fmtDataHoraBR(a.rejeitadoEm)}` : ""}</div>
+                )}
+              </div>
               {a.status === "rejeitado" && a.motivoRejeicao && (
                 <div className="text-[11px] text-red-600 break-words"><strong>Motivo da rejeição:</strong> {a.motivoRejeicao}</div>
               )}

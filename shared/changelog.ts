@@ -1,4 +1,14 @@
 /**
+ * Rev. 4816 - RASTREABILIDADE COMPLETA NO ADITIVO
+ *
+ * - Cada aditivo agora exibe a trilha de auditoria: quem SOLICITOU, quem
+ *   aprovou como Gestor da Obra e quem aprovou como Socio Adm — com data e
+ *   hora no padrao brasileiro (fuso de Brasilia). Rejeicao idem.
+ * - Seguranca: o servidor grava o nome do usuario LOGADO na aprovacao e na
+ *   rejeicao (antes aceitava texto enviado pela tela).
+ */
+
+/**
  * Rev. 4815 - DIALOG "GERAR ADITIVO" MODERNIZADO (padrao BR)
  *
  * - Quantidade e preco unitario agora exibem numeros no padrao brasileiro
