@@ -2299,14 +2299,20 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                     </span>
                   )}
                   <span className="text-xs text-gray-400 hidden sm:inline whitespace-nowrap">{m.dataInicio && m.dataFim ? `${fmtDate(m.dataInicio)} a ${fmtDate(m.dataFim)}` : m.periodo}</span>
-                  {pagto?.pago && (
-                    <span className="text-[11px] text-blue-700 hidden md:inline whitespace-nowrap">
-                      Pago em {fmtDate(pagto.dataPagamento)}{pagto.formaPagamento ? ` • ${pagto.formaPagamento}` : ""}{pagto.conta ? ` • ${pagto.conta}` : ""}
+                  {/* Rev. 4859 — rastro do Financeiro SEMPRE visível (pedido do usuário:
+                      "como sei que foi pro financeiro pagar?"): aprovou → selo com o
+                      título no Contas a Pagar e o vencimento; pagou → selo verde. */}
+                  {pagto?.pago ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 whitespace-nowrap flex-shrink-0">
+                      <CheckCircle className="w-3 h-3" />Paga em {fmtDate(pagto.dataPagamento)}{pagto.formaPagamento ? ` • ${pagto.formaPagamento}` : ""}
                     </span>
-                  )}
-                  {pagto?.parcial && (
-                    <span className="text-[11px] text-amber-700 hidden md:inline whitespace-nowrap">Pago parcial: {BRL(pagto.valorPago)}</span>
-                  )}
+                  ) : pagto?.parcial ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 whitespace-nowrap flex-shrink-0">Pago parcial: {BRL(pagto.valorPago)}</span>
+                  ) : pagto && (pagto as any).statusTitulo && (pagto as any).statusTitulo !== "cancelado" ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5 whitespace-nowrap flex-shrink-0" title={`Título de ${BRL((pagto as any).valorTitulo)} lançado no Contas a Pagar`}>
+                      <DollarSign className="w-3 h-3" />No Contas a Pagar{(pagto as any).vencimento ? ` • vence ${fmtDate((pagto as any).vencimento)}` : ""}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <span className="text-xs text-gray-500 hidden sm:inline mr-0.5">Medido <strong className="text-gray-800">{BRL(m.valorMedido)}</strong></span>

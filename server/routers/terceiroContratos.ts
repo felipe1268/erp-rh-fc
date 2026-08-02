@@ -1013,6 +1013,10 @@ export const terceiroContratosRouter = router({
                 parcial: !pago && totalBaixado > 0,
                 valorPago: totalBaixado,
                 valorTitulo: n(entry.valorPrevisto),
+                // Rev. 4859 — rastro visível: medição aprovada mostra que o título
+                // JÁ ESTÁ no Contas a Pagar, com vencimento (pedido do usuário).
+                vencimento: (entry as any).dataVencimento || null,
+                statusTitulo: String(entry.status || ""),
                 dataPagamento: ult?.data || null,
                 formaPagamento: ult?.formaPagamento || entry.formaPagamento || null,
                 conta: contaNome(ult?.contaBancariaId ?? entry.contaBancariaId ?? null),

@@ -8,6 +8,10 @@
  * - REGRA DE OURO (nada sobrepoe): a linha da medicao agora QUEBRA em blocos
  *   quando nao cabe — cada selo/texto desce inteiro para a linha de baixo,
  *   em vez de escrever por cima do "Medido R$".
+ * - RASTRO DO FINANCEIRO na medicao (pedido: "como sei que foi pro
+ *   financeiro pagar?"): medicao aprovada mostra selo azul "No Contas a
+ *   Pagar • vence dd/mm" (titulo lancado); quitada mostra selo verde
+ *   "Paga em dd/mm"; parcial mostra o valor ja pago.
  */
 
 /**
