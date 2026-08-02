@@ -8975,6 +8975,12 @@ export const medicaoCampoFotos = pgTable("medicao_campo_fotos", {
   pagina:           integer(),
   pinX:             numeric("pin_x", { precision: 10, scale: 6 }),
   pinY:             numeric("pin_y", { precision: 10, scale: 6 }),
+  // Rev. 4825 — rastreio anti-fraude: onde e quando a mídia foi CAPTURADA
+  // (GPS do aparelho na hora da foto/vídeo; capturado_em = relógio do aparelho).
+  gpsLat:           numeric("gps_lat", { precision: 10, scale: 6 }),
+  gpsLng:           numeric("gps_lng", { precision: 10, scale: 6 }),
+  gpsPrecisao:      numeric("gps_precisao", { precision: 10, scale: 1 }),
+  capturadoEm:      timestamp("capturado_em"),
   criadoEm:         timestamp("criado_em").defaultNow(),
   deletedAt:        timestamp("deleted_at"),
 }, (t) => [index("idx_mcfoto_campo").on(t.medicaoCampoId), index("idx_mcfoto_company").on(t.companyId)]);

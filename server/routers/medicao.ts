@@ -1870,6 +1870,11 @@ export const medicaoRouter = router({
       pinX: z.string().nullable().optional(),
       pinY: z.string().nullable().optional(),
       uuid: z.string().optional(),
+      // Rev. 4825 — rastreio da captura (GPS + relógio do aparelho)
+      gpsLat: z.number().nullable().optional(),
+      gpsLng: z.number().nullable().optional(),
+      gpsPrecisao: z.number().nullable().optional(),
+      capturadoEm: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1896,6 +1901,10 @@ export const medicaoRouter = router({
         pagina: input.pagina ?? null,
         pinX: input.pinX ?? null,
         pinY: input.pinY ?? null,
+        gpsLat: input.gpsLat != null ? String(input.gpsLat) : null,
+        gpsLng: input.gpsLng != null ? String(input.gpsLng) : null,
+        gpsPrecisao: input.gpsPrecisao != null ? String(input.gpsPrecisao) : null,
+        capturadoEm: input.capturadoEm ? new Date(input.capturadoEm) : null,
       }).returning();
       return row;
     }),
@@ -2770,6 +2779,11 @@ export const medicaoRouter = router({
               pagina: d.pagina ?? null,
               pinX: d.pinX ?? null,
               pinY: d.pinY ?? null,
+              // Rev. 4825 — rastreio da captura vem junto da op offline
+              gpsLat: d.gpsLat != null ? String(d.gpsLat) : null,
+              gpsLng: d.gpsLng != null ? String(d.gpsLng) : null,
+              gpsPrecisao: d.gpsPrecisao != null ? String(d.gpsPrecisao) : null,
+              capturadoEm: d.capturadoEm ? new Date(d.capturadoEm) : null,
             }).returning();
             resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: row.id, status: "ok" });
             continue;

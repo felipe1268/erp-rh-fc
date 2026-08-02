@@ -67,6 +67,21 @@ const ICON_TIPO: Record<TipoContorno, JSX.Element> = {
 // Rev. 3097 — Tipos que fecham o polígono (área preenchida) vs. linhas abertas.
 // Rev. 4823 — a mídia do levantamento pode ser FOTO ou VÍDEO; detecta pelo
 // contentType (op offline) ou pela extensão do arquivo salvo no servidor.
+// Rev. 4825 — resumo do rastreio da captura (hora + GPS) p/ tooltip/badge.
+function infoCapturaMidia(f: any): { badge: string; title: string } | null {
+  if (!f?.capturadoEm) return null;
+  const d = f.capturadoEm instanceof Date ? f.capturadoEm : new Date(String(f.capturadoEm).replace(" ", "T"));
+  if (isNaN(d.getTime())) return null;
+  const hora = d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const temGps = f.gpsLat != null && f.gpsLng != null;
+  return {
+    badge: `${hora}${temGps ? " 📍" : ""}`,
+    title: temGps
+      ? `Capturada em ${hora} · GPS ${Number(f.gpsLat).toFixed(6)}, ${Number(f.gpsLng).toFixed(6)}${f.gpsPrecisao != null ? ` (±${Math.round(Number(f.gpsPrecisao))} m)` : ""}`
+      : `Capturada em ${hora} · sem GPS`,
+  };
+}
+
 function ehVideoMidia(f: any): boolean {
   const ct = String(f?.contentType || "").toLowerCase();
   if (ct.startsWith("video/")) return true;
@@ -1709,11 +1724,40 @@ export default function MedicaoLevantamento() {
 
   // --- upload foto ---
   const fotoInputRef = useRef<HTMLInputElement>(null);
+  // Rev. 4825 — ANTI-FRAUDE: a mídia tem que ser capturada NA HORA (câmera),
+  // nada de foto antiga/galeria/documento. Camadas: (1) `capture` no input abre
+  // direto a câmera; (2) arquivo com data de modificação velha é recusado;
+  // (3) GPS + data/hora da captura ficam gravados na foto.
+  const FRESCOR_MAX_MS = 5 * 60_000; // tolerância p/ vídeo longo + processamento
+  function midiaRecusadaPorIdade(file: File): boolean {
+    if (!file.lastModified) return false; // sem metadado → deixa passar (câmera de alguns browsers)
+    return Date.now() - file.lastModified > FRESCOR_MAX_MS;
+  }
+  async function capturarGpsAgora(): Promise<{ gpsLat: number | null; gpsLng: number | null; gpsPrecisao: number | null; capturadoEm: string }> {
+    const capturadoEm = new Date().toISOString();
+    const pos = await new Promise<GeolocationPosition | null>((resolve) => {
+      if (!navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition((p) => resolve(p), () => resolve(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 });
+    });
+    if (!pos) {
+      toast.warning("Sem localização (GPS negado ou indisponível) — a mídia será salva sem coordenadas. Ative a Localização do Safari nos Ajustes.", { duration: 6000 });
+      return { gpsLat: null, gpsLng: null, gpsPrecisao: null, capturadoEm };
+    }
+    return { gpsLat: pos.coords.latitude, gpsLng: pos.coords.longitude, gpsPrecisao: pos.coords.accuracy ?? null, capturadoEm };
+  }
+  function filtrarMidiaFresca(files: File[]): File[] {
+    const ok = files.filter((f) => !midiaRecusadaPorIdade(f));
+    const rejeitadas = files.length - ok.length;
+    if (rejeitadas > 0) toast.error(`${rejeitadas} arquivo(s) recusado(s): a foto/vídeo precisa ser tirada NA HORA, pela câmera — não vale anexar mídia antiga da galeria.`, { duration: 7000 });
+    return ok;
+  }
   async function onFotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
+    const files = filtrarMidiaFresca(Array.from(e.target.files || []));
     e.target.value = "";
+    if (!files.length) return;
+    const gps = await capturarGpsAgora();
     for (const file of files) {
-      await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina });
+      await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, ...gps });
     }
   }
 
@@ -1728,13 +1772,14 @@ export default function MedicaoLevantamento() {
     fotoContornoInputRef.current?.click();
   }
   async function onFotoContornoSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
+    const files = filtrarMidiaFresca(Array.from(e.target.files || []));
     e.target.value = "";
     const alvo = fotoAlvoContornoRef.current;
     fotoAlvoContornoRef.current = null;
-    if (alvo == null) return;
+    if (alvo == null || !files.length) return;
+    const gps = await capturarGpsAgora();
     for (const file of files) {
-      await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, contornoId: alvo.id, contornoUuid: alvo.uuid ?? null });
+      await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, contornoId: alvo.id, contornoUuid: alvo.uuid ?? null, ...gps });
     }
   }
 
@@ -3743,6 +3788,7 @@ export default function MedicaoLevantamento() {
                                   {ehVideoMidia(f) && <span className="absolute inset-0 grid place-items-center pointer-events-none"><span className="bg-black/55 text-white rounded-full h-5 w-5 grid place-items-center text-[10px]">▶</span></span>}
                                 </a>
                                 {f.__pending && <span className="absolute bottom-0.5 left-0.5 bg-amber-500/90 text-white text-[8px] px-1 rounded">pend.</span>}
+                                {!f.__pending && (() => { const ic = infoCapturaMidia(f); return ic ? <span className="absolute bottom-0.5 left-0.5 bg-black/60 text-white text-[8px] px-1 rounded" title={ic.title}>{ic.badge}</span> : null; })()}
                                 {!travado && <button className="absolute top-0.5 right-0.5 bg-white/95 rounded-full p-0.5 text-red-600 shadow border" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste contorno. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
                                   <Trash2 className="h-3 w-3" />
                                 </button>}
@@ -3841,10 +3887,10 @@ export default function MedicaoLevantamento() {
                     </Button>
                   )}
                 </div>
-                {/* Rev. 4823 — foto OU vídeo (sem `capture` fixo: o iPad oferece
-                    "Tirar foto ou vídeo" e também a galeria) */}
-                <input ref={fotoInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={onFotoSelected} />
-                <input ref={fotoContornoInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={onFotoContornoSelected} />
+                {/* Rev. 4825 — `capture` de volta: abre DIRETO a câmera (foto ou
+                    vídeo), sem galeria — a mídia tem que ser tirada na hora. */}
+                <input ref={fotoInputRef} type="file" accept="image/*,video/*" capture="environment" multiple className="hidden" onChange={onFotoSelected} />
+                <input ref={fotoContornoInputRef} type="file" accept="image/*,video/*" capture="environment" multiple className="hidden" onChange={onFotoContornoSelected} />
               </div>
               {fotos.length === 0 ? (
                 <p className="text-xs text-gray-400">Sem fotos ou vídeos. Use "Adicionar" (a câmera abre no tablet).</p>
@@ -3881,6 +3927,8 @@ export default function MedicaoLevantamento() {
                       )}
                       {tag && <span className="absolute bottom-1 right-1 max-w-[90%] truncate bg-blue-600/90 text-white text-[9px] px-1 rounded" title={tag}>{tag}</span>}
                       {f.__pending && <span className="absolute bottom-1 left-1 bg-amber-500/90 text-white text-[9px] px-1 rounded">pendente</span>}
+                      {/* Rev. 4825 — rastreio: quando e onde a mídia foi capturada */}
+                      {fotoSel === null && !f.__pending && (() => { const ic = infoCapturaMidia(f); return ic ? <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] px-1 rounded" title={ic.title}>{ic.badge}</span> : null; })()}
                       {/* Rev. 4792 — sempre visível (iPad não tem hover) */}
                       {fotoSel === null && !travado && (
                         <button className="absolute top-1 right-1 bg-white/95 rounded-full p-1 text-red-600 shadow border" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste levantamento. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>

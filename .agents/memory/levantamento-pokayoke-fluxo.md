@@ -11,3 +11,9 @@ Decisões confirmadas pelo usuário (metodologia poka-yoke, Revs. 4781–4783):
 
 **Why:** o objetivo declarado é medir produtividade exata por mês/equipe/fornecedor comparando medições sucessivas; velocidade e impossibilidade de erro valem mais que flexibilidade.
 **How to apply:** qualquer mudança nessa tela deve preservar: classificação obrigatória, DXF-first, e zero passos de escala quando o DXF tem unidade.
+
+## Mídia do levantamento (Rev. 4823-4825)
+- Consolidar SÓ com ciclo completo: todo contorno vivo precisa de ≥1 foto/vídeo (medicao_campo_fotos por contornoId) E apropriação (orcamentoItemId do contorno OU do serviço). Gate no client (UX) e no server consolidarLevantamento (verdade).
+- Mídia aceita foto E vídeo; captura obrigatória NA HORA: input com `capture="environment"` (sem galeria) + recusa de arquivo com lastModified >5 min + GPS/data-hora gravados (gps_lat/lng/precisao, capturado_em) via uploadFoto e sincronizarLote.
+- Numeração de contorno é SEQUENCIAL por categoria ao longo do CONTRATO (baseContrato = max nas outras medições, mesma origem, não-biblioteca) — nos DOIS caminhos de create (salvarContorno E sincronizarLote) + renumerar client com offset.
+- Sync de lote: fatiar também por TAMANHO (~90M chars base64) — server rejeita lote >150M.

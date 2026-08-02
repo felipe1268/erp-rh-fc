@@ -64,6 +64,8 @@ function applyOps(base: any, ops: SyncOp[]): any {
           arquivoUrl: "", legenda: op.data?.legenda ?? null,
           pdfId: op.data?.pdfId ?? null, pagina: op.data?.pagina ?? null,
           contornoId: op.data?.contornoId ?? null,
+          gpsLat: op.data?.gpsLat ?? null, gpsLng: op.data?.gpsLng ?? null,
+          gpsPrecisao: op.data?.gpsPrecisao ?? null, capturadoEm: op.data?.capturadoEm ?? null,
         });
       }
     } else if (op.entity === "pdf") {
@@ -299,7 +301,7 @@ export function useLevantamentoOffline(args: {
     await reloadOps();
   }, [ops, campoId, contratoId, companyId, reloadOps]);
 
-  const saveFoto = useCallback(async (file: File, meta: { pdfId?: number | null; pagina?: number | null; contornoId?: number | null; contornoUuid?: string | null }) => {
+  const saveFoto = useCallback(async (file: File, meta: { pdfId?: number | null; pagina?: number | null; contornoId?: number | null; contornoUuid?: string | null; gpsLat?: number | null; gpsLng?: number | null; gpsPrecisao?: number | null; capturadoEm?: string | null }) => {
     const uuid = newUuid();
     const blobKey = fotoBlobKeyUuid(uuid);
     await putBlob(blobKey, file, file.type || "image/jpeg");
@@ -310,7 +312,7 @@ export function useLevantamentoOffline(args: {
       blobKey, contentType: file.type || "image/jpeg",
       // Rev. 4812 — contornoUuid junto: se o contorno ainda tem id temporário
       // (negativo, offline), o servidor religa a foto pelo uuid na sync.
-      data: { pdfId: meta.pdfId ?? null, pagina: meta.pagina ?? null, contornoId: meta.contornoId ?? null, contornoUuid: meta.contornoUuid ?? null },
+      data: { pdfId: meta.pdfId ?? null, pagina: meta.pagina ?? null, contornoId: meta.contornoId ?? null, contornoUuid: meta.contornoUuid ?? null, gpsLat: meta.gpsLat ?? null, gpsLng: meta.gpsLng ?? null, gpsPrecisao: meta.gpsPrecisao ?? null, capturadoEm: meta.capturadoEm ?? null },
     });
     await reloadOps();
   }, [campoId, contratoId, companyId, reloadOps]);

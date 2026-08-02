@@ -1,4 +1,18 @@
 /**
+ * Rev. 4825 - FOTO SO NA HORA + RASTREIO GPS/DATA-HORA (LEVANTAMENTO)
+ *
+ * - Anti-fraude: a midia do levantamento tem que ser capturada NA HORA.
+ *   O botao abre DIRETO a camera (sem galeria/documentos) e arquivo com
+ *   data de criacao antiga (>5 min) e recusado com aviso.
+ * - Cada foto/video grava a LOCALIZACAO (GPS do aparelho: lat/lng e
+ *   precisao) e a DATA/HORA da captura. A miniatura mostra o selo com
+ *   hora e o pino de localizacao; o toque longo/tooltip mostra as
+ *   coordenadas completas.
+ * - Se o GPS estiver negado/indisponivel, a midia salva sem coordenadas
+ *   e o app avisa para ativar a Localizacao do Safari.
+ */
+
+/**
  * Rev. 4824 - CONSOLIDAR SO COM CICLO COMPLETO + VIDEO NO LEVANTAMENTO
  *
  * - Poka-yoke: NAO deixa consolidar se algum trecho estiver sem foto/video

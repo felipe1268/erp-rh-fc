@@ -2307,6 +2307,15 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4819: catálogo global de serviços do levantamento garantido.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA catálogo global de serviços:`, e?.message || e); }
 
+        // Rev. 4825 — rastreio da mídia do levantamento: GPS + data/hora da captura.
+        try {
+          await db.execute(sql`ALTER TABLE medicao_campo_fotos ADD COLUMN IF NOT EXISTS gps_lat NUMERIC(10,6)`);
+          await db.execute(sql`ALTER TABLE medicao_campo_fotos ADD COLUMN IF NOT EXISTS gps_lng NUMERIC(10,6)`);
+          await db.execute(sql`ALTER TABLE medicao_campo_fotos ADD COLUMN IF NOT EXISTS gps_precisao NUMERIC(10,1)`);
+          await db.execute(sql`ALTER TABLE medicao_campo_fotos ADD COLUMN IF NOT EXISTS capturado_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 4825: rastreio GPS/hora nas fotos do levantamento garantido.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA rastreio GPS fotos levantamento:`, e?.message || e); }
+
         // Rev. 4805 — Projetos para Medição (pavimentos da OBRA): cadastro no
         // cadastro de obras, com pé-direito (default 3,00 m) e arquivo DXF 1:100.
         // Plantas importadas do projeto ganham vínculo pavimento_id.
