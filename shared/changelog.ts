@@ -1,4 +1,18 @@
 /**
+ * Rev. 4829 - COMPARATIVO COM AVANCO DA OBRA REDESENHADO (TERCEIROS)
+ *
+ * - Ao clicar em "Comparar c/ Avanco da Obra" na medicao de terceiros, o
+ *   resultado agora abre com o AVANCO DA OBRA em destaque: barra de 0% a
+ *   100% (media ponderada pelo valor dos itens vinculados ao cronograma).
+ * - Abaixo, tabela item a item: % Medido (acumulado do terceiro) x
+ *   % Cliente (medido com o cliente no modulo Medicao, quando a obra tem
+ *   controle de medicao) x % Obra (avanco do cronograma). Divergencia
+ *   acima de 3 pontos destacada em vermelho (medido acima) / ambar (abaixo).
+ * - A coluna Cliente so aparece quando existe medicao de cliente na obra.
+ *   Continua consultivo: nada altera o valor medido.
+ */
+
+/**
  * Rev. 4828 - REMOVIDO "EDITAR MEDICAO" (TERCEIROS)
  *
  * - Pedido do usuario: o dialogo Editar Medicao (periodo/data/observacoes/

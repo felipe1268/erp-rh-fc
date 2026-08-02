@@ -3992,8 +3992,31 @@ export const terceiroContratosRouter = router({
         percAcumAnteriorPorItem[oi.contratoItemId] = (percAcumAnteriorPorItem[oi.contratoItemId] || 0) + n(oi.percentualMedidoPeriodo);
       }
 
+      // Rev. 4829 — "medido com o CLIENTE" (módulo Medição, lado cliente): busca
+      // o acumulado por atividade/EAP dos boletins da mesma obra p/ comparar.
+      const medidoClienteByAtiv: Record<number, number> = {};
+      const medidoClienteByEap: Record<string, number> = {};
+      try {
+        if (contrato.obraId) {
+          const rs: any = await db.execute(sql`
+            SELECT i.atividade_id, i.eap_codigo, MAX(REPLACE(COALESCE(i.percentual_acumulado_atual::text,'0'),',','.')::numeric) AS pct
+            FROM medicao_boletim_itens i
+            JOIN medicao_boletins b ON b.id = i.boletim_id AND b.status IN ('enviado','aprovado','finalizado')
+            JOIN medicao_contratos c ON c.id = b.contrato_id AND c.deleted_at IS NULL AND c.company_id = ${contrato.companyId}
+            JOIN planejamento_projetos p ON p.id = c.projeto_id AND p.company_id = ${contrato.companyId}
+            WHERE p.obra_id = ${contrato.obraId}
+            GROUP BY i.atividade_id, i.eap_codigo`);
+          for (const r of ((rs as any).rows ?? rs) as any[]) {
+            const pct = Number(r.pct) || 0;
+            if (r.atividade_id != null) medidoClienteByAtiv[Number(r.atividade_id)] = Math.max(medidoClienteByAtiv[Number(r.atividade_id)] || 0, pct);
+            if (r.eap_codigo) medidoClienteByEap[String(r.eap_codigo)] = Math.max(medidoClienteByEap[String(r.eap_codigo)] || 0, pct);
+          }
+        }
+      } catch (e: any) { console.warn("[recalcularMedicao] Lookup medido cliente falhou:", e?.message); }
+
       let valorMedidoPeriodo = 0;
-      const itensResultado: { descricao: string; eapCodigo: string | null; vinculado: boolean; percentual: number }[] = [];
+      let somaAvancoPonderado = 0, somaPesoAvanco = 0;
+      const itensResultado: { descricao: string; eapCodigo: string | null; vinculado: boolean; percentual: number; medidoAcum: number; avancoObra: number | null; medidoCliente: number | null }[] = [];
       // Rev. 4800 — cronograma é CONSULTIVO: coleta divergências medido × obra
       const divergencias: { descricao: string; medidoAcum: number; avancoObra: number; tipo: "acima" | "abaixo" }[] = [];
       const TOLERANCIA_PCT = 3;
@@ -4082,11 +4105,20 @@ export const terceiroContratosRouter = router({
         const medidoAcum = percentualAnterior + percentualPeriodo;
         const valorAcumuladoItem = (medidoAcum / 100) * n(itemContrato.valorTotal);
         valorMedidoPeriodo += valorPeriodo;
+        // Rev. 4829 — avanço global da obra ponderado pelo valor dos itens vinculados
+        if (atividadeId) { somaAvancoPonderado += percentualFisico * n(itemContrato.valorTotal); somaPesoAvanco += n(itemContrato.valorTotal); }
+        const eapC = (itemContrato as any).eapCodigo as string | null;
+        const medidoCliente = (atividadeId != null && medidoClienteByAtiv[atividadeId] !== undefined)
+          ? medidoClienteByAtiv[atividadeId]
+          : (eapC && medidoClienteByEap[eapC] !== undefined ? medidoClienteByEap[eapC] : null);
         itensResultado.push({
           descricao: itemContrato.descricao,
-          eapCodigo: (itemContrato as any).eapCodigo || null,
+          eapCodigo: eapC || null,
           vinculado: !!atividadeId,
           percentual: percentualFisico,
+          medidoAcum: Math.round(medidoAcum * 10) / 10,
+          avancoObra: atividadeId ? Math.round(percentualFisico * 10) / 10 : null,
+          medidoCliente: medidoCliente !== null ? Math.round(medidoCliente * 10) / 10 : null,
         });
 
         await db.update(terceiroMedicaoItens).set({
@@ -4149,7 +4181,9 @@ export const terceiroContratosRouter = router({
 
       const vinculados = itensResultado.filter(i => i.vinculado).length;
       const naoVinculados = itensResultado.filter(i => !i.vinculado).length;
-      return { ok: true, valorMedido: valorMedidoPeriodo, percentualGlobal, itens: itensResultado, vinculados, naoVinculados, divergencias, alertaDivergencia: alertaTexto, totalEaps: Object.keys(eapToAtividadeId).length, totalAvancos: Object.keys(avancoMap).length };
+      const avancoObraGlobal = somaPesoAvanco > 0 ? somaAvancoPonderado / somaPesoAvanco : 0;
+      const temMedicaoCliente = Object.keys(medidoClienteByAtiv).length > 0 || Object.keys(medidoClienteByEap).length > 0;
+      return { ok: true, valorMedido: valorMedidoPeriodo, percentualGlobal, avancoObraGlobal, temMedicaoCliente, itens: itensResultado, vinculados, naoVinculados, divergencias, alertaDivergencia: alertaTexto, totalEaps: Object.keys(eapToAtividadeId).length, totalAvancos: Object.keys(avancoMap).length };
     }),
 
   editarMedicao: protectedProcedure

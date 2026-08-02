@@ -2889,26 +2889,60 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
 
       {recalcResult && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setRecalcResult(null)}>
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" /> Resultado do Recálculo
+              <BarChart3 className="w-5 h-5 text-blue-600" /> Comparativo com o Avanço da Obra
             </h3>
+            {/* Rev. 4829 — avanço da obra em destaque (0% a 100%) */}
+            <div className="mb-4">
+              <div className="flex items-end justify-between mb-1">
+                <p className="text-sm font-medium text-gray-700">Avanço da Obra (cronograma)</p>
+                <p className="text-2xl font-bold text-blue-700">{Number(recalcResult.avancoObraGlobal ?? 0).toFixed(1)}%</p>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(recalcResult.avancoObraGlobal ?? 0)))}%` }} />
+              </div>
+              <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>0%</span><span>100%</span></div>
+            </div>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-blue-50 rounded-lg p-3 text-center">
-                <p className="text-xs text-blue-600 font-medium">Valor Medido</p>
+                <p className="text-xs text-blue-600 font-medium">Valor Medido (período)</p>
                 <p className="text-lg font-bold text-blue-800">R$ {Number(recalcResult.valorMedido).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
               </div>
               <div className="bg-emerald-50 rounded-lg p-3 text-center">
-                <p className="text-xs text-emerald-600 font-medium">% Global</p>
+                <p className="text-xs text-emerald-600 font-medium">% Medido do Contrato</p>
                 <p className="text-lg font-bold text-emerald-800">{Number(recalcResult.percentualGlobal).toFixed(1)}%</p>
               </div>
             </div>
-            <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-gray-500">Itens vinculados ao cronograma:</span><span className={`font-semibold ${recalcResult.vinculados > 0 ? "text-green-600" : "text-red-600"}`}>{recalcResult.vinculados}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Itens sem vínculo:</span><span className={`font-semibold ${recalcResult.naoVinculados > 0 ? "text-amber-600" : "text-green-600"}`}>{recalcResult.naoVinculados}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">EAPs no planejamento:</span><span className="font-semibold text-gray-700">{recalcResult.totalEaps}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Atividades com avanço:</span><span className="font-semibold text-gray-700">{recalcResult.totalAvancos}</span></div>
-            </div>
+            {/* Rev. 4829 — item a item: medido terceiro × medido c/ cliente × avanço da obra */}
+            {Array.isArray(recalcResult.itens) && recalcResult.itens.length > 0 && (
+              <div className="border border-gray-200 rounded-lg mb-4 overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 text-gray-500">
+                    <tr>
+                      <th className="text-left px-2 py-1.5 font-medium">Item</th>
+                      <th className="text-right px-2 py-1.5 font-medium">Medido</th>
+                      {recalcResult.temMedicaoCliente && <th className="text-right px-2 py-1.5 font-medium">Cliente</th>}
+                      <th className="text-right px-2 py-1.5 font-medium">Obra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recalcResult.itens.map((i: any, idx: number) => {
+                      const diverge = i.avancoObra !== null && Math.abs(Number(i.medidoAcum ?? 0) - Number(i.avancoObra)) > 3;
+                      return (
+                        <tr key={idx} className="border-t border-gray-100">
+                          <td className="px-2 py-1.5 text-gray-700 break-words">{i.eapCodigo ? <span className="text-gray-400 mr-1">{i.eapCodigo}</span> : null}{i.descricao}</td>
+                          <td className={`px-2 py-1.5 text-right font-semibold ${diverge ? (Number(i.medidoAcum) > Number(i.avancoObra) ? "text-red-600" : "text-amber-600") : "text-gray-800"}`}>{Number(i.medidoAcum ?? 0).toFixed(1)}%</td>
+                          {recalcResult.temMedicaoCliente && <td className="px-2 py-1.5 text-right text-gray-700">{i.medidoCliente !== null && i.medidoCliente !== undefined ? `${Number(i.medidoCliente).toFixed(1)}%` : "—"}</td>}
+                          <td className="px-2 py-1.5 text-right text-gray-700">{i.avancoObra !== null && i.avancoObra !== undefined ? `${Number(i.avancoObra).toFixed(1)}%` : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <p className="text-[10px] text-gray-400 px-2 py-1 border-t border-gray-100">Medido = acumulado desta medição do terceiro · Cliente = medido com o cliente (módulo Medição) · Obra = avanço do cronograma. Vermelho/âmbar = divergência &gt; 3 pontos.</p>
+              </div>
+            )}
             {recalcResult.naoVinculados > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
                 <p className="text-xs font-semibold text-amber-700 mb-1">Itens não vinculados (sem Item correspondente):</p>
