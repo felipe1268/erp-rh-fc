@@ -1,4 +1,13 @@
 /**
+ * Rev. 4859 - LEGENDA NOS ALERTAS DA MEDICAO (TERCEIROS)
+ *
+ * - O triangulo laranja ao lado do periodo da medicao nao dizia NADA — agora
+ *   virou selo "Diverge do cronograma" (comparativo consultivo com o avanco
+ *   da obra; detalhe completo ao expandir a medicao).
+ * - Medicao rejeitada tambem ganhou selo "Rejeitada" com o motivo no toque.
+ */
+
+/**
  * Rev. 4857 - FIX iPAD: "The string did not match the expected pattern" AO CRIAR LINKS
  *
  * - O Safari do iPad as vezes derruba a conexao DEPOIS do servidor gravar,

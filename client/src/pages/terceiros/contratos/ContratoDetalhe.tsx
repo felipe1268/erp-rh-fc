@@ -2285,8 +2285,17 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   )}
                   <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
                   {m.geradoAutomaticamente && <Badge className="text-xs border bg-purple-100 text-purple-700 border-purple-200"><Zap className="w-3 h-3 mr-1" />Auto</Badge>}
-                  {m.alertaDivergencia && <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />}
-                  {m.motivoRejeicao && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
+                  {/* Rev. 4859 — legenda no alerta (pedido do usuário): triângulo sozinho não diz nada */}
+                  {m.alertaDivergencia && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-200 rounded-full px-1.5 py-0.5 whitespace-nowrap flex-shrink-0" title={String(m.alertaDivergencia)}>
+                      <AlertTriangle className="w-3 h-3" />Diverge do cronograma
+                    </span>
+                  )}
+                  {m.motivoRejeicao && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-full px-1.5 py-0.5 whitespace-nowrap flex-shrink-0" title={String(m.motivoRejeicao)}>
+                      <AlertTriangle className="w-3 h-3" />Rejeitada
+                    </span>
+                  )}
                   <span className="text-xs text-gray-400 hidden sm:inline whitespace-nowrap">{m.dataInicio && m.dataFim ? `${fmtDate(m.dataInicio)} a ${fmtDate(m.dataFim)}` : m.periodo}</span>
                   {pagto?.pago && (
                     <span className="text-[11px] text-blue-700 hidden md:inline whitespace-nowrap">
