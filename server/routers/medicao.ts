@@ -1918,6 +1918,9 @@ export const medicaoRouter = router({
           { chave: "forro",      nome: "Forro",      cor: "#7c3aed", tipoMedida: "area",     derivaDe: null,        fator: "1", ordem: 6 },
           // Rev. 4792 — Pintura em SUBCATEGORIAS (teto/parede/piso): parede usa a
           // ferramenta Linha (L×A — risca a parede e informa a altura).
+          // Rev. 4810 — categoria-MÃE "Pintura" no seed: sem ela as 3 subs viravam
+          // chips soltos na paleta (o agrupamento em abinhas exige a mãe).
+          { chave: "pintura",        nome: "Pintura",        cor: "#db2777", tipoMedida: "area",   derivaDe: null, fator: "1", ordem: 7 },
           { chave: "pintura_teto",   nome: "Pintura Teto",   cor: "#db2777", tipoMedida: "area",   derivaDe: null, fator: "1", ordem: 7 },
           { chave: "pintura_parede", nome: "Pintura Parede", cor: "#be185d", tipoMedida: "parede", derivaDe: null, fator: "1", ordem: 8 },
           { chave: "pintura_piso",   nome: "Pintura Piso",   cor: "#9d174d", tipoMedida: "area",   derivaDe: null, fator: "1", ordem: 9 },
@@ -1939,6 +1942,29 @@ export const medicaoRouter = router({
         // de pintura: se existe "pintura" e nenhuma "pintura_*", acrescenta as 3.
         const temPintura = rows.some((r: any) => r.chave === "pintura");
         const temSub = rows.some((r: any) => String(r.chave).startsWith("pintura_"));
+        // Rev. 4810 — self-heal INVERSO: catálogos semeados com as 3 subs mas SEM a
+        // mãe "Pintura" (seed 4792-4809) mostravam 3 chips soltos. Cria a mãe para
+        // as abinhas agruparem (Pintura → Geral/Teto/Parede/Piso).
+        if (temSub && !temPintura) {
+          const sub = rows.find((r: any) => r.chave === "pintura_teto") ?? rows.find((r: any) => String(r.chave).startsWith("pintura_"));
+          await db.transaction(async (tx: any) => {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(478002, ${input.medicaoCampoId})`);
+            const [ja] = await tx.select({ id: medicaoLevantamentoServicos.id }).from(medicaoLevantamentoServicos)
+              .where(and(
+                eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId),
+                eq(medicaoLevantamentoServicos.companyId, input.companyId),
+                eq(medicaoLevantamentoServicos.chave, "pintura"),
+              )).limit(1);
+            if (ja) return;
+            await tx.insert(medicaoLevantamentoServicos).values({
+              companyId: input.companyId, medicaoCampoId: input.medicaoCampoId,
+              chave: "pintura", nome: "Pintura", cor: sub?.cor ?? "#db2777",
+              tipoMedida: "area", derivaDe: null, fator: "1", ordem: sub?.ordem ?? 7, ativo: 1,
+            });
+          });
+          rows = await db.select().from(medicaoLevantamentoServicos)
+            .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
+        }
         if (temPintura && !temSub) {
           const base = rows.find((r: any) => r.chave === "pintura");
           const ord = (base?.ordem ?? 7);

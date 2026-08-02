@@ -1,4 +1,15 @@
 /**
+ * Rev. 4810 - PINTURA AGRUPADA EM SUBCATEGORIAS (fix da paleta)
+ *
+ * A paleta mostrava "Pintura Teto/Parede/Piso" como 3 chips soltos porque o
+ * catalogo nascia sem a categoria-mae "Pintura":
+ * - Seed novo inclui a mae "Pintura"; as 3 viram abinhas (Geral/Teto/Parede/Piso).
+ * - Self-heal para campos ja semeados: cria a mae automaticamente na 1a leitura.
+ * - Vale para qualquer categoria: subcategorias com nome "Mae X" agrupam sob a
+ *   mae (ex.: Forro -> criar "Forro Sanca" pelo botao +Categoria).
+ */
+
+/**
  * Rev. 4809 - ALERTA DE ADITIVO EM TEMPO REAL NO LEVANTAMENTO
  *
  * Conforme o levantamento soma areas, se o acumulado do item (medido agora +
