@@ -255,9 +255,13 @@ async function _puxarFdAutomatico(db: any, contrato: any, medicaoId: number, cri
     await tx.execute(sql`SELECT pg_advisory_xact_lock(478003, ${contrato.id})`);
     const { pendente: pendenteTotal, registros } = await _fdPendenteDoContrato(tx, contrato);
     if (pendenteTotal <= 0.01) return { criado: false, pendente: 0, restante: 0 };
-    const [medRow] = await tx.select({ valorMedido: terceiroMedicoes.valorMedido, status: terceiroMedicoes.status })
+    const [medRow] = await tx.select({ valorMedido: terceiroMedicoes.valorMedido, status: terceiroMedicoes.status, fdExclusaoAlerta: terceiroMedicoes.fdExclusaoAlerta })
       .from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, medicaoId), eq(terceiroMedicoes.companyId, contrato.companyId)));
     if (!medRow || medRow.status === "aprovada" || medRow.status === "paga") return { criado: false, pendente: 0, restante: pendenteTotal };
+    // Rev. 4827 — o usuário EXCLUIU o desconto automático desta medição de forma
+    // consciente: não re-lançar sozinho (senão o recálculo desfaz a decisão).
+    // O aviso "Existem FDs pendentes" segue gravado na medição.
+    if (medRow.fdExclusaoAlerta) return { criado: false, pendente: 0, restante: pendenteTotal };
     const fdsJa = await tx.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
       .where(and(eq(terceiroMedicaoFds.companyId, contrato.companyId), eq(terceiroMedicaoFds.medicaoId, medicaoId)));
     const jaLancado = fdsJa.reduce((s: number, r: any) => s + n(r.valor), 0);
@@ -346,6 +350,13 @@ async function _assertSemFdPendente(db: any, medicaoId: number, companyId: numbe
   if (!contrato) return;
   const { pendente } = await _fdPendenteDoContrato(db, contrato);
   if (pendente > 0.01) {
+    // Rev. 4827 — o usuário excluiu o desconto automático desta medição de forma
+    // CONSCIENTE (fica o aviso permanente "Existem FDs pendentes" na medição).
+    // Bypass ESTREITO: libera a aprovação só até o valor efetivamente dispensado
+    // (fd_exclusao_dispensa) — pendência NOVA acima disso volta a bloquear.
+    const [medAlerta] = await db.select({ fdExclusaoAlerta: terceiroMedicoes.fdExclusaoAlerta, fdExclusaoDispensa: terceiroMedicoes.fdExclusaoDispensa }).from(terceiroMedicoes)
+      .where(and(eq(terceiroMedicoes.id, medicaoId), eq(terceiroMedicoes.companyId, companyId)));
+    if (medAlerta?.fdExclusaoAlerta && pendente <= n(medAlerta.fdExclusaoDispensa) + 0.01) return;
     // Débito maior que a medição: se ESTA medição já descontou até o teto
     // (FD ≥ valor medido → líquido zero), ela pode ser aprovada; o restante
     // continua bloqueando as PRÓXIMAS medições até zerar.
@@ -2557,13 +2568,31 @@ export const terceiroContratosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       await _assertCompanyAccess(ctx.user, input.companyId);
-      const [fd] = await db.select().from(terceiroMedicaoFds).where(and(eq(terceiroMedicaoFds.id, input.id), eq(terceiroMedicaoFds.companyId, input.companyId)));
-      if (!fd) throw new Error("FD não encontrado.");
-      if (typeof fd.medicaoId === "number") {
-        const [med] = await db.select({ status: terceiroMedicoes.status }).from(terceiroMedicoes).where(eq(terceiroMedicoes.id, fd.medicaoId));
-        if (med && (med.status === "aprovada" || med.status === "paga")) throw new Error("Medição já aprovada/paga — FD travado.");
-      }
-      await db.delete(terceiroMedicaoFds).where(and(eq(terceiroMedicaoFds.id, input.id), eq(terceiroMedicaoFds.companyId, input.companyId)));
+      // Rev. 4827 — transação + MESMO advisory lock do _puxarFdAutomatico (478003,
+      // por contrato): sem isso, um recálculo concorrente podia re-lançar o FD na
+      // janela entre gravar o aviso e apagar a linha.
+      await db.transaction(async (tx: any) => {
+        const [fd] = await tx.select().from(terceiroMedicaoFds).where(and(eq(terceiroMedicaoFds.id, input.id), eq(terceiroMedicaoFds.companyId, input.companyId)));
+        if (!fd) throw new Error("FD não encontrado.");
+        if (fd.contratoId) await tx.execute(sql`SELECT pg_advisory_xact_lock(478003, ${fd.contratoId})`);
+        if (typeof fd.medicaoId === "number") {
+          const [med] = await tx.select({ status: terceiroMedicoes.status, fdExclusaoAlerta: terceiroMedicoes.fdExclusaoAlerta, fdExclusaoDispensa: terceiroMedicoes.fdExclusaoDispensa }).from(terceiroMedicoes)
+            .where(and(eq(terceiroMedicoes.id, fd.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
+          if (med && (med.status === "aprovada" || med.status === "paga")) throw new Error("Medição já aprovada/paga — FD travado.");
+          // Rev. 4827 — excluir um desconto de FD deixa AVISO PERMANENTE na medição
+          // ("Existem FDs pendentes"), visível em todos os pontos, inclusive depois
+          // de aprovada, e soma o valor à dispensa consciente (libera a aprovação
+          // só até esse teto). A exclusão também dispensa o re-lançamento automático.
+          const quando = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+          const quem = (ctx.user as any)?.name || (ctx.user as any)?.email || "usuário";
+          const linha = `EXISTEM FDs PENDENTES — desconto de R$ ${n(fd.valor).toFixed(2).replace(".", ",")} (${fd.descricao || fd.tipo || "FD"}) excluído da medição por ${quem} em ${quando}. O débito continua pendente no contrato.`;
+          const alerta = med?.fdExclusaoAlerta ? `${med.fdExclusaoAlerta}\n${linha}` : linha;
+          const dispensa = n(med?.fdExclusaoDispensa) + n(fd.valor);
+          await tx.update(terceiroMedicoes).set({ fdExclusaoAlerta: alerta, fdExclusaoDispensa: String(dispensa.toFixed(2)), atualizadoEm: new Date().toISOString() } as any)
+            .where(and(eq(terceiroMedicoes.id, fd.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
+        }
+        await tx.delete(terceiroMedicaoFds).where(and(eq(terceiroMedicaoFds.id, input.id), eq(terceiroMedicaoFds.companyId, input.companyId)));
+      });
       return { ok: true };
     }),
 
@@ -2642,6 +2671,13 @@ export const terceiroContratosRouter = router({
       if (n(existing.valorMedido) <= 0) {
         throw new Error("A medição está zerada — lance o medido (levantamento ou planilha) antes de solicitar a aprovação.");
       }
+      // Rev. 4827 — garante o desconto AUTOMÁTICO de FD antes de entrar no fluxo
+      // de aprovação (inclusão é automática; o usuário só pode excluir depois).
+      try {
+        const [contratoFd] = await db.select().from(terceiroContratos)
+          .where(and(eq(terceiroContratos.id, existing.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+        if (contratoFd) await _puxarFdAutomatico(db, contratoFd, input.id, input.solicitadoPor ?? null);
+      } catch (e: any) { console.warn("[solicitarAprovacao] Auto-FD falhou:", e?.message); }
       const [med] = await db.update(terceiroMedicoes).set({
         status: "aguardando_aprovacao",
         nivelAprovacao: 0,
@@ -3079,8 +3115,10 @@ export const terceiroContratosRouter = router({
 
   gerarPdfMedicao: protectedProcedure
     .input(z.object({ medicaoId: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
+      // Rev. 4827 — tenancy guard (review): faltava validar o acesso do chamador.
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const [medicao] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!medicao) throw new Error("Medição não encontrada");
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, medicao.contratoId));
@@ -3447,6 +3485,17 @@ export const terceiroContratosRouter = router({
         doc.fillColor("#1d4ed8").text(BRL(totalValorPeriodo), colX(9) + 2, y + 5, { width: cols[9].width - 5, align: "right", lineBreak: false });
         doc.fillColor("#1e293b").text(BRL(totalValorAcumulado), colX(12) + 2, y + 5, { width: cols[12].width - 5, align: "right", lineBreak: false });
         y += 24;
+
+        // Rev. 4827 — aviso permanente: desconto de FD excluído desta medição.
+        if ((medicao as any).fdExclusaoAlerta) {
+          const alertaTxt = String((medicao as any).fdExclusaoAlerta);
+          const altH = doc.heightOfString(alertaTxt, { width: tableW - 16 }) + 26;
+          if (y > pageBottom - altH) { doc.addPage(); y = 36; }
+          doc.rect(mL, y, tableW, altH).fill("#fef2f2").stroke("#fca5a5");
+          doc.font("Helvetica-Bold").fontSize(8).fillColor("#dc2626").text("⚠ EXISTEM FDs PENDENTES", mL + 8, y + 6);
+          doc.font("Helvetica").fontSize(7).fillColor("#b91c1c").text(alertaTxt, mL + 8, y + 17, { width: tableW - 16 });
+          y += altH + 8;
+        }
 
         if (totalRetencoes > 0 || descontos > 0 || totalFdPdf > 0) {
           if (y > pageBottom - (120 + fdsDaMedicao.length * 13)) { doc.addPage(); y = 36; }
@@ -4237,6 +4286,13 @@ export const terceiroContratosRouter = router({
         atualizadoEm: new Date().toISOString(),
       } as any).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
 
+      // Rev. 4827 — medido mudou → completa o desconto automático de FD
+      // pendente do contrato (o usuário não precisa clicar em nada).
+      if (contrato) {
+        try { await _puxarFdAutomatico(db, contrato, input.medicaoId, null); }
+        catch (e: any) { console.warn("[atualizarMedicaoItem] Auto-FD falhou:", e?.message); }
+      }
+
       if (medicao.status === "aprovada") {
         const todasMedicoesAprovadas = await db.select().from(terceiroMedicoes)
           .where(and(eq(terceiroMedicoes.contratoId, medicao.contratoId), eq(terceiroMedicoes.companyId, input.companyId), inArray(terceiroMedicoes.status, ["aprovada", "paga"])));
@@ -4319,10 +4375,12 @@ export const terceiroContratosRouter = router({
     }),
 
   removerMedicaoItem: protectedProcedure
-    .input(z.object({ medicaoItemId: z.number(), medicaoId: z.number() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({ medicaoItemId: z.number(), medicaoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const [medicao] = await db.select().from(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.medicaoId));
+      // Rev. 4827 — tenancy guard (review): rota aceitava só ids → IDOR cross-tenant.
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const [medicao] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!medicao) throw new Error("Medição não encontrada");
       if (medicao.status === "aprovada" || medicao.status === "paga") throw new Error("Não é possível remover itens de uma medição já aprovada/paga");
 
@@ -4343,6 +4401,12 @@ export const terceiroContratosRouter = router({
         percentualGlobal: String(novoPercentualGlobal),
         atualizadoEm: new Date().toISOString(),
       }).where(eq(terceiroMedicoes.id, input.medicaoId));
+
+      // Rev. 4827 — top-up automático do FD após mudança no medido
+      if (contrato) {
+        try { await _puxarFdAutomatico(db, contrato, input.medicaoId, null); }
+        catch (e: any) { console.warn("[removerMedicaoItem] Auto-FD falhou:", e?.message); }
+      }
 
       return { ok: true, restantes: todosItens.length };
     }),

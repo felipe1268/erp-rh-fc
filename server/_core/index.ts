@@ -2316,6 +2316,13 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4825: rastreio GPS/hora nas fotos do levantamento garantido.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA rastreio GPS fotos levantamento:`, e?.message || e); }
 
+        // Rev. 4827 — aviso permanente de FD excluído na medição de terceiros.
+        try {
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS fd_exclusao_alerta TEXT`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS fd_exclusao_dispensa NUMERIC(18,2) DEFAULT 0`);
+          console.log(`[SyncSchema+] Rev. 4827: coluna fd_exclusao_alerta garantida em terceiro_medicoes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA fd_exclusao_alerta:`, e?.message || e); }
+
         // Rev. 4805 — Projetos para Medição (pavimentos da OBRA): cadastro no
         // cadastro de obras, com pé-direito (default 3,00 m) e arquivo DXF 1:100.
         // Plantas importadas do projeto ganham vínculo pavimento_id.

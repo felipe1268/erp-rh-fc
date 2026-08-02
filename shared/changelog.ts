@@ -1,4 +1,29 @@
 /**
+ * Rev. 4828 - REMOVIDO "EDITAR MEDICAO" (TERCEIROS)
+ *
+ * - Pedido do usuario: o dialogo Editar Medicao (periodo/data/observacoes/
+ *   status) foi removido. Alterar status na mao abria margem para erro; o
+ *   status agora anda SOMENTE pelos botoes do fluxo (Solicitar Aprovacao →
+ *   Gestor → Socio / Aprovar), mantendo o sistema automatizado.
+ */
+
+/**
+ * Rev. 4827 - FD AUTOMATICO NA MEDICAO + AVISO PERMANENTE DE EXCLUSAO
+ *
+ * - O desconto de FD do contrato agora entra AUTOMATICAMENTE na medicao em
+ *   todos os caminhos: editar item da planilha, remover item, recalcular e
+ *   Solicitar Aprovacao. O usuario nao escolhe incluir.
+ * - Excluir um desconto de FD lancado deixa AVISO PERMANENTE na medicao
+ *   ("EXISTEM FDs PENDENTES - desconto de R$ X excluido por FULANO em DATA"),
+ *   visivel no card da medicao, no bloco Retencoes e Descontos, no Painel de
+ *   Medicoes (badge vermelho) e no PDF do boletim - inclusive DEPOIS de
+ *   aprovada.
+ * - Com o aviso gravado, a medicao segue o fluxo de aprovacao normalmente
+ *   (a exclusao e uma dispensa consciente); o debito continua pendente para
+ *   as proximas medicoes. O recalculo NAO re-lanca o FD excluido.
+ */
+
+/**
  * Rev. 4826 - GPS REMOVIDO DA FOTO DO LEVANTAMENTO
  *
  * - A pedido do usuario: o pedido de localizacao travava/errava no iPad.

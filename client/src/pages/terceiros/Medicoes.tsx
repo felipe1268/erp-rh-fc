@@ -295,6 +295,11 @@ export default function Medicoes() {
                             <AlertTriangle className="w-3 h-3 mr-1" />Divergência {m.percentualDivergencia != null ? `${Number(m.percentualDivergencia).toFixed(1)}%` : ""}
                           </Badge>
                         )}
+                        {(m as any).fdExclusaoAlerta && (
+                          <Badge className="text-xs border bg-red-100 text-red-700 border-red-300 font-semibold">
+                            <AlertTriangle className="w-3 h-3 mr-1" />Existem FDs pendentes
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-sm text-gray-600">
                         Período: <strong>{fmtPeriodo(m)}</strong> • Ref: {fmtDate(m.dataReferencia)}

@@ -122,7 +122,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
   });
   const [newDoc, setNewDoc] = useState({ tipo: "INSS", descricao: "", competencia: "", dataVencimento: "", bloqueiaPagemento: false });
-  const [editMedicao, setEditMedicao] = useState<{ id: number; periodo: string; dataReferencia: string; observacoes: string; status: string } | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
   const [editingNatureza, setEditingNatureza] = useState(false);
   const [editingObjeto, setEditingObjeto] = useState(false);
@@ -235,10 +234,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     onError: (e) => toast.error(e.message),
   });
 
-  const editarMedicaoMut = trpc.terceiroContratos.editarMedicao.useMutation({
-    onSuccess: () => { toast.success("Medição atualizada"); setEditMedicao(null); utils.terceiroContratos.getContrato.invalidate({ id }); },
-    onError: (e) => toast.error(e.message),
-  });
 
   const removerItemMut = trpc.terceiroContratos.removerItem.useMutation({
     onSuccess: () => { toast.success("Item removido"); utils.terceiroContratos.getContrato.invalidate({ id }); },
@@ -1029,7 +1024,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tab: Medições */}
         {tab === "medicoes" && (
-          <MedicoesTab contrato={contrato} id={id} emModuloMedicoes={emModuloMedicoes} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} initialMedicaoId={medicaoIdFromUrl} setShowGerarMedicao={setShowGerarMedicao} medCfg={medCfg} fdsTerceiro={fdsTerceiro} aprovarGestorMut={aprovarGestorMut} aprovarSocioMut={aprovarSocioMut} criarFdTerceiroMut={criarFdTerceiroMut} excluirFdTerceiroMut={excluirFdTerceiroMut} />
+          <MedicoesTab contrato={contrato} id={id} emModuloMedicoes={emModuloMedicoes} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} initialMedicaoId={medicaoIdFromUrl} setShowGerarMedicao={setShowGerarMedicao} medCfg={medCfg} fdsTerceiro={fdsTerceiro} aprovarGestorMut={aprovarGestorMut} aprovarSocioMut={aprovarSocioMut} criarFdTerceiroMut={criarFdTerceiroMut} excluirFdTerceiroMut={excluirFdTerceiroMut} />
         )}
 
         {/* Tab: Aditivos (Rev. 4814) */}
@@ -1938,51 +1933,9 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           </div>
         )}
 
-        {editMedicao && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-              <h2 className="text-lg font-bold mb-4">Editar Medição</h2>
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-sm">Período (AAAA-MM)</Label>
-                  <Input className="mt-1" value={editMedicao.periodo} onChange={e => setEditMedicao(prev => prev ? { ...prev, periodo: e.target.value } : null)} />
-                </div>
-                <div>
-                  <Label className="text-sm">Data de Referência</Label>
-                  <Input type="date" className="mt-1" value={editMedicao.dataReferencia} onChange={e => setEditMedicao(prev => prev ? { ...prev, dataReferencia: e.target.value } : null)} />
-                </div>
-                <div>
-                  <Label className="text-sm">Observações</Label>
-                  <Input className="mt-1" value={editMedicao.observacoes} onChange={e => setEditMedicao(prev => prev ? { ...prev, observacoes: e.target.value } : null)} placeholder="Observações..." />
-                </div>
-                <div>
-                  <Label className="text-sm">Status</Label>
-                  <Select value={editMedicao.status} onValueChange={v => setEditMedicao(prev => prev ? { ...prev, status: v } : null)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="rascunho">Rascunho</SelectItem>
-                      <SelectItem value="aguardando_aprovacao">Aguardando Aprovação</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="flex gap-3 mt-5 justify-end">
-                <Button variant="outline" onClick={() => setEditMedicao(null)}>Cancelar</Button>
-                <Button className="bg-blue-600 hover:bg-blue-700" disabled={editarMedicaoMut.isPending}
-                  onClick={() => editarMedicaoMut.mutate({
-                    id: editMedicao.id,
-                    companyId: contrato.companyId,
-                    periodo: editMedicao.periodo,
-                    dataReferencia: editMedicao.dataReferencia || null,
-                    observacoes: editMedicao.observacoes || null,
-                    status: editMedicao.status as "rascunho" | "aguardando_aprovacao",
-                  })}>
-                  <Save className="w-4 h-4 mr-2" />{editarMedicaoMut.isPending ? "Salvando..." : "Salvar"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Rev. 4828 — diálogo "Editar Medição" REMOVIDO (pedido do usuário):
+            edição manual de período/status abria margem para erro; o status
+            anda só pelos botões do fluxo de aprovação. */}
 
         {/* Rev. 4817 — Diálogo Encerrar contrato */}
         {showEncerrar && (() => {
@@ -2126,7 +2079,7 @@ function ConfirmBox({ state, onClose }: { state: ConfirmState; onClose: () => vo
   );
 }
 
-function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao, initialMedicaoId, setShowGerarMedicao, medCfg, fdsTerceiro, aprovarGestorMut, aprovarSocioMut, criarFdTerceiroMut, excluirFdTerceiroMut }: any) {
+function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, initialMedicaoId, setShowGerarMedicao, medCfg, fdsTerceiro, aprovarGestorMut, aprovarSocioMut, criarFdTerceiroMut, excluirFdTerceiroMut }: any) {
   const assinado = (contrato as any).assinaturaStatus === "concluido";
   // Rev. 4818 — aditivos vinculados à medição: aviso no excluir (cascata)
   const { data: aditivosDoContrato } = trpc.terceiroContratos.listarAditivos.useQuery(
@@ -2341,12 +2294,9 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       <span className="hidden md:inline">Solicitar Aprovação</span>
                     </Button>
                   )}
-                  {modoEdicao && isPreApproval && (
-                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Editar medição"
-                      onClick={() => setEditMedicao({ id: m.id, periodo: m.periodo, dataReferencia: m.dataReferencia || "", observacoes: m.observacoes || "", status: m.status || "rascunho" })}>
-                      <Pencil className="w-3 h-3" />
-                    </Button>
-                  )}
+                  {/* Rev. 4828 — botão "Editar medição" REMOVIDO (pedido do usuário):
+                      período/status não são editáveis à mão; o status anda só
+                      pelos botões do fluxo (Solicitar Aprovação → Aprovar). */}
                   {modoEdicao && m.status === "aprovada" && (
                     <Button size="sm" variant="outline" className="h-7 gap-1 text-xs text-orange-600 border-orange-200 hover:bg-orange-50" title="Cancelar aprovação"
                       disabled={cancelarAprovacaoMut.isPending}
@@ -2444,6 +2394,14 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   <div className="rounded-xl border border-orange-200 bg-orange-50 p-3.5">
                     <p className="text-[10px] font-bold uppercase tracking-wide text-orange-500 mb-1 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" />Comparativo com o avanço da obra</p>
                     <p className="text-xs text-orange-700 break-words leading-relaxed">{m.alertaDivergencia}</p>
+                  </div>
+                )}
+                {/* Rev. 4827 — aviso PERMANENTE: desconto de FD foi excluído desta
+                    medição; segue visível em todos os status, inclusive aprovada. */}
+                {(m as any).fdExclusaoAlerta && (
+                  <div className="rounded-xl border-2 border-red-300 bg-red-50 p-3.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-red-600 mb-1 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" />Existem FDs pendentes</p>
+                    <p className="text-xs text-red-700 break-words leading-relaxed whitespace-pre-line">{(m as any).fdExclusaoAlerta}</p>
                   </div>
                 )}
                 {m.motivoRejeicao && (
@@ -2558,12 +2516,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       <BarChart3 className={`w-3 h-3 ${recalcularMut.isPending ? "animate-pulse" : ""}`} /> Comparar c/ Avanço da Obra
                     </Button>
                   )}
-                  {isPreApproval && (
-                    <Button size="sm" variant="outline" className="gap-1 text-xs"
-                      onClick={() => setEditMedicao({ id: m.id, periodo: m.periodo, dataReferencia: m.dataReferencia || "", observacoes: m.observacoes || "", status: m.status || "rascunho" })}>
-                      <Pencil className="w-3 h-3" /> Editar
-                    </Button>
-                  )}
+                  {/* Rev. 4828 — botão "Editar" removido (fluxo automatizado; status só pelos botões) */}
                   {m.status !== "paga" && (
                     <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
                       disabled={excluirMedicaoMut.isPending}
@@ -2775,7 +2728,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                             </td>
                             {mostrarRemover && (
                               <td className="px-2 py-2 text-center">
-                                <button onClick={() => setConfirmar({ title: "Remover este item da medição?", actionLabel: "Remover", destructive: true, onConfirm: () => removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id }) })}
+                                <button onClick={() => setConfirmar({ title: "Remover este item da medição?", actionLabel: "Remover", destructive: true, onConfirm: () => removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id, companyId: contrato.companyId }) })}
                                   className="text-red-300 hover:text-red-500 p-0.5">
                                   <X className="w-3 h-3" />
                                 </button>
@@ -3379,6 +3332,13 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
 
   return (
     <div className="border-t border-gray-100 p-4 space-y-3">
+      {/* Rev. 4827 — aviso permanente de FD excluído, também no bloco de descontos */}
+      {(m as any).fdExclusaoAlerta && (
+        <div className="rounded-lg border-2 border-red-300 bg-red-50 p-2.5">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-red-600 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" />Existem FDs pendentes</p>
+          <p className="text-[11px] text-red-700 break-words leading-relaxed whitespace-pre-line">{(m as any).fdExclusaoAlerta}</p>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Retenções e Descontos</h4>
         <div className="flex gap-2">

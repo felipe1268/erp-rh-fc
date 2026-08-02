@@ -4476,6 +4476,13 @@ export const terceiroMedicoes = pgTable("terceiro_medicoes", {
   percentualDivergencia: numeric("percentual_divergencia", { precision: 8, scale: 4 }),
   // Rev. 3078 — Total de FD (auto OCs + manual) abatido nesta medição.
   fdTotalAbatido:    numeric("fd_total_abatido", { precision: 18, scale: 2 }).default("0").notNull(),
+  // Rev. 4827 — usuário EXCLUIU um desconto de FD lançado automaticamente:
+  // aviso permanente ("Existem FDs pendentes") que segue a medição em todos os
+  // pontos, inclusive depois de aprovada. Também libera a aprovação (dispensa consciente).
+  fdExclusaoAlerta:  text("fd_exclusao_alerta"),
+  // Rev. 4827 — soma dos valores de FD excluídos conscientemente desta medição:
+  // a aprovação só é liberada até esse teto de dispensa (bypass estreito).
+  fdExclusaoDispensa: numeric("fd_exclusao_dispensa", { precision: 18, scale: 2 }).default("0"),
   // Rev. 4284 — Breakdown de descontos calculados na liquidação do boletim.
   adiantamentoAmortizacaoValor: numeric("adiantamento_amortizacao_valor", { precision: 18, scale: 2 }).default("0"),
   retencaoGarantiaValor:        numeric("retencao_garantia_valor", { precision: 18, scale: 2 }).default("0"),
