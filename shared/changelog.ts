@@ -1,4 +1,15 @@
 /**
+ * Rev. 4842 - ETIQUETA DE CONTORNO LINEAR: DENTRO + LINHA-GUIA QUE GRUDA
+ *
+ * - Contornos lineares (perimetro/tabica) tambem colocam a etiqueta do
+ *   lado DE DENTRO do ambiente por padrao (antes ficava fora do traçado).
+ * - A linha-guia agora conecta a etiqueta ao ponto MAIS PROXIMO do
+ *   contorno e acompanha o arrasto para qualquer lado ("etiqueta puxando").
+ * - A guia aparece tambem para posicao salva (nao so durante o arrasto) e
+ *   sai desenhada nos croquis da Memoria de Calculo.
+ */
+
+/**
  * Rev. 4841 - MEMORIA DE CALCULO: UM CROQUI POR SERVICO + LEGENDA LATERAL
  *
  * - Cada camada/servico do levantamento (Forro, Tabica, Sanca...) vira um

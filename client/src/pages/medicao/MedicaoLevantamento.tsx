@@ -104,7 +104,10 @@ function dentroPoligono(pt: { x: number; y: number }, pts: { x: number; y: numbe
   return inside;
 }
 function pontoEtiqueta(pts: { x: number; y: number }[], fecha: boolean): { x: number; y: number } {
-  if (!fecha) {
+  // Rev. 4842 — contornos LINEARES (perímetro/tabica) também preferem o lado
+  // DE DENTRO: o traçado costuma fechar um ambiente; usa o interior do
+  // polígono formado pelos pontos. Linha reta (2 pts) mantém o deslocamento.
+  if (!fecha && pts.length < 3) {
     const i = Math.floor((pts.length - 1) / 2);
     const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)];
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
@@ -132,6 +135,25 @@ function pontoEtiqueta(pts: { x: number; y: number }[], fecha: boolean): { x: nu
     }
   }
   return best ?? { x: cx, y: cy };
+}
+// Rev. 4842 — ponto do contorno MAIS PRÓXIMO da etiqueta (a linha-guia "gruda"
+// na borda, acompanhando o arrasto para qualquer lado).
+function pontoMaisProximoNoContorno(
+  pts: { x: number; y: number }[], p: { x: number; y: number }, fecha: boolean,
+): { x: number; y: number } {
+  let best = pts[0] ?? p; let bestD = Infinity;
+  const n = pts.length;
+  const segs = fecha ? n : n - 1;
+  for (let i = 0; i < segs; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const l2 = dx * dx + dy * dy;
+    const t = l2 > 0 ? Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2)) : 0;
+    const q = { x: a.x + t * dx, y: a.y + t * dy };
+    const d = Math.hypot(p.x - q.x, p.y - q.y);
+    if (d < bestD) { bestD = d; best = q; }
+  }
+  return best;
 }
 
 // ---------------------------------------------------------------------------
@@ -2597,6 +2619,15 @@ export default function MedicaoLevantamento() {
             const cx = pe.x * W, cy = pe.y * H;
             const num = Number(c.numero);
             if (c.numero != null && isFinite(num) && isFinite(cx) && isFinite(cy)) {
+              // Rev. 4842 — linha-guia até o ponto MAIS PRÓXIMO do contorno
+              // quando a etiqueta está afastada (mesma regra da tela).
+              if (c.tipo !== "contagem" && pts.length >= 2) {
+                const near = pontoMaisProximoNoContorno(pts, pe, FECHA_POLIGONO(c.tipo));
+                if (Math.hypot(pe.x - near.x, pe.y - near.y) >= 0.02) {
+                  const nx = near.x * W, ny = near.y * H;
+                  badges.push(`<g><line x1="${cx.toFixed(1)}" y1="${cy.toFixed(1)}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="${cor}" stroke-width="1.6" stroke-dasharray="6 4"/><circle cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="4" fill="${cor}" stroke="#fff" stroke-width="1.2"/></g>`);
+                }
+              }
               badges.push(`<g><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="16" fill="#ffffff" stroke="${cor}" stroke-width="2.5"/><text x="${cx.toFixed(1)}" y="${(cy + 0.5).toFixed(1)}" font-size="15" font-family="Arial,Helvetica,sans-serif" fill="#111827" text-anchor="middle" dominant-baseline="central" font-weight="700">${num}</text></g>`);
             }
             if (c.tipo === "contagem") {
@@ -3698,17 +3729,25 @@ export default function MedicaoLevantamento() {
                           {contornosVisiveis.map((c) => {
                             if (c.tipo === "contagem") return null;
                             const key = String(c.uuid || c.id);
-                            const lp = labelPosMap[key];
+                            // Rev. 4842 — vale também p/ posição SALVA (etiquetaJson), não só drag local
+                            let lp = labelPosMap[key] as { x: number; y: number } | undefined;
+                            if (!lp) {
+                              try {
+                                const ep = c.etiquetaJson ? JSON.parse(c.etiquetaJson) : null;
+                                if (ep && isFinite(ep.x) && isFinite(ep.y)) lp = ep;
+                              } catch { /* */ }
+                            }
                             if (!lp) return null;
                             let pts: GeoPonto[] = [];
                             try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
                             if (editDrag && editDrag.contId === c.id) pts = editDrag.pts;
                             if (pts.length < 2) return null;
                             const fecha = FECHA_POLIGONO(c.tipo);
-                            let ax = 0, ay = 0;
-                            if (fecha) { for (const p of pts) { ax += p.x; ay += p.y; } ax /= pts.length; ay /= pts.length; }
-                            else { const i = Math.floor((pts.length - 1) / 2); const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)]; ax = (a.x + b.x) / 2; ay = (a.y + b.y) / 2; }
-                            if (Math.hypot(lp.x - ax, lp.y - ay) < 0.035) return null; // perto = sem seta
+                            // Rev. 4842 — a guia "gruda" no ponto do contorno MAIS PRÓXIMO
+                            // da etiqueta (acompanha o arrasto p/ qualquer lado).
+                            const near = pontoMaisProximoNoContorno(pts, lp, fecha);
+                            const ax = near.x, ay = near.y;
+                            if (Math.hypot(lp.x - ax, lp.y - ay) < 0.02) return null; // encostada = sem seta
                             const cor = c.cor || COR_TIPO[c.tipo as TipoContorno] || "#2563eb";
                             return (
                               <g key={`leader-${c.id}`}>
