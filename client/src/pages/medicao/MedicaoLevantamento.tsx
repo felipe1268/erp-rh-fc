@@ -1738,10 +1738,19 @@ export default function MedicaoLevantamento() {
   }
   async function capturarGpsAgora(): Promise<{ gpsLat: number | null; gpsLng: number | null; gpsPrecisao: number | null; capturadoEm: string }> {
     const capturadoEm = new Date().toISOString();
-    const pos = await new Promise<GeolocationPosition | null>((resolve) => {
-      if (!navigator.geolocation) return resolve(null);
-      navigator.geolocation.getCurrentPosition((p) => resolve(p), () => resolve(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 });
-    });
+    // ⚠️ iOS: se o prompt de permissão de localização fica pendente (ou a
+    // Localização está desligada), getCurrentPosition pode NUNCA chamar
+    // callback nenhum — o `timeout` só vale DEPOIS da permissão. Sem o
+    // corta-fogo abaixo, o anexo da foto ficava travado para sempre.
+    const pos = await Promise.race([
+      new Promise<GeolocationPosition | null>((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        try {
+          navigator.geolocation.getCurrentPosition((p) => resolve(p), () => resolve(null), { enableHighAccuracy: true, timeout: 6000, maximumAge: 60_000 });
+        } catch { resolve(null); }
+      }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+    ]);
     if (!pos) {
       toast.warning("Sem localização (GPS negado ou indisponível) — a mídia será salva sem coordenadas. Ative a Localização do Safari nos Ajustes.", { duration: 6000 });
       return { gpsLat: null, gpsLng: null, gpsPrecisao: null, capturadoEm };
