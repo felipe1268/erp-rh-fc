@@ -1287,6 +1287,18 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3904: tst_id + encarregado_id garantidos em obras.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA obras.tst_id/encarregado_id:`, e?.message || e); }
 
+        // Rev. 4832 — Condição de pagamento padrão de TERCEIROS por obra (herdada
+        // pelos contratos) + modalidade "conforme recebimento" por contrato.
+        // Colunas aditivas; ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS terceiro_dia_medicao INTEGER`);
+          await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS terceiro_dia_pagamento INTEGER`);
+          await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS terceiro_prazo_aprovacao_dias INTEGER`);
+          await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS terceiro_pagamento_conforme_recebimento SMALLINT DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS pagamento_conforme_recebimento SMALLINT`);
+          console.log(`[SyncSchema+] Rev. 4832: condição de pagamento de terceiros (obra + contrato) garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 4832 condição pagto terceiros:`, e?.message || e); }
+
         // Rev. 3278 — DISSÍDIO com DATA DE VIGÊNCIA + DIFERENÇA SALARIAL retroativa.
         // Colunas aditivas (R-001/R-007/R-010 OK — ADD COLUMN IF NOT EXISTS).
         try {

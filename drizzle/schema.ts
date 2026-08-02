@@ -2693,6 +2693,12 @@ export const obras = pgTable("obras", {
         periculosidade: smallint().default(0),
         adicionalNoturnoAtivo: smallint("adicional_noturno_ativo").default(0),
         condicoesVigenciaInicio: date("condicoes_vigencia_inicio", { mode: 'string' }),
+        // Rev. 4832 — Condição de pagamento padrão de TERCEIROS por obra (herdada pelos
+        // contratos no cadastro; contrato pode sobrescrever). null = defaults globais (25/10/5).
+        terceiroDiaMedicao: integer("terceiro_dia_medicao"),
+        terceiroDiaPagamento: integer("terceiro_dia_pagamento"),
+        terceiroPrazoAprovacaoDias: integer("terceiro_prazo_aprovacao_dias"),
+        terceiroPagamentoConformeRecebimento: smallint("terceiro_pagamento_conforme_recebimento").default(0),
         gerenciadoraNome: varchar("gerenciadora_nome", { length: 255 }),
         gerenciadoraLogoUrl: text("gerenciadora_logo_url"),
         clienteLogoUrl: text("cliente_logo_url"),
@@ -4364,6 +4370,9 @@ export const terceiroContratos = pgTable("terceiro_contratos", {
   diaMedicao:        integer("dia_medicao").default(25),
   diaPagamento:      integer("dia_pagamento").default(10),
   prazoAprovacaoDias: integer("prazo_aprovacao_dias").default(5),
+  // Rev. 4832 — 1 = título a pagar sem dia fixo: vence conforme recebimento do
+  // cliente (previsão = fim do mês seguinte). null herda o padrão da obra.
+  pagamentoConformeRecebimento: smallint("pagamento_conforme_recebimento"),
   documentacaoNecessaria: text("documentacao_necessaria"),
   fluxogramaEtapas:  text("fluxograma_etapas"),
   prazoEmissaoNf:    integer("prazo_emissao_nf").default(3),

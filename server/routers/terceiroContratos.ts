@@ -152,6 +152,31 @@ async function _assertCompanyAccess(ctxUser: any, companyId: number | null | und
   }
 }
 
+// Rev. 4832 — Herança da condição de pagamento padrão de terceiros da OBRA no
+// momento da criação do contrato. Lookup escopado por companyId (anti-IDOR:
+// obra de outra empresa nunca influencia os defaults).
+async function _herdarCondicaoPagamentoDaObra(db: any, obraId: number | null | undefined, companyId: number): Promise<{ diaMedicao?: number; diaPagamento?: number; prazoAprovacaoDias?: number; pagamentoConformeRecebimento?: number }> {
+  const herdado: { diaMedicao?: number; diaPagamento?: number; prazoAprovacaoDias?: number; pagamentoConformeRecebimento?: number } = {};
+  if (!obraId) return herdado;
+  try {
+    const [ob] = await db.select({
+      dm: obras.terceiroDiaMedicao,
+      dp: obras.terceiroDiaPagamento,
+      pa: obras.terceiroPrazoAprovacaoDias,
+      cr: obras.terceiroPagamentoConformeRecebimento,
+    }).from(obras).where(and(eq(obras.id, obraId), eq(obras.companyId, companyId)));
+    if (ob) {
+      if (ob.dm != null) herdado.diaMedicao = ob.dm;
+      if (ob.dp != null) herdado.diaPagamento = ob.dp;
+      if (ob.pa != null) herdado.prazoAprovacaoDias = ob.pa;
+      if (ob.cr != null && Number(ob.cr) === 1) herdado.pagamentoConformeRecebimento = 1;
+    }
+  } catch (e: any) {
+    console.warn("[terceiroContratos] herança de condição de pagamento da obra falhou:", e?.message);
+  }
+  return herdado;
+}
+
 // Rev. 2830 — FD (Faturamento Direto) de MATERIAL atrelado a um contrato de terceiro.
 // Origem: OCs de Compras marcadas como FD (modalidade_fd != 'normal' OU fd_valor > 0),
 // vinculadas ao contrato por (1) contrato_id explícito OU (2) heurística obra+fornecedor
@@ -1046,7 +1071,9 @@ export const terceiroContratosRouter = router({
       observacoes: z.string().optional(),
       criadoPor: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Rev. 4832 — tenancy: valida acesso do chamador à empresa antes de criar.
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const ano = new Date().getFullYear();
 
@@ -1062,7 +1089,13 @@ export const terceiroContratosRouter = router({
         numeroContrato = `CT-${ano}-${String(numeroSequencia).padStart(3, "0")}`;
       }
 
+      // Rev. 4832 — Herança da condição de pagamento padrão de terceiros da OBRA:
+      // contrato novo nasce com dia de medição/pagamento/prazo de aprovação da obra
+      // (quando definidos), podendo ser sobrescrito depois em "Critérios do Contrato".
+      const herdado = await _herdarCondicaoPagamentoDaObra(db, input.obraId, input.companyId);
+
       const [c] = await db.insert(terceiroContratos).values({
+        ...herdado,
         companyId: input.companyId,
         empresaTerceiraId: input.empresaTerceiraId,
         obraId: input.obraId ?? null,
@@ -1100,6 +1133,7 @@ export const terceiroContratosRouter = router({
       diaMedicao: z.number().min(1).max(31).optional(),
       diaPagamento: z.number().min(1).max(31).optional(),
       prazoAprovacaoDias: z.number().min(1).max(60).optional(),
+      pagamentoConformeRecebimento: z.number().min(0).max(1).nullable().optional(),
       documentacaoNecessaria: z.string().max(2000).optional(),
       fluxogramaEtapas: z.string().max(5000).optional(),
       prazoEmissaoNf: z.number().min(1).max(60).optional(),
@@ -1128,6 +1162,7 @@ export const terceiroContratosRouter = router({
       if (rest.diaMedicao !== undefined) upd.diaMedicao = rest.diaMedicao;
       if (rest.diaPagamento !== undefined) upd.diaPagamento = rest.diaPagamento;
       if (rest.prazoAprovacaoDias !== undefined) upd.prazoAprovacaoDias = rest.prazoAprovacaoDias;
+      if (rest.pagamentoConformeRecebimento !== undefined) upd.pagamentoConformeRecebimento = rest.pagamentoConformeRecebimento;
       if (rest.documentacaoNecessaria !== undefined) upd.documentacaoNecessaria = rest.documentacaoNecessaria;
       if (rest.fluxogramaEtapas !== undefined) upd.fluxogramaEtapas = rest.fluxogramaEtapas;
       if (rest.prazoEmissaoNf !== undefined) upd.prazoEmissaoNf = rest.prazoEmissaoNf;
@@ -5062,7 +5097,10 @@ export const terceiroContratosRouter = router({
 
       // 7. Criar contrato
       const valorTotal = parseFloat(String(cot.total || "0"));
+      // Rev. 4832 — herda condição de pagamento padrão da obra (mesma regra do criarContrato).
+      const herdadoCot = await _herdarCondicaoPagamentoDaObra(db, cot.obraId, input.companyId);
       const [contrato] = await db.insert(terceiroContratos).values({
+        ...herdadoCot,
         companyId: input.companyId,
         empresaTerceiraId,
         obraId: cot.obraId || null,

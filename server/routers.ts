@@ -2258,6 +2258,10 @@ export const appRouter = router({
       jornadaTrabalho: z.string().nullable().optional(),
       tstId: z.number().nullable().optional(),
       encarregadoId: z.number().nullable().optional(),
+      terceiroDiaMedicao: z.number().min(1).max(31).nullable().optional(),
+      terceiroDiaPagamento: z.number().min(1).max(31).nullable().optional(),
+      terceiroPrazoAprovacaoDias: z.number().min(1).max(60).nullable().optional(),
+      terceiroPagamentoConformeRecebimento: z.number().min(0).max(1).optional(),
     })).mutation(async ({ input, ctx }) => {
       const { sns, ...obraData } = input;
       const result = await createObra(obraData as any);
@@ -2363,6 +2367,10 @@ export const appRouter = router({
       jornadaTrabalho: z.string().nullable().optional(),
       tstId: z.number().nullable().optional(),
       encarregadoId: z.number().nullable().optional(),
+      terceiroDiaMedicao: z.number().min(1).max(31).nullable().optional(),
+      terceiroDiaPagamento: z.number().min(1).max(31).nullable().optional(),
+      terceiroPrazoAprovacaoDias: z.number().min(1).max(60).nullable().optional(),
+      terceiroPagamentoConformeRecebimento: z.number().min(0).max(1).optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, responsavelId, ...data } = input;
       // Rev. 2391 — Guard server-side: não permitir TRANSITAR obra pra status encerrador

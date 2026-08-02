@@ -116,7 +116,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [editDI, setEditDI] = useState("");
   const [editDT, setEditDT] = useState("");
   const [editingCriterios, setEditingCriterios] = useState(false);
-  const [critForm, setCritForm] = useState({ diaMedicao: 25, diaPagamento: 10, prazoAprovacaoDias: 5, prazoEmissaoNf: 3, prazoLiberacaoOp: 5, documentacaoNecessaria: "" });
+  const [critForm, setCritForm] = useState({ diaMedicao: 25, diaPagamento: 10, prazoAprovacaoDias: 5, prazoEmissaoNf: 3, prazoLiberacaoOp: 5, documentacaoNecessaria: "", pagamentoConformeRecebimento: 0 });
   const [periodo, setPeriodo] = useState(() => new Date().toISOString().slice(0, 7));
   const [medicaoDataInicio, setMedicaoDataInicio] = useState(() => {
     const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
@@ -283,6 +283,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     { enabled: tab === "medicoes" && id > 0 && !!(contrato as any)?.companyId },
   );
   const invalidarMedicoes = () => { utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarFdsTerceiro.invalidate({ contratoId: id, companyId: (contrato as any)?.companyId ?? 0 }); };
+  // Rev. 4832 — padrão da OBRA p/ condição de pagamento (contrato null = herda a obra)
+  const { data: obraPadrao } = trpc.obras.getById.useQuery(
+    { id: (contrato as any)?.obraId ?? 0 },
+    { enabled: !!(contrato as any)?.obraId },
+  );
   // Rev. 4814 — contador p/ a aba "Aditivos" na barra de navegação
   const { data: aditivosTopo } = trpc.terceiroContratos.listarAditivos.useQuery(
     { contratoId: id, companyId: (contrato as any)?.companyId ?? 0 },
@@ -754,6 +759,9 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           const pnf = (contrato as any).prazoEmissaoNf ?? 3;
           const plop = (contrato as any).prazoLiberacaoOp ?? 5;
           const docNec = (contrato as any).documentacaoNecessaria || "";
+          // Rev. 4832 — tri-state: valor do contrato; se null, herda o padrão da obra
+          // (mesma precedência do título automático no Contas a Pagar).
+          const confReceb = Number((contrato as any).pagamentoConformeRecebimento ?? (obraPadrao as any)?.terceiroPagamentoConformeRecebimento ?? 0) === 1;
 
           const etapas = [
             { num: 1, titulo: "Medição Física", desc: `Dia ${dm} de cada mês — levantamento e conferência do avanço físico`, icon: "📏", cor: "bg-blue-500" },
@@ -761,7 +769,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             { num: 3, titulo: "Documentação", desc: docNec || "Envio de NF, certidões e documentação comprobatória", icon: "📄", cor: "bg-amber-500" },
             { num: 4, titulo: "Emissão da NF", desc: `Até ${pnf} dias úteis após aprovação — liberação para emissão da nota fiscal`, icon: "🧾", cor: "bg-purple-500" },
             { num: 5, titulo: "Liberação da OP", desc: `Até ${plop} dias úteis após NF — liberação da Ordem de Pagamento`, icon: "💰", cor: "bg-emerald-500" },
-            { num: 6, titulo: "Pagamento", desc: `Dia ${dp} do mês subsequente — crédito em conta`, icon: "🏦", cor: "bg-indigo-500" },
+            { num: 6, titulo: "Pagamento", desc: confReceb ? "Conforme recebimento da medição do cliente — sem dia fixo" : `Dia ${dp} do mês subsequente — crédito em conta`, icon: "🏦", cor: "bg-indigo-500" },
           ];
 
           return (
@@ -774,7 +782,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                 {!editingCriterios && !contratoAssinado && (
                   <button
                     onClick={() => {
-                      setCritForm({ diaMedicao: dm, diaPagamento: dp, prazoAprovacaoDias: pa, prazoEmissaoNf: pnf, prazoLiberacaoOp: plop, documentacaoNecessaria: docNec });
+                      setCritForm({ diaMedicao: dm, diaPagamento: dp, prazoAprovacaoDias: pa, prazoEmissaoNf: pnf, prazoLiberacaoOp: plop, documentacaoNecessaria: docNec, pagamentoConformeRecebimento: confReceb ? 1 : 0 });
                       setEditingCriterios(true);
                     }}
                     className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 hover:underline"
@@ -810,9 +818,16 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                     </div>
                     <div>
                       <Label className="text-xs text-gray-600">Dia do Pagamento (do mês)</Label>
-                      <Input type="number" min={1} max={31} className="mt-1 text-sm" value={critForm.diaPagamento} onChange={e => setCritForm(f => ({ ...f, diaPagamento: parseInt(e.target.value) || 10 }))} />
+                      <Input type="number" min={1} max={31} className="mt-1 text-sm" value={critForm.diaPagamento} disabled={critForm.pagamentoConformeRecebimento === 1} onChange={e => setCritForm(f => ({ ...f, diaPagamento: parseInt(e.target.value) || 10 }))} />
                     </div>
                   </div>
+                  <label className="flex items-start gap-2 p-3 bg-indigo-50 border border-indigo-200 rounded-lg cursor-pointer">
+                    <input type="checkbox" className="mt-0.5" checked={critForm.pagamentoConformeRecebimento === 1}
+                      onChange={e => setCritForm(f => ({ ...f, pagamentoConformeRecebimento: e.target.checked ? 1 : 0 }))} />
+                    <span className="text-xs text-indigo-900 leading-relaxed">
+                      <span className="font-semibold">Pagamento conforme recebimento do cliente</span> — este contrato não tem dia fixo de pagamento: o título entra no Contas a Pagar com vencimento previsto no fim do mês seguinte e é pago quando a medição do cliente for recebida.
+                    </span>
+                  </label>
                   <div>
                     <Label className="text-xs text-gray-600">Documentação Necessária para Liberação</Label>
                     <textarea className="w-full mt-1 text-sm border rounded-lg p-2 min-h-[80px] resize-y" placeholder="Ex: Nota Fiscal, CND FGTS, CND INSS, Certidão Trabalhista, Boletim de Medição assinado..."
@@ -835,6 +850,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                         prazoEmissaoNf: critForm.prazoEmissaoNf,
                         prazoLiberacaoOp: critForm.prazoLiberacaoOp,
                         documentacaoNecessaria: critForm.documentacaoNecessaria,
+                        pagamentoConformeRecebimento: critForm.pagamentoConformeRecebimento,
                       })}>
                       <Save className="w-3 h-3 mr-1" /> Salvar Critérios
                     </Button>
@@ -848,7 +864,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                       { label: "Prazo Aprovação", value: `${pa} dias úteis` },
                       { label: "Prazo Emissão NF", value: `${pnf} dias úteis` },
                       { label: "Prazo Liberação OP", value: `${plop} dias úteis` },
-                      { label: "Dia do Pagamento", value: `Dia ${dp}` },
+                      { label: "Dia do Pagamento", value: confReceb ? "Conf. recebimento" : `Dia ${dp}` },
                     ].map((k, i) => (
                       <div key={i} className="text-center bg-gray-50 rounded-lg p-2 border border-gray-100">
                         <p className="text-[10px] text-gray-500 uppercase font-medium">{k.label}</p>

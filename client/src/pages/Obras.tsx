@@ -83,6 +83,10 @@ type ObraForm = {
   tipoContrato: string;
   percentualGerenciamentoMaterial: string;
   percentualAdm: string;
+  terceiroDiaMedicao: number | null;
+  terceiroDiaPagamento: number | null;
+  terceiroPrazoAprovacaoDias: number | null;
+  terceiroPagamentoConformeRecebimento: number;
 };
 
 const TIPO_CONTRATO_OPTIONS = [
@@ -118,6 +122,10 @@ const emptyForm: ObraForm = {
   tipoContrato: "global",
   percentualGerenciamentoMaterial: "0",
   percentualAdm: "0",
+  terceiroDiaMedicao: null,
+  terceiroDiaPagamento: null,
+  terceiroPrazoAprovacaoDias: null,
+  terceiroPagamentoConformeRecebimento: 0,
 };
 
 export default function Obras() {
@@ -379,6 +387,10 @@ export default function Obras() {
       tipoContrato: obra.tipoContrato || "global",
       percentualGerenciamentoMaterial: obra.percentualGerenciamentoMaterial || "0",
       percentualAdm: obra.percentualAdm || "0",
+      terceiroDiaMedicao: obra.terceiroDiaMedicao ?? null,
+      terceiroDiaPagamento: obra.terceiroDiaPagamento ?? null,
+      terceiroPrazoAprovacaoDias: obra.terceiroPrazoAprovacaoDias ?? null,
+      terceiroPagamentoConformeRecebimento: obra.terceiroPagamentoConformeRecebimento ?? 0,
     });
     setJornadaForm(decomporJornadaObra(obra.jornadaTrabalho));
     setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setNomeError(false);
@@ -1353,6 +1365,33 @@ export default function Obras() {
             <div className="sm:col-span-2">
               <Label>Observações</Label>
               <Textarea value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} rows={3} />
+            </div>
+
+            {/* Rev. 4832 — Condição de Pagamento padrão de TERCEIROS (herdada pelos contratos) */}
+            <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
+              <div>
+                <h3 className="font-semibold text-sm text-slate-700">Condição de Pagamento — Terceiros (padrão da obra)</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Todo contrato de terceiro novo desta obra herda estes valores automaticamente. Cada contrato pode sobrescrever em "Critérios do Contrato".</p>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs">Dia da Medição</Label>
+                  <Input type="number" min={1} max={31} placeholder="25" value={form.terceiroDiaMedicao ?? ""} onChange={e => setForm(f => ({ ...f, terceiroDiaMedicao: e.target.value === "" ? null : Math.min(31, Math.max(1, parseInt(e.target.value) || 25)) }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Aprovação (dias)</Label>
+                  <Input type="number" min={1} max={60} placeholder="5" value={form.terceiroPrazoAprovacaoDias ?? ""} onChange={e => setForm(f => ({ ...f, terceiroPrazoAprovacaoDias: e.target.value === "" ? null : Math.min(60, Math.max(1, parseInt(e.target.value) || 5)) }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Dia do Pagamento</Label>
+                  <Input type="number" min={1} max={31} placeholder="10" disabled={form.terceiroPagamentoConformeRecebimento === 1} value={form.terceiroDiaPagamento ?? ""} onChange={e => setForm(f => ({ ...f, terceiroDiaPagamento: e.target.value === "" ? null : Math.min(31, Math.max(1, parseInt(e.target.value) || 10)) }))} />
+                </div>
+              </div>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={form.terceiroPagamentoConformeRecebimento === 1} onChange={e => setForm(f => ({ ...f, terceiroPagamentoConformeRecebimento: e.target.checked ? 1 : 0 }))} />
+                <span className="text-xs text-slate-600 leading-relaxed"><span className="font-medium">Pagamento conforme recebimento do cliente</span> — sem dia fixo: os títulos entram com vencimento previsto no fim do mês seguinte e são pagos quando a medição do cliente for recebida.</span>
+              </label>
+              <p className="text-[11px] text-muted-foreground">Ex. do fluxo padrão: mede até o dia 25, aprova até o dia 1º e paga até o dia 10 do mês seguinte. Vazio = padrão do sistema (25 / 5 / 10). O vencimento do título no Contas a Pagar cai sempre no mês seguinte ao da medição.</p>
             </div>
 
             {/* Jornada de Trabalho da OBRA — prevalece sobre a do funcionário p/ alocados */}

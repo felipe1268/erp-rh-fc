@@ -1,4 +1,26 @@
 /**
+ * Rev. 4832 - CONDICAO DE PAGAMENTO DE TERCEIROS: PADRAO NA OBRA + VENCIMENTO CORRETO
+ *
+ * - Cadastro da Obra ganhou a secao "Condicao de Pagamento - Terceiros":
+ *   dia da medicao, prazo de aprovacao e dia do pagamento padrao, alem da
+ *   modalidade "pagamento conforme recebimento do cliente". Todo contrato
+ *   de terceiro novo da obra HERDA esses valores automaticamente; cada
+ *   contrato pode sobrescrever em "Criterios do Contrato".
+ * - CORRECAO IMPORTANTE: o vencimento do titulo automatico no Contas a
+ *   Pagar era fixo no dia 25 do PROPRIO mes da medicao, ignorando o dia de
+ *   pagamento do contrato. Agora vence no dia de pagamento do contrato
+ *   (ou da obra) no MES SEGUINTE ao da medicao - fluxo padrao: mede ate 25,
+ *   aprova ate dia 1o, paga dia 10 do mes seguinte. Dia clampado ao ultimo
+ *   dia do mes (ex.: 31 em junho vira 30).
+ * - "Conforme recebimento": titulo entra com vencimento previsto no fim do
+ *   mes seguinte e a descricao marca "(pagto conforme recebimento do
+ *   cliente)"; a baixa continua manual, quando o cliente pagar.
+ * - Criterios do contrato: novo checkbox da modalidade; com ela ativa o
+ *   campo "Dia do Pagamento" fica desabilitado e o fluxograma passa a
+ *   exibir "Conforme recebimento da medicao do cliente - sem dia fixo".
+ */
+
+/**
  * Rev. 4830 - COMPARATIVO INLINE + PARECER TECNICO (TERCEIROS)
  *
  * - O resultado do "Comparar c/ Avanco da Obra" deixou de ser um pop-up e

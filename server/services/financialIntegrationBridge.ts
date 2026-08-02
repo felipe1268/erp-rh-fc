@@ -187,6 +187,10 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
               tm.data_referencia, tm.status, tm.periodo, tm.obra_id,
               COALESCE(et.nome_fantasia, et.razao_social) AS nome_empresa,
               tc.descricao AS tipo_servico, tc.valor_total AS valor_contrato,
+              tc.dia_pagamento AS tc_dia_pagamento,
+              tc.pagamento_conforme_recebimento AS tc_conforme_receb,
+              o.terceiro_dia_pagamento AS obra_dia_pagamento,
+              o.terceiro_pagamento_conforme_recebimento AS obra_conforme_receb,
               o.nome AS obra_nome
        FROM terceiro_medicoes tm
        JOIN terceiro_contratos tc ON tc.id = tm.contrato_id
@@ -273,9 +277,23 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
       }
       if (valorLiquido <= 0) continue; // 100% abatido em FD → nada a pagar
 
-      const dataVenc = r.data_referencia
-        ? r.data_referencia.toString().substring(0, 7) + "-25"
-        : targetMes + "-25";
+      // Rev. 4832 — vencimento respeita a condição de pagamento do contrato
+      // (herdada da obra): dia de pagamento no MÊS SEGUINTE ao mês de referência
+      // da medição (fluxo padrão: mede até 25, aprova até dia 1º, paga dia 10).
+      // "Conforme recebimento": sem dia fixo → previsão = último dia do mês seguinte.
+      const mesRef = r.data_referencia
+        ? r.data_referencia.toString().substring(0, 7)
+        : targetMes;
+      const [anoRef, mmRef] = mesRef.split("-").map((s: string) => parseInt(s, 10));
+      const anoPag = mmRef === 12 ? anoRef + 1 : anoRef;
+      const mesPag = mmRef === 12 ? 1 : mmRef + 1;
+      const ultimoDiaMesPag = new Date(anoPag, mesPag, 0).getDate(); // dia 0 do mês seguinte = último dia
+      const conformeReceb = Number(r.tc_conforme_receb ?? r.obra_conforme_receb ?? 0) === 1;
+      const diaPagBruto = conformeReceb
+        ? ultimoDiaMesPag
+        : parseInt(String(r.tc_dia_pagamento ?? r.obra_dia_pagamento ?? 10), 10) || 10;
+      const diaPag = Math.min(Math.max(diaPagBruto, 1), ultimoDiaMesPag);
+      const dataVenc = `${anoPag}-${String(mesPag).padStart(2, "0")}-${String(diaPag).padStart(2, "0")}`;
       await insertEntry(db, {
         companyId,
         obraId: r.obra_id,
@@ -292,7 +310,7 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
         origemModulo: "terceiro_medicao",
         origemId: r.id,
         origemDescricao: `Medição #${r.id} — ${r.nome_empresa} — ${r.tipo_servico ?? "Serviço"} — ${r.periodo}`,
-        descricao: `Terceiro: ${r.nome_empresa} — ${r.periodo}`,
+        descricao: `Terceiro: ${r.nome_empresa} — ${r.periodo}${conformeReceb ? " (pagto conforme recebimento do cliente)" : ""}`,
       });
       imported++;
     }
