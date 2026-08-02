@@ -3739,6 +3739,65 @@ export const financialRouter = router({
               ],
             };
           }
+        } else if (om === "terceiro_medicao") {
+          // Rev. 4859 — RASTREABILIDADE COMPLETA (pedido do usuário): de onde
+          // veio, como aprovou, quem aprovou/assinou, quem falta.
+          const r = await dbExecute(db,
+            `SELECT tm.id, tm.numero, tm.periodo, tm.data_inicio AS "dataInicio", tm.data_fim AS "dataFim",
+                    tm.valor_medido AS "valorMedido", tm.retencao_tecnica AS "retencaoTecnica",
+                    tm.descontos, tm.status, tm.revisao,
+                    tm.aprovado_por AS "aprovadoPor", tm.aprovado_em AS "aprovadoEm",
+                    tm.gestor_aprovado_por AS "gestorPor", tm.gestor_aprovado_em AS "gestorEm",
+                    tm.socio_aprovado_por AS "socioPor", tm.socio_aprovado_em AS "socioEm",
+                    tm.rejeitado_por AS "rejeitadoPor", tm.motivo_rejeicao AS "motivoRejeicao",
+                    tc.numero_contrato AS "numeroContrato", tc.objeto, tc.obra_nome AS "obraNome",
+                    et.razao_social AS "razaoSocial", et.cnpj
+             FROM terceiro_medicoes tm
+             LEFT JOIN terceiro_contratos tc ON tc.id = tm.contrato_id
+             LEFT JOIN empresas_terceiras et ON et.id = tm.empresa_terceira_id
+             WHERE tm.id = $1 AND tm.company_id = $2`, [entry.origemId, input.companyId]);
+          const tm = (rows(r) as any[])[0];
+          if (tm) {
+            const dt = (v: any) => (v ? String(v).slice(0, 10).split("-").reverse().join("/") : null);
+            const dth = (v: any) => { if (!v) return null; const s = String(v); return `${s.slice(0, 10).split("-").reverse().join("/")} ${s.slice(11, 16)}`.trim(); };
+            const brl = (v: any) => `R$ ${Number(v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+            // Assinaturas FCSign do boletim (envelope mais recente não-excluído)
+            let assinaturas: any[] = [];
+            try {
+              const er = await dbExecute(db,
+                `SELECT s.nome, s.papel, s.cargo, s.status, s.assinado_em AS "assinadoEm"
+                 FROM integrasign_signatarios s
+                 WHERE s.envelope_id = (
+                   SELECT e.id FROM integrasign_envelopes e
+                   WHERE e.medicao_terceiro_id = $1 AND e.company_id = $2 AND e.excluido_em IS NULL
+                     AND e.status <> 'cancelado'
+                   ORDER BY e.id DESC LIMIT 1)
+                 ORDER BY s.ordem_assinatura`, [tm.id, input.companyId]);
+              assinaturas = rows(er) as any[];
+            } catch { /* sem FCSign — segue com aprovação manual */ }
+            const PAPEL: Record<string, string> = { fornecedor: "Fornecedor", gestor_projeto: "Gestor do Projeto", diretor: "Sócio Administrador", financeiro: "Financeiro", rh: "RH", testemunha: "Testemunha" };
+            origemDetalhes = {
+              tipo: "terceiro_medicao",
+              titulo: `Medição ${String(tm.numero ?? "").toString().padStart(2, "0")}${Number(tm.revisao) > 0 ? ` (REV. ${tm.revisao})` : ""} — Contrato ${tm.numeroContrato ?? "—"}`,
+              subtitulo: `${tm.razaoSocial ?? "—"}${tm.cnpj ? ` · CNPJ ${tm.cnpj}` : ""}${tm.obraNome ? ` · 📍 ${tm.obraNome}` : ""}${tm.objeto ? ` · ${tm.objeto}` : ""}`,
+              formula: `Valor do título = Medido ${brl(tm.valorMedido)} − Retenção Técnica ${brl(tm.retencaoTecnica)} − Descontos/FD ${brl(Math.max(0, Number(tm.valorMedido ?? 0) - Number(tm.retencaoTecnica ?? 0) - Number(entry.valorPrevisto ?? 0)))} = ${brl(entry.valorPrevisto)}. A retenção técnica só vira título quando liberada (última medição).`,
+              campos: [
+                { label: "Período medido", value: tm.dataInicio && tm.dataFim ? `${dt(tm.dataInicio)} a ${dt(tm.dataFim)}` : tm.periodo },
+                { label: "Competência", value: tm.periodo },
+                { label: "Status da medição", value: String(tm.status ?? "—") },
+                { label: "Valor medido (bruto)", value: brl(tm.valorMedido) },
+                { label: "Retenção técnica", value: brl(tm.retencaoTecnica) },
+                { label: "Aprovada por", value: tm.aprovadoPor ? `${tm.aprovadoPor}${tm.aprovadoEm ? ` em ${dth(tm.aprovadoEm)}` : ""}` : "—" },
+                ...(tm.gestorPor ? [{ label: "Gestor da obra", value: `${tm.gestorPor}${tm.gestorEm ? ` em ${dth(tm.gestorEm)}` : ""}` }] : []),
+                ...(tm.socioPor ? [{ label: "Sócio administrador", value: `${tm.socioPor}${tm.socioEm ? ` em ${dth(tm.socioEm)}` : ""}` }] : []),
+                ...(tm.rejeitadoPor ? [{ label: "Rejeitada por", value: tm.rejeitadoPor }, { label: "Motivo da rejeição", value: tm.motivoRejeicao ?? "—" }] : []),
+                ...assinaturas.map((s: any) => ({
+                  label: `Assinatura — ${PAPEL[String(s.papel)] ?? s.papel}`,
+                  value: `${s.nome}${s.status === "assinado" ? ` ✓ assinou${s.assinadoEm ? ` em ${dth(s.assinadoEm)}` : ""}` : " ⏳ pendente"}`,
+                })),
+              ],
+            };
+          }
         } else if (om === "planejamento_medicao") {
           const r = await dbExecute(db,
             `SELECT pm.numero, pm.competencia, pm.valor_previsto AS "valorPrevisto",

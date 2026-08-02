@@ -12,6 +12,11 @@
  *   financeiro pagar?"): medicao aprovada mostra selo azul "No Contas a
  *   Pagar • vence dd/mm" (titulo lancado); quitada mostra selo verde
  *   "Paga em dd/mm"; parcial mostra o valor ja pago.
+ * - ABA ORIGEM do Detalhe do Titulo (medicao de terceiros) com
+ *   RASTREABILIDADE COMPLETA: contrato + fornecedor (CNPJ) + obra + periodo
+ *   medido, formula do valor (medido - retencao - FD), quem aprovou em cada
+ *   nivel (gestor/socio) e as ASSINATURAS FCSign (quem assinou com data/hora
+ *   e quem ainda esta pendente).
  */
 
 /**
