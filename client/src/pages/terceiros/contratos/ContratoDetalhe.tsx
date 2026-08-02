@@ -2519,6 +2519,10 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                         setTimeout(() => document.getElementById(`comparativo-obra-${m.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
                       } })}>
                       <BarChart3 className={`w-3 h-3 ${recalcularMut.isPending ? "animate-pulse" : ""}`} /> Comparar c/ Avanço da Obra
+                      {/* Rev. 4831 — % de avanço da obra (0–100%) direto no botão após comparar */}
+                      {recalcResult && recalcResult.medicaoId === m.id && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-600 text-white font-bold text-[10px]">{Number(recalcResult.avancoObraGlobal ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>
+                      )}
                     </Button>
                   )}
                   {/* Rev. 4828 — botão "Editar" removido (fluxo automatizado; status só pelos botões) */}
@@ -2904,6 +2908,7 @@ function ComparativoObraSection({ r, m, onClose }: { r: any; m: any; onClose: ()
   const abaixo = (r.divergencias || []).filter((d: any) => d.tipo === "abaixo");
   const avancoObra = Number(r.avancoObraGlobal ?? 0);
   const medidoGlobal = Number(r.percentualGlobal ?? 0);
+  const saldoGlobal = avancoObra - medidoGlobal;
   const numeroMed = String(m.numero ?? "").padStart(2, "0");
 
   // Parecer técnico por extenso (boletim de medição — caráter consultivo)
@@ -2968,7 +2973,7 @@ function ComparativoObraSection({ r, m, onClose }: { r: any; m: any; onClose: ()
         <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>0%</span><span>100%</span></div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-lg border border-blue-100 p-3 text-center">
           <p className="text-xs text-blue-600 font-medium">Valor Medido (período)</p>
           <p className="text-lg font-bold text-blue-800">R$ {Number(r.valorMedido ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
@@ -2976,6 +2981,11 @@ function ComparativoObraSection({ r, m, onClose }: { r: any; m: any; onClose: ()
         <div className="bg-white rounded-lg border border-emerald-100 p-3 text-center">
           <p className="text-xs text-emerald-600 font-medium">% Medido do Contrato</p>
           <p className="text-lg font-bold text-emerald-800">{fmtP(medidoGlobal)}%</p>
+        </div>
+        <div className={`bg-white rounded-lg border p-3 text-center ${saldoGlobal < 0 ? "border-red-200" : "border-gray-200"}`}>
+          <p className="text-xs text-gray-500 font-medium">Saldo (Obra − Medido)</p>
+          <p className={`text-lg font-bold ${saldoGlobal < 0 ? "text-red-600" : "text-gray-800"}`}>{saldoGlobal > 0 ? "+" : ""}{fmtP(saldoGlobal)} p.p.</p>
+          <p className="text-[10px] text-gray-400">{saldoGlobal < 0 ? "medido acima da obra" : saldoGlobal > 0 ? "saldo de obra a medir" : "em equilíbrio"}</p>
         </div>
       </div>
 
@@ -2987,27 +2997,31 @@ function ComparativoObraSection({ r, m, onClose }: { r: any; m: any; onClose: ()
               <thead className="bg-gray-50 text-gray-500">
                 <tr>
                   <th className="text-left px-2 py-1.5 font-medium">Item</th>
-                  <th className="text-right px-2 py-1.5 font-medium">Medido</th>
-                  {r.temMedicaoCliente && <th className="text-right px-2 py-1.5 font-medium">Cliente</th>}
                   <th className="text-right px-2 py-1.5 font-medium">Obra</th>
+                  {r.temMedicaoCliente && <th className="text-right px-2 py-1.5 font-medium">Cliente</th>}
+                  <th className="text-right px-2 py-1.5 font-medium">Medido</th>
+                  <th className="text-right px-2 py-1.5 font-medium">Saldo</th>
                 </tr>
               </thead>
               <tbody>
                 {r.itens.map((i: any, idx: number) => {
-                  const diverge = i.avancoObra !== null && i.avancoObra !== undefined && Math.abs(Number(i.medidoAcum ?? 0) - Number(i.avancoObra)) > 3;
+                  const temObra = i.avancoObra !== null && i.avancoObra !== undefined;
+                  const saldo = temObra ? Number(i.avancoObra) - Number(i.medidoAcum ?? 0) : null;
+                  const diverge = saldo !== null && Math.abs(saldo) > 3;
                   return (
                     <tr key={idx} className="border-t border-gray-100">
                       <td className="px-2 py-1.5 text-gray-700 break-words">{i.eapCodigo ? <span className="text-gray-400 mr-1">{i.eapCodigo}</span> : null}{i.descricao}</td>
-                      <td className={`px-2 py-1.5 text-right font-semibold ${diverge ? (Number(i.medidoAcum) > Number(i.avancoObra) ? "text-red-600" : "text-amber-600") : "text-gray-800"}`}>{fmtP(i.medidoAcum)}%</td>
+                      <td className="px-2 py-1.5 text-right text-gray-700">{temObra ? `${fmtP(i.avancoObra)}%` : "—"}</td>
                       {r.temMedicaoCliente && <td className="px-2 py-1.5 text-right text-gray-700">{i.medidoCliente !== null && i.medidoCliente !== undefined ? `${fmtP(i.medidoCliente)}%` : "—"}</td>}
-                      <td className="px-2 py-1.5 text-right text-gray-700">{i.avancoObra !== null && i.avancoObra !== undefined ? `${fmtP(i.avancoObra)}%` : "—"}</td>
+                      <td className={`px-2 py-1.5 text-right font-semibold ${diverge ? (saldo! < 0 ? "text-red-600" : "text-amber-600") : "text-gray-800"}`}>{fmtP(i.medidoAcum)}%</td>
+                      <td className={`px-2 py-1.5 text-right font-semibold ${saldo === null ? "text-gray-400" : saldo < -3 ? "text-red-600" : saldo > 3 ? "text-amber-600" : "text-gray-700"}`}>{saldo === null ? "—" : `${saldo > 0 ? "+" : ""}${fmtP(saldo)}`}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
-          <p className="text-[10px] text-gray-400 px-2 py-1 border-t border-gray-100">Medido = acumulado desta medição do terceiro · Cliente = medido com o cliente (módulo Medição) · Obra = avanço do cronograma. Vermelho/âmbar = divergência &gt; 3 pontos.</p>
+          <p className="text-[10px] text-gray-400 px-2 py-1 border-t border-gray-100">Obra = avanço do cronograma · Cliente = medido com o cliente (módulo Medição) · Medido = acumulado desta medição do terceiro · Saldo = Obra − Medido (p.p.). Vermelho = medido acima da obra; âmbar = obra à frente do medido (&gt; 3 pontos).</p>
         </div>
       )}
 
@@ -3025,7 +3039,7 @@ function ComparativoObraSection({ r, m, onClose }: { r: any; m: any; onClose: ()
 
       {/* Parecer técnico completo */}
       <div className="bg-white rounded-lg border border-gray-200 p-3.5">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Parecer do Comparativo</p>
+        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Parecer e Recomendação</p>
         <div className="space-y-2">
           {paragrafos.map((t, i) => (
             <p key={i} className="text-xs text-gray-600 leading-relaxed break-words text-justify">{t}</p>

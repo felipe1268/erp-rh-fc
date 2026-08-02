@@ -10,6 +10,12 @@
  *   tolerancia de 3 p.p., divergencias acima/abaixo com interpretacao
  *   (antecipacao de faturamento / servico executado nao medido) e o
  *   carater consultivo do cruzamento.
+ * - Ajuste fino (pedido do usuario): na tabela, coluna Obra vem PRIMEIRO,
+ *   depois Cliente (se houver), depois Medido e uma coluna SALDO
+ *   (Obra - Medido, em pontos percentuais); cartao de Saldo global ao lado
+ *   do valor/% medido; parecer renomeado para "Parecer e Recomendacao".
+ * - Apos comparar, o proprio botao "Comparar c/ Avanco da Obra" mostra o
+ *   percentual de avanco (0-100%) num selo azul.
  */
 
 /**
