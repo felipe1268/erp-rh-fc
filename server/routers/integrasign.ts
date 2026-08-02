@@ -10,6 +10,15 @@ import {
   employees,
   gestorSubstituicaoSolicitacoes,
   medicaoCampo,
+  signatureSessions,
+  signatureSigners,
+  rhDocumentos,
+  epiDeliveries,
+  epiAssinaturas,
+  comunicadosInternos,
+  comunicadoAssinaturas,
+  ptPermissoes,
+  ptAssinaturas,
 } from "../../drizzle/schema";
 import { eq, and, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -123,8 +132,10 @@ export const integrasignRouter = router({
 
   getEnvelope: protectedProcedure
     .input(z.object({ companyId: z.number(), id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
+      // Rev. 4854 — tenancy guard (review): resposta expõe tokens de assinatura.
+      await assertIntegraSignCompanyAccess((ctx as any).user, input.companyId);
       const [envelope] = await db
         .select()
         .from(integrasignEnvelopes)
@@ -986,8 +997,222 @@ export const integrasignRouter = router({
           podeAssinar,
         },
         todosSignatarios,
+        // Rev. 4854 — boletim de medição tem PDF completo (planilha + levantamento)
+        temBoletimPdf: !!(envelope as any).medicaoTerceiroId,
         termoLegal: `Ao assinar este documento, declaro que li e concordo com todos os termos do contrato acima. Esta assinatura eletrônica tem validade jurídica nos termos da Medida Provisória nº 2.200-2/2001 e da Lei nº 14.063/2020. A assinatura será registrada com data/hora, endereço IP, geolocalização e hash criptográfico SHA-256 para fins de autenticidade e integridade.`,
       };
+    }),
+
+  // Rev. 4855 — BIBLIOTECA CONSULTIVA DE ASSINADOS: catálogo automático de TUDO
+  // que foi assinado no sistema, separado por setor e pasta. Cada fonte é
+  // resiliente (try/catch) — uma tabela ausente não derruba o catálogo.
+  bibliotecaAssinados: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertIntegraSignCompanyAccess((ctx as any).user, input.companyId);
+      const cid = input.companyId;
+      type Item = {
+        setor: string; pasta: string; titulo: string; data: string | null;
+        pessoas: string[]; url: string | null; envelopeId?: number; origem: string;
+      };
+      const items: Item[] = [];
+      const empIds = new Set<number>();
+      const empName = new Map<number, string>();
+
+      // 1) IntegraSign — envelopes concluídos (Terceiros/Planejamento/Compras)
+      try {
+        const envs = await db.select().from(integrasignEnvelopes)
+          .where(and(
+            eq(integrasignEnvelopes.companyId, cid),
+            eq(integrasignEnvelopes.status, "concluido"),
+            isNull(integrasignEnvelopes.excluidoEm),
+          ));
+        const envIds = envs.map((e: any) => e.id);
+        const sigs = envIds.length
+          ? await db.select({
+              envelopeId: integrasignSignatarios.envelopeId,
+              nome: integrasignSignatarios.nome,
+              status: integrasignSignatarios.status,
+            }).from(integrasignSignatarios)
+            .where(inArray(integrasignSignatarios.envelopeId, envIds))
+          : [];
+        for (const e of envs as any[]) {
+          const pessoas = sigs.filter((s: any) => s.envelopeId === e.id && s.status === "assinado").map((s: any) => s.nome);
+          let setor = "Terceiros & Medições"; let pasta = "Outros Documentos";
+          if (e.medicaoTerceiroId) pasta = "Boletins de Medição";
+          else if (e.medicaoCampoId) { setor = "Planejamento"; pasta = "Memórias de Cálculo"; }
+          else if (e.ordemCompraId) { setor = "Compras"; pasta = "Ordens de Compra"; }
+          else if (e.contratoTerceiroId) pasta = "Contratos de Serviço";
+          items.push({ setor, pasta, titulo: e.titulo, data: e.dataConclusao || e.atualizadoEm || e.criadoEm, pessoas, url: null, envelopeId: e.id, origem: "IntegraSign" });
+        }
+      } catch (err: any) { console.error("[Biblioteca] envelopes:", err?.message); }
+
+      // 2) FCSign legado — sessões completas (RH & DP)
+      try {
+        const sess = await db.select().from(signatureSessions)
+          .where(and(eq(signatureSessions.companyId, cid), eq(signatureSessions.status, "completo")));
+        const sIds = sess.map((s: any) => s.id);
+        const signers = sIds.length
+          ? await db.select({ sessionId: signatureSigners.sessionId, nome: signatureSigners.nome, signedAt: signatureSigners.signedAt })
+              .from(signatureSigners).where(inArray(signatureSigners.sessionId, sIds))
+          : [];
+        const tipoLbl: Record<string, string> = {
+          contrato_experiencia: "Contratos de Experiência", contract_experiencia: "Contratos de Experiência",
+          comunicado: "Comunicados", epi: "EPI", pt: "Permissões de Trabalho", outros: "Outros Documentos",
+        };
+        for (const s of sess as any[]) {
+          items.push({
+            setor: "RH & DP", pasta: tipoLbl[s.tipo] || "Outros Documentos",
+            titulo: s.documentTitle, data: s.completedAt || s.createdAt,
+            pessoas: signers.filter((g: any) => g.sessionId === s.id && g.signedAt).map((g: any) => g.nome),
+            url: s.finalDocumentUrl || null, origem: "FCSign",
+          });
+        }
+      } catch (err: any) { console.error("[Biblioteca] sessions:", err?.message); }
+
+      // 3) Documentos do Colaborador assinados (RH & DP)
+      try {
+        const docs = await db.select().from(rhDocumentos)
+          .where(and(eq(rhDocumentos.companyId, cid), eq(rhDocumentos.status, "assinado")));
+        for (const d of docs as any[]) {
+          empIds.add(d.employeeId);
+          items.push({
+            setor: "RH & DP", pasta: "Documentos do Colaborador",
+            titulo: d.titulo, data: d.assinadoEm, pessoas: [`__emp:${d.employeeId}`],
+            url: `/api/download/rh-documento-pdf?id=${d.id}`, origem: "RH Docs",
+          });
+        }
+      } catch (err: any) { console.error("[Biblioteca] rhDocumentos:", err?.message); }
+
+      // 4) EPI — entregas assinadas
+      try {
+        const dels = await db.select({
+          id: epiDeliveries.id, employeeId: epiDeliveries.employeeId,
+          dataEntrega: epiDeliveries.dataEntrega, fichaUrl: epiDeliveries.fichaUrl,
+          assinaturaUrl: epiDeliveries.assinaturaUrl,
+        }).from(epiDeliveries)
+          .where(and(eq(epiDeliveries.companyId, cid), sql`${epiDeliveries.assinaturaUrl} IS NOT NULL`));
+        for (const d of dels as any[]) {
+          empIds.add(d.employeeId);
+          items.push({
+            setor: "EPI", pasta: "Fichas de Entrega de EPI",
+            titulo: `Entrega de EPI — ${d.dataEntrega?.split("-").reverse().join("/") || ""}`,
+            data: d.dataEntrega, pessoas: [`__emp:${d.employeeId}`],
+            url: d.fichaUrl || null, origem: "EPI",
+          });
+        }
+      } catch (err: any) { console.error("[Biblioteca] epiDeliveries:", err?.message); }
+
+      // 5) SST — Ordens de Serviço assinadas
+      try {
+        const oss = await db.select({
+          employeeId: epiAssinaturas.employeeId, assinadoEm: epiAssinaturas.assinadoEm,
+        }).from(epiAssinaturas)
+          .where(and(eq(epiAssinaturas.companyId, cid), eq(epiAssinaturas.tipo, "ordem_servico")));
+        for (const o of oss as any[]) {
+          empIds.add(o.employeeId);
+          items.push({
+            setor: "Segurança do Trabalho", pasta: "Ordens de Serviço",
+            titulo: "Ordem de Serviço (NR-1)", data: o.assinadoEm, pessoas: [`__emp:${o.employeeId}`],
+            url: `/api/download/ordem-servico-pdf?companyId=${cid}&employeeId=${o.employeeId}`, origem: "SST",
+          });
+        }
+      } catch (err: any) { console.error("[Biblioteca] ordemServico:", err?.message); }
+
+      // 6) SST — Permissões de Trabalho com assinaturas colhidas
+      try {
+        const assins = await db.select({ ptId: ptAssinaturas.ptId, nomeManual: ptAssinaturas.nomeManual, employeeId: ptAssinaturas.employeeId, assinadoEm: ptAssinaturas.assinadoEm })
+          .from(ptAssinaturas)
+          .where(and(eq(ptAssinaturas.companyId, cid), sql`${ptAssinaturas.assinadoEm} IS NOT NULL`));
+        const ptIds = Array.from(new Set(assins.map((a: any) => a.ptId)));
+        const pts = ptIds.length
+          ? await db.select({ id: ptPermissoes.id, numero: ptPermissoes.numero, dataEmissao: ptPermissoes.dataEmissao })
+              .from(ptPermissoes).where(and(eq(ptPermissoes.companyId, cid), inArray(ptPermissoes.id, ptIds)))
+          : [];
+        for (const pt of pts as any[]) {
+          const doPt = assins.filter((a: any) => a.ptId === pt.id);
+          doPt.forEach((a: any) => { if (a.employeeId) empIds.add(a.employeeId); });
+          items.push({
+            setor: "Segurança do Trabalho", pasta: "Permissões de Trabalho (PT)",
+            titulo: `PT ${pt.numero}`, data: doPt[0]?.assinadoEm || pt.dataEmissao || null,
+            pessoas: doPt.map((a: any) => a.nomeManual || (a.employeeId ? `__emp:${a.employeeId}` : "")).filter(Boolean),
+            url: null, origem: "SST",
+          });
+        }
+      } catch (err: any) { console.error("[Biblioteca] PT:", err?.message); }
+
+      // 7) Comunicados Internos com assinaturas de ciência
+      try {
+        const assins = await db.select({ comunicadoId: comunicadoAssinaturas.comunicadoId, employeeId: comunicadoAssinaturas.employeeId, assinadoEm: comunicadoAssinaturas.assinadoEm })
+          .from(comunicadoAssinaturas).where(eq(comunicadoAssinaturas.companyId, cid));
+        const cIds = Array.from(new Set(assins.map((a: any) => a.comunicadoId)));
+        const coms = cIds.length
+          ? await db.select({ id: comunicadosInternos.id, numero: comunicadosInternos.numero, titulo: comunicadosInternos.titulo, documentoUrl: comunicadosInternos.documentoUrl, dataEmissao: comunicadosInternos.dataEmissao })
+              .from(comunicadosInternos).where(and(eq(comunicadosInternos.companyId, cid), inArray(comunicadosInternos.id, cIds)))
+          : [];
+        for (const c of coms as any[]) {
+          const doCom = assins.filter((a: any) => a.comunicadoId === c.id);
+          doCom.forEach((a: any) => empIds.add(a.employeeId));
+          items.push({
+            setor: "RH & DP", pasta: "Comunicados Internos",
+            titulo: `${c.numero} — ${c.titulo}`, data: doCom[0]?.assinadoEm || c.dataEmissao,
+            pessoas: doCom.map((a: any) => `__emp:${a.employeeId}`),
+            url: c.documentoUrl || null, origem: "Comunicados",
+          });
+        }
+      } catch (err: any) { console.error("[Biblioteca] comunicados:", err?.message); }
+
+      // Resolve nomes de funcionários (regra de ouro: nome, nunca #ID)
+      try {
+        if (empIds.size) {
+          const emps = await db.select({ id: employees.id, nome: employees.nomeCompleto })
+            .from(employees).where(inArray(employees.id, Array.from(empIds)));
+          for (const e of emps as any[]) empName.set(e.id, e.nome);
+        }
+      } catch {}
+      for (const it of items) {
+        it.pessoas = it.pessoas.map((p) => p.startsWith("__emp:")
+          ? (empName.get(Number(p.slice(6))) || "Funcionário")
+          : p);
+      }
+
+      items.sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+      return items;
+    }),
+
+  // Rev. 4854 — DOCUMENTO COMPLETO PARA O ASSINANTE: o mesmo PDF do boletim
+  // (planilha + retenções + levantamento de campo com fotos) acessível pelo
+  // token público do signatário, para conferência antes de assinar.
+  gerarBoletimPdfPublico: publicProcedure
+    .input(z.object({ token: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [signatario] = await db.select().from(integrasignSignatarios)
+        .where(eq(integrasignSignatarios.token, input.token));
+      if (!signatario) throw new TRPCError({ code: "NOT_FOUND", message: "Link inválido" });
+      // Rev. 4854 — mesmas regras do getDocumentoPublico (review): expiração e
+      // estados terminais bloqueiam também o PDF, não só a tela de assinatura.
+      if (new Date(signatario.tokenExpiraEm) < new Date()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Link expirado." });
+      }
+      if (signatario.status === "recusado") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Documento recusado." });
+      }
+      const [envelope] = await db.select().from(integrasignEnvelopes)
+        .where(and(eq(integrasignEnvelopes.id, signatario.envelopeId), isNull(integrasignEnvelopes.excluidoEm)));
+      if (!envelope || !(envelope as any).medicaoTerceiroId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Este documento não tem boletim em PDF" });
+      }
+      if (["cancelado", "expirado", "recusado"].includes(envelope.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Envelope indisponível." });
+      }
+      // Import dinâmico para evitar ciclo de módulos integrasign ↔ terceiroContratos
+      const { gerarPdfMedicaoBuffer } = await import("./terceiroContratos");
+      return await gerarPdfMedicaoBuffer(db, {
+        medicaoId: (envelope as any).medicaoTerceiroId,
+        companyId: envelope.companyId,
+      });
     }),
 
   assinarDocumento: publicProcedure
@@ -1265,6 +1490,8 @@ export const integrasignRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      // Rev. 4854 — tenancy guard (review): rotaciona token — precisa validar acesso.
+      await assertIntegraSignCompanyAccess((ctx as any).user, input.companyId);
       const userId = (ctx as any).session?.userId;
       const userName = (ctx as any).session?.name || "Sistema";
 

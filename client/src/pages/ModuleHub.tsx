@@ -12,7 +12,7 @@ import {
   Handshake, Home, Ruler, BookOpen,
   HardHat, Warehouse, BarChart3, FolderOpen, Hammer, Truck,
   Settings, FileText, Trash2, GitBranch, Receipt, Scale, Sparkles,
-  Megaphone, Briefcase, ShieldCheck,
+  Megaphone, Briefcase, ShieldCheck, PenLine,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -120,6 +120,22 @@ const MODULES: Module[] = [
     path: "/terceiros/painel",
     active: true,
     features: ["Empresas Terceiras", "Funcionários", "Obrigações Mensais", "Conformidade", "Crachás"],
+  },
+  {
+    // Rev. 4853 — módulo dedicado de assinaturas (reusa a permissão de terceiros)
+    id: "fcsign",
+    permId: "terceiros",
+    title: "FCSign",
+    subtitle: "Central de Assinaturas",
+    description: "Assinatura eletrônica de contratos, boletins e memórias de cálculo — pendências, links e biblioteca de documentos assinados.",
+    icon: PenLine,
+    accentFrom: "#0D9488",
+    accentTo: "#0F766E",
+    accentGlow: "rgba(13,148,136,0.35)",
+    iconBg: "rgba(13,148,136,0.12)",
+    path: "/integrasign",
+    active: true,
+    features: ["Pendências de Assinatura", "Envelopes", "Links de Assinatura", "Biblioteca de Assinados", "Auditoria"],
   },
   {
     id: "parceiros",
@@ -415,6 +431,7 @@ export default function ModuleHub() {
     "juridico-trabalhista": "juridico", "juridico-tributario": "juridico", "juridico-civil": "juridico",
     "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
     "cadastro": "cadastro", "medicao-terceiros": "medicao-terceiros",
+    "fcsign": "fcsign",
   };
   // Filtrar módulos: habilitados no config E acessíveis pelo grupo do usuário
   const activeModules = MODULES.filter(m => {
@@ -438,6 +455,8 @@ export default function ModuleHub() {
         ? (canAccessModule("juridico") || canAccessModule("juridico-trabalhista") || canAccessModule("juridico-tributario") || canAccessModule("juridico-civil"))
         : m.id === "medicao-terceiros"
         ? (canAccessModule("terceiros") || canAccessModule("medicao-terceiros"))
+        : m.id === "fcsign"
+        ? (canAccessModule("terceiros") || canAccessModule("fcsign"))
         : canAccessModule(permId);
       if (!canAccess) return false;
       // Validação adicional via rota (sistema legado ou fallback)

@@ -15,7 +15,7 @@ import {
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
   Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler, PenLine,
-  UserRound, Link2, BadgeCheck,
+  UserRound, Link2, BadgeCheck, Mail, Check,
   CheckCircle2, FilePlus, Camera,
 } from "lucide-react";
 import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
@@ -3358,6 +3358,8 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
   const { user: usuarioLogado } = useAuth();
   const [fcsignOpen, setFcsignOpen] = useState(false);
   const [gestorMesmo, setGestorMesmo] = useState(true);
+  // Rev. 4854 — tela de COLHER assinaturas (na hora, por link/WhatsApp ou e-mail)
+  const [colherEnvId, setColherEnvId] = useState<number | null>(null);
   const [fcsignSigs, setFcsignSigs] = useState<{ nome: string; email: string }[]>([
     { nome: contrato.empresa?.responsavelNome || contrato.empresa?.razaoSocial || "", email: contrato.empresa?.email || "" },
     { nome: (usuarioLogado as any)?.name || (usuarioLogado as any)?.nome || "", email: (usuarioLogado as any)?.email || "" },
@@ -3386,6 +3388,12 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
 
   const criarEnvelopeMut = trpc.integrasign.criarEnvelope.useMutation();
   const enviarEnvelopeMut = trpc.integrasign.enviarParaAssinatura.useMutation();
+  // Rev. 4854 — colher assinaturas: envelope ao vivo (atualiza a cada 5s enquanto aberto)
+  const colherEnv = trpc.integrasign.getEnvelope.useQuery(
+    { companyId: contrato.companyId, id: colherEnvId ?? 0 },
+    { enabled: !!colherEnvId, refetchInterval: 5000 }
+  );
+  const reenviarEmailMut = trpc.integrasign.reenviarNotificacao.useMutation();
   const handleFcsign = async () => {
     const [contratada, elaborador, gestor] = fcsignSigs;
     if (!contratada.nome.trim()) { toast.error("Informe o nome do responsável da contratada."); return; }
@@ -3407,12 +3415,13 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
           ...(!gestorMesmo ? [{ papel: "gestor_projeto" as const, ordemAssinatura: 3, nome: gestor.nome.trim(), email: gestor.email.trim(), cargo: "Gestor do Contrato", empresaNome: "Contratante" }] : []),
         ],
       } as any);
-      // Rev. 4851 — envia AUTOMATICAMENTE: gera/ativa os links de todos (e
-      // dispara e-mail só pra quem tem e-mail). Nada de clicar "enviar" depois.
-      await enviarEnvelopeMut.mutateAsync({ companyId: contrato.companyId, envelopeId: env.id, enviarEmail: true } as any);
-      toast.success("Envelope criado e enviado! Links de assinatura ativos — quem é do sistema recebe o aviso ao entrar.");
+      // Rev. 4854 — NÃO envia nada automaticamente (pedido do usuário): só
+      // ativa os links e abre a tela de COLHER assinaturas — lá o usuário
+      // escolhe por signatário: assinar na hora, link/WhatsApp ou e-mail.
+      await enviarEnvelopeMut.mutateAsync({ companyId: contrato.companyId, envelopeId: env.id, enviarEmail: false } as any);
       setFcsignOpen(false);
-      navigate(`/integrasign?envelope=${env?.id ?? ""}`);
+      setColherEnvId(env.id);
+      toast.success("Links de assinatura ativos! Agora é só colher as assinaturas.");
     } catch (e: any) {
       toast.error(e?.message || "Erro ao criar/enviar envelope");
     }
@@ -3592,6 +3601,104 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
               Criar e gerar links de assinatura
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 4854 — COLHER ASSINATURAS: assinar na hora, link/WhatsApp ou e-mail */}
+      <Dialog open={!!colherEnvId} onOpenChange={(o) => { if (!o) setColherEnvId(null); }}>
+        <DialogContent className="max-w-lg p-0 gap-0 overflow-y-auto max-h-[92dvh] rounded-2xl">
+          <div className="bg-gradient-to-br from-[#0f2027] via-[#1B2A4A] to-teal-800 px-5 pt-5 pb-4 text-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2.5 text-white text-base">
+                <span className="rounded-xl bg-white/15 p-2 backdrop-blur-sm"><PenLine className="w-4 h-4" /></span>
+                Colher assinaturas
+              </DialogTitle>
+            </DialogHeader>
+            <p className="mt-2 text-[11px] leading-relaxed text-teal-100/90 break-words">
+              Nada foi enviado ainda. Para cada pessoa você escolhe: <b>assinar agora</b> (se estiver
+              aqui com você), mandar o <b>link pelo WhatsApp</b> ou disparar por <b>e-mail</b>. A ordem é
+              respeitada — o próximo só assina depois do anterior.
+            </p>
+          </div>
+
+          <div className="px-5 py-4 space-y-2.5 bg-slate-50/60">
+            {colherEnv.isLoading && <div className="flex justify-center p-6"><Loader2 className="w-5 h-5 animate-spin text-teal-600" /></div>}
+            {(() => {
+              const sigs: any[] = ((colherEnv.data as any)?.signatarios || []);
+              const obrig = sigs.filter((s: any) => s.papel !== "testemunha").sort((a: any, b: any) => a.ordemAssinatura - b.ordemAssinatura);
+              const atualId = obrig.find((s: any) => s.status !== "assinado")?.id ?? null;
+              const papelLbl = (s: any) => s.cargo || (s.papel === "fornecedor" ? "Contratada" : s.papel === "diretor" ? "Sócio Administrador" : "Contratante");
+              return obrig.map((s: any, i: number) => {
+                const assinado = s.status === "assinado";
+                const ehAtual = s.id === atualId;
+                const link = `${window.location.origin}/integrasign/assinar/${s.token}`;
+                const zapTxt = encodeURIComponent(`Olá, ${s.nome}! Segue o link para conferir e assinar o boletim de medição digitalmente pelo FCSign:\n\n${link}`);
+                return (
+                  <div key={s.id} className={`rounded-2xl border bg-white p-3.5 ${ehAtual ? "border-teal-300 ring-2 ring-teal-100" : assinado ? "border-emerald-200" : "border-slate-200 opacity-70"}`}>
+                    <div className="flex items-center gap-2.5">
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${assinado ? "bg-emerald-500" : ehAtual ? "bg-teal-600" : "bg-slate-300"}`}>
+                        {assinado ? <Check className="w-4 h-4" /> : i + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 break-words leading-tight">{s.nome}</p>
+                        <p className="text-[11px] text-slate-500">{papelLbl(s)}{s.email ? ` · ${s.email}` : " · sem e-mail (assina pelo link)"}</p>
+                      </div>
+                      {assinado && <span className="text-[10px] font-medium text-emerald-600">Assinado ✓</span>}
+                      {!assinado && !ehAtual && <span className="text-[10px] text-slate-400">aguarda a vez</span>}
+                    </div>
+                    {!assinado && (
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        <Button size="sm" className="h-8 text-xs bg-teal-600 hover:bg-teal-700 text-white" disabled={!ehAtual}
+                          title={ehAtual ? "Colher a assinatura agora, neste aparelho" : "Ainda não é a vez desta pessoa"}
+                          onClick={() => window.open(link, "_blank", "noopener")}>
+                          <PenLine className="w-3.5 h-3.5 mr-1" /> Assinar agora
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 text-xs"
+                          onClick={async () => { try { await navigator.clipboard.writeText(link); toast.success("Link copiado!"); } catch { toast.error("Não foi possível copiar"); } }}>
+                          <Link2 className="w-3.5 h-3.5 mr-1" /> Copiar link
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                          onClick={() => window.open(`https://wa.me/?text=${zapTxt}`, "_blank", "noopener")}>
+                          <Send className="w-3.5 h-3.5 mr-1" /> WhatsApp
+                        </Button>
+                        {s.email && (
+                          <Button size="sm" variant="outline" className="h-8 text-xs" disabled={reenviarEmailMut.isPending}
+                            onClick={async () => {
+                              try {
+                                await reenviarEmailMut.mutateAsync({ companyId: contrato.companyId, signatarioId: s.id });
+                                colherEnv.refetch();
+                                toast.success(`E-mail enviado para ${s.email}`);
+                              } catch (e: any) { toast.error(e?.message || "Erro ao enviar e-mail"); }
+                            }}>
+                            <Mail className="w-3.5 h-3.5 mr-1" /> Enviar e-mail
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()}
+            {(colherEnv.data as any)?.status === "concluido" && (
+              <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-3 text-center text-sm font-medium text-emerald-700">
+                Todas as assinaturas colhidas — medição aprovada automaticamente! 🎉
+              </div>
+            )}
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              Esta tela atualiza sozinha. Quando alguém assina, o próximo é liberado na hora — e quem
+              tem acesso ao sistema também recebe o aviso ao entrar. Na tela de assinatura a pessoa vê
+              o documento completo (todas as páginas) e a rubrica dela sai em cada página do PDF.
+            </p>
+          </div>
+
+          <DialogFooter className="px-5 pb-4 bg-slate-50/60 flex-row gap-2">
+            <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate(`/integrasign?envelope=${colherEnvId}`)}>
+              Abrir no FCSign
+            </Button>
+            <Button size="sm" className="flex-1 bg-[#1B2A4A] hover:bg-[#22376b] text-white" onClick={() => setColherEnvId(null)}>
+              Concluir depois
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

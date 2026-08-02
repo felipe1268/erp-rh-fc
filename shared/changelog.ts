@@ -1,4 +1,59 @@
 /**
+ * Rev. 4855 - BIBLIOTECA CONSULTIVA DE ASSINADOS — TODOS OS MODULOS, POR SETOR
+ *
+ * A aba "Biblioteca de Assinados" do FCSign virou uma plataforma consultiva de
+ * TUDO que e assinado no sistema, catalogado automaticamente em pastas por setor:
+ * - RH & DP: contratos de experiencia e docs do FCSign, Documentos do
+ *   Colaborador assinados, Comunicados Internos com ciencia assinada.
+ * - Seguranca do Trabalho: Ordens de Servico (NR-1) e Permissoes de Trabalho (PT).
+ * - EPI: fichas de entrega de EPI assinadas.
+ * - Terceiros & Medicoes: boletins de medicao e contratos (IntegraSign).
+ * - Planejamento: memorias de calculo de levantamento.
+ * - Compras: ordens de compra assinadas.
+ * Estrutura de pastas (setor > pasta > documento), busca unica em tudo,
+ * cada documento com data, quem assinou e botao para abrir o PDF/registro.
+ * Tudo automatico: assinou em qualquer modulo, entra na Biblioteca sozinho.
+ */
+
+/**
+ * Rev. 4854 - COLHER ASSINATURAS + DOCUMENTO COMPLETO + RUBRICA EM TODAS AS PAGINAS
+ *
+ * - "Assinar no FCSign" NAO envia mais nada automaticamente: cria o envelope,
+ *   ativa os links e abre a tela "Colher assinaturas" ali mesmo.
+ * - Nessa tela, por signatario (respeitando a ordem): ASSINAR AGORA (colhe a
+ *   assinatura na hora, no proprio aparelho), COPIAR LINK, WHATSAPP ou
+ *   ENVIAR E-MAIL (opcional, por pessoa). Atualiza sozinha a cada 5s — quando
+ *   um assina, o proximo e liberado na hora.
+ * - Tela publica de assinatura agora mostra o DOCUMENTO DE VERDADE:
+ *   - o boletim (HTML) renderizado formatado (antes aparecia o codigo cru);
+ *   - botao "Ver documento completo (PDF)" — o mesmo PDF oficial da medicao
+ *     com todas as paginas (planilha, retencoes e levantamento com fotos),
+ *     acessivel pelo token do signatario (rota publica nova).
+ * - RUBRICA EM TODAS AS PAGINAS: a rubrica de cada assinante e carimbada no
+ *   rodape de todas as paginas do PDF do boletim.
+ */
+
+/**
+ * Rev. 4853 - MODULO FCSIGN: CENTRAL DE ASSINATURAS + BIBLIOTECA DE ASSINADOS
+ *
+ * - Novo modulo "FCSign" no hub inicial (azulejo teal com caneta), com menu
+ *   proprio e toggle em Configuracoes -> Modulos do Sistema. Reusa a
+ *   permissao de Terceiros (rota /integrasign), sem mudanca de ACL.
+ * - Tela /integrasign totalmente repaginada:
+ *   - Hero em degrade navy->teal com abas "Painel" e "Biblioteca de
+ *     Assinados".
+ *   - Faixa "Sua vez de assinar" (mesma fonte do pop-up global) com botao
+ *     de assinar direto.
+ *   - Cards de status coloridos e CLICAVEIS (filtram a lista): total,
+ *     rascunho, em andamento, concluidos, recusados.
+ *   - Biblioteca = servidor de documentos assinados: busca por titulo,
+ *     cartoes com selo verde, quem assinou, hash SHA-256, acesso aos
+ *     detalhes/auditoria e a pagina publica do documento.
+ * - Comportamento preservado: envio, links, WhatsApp, cancelar, excluir,
+ *   nova versao e socio administrador continuam identicos.
+ */
+
+/**
  * Rev. 4852 - DIALOG DE ASSINATURA DO BOLETIM REPAGINADO (TIMELINE COLORIDA)
  *
  * - Visual moderno: cabecalho em degrade navy/azul com icone e resumo curto.

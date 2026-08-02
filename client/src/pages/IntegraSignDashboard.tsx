@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw, Trash2, Link2, Check, Pencil, MessageCircle, Crown } from "lucide-react";
+import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, ChevronDown, RotateCcw, Trash2, Link2, Check, Pencil, MessageCircle, Crown, Library, LayoutDashboard, Search, ShieldCheck, ExternalLink, Folder, FolderOpen, Users, HardHat, ShoppingCart, CalendarRange, Handshake } from "lucide-react";
 import { toast } from "sonner";
 
 function papelLabel(p: string) {
@@ -54,6 +54,9 @@ export default function IntegraSignDashboard() {
   const companyId = parseInt(selectedCompanyId) || 0;
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [selectedEnvelope, setSelectedEnvelope] = useState<number | null>(null);
+  // Rev. 4853 — módulo FCSign: abas Painel × Biblioteca de assinados
+  const [aba, setAba] = useState<"painel" | "biblioteca">("painel");
+  const [busca, setBusca] = useState("");
   const [location] = useLocation();
   // Auto-seleciona o envelope vindo da query string (?envelope=ID), útil quando
   // o usuário é redirecionado de outras telas após criar o envelope.
@@ -72,6 +75,15 @@ export default function IntegraSignDashboard() {
     { companyId, status: statusFilter === "todos" ? undefined : statusFilter },
     { enabled: companyId > 0 }
   );
+  // Rev. 4855 — Biblioteca consultiva: TUDO que foi assinado no sistema,
+  // catalogado automaticamente por setor e pasta (todas as fontes).
+  const biblioteca = trpc.integrasign.bibliotecaAssinados.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && aba === "biblioteca" }
+  );
+  const [setorAberto, setSetorAberto] = useState<string | null>(null);
+  // Minha vez de assinar (mesma fonte do pop-up global)
+  const pendentesMe = trpc.integrasign.pendingForCurrentUser.useQuery(undefined, { refetchOnWindowFocus: true });
 
   const envelopeDetail = trpc.integrasign.getEnvelope.useQuery(
     { companyId, id: selectedEnvelope! },
@@ -245,56 +257,113 @@ export default function IntegraSignDashboard() {
     recusado: envelopes.data?.filter((e: any) => e.status === "recusado").length || 0,
   };
 
+  const minhasPendencias = (pendentesMe.data ?? []) as any[];
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <PenLine className="h-7 w-7 text-blue-600" />
-          <div>
-            <h1 className="text-2xl font-bold">IntegraSign</h1>
-            <p className="text-sm text-gray-500">Gestão de Assinaturas Eletrônicas de Contratos</p>
+    <div className="min-h-full bg-slate-50">
+      {/* Hero */}
+      <div className="bg-gradient-to-br from-[#0f2027] via-[#1B2A4A] to-teal-800 px-6 pt-6 pb-16 text-white">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="rounded-2xl bg-white/10 p-3 backdrop-blur-sm ring-1 ring-white/15"><PenLine className="h-6 w-6 text-teal-300" /></span>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">FCSign</h1>
+              <p className="text-sm text-teal-100/80">Central de assinaturas e biblioteca de documentos assinados</p>
+            </div>
           </div>
+          <Button variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white" onClick={() => { envelopes.refetch(); pendentesMe.refetch(); }}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Atualizar
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={() => envelopes.refetch()}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Atualizar
-        </Button>
+
+        {/* Abas */}
+        <div className="mt-5 inline-flex rounded-xl bg-white/10 p-1 backdrop-blur-sm ring-1 ring-white/15">
+          {[
+            { id: "painel" as const, label: "Painel", Icon: LayoutDashboard },
+            { id: "biblioteca" as const, label: "Biblioteca de Assinados", Icon: Library },
+          ].map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setAba(id)}
+              className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition ${
+                aba === id ? "bg-white text-[#1B2A4A] shadow" : "text-teal-100/90 hover:bg-white/10"
+              }`}
+            >
+              <Icon className="h-4 w-4" /> {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {[
-          { label: "Total", value: stats.total, color: "text-gray-700" },
-          { label: "Rascunho", value: stats.rascunho, color: "text-gray-500" },
-          { label: "Em Andamento", value: stats.enviado, color: "text-blue-600" },
-          { label: "Concluídos", value: stats.concluido, color: "text-green-600" },
-          { label: "Recusados", value: stats.recusado, color: "text-red-600" },
-        ].map((s) => (
-          <Card key={s.label}>
-            <CardContent className="p-4 text-center">
-              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-              <p className="text-xs text-gray-500">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <div className="px-6 -mt-10 pb-8 space-y-5">
+        {/* Minha vez de assinar */}
+        {minhasPendencias.length > 0 && (
+          <div className="rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-4 shadow-sm">
+            <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-60" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+              </span>
+              Sua vez de assinar ({minhasPendencias.length})
+            </div>
+            <div className="mt-2 space-y-1.5">
+              {minhasPendencias.map((p: any) => (
+                <div key={p.signatarioId} className="flex items-center gap-2 rounded-xl bg-white/80 border border-amber-200 px-3 py-2">
+                  <FileText className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span className="flex-1 min-w-0 text-sm text-slate-800 truncate" title={p.titulo}>{p.titulo}</span>
+                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white h-8" onClick={() => window.open(`${window.location.origin}/integrasign/assinar/${p.token}`, "_blank", "noopener")}>
+                    <PenLine className="h-3.5 w-3.5 mr-1" /> Assinar agora
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-      <div className="flex items-center gap-4">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filtrar status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="rascunho">Rascunho</SelectItem>
-            <SelectItem value="enviado">Enviado</SelectItem>
-            <SelectItem value="concluido">Concluído</SelectItem>
-            <SelectItem value="recusado">Recusado</SelectItem>
-            <SelectItem value="cancelado">Cancelado</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+        {aba === "painel" && (<>
+        {/* Cards de status clicáveis (filtram a lista) */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {[
+            { label: "Total", value: stats.total, filtro: "todos", grad: "from-slate-600 to-slate-800", Icon: FileText },
+            { label: "Rascunho", value: stats.rascunho, filtro: "rascunho", grad: "from-gray-400 to-gray-600", Icon: Pencil },
+            { label: "Em Andamento", value: stats.enviado, filtro: "enviado", grad: "from-blue-500 to-indigo-600", Icon: Clock },
+            { label: "Concluídos", value: stats.concluido, filtro: "concluido", grad: "from-emerald-500 to-green-700", Icon: CheckCircle2 },
+            { label: "Recusados", value: stats.recusado, filtro: "recusado", grad: "from-rose-500 to-red-700", Icon: XCircle },
+          ].map((s) => (
+            <button
+              key={s.label}
+              onClick={() => setStatusFilter(s.filtro)}
+              className={`rounded-2xl bg-gradient-to-br ${s.grad} p-3.5 text-left text-white shadow-md transition hover:scale-[1.02] ${
+                statusFilter === s.filtro ? "ring-4 ring-teal-300/60" : "opacity-95"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <s.Icon className="h-4 w-4 opacity-80" />
+                <span className="text-2xl font-bold leading-none">{s.value}</span>
+              </div>
+              <p className="mt-2 text-[11px] font-medium uppercase tracking-wide opacity-90">{s.label}</p>
+            </button>
+          ))}
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="flex items-center gap-4">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-48 bg-white">
+              <SelectValue placeholder="Filtrar status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="rascunho">Rascunho</SelectItem>
+              <SelectItem value="enviado">Enviado</SelectItem>
+              <SelectItem value="concluido">Concluído</SelectItem>
+              <SelectItem value="recusado">Recusado</SelectItem>
+              <SelectItem value="cancelado">Cancelado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle className="text-base">Envelopes</CardTitle></CardHeader>
           <CardContent>
@@ -553,6 +622,135 @@ export default function IntegraSignDashboard() {
           </CardContent>
         </Card>
       </div>
+      </>)}
+
+      {/* Rev. 4855 — Biblioteca consultiva: pastas por setor, tudo automático */}
+      {aba === "biblioteca" && (() => {
+        const SETOR_META: Record<string, { Icon: any; cor: string; bg: string }> = {
+          "RH & DP": { Icon: Users, cor: "text-indigo-600", bg: "bg-indigo-50 ring-indigo-100" },
+          "Segurança do Trabalho": { Icon: HardHat, cor: "text-amber-600", bg: "bg-amber-50 ring-amber-100" },
+          "EPI": { Icon: Shield, cor: "text-orange-600", bg: "bg-orange-50 ring-orange-100" },
+          "Terceiros & Medições": { Icon: Handshake, cor: "text-teal-600", bg: "bg-teal-50 ring-teal-100" },
+          "Planejamento": { Icon: CalendarRange, cor: "text-blue-600", bg: "bg-blue-50 ring-blue-100" },
+          "Compras": { Icon: ShoppingCart, cor: "text-emerald-600", bg: "bg-emerald-50 ring-emerald-100" },
+        };
+        const ORDEM_SETORES = ["RH & DP", "Segurança do Trabalho", "EPI", "Terceiros & Medições", "Planejamento", "Compras"];
+        const q = busca.trim().toLowerCase();
+        const todos = (biblioteca.data || []) as any[];
+        const filtrados = !q ? todos : todos.filter((it) =>
+          [it.titulo, it.setor, it.pasta, ...(it.pessoas || [])].join(" ").toLowerCase().includes(q)
+        );
+        const porSetor = new Map<string, any[]>();
+        for (const it of filtrados) {
+          if (!porSetor.has(it.setor)) porSetor.set(it.setor, []);
+          porSetor.get(it.setor)!.push(it);
+        }
+        const setores = [
+          ...ORDEM_SETORES.filter((s) => porSetor.has(s)),
+          ...Array.from(porSetor.keys()).filter((s) => !ORDEM_SETORES.includes(s)),
+        ];
+        const fmtData = (d: string | null) => {
+          if (!d) return "—";
+          const s = String(d);
+          const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+          return iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : s;
+        };
+        return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[220px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                className="pl-9 bg-white"
+                placeholder="Buscar em tudo que foi assinado..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+              />
+            </div>
+            <span className="text-xs text-slate-500">
+              {filtrados.length} documento(s) assinado(s) · {setores.length} setor(es)
+            </span>
+          </div>
+
+          {biblioteca.isLoading && (
+            <div className="flex justify-center p-10"><Loader2 className="h-6 w-6 animate-spin text-teal-600" /></div>
+          )}
+          {!biblioteca.isLoading && filtrados.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">
+              <Library className="mx-auto h-8 w-8 mb-2" />
+              {q ? "Nada encontrado com essa busca." : "Nenhum documento assinado ainda — tudo que for assinado em qualquer módulo entra aqui automaticamente."}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {setores.map((setor) => {
+              const meta = SETOR_META[setor] || { Icon: Folder, cor: "text-slate-600", bg: "bg-slate-50 ring-slate-100" };
+              const itens = porSetor.get(setor)!;
+              const aberto = setorAberto === setor || !!q;
+              const pastas = new Map<string, any[]>();
+              for (const it of itens) {
+                if (!pastas.has(it.pasta)) pastas.set(it.pasta, []);
+                pastas.get(it.pasta)!.push(it);
+              }
+              return (
+                <div key={setor} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <button
+                    className="w-full flex items-center gap-3 p-4 text-left hover:bg-slate-50 transition"
+                    onClick={() => setSetorAberto(aberto && !q ? null : setor)}
+                  >
+                    <span className={`rounded-xl p-2.5 ring-1 ${meta.bg}`}>
+                      {aberto ? <FolderOpen className={`h-5 w-5 ${meta.cor}`} /> : <Folder className={`h-5 w-5 ${meta.cor}`} />}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800">{setor}</p>
+                      <p className="text-[11px] text-slate-400">{pastas.size} pasta(s) · {itens.length} documento(s)</p>
+                    </div>
+                    {aberto ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+                  </button>
+                  {aberto && (
+                    <div className="border-t border-slate-100 px-4 pb-4 space-y-3">
+                      {Array.from(pastas.entries()).map(([pasta, docs]) => (
+                        <div key={pasta} className="pt-3">
+                          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">
+                            <Folder className="h-3.5 w-3.5" /> {pasta} <span className="font-normal">({docs.length})</span>
+                          </p>
+                          <div className="space-y-1.5">
+                            {docs.map((it: any, i: number) => (
+                              <div key={`${pasta}-${i}`} className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2 hover:border-teal-200 transition">
+                                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-slate-700 break-words leading-snug">{it.titulo}</p>
+                                  <p className="text-[10px] text-slate-400 break-words">
+                                    {fmtData(it.data)}{it.pessoas?.length ? ` · ${it.pessoas.slice(0, 3).join(", ")}${it.pessoas.length > 3 ? ` +${it.pessoas.length - 3}` : ""}` : ""}
+                                  </p>
+                                </div>
+                                {it.envelopeId ? (
+                                  <Button size="sm" variant="outline" className="h-7 text-[11px] border-teal-200 text-teal-700 hover:bg-teal-50 shrink-0"
+                                    onClick={() => { setAba("painel"); setStatusFilter("concluido"); setSelectedEnvelope(it.envelopeId); }}>
+                                    <Eye className="h-3 w-3 mr-1" /> Ver
+                                  </Button>
+                                ) : it.url ? (
+                                  <Button size="sm" variant="outline" className="h-7 text-[11px] shrink-0"
+                                    onClick={() => window.open(it.url, "_blank", "noopener")}>
+                                    <ExternalLink className="h-3 w-3 mr-1" /> Abrir
+                                  </Button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-300 shrink-0">registro</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        );
+      })()}
 
       <Dialog open={!!cancelDialog} onOpenChange={() => { setCancelDialog(null); setMotivoCancelamento(""); }}>
         <DialogContent>
@@ -654,6 +852,7 @@ export default function IntegraSignDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

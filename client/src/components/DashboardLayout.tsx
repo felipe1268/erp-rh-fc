@@ -788,6 +788,16 @@ const menuSectionsPortalCliente: MenuSection[] = [
   },
 ];
 
+// Rev. 4853 — módulo dedicado FCSign (central de assinaturas + biblioteca)
+const menuSectionsFcsign: MenuSection[] = [
+  {
+    title: "Assinaturas",
+    items: [
+      { icon: PenLine, label: "Central de Assinaturas", path: "/integrasign" },
+    ],
+  },
+];
+
 export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "rh-dp": menuSectionsRHDP,
   "sst": menuSectionsSST,
@@ -813,6 +823,7 @@ export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "curriculos":           menuSectionsCurriculos,
   "oraculo":              menuSectionsOraculo,
   "portal-cliente":       menuSectionsPortalCliente,
+  "fcsign":               menuSectionsFcsign,
   "admin": menuSectionsAdmin,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
@@ -894,6 +905,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "curriculos":           "/curriculos",
   "oraculo":              "/oraculo",
   "portal-cliente":       "/clientes/portal",
+  "fcsign":               "/integrasign",
   "admin": "/admin/telemetria",
   "all": "/painel",
 };
@@ -924,6 +936,7 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "curriculos":           { icon: Briefcase, color: "text-amber-400",  bg: "bg-amber-500/20"  },
   "oraculo":              { icon: Sparkles,  color: "text-violet-400", bg: "bg-violet-500/20" },
   "portal-cliente":       { icon: ShieldCheck, color: "text-indigo-400", bg: "bg-indigo-500/20" },
+  "fcsign":               { icon: PenLine, color: "text-teal-400", bg: "bg-teal-500/20" },
   "admin": { icon: BarChart3, color: "text-red-400", bg: "bg-red-500/20" },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
@@ -1778,6 +1791,8 @@ function DashboardLayoutContent({
     { id: "curriculos",           label: "Currículos",           icon: Briefcase, color: "text-amber-400",  bg: "bg-amber-500/20",  path: "/curriculos",           canSee: () => (permIsAdminMaster || canAccessModule("curriculos"))           && isModEnabled("curriculos") },
     { id: "oraculo",              label: "Oráculo",              icon: Sparkles,  color: "text-violet-400", bg: "bg-violet-500/20", path: "/oraculo",              canSee: () => permIsAdminMaster },
     { id: "portal-cliente",       label: "Portal do Cliente",    icon: ShieldCheck, color: "text-indigo-400", bg: "bg-indigo-500/20", path: "/clientes/portal",     canSee: () => (permIsAdminMaster || canAccessModule("portal-cliente")) && isModEnabled("portal-cliente") },
+    // Rev. 4853 — FCSign reusa a permissão de terceiros (rota /integrasign vive em MODULE_DEFINITIONS de terceiros)
+    { id: "fcsign", label: "FCSign", icon: PenLine, color: "text-teal-400", bg: "bg-teal-500/20", path: "/integrasign", canSee: () => (permIsAdminMaster || canAccessModule("terceiros") || canAccessModule("fcsign")) && isModEnabled("fcsign") },
   ];
   const visibleModuleDefs = ALL_MODULE_DEFS.filter(m => m.canSee());
   const sortedModuleDefs = moduleOrder.length === 0 ? visibleModuleDefs :

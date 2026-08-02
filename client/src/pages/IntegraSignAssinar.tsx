@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, CheckCircle2, XCircle, FileText, PenLine, AlertTriangle, Shield, Download } from "lucide-react";
 import { formatDateTime, formatDate } from "@/lib/dateUtils";
+import { toast } from "sonner";
 import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
 
 /**
@@ -93,6 +94,33 @@ export default function IntegraSignAssinar() {
 
   const assinarMut = trpc.integrasign.assinarDocumento.useMutation();
   const recusarMut = trpc.integrasign.recusarDocumento.useMutation();
+
+  // Rev. 4854 — documento completo do boletim (todas as páginas) para conferência.
+  // iOS: abrir a aba ANTES do fetch (senão o Safari bloqueia como pop-up).
+  const [pdfCompletoLoading, setPdfCompletoLoading] = useState(false);
+  const handleVerBoletimPdf = async () => {
+    setPdfCompletoLoading(true);
+    const win = window.open("about:blank", "_blank");
+    try {
+      const inputPayload = { json: { token } };
+      const res = await fetch(`/api/trpc/integrasign.gerarBoletimPdfPublico?input=${encodeURIComponent(JSON.stringify(inputPayload))}`);
+      const json = await res.json();
+      const data = json?.result?.data?.json || json?.result?.data;
+      if (!data?.base64) throw new Error("PDF não gerado");
+      const byteChars = atob(data.base64);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteArr], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      if (win && !win.closed) win.location.href = url;
+      else window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) {
+      try { win?.close(); } catch { /* noop */ }
+      toast.error(e?.message || "Erro ao abrir o documento completo");
+    }
+    setPdfCompletoLoading(false);
+  };
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -506,14 +534,36 @@ export default function IntegraSignAssinar() {
 
         {envelope.textoContrato && (
           <Card>
-            <CardHeader><CardTitle className="text-base">Contrato</CardTitle></CardHeader>
-            <CardContent>
-              <div
-                className="max-h-[500px] overflow-y-auto border rounded-lg p-6 bg-white text-sm leading-relaxed whitespace-pre-wrap"
-                style={{ fontFamily: "Georgia, serif" }}
-              >
-                {envelope.textoContrato}
-              </div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">Documento</CardTitle>
+              {(doc.data as any)?.temBoletimPdf && (
+                <Button size="sm" variant="outline" className="border-blue-200 text-blue-700" disabled={pdfCompletoLoading} onClick={handleVerBoletimPdf}>
+                  {pdfCompletoLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <FileText className="h-4 w-4 mr-1.5" />}
+                  Ver documento completo (PDF)
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(doc.data as any)?.temBoletimPdf && (
+                <p className="text-xs text-gray-500">
+                  Confira abaixo o resumo do boletim. O botão acima abre o documento completo,
+                  com todas as páginas — planilha da medição, retenções e levantamento de campo com fotos.
+                </p>
+              )}
+              {/* Rev. 4854 — boletim é HTML gerado no servidor; renderiza formatado */}
+              {String(envelope.textoContrato).trimStart().startsWith("<") ? (
+                <div
+                  className="max-h-[500px] overflow-y-auto border rounded-lg p-4 bg-white text-sm leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: envelope.textoContrato }}
+                />
+              ) : (
+                <div
+                  className="max-h-[500px] overflow-y-auto border rounded-lg p-6 bg-white text-sm leading-relaxed whitespace-pre-wrap"
+                  style={{ fontFamily: "Georgia, serif" }}
+                >
+                  {envelope.textoContrato}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

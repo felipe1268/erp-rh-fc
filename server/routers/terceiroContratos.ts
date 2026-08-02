@@ -3250,632 +3250,7 @@ export const terceiroContratosRouter = router({
       const db = await getDb();
       // Rev. 4827 — tenancy guard (review): faltava validar o acesso do chamador.
       await _assertCompanyAccess(ctx.user, input.companyId);
-      const [medicao] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
-      if (!medicao) throw new Error("Medição não encontrada");
-      // Rev. 4834 — tenancy em TODAS as queries (review): contrato/empresa/obra/itens escopados por companyId.
-      const [contrato] = await db.select().from(terceiroContratos).where(and(eq(terceiroContratos.id, medicao.contratoId), eq(terceiroContratos.companyId, input.companyId)));
-      if (!contrato) throw new Error("Contrato não encontrado");
-      const [empresa] = await db.select().from(empresasTerceiras).where(and(eq(empresasTerceiras.id, contrato.empresaTerceiraId), eq(empresasTerceiras.companyId, input.companyId)));
-      const [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
-      let obraNome = "";
-      if (contrato.obraId) {
-        const [obra] = await db.select().from(obras).where(and(eq(obras.id, contrato.obraId), eq(obras.companyId, input.companyId)));
-        if (obra) obraNome = obra.nome;
-      }
-      const itensMedicao = await db.select().from(terceiroMedicaoItens).where(and(eq(terceiroMedicaoItens.medicaoId, input.medicaoId), eq(terceiroMedicaoItens.companyId, input.companyId)));
-      const itensContrato = await db.select().from(terceiroContratoItens).where(and(eq(terceiroContratoItens.contratoId, contrato.id), eq(terceiroContratoItens.companyId, input.companyId))).orderBy(asc(terceiroContratoItens.ordem));
-
-      const itensEnriquecidos = itensMedicao.map(im => {
-        const ci = itensContrato.find(c => c.id === im.contratoItemId);
-        return {
-          descricao: ci?.descricao || im.descricao || "",
-          eapCodigo: (ci as any)?.eapCodigo || "",
-          unidade: ci?.unidade || "-",
-          quantidade: n(ci?.quantidade),
-          valorUnitario: n(ci?.valorUnitario),
-          valorTotal: n(ci?.valorTotal),
-          percAnterior: n(im.percentualAcumuladoAnterior),
-          percPeriodo: n(im.percentualMedidoPeriodo),
-          percAcumulado: n(im.percentualAcumuladoAnterior) + n(im.percentualMedidoPeriodo), // Rev. 4800 — acumulado MEDIDO
-          valorPeriodo: n(im.valorMedidoPeriodo),
-          valorAcumulado: n(im.valorAcumulado),
-        };
-      });
-      itensEnriquecidos.sort((a, b) => a.eapCodigo.localeCompare(b.eapCodigo, undefined, { numeric: true }));
-
-      let hierMap = new Map<string, string>();
-      try {
-        const orcamentoId = contrato.orcamentoId || (itensContrato.length > 0 ? (itensContrato[0] as any).orcamentoItemId ? undefined : undefined : undefined);
-        const eapCodes = [...new Set(itensContrato.map((it: any) => it.eapCodigo).filter(Boolean))] as string[];
-        if (eapCodes.length > 0) {
-          const parentEaps = new Set<string>();
-          for (const eap of eapCodes) {
-            const parts = eap.split(".");
-            for (let i = 1; i < parts.length; i++) parentEaps.add(parts.slice(0, i).join("."));
-          }
-          const allEaps = [...new Set([...eapCodes, ...parentEaps])];
-          if (allEaps.length > 0) {
-            const atividadesRows = await db.select({ eapCodigo: planejamentoAtividades.eapCodigo, nome: planejamentoAtividades.nome })
-              .from(planejamentoAtividades)
-              .where(inArray(planejamentoAtividades.eapCodigo, allEaps));
-            for (const a of atividadesRows) { if (a.eapCodigo && a.nome) hierMap.set(a.eapCodigo, a.nome); }
-          }
-          if (hierMap.size === 0 && contrato.orcamentoId) {
-            const orcRows = await db.select({ eapCodigo: orcamentoItens.eapCodigo, descricao: orcamentoItens.descricao })
-              .from(orcamentoItens)
-              .where(and(eq(orcamentoItens.orcamentoId, contrato.orcamentoId), inArray(orcamentoItens.eapCodigo, allEaps)));
-            for (const o of orcRows) { if (o.eapCodigo && o.descricao) hierMap.set(o.eapCodigo, o.descricao); }
-          }
-        }
-      } catch {}
-
-      const totalValorContrato = itensEnriquecidos.reduce((s, i) => s + i.valorTotal, 0);
-      const totalValorPeriodo = itensEnriquecidos.reduce((s, i) => s + i.valorPeriodo, 0);
-      const totalValorAcumulado = itensEnriquecidos.reduce((s, i) => s + i.valorAcumulado, 0);
-
-      const pISS = n((contrato as any).percISS);
-      const pINSS = n((contrato as any).percINSS);
-      const pIRRF = n((contrato as any).percIRRF);
-      const pOutras = n((contrato as any).percOutrasRetencoes);
-      const pRetTecnica = n((contrato as any).percRetencaoTecnica);
-      const retISS = pISS > 0 ? totalValorPeriodo * pISS / 100 : n((medicao as any).retencaoISS);
-      const retINSS = pINSS > 0 ? totalValorPeriodo * pINSS / 100 : n((medicao as any).retencaoINSS);
-      const retIRRF = pIRRF > 0 ? totalValorPeriodo * pIRRF / 100 : n((medicao as any).retencaoIRRF);
-      const retOutras = pOutras > 0 ? totalValorPeriodo * pOutras / 100 : n((medicao as any).outrasRetencoes);
-      const retTecnica = pRetTecnica > 0 ? totalValorPeriodo * pRetTecnica / 100 : n((medicao as any).retencaoTecnica);
-      const descontos = n((medicao as any).descontos);
-      const totalRetencoes = retISS + retINSS + retIRRF + retOutras + retTecnica;
-      // Rev. 4800 — FDs do período no relatório: lista item a item o que foi
-      // descontado (descrição + data + valor), para não haver dúvida.
-      const fdsDaMedicao = await db.select().from(terceiroMedicaoFds)
-        .where(and(
-          eq(terceiroMedicaoFds.medicaoId, input.medicaoId),
-          eq(terceiroMedicaoFds.companyId, input.companyId),
-        )).orderBy(asc(terceiroMedicaoFds.dataFd), asc(terceiroMedicaoFds.id));
-      const totalFdPdf = fdsDaMedicao.reduce((s: number, f: any) => s + n(f.valor), 0);
-      const valorLiquido = totalValorPeriodo - totalRetencoes - descontos - totalFdPdf;
-
-      let retTecnicaAcumulada = 0;
-      if (pRetTecnica > 0) {
-        const todasMedicoes = await db.select().from(terceiroMedicoes)
-          .where(and(
-            eq(terceiroMedicoes.contratoId, (medicao as any).contratoId),
-            eq(terceiroMedicoes.companyId, input.companyId),
-          ));
-        retTecnicaAcumulada = todasMedicoes
-          .filter((md: any) => md.status === "aprovada" || md.status === "paga")
-          .reduce((acc: number, md: any) => acc + n(md.valorMedido) * pRetTecnica / 100, 0);
-      }
-
-      const PDFDocument = (await import("pdfkit")).default;
-      const fs = await import("fs");
-      const path = await import("path");
-
-      function resolveLogoSource(logoUrl: string | null | undefined): string | Buffer | null {
-        if (!logoUrl) return null;
-        if (logoUrl.startsWith("data:image")) {
-          const matches = logoUrl.match(/^data:image\/\w+;base64,(.+)$/);
-          if (matches?.[1]) return Buffer.from(matches[1], "base64");
-          return null;
-        }
-        if (logoUrl.startsWith("/uploads/")) {
-          const localPath = path.join(process.cwd(), "server", logoUrl);
-          if (fs.existsSync(localPath)) return localPath;
-        }
-        // Rev. 4796 — logo em asset público (ex.: /logo-fc.jpg). Anti-traversal:
-        // resolve e EXIGE que o caminho final continue dentro do diretório base.
-        if (logoUrl.startsWith("/")) {
-          for (const base of ["client/public", "dist/public"]) {
-            const baseDir = path.resolve(process.cwd(), base);
-            const p = path.resolve(baseDir, "." + path.posix.normalize(logoUrl));
-            if (p.startsWith(baseDir + path.sep) && fs.existsSync(p)) return p;
-          }
-        }
-        return null;
-      }
-
-      // Rev. 4793 — assinatura digital (FCSign): mostra no PDF o status do envelope
-      let envelopeAss: any = null;
-      try {
-        const envs = await db.select().from(integrasignEnvelopes)
-          .where(and(
-            eq(integrasignEnvelopes.companyId, input.companyId),
-            eq((integrasignEnvelopes as any).medicaoTerceiroId, input.medicaoId),
-            sql`${integrasignEnvelopes.excluidoEm} IS NULL`,
-          )).orderBy(desc(integrasignEnvelopes.id)).limit(1);
-        envelopeAss = envs[0] ?? null;
-      } catch { /* coluna pode não existir ainda */ }
-      let signatariosAss: any[] = [];
-      if (envelopeAss) {
-        try {
-          signatariosAss = await db.select().from(integrasignSignatarios)
-            .where(eq(integrasignSignatarios.envelopeId, envelopeAss.id))
-            .orderBy(asc(integrasignSignatarios.ordemAssinatura));
-        } catch {}
-      }
-
-      // Rev. 4834 — HISTÓRICO DE LEVANTAMENTO DE CAMPO no boletim (documento
-      // único, pedido do usuário): todos os levantamentos vinculados a esta
-      // medição, com contornos medidos e registro fotográfico embutidos.
-      type FotoPdf = { legenda: string; buffer: Buffer | null };
-      type CampoPdf = { titulo: string; criadoPorNome: string; contornos: any[]; fotos: FotoPdf[] };
-      const camposPdf: CampoPdf[] = [];
-      try {
-        // O vínculo principal vive na MEDIÇÃO (terceiro_medicoes.levantamento_campo_id);
-        // campo.medicaoId nem sempre é populado — busca pelos dois caminhos.
-        const levCampoId = Number((medicao as any).levantamentoCampoId || 0);
-        const campos = await db.select().from(medicaoCampo).where(and(
-          eq(medicaoCampo.companyId, input.companyId),
-          eq(medicaoCampo.origem, "terceiro"),
-          sql`${medicaoCampo.deletedAt} IS NULL`,
-          levCampoId > 0
-            ? sql`(${medicaoCampo.id} = ${levCampoId} OR ${(medicaoCampo as any).medicaoId} = ${input.medicaoId})`
-            : eq((medicaoCampo as any).medicaoId, input.medicaoId),
-        )).orderBy(asc(medicaoCampo.numero));
-        const fs2 = await import("fs");
-        const path2 = await import("path");
-        const uploadsRoot = path2.join(process.cwd(), "server/uploads");
-        const resolveFotoBuffer = async (url: string | null): Promise<Buffer | null> => {
-          if (!url || !url.startsWith("/uploads/")) return null;
-          // PDFKit só embute JPEG/PNG — vídeos (.mov/.mp4) e outros formatos ficam de fora.
-          if (!/\.(jpe?g|png)$/i.test(url)) return null;
-          const key = decodeURIComponent(url.replace(/^\/uploads\//, ""));
-          // Rev. 4834 — anti-IDOR (review): a chave DEVE pertencer ao tenant deste
-          // boletim (prefixo canônico das fotos de levantamento). Qualquer path
-          // fora desse escopo (ex.: arquivo de outra empresa) é rejeitado.
-          if (!key.startsWith(`medicao-campo/${input.companyId}/`)) return null;
-          const p = path2.resolve(uploadsRoot, key);
-          // anti-traversal: só dentro do diretório de uploads
-          if (p !== uploadsRoot && !p.startsWith(uploadsRoot + path2.sep)) return null;
-          try {
-            let buf: Buffer | null = null;
-            buf = await fs2.promises.readFile(p).catch(() => null);
-            if (!buf) {
-              const { dbRetrieve } = await import("../storage");
-              const r = await dbRetrieve(key);
-              buf = r?.buffer ?? null;
-            }
-            if (!buf) return null;
-            // Rev. 4834 — fotos de celular chegam com 4-6MB cada; sem compressão o
-            // PDF passava de 17MB (estoura o proxy no iPad). Reduz p/ 1280px JPEG.
-            try {
-              const sharp = (await import("sharp")).default;
-              return await sharp(buf).rotate().resize({ width: 1280, withoutEnlargement: true }).jpeg({ quality: 72 }).toBuffer();
-            } catch { return buf; }
-          } catch { return null; }
-        };
-        for (const campo of campos) {
-          const contornos = await db.select().from(medicaoCampoContornos).where(and(
-            eq(medicaoCampoContornos.medicaoCampoId, campo.id),
-            eq(medicaoCampoContornos.companyId, input.companyId),
-            sql`${medicaoCampoContornos.deletedAt} IS NULL`,
-          )).orderBy(asc(medicaoCampoContornos.tipo), asc(medicaoCampoContornos.numero), asc(medicaoCampoContornos.id));
-          const fotosRows = await db.select().from(medicaoCampoFotos).where(and(
-            eq(medicaoCampoFotos.medicaoCampoId, campo.id),
-            eq(medicaoCampoFotos.companyId, input.companyId),
-            sql`${medicaoCampoFotos.deletedAt} IS NULL`,
-          )).orderBy(asc(medicaoCampoFotos.id));
-          const contornoRotulo = new Map<number, string>(contornos.map((c: any) => [c.id, c.rotulo || c.servico || ""]));
-          const fotos: FotoPdf[] = [];
-          for (const f of fotosRows) {
-            const buffer = await resolveFotoBuffer((f as any).arquivoUrl);
-            fotos.push({
-              legenda: (f as any).legenda || contornoRotulo.get((f as any).contornoId) || "Foto do levantamento",
-              buffer,
-            });
-          }
-          camposPdf.push({
-            titulo: `Nº ${String(campo.numero).padStart(3, "0")}${campo.titulo ? ` — ${campo.titulo}` : ""}`,
-            criadoPorNome: (campo as any).criadoPorNome || "",
-            contornos,
-            fotos,
-          });
-        }
-      } catch (e: any) {
-        console.warn("[gerarPdfMedicao] levantamento de campo indisponível no PDF:", e?.message);
-      }
-
-      return new Promise<{ base64: string; filename: string }>((resolve, reject) => {
-        // Rev. 4793 — PAISAGEM: a medição inteira cabe na largura (qtds medidas
-        // em números + valores), leitura muito mais fácil no iPad e impressa.
-        const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 36, bufferPages: true });
-        const chunks: Buffer[] = [];
-        doc.on("data", (c: Buffer) => chunks.push(c));
-        doc.on("end", () => {
-          const buf = Buffer.concat(chunks);
-          const numStr = String(medicao.numero || 1).padStart(2, "0");
-          resolve({ base64: buf.toString("base64"), filename: `Medicao_${numStr}_${medicao.periodo}.pdf` });
-        });
-        doc.on("error", reject);
-
-        const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-        const PCT = (v: number) => v.toFixed(1) + "%";
-        const mL = 40;
-        const mR = 40;
-        const pageW = doc.page.width - mL - mR;
-        const primary = "#1B3A5C";
-        const accent = "#2980b9";
-
-        const pageBottom = doc.page.height - 44;
-
-        // Rev. 4834 — padrão "Memória de Cálculo" (pedido do usuário): logo GRANDE
-        // centralizado sobre fundo branco + faixa azul-marinho com o título em
-        // caixa alta espaçada. O box da medição fica à direita da faixa.
-        const logoSrc = resolveLogoSource((company as any)?.logoUrl);
-        let logoRendered = false;
-        if (logoSrc) {
-          try { doc.image(logoSrc, doc.page.width / 2 - 60, 10, { fit: [120, 44] }); logoRendered = true; } catch { logoRendered = false; }
-        }
-        if (!logoRendered) {
-          doc.font("Helvetica-Bold").fontSize(18).fillColor(primary)
-            .text(company?.name || "FC Engenharia", 0, 24, { width: doc.page.width, align: "center" });
-        }
-        if (company?.cnpj) {
-          doc.font("Helvetica").fontSize(6.5).fillColor("#7a8699")
-            .text(`${company?.name || "FC Engenharia"} · CNPJ: ${company.cnpj}`, 0, 56, { width: doc.page.width, align: "center" });
-        }
-
-        const barY = 66, barH = 26;
-        doc.rect(mL - 4, barY, doc.page.width - mL - mR + 8, barH).fill(primary);
-        doc.font("Helvetica-Bold").fontSize(10).fillColor("#ffffff")
-          .text("B O L E T I M   D E   M E D I Ç Ã O   —   C O N T R A T O   D E   T E R C E I R O S", mL - 4, barY + 9, { width: doc.page.width - mL - mR + 8, align: "center" });
-
-        const statusLabels: Record<string, string> = { rascunho: "Rascunho", aguardando_aprovacao: "Aguard. Aprovação", aprovada: "Aprovada", paga: "Paga", rejeitada: "Rejeitada" };
-        const revNum = Number((medicao as any).revisao || 0);
-        const numBox = `Nº ${String(medicao.numero || 1).padStart(2, "0")}${revNum > 0 ? ` · REV. ${revNum}` : ""}`;
-        doc.roundedRect(doc.page.width - mR - 128, barY + 2, 124, barH - 4, 3).fill("#ffffff");
-        doc.font("Helvetica").fontSize(5.5).fillColor(primary).text(`MEDIÇÃO · ${medicao.periodo || "-"}  ·  ${statusLabels[medicao.status || "rascunho"] || medicao.status || "-"}`, doc.page.width - mR - 124, barY + 5, { width: 116, align: "center" });
-        doc.font("Helvetica-Bold").fontSize(11).fillColor(primary).text(numBox, doc.page.width - mR - 124, barY + 11.5, { width: 116, align: "center" });
-
-        let y = barY + barH + 10;
-
-        // Rev. 4796 — datas do contrato + ritmo (adiantado/em dia/atrasado)
-        const fmtBR = (d: any) => {
-          if (!d) return "-";
-          const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
-          const [a, m2, dd] = s.split("-");
-          return dd && m2 && a ? `${dd}/${m2}/${a}` : s;
-        };
-        const toDate = (d: any) => {
-          if (!d) return null;
-          const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
-          const t = new Date(s + "T12:00:00");
-          return isNaN(t.getTime()) ? null : t;
-        };
-        const percAcumGlobal = totalValorContrato > 0 ? totalValorAcumulado / totalValorContrato * 100 : 0;
-        const ini = toDate((contrato as any).dataInicio);
-        const fim = toDate((contrato as any).dataTermino);
-        const ref = toDate((medicao as any).dataFim) || new Date();
-        let ritmo: { label: string; cor: string; bg: string; detalhe: string } | null = null;
-        if (ini && fim && fim.getTime() > ini.getTime()) {
-          const percTempo = Math.max(0, Math.min(100, (ref.getTime() - ini.getTime()) / (fim.getTime() - ini.getTime()) * 100));
-          const delta = percAcumGlobal - percTempo;
-          const det = `Físico ${percAcumGlobal.toFixed(1)}% × Prazo ${percTempo.toFixed(1)}% (${delta >= 0 ? "+" : ""}${delta.toFixed(1)} p.p.)`;
-          if (delta >= 5) ritmo = { label: "ADIANTADO", cor: "#065f46", bg: "#d1fae5", detalhe: det };
-          else if (delta <= -5) ritmo = { label: "ATRASADO", cor: "#991b1b", bg: "#fee2e2", detalhe: det };
-          else ritmo = { label: "EM DIA", cor: "#1e40af", bg: "#dbeafe", detalhe: det };
-        }
-
-        // ── Faixa de identificação (3 linhas × 4 colunas) ──
-        doc.roundedRect(mL, y, pageW, 68, 3).fill("#f4f6f9");
-        const infoColW = pageW / 4;
-        const infoLine = (label: string, value: string, ci: number, row: number) => {
-          const x = mL + 10 + ci * infoColW;
-          const yy = y + 6 + row * 21;
-          doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#7a8699").text(label, x, yy);
-          doc.font("Helvetica-Bold").fontSize(8).fillColor("#1a1a2e").text(value || "-", x, yy + 8, { width: infoColW - 16, height: 12, ellipsis: true });
-        };
-        infoLine("Nº DO CONTRATO", (contrato as any).numeroContrato || `#${contrato.id}`, 0, 0);
-        infoLine("CONTRATO", contrato.descricao || "-", 1, 0);
-        infoLine("TERCEIRO (CONTRATADA)", empresa?.razaoSocial || empresa?.nomeFantasia || "-", 2, 0);
-        infoLine("CNPJ TERCEIRO", empresa?.cnpj || "-", 3, 0);
-        infoLine("OBRA", obraNome || "-", 0, 1);
-        infoLine("INÍCIO DO CONTRATO", fmtBR((contrato as any).dataInicio), 1, 1);
-        infoLine("TÉRMINO DO CONTRATO", fmtBR((contrato as any).dataTermino), 2, 1);
-        infoLine("VALOR DO CONTRATO", BRL(n(contrato.valorTotal)), 3, 1);
-        infoLine("PERÍODO MEDIDO", `${fmtBR((medicao as any).dataInicio)}  a  ${fmtBR((medicao as any).dataFim)}`, 0, 2);
-        infoLine("MEDIDO NO PERÍODO", BRL(totalValorPeriodo), 1, 2);
-        infoLine("ACUMULADO", `${BRL(totalValorAcumulado)}  (${percAcumGlobal.toFixed(1)}%)`, 2, 2);
-        if (ritmo) {
-          const x = mL + 10 + 3 * infoColW;
-          doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#7a8699").text("RITMO DO CONTRATO", x, y + 6 + 2 * 21);
-          const bw = doc.widthOfString(ritmo.label, { size: 7.5 } as any) + 60;
-          doc.roundedRect(x, y + 6 + 2 * 21 + 8, Math.min(infoColW - 16, 88), 11, 5.5).fill(ritmo.bg);
-          doc.font("Helvetica-Bold").fontSize(7.5).fillColor(ritmo.cor).text(ritmo.label, x, y + 6 + 2 * 21 + 10.5, { width: Math.min(infoColW - 16, 88), align: "center" });
-          void bw;
-        } else {
-          infoLine("RITMO DO CONTRATO", "Sem datas no contrato", 3, 2);
-        }
-        y += 68 + 4;
-        if (ritmo) {
-          doc.font("Helvetica").fontSize(6.5).fillColor("#7a8699").text(`Ritmo: ${ritmo.detalhe} — referência: ${fmtBR(ref)}`, mL + 2, y);
-          y += 12;
-        } else {
-          y += 6;
-        }
-
-        // Rev. 4793 — paisagem: contratado (Qtd/V.Total) + MEDIÇÃO ATUAL em
-        // números (Qtd. medida do período destacada) + acumulado, tudo na tela.
-        const cols = [
-          { label: "EAP", width: 52, align: "left" as const },
-          { label: "Atividade", width: 168, align: "left" as const },
-          { label: "Unid.", width: 32, align: "center" as const },
-          { label: "Qtd. Contr.", width: 52, align: "right" as const },
-          { label: "V.Unit.", width: 54, align: "right" as const },
-          { label: "V.Total Contr.", width: 62, align: "right" as const },
-          { label: "Ant.%", width: 36, align: "right" as const },
-          { label: "Per.%", width: 36, align: "right" as const, destaque: true },
-          { label: "Qtd. Período", width: 56, align: "right" as const, destaque: true },
-          { label: "V.Período", width: 62, align: "right" as const, destaque: true },
-          { label: "Acum.%", width: 40, align: "right" as const },
-          { label: "Qtd. Acum.", width: 56, align: "right" as const },
-          { label: "V.Acum.", width: 62, align: "right" as const },
-        ] as Array<{ label: string; width: number; align: "left" | "center" | "right"; destaque?: boolean }>;
-        const tableW = cols.reduce((s, c) => s + c.width, 0);
-        const DESTAQUE_BG = "#dbeafe";
-        const destaqueX = mL + cols.slice(0, 7).reduce((s, c) => s + c.width, 0);
-        const destaqueW = cols[7].width + cols[8].width + cols[9].width;
-
-        const drawTableHeader = (yPos: number) => {
-          let xOff = mL;
-          doc.rect(mL, yPos, tableW, 16).fill(primary);
-          doc.rect(destaqueX, yPos, destaqueW, 16).fill("#2d5a8a");
-          doc.fillColor("#fff").fontSize(6.5).font("Helvetica-Bold");
-          for (const c of cols) {
-            doc.text(c.label, xOff + 2, yPos + 5, { width: c.width - 5, align: c.align });
-            xOff += c.width;
-          }
-          return yPos + 16;
-        };
-
-        y = drawTableHeader(y);
-
-        const renderedGroups = new Set<string>();
-        let rowIdx = 0;
-
-        for (const item of itensEnriquecidos) {
-          const eap = item.eapCodigo;
-          if (eap) {
-            const parts = eap.split(".");
-            for (let depth = 1; depth < parts.length; depth++) {
-              const parentEap = parts.slice(0, depth).join(".");
-              if (!renderedGroups.has(parentEap)) {
-                renderedGroups.add(parentEap);
-                if (y > pageBottom - 30) { doc.addPage(); y = 36; y = drawTableHeader(y); }
-                const isTop = depth === 1;
-                const bgColor = isTop ? "#e8edf4" : "#f3f5f8";
-                doc.rect(mL, y, tableW, 14).fill(bgColor);
-                if (isTop) doc.rect(mL, y, 3, 14).fill("#d4a017");
-                doc.fillColor(primary).font("Helvetica-Bold").fontSize(7);
-                doc.text(parentEap, mL + 5, y + 4);
-                const indent = 5 + (depth - 1) * 10;
-                const nome = hierMap.get(parentEap) || `Nível ${parentEap}`;
-                doc.text(`» ${nome}`, mL + 52 + indent, y + 4, { width: tableW - 60 - indent, height: 10, ellipsis: true });
-                y += 14;
-                rowIdx = 0;
-              }
-            }
-          }
-
-          if (y > pageBottom - 20) { doc.addPage(); y = 36; y = drawTableHeader(y); }
-          if (rowIdx % 2 === 0) doc.rect(mL, y, tableW, 13).fill("#fafbfc");
-          doc.rect(destaqueX, y, destaqueW, 13).fill(rowIdx % 2 === 0 ? "#e3eefc" : DESTAQUE_BG);
-          doc.fillColor("#333").font("Helvetica").fontSize(6.5);
-          let xOff = mL;
-          const indent = eap ? Math.max(0, (eap.split(".").length - 1) * 6) : 0;
-          const QTD = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-          const qtdPeriodo = item.quantidade * item.percPeriodo / 100;
-          const qtdAcumulada = item.quantidade * item.percAcumulado / 100;
-          const vals = [
-            { v: eap || "-", a: "left" as const },
-            { v: item.descricao.substring(0, 42), a: "left" as const },
-            { v: item.unidade, a: "center" as const },
-            { v: QTD(item.quantidade), a: "right" as const },
-            { v: BRL(item.valorUnitario), a: "right" as const },
-            { v: BRL(item.valorTotal), a: "right" as const },
-            { v: PCT(item.percAnterior), a: "right" as const },
-            { v: PCT(item.percPeriodo), a: "right" as const },
-            { v: `${QTD(qtdPeriodo)} ${item.unidade !== "-" ? item.unidade : ""}`.trim(), a: "right" as const },
-            { v: BRL(item.valorPeriodo), a: "right" as const },
-            { v: PCT(item.percAcumulado), a: "right" as const },
-            { v: `${QTD(qtdAcumulada)} ${item.unidade !== "-" ? item.unidade : ""}`.trim(), a: "right" as const },
-            { v: BRL(item.valorAcumulado), a: "right" as const },
-          ];
-          for (let ci = 0; ci < cols.length; ci++) {
-            const c = cols[ci];
-            const cellX = ci === 1 ? xOff + indent : xOff;
-            const cellW = ci === 1 ? c.width - indent : c.width;
-            if (c.destaque) doc.font("Helvetica-Bold").fillColor("#1d4ed8"); else doc.font("Helvetica").fillColor("#333");
-            doc.text(vals[ci].v, cellX + 2, y + 4, { width: cellW - 5, align: vals[ci].a, lineBreak: false });
-            xOff += c.width;
-          }
-          doc.strokeColor("#e5e7eb").lineWidth(0.3).moveTo(mL, y + 13).lineTo(mL + tableW, y + 13).stroke();
-          y += 13;
-          rowIdx++;
-        }
-
-        if (y > pageBottom - 20) { doc.addPage(); y = 36; }
-        doc.rect(mL, y, tableW, 16).fill("#e2e8f0");
-        doc.fillColor("#1e293b").font("Helvetica-Bold").fontSize(7);
-        doc.text("TOTAL", mL + 5, y + 5);
-        const colX = (i: number) => mL + cols.slice(0, i).reduce((s, c) => s + c.width, 0);
-        doc.text(BRL(totalValorContrato), colX(5) + 2, y + 5, { width: cols[5].width - 5, align: "right", lineBreak: false });
-        doc.fillColor("#1d4ed8").text(BRL(totalValorPeriodo), colX(9) + 2, y + 5, { width: cols[9].width - 5, align: "right", lineBreak: false });
-        doc.fillColor("#1e293b").text(BRL(totalValorAcumulado), colX(12) + 2, y + 5, { width: cols[12].width - 5, align: "right", lineBreak: false });
-        y += 24;
-
-        // Rev. 4827 — aviso permanente: desconto de FD excluído desta medição.
-        if ((medicao as any).fdExclusaoAlerta) {
-          const alertaTxt = String((medicao as any).fdExclusaoAlerta);
-          const altH = doc.heightOfString(alertaTxt, { width: tableW - 16 }) + 26;
-          if (y > pageBottom - altH) { doc.addPage(); y = 36; }
-          doc.rect(mL, y, tableW, altH).fill("#fef2f2").stroke("#fca5a5");
-          doc.font("Helvetica-Bold").fontSize(8).fillColor("#dc2626").text("⚠ EXISTEM FDs PENDENTES", mL + 8, y + 6);
-          doc.font("Helvetica").fontSize(7).fillColor("#b91c1c").text(alertaTxt, mL + 8, y + 17, { width: tableW - 16 });
-          y += altH + 8;
-        }
-
-        if (totalRetencoes > 0 || descontos > 0 || totalFdPdf > 0) {
-          if (y > pageBottom - (120 + fdsDaMedicao.length * 13)) { doc.addPage(); y = 36; }
-          doc.font("Helvetica-Bold").fontSize(9).fillColor(primary).text("RETENÇÕES E DESCONTOS", mL, y);
-          y += 14;
-          doc.strokeColor(accent).lineWidth(0.8).moveTo(mL, y).lineTo(mL + 200, y).stroke();
-          y += 8;
-          doc.fontSize(8).font("Helvetica").fillColor("#333");
-          if (retISS > 0) { doc.text(`ISS${pISS > 0 ? ` (${pISS}%)` : ""}: ${BRL(retISS)}`, mL, y); y += 13; }
-          if (retINSS > 0) { doc.text(`INSS${pINSS > 0 ? ` (${pINSS}%)` : ""}: ${BRL(retINSS)}`, mL, y); y += 13; }
-          if (retIRRF > 0) { doc.text(`IRRF${pIRRF > 0 ? ` (${pIRRF}%)` : ""}: ${BRL(retIRRF)}`, mL, y); y += 13; }
-          if (retOutras > 0) { doc.text(`Outras Retenções${pOutras > 0 ? ` (${pOutras}%)` : ""}: ${BRL(retOutras)}`, mL, y); y += 13; }
-          if (retTecnica > 0) { doc.text(`Retenção Técnica${pRetTecnica > 0 ? ` (${pRetTecnica}%)` : ""}: ${BRL(retTecnica)} *`, mL, y); y += 13; }
-          if (descontos > 0) { doc.text(`Descontos: ${BRL(descontos)}`, mL, y); y += 13; }
-          // Rev. 4800 — cada FD descontado sai discriminado no boletim
-          if (totalFdPdf > 0) {
-            doc.font("Helvetica-Bold").fillColor("#92400e").text(`Descontos lançados neste período (FD, EPI, ferramental...): - ${BRL(totalFdPdf)}`, mL, y); y += 13;
-            doc.font("Helvetica").fontSize(7.5).fillColor("#555");
-            // Rev. 4801 — cada desconto sai discriminado com o TIPO no boletim
-            const tipoLabelPdf: Record<string, string> = { fd: "FD Compra", epi: "EPI", ferramental: "Ferramental", insumo: "Insumo", outro: "Outro" };
-            for (const f of fdsDaMedicao) {
-              if (y > pageBottom - 20) { doc.addPage(); y = 36; doc.font("Helvetica").fontSize(7.5).fillColor("#555"); }
-              const dt = f.dataFd ? new Date(`${String(f.dataFd).slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR") : "-";
-              const origemTxt = f.origem === "auto" ? " (desconto automático)" : f.origem === "avulso" ? " (lançado fora da medição)" : "";
-              doc.text(`   • ${dt} — [${tipoLabelPdf[(f as any).tipo || "fd"] || "Outro"}] ${f.descricao}${origemTxt}: - ${BRL(n(f.valor))}`, mL, y, { width: pageW - 20 });
-              y += 12;
-            }
-            doc.fontSize(8).fillColor("#333");
-          }
-          doc.font("Helvetica-Bold").text(`Total Retenções: ${BRL(totalRetencoes)}`, mL, y); y += 13;
-          if (retTecnica > 0) { doc.font("Helvetica").fontSize(7).fillColor("#666").text(`* Retenção Técnica: valor retido e liberado somente após a última medição do contrato. Acumulado: ${BRL(retTecnicaAcumulada)}`, mL, y); y += 13; }
-          if ((medicao as any).observacoesRetencao) { doc.font("Helvetica").fontSize(7).text(`Obs.: ${(medicao as any).observacoesRetencao}`, mL, y); y += 13; }
-          y += 8;
-        }
-
-        if (y > pageBottom - 70) { doc.addPage(); y = 36; }
-        // ── Resumo financeiro em linha (paisagem) ──
-        doc.roundedRect(mL, y, pageW, 44, 4).lineWidth(1.2).stroke(primary);
-        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(primary).text("RESUMO FINANCEIRO", mL + 12, y + 7);
-        const summCol = (pageW - 200) / 3;
-        const summItem = (label: string, valor: string, ci: number, bold = false) => {
-          const x = mL + 12 + ci * summCol;
-          doc.font("Helvetica").fontSize(7).fillColor("#666").text(label, x, y + 20);
-          doc.font("Helvetica-Bold").fontSize(9).fillColor("#333").text(valor, x, y + 29);
-        };
-        summItem("Valor Bruto do Período", BRL(totalValorPeriodo), 0);
-        summItem("Retenções", `- ${BRL(totalRetencoes)}`, 1);
-        summItem("Descontos + FD", `- ${BRL(descontos + totalFdPdf)}`, 2);
-        doc.roundedRect(mL + pageW - 185, y + 8, 173, 28, 3).fill("#d1fae5");
-        doc.font("Helvetica").fontSize(6.5).fillColor("#065f46").text("VALOR LÍQUIDO A PAGAR", mL + pageW - 177, y + 13);
-        doc.font("Helvetica-Bold").fontSize(12).fillColor("#065f46").text(BRL(valorLiquido), mL + pageW - 177, y + 21);
-        y += 44 + 12;
-
-        // ── Assinatura digital — FCSign (sem papel) ──
-        if (y > pageBottom - 66) { doc.addPage(); y = 36; }
-        doc.roundedRect(mL, y, pageW, 58, 4).fill("#f4f6f9");
-        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(primary).text("ASSINATURA DIGITAL — FCSIGN", mL + 12, y + 8);
-        if (envelopeAss) {
-          const envStatus: Record<string, string> = { rascunho: "Envelope criado (aguardando envio)", enviado: "Enviado para assinatura", em_andamento: "Assinaturas em andamento", concluido: "ASSINADO DIGITALMENTE", cancelado: "Envelope cancelado", recusado: "Assinatura recusada" };
-          doc.font("Helvetica").fontSize(7).fillColor("#333")
-            .text(`Envelope #${envelopeAss.id} · ${envStatus[envelopeAss.status] || envelopeAss.status}${envelopeAss.dataConclusao ? ` em ${new Date(envelopeAss.dataConclusao).toLocaleDateString("pt-BR")}` : ""} · Documento com hash e trilha de auditoria no módulo FCSign.`, mL + 12, y + 20, { width: pageW - 24 });
-          let sx = mL + 12;
-          const sigColW = Math.min(240, (pageW - 24) / Math.max(1, signatariosAss.length));
-          for (const s of signatariosAss) {
-            const assinado = !!s.dataAssinatura;
-            doc.font("Helvetica-Bold").fontSize(7.5).fillColor(assinado ? "#065f46" : "#92600a").text(`${assinado ? "✓" : "…"} ${s.nome}`, sx, y + 34, { width: sigColW - 10, height: 9, ellipsis: true });
-            doc.font("Helvetica").fontSize(6.5).fillColor("#666").text(`${s.papel === "fornecedor" ? "Contratada" : "Contratante"}${assinado ? ` — assinado em ${new Date(s.dataAssinatura).toLocaleDateString("pt-BR")}` : " — pendente"}`, sx, y + 44, { width: sigColW - 10 });
-            sx += sigColW;
-          }
-        } else {
-          doc.font("Helvetica").fontSize(7).fillColor("#333")
-            .text("Este boletim é validado por assinatura eletrônica no módulo FCSign (sem papel): contratante e contratada assinam pelo link recebido, com hash do documento e trilha de auditoria. Envie para assinatura pelo botão \"Assinar no FCSign\" na medição.", mL + 12, y + 20, { width: pageW - 24 });
-          const sigW = 220;
-          doc.strokeColor("#9aa7b8").lineWidth(0.5);
-          doc.moveTo(mL + 40, y + 46).lineTo(mL + 40 + sigW, y + 46).stroke();
-          doc.moveTo(mL + pageW - 40 - sigW, y + 46).lineTo(mL + pageW - 40, y + 46).stroke();
-          doc.fontSize(6.5).font("Helvetica").fillColor("#666");
-          doc.text(`Contratante — ${company?.name || ""}`, mL + 40, y + 49, { width: sigW, align: "center" });
-          doc.text(`Contratada — ${empresa?.razaoSocial || empresa?.nomeFantasia || ""}`, mL + pageW - 40 - sigW, y + 49, { width: sigW, align: "center" });
-        }
-
-        // ── Rev. 4834 — MEMÓRIA DE CÁLCULO / LEVANTAMENTO DE CAMPO (com fotos) ──
-        const fmtQtd = (c: any) => {
-          const q = n(c.quantidade);
-          const un = c.unidade || (c.tipo === "area" ? "m²" : c.tipo === "perimetro" || c.tipo === "linear" ? "m" : c.tipo === "volume" ? "m³" : "");
-          return `${q.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${un}`.trim();
-        };
-        const tipoLabel: Record<string, string> = { area: "Área", perimetro: "Perímetro / Linear", linear: "Perímetro / Linear", volume: "Volume", contagem: "Contagem", parede: "Parede" };
-        for (const campo of camposPdf) {
-          doc.addPage();
-          // faixa-título no mesmo padrão do cabeçalho
-          doc.rect(mL - 4, 36, doc.page.width - mL - mR + 8, 24).fill(primary);
-          doc.font("Helvetica-Bold").fontSize(9).fillColor("#ffffff")
-            .text("M E M Ó R I A   D E   C Á L C U L O   —   L E V A N T A M E N T O   D E   C A M P O", mL - 4, 44, { width: doc.page.width - mL - mR + 8, align: "center" });
-          y = 36 + 24 + 8;
-          doc.font("Helvetica-Bold").fontSize(8.5).fillColor(primary).text(`Levantamento ${campo.titulo}`, mL, y);
-          if (campo.criadoPorNome) {
-            doc.font("Helvetica").fontSize(7).fillColor("#666").text(`Realizado por: ${campo.criadoPorNome}`, mL + pageW - 240, y + 1, { width: 240, align: "right" });
-          }
-          y += 16;
-
-          // tabela de contornos
-          if (campo.contornos.length > 0) {
-            doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#333").text("Contornos medidos", mL, y); y += 11;
-            const cw = [34, 92, 130, pageW - 34 - 92 - 130 - 110, 110];
-            const cx = [mL, mL + cw[0], mL + cw[0] + cw[1], mL + cw[0] + cw[1] + cw[2], mL + cw[0] + cw[1] + cw[2] + cw[3]];
-            const headRow = () => {
-              doc.rect(mL, y, pageW, 12).fill("#eef1f5");
-              doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#555");
-              ["Nº", "Tipo", "Local / Nome", "Item vinculado", "Quantidade"].forEach((h, i) => doc.text(h, cx[i] + 3, y + 3.5, { width: cw[i] - 6, align: i === 4 ? "right" : "left" }));
-              y += 12;
-            };
-            headRow();
-            let idxPorTipo: Record<string, number> = {};
-            for (const c of campo.contornos) {
-              if (y > pageBottom - 14) { doc.addPage(); y = 36; headRow(); }
-              const t = tipoLabel[c.tipo] || c.tipo || "-";
-              idxPorTipo[t] = (idxPorTipo[t] || 0) + 1;
-              doc.rect(mL, y, pageW, 11).strokeColor("#e3e7ee").lineWidth(0.4).stroke();
-              doc.font("Helvetica").fontSize(6.5).fillColor("#333");
-              doc.text(String(c.numero ?? idxPorTipo[t]).padStart(3, "0"), cx[0] + 3, y + 3, { width: cw[0] - 6 });
-              doc.text(t, cx[1] + 3, y + 3, { width: cw[1] - 6, height: 8, ellipsis: true });
-              doc.text(c.rotulo || c.servico || "-", cx[2] + 3, y + 3, { width: cw[2] - 6, height: 8, ellipsis: true });
-              doc.text(c.itemDescricao || "-", cx[3] + 3, y + 3, { width: cw[3] - 6, height: 8, ellipsis: true });
-              doc.font("Helvetica-Bold").text(fmtQtd(c), cx[4] + 3, y + 3, { width: cw[4] - 6, align: "right" });
-              y += 11;
-            }
-            y += 10;
-          }
-
-          // registro fotográfico
-          const fotosOk = campo.fotos.filter(f => f.buffer);
-          if (fotosOk.length > 0) {
-            if (y > pageBottom - 130) { doc.addPage(); y = 36; }
-            doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#333").text(`Registro fotográfico (${fotosOk.length})`, mL, y); y += 12;
-            const perRow = 5, gap = 8;
-            const cellW = (pageW - gap * (perRow - 1)) / perRow;
-            const imgH = cellW * 0.72, cellH = imgH + 14;
-            let col = 0;
-            for (const f of fotosOk) {
-              if (col === 0 && y + cellH > pageBottom) { doc.addPage(); y = 36; }
-              const x = mL + col * (cellW + gap);
-              try {
-                doc.save();
-                doc.rect(x, y, cellW, imgH).clip();
-                doc.image(f.buffer as Buffer, x, y, { cover: [cellW, imgH], align: "center", valign: "center" } as any);
-                doc.restore();
-                doc.rect(x, y, cellW, imgH).strokeColor("#d4d9e0").lineWidth(0.5).stroke();
-              } catch {
-                doc.rect(x, y, cellW, imgH).fill("#f0f2f5");
-                doc.font("Helvetica").fontSize(6).fillColor("#999").text("foto indisponível", x, y + imgH / 2 - 3, { width: cellW, align: "center" });
-              }
-              doc.font("Helvetica").fontSize(6).fillColor("#555").text((f.legenda || "").toUpperCase(), x, y + imgH + 3, { width: cellW, height: 8, ellipsis: true });
-              col++;
-              if (col === perRow) { col = 0; y += cellH + 6; }
-            }
-            if (col > 0) y += cellH + 6;
-          }
-        }
-
-        doc.end();
-      });
+      return await gerarPdfMedicaoBuffer(db, input);
     }),
 
   excluirMedicao: protectedProcedure
@@ -6016,4 +5391,664 @@ async function _recalcularValorContrato(db: any, contratoId: number) {
   const total = itens.reduce((s: number, i: any) => s + n(i.valorTotal), 0);
   await db.update(terceiroContratos).set({ valorTotal: String(total), atualizadoEm: new Date().toISOString() })
     .where(eq(terceiroContratos.id, contratoId));
+}
+
+
+// Rev. 4854 — extraído do procedure gerarPdfMedicao para permitir a rota
+// pública do FCSign (assinante vê o boletim completo em PDF pelo token).
+// ATENÇÃO: quem chama é responsável pelo guard de tenancy/token.
+export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number; companyId: number }): Promise<{ base64: string; filename: string }> {
+      const [medicao] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
+      if (!medicao) throw new Error("Medição não encontrada");
+      // Rev. 4834 — tenancy em TODAS as queries (review): contrato/empresa/obra/itens escopados por companyId.
+      const [contrato] = await db.select().from(terceiroContratos).where(and(eq(terceiroContratos.id, medicao.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+      if (!contrato) throw new Error("Contrato não encontrado");
+      const [empresa] = await db.select().from(empresasTerceiras).where(and(eq(empresasTerceiras.id, contrato.empresaTerceiraId), eq(empresasTerceiras.companyId, input.companyId)));
+      const [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
+      let obraNome = "";
+      if (contrato.obraId) {
+        const [obra] = await db.select().from(obras).where(and(eq(obras.id, contrato.obraId), eq(obras.companyId, input.companyId)));
+        if (obra) obraNome = obra.nome;
+      }
+      const itensMedicao = await db.select().from(terceiroMedicaoItens).where(and(eq(terceiroMedicaoItens.medicaoId, input.medicaoId), eq(terceiroMedicaoItens.companyId, input.companyId)));
+      const itensContrato = await db.select().from(terceiroContratoItens).where(and(eq(terceiroContratoItens.contratoId, contrato.id), eq(terceiroContratoItens.companyId, input.companyId))).orderBy(asc(terceiroContratoItens.ordem));
+
+      const itensEnriquecidos = itensMedicao.map(im => {
+        const ci = itensContrato.find(c => c.id === im.contratoItemId);
+        return {
+          descricao: ci?.descricao || im.descricao || "",
+          eapCodigo: (ci as any)?.eapCodigo || "",
+          unidade: ci?.unidade || "-",
+          quantidade: n(ci?.quantidade),
+          valorUnitario: n(ci?.valorUnitario),
+          valorTotal: n(ci?.valorTotal),
+          percAnterior: n(im.percentualAcumuladoAnterior),
+          percPeriodo: n(im.percentualMedidoPeriodo),
+          percAcumulado: n(im.percentualAcumuladoAnterior) + n(im.percentualMedidoPeriodo), // Rev. 4800 — acumulado MEDIDO
+          valorPeriodo: n(im.valorMedidoPeriodo),
+          valorAcumulado: n(im.valorAcumulado),
+        };
+      });
+      itensEnriquecidos.sort((a, b) => a.eapCodigo.localeCompare(b.eapCodigo, undefined, { numeric: true }));
+
+      let hierMap = new Map<string, string>();
+      try {
+        const orcamentoId = contrato.orcamentoId || (itensContrato.length > 0 ? (itensContrato[0] as any).orcamentoItemId ? undefined : undefined : undefined);
+        const eapCodes = [...new Set(itensContrato.map((it: any) => it.eapCodigo).filter(Boolean))] as string[];
+        if (eapCodes.length > 0) {
+          const parentEaps = new Set<string>();
+          for (const eap of eapCodes) {
+            const parts = eap.split(".");
+            for (let i = 1; i < parts.length; i++) parentEaps.add(parts.slice(0, i).join("."));
+          }
+          const allEaps = [...new Set([...eapCodes, ...parentEaps])];
+          if (allEaps.length > 0) {
+            const atividadesRows = await db.select({ eapCodigo: planejamentoAtividades.eapCodigo, nome: planejamentoAtividades.nome })
+              .from(planejamentoAtividades)
+              .where(inArray(planejamentoAtividades.eapCodigo, allEaps));
+            for (const a of atividadesRows) { if (a.eapCodigo && a.nome) hierMap.set(a.eapCodigo, a.nome); }
+          }
+          if (hierMap.size === 0 && contrato.orcamentoId) {
+            const orcRows = await db.select({ eapCodigo: orcamentoItens.eapCodigo, descricao: orcamentoItens.descricao })
+              .from(orcamentoItens)
+              .where(and(eq(orcamentoItens.orcamentoId, contrato.orcamentoId), inArray(orcamentoItens.eapCodigo, allEaps)));
+            for (const o of orcRows) { if (o.eapCodigo && o.descricao) hierMap.set(o.eapCodigo, o.descricao); }
+          }
+        }
+      } catch {}
+
+      const totalValorContrato = itensEnriquecidos.reduce((s, i) => s + i.valorTotal, 0);
+      const totalValorPeriodo = itensEnriquecidos.reduce((s, i) => s + i.valorPeriodo, 0);
+      const totalValorAcumulado = itensEnriquecidos.reduce((s, i) => s + i.valorAcumulado, 0);
+
+      const pISS = n((contrato as any).percISS);
+      const pINSS = n((contrato as any).percINSS);
+      const pIRRF = n((contrato as any).percIRRF);
+      const pOutras = n((contrato as any).percOutrasRetencoes);
+      const pRetTecnica = n((contrato as any).percRetencaoTecnica);
+      const retISS = pISS > 0 ? totalValorPeriodo * pISS / 100 : n((medicao as any).retencaoISS);
+      const retINSS = pINSS > 0 ? totalValorPeriodo * pINSS / 100 : n((medicao as any).retencaoINSS);
+      const retIRRF = pIRRF > 0 ? totalValorPeriodo * pIRRF / 100 : n((medicao as any).retencaoIRRF);
+      const retOutras = pOutras > 0 ? totalValorPeriodo * pOutras / 100 : n((medicao as any).outrasRetencoes);
+      const retTecnica = pRetTecnica > 0 ? totalValorPeriodo * pRetTecnica / 100 : n((medicao as any).retencaoTecnica);
+      const descontos = n((medicao as any).descontos);
+      const totalRetencoes = retISS + retINSS + retIRRF + retOutras + retTecnica;
+      // Rev. 4800 — FDs do período no relatório: lista item a item o que foi
+      // descontado (descrição + data + valor), para não haver dúvida.
+      const fdsDaMedicao = await db.select().from(terceiroMedicaoFds)
+        .where(and(
+          eq(terceiroMedicaoFds.medicaoId, input.medicaoId),
+          eq(terceiroMedicaoFds.companyId, input.companyId),
+        )).orderBy(asc(terceiroMedicaoFds.dataFd), asc(terceiroMedicaoFds.id));
+      const totalFdPdf = fdsDaMedicao.reduce((s: number, f: any) => s + n(f.valor), 0);
+      const valorLiquido = totalValorPeriodo - totalRetencoes - descontos - totalFdPdf;
+
+      let retTecnicaAcumulada = 0;
+      if (pRetTecnica > 0) {
+        const todasMedicoes = await db.select().from(terceiroMedicoes)
+          .where(and(
+            eq(terceiroMedicoes.contratoId, (medicao as any).contratoId),
+            eq(terceiroMedicoes.companyId, input.companyId),
+          ));
+        retTecnicaAcumulada = todasMedicoes
+          .filter((md: any) => md.status === "aprovada" || md.status === "paga")
+          .reduce((acc: number, md: any) => acc + n(md.valorMedido) * pRetTecnica / 100, 0);
+      }
+
+      const PDFDocument = (await import("pdfkit")).default;
+      const fs = await import("fs");
+      const path = await import("path");
+
+      function resolveLogoSource(logoUrl: string | null | undefined): string | Buffer | null {
+        if (!logoUrl) return null;
+        if (logoUrl.startsWith("data:image")) {
+          const matches = logoUrl.match(/^data:image\/\w+;base64,(.+)$/);
+          if (matches?.[1]) return Buffer.from(matches[1], "base64");
+          return null;
+        }
+        if (logoUrl.startsWith("/uploads/")) {
+          const localPath = path.join(process.cwd(), "server", logoUrl);
+          if (fs.existsSync(localPath)) return localPath;
+        }
+        // Rev. 4796 — logo em asset público (ex.: /logo-fc.jpg). Anti-traversal:
+        // resolve e EXIGE que o caminho final continue dentro do diretório base.
+        if (logoUrl.startsWith("/")) {
+          for (const base of ["client/public", "dist/public"]) {
+            const baseDir = path.resolve(process.cwd(), base);
+            const p = path.resolve(baseDir, "." + path.posix.normalize(logoUrl));
+            if (p.startsWith(baseDir + path.sep) && fs.existsSync(p)) return p;
+          }
+        }
+        return null;
+      }
+
+      // Rev. 4793 — assinatura digital (FCSign): mostra no PDF o status do envelope
+      let envelopeAss: any = null;
+      try {
+        const envs = await db.select().from(integrasignEnvelopes)
+          .where(and(
+            eq(integrasignEnvelopes.companyId, input.companyId),
+            eq((integrasignEnvelopes as any).medicaoTerceiroId, input.medicaoId),
+            sql`${integrasignEnvelopes.excluidoEm} IS NULL`,
+          )).orderBy(desc(integrasignEnvelopes.id)).limit(1);
+        envelopeAss = envs[0] ?? null;
+      } catch { /* coluna pode não existir ainda */ }
+      let signatariosAss: any[] = [];
+      if (envelopeAss) {
+        try {
+          signatariosAss = await db.select().from(integrasignSignatarios)
+            .where(eq(integrasignSignatarios.envelopeId, envelopeAss.id))
+            .orderBy(asc(integrasignSignatarios.ordemAssinatura));
+        } catch {}
+      }
+
+      // Rev. 4834 — HISTÓRICO DE LEVANTAMENTO DE CAMPO no boletim (documento
+      // único, pedido do usuário): todos os levantamentos vinculados a esta
+      // medição, com contornos medidos e registro fotográfico embutidos.
+      type FotoPdf = { legenda: string; buffer: Buffer | null };
+      type CampoPdf = { titulo: string; criadoPorNome: string; contornos: any[]; fotos: FotoPdf[] };
+      const camposPdf: CampoPdf[] = [];
+      try {
+        // O vínculo principal vive na MEDIÇÃO (terceiro_medicoes.levantamento_campo_id);
+        // campo.medicaoId nem sempre é populado — busca pelos dois caminhos.
+        const levCampoId = Number((medicao as any).levantamentoCampoId || 0);
+        const campos = await db.select().from(medicaoCampo).where(and(
+          eq(medicaoCampo.companyId, input.companyId),
+          eq(medicaoCampo.origem, "terceiro"),
+          sql`${medicaoCampo.deletedAt} IS NULL`,
+          levCampoId > 0
+            ? sql`(${medicaoCampo.id} = ${levCampoId} OR ${(medicaoCampo as any).medicaoId} = ${input.medicaoId})`
+            : eq((medicaoCampo as any).medicaoId, input.medicaoId),
+        )).orderBy(asc(medicaoCampo.numero));
+        const fs2 = await import("fs");
+        const path2 = await import("path");
+        const uploadsRoot = path2.join(process.cwd(), "server/uploads");
+        const resolveFotoBuffer = async (url: string | null): Promise<Buffer | null> => {
+          if (!url || !url.startsWith("/uploads/")) return null;
+          // PDFKit só embute JPEG/PNG — vídeos (.mov/.mp4) e outros formatos ficam de fora.
+          if (!/\.(jpe?g|png)$/i.test(url)) return null;
+          const key = decodeURIComponent(url.replace(/^\/uploads\//, ""));
+          // Rev. 4834 — anti-IDOR (review): a chave DEVE pertencer ao tenant deste
+          // boletim (prefixo canônico das fotos de levantamento). Qualquer path
+          // fora desse escopo (ex.: arquivo de outra empresa) é rejeitado.
+          if (!key.startsWith(`medicao-campo/${input.companyId}/`)) return null;
+          const p = path2.resolve(uploadsRoot, key);
+          // anti-traversal: só dentro do diretório de uploads
+          if (p !== uploadsRoot && !p.startsWith(uploadsRoot + path2.sep)) return null;
+          try {
+            let buf: Buffer | null = null;
+            buf = await fs2.promises.readFile(p).catch(() => null);
+            if (!buf) {
+              const { dbRetrieve } = await import("../storage");
+              const r = await dbRetrieve(key);
+              buf = r?.buffer ?? null;
+            }
+            if (!buf) return null;
+            // Rev. 4834 — fotos de celular chegam com 4-6MB cada; sem compressão o
+            // PDF passava de 17MB (estoura o proxy no iPad). Reduz p/ 1280px JPEG.
+            try {
+              const sharp = (await import("sharp")).default;
+              return await sharp(buf).rotate().resize({ width: 1280, withoutEnlargement: true }).jpeg({ quality: 72 }).toBuffer();
+            } catch { return buf; }
+          } catch { return null; }
+        };
+        for (const campo of campos) {
+          const contornos = await db.select().from(medicaoCampoContornos).where(and(
+            eq(medicaoCampoContornos.medicaoCampoId, campo.id),
+            eq(medicaoCampoContornos.companyId, input.companyId),
+            sql`${medicaoCampoContornos.deletedAt} IS NULL`,
+          )).orderBy(asc(medicaoCampoContornos.tipo), asc(medicaoCampoContornos.numero), asc(medicaoCampoContornos.id));
+          const fotosRows = await db.select().from(medicaoCampoFotos).where(and(
+            eq(medicaoCampoFotos.medicaoCampoId, campo.id),
+            eq(medicaoCampoFotos.companyId, input.companyId),
+            sql`${medicaoCampoFotos.deletedAt} IS NULL`,
+          )).orderBy(asc(medicaoCampoFotos.id));
+          const contornoRotulo = new Map<number, string>(contornos.map((c: any) => [c.id, c.rotulo || c.servico || ""]));
+          const fotos: FotoPdf[] = [];
+          for (const f of fotosRows) {
+            const buffer = await resolveFotoBuffer((f as any).arquivoUrl);
+            fotos.push({
+              legenda: (f as any).legenda || contornoRotulo.get((f as any).contornoId) || "Foto do levantamento",
+              buffer,
+            });
+          }
+          camposPdf.push({
+            titulo: `Nº ${String(campo.numero).padStart(3, "0")}${campo.titulo ? ` — ${campo.titulo}` : ""}`,
+            criadoPorNome: (campo as any).criadoPorNome || "",
+            contornos,
+            fotos,
+          });
+        }
+      } catch (e: any) {
+        console.warn("[gerarPdfMedicao] levantamento de campo indisponível no PDF:", e?.message);
+      }
+
+      return new Promise<{ base64: string; filename: string }>((resolve, reject) => {
+        // Rev. 4793 — PAISAGEM: a medição inteira cabe na largura (qtds medidas
+        // em números + valores), leitura muito mais fácil no iPad e impressa.
+        const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 36, bufferPages: true });
+        const chunks: Buffer[] = [];
+        doc.on("data", (c: Buffer) => chunks.push(c));
+        doc.on("end", () => {
+          const buf = Buffer.concat(chunks);
+          const numStr = String(medicao.numero || 1).padStart(2, "0");
+          resolve({ base64: buf.toString("base64"), filename: `Medicao_${numStr}_${medicao.periodo}.pdf` });
+        });
+        doc.on("error", reject);
+
+        const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const PCT = (v: number) => v.toFixed(1) + "%";
+        const mL = 40;
+        const mR = 40;
+        const pageW = doc.page.width - mL - mR;
+        const primary = "#1B3A5C";
+        const accent = "#2980b9";
+
+        const pageBottom = doc.page.height - 44;
+
+        // Rev. 4834 — padrão "Memória de Cálculo" (pedido do usuário): logo GRANDE
+        // centralizado sobre fundo branco + faixa azul-marinho com o título em
+        // caixa alta espaçada. O box da medição fica à direita da faixa.
+        const logoSrc = resolveLogoSource((company as any)?.logoUrl);
+        let logoRendered = false;
+        if (logoSrc) {
+          try { doc.image(logoSrc, doc.page.width / 2 - 60, 10, { fit: [120, 44] }); logoRendered = true; } catch { logoRendered = false; }
+        }
+        if (!logoRendered) {
+          doc.font("Helvetica-Bold").fontSize(18).fillColor(primary)
+            .text(company?.name || "FC Engenharia", 0, 24, { width: doc.page.width, align: "center" });
+        }
+        if (company?.cnpj) {
+          doc.font("Helvetica").fontSize(6.5).fillColor("#7a8699")
+            .text(`${company?.name || "FC Engenharia"} · CNPJ: ${company.cnpj}`, 0, 56, { width: doc.page.width, align: "center" });
+        }
+
+        const barY = 66, barH = 26;
+        doc.rect(mL - 4, barY, doc.page.width - mL - mR + 8, barH).fill(primary);
+        doc.font("Helvetica-Bold").fontSize(10).fillColor("#ffffff")
+          .text("B O L E T I M   D E   M E D I Ç Ã O   —   C O N T R A T O   D E   T E R C E I R O S", mL - 4, barY + 9, { width: doc.page.width - mL - mR + 8, align: "center" });
+
+        const statusLabels: Record<string, string> = { rascunho: "Rascunho", aguardando_aprovacao: "Aguard. Aprovação", aprovada: "Aprovada", paga: "Paga", rejeitada: "Rejeitada" };
+        const revNum = Number((medicao as any).revisao || 0);
+        const numBox = `Nº ${String(medicao.numero || 1).padStart(2, "0")}${revNum > 0 ? ` · REV. ${revNum}` : ""}`;
+        doc.roundedRect(doc.page.width - mR - 128, barY + 2, 124, barH - 4, 3).fill("#ffffff");
+        doc.font("Helvetica").fontSize(5.5).fillColor(primary).text(`MEDIÇÃO · ${medicao.periodo || "-"}  ·  ${statusLabels[medicao.status || "rascunho"] || medicao.status || "-"}`, doc.page.width - mR - 124, barY + 5, { width: 116, align: "center" });
+        doc.font("Helvetica-Bold").fontSize(11).fillColor(primary).text(numBox, doc.page.width - mR - 124, barY + 11.5, { width: 116, align: "center" });
+
+        let y = barY + barH + 10;
+
+        // Rev. 4796 — datas do contrato + ritmo (adiantado/em dia/atrasado)
+        const fmtBR = (d: any) => {
+          if (!d) return "-";
+          const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+          const [a, m2, dd] = s.split("-");
+          return dd && m2 && a ? `${dd}/${m2}/${a}` : s;
+        };
+        const toDate = (d: any) => {
+          if (!d) return null;
+          const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+          const t = new Date(s + "T12:00:00");
+          return isNaN(t.getTime()) ? null : t;
+        };
+        const percAcumGlobal = totalValorContrato > 0 ? totalValorAcumulado / totalValorContrato * 100 : 0;
+        const ini = toDate((contrato as any).dataInicio);
+        const fim = toDate((contrato as any).dataTermino);
+        const ref = toDate((medicao as any).dataFim) || new Date();
+        let ritmo: { label: string; cor: string; bg: string; detalhe: string } | null = null;
+        if (ini && fim && fim.getTime() > ini.getTime()) {
+          const percTempo = Math.max(0, Math.min(100, (ref.getTime() - ini.getTime()) / (fim.getTime() - ini.getTime()) * 100));
+          const delta = percAcumGlobal - percTempo;
+          const det = `Físico ${percAcumGlobal.toFixed(1)}% × Prazo ${percTempo.toFixed(1)}% (${delta >= 0 ? "+" : ""}${delta.toFixed(1)} p.p.)`;
+          if (delta >= 5) ritmo = { label: "ADIANTADO", cor: "#065f46", bg: "#d1fae5", detalhe: det };
+          else if (delta <= -5) ritmo = { label: "ATRASADO", cor: "#991b1b", bg: "#fee2e2", detalhe: det };
+          else ritmo = { label: "EM DIA", cor: "#1e40af", bg: "#dbeafe", detalhe: det };
+        }
+
+        // ── Faixa de identificação (3 linhas × 4 colunas) ──
+        doc.roundedRect(mL, y, pageW, 68, 3).fill("#f4f6f9");
+        const infoColW = pageW / 4;
+        const infoLine = (label: string, value: string, ci: number, row: number) => {
+          const x = mL + 10 + ci * infoColW;
+          const yy = y + 6 + row * 21;
+          doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#7a8699").text(label, x, yy);
+          doc.font("Helvetica-Bold").fontSize(8).fillColor("#1a1a2e").text(value || "-", x, yy + 8, { width: infoColW - 16, height: 12, ellipsis: true });
+        };
+        infoLine("Nº DO CONTRATO", (contrato as any).numeroContrato || `#${contrato.id}`, 0, 0);
+        infoLine("CONTRATO", contrato.descricao || "-", 1, 0);
+        infoLine("TERCEIRO (CONTRATADA)", empresa?.razaoSocial || empresa?.nomeFantasia || "-", 2, 0);
+        infoLine("CNPJ TERCEIRO", empresa?.cnpj || "-", 3, 0);
+        infoLine("OBRA", obraNome || "-", 0, 1);
+        infoLine("INÍCIO DO CONTRATO", fmtBR((contrato as any).dataInicio), 1, 1);
+        infoLine("TÉRMINO DO CONTRATO", fmtBR((contrato as any).dataTermino), 2, 1);
+        infoLine("VALOR DO CONTRATO", BRL(n(contrato.valorTotal)), 3, 1);
+        infoLine("PERÍODO MEDIDO", `${fmtBR((medicao as any).dataInicio)}  a  ${fmtBR((medicao as any).dataFim)}`, 0, 2);
+        infoLine("MEDIDO NO PERÍODO", BRL(totalValorPeriodo), 1, 2);
+        infoLine("ACUMULADO", `${BRL(totalValorAcumulado)}  (${percAcumGlobal.toFixed(1)}%)`, 2, 2);
+        if (ritmo) {
+          const x = mL + 10 + 3 * infoColW;
+          doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#7a8699").text("RITMO DO CONTRATO", x, y + 6 + 2 * 21);
+          const bw = doc.widthOfString(ritmo.label, { size: 7.5 } as any) + 60;
+          doc.roundedRect(x, y + 6 + 2 * 21 + 8, Math.min(infoColW - 16, 88), 11, 5.5).fill(ritmo.bg);
+          doc.font("Helvetica-Bold").fontSize(7.5).fillColor(ritmo.cor).text(ritmo.label, x, y + 6 + 2 * 21 + 10.5, { width: Math.min(infoColW - 16, 88), align: "center" });
+          void bw;
+        } else {
+          infoLine("RITMO DO CONTRATO", "Sem datas no contrato", 3, 2);
+        }
+        y += 68 + 4;
+        if (ritmo) {
+          doc.font("Helvetica").fontSize(6.5).fillColor("#7a8699").text(`Ritmo: ${ritmo.detalhe} — referência: ${fmtBR(ref)}`, mL + 2, y);
+          y += 12;
+        } else {
+          y += 6;
+        }
+
+        // Rev. 4793 — paisagem: contratado (Qtd/V.Total) + MEDIÇÃO ATUAL em
+        // números (Qtd. medida do período destacada) + acumulado, tudo na tela.
+        const cols = [
+          { label: "EAP", width: 52, align: "left" as const },
+          { label: "Atividade", width: 168, align: "left" as const },
+          { label: "Unid.", width: 32, align: "center" as const },
+          { label: "Qtd. Contr.", width: 52, align: "right" as const },
+          { label: "V.Unit.", width: 54, align: "right" as const },
+          { label: "V.Total Contr.", width: 62, align: "right" as const },
+          { label: "Ant.%", width: 36, align: "right" as const },
+          { label: "Per.%", width: 36, align: "right" as const, destaque: true },
+          { label: "Qtd. Período", width: 56, align: "right" as const, destaque: true },
+          { label: "V.Período", width: 62, align: "right" as const, destaque: true },
+          { label: "Acum.%", width: 40, align: "right" as const },
+          { label: "Qtd. Acum.", width: 56, align: "right" as const },
+          { label: "V.Acum.", width: 62, align: "right" as const },
+        ] as Array<{ label: string; width: number; align: "left" | "center" | "right"; destaque?: boolean }>;
+        const tableW = cols.reduce((s, c) => s + c.width, 0);
+        const DESTAQUE_BG = "#dbeafe";
+        const destaqueX = mL + cols.slice(0, 7).reduce((s, c) => s + c.width, 0);
+        const destaqueW = cols[7].width + cols[8].width + cols[9].width;
+
+        const drawTableHeader = (yPos: number) => {
+          let xOff = mL;
+          doc.rect(mL, yPos, tableW, 16).fill(primary);
+          doc.rect(destaqueX, yPos, destaqueW, 16).fill("#2d5a8a");
+          doc.fillColor("#fff").fontSize(6.5).font("Helvetica-Bold");
+          for (const c of cols) {
+            doc.text(c.label, xOff + 2, yPos + 5, { width: c.width - 5, align: c.align });
+            xOff += c.width;
+          }
+          return yPos + 16;
+        };
+
+        y = drawTableHeader(y);
+
+        const renderedGroups = new Set<string>();
+        let rowIdx = 0;
+
+        for (const item of itensEnriquecidos) {
+          const eap = item.eapCodigo;
+          if (eap) {
+            const parts = eap.split(".");
+            for (let depth = 1; depth < parts.length; depth++) {
+              const parentEap = parts.slice(0, depth).join(".");
+              if (!renderedGroups.has(parentEap)) {
+                renderedGroups.add(parentEap);
+                if (y > pageBottom - 30) { doc.addPage(); y = 36; y = drawTableHeader(y); }
+                const isTop = depth === 1;
+                const bgColor = isTop ? "#e8edf4" : "#f3f5f8";
+                doc.rect(mL, y, tableW, 14).fill(bgColor);
+                if (isTop) doc.rect(mL, y, 3, 14).fill("#d4a017");
+                doc.fillColor(primary).font("Helvetica-Bold").fontSize(7);
+                doc.text(parentEap, mL + 5, y + 4);
+                const indent = 5 + (depth - 1) * 10;
+                const nome = hierMap.get(parentEap) || `Nível ${parentEap}`;
+                doc.text(`» ${nome}`, mL + 52 + indent, y + 4, { width: tableW - 60 - indent, height: 10, ellipsis: true });
+                y += 14;
+                rowIdx = 0;
+              }
+            }
+          }
+
+          if (y > pageBottom - 20) { doc.addPage(); y = 36; y = drawTableHeader(y); }
+          if (rowIdx % 2 === 0) doc.rect(mL, y, tableW, 13).fill("#fafbfc");
+          doc.rect(destaqueX, y, destaqueW, 13).fill(rowIdx % 2 === 0 ? "#e3eefc" : DESTAQUE_BG);
+          doc.fillColor("#333").font("Helvetica").fontSize(6.5);
+          let xOff = mL;
+          const indent = eap ? Math.max(0, (eap.split(".").length - 1) * 6) : 0;
+          const QTD = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const qtdPeriodo = item.quantidade * item.percPeriodo / 100;
+          const qtdAcumulada = item.quantidade * item.percAcumulado / 100;
+          const vals = [
+            { v: eap || "-", a: "left" as const },
+            { v: item.descricao.substring(0, 42), a: "left" as const },
+            { v: item.unidade, a: "center" as const },
+            { v: QTD(item.quantidade), a: "right" as const },
+            { v: BRL(item.valorUnitario), a: "right" as const },
+            { v: BRL(item.valorTotal), a: "right" as const },
+            { v: PCT(item.percAnterior), a: "right" as const },
+            { v: PCT(item.percPeriodo), a: "right" as const },
+            { v: `${QTD(qtdPeriodo)} ${item.unidade !== "-" ? item.unidade : ""}`.trim(), a: "right" as const },
+            { v: BRL(item.valorPeriodo), a: "right" as const },
+            { v: PCT(item.percAcumulado), a: "right" as const },
+            { v: `${QTD(qtdAcumulada)} ${item.unidade !== "-" ? item.unidade : ""}`.trim(), a: "right" as const },
+            { v: BRL(item.valorAcumulado), a: "right" as const },
+          ];
+          for (let ci = 0; ci < cols.length; ci++) {
+            const c = cols[ci];
+            const cellX = ci === 1 ? xOff + indent : xOff;
+            const cellW = ci === 1 ? c.width - indent : c.width;
+            if (c.destaque) doc.font("Helvetica-Bold").fillColor("#1d4ed8"); else doc.font("Helvetica").fillColor("#333");
+            doc.text(vals[ci].v, cellX + 2, y + 4, { width: cellW - 5, align: vals[ci].a, lineBreak: false });
+            xOff += c.width;
+          }
+          doc.strokeColor("#e5e7eb").lineWidth(0.3).moveTo(mL, y + 13).lineTo(mL + tableW, y + 13).stroke();
+          y += 13;
+          rowIdx++;
+        }
+
+        if (y > pageBottom - 20) { doc.addPage(); y = 36; }
+        doc.rect(mL, y, tableW, 16).fill("#e2e8f0");
+        doc.fillColor("#1e293b").font("Helvetica-Bold").fontSize(7);
+        doc.text("TOTAL", mL + 5, y + 5);
+        const colX = (i: number) => mL + cols.slice(0, i).reduce((s, c) => s + c.width, 0);
+        doc.text(BRL(totalValorContrato), colX(5) + 2, y + 5, { width: cols[5].width - 5, align: "right", lineBreak: false });
+        doc.fillColor("#1d4ed8").text(BRL(totalValorPeriodo), colX(9) + 2, y + 5, { width: cols[9].width - 5, align: "right", lineBreak: false });
+        doc.fillColor("#1e293b").text(BRL(totalValorAcumulado), colX(12) + 2, y + 5, { width: cols[12].width - 5, align: "right", lineBreak: false });
+        y += 24;
+
+        // Rev. 4827 — aviso permanente: desconto de FD excluído desta medição.
+        if ((medicao as any).fdExclusaoAlerta) {
+          const alertaTxt = String((medicao as any).fdExclusaoAlerta);
+          const altH = doc.heightOfString(alertaTxt, { width: tableW - 16 }) + 26;
+          if (y > pageBottom - altH) { doc.addPage(); y = 36; }
+          doc.rect(mL, y, tableW, altH).fill("#fef2f2").stroke("#fca5a5");
+          doc.font("Helvetica-Bold").fontSize(8).fillColor("#dc2626").text("⚠ EXISTEM FDs PENDENTES", mL + 8, y + 6);
+          doc.font("Helvetica").fontSize(7).fillColor("#b91c1c").text(alertaTxt, mL + 8, y + 17, { width: tableW - 16 });
+          y += altH + 8;
+        }
+
+        if (totalRetencoes > 0 || descontos > 0 || totalFdPdf > 0) {
+          if (y > pageBottom - (120 + fdsDaMedicao.length * 13)) { doc.addPage(); y = 36; }
+          doc.font("Helvetica-Bold").fontSize(9).fillColor(primary).text("RETENÇÕES E DESCONTOS", mL, y);
+          y += 14;
+          doc.strokeColor(accent).lineWidth(0.8).moveTo(mL, y).lineTo(mL + 200, y).stroke();
+          y += 8;
+          doc.fontSize(8).font("Helvetica").fillColor("#333");
+          if (retISS > 0) { doc.text(`ISS${pISS > 0 ? ` (${pISS}%)` : ""}: ${BRL(retISS)}`, mL, y); y += 13; }
+          if (retINSS > 0) { doc.text(`INSS${pINSS > 0 ? ` (${pINSS}%)` : ""}: ${BRL(retINSS)}`, mL, y); y += 13; }
+          if (retIRRF > 0) { doc.text(`IRRF${pIRRF > 0 ? ` (${pIRRF}%)` : ""}: ${BRL(retIRRF)}`, mL, y); y += 13; }
+          if (retOutras > 0) { doc.text(`Outras Retenções${pOutras > 0 ? ` (${pOutras}%)` : ""}: ${BRL(retOutras)}`, mL, y); y += 13; }
+          if (retTecnica > 0) { doc.text(`Retenção Técnica${pRetTecnica > 0 ? ` (${pRetTecnica}%)` : ""}: ${BRL(retTecnica)} *`, mL, y); y += 13; }
+          if (descontos > 0) { doc.text(`Descontos: ${BRL(descontos)}`, mL, y); y += 13; }
+          // Rev. 4800 — cada FD descontado sai discriminado no boletim
+          if (totalFdPdf > 0) {
+            doc.font("Helvetica-Bold").fillColor("#92400e").text(`Descontos lançados neste período (FD, EPI, ferramental...): - ${BRL(totalFdPdf)}`, mL, y); y += 13;
+            doc.font("Helvetica").fontSize(7.5).fillColor("#555");
+            // Rev. 4801 — cada desconto sai discriminado com o TIPO no boletim
+            const tipoLabelPdf: Record<string, string> = { fd: "FD Compra", epi: "EPI", ferramental: "Ferramental", insumo: "Insumo", outro: "Outro" };
+            for (const f of fdsDaMedicao) {
+              if (y > pageBottom - 20) { doc.addPage(); y = 36; doc.font("Helvetica").fontSize(7.5).fillColor("#555"); }
+              const dt = f.dataFd ? new Date(`${String(f.dataFd).slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR") : "-";
+              const origemTxt = f.origem === "auto" ? " (desconto automático)" : f.origem === "avulso" ? " (lançado fora da medição)" : "";
+              doc.text(`   • ${dt} — [${tipoLabelPdf[(f as any).tipo || "fd"] || "Outro"}] ${f.descricao}${origemTxt}: - ${BRL(n(f.valor))}`, mL, y, { width: pageW - 20 });
+              y += 12;
+            }
+            doc.fontSize(8).fillColor("#333");
+          }
+          doc.font("Helvetica-Bold").text(`Total Retenções: ${BRL(totalRetencoes)}`, mL, y); y += 13;
+          if (retTecnica > 0) { doc.font("Helvetica").fontSize(7).fillColor("#666").text(`* Retenção Técnica: valor retido e liberado somente após a última medição do contrato. Acumulado: ${BRL(retTecnicaAcumulada)}`, mL, y); y += 13; }
+          if ((medicao as any).observacoesRetencao) { doc.font("Helvetica").fontSize(7).text(`Obs.: ${(medicao as any).observacoesRetencao}`, mL, y); y += 13; }
+          y += 8;
+        }
+
+        if (y > pageBottom - 70) { doc.addPage(); y = 36; }
+        // ── Resumo financeiro em linha (paisagem) ──
+        doc.roundedRect(mL, y, pageW, 44, 4).lineWidth(1.2).stroke(primary);
+        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(primary).text("RESUMO FINANCEIRO", mL + 12, y + 7);
+        const summCol = (pageW - 200) / 3;
+        const summItem = (label: string, valor: string, ci: number, bold = false) => {
+          const x = mL + 12 + ci * summCol;
+          doc.font("Helvetica").fontSize(7).fillColor("#666").text(label, x, y + 20);
+          doc.font("Helvetica-Bold").fontSize(9).fillColor("#333").text(valor, x, y + 29);
+        };
+        summItem("Valor Bruto do Período", BRL(totalValorPeriodo), 0);
+        summItem("Retenções", `- ${BRL(totalRetencoes)}`, 1);
+        summItem("Descontos + FD", `- ${BRL(descontos + totalFdPdf)}`, 2);
+        doc.roundedRect(mL + pageW - 185, y + 8, 173, 28, 3).fill("#d1fae5");
+        doc.font("Helvetica").fontSize(6.5).fillColor("#065f46").text("VALOR LÍQUIDO A PAGAR", mL + pageW - 177, y + 13);
+        doc.font("Helvetica-Bold").fontSize(12).fillColor("#065f46").text(BRL(valorLiquido), mL + pageW - 177, y + 21);
+        y += 44 + 12;
+
+        // ── Assinatura digital — FCSign (sem papel) ──
+        if (y > pageBottom - 66) { doc.addPage(); y = 36; }
+        doc.roundedRect(mL, y, pageW, 58, 4).fill("#f4f6f9");
+        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(primary).text("ASSINATURA DIGITAL — FCSIGN", mL + 12, y + 8);
+        if (envelopeAss) {
+          const envStatus: Record<string, string> = { rascunho: "Envelope criado (aguardando envio)", enviado: "Enviado para assinatura", em_andamento: "Assinaturas em andamento", concluido: "ASSINADO DIGITALMENTE", cancelado: "Envelope cancelado", recusado: "Assinatura recusada" };
+          doc.font("Helvetica").fontSize(7).fillColor("#333")
+            .text(`Envelope #${envelopeAss.id} · ${envStatus[envelopeAss.status] || envelopeAss.status}${envelopeAss.dataConclusao ? ` em ${new Date(envelopeAss.dataConclusao).toLocaleDateString("pt-BR")}` : ""} · Documento com hash e trilha de auditoria no módulo FCSign.`, mL + 12, y + 20, { width: pageW - 24 });
+          let sx = mL + 12;
+          const sigColW = Math.min(240, (pageW - 24) / Math.max(1, signatariosAss.length));
+          for (const s of signatariosAss) {
+            const assinado = !!s.dataAssinatura;
+            doc.font("Helvetica-Bold").fontSize(7.5).fillColor(assinado ? "#065f46" : "#92600a").text(`${assinado ? "✓" : "…"} ${s.nome}`, sx, y + 34, { width: sigColW - 10, height: 9, ellipsis: true });
+            doc.font("Helvetica").fontSize(6.5).fillColor("#666").text(`${s.papel === "fornecedor" ? "Contratada" : "Contratante"}${assinado ? ` — assinado em ${new Date(s.dataAssinatura).toLocaleDateString("pt-BR")}` : " — pendente"}`, sx, y + 44, { width: sigColW - 10 });
+            sx += sigColW;
+          }
+        } else {
+          doc.font("Helvetica").fontSize(7).fillColor("#333")
+            .text("Este boletim é validado por assinatura eletrônica no módulo FCSign (sem papel): contratante e contratada assinam pelo link recebido, com hash do documento e trilha de auditoria. Envie para assinatura pelo botão \"Assinar no FCSign\" na medição.", mL + 12, y + 20, { width: pageW - 24 });
+          const sigW = 220;
+          doc.strokeColor("#9aa7b8").lineWidth(0.5);
+          doc.moveTo(mL + 40, y + 46).lineTo(mL + 40 + sigW, y + 46).stroke();
+          doc.moveTo(mL + pageW - 40 - sigW, y + 46).lineTo(mL + pageW - 40, y + 46).stroke();
+          doc.fontSize(6.5).font("Helvetica").fillColor("#666");
+          doc.text(`Contratante — ${company?.name || ""}`, mL + 40, y + 49, { width: sigW, align: "center" });
+          doc.text(`Contratada — ${empresa?.razaoSocial || empresa?.nomeFantasia || ""}`, mL + pageW - 40 - sigW, y + 49, { width: sigW, align: "center" });
+        }
+
+        // ── Rev. 4834 — MEMÓRIA DE CÁLCULO / LEVANTAMENTO DE CAMPO (com fotos) ──
+        const fmtQtd = (c: any) => {
+          const q = n(c.quantidade);
+          const un = c.unidade || (c.tipo === "area" ? "m²" : c.tipo === "perimetro" || c.tipo === "linear" ? "m" : c.tipo === "volume" ? "m³" : "");
+          return `${q.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${un}`.trim();
+        };
+        const tipoLabel: Record<string, string> = { area: "Área", perimetro: "Perímetro / Linear", linear: "Perímetro / Linear", volume: "Volume", contagem: "Contagem", parede: "Parede" };
+        for (const campo of camposPdf) {
+          doc.addPage();
+          // faixa-título no mesmo padrão do cabeçalho
+          doc.rect(mL - 4, 36, doc.page.width - mL - mR + 8, 24).fill(primary);
+          doc.font("Helvetica-Bold").fontSize(9).fillColor("#ffffff")
+            .text("M E M Ó R I A   D E   C Á L C U L O   —   L E V A N T A M E N T O   D E   C A M P O", mL - 4, 44, { width: doc.page.width - mL - mR + 8, align: "center" });
+          y = 36 + 24 + 8;
+          doc.font("Helvetica-Bold").fontSize(8.5).fillColor(primary).text(`Levantamento ${campo.titulo}`, mL, y);
+          if (campo.criadoPorNome) {
+            doc.font("Helvetica").fontSize(7).fillColor("#666").text(`Realizado por: ${campo.criadoPorNome}`, mL + pageW - 240, y + 1, { width: 240, align: "right" });
+          }
+          y += 16;
+
+          // tabela de contornos
+          if (campo.contornos.length > 0) {
+            doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#333").text("Contornos medidos", mL, y); y += 11;
+            const cw = [34, 92, 130, pageW - 34 - 92 - 130 - 110, 110];
+            const cx = [mL, mL + cw[0], mL + cw[0] + cw[1], mL + cw[0] + cw[1] + cw[2], mL + cw[0] + cw[1] + cw[2] + cw[3]];
+            const headRow = () => {
+              doc.rect(mL, y, pageW, 12).fill("#eef1f5");
+              doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#555");
+              ["Nº", "Tipo", "Local / Nome", "Item vinculado", "Quantidade"].forEach((h, i) => doc.text(h, cx[i] + 3, y + 3.5, { width: cw[i] - 6, align: i === 4 ? "right" : "left" }));
+              y += 12;
+            };
+            headRow();
+            let idxPorTipo: Record<string, number> = {};
+            for (const c of campo.contornos) {
+              if (y > pageBottom - 14) { doc.addPage(); y = 36; headRow(); }
+              const t = tipoLabel[c.tipo] || c.tipo || "-";
+              idxPorTipo[t] = (idxPorTipo[t] || 0) + 1;
+              doc.rect(mL, y, pageW, 11).strokeColor("#e3e7ee").lineWidth(0.4).stroke();
+              doc.font("Helvetica").fontSize(6.5).fillColor("#333");
+              doc.text(String(c.numero ?? idxPorTipo[t]).padStart(3, "0"), cx[0] + 3, y + 3, { width: cw[0] - 6 });
+              doc.text(t, cx[1] + 3, y + 3, { width: cw[1] - 6, height: 8, ellipsis: true });
+              doc.text(c.rotulo || c.servico || "-", cx[2] + 3, y + 3, { width: cw[2] - 6, height: 8, ellipsis: true });
+              doc.text(c.itemDescricao || "-", cx[3] + 3, y + 3, { width: cw[3] - 6, height: 8, ellipsis: true });
+              doc.font("Helvetica-Bold").text(fmtQtd(c), cx[4] + 3, y + 3, { width: cw[4] - 6, align: "right" });
+              y += 11;
+            }
+            y += 10;
+          }
+
+          // registro fotográfico
+          const fotosOk = campo.fotos.filter(f => f.buffer);
+          if (fotosOk.length > 0) {
+            if (y > pageBottom - 130) { doc.addPage(); y = 36; }
+            doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#333").text(`Registro fotográfico (${fotosOk.length})`, mL, y); y += 12;
+            const perRow = 5, gap = 8;
+            const cellW = (pageW - gap * (perRow - 1)) / perRow;
+            const imgH = cellW * 0.72, cellH = imgH + 14;
+            let col = 0;
+            for (const f of fotosOk) {
+              if (col === 0 && y + cellH > pageBottom) { doc.addPage(); y = 36; }
+              const x = mL + col * (cellW + gap);
+              try {
+                doc.save();
+                doc.rect(x, y, cellW, imgH).clip();
+                doc.image(f.buffer as Buffer, x, y, { cover: [cellW, imgH], align: "center", valign: "center" } as any);
+                doc.restore();
+                doc.rect(x, y, cellW, imgH).strokeColor("#d4d9e0").lineWidth(0.5).stroke();
+              } catch {
+                doc.rect(x, y, cellW, imgH).fill("#f0f2f5");
+                doc.font("Helvetica").fontSize(6).fillColor("#999").text("foto indisponível", x, y + imgH / 2 - 3, { width: cellW, align: "center" });
+              }
+              doc.font("Helvetica").fontSize(6).fillColor("#555").text((f.legenda || "").toUpperCase(), x, y + imgH + 3, { width: cellW, height: 8, ellipsis: true });
+              col++;
+              if (col === perRow) { col = 0; y += cellH + 6; }
+            }
+            if (col > 0) y += cellH + 6;
+          }
+        }
+
+        // Rev. 4854 — RUBRICA EM TODAS AS PÁGINAS (pedido do usuário): cada
+        // assinante que já assinou tem sua rubrica carimbada no rodapé de
+        // todas as páginas do boletim (bufferPages permite revisitar).
+        try {
+          const rubricas = (signatariosAss || []).filter((s: any) =>
+            s.status === "assinado" && typeof s.rubricaImagem === "string" && s.rubricaImagem.startsWith("data:image"));
+          if (rubricas.length > 0) {
+            const range = doc.bufferedPageRange();
+            for (let pi = range.start; pi < range.start + range.count; pi++) {
+              doc.switchToPage(pi);
+              let rx = doc.page.width - 40 - rubricas.length * 48;
+              const ry = doc.page.height - 30;
+              for (const s of rubricas) {
+                try {
+                  const b64 = String(s.rubricaImagem).split(",")[1];
+                  if (b64) {
+                    doc.image(Buffer.from(b64, "base64"), rx, ry - 18, { fit: [44, 16] });
+                    doc.font("Helvetica").fontSize(4.5).fillColor("#8a94a3")
+                      .text(String(s.nome || "").split(" ")[0].toUpperCase(), rx, ry, { width: 44, align: "center", lineBreak: false });
+                  }
+                } catch {}
+                rx += 48;
+              }
+            }
+          }
+        } catch {}
+
+        doc.end();
+      });
 }
