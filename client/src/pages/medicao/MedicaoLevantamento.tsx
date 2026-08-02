@@ -321,6 +321,44 @@ export default function MedicaoLevantamento() {
     return out.sort((a, b) => (a.eapCodigo || "").localeCompare(b.eapCodigo || "", undefined, { numeric: true }));
   }, [jaMedidoMap, itensOrcamento]);
 
+  // Rev. 4809 — Alerta de ADITIVO em tempo real: conforme o levantamento soma
+  // áreas, se (medido agora + já medido em medições fechadas) ultrapassar a
+  // quantidade do contrato para o item, avisa na hora (toast 1x por item +
+  // banner âmbar fixo na Planilha consolidada).
+  const itensExcedidos = useMemo(() => {
+    const out: { id: number; eapCodigo: string; descricao: string; unidade: string; contratada: number; acumulada: number }[] = [];
+    const linhas = (consolidado?.linhas ?? []) as any[];
+    for (const l of linhas) {
+      if (l.orcamentoItemId == null) continue;
+      const it = (itensOrcamento as any[]).find((i) => i.id === l.orcamentoItemId);
+      const contratada = parseFloat(String(it?.quantidade ?? "0")) || 0;
+      if (contratada <= 0) continue;
+      const acumulada = (Number(l.quantidade) || 0) + (jaMedidoMap.get(l.orcamentoItemId) || 0);
+      if (acumulada > contratada + 1e-6) {
+        out.push({
+          id: l.orcamentoItemId,
+          eapCodigo: it?.eapCodigo ?? l.eapCodigo ?? "",
+          descricao: it?.descricao ?? l.descricao ?? "",
+          unidade: it?.unidade ?? l.unidade ?? "",
+          contratada,
+          acumulada,
+        });
+      }
+    }
+    return out;
+  }, [consolidado, itensOrcamento, jaMedidoMap]);
+  const aditivoAvisadosRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    for (const it of itensExcedidos) {
+      if (aditivoAvisadosRef.current.has(it.id)) continue;
+      aditivoAvisadosRef.current.add(it.id);
+      toast.warning("Área superior ao contrato", {
+        description: `${it.eapCodigo ? it.eapCodigo + " · " : ""}${it.descricao}: ${numFmt(it.acumulada, 2)} ${it.unidade} medidos × ${numFmt(it.contratada, 2)} ${it.unidade} contratados. Avaliar a possibilidade de criar aditivo.`,
+        duration: 10000,
+      });
+    }
+  }, [itensExcedidos]);
+
   // Rev. 3093 (T002/T003) — Contornos das OUTRAS medições do contrato, exibidos
   // como camada de REFERÊNCIA clara/tracejada sobre a MESMA planta (pdfId+página).
   // Ajuda o engenheiro a ver "o que já foi medido aqui" sem remedir.
@@ -3521,6 +3559,19 @@ export default function MedicaoLevantamento() {
             {/* consolidado */}
             <div className="border rounded-lg p-3">
               <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><FileSpreadsheet className="h-4 w-4" />Planilha consolidada</h3>
+              {/* Rev. 4809 — alerta de aditivo: acumulado ultrapassou o contratado */}
+              {itensExcedidos.length > 0 && (
+                <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+                  <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />Área superior ao contrato</div>
+                  {itensExcedidos.map((it) => (
+                    <div key={it.id} className="mt-1 break-words">
+                      {it.eapCodigo ? `${it.eapCodigo} · ` : ""}{it.descricao}: <b>{numFmt(it.acumulada, 2)} {it.unidade}</b> medidos × {numFmt(it.contratada, 2)} {it.unidade} contratados
+                      {" "}(+{numFmt(it.acumulada - it.contratada, 2)} {it.unidade}).
+                    </div>
+                  ))}
+                  <div className="mt-1">Avaliar a possibilidade de criar <b>aditivo</b>.</div>
+                </div>
+              )}
               {(consolidado?.linhas ?? []).length === 0 ? (
                 <p className="text-xs text-gray-400">Vincule contornos a itens do orçamento para consolidar em R$.</p>
               ) : (

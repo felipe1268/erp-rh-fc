@@ -1,4 +1,15 @@
 /**
+ * Rev. 4809 - ALERTA DE ADITIVO EM TEMPO REAL NO LEVANTAMENTO
+ *
+ * Conforme o levantamento soma areas, se o acumulado do item (medido agora +
+ * medicoes fechadas) ultrapassar a quantidade contratada:
+ * - Toast na hora (1x por item): "Area superior ao contrato. Avaliar a
+ *   possibilidade de criar aditivo."
+ * - Banner ambar fixo na Planilha consolidada com medido x contratado e o
+ *   excedente de cada item.
+ */
+
+/**
  * Rev. 4808 - "JA MEDIDO NESTE CONTRATO" SO CONTA MEDICAO FECHADA
  *
  * Bug relatado: card "Ja medido neste contrato" mostrava 94,62 m2 de Forro
