@@ -187,7 +187,15 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   });
 
   const excluirMedicaoMut = trpc.terceiroContratos.excluirMedicao.useMutation({
-    onSuccess: () => { toast.success("Medição excluída"); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onSuccess: (res: any) => {
+      const nAd = Number(res?.aditivosExcluidos || 0);
+      const vRev = Number(res?.valorAditivoRevertido || 0);
+      toast.success(nAd > 0
+        ? `Medição excluída — ${nAd} aditivo(s) originado(s) por ela também ${nAd > 1 ? "foram excluídos" : "foi excluído"}${vRev > 0.01 ? ` e ${vRev.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} revertidos do contrato` : ""}.`
+        : "Medição excluída");
+      utils.terceiroContratos.getContrato.invalidate({ id });
+      utils.terceiroContratos.listarAditivos.invalidate({ contratoId: id, companyId: contrato?.companyId });
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -2120,6 +2128,18 @@ function ConfirmBox({ state, onClose }: { state: ConfirmState; onClose: () => vo
 
 function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao, initialMedicaoId, setShowGerarMedicao, medCfg, fdsTerceiro, aprovarGestorMut, aprovarSocioMut, criarFdTerceiroMut, excluirFdTerceiroMut }: any) {
   const assinado = (contrato as any).assinaturaStatus === "concluido";
+  // Rev. 4818 — aditivos vinculados à medição: aviso no excluir (cascata)
+  const { data: aditivosDoContrato } = trpc.terceiroContratos.listarAditivos.useQuery(
+    { contratoId: id, companyId: contrato?.companyId },
+    { enabled: !!contrato?.companyId },
+  );
+  const descExcluirMedicao = (m: any) => {
+    const vinculados = (aditivosDoContrato || []).filter((a: any) => a.medicaoId === m.id);
+    const base = m.status === "aprovada" ? "Os valores acumulados serão revertidos. " : "";
+    if (vinculados.length === 0) return `${base}Esta ação não pode ser desfeita.`;
+    const soma = vinculados.reduce((s: number, a: any) => s + (Number(a.valorTotal) || 0), 0);
+    return `${base}ATENÇÃO: esta medição originou ${vinculados.length} aditivo(s) (${soma.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}). Eles serão EXCLUÍDOS junto — o teto do item, o valor do contrato e o consumo da Realocação de Verba serão desfeitos. Esta ação não pode ser desfeita.`;
+  };
   const tresNiveis = (medCfg?.aprovacaoTresNiveis ?? 1) === 1;
   const fdsAll: any[] = fdsTerceiro?.fds || [];
   const [expandedMedicao, setExpandedMedicao] = useState<number | null>(initialMedicaoId ?? null);
@@ -2337,7 +2357,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   {modoEdicao && m.status !== "paga" && (
                     <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-red-600 border-red-200 hover:bg-red-50" title="Excluir medição"
                       disabled={excluirMedicaoMut.isPending}
-                      onClick={() => setConfirmar({ title: `Excluir Medição ${String(m.numero).padStart(2, "0")}?`, description: m.status === "aprovada" ? "Os valores acumulados serão revertidos. Esta ação não pode ser desfeita." : "Esta ação não pode ser desfeita.", actionLabel: "Excluir", destructive: true, onConfirm: () => excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }) })}>
+                      onClick={() => setConfirmar({ title: `Excluir Medição ${String(m.numero).padStart(2, "0")}?`, description: descExcluirMedicao(m), actionLabel: "Excluir", destructive: true, onConfirm: () => excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }) })}>
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   )}
@@ -2547,7 +2567,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   {m.status !== "paga" && (
                     <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
                       disabled={excluirMedicaoMut.isPending}
-                      onClick={() => setConfirmar({ title: `Excluir Medição ${String(m.numero).padStart(2, "0")}?`, description: m.status === "aprovada" ? "Os valores acumulados serão revertidos. Esta ação não pode ser desfeita." : "Esta ação não pode ser desfeita.", actionLabel: "Excluir", destructive: true, onConfirm: () => excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }) })}>
+                      onClick={() => setConfirmar({ title: `Excluir Medição ${String(m.numero).padStart(2, "0")}?`, description: descExcluirMedicao(m), actionLabel: "Excluir", destructive: true, onConfirm: () => excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }) })}>
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   )}

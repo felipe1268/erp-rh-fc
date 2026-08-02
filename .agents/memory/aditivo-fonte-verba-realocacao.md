@@ -7,4 +7,5 @@ description: Integração aditivo de terceiros ↔ pote de Realocação de Verba
 - **Locks**: 478005+contratoId (aditivo), 478006+companyId serializa leitura-de-saldo+consumo entre aprovações E encerramentos (sem ele, 2 sócios gastam o mesmo saldo 2×).
 - Nunca bloquear: sem saldo o aditivo sobe; sócio aprova; `valor_coberto = min(saldo, valorTotal)`; descoberto = prejuízo consciente (badge vermelho/âmbar no card).
 - `encerrarContrato` exige medições/aditivos pendentes resolvidos; sobra = valorTotal − Σ itens.valorMedidoAcumulado; idempotente (checa crédito existente). `gerarMedicao` bloqueia encerrado/cancelado/suspenso.
-- **Why:** dinheiro não pode existir 2× (teto reaberto + crédito no pote) nem ser consumido 2× em corrida.
+- **Excluir a medição que ORIGINOU o aditivo (medicaoId) derruba o aditivo junto** e desfaz tudo: teto do item, valor do contrato, % das medições abertas (fator inverso) e o consumo de realocação volta ao pote. Demais medições não mexem em aditivos (regra do usuário). Item afetado: % re-derivado do VALOR contra o teto novo.
+- **Why:** dinheiro não pode existir 2× (teto reaberto + crédito no pote) nem ser consumido 2× em corrida; aditivo sem a medição-lastro é órfão sem fundamento.

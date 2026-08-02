@@ -3549,7 +3549,73 @@ export const terceiroContratosRouter = router({
       // Antes só revertia se status==="aprovada"; um rascunho que passou pelo
       // recalcular já tinha gravado acumulado no item → exclusão deixava saldo
       // fantasma no contrato ("Medido Acumulado" sem nenhuma medição).
+      let aditivosExcluidos = 0;
+      let valorAditivoRevertido = 0;
       await db.transaction(async (tx: any) => {
+        // Rev. 4818 — a medição que ORIGINOU um aditivo é o lastro dele: excluir
+        // essa medição derruba o aditivo junto e DESFAZ todos os efeitos
+        // (teto do item, valor do contrato, consumo de realocação, % das abertas).
+        const aditivosDaMedicao = await tx.select().from(terceiroContratoAditivos)
+          .where(and(eq(terceiroContratoAditivos.medicaoId, input.id), eq(terceiroContratoAditivos.companyId, input.companyId)));
+        const itensAfetadosPorAditivo = new Set<number>();
+        if (aditivosDaMedicao.length > 0) {
+          // Serializa com o pote de realocação (mesmo lock das aprovações).
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(478006, ${input.companyId})`);
+          const [contrato] = await tx.select().from(terceiroContratos)
+            .where(and(eq(terceiroContratos.id, medicao.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+          for (const ad of aditivosDaMedicao) {
+            if (ad.status === "aprovado" && contrato) {
+              const [item] = await tx.select().from(terceiroContratoItens)
+                .where(and(eq(terceiroContratoItens.id, ad.contratoItemId), eq(terceiroContratoItens.companyId, input.companyId)));
+              if (item) {
+                const tetoAntigo = n(item.valorTotal);
+                const tetoNovo = Math.max(0, Math.round((tetoAntigo - n(ad.valorTotal)) * 100) / 100);
+                await tx.update(terceiroContratoItens).set({
+                  quantidade: String(Math.max(0, n(item.quantidade) - n(ad.quantidade))),
+                  valorTotal: String(tetoNovo),
+                } as any).where(eq(terceiroContratoItens.id, item.id));
+                itensAfetadosPorAditivo.add(item.id);
+                // % das medições ABERTAS remanescentes foram re-escaladas quando o
+                // teto cresceu — desfaz com o fator INVERSO (valores em R$ não mudam).
+                const fatorInv = tetoNovo > 0 ? tetoAntigo / tetoNovo : 0;
+                await tx.execute(sql`
+                  UPDATE terceiro_medicao_itens mi SET
+                    percentual_acumulado_anterior = ROUND(COALESCE(mi.percentual_acumulado_anterior, 0) * ${fatorInv}::numeric, 4),
+                    percentual_medido_periodo     = ROUND(COALESCE(mi.percentual_medido_periodo, 0) * ${fatorInv}::numeric, 4),
+                    percentual_avanco_fisico      = ROUND(COALESCE(mi.percentual_avanco_fisico, 0) * ${fatorInv}::numeric, 4)
+                  FROM terceiro_medicoes m
+                  WHERE m.id = mi.medicao_id
+                    AND mi.contrato_item_id = ${item.id}
+                    AND m.contrato_id = ${medicao.contratoId}
+                    AND m.id != ${input.id}
+                    AND m.status NOT IN ('aprovada','paga')
+                `);
+              }
+              const novoValorContrato = Math.max(0, Math.round((n(contrato.valorTotal) - n(ad.valorTotal)) * 100) / 100);
+              (contrato as any).valorTotal = String(novoValorContrato);
+              await tx.update(terceiroContratos).set({ valorTotal: String(novoValorContrato), atualizadoEm: new Date().toISOString() } as any)
+                .where(eq(terceiroContratos.id, contrato.id));
+              await tx.execute(sql`
+                UPDATE terceiro_medicoes SET
+                  percentual_global = ROUND(COALESCE(valor_medido, 0) / NULLIF(${novoValorContrato}::numeric, 0) * 100, 4)
+                WHERE contrato_id = ${medicao.contratoId}
+                  AND id != ${input.id}
+                  AND status NOT IN ('aprovada','paga')
+              `);
+              // Devolve o consumo do pote de Realocação de Verba (se houve).
+              if ((ad as any).realocacaoId) {
+                await tx.delete(budgetReallocations).where(and(
+                  eq(budgetReallocations.id, (ad as any).realocacaoId),
+                  eq(budgetReallocations.companyId, input.companyId),
+                ));
+              }
+              valorAditivoRevertido += n(ad.valorTotal);
+            }
+            await tx.delete(terceiroContratoAditivos).where(eq(terceiroContratoAditivos.id, ad.id));
+            aditivosExcluidos++;
+          }
+        }
+
         {
           const itensMedicao = await tx.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
           const itemIds = Array.from(new Set(itensMedicao.map((im: any) => im.contratoItemId).filter(Boolean)));
@@ -3570,8 +3636,17 @@ export const terceiroContratosRouter = router({
               .reduce((s: number, o: any) => s + n(o.percentualMedidoPeriodo), 0);
             const somaValor = outrosItens.filter((o: any) => o.contratoItemId === itemId)
               .reduce((s: number, o: any) => s + n(o.valorMedidoPeriodo), 0);
+            // Rev. 4818 — item cujo teto encolheu (aditivo revertido): % re-derivado
+            // do VALOR contra o teto atual (os % antigos eram relativos ao teto maior).
+            let percFinal = somaPerc;
+            if (itensAfetadosPorAditivo.has(itemId as number)) {
+              const [itemAtual] = await tx.select({ valorTotal: terceiroContratoItens.valorTotal }).from(terceiroContratoItens)
+                .where(eq(terceiroContratoItens.id, itemId));
+              const teto = n(itemAtual?.valorTotal);
+              percFinal = teto > 0 ? (somaValor / teto) * 100 : 0;
+            }
             await tx.update(terceiroContratoItens).set({
-              percentualMedidoAcumulado: String(somaPerc),
+              percentualMedidoAcumulado: String(percFinal),
               valorMedidoAcumulado: String(somaValor),
             }).where(and(eq(terceiroContratoItens.id, itemId), eq(terceiroContratoItens.companyId, input.companyId)));
           }
@@ -3588,7 +3663,7 @@ export const terceiroContratosRouter = router({
         await tx.delete(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
         await tx.delete(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.id));
       });
-      return { ok: true };
+      return { ok: true, aditivosExcluidos, valorAditivoRevertido: Math.round(valorAditivoRevertido * 100) / 100 };
     }),
 
   // Rev. 4801 — LIBERAÇÃO DA RETENÇÃO TÉCNICA (após a última medição do contrato).

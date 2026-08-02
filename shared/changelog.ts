@@ -1,4 +1,16 @@
 /**
+ * Rev. 4818 - EXCLUIR MEDICAO DERRUBA O ADITIVO QUE ELA ORIGINOU
+ *
+ * - A medicao que originou um aditivo e o LASTRO dele: ao excluir essa
+ *   medicao, o aditivo e excluido junto e TODOS os efeitos sao desfeitos
+ *   (teto do item, valor do contrato, % das medicoes abertas e o consumo
+ *   do saldo de Realocacao de Verba, que volta ao pote).
+ * - Alerta antes: o dialogo de exclusao avisa quantos aditivos serao
+ *   excluidos e o valor que sera revertido do contrato.
+ * - As demais medicoes nao mexem em aditivos (regra do usuario).
+ */
+
+/**
  * Rev. 4817 - ADITIVO COM FONTE DE VERBA + ENCERRAR CONTRATO COM SOBRA
  *
  * - Ao gerar aditivo, a tela mostra o saldo disponivel da Realocacao de Verba
