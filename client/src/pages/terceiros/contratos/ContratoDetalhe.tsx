@@ -16,7 +16,7 @@ import {
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
   Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler, PenLine, Clock3, XCircle,
   UserRound, Link2, BadgeCheck, Mail, Check,
-  CheckCircle2, FilePlus, Camera,
+  CheckCircle2, FilePlus, Camera, Paperclip,
 } from "lucide-react";
 import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
 import { toast } from "sonner";
@@ -2313,6 +2313,15 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       <DollarSign className="w-3 h-3" />No Contas a Pagar{(pagto as any).vencimento ? ` • vence ${fmtDate((pagto as any).vencimento)}` : ""}
                     </span>
                   ) : null}
+                  {/* Rev. 4859 — comprovante da baixa visível direto na linha (pedido do
+                      usuário: ver imagem/PDF sem caçar no Financeiro). Abre em nova aba. */}
+                  {(pagto?.pago || pagto?.parcial) && (pagto?.baixas || []).filter((b: any) => b.comprovanteUrl).map((b: any, i: number) => (
+                    <a key={i} href={b.comprovanteUrl} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-white border border-emerald-300 rounded-full px-1.5 py-0.5 whitespace-nowrap flex-shrink-0 hover:bg-emerald-50 underline underline-offset-2"
+                      title={`Comprovante da baixa de ${fmtDate(b.data)} — ${BRL(b.valor)}`}>
+                      <Paperclip className="w-3 h-3" />Comprovante{(pagto?.baixas || []).filter((x: any) => x.comprovanteUrl).length > 1 ? ` ${i + 1}` : ""}
+                    </a>
+                  ))}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {/* Rev. 4859 — na linha mostra o VALOR A SER PAGO (líquido), não o
@@ -4617,7 +4626,12 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
   const parseBRLInput = (s: string) => parseInt(onlyDigits(s) || "0", 10) / 100;
 
   const totalFd = (fds || []).reduce((s: number, f: any) => s + (Number(f.valor) || 0), 0);
-  const liquido = (Number(medicao.valorMedido) || 0) - totalFd;
+  // Rev. 4859 — o líquido a pagar desconta TAMBÉM as retenções da medição
+  // (técnica + ISS/INSS/IRRF/outras + descontos), igual ao título do Financeiro.
+  const totalRetencoes = (Number(medicao.retencaoTecnica) || 0) + (Number(medicao.retencaoISS) || 0)
+    + (Number(medicao.retencaoINSS) || 0) + (Number(medicao.retencaoIRRF) || 0)
+    + (Number(medicao.outrasRetencoes) || 0) + (Number(medicao.descontos) || 0);
+  const liquido = Math.max(0, (Number(medicao.valorMedido) || 0) - totalRetencoes - totalFd);
 
   // Rev. 4798 — débito de FD do contrato ainda não descontado em NENHUMA medição.
   // O sistema avisa sozinho e oferece puxar o desconto; a aprovação fica
@@ -4735,6 +4749,9 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
 
       <div className="mt-2 flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs border-t border-amber-200 pt-2">
         <span className="text-gray-500">Medido: <strong className="text-gray-800">{BRL(medicao.valorMedido)}</strong></span>
+        {totalRetencoes > 0 && (
+          <span className="text-rose-700" title="Retenção técnica + ISS/INSS/IRRF/outras + descontos da medição">Retenções: <strong>− {BRL(totalRetencoes)}</strong></span>
+        )}
         <span className="text-amber-700">Total descontos: <strong>− {BRL(totalFd)}</strong></span>
         <span className="text-blue-700">Líquido a pagar: <strong>{BRL(liquido)}</strong></span>
       </div>
