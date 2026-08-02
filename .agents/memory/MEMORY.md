@@ -27,11 +27,7 @@
 - [Unguarded tRPC endpoints](unguarded-trpc-endpoints.md) — frontend route gating ≠ backend authorization; verify role/tenant checks live IN the procedure, not just behind the UI route guard.
 - [OC entregue fora do fluxo padrão precisa de self-heal](oc-almox-entrega-sem-titulo.md) — todo caminho que marca OC entregue (Almoxarifado!) deve chamar garantirEntryDaOC ou a OC some do Contas a Pagar.
 - [Contas a Pagar — base da janela de fechamento](contas-pagar-ciclo-window-basis.md) — agrupar por ciclo de fornecedor usa data da COMPRA (competência), nunca vencimento (varia por OC).
-- [DXF escala heurística + sidecar](levantamento-dxf-escala-heuristica.md) — $INSUNITS mente; clustering espacial + plausibilidade 3–1000 m; mudou o parse → bump DXF_ALGO_VERSION; upload multipart ≤150MB.
-- [Levantamento sync — corridas da fila](levantamento-sync-queue-races.md) — op editada em voo nunca é apagada pelo ack; foto referencia contorno por UUID (id offline é hash negativo); contornos antes de fotos no lote.
-- [Levantamento consolidado = só-leitura](levantamento-consolidacao-lock.md) — todo write novo passa por assertCampoNaoConsolidado; sync offline descarta com "ok"; desconsolidar checa medição por consulta reversa; desaprovar gera REV. N.
-- [Levantamento — fluxo poka-yoke](levantamento-pokayoke-fluxo.md) — planta nova só DXF; categoria comanda a ferramenta (contorno sempre classificado); escala PDF legado exige conferência ±2%.
-- [Levantamento — catálogo de serviços](levantamento-servicos-catalogo.md) — seed sob advisory lock 478002; updates de contorno SEMPRE reenviam `servico` (sync preserva se ausente); derivado com medição manual suprime derivação.
+- [Levantamento gotchas](levantamento-consolidacao-lock.md) — [consolidado = só-leitura (assertCampoNaoConsolidado)](levantamento-consolidacao-lock.md); [corridas da fila de sync](levantamento-sync-queue-races.md); [DXF escala heurística](levantamento-dxf-escala-heuristica.md); [fluxo poka-yoke](levantamento-pokayoke-fluxo.md); [catálogo de serviços (lock 478002)](levantamento-servicos-catalogo.md).
 - [Medição gotchas](medicao-modules-architecture.md) — [FD ↔ Compras via compraId](medicao-fd-compras-link.md); [× Cronograma casar por atividadeId, não EAP](medicao-cronograma-atividade-id-match.md); [duplicada no Contas a Receber (2 escritas)](medicao-receita-dupla-escrita.md).
 - [SEFAZ sync gating & NSU](sefaz-nsu-rate-limit-loop.md) — cStat=656 deve persistir ultNSU (senão loop eterno); 4 fórmulas de gate DEVEM casar; elapsed via SQL/EXTRACT EPOCH não `new Date()` JS (skew 3h).
 - [Dissídio — HE excluída da base retroativa](dissidio-he-excluded-from-base.md) — toda HE vira banco de horas, nunca é paga em dinheiro; nunca somar HE na base de diferença salarial retroativa/reajuste.
@@ -82,10 +78,9 @@
 - [Batch-sync contract BOLA](batch-sync-contract-bola.md) — sync-queue endpoints must validate the CONTRATO of each id/uuid-targeted row; client must chunk ops below the server's lote cap.
 - [Transfer multi-resource IDOR + atomic debit](transfer-multi-resource-idor-atomic-debit.md) — transfer mutations must tenant-check EVERY id e debitar com `UPDATE ... WHERE qty>=X` (race → saldo negativo).
 - [Levantamento de Campo em PDF — IDOR](medicao-levantamento-campo.md) — procedures novas precisam de companyId em TODAS as subconsultas + validar contrato pertence à empresa E ao campo.
-- [EPI calça letra é derivada](epi-calca-size-letter-derived.md) — conversão letra→número é destrutiva; derive a letra do número na tela via `epiTamanho.ts`.
-- [EPI "restrito não escreve no Central"](epi-central-write-rule.md) — inventarie TODAS as rotas que escrevem num recurso ao impor permissão (transferir 2 sentidos, entradaEstoque, create).
+- [EPI gotchas](epi-central-write-rule.md) — [restrito não escreve no Central: inventarie TODAS as rotas de escrita](epi-central-write-rule.md); [calça letra é derivada do número](epi-calca-size-letter-derived.md).
 - [Public route ↔ auth whitelist drift](public-route-whitelist-drift.md) — a public route in App.tsx also needs its prefix in BOTH `publicPaths` arrays in main.tsx.
-- [Lazy chunk stale after deploy](lazy-chunk-stale-deploy.md) — every deploy rotates chunk hashes; Wrap React.lazy (lazyWithRetry) to retry+reload.
+- [Lazy chunk stale after deploy](lazy-chunk-stale-deploy.md) — every deploy rotates chunk hashes; Wrap React.lazy (lazyWithRetry) to retry+reload; ver tb [HTML cache stale](html-cache-stale-deploy.md).
 - [SyncSchema+ log is capped](syncschema-log-cap.md) — `[SyncSchema+]` log file caps ~49 lines; missing `Rev. N` line ≠ failure. Verify via NEON_DATABASE_URL direct pg.
 - [Master-only field must gate at backend](master-only-field-backend-gate.md) — a "só Admin Master" field must be stripped from the payload by role server-side, not just hidden in the UI.
 - [react-pdf worker version match](pdfjs-worker-version-match.md) — "Erro ao carregar PDF" = bundled worker version ≠ react-pdf's internal pdfjs API; pin pdfjs-dist EXACTLY to react-pdf's dep.
@@ -93,8 +88,7 @@
 - [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; mutações de conta precisam de tenant guard.
 - [Notification recipient tenancy](notification-recipient-tenancy.md) — notify queries must join `user_companies` (users has NO companyId; admin roles are global) or you leak across tenants.
 - [resolveCompanyIds trusts input](resolvecompanyids-no-intersect.md) — resolveCompanyIds/companyFilter don't intersect with user's allowed companies; per-company endpoints must call assert guard explicitly.
-- [Backup diário — streaming obrigatório](backup-streaming-oom.md) — nunca acumular tabelas em RAM (OOM derrubava o servidor); lote adaptativo por ctid; uploaded_files usa pg_column_size, nunca LENGTH.
-- [Migração export/import](migration-export-streaming.md) — export grande = rota GET streaming (archiver.pipe+ctid); import precisa whitelist de identificadores.
+- [Backup/migração — streaming obrigatório](backup-streaming-oom.md) — nunca acumular tabelas em RAM (OOM); lote por ctid; pg_column_size, não LENGTH; [export GET streaming + whitelist no import](migration-export-streaming.md).
 - [Recebíveis só entram manualmente](recebiveis-previstos-manual.md) — nenhum importer materializa receita em financial_entries; user lança via "Recebíveis Previstos"; dedup revenue ignora cancelado.
 - [AI JSON quebra com número BR](ai-json-br-number-salvage.md) — LLM emite `2.500,00` → JSON.parse estrito aborta o lote; try-parse→catch-salvage por regex + parser BR-aware.
 - [SC → cotação tipo propagation](sc-cotacao-tipo-propagation.md) — editar SC deve reconciliar `tipo` nas cotações vinculadas; TODO caminho de criação de cotação deve semear `tipo: sc.tipo ?? "material"`.
@@ -104,10 +98,7 @@
 - [terceiro_contratos.status não confiável](terceiro-contrato-status-unreliable.md) — "assinado" = envelope FcSign concluido+não-excluído, NÃO status="ativo" bruto.
 - [CIPA module write-path guards](cipa-module.md) — CIPA create/update/delete need companyFilter; update/delete-by-id are IDOR holes; abrirVotacao race fixed via UNIQUE+onConflictDoNothing.
 - [Cronograma consultivo na medição](medicao-cronograma-consultivo.md) — avanço do cronograma NUNCA escreve o medido (campo é soberano); só comparativo com alerta acima/abaixo (tol. 3%).
-- [FD pendente trava aprovação](fd-pendente-trava-aprovacao.md) — FD de material não descontado bloqueia aprovar medição; puxar auto capado no medido (lock 478003); título líquido de FD; desaprovar apaga título sem baixa.
-- [Acumulado terceiros: só aprovadas escrevem](terceiro-medicao-acumulado-writers.md) — recalcular rascunho NUNCA grava acumulado no item; excluir/cancelar recalculam das aprovadas remanescentes (senão saldo fantasma).
-- [Aditivo de contrato terceiro](aditivo-contrato-terceiro.md) — aditivo exige lastro no excedente medido; aprovar (teto cresce) DEVE re-escalar % das medições abertas ou o sync re-marca excedente.
-- [Terceiros: título garantido no Financeiro](terceiros-medicao-titulo-garantido.md) — aprovar medição chama garantirTituloDaMedicao (bypassa toggle auto_import, xact_lock 478001, periodo YYYY-MM c/ fallback); novo caminho de aprovação deve propagar financeiroOk.
+- [Terceiros medição gotchas](medicao-paga-imutavel.md) — [paga (baixa ativa, não status!) = imutável; só master c/ senha destrava atômico](medicao-paga-imutavel.md); [FD pendente trava aprovação](fd-pendente-trava-aprovacao.md); [acumulado: só aprovadas escrevem](terceiro-medicao-acumulado-writers.md); [aditivo exige lastro + re-escala %](aditivo-contrato-terceiro.md); [título garantido ao aprovar](terceiros-medicao-titulo-garantido.md).
 - [Medição módulos cliente vs terceiros + shared engine](medicao-modules-architecture.md) — "medicao"=lado CLIENTE, terceiros é tabela separada, IDs colidem → medicao_campo precisa de `origem`; [sem origem = escopo CLIENTE nunca `true`](medicao-shared-engine-origem.md).
 - [/uploads DB-fallback MIME + traversal](uploads-db-fallback-mime.md) — off-disk attachments fall back to uploaded_files; octet-stream → Safari/iOS preview blank; derive MIME from extension; fallback needs path-traversal guard.
 - [NFS-e gotchas](nfse-valor-liquido-formula.md) — [Líquido = Bruto − retenções](nfse-valor-liquido-formula.md); [SIAP GEO: "ISS devido" ≠ iss_retido](nfse-siapgeo-issretido-vs-informado.md); [formato SPED/RFB Guaratinguetá ≠ ABRASF](nfse-nacional-sped-format.md).
@@ -127,9 +118,7 @@
 - [RQ cache-hit hydration race](rq-cache-hit-hydration-race.md) — dois useEffects (um hidrata de query.data, outro reseta) anulam estado em cache hit; unifique num só effect.
 - [Conceder obra implica empresa](grant-obra-implies-company.md) — usuário comum: empresas visíveis = user_companies + DONAS das obras de getEffectiveAllowedObraIds.
 - [criarManual explicit-id IDOR](cheques-criar-manual-idor.md) — INSERT que aceita FK id explícito deve validar ownership da empresa; assertCompanyAccess só autoriza a empresa, não o recurso referenciado.
-- [HTML cache stale post-deploy](html-cache-stale-deploy.md) — express.static com maxAge=1h serve index.html stale após deploy → chunks 404. Fix: setHeaders para .html/.sw.js = no-cache,no-store.
-- [Baixa parcial financeiro](financeiro-baixa-parcial.md) — rollup=SUM(baixas ativas); estornos LEGADOS devem soft-estornar baixas; concorrência via advisory lock por entry em db.transaction.
-- [Conta da baixa não propaga pro entry](conta-bancaria-rollup-propagation.md) — registrarBaixa grava conta só no histórico; rollup deve setar entry.conta_bancaria_id=COALESCE(última baixa ativa, atual).
+- [Baixa parcial financeiro](financeiro-baixa-parcial.md) — rollup=SUM(baixas ativas); estornos legados soft-estornam; lock por entry em db.transaction; [conta da baixa deve propagar pro entry](conta-bancaria-rollup-propagation.md).
 - [ORDER BY alias-in-expression throws](orderby-alias-expression-postgres.md) — `ORDER BY (aliasA+aliasB)` no Postgres → "column does not exist"; wrap em subquery.
 - [Panorama Fiscal — duas noções de "com nota"](panorama-fiscal-cobertura-two-notions.md) — gauge Saúde Fiscal = ratio de VOLUME (NF-e/débitos); split entradas/saidasComNota = vínculo LINHA-A-LINHA. Divergem por design.
 - [DRE drill-down single-source](dre-drilldown-single-source.md) — detalhe clicável reusa `dreLinhaPredicate` + a MESMA CTE de calcularDRE; impostos tem 2 fontes a espelhar.

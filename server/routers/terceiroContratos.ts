@@ -510,6 +510,22 @@ async function _assertMasterComSenha(ctxUser: any, password: string | undefined)
   }
 }
 
+// Rev. 4859 (review) — LGPD/ISO 9001: medição com PAGAMENTO baixado (baixa ativa
+// no título do Contas a Pagar) é IMUTÁVEL, mesmo que o status ainda seja
+// "aprovada". Guard compartilhado por TODO write path de medição.
+async function _assertMedicaoSemBaixaAtiva(db: any, medicaoId: number, companyId: number) {
+  const r = await db.execute(sql`
+    SELECT 1 FROM financial_entry_baixas b
+    JOIN financial_entries e ON e.id = b.entry_id
+    WHERE e.company_id = ${companyId} AND e.origem_modulo = 'terceiro_medicao' AND e.origem_id = ${medicaoId}
+      AND b.estornada_em IS NULL
+    LIMIT 1`);
+  const rows = Array.isArray(r) ? r : (r?.rows ?? []);
+  if (rows.length > 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Esta medição já tem PAGAMENTO baixado no Contas a Pagar e não pode ser alterada. Caminho correto: o admin master destrava com a senha dele (estorna a baixa e cancela a aprovação na ordem correta)." });
+  }
+}
+
 // Rev. 2909 — Cancelamento EM CASCATA do contrato (soft, preserva histórico):
 //   1) contrato → status "cancelado" (+ quem/quando/motivo + nota em observações);
 //   2) medições NÃO pagas (status != paga|cancelada) → "cancelada";
@@ -2478,11 +2494,18 @@ export const terceiroContratosRouter = router({
     }),
 
   cancelarAprovacao: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .input(z.object({ id: z.number(), companyId: z.number(), senhaMaster: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       await _assertCompanyAccess(ctx.user, input.companyId);
-      return await cancelarAprovacaoDaMedicao(db, { id: input.id, companyId: input.companyId, userName: (ctx.user as any)?.name || null });
+      // Rev. 4859 — medição PAGA só destrava com a senha do admin master:
+      // o sistema faz a volta completa (estorna baixas → remove título → desaprova).
+      let masterEstorno: { userId: number | null; userName: string | null } | undefined;
+      if (input.senhaMaster != null) {
+        await _assertMasterComSenha(ctx.user, input.senhaMaster);
+        masterEstorno = { userId: (ctx.user as any)?.id ?? null, userName: (ctx.user as any)?.name ?? null };
+      }
+      return await cancelarAprovacaoDaMedicao(db, { id: input.id, companyId: input.companyId, userName: (ctx.user as any)?.name || null, masterEstorno });
     }),
 
   rejeitarMedicao: protectedProcedure
@@ -3190,6 +3213,24 @@ export const terceiroContratosRouter = router({
       );
       if (!medicao) throw new Error("Medição não encontrada");
       if (medicao.status === "paga") throw new Error("Não é possível excluir uma medição já paga");
+      // Rev. 4859 — LGPD/ISO 9001 (pedido do usuário): medição com PAGAMENTO
+      // baixado no Contas a Pagar é IMUTÁVEL. O caminho é o inverso: estornar a
+      // baixa no Financeiro → cancelar a aprovação → só então excluir/alterar.
+      {
+        const titulos = await db.select({ id: financialEntries.id }).from(financialEntries)
+          .where(and(
+            eq(financialEntries.companyId, input.companyId),
+            eq(financialEntries.origemModulo, "terceiro_medicao"),
+            eq(financialEntries.origemId, input.id),
+          ));
+        for (const t of titulos) {
+          const bx = await db.select({ id: financialEntryBaixas.id }).from(financialEntryBaixas)
+            .where(and(eq(financialEntryBaixas.entryId, t.id), sql`${financialEntryBaixas.estornadaEm} IS NULL`)).limit(1);
+          if (bx.length > 0) {
+            throw new Error("Esta medição já tem PAGAMENTO baixado no Contas a Pagar e não pode ser excluída. Caminho correto: estornar a baixa do título no Financeiro, depois cancelar a aprovação da medição — só então ela pode ser alterada ou excluída.");
+          }
+        }
+      }
 
       // Rev. 4801 — tudo atômico: reversão de acumulados + descontos + deleções.
       // Rev. 4804 — BUGFIX: reverter SEMPRE (qualquer status), recalculando o
@@ -3801,6 +3842,7 @@ export const terceiroContratosRouter = router({
       );
       if (!medicao) throw new Error("Medição não encontrada");
       if (medicao.status === "paga") throw new Error("Não é possível editar uma medição já paga");
+      await _assertMedicaoSemBaixaAtiva(db, input.id, input.companyId); // Rev. 4859 — paga = imutável
 
       const upd: any = { atualizadoEm: new Date().toISOString() };
       if (input.periodo !== undefined) upd.periodo = input.periodo;
@@ -3818,18 +3860,28 @@ export const terceiroContratosRouter = router({
       return updated;
     }),
 
+  // Rev. 4859 (review) — endpoint legado hardening: exigia só medicaoId/contratoId
+  // sem tenancy (IDOR — qualquer usuário logado podia marcar medição alheia como
+  // paga). Agora exige companyId + acesso à empresa + vínculo medição↔contrato.
   registrarPagamento: protectedProcedure
-    .input(z.object({ medicaoId: z.number(), contratoId: z.number(), valor: z.number() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({ medicaoId: z.number(), contratoId: z.number(), companyId: z.number(), valor: z.number() }))
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const [med] = await db.select().from(terceiroMedicoes).where(and(
+        eq(terceiroMedicoes.id, input.medicaoId),
+        eq(terceiroMedicoes.contratoId, input.contratoId),
+        eq(terceiroMedicoes.companyId, input.companyId),
+      ));
+      if (!med) throw new Error("Medição não encontrada");
       await db.update(terceiroMedicoes)
         .set({ status: "paga", atualizadoEm: new Date().toISOString() })
-        .where(eq(terceiroMedicoes.id, input.medicaoId));
-      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
+        .where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
+      const [contrato] = await db.select().from(terceiroContratos).where(and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId)));
       const novoValorPago = n(contrato?.valorPago) + input.valor;
       const [c] = await db.update(terceiroContratos)
         .set({ valorPago: String(novoValorPago), atualizadoEm: new Date().toISOString() })
-        .where(eq(terceiroContratos.id, input.contratoId))
+        .where(and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId)))
         .returning();
       return c;
     }),
@@ -3850,6 +3902,7 @@ export const terceiroContratosRouter = router({
       const [medicao] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!medicao) throw new Error("Medição não encontrada");
       if (medicao.status === "paga") throw new Error("Não é possível editar itens de uma medição já paga");
+      await _assertMedicaoSemBaixaAtiva(db, input.medicaoId, input.companyId); // Rev. 4859 — paga = imutável
 
       const [item] = await db.select().from(terceiroMedicaoItens).where(and(eq(terceiroMedicaoItens.id, input.medicaoItemId), eq(terceiroMedicaoItens.medicaoId, input.medicaoId)));
       if (!item) throw new Error("Item da medição não encontrado");
@@ -5983,11 +6036,20 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
 // Rev. 4857 — corpo do cancelarAprovacao extraído para reuso pelo FCSign:
 // cancelar um envelope CONCLUÍDO de boletim precisa desfazer a aprovação da
 // medição e o título no Contas a Pagar (bloqueando se já houver baixa ativa).
-export async function cancelarAprovacaoDaMedicao(db: any, input: { id: number; companyId: number; userName?: string | null }) {
+export async function cancelarAprovacaoDaMedicao(outerDb: any, input: { id: number; companyId: number; userName?: string | null; masterEstorno?: { userId: number | null; userName: string | null } }) {
+  // Rev. 4859 (review) — ATÔMICO: estorno de baixas + remoção do título +
+  // desaprovação numa transação só, serializada com a criação de título
+  // (mesmo advisory lock 478001 do garantirTituloDaMedicao) — sem estado parcial
+  // nem corrida entre dois cancelamentos/aprovações concorrentes.
+  return await outerDb.transaction(async (db: any) => {
+      await db.execute(sql`SELECT pg_advisory_xact_lock(478001, ${input.companyId})`);
       const ctx = { user: { name: input.userName } } as any;
       const [existing] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!existing) throw new Error("Medição não encontrada");
-      if (existing.status !== "aprovada") throw new Error(`Apenas medições aprovadas podem ter a aprovação cancelada (status: ${existing.status})`);
+      // Rev. 4859 — com destravamento do admin master (senha conferida), medição
+      // com status "paga" também pode voltar (o estorno das baixas sai junto).
+      const statusPermitidos = input.masterEstorno ? ["aprovada", "paga"] : ["aprovada"];
+      if (!statusPermitidos.includes(String(existing.status))) throw new Error(`Apenas medições aprovadas podem ter a aprovação cancelada (status: ${existing.status})`);
 
       // Rev. 4798 (review) — reconcilia o FINANCEIRO ao desaprovar: o título da
       // medição sai junto (senão a reaprovação com valores diferentes deixaria
@@ -6004,7 +6066,18 @@ export async function cancelarAprovacaoDaMedicao(db: any, input: { id: number; c
           const baixas = await db.select({ id: financialEntryBaixas.id }).from(financialEntryBaixas)
             .where(and(eq(financialEntryBaixas.entryId, t.id), sql`${financialEntryBaixas.estornadaEm} IS NULL`)).limit(1);
           if (baixas.length > 0) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Esta medição já tem PAGAMENTO baixado no Contas a Pagar. Estorne a baixa do título antes de cancelar a aprovação." });
+            // Rev. 4859 — LGPD/ISO 9001: medição paga é imutável. ÚNICA exceção:
+            // admin master COM SENHA conferida → o sistema faz a volta completa
+            // sozinho (soft-estorna as baixas aqui; o título sai logo abaixo).
+            if (input.masterEstorno) {
+              await db.execute(sql`
+                UPDATE financial_entry_baixas
+                SET estornada_em=NOW(), estornada_por_id=${input.masterEstorno.userId}, estornada_por_nome=${input.masterEstorno.userName},
+                    estorno_motivo=${"Estorno automático — cancelamento da aprovação da medição pelo admin master (senha conferida)"}
+                WHERE entry_id=${t.id} AND company_id=${input.companyId} AND estornada_em IS NULL`);
+            } else {
+              throw new TRPCError({ code: "BAD_REQUEST", message: "Esta medição já tem PAGAMENTO baixado no Contas a Pagar. Estorne a baixa do título no Financeiro — ou peça ao admin master para destravar com a senha dele." });
+            }
           }
         }
         if (titulos.length > 0) {
@@ -6063,4 +6136,5 @@ export async function cancelarAprovacaoDaMedicao(db: any, input: { id: number; c
         .returning();
 
       return medicao;
+  });
 }

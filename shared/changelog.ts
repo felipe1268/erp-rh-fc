@@ -1,6 +1,17 @@
 /**
  * Rev. 4859 - LEGENDA NOS ALERTAS DA MEDICAO (TERCEIROS)
  *
+ * - COMPROVANTE NA LINHA DA MEDICAO: baixa com comprovante anexado mostra o
+ *   selo "Comprovante" direto na listagem (abre imagem/PDF em nova aba).
+ * - MEDICAO PAGA E IMUTAVEL (LGPD/ISO 9001, pedido do usuario): com pagamento
+ *   baixado no Contas a Pagar, some o cancelar/excluir e entra o cadeado
+ *   "Travada — paga". Excluir/cancelar no servidor tambem bloqueiam.
+ * - DESTRAVAR SO COM SENHA DO ADMIN MASTER: botao "Destravar" (so master)
+ *   pede a senha e o sistema faz a VOLTA COMPLETA na ordem correta —
+ *   estorna a baixa (historico preservado), remove o titulo do Financeiro e
+ *   cancela a aprovacao (medicao volta como nova revisao). Nada some
+ *   "por fora": o caminho inverso e obrigatorio e auditado.
+ *
  * - O triangulo laranja ao lado do periodo da medicao nao dizia NADA — agora
  *   virou selo "Diverge do cronograma" (comparativo consultivo com o avanco
  *   da obra; detalhe completo ao expandir a medicao).

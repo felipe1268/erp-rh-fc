@@ -145,6 +145,10 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [showExcluirContrato, setShowExcluirContrato] = useState(false);
   const [contratoMotivo, setContratoMotivo] = useState("");
   const [contratoSenha, setContratoSenha] = useState("");
+  // Rev. 4859 — destravar medição PAGA (LGPD/ISO 9001): só admin master com senha;
+  // o servidor faz a volta completa (estorna baixa → remove título → desaprova).
+  const [destravar, setDestravar] = useState<{ id: number; numero: string } | null>(null);
+  const [senhaDestravar, setSenhaDestravar] = useState("");
 
   const utils = trpc.useUtils();
   const { data: contrato, isLoading } = trpc.terceiroContratos.getContrato.useQuery(
@@ -2061,6 +2065,40 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {/* Rev. 4859 — destravar medição PAGA: só admin master com senha; o servidor
+            faz a volta completa (estorna baixa → remove título → cancela aprovação). */}
+        <Dialog open={!!destravar} onOpenChange={v => { if (!v) setDestravar(null); }}>
+          <DialogContent className="border-slate-300 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+            <DialogHeader>
+              <DialogTitle className="text-slate-800 flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5" /> Destravar Medição {destravar?.numero} (paga)
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-1">
+              <div className="rounded-lg bg-amber-50 border border-amber-300 p-3 text-xs text-amber-900 space-y-1">
+                <p className="font-semibold">Medição paga é imutável (LGPD/ISO 9001).</p>
+                <p>Com a sua senha de admin master, o sistema fará a <strong>volta completa</strong>, na ordem correta:</p>
+                <p>1. Estorna a baixa do pagamento no Contas a Pagar;<br />2. Remove o título do Financeiro;<br />3. Cancela a aprovação (a medição volta para "Aguardando Aprovação" como nova revisão).</p>
+                <p>Nada é apagado sem esse caminho — o histórico do estorno fica registrado.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-gray-700">Senha do admin master <span className="text-red-500">*</span></Label>
+                <Input type="password" placeholder="Confirme sua senha" value={senhaDestravar} onChange={e => setSenhaDestravar(e.target.value)} className="text-sm" />
+              </div>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button variant="outline" onClick={() => setDestravar(null)} disabled={cancelarAprovacaoMut.isPending}>Voltar</Button>
+              <Button
+                className="bg-slate-700 hover:bg-slate-600 text-white gap-1.5"
+                disabled={!senhaDestravar || cancelarAprovacaoMut.isPending}
+                onClick={() => destravar && cancelarAprovacaoMut.mutate({ id: destravar.id, companyId: contrato.companyId, senhaMaster: senhaDestravar }, { onSuccess: () => setDestravar(null) })}
+              >
+                {cancelarAprovacaoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                Destravar e Desfazer Pagamento
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <ConfirmBox state={confirmarMain} onClose={() => setConfirmarMain(null)} />
       </div>
     </DashboardLayout>
@@ -2356,6 +2394,22 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   {/* Rev. 4828 — botão "Editar medição" REMOVIDO (pedido do usuário):
                       período/status não são editáveis à mão; o status anda só
                       pelos botões do fluxo (Solicitar Aprovação → Aprovar). */}
+                  {/* Rev. 4859 — LGPD/ISO 9001: medição PAGA (baixa ativa no Financeiro)
+                      é IMUTÁVEL. Some o cancelar/excluir e entra o cadeado com o
+                      caminho inverso (estornar baixa → cancelar aprovação → alterar). */}
+                  {(pagto?.pago || pagto?.parcial) ? (<>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-2 py-1 whitespace-nowrap flex-shrink-0"
+                      title="Medição paga é imutável (LGPD/ISO 9001). Só o admin master, com a senha dele, pode destravar — o sistema estorna a baixa e desfaz a aprovação na ordem correta.">
+                      <Lock className="w-3 h-3" /><span className="hidden md:inline">Travada — paga</span>
+                    </span>
+                    {isMaster && modoEdicao && (
+                      <Button size="sm" variant="outline" className="h-7 gap-1 text-xs text-slate-600 border-slate-300 hover:bg-slate-50"
+                        title="Destravar com a senha do admin master: estorna a baixa, remove o título e cancela a aprovação (volta completa do sistema)"
+                        onClick={() => { setSenhaDestravar(""); setDestravar({ id: m.id, numero: String(m.numero).padStart(2, "0") }); }}>
+                        <ShieldCheck className="w-3 h-3" /><span className="hidden md:inline">Destravar</span>
+                      </Button>
+                    )}
+                  </>) : (<>
                   {modoEdicao && m.status === "aprovada" && (
                     <Button size="sm" variant="outline" className="h-7 gap-1 text-xs text-orange-600 border-orange-200 hover:bg-orange-50" title="Cancelar aprovação"
                       disabled={cancelarAprovacaoMut.isPending}
@@ -2370,6 +2424,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   )}
+                  </>)}
                 </div>
               </div>
             </div>
@@ -2562,7 +2617,22 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       </Button>
                     </>
                   )}
-                  {m.status === "aprovada" && (
+                  {/* Rev. 4859 — LGPD/ISO 9001: paga (baixa ativa) = imutável; caminho
+                      inverso: estornar baixa no Financeiro → cancelar aprovação. */}
+                  {(pagto?.pago || pagto?.parcial) && (<>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-2 py-1"
+                      title="Medição paga é imutável (LGPD/ISO 9001). Só o admin master, com a senha dele, pode destravar.">
+                      <Lock className="w-3 h-3" /> Travada — paga
+                    </span>
+                    {isMaster && (
+                      <Button size="sm" variant="outline" className="gap-1 text-xs text-slate-600 border-slate-300 hover:bg-slate-50"
+                        title="Destravar com a senha do admin master: estorna a baixa, remove o título e cancela a aprovação (volta completa do sistema)"
+                        onClick={() => { setSenhaDestravar(""); setDestravar({ id: m.id, numero: String(m.numero).padStart(2, "0") }); }}>
+                        <ShieldCheck className="w-3 h-3" /> Destravar
+                      </Button>
+                    )}
+                  </>)}
+                  {m.status === "aprovada" && !(pagto?.pago || pagto?.parcial) && (
                     <Button size="sm" variant="outline" className="gap-1 text-xs text-orange-600 border-orange-200 hover:bg-orange-50"
                       disabled={cancelarAprovacaoMut.isPending}
                       onClick={() => setConfirmar({ title: `Cancelar aprovação da Medição ${String(m.numero).padStart(2, "0")}?`, description: 'A medição voltará para "Aguardando Aprovação" e os valores acumulados serão recalculados.', actionLabel: "Cancelar Aprovação", onConfirm: () => cancelarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }) })}>
@@ -2587,7 +2657,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                     </Button>
                   )}
                   {/* Rev. 4828 — botão "Editar" removido (fluxo automatizado; status só pelos botões) */}
-                  {m.status !== "paga" && (
+                  {m.status !== "paga" && !(pagto?.pago || pagto?.parcial) && (
                     <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
                       disabled={excluirMedicaoMut.isPending}
                       onClick={() => setConfirmar({ title: `Excluir Medição ${String(m.numero).padStart(2, "0")}?`, description: descExcluirMedicao(m), actionLabel: "Excluir", destructive: true, onConfirm: () => excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }) })}>
