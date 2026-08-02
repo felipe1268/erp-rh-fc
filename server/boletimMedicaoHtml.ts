@@ -222,7 +222,7 @@ export async function buildBoletimMedicaoHtml(db: any, medicaoId: number, compan
               <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-top:10px">
                 <div style="font-size:10px;font-weight:bold;color:#1B3A5C;text-transform:uppercase">${esc(camadaNome)} <span style="color:#7a8699;font-weight:normal">· ${esc((pdf as any).nome || (pdf as any).arquivoNome || "Planta")} · ${ccs.length} medição(ões)${soma > 0 ? ` · total ${QTD(soma)} ${esc(unid)}` : ""}</span></div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
-                  <div style="flex:2;min-width:280px;position:relative;padding-top:${(100 / Math.max(ratio, 0.05) * 0.66).toFixed(2)}%;background:#fff;border:1px solid #eef1f5">
+                  <div style="flex:2;min-width:280px;position:relative;padding-top:${(100 / Math.max(ratio, 0.05)).toFixed(2)}%;background:#fff;border:1px solid #eef1f5">
                     <div style="position:absolute;inset:0">${bg}<svg viewBox="0 0 ${W} ${H.toFixed(1)}" style="position:absolute;inset:0;width:100%;height:100%" preserveAspectRatio="none">${shapes.join("")}</svg></div>
                   </div>
                   <div style="flex:1;min-width:170px"><div style="font-size:8.5px;color:#7a8699;text-transform:uppercase;font-weight:bold;border-bottom:1px solid #e5e7eb;padding-bottom:2px">Legenda — ${esc(camadaNome)}</div>${legenda.join("")}${soma > 0 ? `<div style="font-size:9px;text-align:right;font-weight:bold;padding-top:3px">TOTAL: ${QTD(soma)} ${esc(unid)}</div>` : ""}</div>
