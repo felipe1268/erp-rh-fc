@@ -1730,8 +1730,11 @@ export default function MedicaoLevantamento() {
   // (3) GPS + data/hora da captura ficam gravados na foto.
   const FRESCOR_MAX_MS = 5 * 60_000; // tolerância p/ vídeo longo + processamento
   function midiaRecusadaPorIdade(file: File): boolean {
-    if (!file.lastModified) return false; // sem metadado → deixa passar (câmera de alguns browsers)
-    return Date.now() - file.lastModified > FRESCOR_MAX_MS;
+    // iOS às vezes entrega lastModified zerado/inválido na captura da câmera —
+    // só recusa quando o carimbo é PLAUSÍVEL (após 2020) e realmente antigo.
+    const lm = file.lastModified;
+    if (!lm || lm < 1_577_836_800_000 || lm > Date.now() + 60_000) return false;
+    return Date.now() - lm > FRESCOR_MAX_MS;
   }
   async function capturarGpsAgora(): Promise<{ gpsLat: number | null; gpsLng: number | null; gpsPrecisao: number | null; capturadoEm: string }> {
     const capturadoEm = new Date().toISOString();
@@ -1755,9 +1758,14 @@ export default function MedicaoLevantamento() {
     const files = filtrarMidiaFresca(Array.from(e.target.files || []));
     e.target.value = "";
     if (!files.length) return;
-    const gps = await capturarGpsAgora();
-    for (const file of files) {
-      await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, ...gps });
+    try {
+      const gps = await capturarGpsAgora();
+      for (const file of files) {
+        await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, ...gps });
+      }
+      toast.success(files.length === 1 ? "Mídia anexada." : `${files.length} mídias anexadas.`);
+    } catch (err: any) {
+      toast.error(`Falha ao anexar: ${err?.message || err}`, { duration: 8000 });
     }
   }
 
@@ -1777,9 +1785,14 @@ export default function MedicaoLevantamento() {
     const alvo = fotoAlvoContornoRef.current;
     fotoAlvoContornoRef.current = null;
     if (alvo == null || !files.length) return;
-    const gps = await capturarGpsAgora();
-    for (const file of files) {
-      await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, contornoId: alvo.id, contornoUuid: alvo.uuid ?? null, ...gps });
+    try {
+      const gps = await capturarGpsAgora();
+      for (const file of files) {
+        await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, contornoId: alvo.id, contornoUuid: alvo.uuid ?? null, ...gps });
+      }
+      toast.success(files.length === 1 ? "Mídia anexada ao trecho." : `${files.length} mídias anexadas ao trecho.`);
+    } catch (err: any) {
+      toast.error(`Falha ao anexar: ${err?.message || err}`, { duration: 8000 });
     }
   }
 
