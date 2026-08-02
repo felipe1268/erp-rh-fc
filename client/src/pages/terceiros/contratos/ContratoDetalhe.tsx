@@ -2458,6 +2458,10 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   excluirFdTerceiroMut={excluirFdTerceiroMut}
                   readOnly={!modoEdicao}
                 />
+                {/* Rev. 4830 — comparativo INLINE abaixo da medição (pedido do usuário) */}
+                {recalcResult && recalcResult.medicaoId === m.id && (
+                  <ComparativoObraSection r={recalcResult} m={m} onClose={() => setRecalcResult(null)} />
+                )}
                 {modoEdicao && (
                 <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
                   {(m.status === "rascunho" || m.status === "rejeitada") && (
@@ -2509,9 +2513,10 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       disabled={recalcularMut.isPending}
                       title="Cruza o medido com o avanço do cronograma da obra (consultivo — não altera o medido)"
                       onClick={() => recalcularMut.mutate({ medicaoId: m.id, companyId: contrato.companyId }, { onSuccess: (data: any) => {
-                        setRecalcResult(data);
+                        setRecalcResult({ ...data, medicaoId: m.id });
                         if (data?.alertaDivergencia) toast.warning(data.alertaDivergencia);
                         else toast.success("Medido compatível com o avanço da obra.");
+                        setTimeout(() => document.getElementById(`comparativo-obra-${m.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
                       } })}>
                       <BarChart3 className={`w-3 h-3 ${recalcularMut.isPending ? "animate-pulse" : ""}`} /> Comparar c/ Avanço da Obra
                     </Button>
@@ -2887,79 +2892,146 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
         </div>
       )}
 
-      {recalcResult && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setRecalcResult(null)}>
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-blue-600" /> Comparativo com o Avanço da Obra
-            </h3>
-            {/* Rev. 4829 — avanço da obra em destaque (0% a 100%) */}
-            <div className="mb-4">
-              <div className="flex items-end justify-between mb-1">
-                <p className="text-sm font-medium text-gray-700">Avanço da Obra (cronograma)</p>
-                <p className="text-2xl font-bold text-blue-700">{Number(recalcResult.avancoObraGlobal ?? 0).toFixed(1)}%</p>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(recalcResult.avancoObraGlobal ?? 0)))}%` }} />
-              </div>
-              <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>0%</span><span>100%</span></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-blue-50 rounded-lg p-3 text-center">
-                <p className="text-xs text-blue-600 font-medium">Valor Medido (período)</p>
-                <p className="text-lg font-bold text-blue-800">R$ {Number(recalcResult.valorMedido).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="bg-emerald-50 rounded-lg p-3 text-center">
-                <p className="text-xs text-emerald-600 font-medium">% Medido do Contrato</p>
-                <p className="text-lg font-bold text-emerald-800">{Number(recalcResult.percentualGlobal).toFixed(1)}%</p>
-              </div>
-            </div>
-            {/* Rev. 4829 — item a item: medido terceiro × medido c/ cliente × avanço da obra */}
-            {Array.isArray(recalcResult.itens) && recalcResult.itens.length > 0 && (
-              <div className="border border-gray-200 rounded-lg mb-4 overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 text-gray-500">
-                    <tr>
-                      <th className="text-left px-2 py-1.5 font-medium">Item</th>
-                      <th className="text-right px-2 py-1.5 font-medium">Medido</th>
-                      {recalcResult.temMedicaoCliente && <th className="text-right px-2 py-1.5 font-medium">Cliente</th>}
-                      <th className="text-right px-2 py-1.5 font-medium">Obra</th>
+    </div>
+  );
+}
+
+// Rev. 4830 — Comparativo com o Avanço da Obra, INLINE abaixo da medição.
+// Item a item (medido × cliente × obra) + parecer técnico completo por escrito.
+function ComparativoObraSection({ r, m, onClose }: { r: any; m: any; onClose: () => void }) {
+  const fmtP = (v: any) => Number(v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const acima = (r.divergencias || []).filter((d: any) => d.tipo === "acima");
+  const abaixo = (r.divergencias || []).filter((d: any) => d.tipo === "abaixo");
+  const avancoObra = Number(r.avancoObraGlobal ?? 0);
+  const medidoGlobal = Number(r.percentualGlobal ?? 0);
+  const numeroMed = String(m.numero ?? "").padStart(2, "0");
+
+  // Parecer técnico por extenso (boletim de medição — caráter consultivo)
+  const paragrafos: string[] = [];
+  paragrafos.push(
+    `Procedeu-se ao cruzamento do Boletim de Medição nº ${numeroMed} com o avanço físico apurado no cronograma da obra. ` +
+    `O valor medido no período é de R$ ${Number(r.valorMedido ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}, ` +
+    `o que representa ${fmtP(medidoGlobal)}% do valor contratado (acumulado). ` +
+    `O avanço físico da obra, ponderado pelo valor dos itens vinculados ao cronograma, encontra-se em ${fmtP(avancoObra)}%.`
+  );
+  paragrafos.push(
+    `Dos ${(r.itens || []).length} item(ns) da planilha de medição, ${r.vinculados ?? 0} está(ão) vinculado(s) a atividades do cronograma` +
+    `${(r.naoVinculados ?? 0) > 0 ? ` e ${r.naoVinculados} permanece(m) sem vínculo — para esses, o comparativo físico não pôde ser apurado` : ""}. ` +
+    `Adotou-se tolerância de 3 (três) pontos percentuais entre o medido acumulado e o avanço físico, margem usual para absorver defasagens de apropriação entre a data da medição e a última atualização do cronograma.`
+  );
+  if (acima.length > 0) {
+    paragrafos.push(
+      `Constatou-se medição ACIMA do avanço físico da obra em ${acima.length} item(ns): ` +
+      acima.map((d: any) => `${d.descricao} (medido ${fmtP(d.medidoAcum)}% × obra ${fmtP(d.avancoObra)}%)`).join("; ") + ". " +
+      `Medição superior ao avanço físico pode indicar antecipação de faturamento em relação ao serviço efetivamente executado, ou cronograma desatualizado. Recomenda-se verificação in loco antes da aprovação e, se for o caso, a atualização do avanço no Planejamento.`
+    );
+  }
+  if (abaixo.length > 0) {
+    paragrafos.push(
+      `Constatou-se medição ABAIXO do avanço físico da obra em ${abaixo.length} item(ns): ` +
+      abaixo.map((d: any) => `${d.descricao} (medido ${fmtP(d.medidoAcum)}% × obra ${fmtP(d.avancoObra)}%)`).join("; ") + ". " +
+      `Medição inferior ao avanço físico pode indicar serviço executado e ainda não medido (saldo a apropriar em boletins futuros) ou execução por terceiros/administração direta na mesma atividade.`
+    );
+  }
+  if (acima.length === 0 && abaixo.length === 0) {
+    paragrafos.push(
+      `Não foram identificadas divergências acima da tolerância: o medido acumulado é compatível com o avanço físico registrado no cronograma da obra.`
+    );
+  }
+  if (r.temMedicaoCliente) {
+    paragrafos.push(
+      `A obra possui controle de medição junto ao cliente (módulo Medição); o percentual "Cliente" na tabela corresponde ao acumulado medido com o contratante para a mesma atividade/EAP, permitindo aferir o equilíbrio entre o que se paga ao terceiro e o que se recebe do cliente.`
+    );
+  }
+  paragrafos.push(
+    `Este comparativo tem caráter exclusivamente CONSULTIVO: não altera o valor medido, não bloqueia o fluxo de aprovação e fica registrado como referência no boletim. O valor devido ao contratado permanece o apurado na planilha de medição${(m.status === "aguardando_aprovacao") ? ", pendente de aprovação" : ""}.`
+  );
+
+  return (
+    <div id={`comparativo-obra-${m.id}`} className="rounded-xl border-2 border-blue-200 bg-blue-50/40 p-4 space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-bold uppercase tracking-wide text-blue-700 flex items-center gap-1.5">
+          <BarChart3 className="w-4 h-4" /> Comparativo com o Avanço da Obra
+        </p>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-gray-500" onClick={onClose}><X className="w-3.5 h-3.5" /></Button>
+      </div>
+
+      {/* Avanço da obra em destaque — 0% a 100% */}
+      <div>
+        <div className="flex items-end justify-between mb-1">
+          <p className="text-sm font-medium text-gray-700">Avanço da Obra (cronograma)</p>
+          <p className="text-2xl font-bold text-blue-700">{fmtP(avancoObra)}%</p>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, avancoObra))}%` }} />
+        </div>
+        <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>0%</span><span>100%</span></div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-lg border border-blue-100 p-3 text-center">
+          <p className="text-xs text-blue-600 font-medium">Valor Medido (período)</p>
+          <p className="text-lg font-bold text-blue-800">R$ {Number(r.valorMedido ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+        </div>
+        <div className="bg-white rounded-lg border border-emerald-100 p-3 text-center">
+          <p className="text-xs text-emerald-600 font-medium">% Medido do Contrato</p>
+          <p className="text-lg font-bold text-emerald-800">{fmtP(medidoGlobal)}%</p>
+        </div>
+      </div>
+
+      {/* Item a item */}
+      {Array.isArray(r.itens) && r.itens.length > 0 && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 text-gray-500">
+                <tr>
+                  <th className="text-left px-2 py-1.5 font-medium">Item</th>
+                  <th className="text-right px-2 py-1.5 font-medium">Medido</th>
+                  {r.temMedicaoCliente && <th className="text-right px-2 py-1.5 font-medium">Cliente</th>}
+                  <th className="text-right px-2 py-1.5 font-medium">Obra</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.itens.map((i: any, idx: number) => {
+                  const diverge = i.avancoObra !== null && i.avancoObra !== undefined && Math.abs(Number(i.medidoAcum ?? 0) - Number(i.avancoObra)) > 3;
+                  return (
+                    <tr key={idx} className="border-t border-gray-100">
+                      <td className="px-2 py-1.5 text-gray-700 break-words">{i.eapCodigo ? <span className="text-gray-400 mr-1">{i.eapCodigo}</span> : null}{i.descricao}</td>
+                      <td className={`px-2 py-1.5 text-right font-semibold ${diverge ? (Number(i.medidoAcum) > Number(i.avancoObra) ? "text-red-600" : "text-amber-600") : "text-gray-800"}`}>{fmtP(i.medidoAcum)}%</td>
+                      {r.temMedicaoCliente && <td className="px-2 py-1.5 text-right text-gray-700">{i.medidoCliente !== null && i.medidoCliente !== undefined ? `${fmtP(i.medidoCliente)}%` : "—"}</td>}
+                      <td className="px-2 py-1.5 text-right text-gray-700">{i.avancoObra !== null && i.avancoObra !== undefined ? `${fmtP(i.avancoObra)}%` : "—"}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {recalcResult.itens.map((i: any, idx: number) => {
-                      const diverge = i.avancoObra !== null && Math.abs(Number(i.medidoAcum ?? 0) - Number(i.avancoObra)) > 3;
-                      return (
-                        <tr key={idx} className="border-t border-gray-100">
-                          <td className="px-2 py-1.5 text-gray-700 break-words">{i.eapCodigo ? <span className="text-gray-400 mr-1">{i.eapCodigo}</span> : null}{i.descricao}</td>
-                          <td className={`px-2 py-1.5 text-right font-semibold ${diverge ? (Number(i.medidoAcum) > Number(i.avancoObra) ? "text-red-600" : "text-amber-600") : "text-gray-800"}`}>{Number(i.medidoAcum ?? 0).toFixed(1)}%</td>
-                          {recalcResult.temMedicaoCliente && <td className="px-2 py-1.5 text-right text-gray-700">{i.medidoCliente !== null && i.medidoCliente !== undefined ? `${Number(i.medidoCliente).toFixed(1)}%` : "—"}</td>}
-                          <td className="px-2 py-1.5 text-right text-gray-700">{i.avancoObra !== null && i.avancoObra !== undefined ? `${Number(i.avancoObra).toFixed(1)}%` : "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                <p className="text-[10px] text-gray-400 px-2 py-1 border-t border-gray-100">Medido = acumulado desta medição do terceiro · Cliente = medido com o cliente (módulo Medição) · Obra = avanço do cronograma. Vermelho/âmbar = divergência &gt; 3 pontos.</p>
-              </div>
-            )}
-            {recalcResult.naoVinculados > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-                <p className="text-xs font-semibold text-amber-700 mb-1">Itens não vinculados (sem Item correspondente):</p>
-                <ul className="text-xs text-amber-600 space-y-0.5">
-                  {recalcResult.itens.filter((i: any) => !i.vinculado).map((i: any, idx: number) => (
-                    <li key={idx}>• {i.descricao} {i.eapCodigo ? `(Item: ${i.eapCodigo})` : "(sem código Item)"}</li>
-                  ))}
-                </ul>
-                <p className="text-xs text-amber-500 mt-2">Vincule esses itens ao cronograma na aba "Itens" usando o botão "Vincular Item" para que os avanços sejam puxados automaticamente.</p>
-              </div>
-            )}
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => setRecalcResult(null)}>Fechar</Button>
-            </div>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
+          <p className="text-[10px] text-gray-400 px-2 py-1 border-t border-gray-100">Medido = acumulado desta medição do terceiro · Cliente = medido com o cliente (módulo Medição) · Obra = avanço do cronograma. Vermelho/âmbar = divergência &gt; 3 pontos.</p>
         </div>
       )}
+
+      {r.naoVinculados > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-xs font-semibold text-amber-700 mb-1">Itens não vinculados (sem Item correspondente):</p>
+          <ul className="text-xs text-amber-600 space-y-0.5">
+            {(r.itens || []).filter((i: any) => !i.vinculado).map((i: any, idx: number) => (
+              <li key={idx}>• {i.descricao} {i.eapCodigo ? `(Item: ${i.eapCodigo})` : "(sem código Item)"}</li>
+            ))}
+          </ul>
+          <p className="text-xs text-amber-500 mt-2">Vincule esses itens ao cronograma na aba "Itens" usando o botão "Vincular Item" para que os avanços sejam puxados automaticamente.</p>
+        </div>
+      )}
+
+      {/* Parecer técnico completo */}
+      <div className="bg-white rounded-lg border border-gray-200 p-3.5">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Parecer do Comparativo</p>
+        <div className="space-y-2">
+          {paragrafos.map((t, i) => (
+            <p key={i} className="text-xs text-gray-600 leading-relaxed break-words text-justify">{t}</p>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

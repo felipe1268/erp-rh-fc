@@ -1,4 +1,18 @@
 /**
+ * Rev. 4830 - COMPARATIVO INLINE + PARECER TECNICO (TERCEIROS)
+ *
+ * - O resultado do "Comparar c/ Avanco da Obra" deixou de ser um pop-up e
+ *   passou a aparecer DENTRO da tela de detalhes da medicao, abaixo de todo
+ *   o conteudo (a tela rola sozinha ate a secao).
+ * - Secao completa: barra de avanco da obra 0-100%, cartoes de valor/%,
+ *   tabela item a item (Medido x Cliente x Obra) e um PARECER DO
+ *   COMPARATIVO por extenso, redigido como boletim tecnico: metodologia,
+ *   tolerancia de 3 p.p., divergencias acima/abaixo com interpretacao
+ *   (antecipacao de faturamento / servico executado nao medido) e o
+ *   carater consultivo do cruzamento.
+ */
+
+/**
  * Rev. 4829 - COMPARATIVO COM AVANCO DA OBRA REDESENHADO (TERCEIROS)
  *
  * - Ao clicar em "Comparar c/ Avanco da Obra" na medicao de terceiros, o
