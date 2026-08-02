@@ -2380,6 +2380,7 @@ function ProjetosMedicaoSection({ companyId, obraId }: { companyId: number; obra
   const [novoNome, setNovoNome] = useState("");
   const [novoPe, setNovoPe] = useState("3,00");
   const [uploadingId, setUploadingId] = useState<number | "novo" | null>(null);
+  const [uploadPct, setUploadPct] = useState<number | null>(null); // Rev. 4806 — % real do envio (0–100)
   const fileRef = useRef<HTMLInputElement | null>(null);
   const uploadAlvoRef = useRef<number | null>(null);
 
@@ -2403,13 +2404,29 @@ function ProjetosMedicaoSection({ companyId, obraId }: { companyId: number; obra
       return;
     }
     setUploadingId(pavId);
+    setUploadPct(0);
     try {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("companyId", String(companyId));
-      const resp = await fetch("/api/upload/levantamento-planta", { method: "POST", body: fd, credentials: "include" });
-      const j = await resp.json();
-      if (!resp.ok || !j?.key) throw new Error(j?.error || "Falha no envio do arquivo.");
+      // XHR p/ progresso REAL de upload (fetch não expõe onprogress do envio)
+      const j: any = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/upload/levantamento-planta");
+        xhr.withCredentials = true;
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) setUploadPct(Math.min(99, Math.round((ev.loaded / ev.total) * 100)));
+        };
+        xhr.onload = () => {
+          try {
+            const body = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status >= 200 && xhr.status < 300 && body?.key) { setUploadPct(100); resolve(body); }
+            else reject(new Error(body?.error || `Falha no envio (HTTP ${xhr.status}).`));
+          } catch { reject(new Error(`Falha no envio (HTTP ${xhr.status}).`)); }
+        };
+        xhr.onerror = () => reject(new Error("Falha de rede no envio do arquivo."));
+        xhr.send(fd);
+      });
       const pav = pavimentos.find(p => p.id === pavId);
       await salvarMut.mutateAsync({
         companyId, obraId, id: pavId,
@@ -2424,6 +2441,7 @@ function ProjetosMedicaoSection({ companyId, obraId }: { companyId: number; obra
       toast.error(e?.message || "Erro ao enviar o projeto.");
     } finally {
       setUploadingId(null);
+      setUploadPct(null);
     }
   };
 
@@ -2469,7 +2487,9 @@ function ProjetosMedicaoSection({ companyId, obraId }: { companyId: number; obra
                 title="Enviar/substituir o DXF (escala 1:100)"
               >
                 {uploadingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                {p.arquivoKey ? (p.arquivoNome || "DXF enviado") : "Enviar DXF (1:100)"}
+                {uploadingId === p.id
+                  ? `Enviando... ${uploadPct ?? 0}%`
+                  : p.arquivoKey ? (p.arquivoNome || "DXF enviado") : "Enviar DXF (1:100)"}
               </button>
               {(p.revisao ?? 1) > 1 && (
                 <Badge variant="outline" className="text-[10px] bg-violet-50 text-violet-700 border-violet-200">REV. {p.revisao}</Badge>
