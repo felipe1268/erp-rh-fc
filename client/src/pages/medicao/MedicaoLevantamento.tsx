@@ -2777,7 +2777,6 @@ export default function MedicaoLevantamento() {
         <td style="border:1px solid #ccc;padding:5px">${escHtml(c.rotulo) || "—"}</td>
         <td style="border:1px solid #ccc;padding:5px">${escHtml(c.itemDescricao) || "—"}</td>
         <td style="border:1px solid #ccc;padding:5px;text-align:right">${numFmt(parseFloat(c.quantidade || "0"), 2)} ${escHtml(c.unidade) || ""}</td>
-        <td style="border:1px solid #ccc;padding:5px;text-align:right">${c.metrosPorUnidade ? numFmt(parseFloat(c.metrosPorUnidade), 6) : "—"}</td>
       </tr>`).join("");
     const rowsConsol = linhas.map((l) => `
       <tr>
@@ -2820,8 +2819,7 @@ export default function MedicaoLevantamento() {
           <th style="border:1px solid #ccc;padding:5px">Local / Nome</th>
           <th style="border:1px solid #ccc;padding:5px">Item vinculado</th>
           <th style="border:1px solid #ccc;padding:5px">Quantidade</th>
-          <th style="border:1px solid #ccc;padding:5px">m/ponto</th>
-        </tr></thead><tbody>${rowsContornos || `<tr><td colspan="6" style="border:1px solid #ccc;padding:8px;text-align:center">Sem contornos</td></tr>`}</tbody>
+        </tr></thead><tbody>${rowsContornos || `<tr><td colspan="5" style="border:1px solid #ccc;padding:8px;text-align:center">Sem contornos</td></tr>`}</tbody>
       </table>
       <h3 style="font-size:13px;margin:18px 0 6px">Consolidação por item (R$)</h3>
       <table style="border-collapse:collapse;width:100%;font-size:11px">
@@ -2861,7 +2859,7 @@ export default function MedicaoLevantamento() {
           ${slot(sigDe("fornecedor"), fornecedorNome !== "—" ? fornecedorNome : "", "Fornecedor — de acordo com o levantamento")}
         </tr></tbody></table>`;
       })()}
-      <p style="font-size:9px;color:#6b7280;margin-top:24px">Quantidades obtidas por levantamento sobre planta (PDF) com calibração de escala. Fator m/ponto = medida real informada ÷ distância marcada (em pontos de PDF). Área = polígono (shoelace) × fator²; perímetro/linear = soma dos segmentos × fator; volume = área × espessura.</p>
+      <p style="font-size:9px;color:#6b7280;margin-top:24px">Quantidades obtidas por levantamento sobre a planta (PDF/DXF) com escala calibrada e conferida. Área = polígono medido em escala real; perímetro/linear = soma dos trechos; volume = área × espessura.</p>
       ${comPrint ? `<script>window.onload=function(){setTimeout(function(){window.print();},300);}</script>` : ""}
     </body></html>`;
     return html;

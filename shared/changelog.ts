@@ -1,4 +1,14 @@
 /**
+ * Rev. 4845 - MEMORIA DE CALCULO: COLUNA "M/PONTO" REMOVIDA
+ *
+ * - A coluna tecnica m/ponto (fator interno de escala) saiu da tabela de
+ *   contornos medidos — nao ajudava a conferencia de quem assina e gerava
+ *   duvida (ex.: 1,000000 em plantas DXF ja em metros).
+ * - A conferencia transparente continua na legenda dos croquis (lados
+ *   somados, largura × altura, formula) e na nota de metodologia do rodape.
+ */
+
+/**
  * Rev. 4844 - MEMORIA DE CALCULO: ASSINATURA DESENHADA NO CAMPO
  *
  * - A assinatura feita na tela (FCSign) agora aparece EM CIMA da linha de
