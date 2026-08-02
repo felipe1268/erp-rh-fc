@@ -14,7 +14,7 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler, PenLine,
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler, PenLine, Clock3, XCircle,
   UserRound, Link2, BadgeCheck, Mail, Check,
   CheckCircle2, FilePlus, Camera,
 } from "lucide-react";
@@ -3394,6 +3394,21 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
     { enabled: !!colherEnvId, refetchInterval: 5000 }
   );
   const reenviarEmailMut = trpc.integrasign.reenviarNotificacao.useMutation();
+  // Rev. 4857 — botão único: envelope existente da medição comanda o botão
+  // (enviar 1x → "Ver assinaturas" → concluído → cancelar só Admin Master).
+  const envMedicao = trpc.integrasign.envelopePorMedicao.useQuery(
+    { companyId: contrato.companyId, medicaoTerceiroId: m.id },
+    { refetchInterval: colherEnvId ? false : 30000 }
+  );
+  const ehMaster = (usuarioLogado as any)?.role === "admin_master";
+  const cancelarEnvMut = trpc.integrasign.cancelarEnvelope.useMutation({
+    onSuccess: () => { toast.success("Assinatura cancelada. Agora é possível ajustar e reenviar."); envMedicao.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const solicitarCancMut = trpc.integrasign.solicitarCancelamento.useMutation({
+    onSuccess: (r: any) => toast.success(`Solicitação enviada ao Admin Master (${r?.notificados ?? ""} avisado(s)).`),
+    onError: (e: any) => toast.error(e.message),
+  });
   const handleFcsign = async () => {
     const [contratada, elaborador, gestor] = fcsignSigs;
     if (!contratada.nome.trim()) { toast.error("Informe o nome do responsável da contratada."); return; }
@@ -3403,8 +3418,21 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
     if (!emailOk(contratada.email) || !emailOk(elaborador.email) || (!gestorMesmo && !emailOk(gestor.email))) {
       toast.error("E-mail inválido (deixe em branco para assinar por link)."); return;
     }
+    // Rev. 4857 — iPad/Safari derruba a conexão às vezes ("The string did not
+    // match the expected pattern") mesmo com o servidor tendo gravado. O backend
+    // agora é IDEMPOTENTE (reusa envelope ativo da medição), então o retry é seguro.
+    const ehErroTransporte = (msg: string) => {
+      const m = (msg || "").toLowerCase();
+      return !m || ["did not match the expected pattern", "load failed", "failed to fetch", "networkerror", "network connection", "aborted", "timed out", "operation couldn't be completed"].some((p) => m.includes(p));
+    };
+    const comRetry = async <T,>(fn: () => Promise<T>): Promise<T> => {
+      try { return await fn(); } catch (e: any) {
+        if (ehErroTransporte(e?.message)) { await new Promise((r) => setTimeout(r, 800)); return await fn(); }
+        throw e;
+      }
+    };
     try {
-      const env: any = await criarEnvelopeMut.mutateAsync({
+      const env: any = await comRetry(() => criarEnvelopeMut.mutateAsync({
         companyId: contrato.companyId,
         medicaoTerceiroId: m.id,
         obraId: contrato.obraId ?? undefined,
@@ -3414,16 +3442,19 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
           { papel: "gestor_projeto", ordemAssinatura: 2, nome: elaborador.nome.trim(), email: elaborador.email.trim(), cargo: "Elaborador da Medição", empresaNome: "Contratante" },
           ...(!gestorMesmo ? [{ papel: "gestor_projeto" as const, ordemAssinatura: 3, nome: gestor.nome.trim(), email: gestor.email.trim(), cargo: "Gestor do Contrato", empresaNome: "Contratante" }] : []),
         ],
-      } as any);
+      } as any));
       // Rev. 4854 — NÃO envia nada automaticamente (pedido do usuário): só
       // ativa os links e abre a tela de COLHER assinaturas — lá o usuário
       // escolhe por signatário: assinar na hora, link/WhatsApp ou e-mail.
-      await enviarEnvelopeMut.mutateAsync({ companyId: contrato.companyId, envelopeId: env.id, enviarEmail: false } as any);
+      await comRetry(() => enviarEnvelopeMut.mutateAsync({ companyId: contrato.companyId, envelopeId: env.id, enviarEmail: false } as any));
       setFcsignOpen(false);
       setColherEnvId(env.id);
+      envMedicao.refetch();
       toast.success("Links de assinatura ativos! Agora é só colher as assinaturas.");
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao criar/enviar envelope");
+      toast.error(ehErroTransporte(e?.message)
+        ? "Falha de conexão do iPad/Safari. Tente de novo — o sistema não cria duplicatas."
+        : (e?.message || "Erro ao criar/enviar envelope"));
     }
   };
 
@@ -3510,9 +3541,34 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
           <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handlePdf} disabled={pdfLoading}>
             {pdfLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />} Gerar PDF
           </Button>
-          <Button size="sm" className="gap-1 text-xs bg-blue-700 hover:bg-blue-800 text-white" onClick={() => setFcsignOpen(true)}>
-            <PenLine className="w-3 h-3" /> Assinar no FCSign
-          </Button>
+          {/* Rev. 4857 — botão único conforme o estado do envelope da medição */}
+          {!envMedicao.data ? (
+            <Button size="sm" className="gap-1 text-xs bg-blue-700 hover:bg-blue-800 text-white" disabled={envMedicao.isLoading} onClick={() => setFcsignOpen(true)}>
+              <PenLine className="w-3 h-3" /> Assinar no FCSign
+            </Button>
+          ) : envMedicao.data.status !== "concluido" ? (
+            <Button size="sm" className="gap-1 text-xs bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setColherEnvId(envMedicao.data!.id)}>
+              <Clock3 className="w-3 h-3" /> Assinaturas pendentes ({envMedicao.data.assinados}/{envMedicao.data.total})
+            </Button>
+          ) : ehMaster ? (
+            <Button size="sm" variant="outline" className="gap-1 text-xs border-red-300 text-red-600 hover:bg-red-50"
+              disabled={cancelarEnvMut.isPending}
+              onClick={() => {
+                const motivo = window.prompt("Documento ASSINADO por todos. Cancelar libera ajustes na medição, mas invalida as assinaturas. Motivo do cancelamento:");
+                if (motivo?.trim()) cancelarEnvMut.mutate({ companyId: contrato.companyId, envelopeId: envMedicao.data!.id, motivo: motivo.trim() } as any);
+              }}>
+              <XCircle className="w-3 h-3" /> Cancelar assinatura
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" className="gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+              disabled={solicitarCancMut.isPending}
+              onClick={() => {
+                const motivo = window.prompt("Documento assinado e encerrado — só o Admin Master pode cancelar. Descreva o motivo para solicitar o cancelamento:");
+                if (motivo?.trim()) solicitarCancMut.mutate({ companyId: contrato.companyId, envelopeId: envMedicao.data!.id, motivo: motivo.trim() } as any);
+              }}>
+              <ShieldCheck className="w-3 h-3" /> Assinado — solicitar cancelamento
+            </Button>
+          )}
         </div>
       </div>
 

@@ -1,4 +1,44 @@
 /**
+ * Rev. 4857 - FIX iPAD: "The string did not match the expected pattern" AO CRIAR LINKS
+ *
+ * - O Safari do iPad as vezes derruba a conexao DEPOIS do servidor gravar,
+ *   mostrando esse erro criptico — e cada nova tentativa criava um envelope
+ *   DUPLICADO da mesma medicao.
+ * - Servidor agora e IDEMPOTENTE: criar envelope para uma medicao que ja tem
+ *   envelope ativo REUSA o existente; reenviar envelope ja enviado responde
+ *   sucesso em vez de erro.
+ * - Cliente: retry automatico em falha de transporte + mensagem amigavel em
+ *   portugues no lugar do erro criptico do Safari.
+ * - Duplicatas da Medicao 01 do CT-2026-0006 limpas (ficou 1 envelope ativo).
+ * - FIX VALOR: o boletim HTML da tela de assinatura nao abatia os FDs /
+ *   Descontos lancados — agora o Resumo Financeiro mostra a linha "FD /
+ *   Descontos lancados" e o VALOR LIQUIDO A PAGAR bate com a tela da medicao
+ *   (mesma regra do PDF e do titulo no Contas a Pagar). Envelope ativo da
+ *   Medicao 01 regenerado com o valor certo (R$ 3.619,98).
+ * - BOTAO UNICO na medicao: com envelope ativo o botao vira "Assinaturas
+ *   pendentes (X/Y)" (abre a tela de colher assinaturas — nao cria outro
+ *   envelope). Todos assinaram → vira "Cancelar assinatura" (SO Admin Master);
+ *   usuario comum ve "Solicitar cancelamento", que avisa os masters in-app.
+ * - Servidor: cancelar envelope CONCLUIDO exige admin_master; nova rota
+ *   solicitarCancelamento notifica os masters com motivo + trilha de auditoria.
+ */
+
+/**
+ * Rev. 4856 - BIBLIOTECA: CONTROLE DE ASSINATURA (ASSINADOS x PENDENTES) + PDF ASSINADO
+ *
+ * - Ficha de EPI da Biblioteca agora abre o PDF ASSINADO (gerado na hora, com
+ *   a assinatura do funcionario, data/hora, IP e hash SHA-256) — antes abria o
+ *   PDF em branco salvo no ato da entrega. Nova rota autenticada
+ *   /api/download/ficha-epi-pdf?companyId&employeeId.
+ * - Controle de assinatura na Biblioteca: cards Total / Assinados / Faltam
+ *   Assinar (clicaveis, filtram a lista). Documento pendente aparece em ambar
+ *   com "Falta assinar: fulano, ciclano" para correr atras da assinatura.
+ * - Pendencias entram de todas as fontes: envelopes enviados/em andamento,
+ *   sessoes FCSign pendentes, Documentos do Colaborador gerados sem assinatura
+ *   e entregas de EPI sem assinatura.
+ */
+
+/**
  * Rev. 4855 - BIBLIOTECA CONSULTIVA DE ASSINADOS — TODOS OS MODULOS, POR SETOR
  *
  * A aba "Biblioteca de Assinados" do FCSign virou uma plataforma consultiva de

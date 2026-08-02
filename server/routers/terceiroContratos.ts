@@ -2478,84 +2478,7 @@ export const terceiroContratosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       await _assertCompanyAccess(ctx.user, input.companyId);
-      const [existing] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
-      if (!existing) throw new Error("Medição não encontrada");
-      if (existing.status !== "aprovada") throw new Error(`Apenas medições aprovadas podem ter a aprovação cancelada (status: ${existing.status})`);
-
-      // Rev. 4798 (review) — reconcilia o FINANCEIRO ao desaprovar: o título da
-      // medição sai junto (senão a reaprovação com valores diferentes deixaria
-      // um título velho no Contas a Pagar). Título com BAIXA ATIVA é intocável:
-      // exige estornar o pagamento antes de desaprovar.
-      {
-        const titulos = await db.select({ id: financialEntries.id }).from(financialEntries)
-          .where(and(
-            eq(financialEntries.companyId, input.companyId),
-            eq(financialEntries.origemModulo, "terceiro_medicao"),
-            eq(financialEntries.origemId, input.id),
-          ));
-        for (const t of titulos) {
-          const baixas = await db.select({ id: financialEntryBaixas.id }).from(financialEntryBaixas)
-            .where(and(eq(financialEntryBaixas.entryId, t.id), sql`${financialEntryBaixas.estornadaEm} IS NULL`)).limit(1);
-          if (baixas.length > 0) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Esta medição já tem PAGAMENTO baixado no Contas a Pagar. Estorne a baixa do título antes de cancelar a aprovação." });
-          }
-        }
-        if (titulos.length > 0) {
-          await db.delete(financialEntries).where(and(
-            eq(financialEntries.companyId, input.companyId),
-            eq(financialEntries.origemModulo, "terceiro_medicao"),
-            eq(financialEntries.origemId, input.id),
-          ));
-        }
-      }
-
-      const itensMedicao = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
-
-      const outrasAprovadas = await db.select().from(terceiroMedicoes)
-        .where(and(
-          eq(terceiroMedicoes.contratoId, existing.contratoId),
-          eq(terceiroMedicoes.companyId, input.companyId),
-          inArray(terceiroMedicoes.status, ["aprovada", "paga"]),
-          sql`${terceiroMedicoes.id} != ${input.id}`
-        ));
-
-      const outrosItens: any[] = [];
-      for (const om of outrasAprovadas) {
-        const its = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, om.id));
-        outrosItens.push(...its);
-      }
-
-      for (const im of itensMedicao) {
-        const somaPercPeriodo = outrosItens
-          .filter(o => o.contratoItemId === im.contratoItemId)
-          .reduce((s, o) => s + Number(o.percentualMedidoPeriodo || 0), 0);
-        const somaValorPeriodo = outrosItens
-          .filter(o => o.contratoItemId === im.contratoItemId)
-          .reduce((s, o) => s + Number(o.valorMedidoPeriodo || 0), 0);
-
-        await db.update(terceiroContratoItens)
-          .set({
-            percentualMedidoAcumulado: String(somaPercPeriodo),
-            valorMedidoAcumulado: String(somaValorPeriodo),
-          })
-          .where(and(eq(terceiroContratoItens.id, im.contratoItemId), eq(terceiroContratoItens.companyId, input.companyId)));
-      }
-
-      const [medicao] = await db.update(terceiroMedicoes)
-        .set({
-          status: "aguardando_aprovacao",
-          aprovadoPor: null,
-          aprovadoEm: null,
-          // Rev. 4797 — desaprovar p/ ajuste gera uma REVISÃO da medição
-          revisao: sql`COALESCE(revisao, 0) + 1`,
-          revisadoEm: new Date().toISOString(),
-          revisadoPorNome: (ctx.user as any)?.name || null,
-          atualizadoEm: new Date().toISOString(),
-        } as any)
-        .where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)))
-        .returning();
-
-      return medicao;
+      return await cancelarAprovacaoDaMedicao(db, { id: input.id, companyId: input.companyId, userName: (ctx.user as any)?.name || null });
     }),
 
   rejeitarMedicao: protectedProcedure
@@ -6051,4 +5974,89 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
 
         doc.end();
       });
+}
+
+// Rev. 4857 — corpo do cancelarAprovacao extraído para reuso pelo FCSign:
+// cancelar um envelope CONCLUÍDO de boletim precisa desfazer a aprovação da
+// medição e o título no Contas a Pagar (bloqueando se já houver baixa ativa).
+export async function cancelarAprovacaoDaMedicao(db: any, input: { id: number; companyId: number; userName?: string | null }) {
+      const ctx = { user: { name: input.userName } } as any;
+      const [existing] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
+      if (!existing) throw new Error("Medição não encontrada");
+      if (existing.status !== "aprovada") throw new Error(`Apenas medições aprovadas podem ter a aprovação cancelada (status: ${existing.status})`);
+
+      // Rev. 4798 (review) — reconcilia o FINANCEIRO ao desaprovar: o título da
+      // medição sai junto (senão a reaprovação com valores diferentes deixaria
+      // um título velho no Contas a Pagar). Título com BAIXA ATIVA é intocável:
+      // exige estornar o pagamento antes de desaprovar.
+      {
+        const titulos = await db.select({ id: financialEntries.id }).from(financialEntries)
+          .where(and(
+            eq(financialEntries.companyId, input.companyId),
+            eq(financialEntries.origemModulo, "terceiro_medicao"),
+            eq(financialEntries.origemId, input.id),
+          ));
+        for (const t of titulos) {
+          const baixas = await db.select({ id: financialEntryBaixas.id }).from(financialEntryBaixas)
+            .where(and(eq(financialEntryBaixas.entryId, t.id), sql`${financialEntryBaixas.estornadaEm} IS NULL`)).limit(1);
+          if (baixas.length > 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Esta medição já tem PAGAMENTO baixado no Contas a Pagar. Estorne a baixa do título antes de cancelar a aprovação." });
+          }
+        }
+        if (titulos.length > 0) {
+          await db.delete(financialEntries).where(and(
+            eq(financialEntries.companyId, input.companyId),
+            eq(financialEntries.origemModulo, "terceiro_medicao"),
+            eq(financialEntries.origemId, input.id),
+          ));
+        }
+      }
+
+      const itensMedicao = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
+
+      const outrasAprovadas = await db.select().from(terceiroMedicoes)
+        .where(and(
+          eq(terceiroMedicoes.contratoId, existing.contratoId),
+          eq(terceiroMedicoes.companyId, input.companyId),
+          inArray(terceiroMedicoes.status, ["aprovada", "paga"]),
+          sql`${terceiroMedicoes.id} != ${input.id}`
+        ));
+
+      const outrosItens: any[] = [];
+      for (const om of outrasAprovadas) {
+        const its = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, om.id));
+        outrosItens.push(...its);
+      }
+
+      for (const im of itensMedicao) {
+        const somaPercPeriodo = outrosItens
+          .filter(o => o.contratoItemId === im.contratoItemId)
+          .reduce((s, o) => s + Number(o.percentualMedidoPeriodo || 0), 0);
+        const somaValorPeriodo = outrosItens
+          .filter(o => o.contratoItemId === im.contratoItemId)
+          .reduce((s, o) => s + Number(o.valorMedidoPeriodo || 0), 0);
+
+        await db.update(terceiroContratoItens)
+          .set({
+            percentualMedidoAcumulado: String(somaPercPeriodo),
+            valorMedidoAcumulado: String(somaValorPeriodo),
+          })
+          .where(and(eq(terceiroContratoItens.id, im.contratoItemId), eq(terceiroContratoItens.companyId, input.companyId)));
+      }
+
+      const [medicao] = await db.update(terceiroMedicoes)
+        .set({
+          status: "aguardando_aprovacao",
+          aprovadoPor: null,
+          aprovadoEm: null,
+          // Rev. 4797 — desaprovar p/ ajuste gera uma REVISÃO da medição
+          revisao: sql`COALESCE(revisao, 0) + 1`,
+          revisadoEm: new Date().toISOString(),
+          revisadoPorNome: (ctx.user as any)?.name || null,
+          atualizadoEm: new Date().toISOString(),
+        } as any)
+        .where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)))
+        .returning();
+
+      return medicao;
 }

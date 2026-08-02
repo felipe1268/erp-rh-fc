@@ -267,6 +267,23 @@ export const integrasignRouter = router({
       const userId = (ctx as any).session?.userId;
       const userName = (ctx as any).session?.name || "Sistema";
 
+      // Rev. 4857 — IDEMPOTENTE por medição: o iPad/Safari às vezes derruba a
+      // conexão DEPOIS do servidor gravar ("The string did not match the expected
+      // pattern") e o retry criava envelopes duplicados. Se já existe envelope
+      // ATIVO para a mesma medição, devolve o existente em vez de criar outro.
+      if (input.medicaoTerceiroId) {
+        const [existente] = await db.select().from(integrasignEnvelopes)
+          .where(and(
+            eq(integrasignEnvelopes.companyId, input.companyId),
+            eq(integrasignEnvelopes.medicaoTerceiroId, input.medicaoTerceiroId),
+            isNull(integrasignEnvelopes.excluidoEm),
+            inArray(integrasignEnvelopes.status, ["rascunho", "enviado", "em_andamento"]),
+          ))
+          .orderBy(desc(integrasignEnvelopes.id))
+          .limit(1);
+        if (existente) return existente;
+      }
+
       // Rev. 3050 — TODO contrato deve ser assinado por 3 signatários: FORNECEDOR
       // + GESTOR DA OBRA + SÓCIO ADMINISTRADOR (este por ÚLTIMO, autoridade final).
       // O front envia fornecedor + gestor (com seus dados); aqui NORMALIZAMOS de forma
@@ -772,6 +789,11 @@ export const integrasignRouter = router({
           isNull(integrasignEnvelopes.excluidoEm),
         ));
       if (!envelope) throw new TRPCError({ code: "NOT_FOUND" });
+      // Rev. 4857 — IDEMPOTENTE: se já foi enviado (retry do iPad após queda de
+      // conexão), responde sucesso em vez de erro — o trabalho já está feito.
+      if (envelope.status === "enviado" || envelope.status === "em_andamento") {
+        return { success: true, notificados: 0, enviarEmail: input.enviarEmail !== false };
+      }
       if (envelope.status !== "rascunho") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Envelope já foi enviado" });
       }
@@ -1015,6 +1037,8 @@ export const integrasignRouter = router({
       type Item = {
         setor: string; pasta: string; titulo: string; data: string | null;
         pessoas: string[]; url: string | null; envelopeId?: number; origem: string;
+        // Rev. 4856 — controle de assinatura: pendências visíveis p/ correr atrás
+        status: "assinado" | "pendente"; faltam?: string[];
       };
       const items: Item[] = [];
       const empIds = new Set<number>();
@@ -1025,7 +1049,7 @@ export const integrasignRouter = router({
         const envs = await db.select().from(integrasignEnvelopes)
           .where(and(
             eq(integrasignEnvelopes.companyId, cid),
-            eq(integrasignEnvelopes.status, "concluido"),
+            inArray(integrasignEnvelopes.status, ["concluido", "enviado", "em_andamento"]),
             isNull(integrasignEnvelopes.excluidoEm),
           ));
         const envIds = envs.map((e: any) => e.id);
@@ -1038,20 +1062,27 @@ export const integrasignRouter = router({
             .where(inArray(integrasignSignatarios.envelopeId, envIds))
           : [];
         for (const e of envs as any[]) {
-          const pessoas = sigs.filter((s: any) => s.envelopeId === e.id && s.status === "assinado").map((s: any) => s.nome);
+          const doEnv = sigs.filter((s: any) => s.envelopeId === e.id);
+          const pessoas = doEnv.filter((s: any) => s.status === "assinado").map((s: any) => s.nome);
+          const faltam = doEnv.filter((s: any) => s.status !== "assinado" && s.status !== "recusado").map((s: any) => s.nome);
           let setor = "Terceiros & Medições"; let pasta = "Outros Documentos";
           if (e.medicaoTerceiroId) pasta = "Boletins de Medição";
           else if (e.medicaoCampoId) { setor = "Planejamento"; pasta = "Memórias de Cálculo"; }
           else if (e.ordemCompraId) { setor = "Compras"; pasta = "Ordens de Compra"; }
           else if (e.contratoTerceiroId) pasta = "Contratos de Serviço";
-          items.push({ setor, pasta, titulo: e.titulo, data: e.dataConclusao || e.atualizadoEm || e.criadoEm, pessoas, url: null, envelopeId: e.id, origem: "IntegraSign" });
+          items.push({
+            setor, pasta, titulo: e.titulo, data: e.dataConclusao || e.atualizadoEm || e.criadoEm,
+            pessoas, url: null, envelopeId: e.id, origem: "IntegraSign",
+            status: e.status === "concluido" ? "assinado" : "pendente",
+            faltam: e.status === "concluido" ? undefined : faltam,
+          });
         }
       } catch (err: any) { console.error("[Biblioteca] envelopes:", err?.message); }
 
       // 2) FCSign legado — sessões completas (RH & DP)
       try {
         const sess = await db.select().from(signatureSessions)
-          .where(and(eq(signatureSessions.companyId, cid), eq(signatureSessions.status, "completo")));
+          .where(and(eq(signatureSessions.companyId, cid), inArray(signatureSessions.status, ["completo", "pendente", "em_andamento"])));
         const sIds = sess.map((s: any) => s.id);
         const signers = sIds.length
           ? await db.select({ sessionId: signatureSigners.sessionId, nome: signatureSigners.nome, signedAt: signatureSigners.signedAt })
@@ -1062,11 +1093,14 @@ export const integrasignRouter = router({
           comunicado: "Comunicados", epi: "EPI", pt: "Permissões de Trabalho", outros: "Outros Documentos",
         };
         for (const s of sess as any[]) {
+          const doSess = signers.filter((g: any) => g.sessionId === s.id);
           items.push({
             setor: "RH & DP", pasta: tipoLbl[s.tipo] || "Outros Documentos",
             titulo: s.documentTitle, data: s.completedAt || s.createdAt,
-            pessoas: signers.filter((g: any) => g.sessionId === s.id && g.signedAt).map((g: any) => g.nome),
+            pessoas: doSess.filter((g: any) => g.signedAt).map((g: any) => g.nome),
             url: s.finalDocumentUrl || null, origem: "FCSign",
+            status: s.status === "completo" ? "assinado" : "pendente",
+            faltam: s.status === "completo" ? undefined : doSess.filter((g: any) => !g.signedAt).map((g: any) => g.nome),
           });
         }
       } catch (err: any) { console.error("[Biblioteca] sessions:", err?.message); }
@@ -1074,13 +1108,16 @@ export const integrasignRouter = router({
       // 3) Documentos do Colaborador assinados (RH & DP)
       try {
         const docs = await db.select().from(rhDocumentos)
-          .where(and(eq(rhDocumentos.companyId, cid), eq(rhDocumentos.status, "assinado")));
+          .where(and(eq(rhDocumentos.companyId, cid), inArray(rhDocumentos.status, ["assinado", "gerado"]), isNull(rhDocumentos.deletedAt)));
         for (const d of docs as any[]) {
           empIds.add(d.employeeId);
+          const ok = d.status === "assinado";
           items.push({
             setor: "RH & DP", pasta: "Documentos do Colaborador",
-            titulo: d.titulo, data: d.assinadoEm, pessoas: [`__emp:${d.employeeId}`],
+            titulo: d.titulo, data: d.assinadoEm || d.createdAt || null, pessoas: ok ? [`__emp:${d.employeeId}`] : [],
             url: `/api/download/rh-documento-pdf?id=${d.id}`, origem: "RH Docs",
+            status: ok ? "assinado" : "pendente",
+            faltam: ok ? undefined : [`__emp:${d.employeeId}`],
           });
         }
       } catch (err: any) { console.error("[Biblioteca] rhDocumentos:", err?.message); }
@@ -1092,14 +1129,19 @@ export const integrasignRouter = router({
           dataEntrega: epiDeliveries.dataEntrega, fichaUrl: epiDeliveries.fichaUrl,
           assinaturaUrl: epiDeliveries.assinaturaUrl,
         }).from(epiDeliveries)
-          .where(and(eq(epiDeliveries.companyId, cid), sql`${epiDeliveries.assinaturaUrl} IS NOT NULL`));
+          .where(eq(epiDeliveries.companyId, cid));
         for (const d of dels as any[]) {
           empIds.add(d.employeeId);
+          const ok = !!d.assinaturaUrl;
           items.push({
             setor: "EPI", pasta: "Fichas de Entrega de EPI",
-            titulo: `Entrega de EPI — ${d.dataEntrega?.split("-").reverse().join("/") || ""}`,
-            data: d.dataEntrega, pessoas: [`__emp:${d.employeeId}`],
-            url: d.fichaUrl || null, origem: "EPI",
+            titulo: `Entrega de EPI — ${d.dataEntrega?.split("-").reverse().join("/") || ""} — __emp:${d.employeeId}`,
+            data: d.dataEntrega, pessoas: ok ? [`__emp:${d.employeeId}`] : [],
+            // Ficha COM assinatura (data/hora, IP e hash) gerada na hora —
+            // o fichaUrl antigo era o PDF em branco da entrega.
+            url: `/api/download/ficha-epi-pdf?companyId=${cid}&employeeId=${d.employeeId}`, origem: "EPI",
+            status: ok ? "assinado" : "pendente",
+            faltam: ok ? undefined : [`__emp:${d.employeeId}`],
           });
         }
       } catch (err: any) { console.error("[Biblioteca] epiDeliveries:", err?.message); }
@@ -1116,6 +1158,7 @@ export const integrasignRouter = router({
             setor: "Segurança do Trabalho", pasta: "Ordens de Serviço",
             titulo: "Ordem de Serviço (NR-1)", data: o.assinadoEm, pessoas: [`__emp:${o.employeeId}`],
             url: `/api/download/ordem-servico-pdf?companyId=${cid}&employeeId=${o.employeeId}`, origem: "SST",
+            status: "assinado",
           });
         }
       } catch (err: any) { console.error("[Biblioteca] ordemServico:", err?.message); }
@@ -1138,6 +1181,7 @@ export const integrasignRouter = router({
             titulo: `PT ${pt.numero}`, data: doPt[0]?.assinadoEm || pt.dataEmissao || null,
             pessoas: doPt.map((a: any) => a.nomeManual || (a.employeeId ? `__emp:${a.employeeId}` : "")).filter(Boolean),
             url: null, origem: "SST",
+            status: "assinado",
           });
         }
       } catch (err: any) { console.error("[Biblioteca] PT:", err?.message); }
@@ -1159,6 +1203,7 @@ export const integrasignRouter = router({
             titulo: `${c.numero} — ${c.titulo}`, data: doCom[0]?.assinadoEm || c.dataEmissao,
             pessoas: doCom.map((a: any) => `__emp:${a.employeeId}`),
             url: c.documentoUrl || null, origem: "Comunicados",
+            status: "assinado",
           });
         }
       } catch (err: any) { console.error("[Biblioteca] comunicados:", err?.message); }
@@ -1171,10 +1216,13 @@ export const integrasignRouter = router({
           for (const e of emps as any[]) empName.set(e.id, e.nome);
         }
       } catch {}
+      const resolveEmp = (p: string) => p.startsWith("__emp:")
+        ? (empName.get(Number(p.slice(6))) || "Funcionário")
+        : p;
       for (const it of items) {
-        it.pessoas = it.pessoas.map((p) => p.startsWith("__emp:")
-          ? (empName.get(Number(p.slice(6))) || "Funcionário")
-          : p);
+        it.pessoas = it.pessoas.map(resolveEmp);
+        if (it.faltam) it.faltam = it.faltam.map(resolveEmp);
+        it.titulo = it.titulo.replace(/__emp:(\d+)/g, (_m, id) => empName.get(Number(id)) || "Funcionário");
       }
 
       items.sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
@@ -1565,8 +1613,25 @@ export const integrasignRouter = router({
         ));
 
       if (!envelope) throw new TRPCError({ code: "NOT_FOUND" });
+      // Rev. 4857 — envelope CONCLUÍDO só o Admin Master pode cancelar (o
+      // documento se encerrou; demais usuários solicitam o cancelamento).
       if (envelope.status === "concluido") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Envelope já concluído, não pode cancelar" });
+        const role = (ctx as any).user?.role;
+        if (role !== "admin_master") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Documento concluído: somente o Admin Master pode cancelar. Use 'Solicitar cancelamento'." });
+        }
+        // Rev. 4857 (review) — cancelar boletim CONCLUÍDO desfaz também a
+        // APROVAÇÃO da medição + título no Contas a Pagar (a conclusão do
+        // envelope foi quem aprovou). Bloqueia se o título já tem baixa ativa.
+        if (envelope.medicaoTerceiroId) {
+          const { terceiroMedicoes } = await import("../drizzle/schema");
+          const [med] = await db.select().from(terceiroMedicoes)
+            .where(and(eq(terceiroMedicoes.id, envelope.medicaoTerceiroId), eq(terceiroMedicoes.companyId, input.companyId)));
+          if (med?.status === "aprovada") {
+            const { cancelarAprovacaoDaMedicao } = await import("./terceiroContratos");
+            await cancelarAprovacaoDaMedicao(db, { id: envelope.medicaoTerceiroId, companyId: input.companyId, userName });
+          }
+        }
       }
 
       await db.update(integrasignEnvelopes).set({
@@ -1586,6 +1651,75 @@ export const integrasignRouter = router({
       });
 
       return { success: true };
+    }),
+
+  // Rev. 4857 — envelope ativo/concluído de uma MEDIÇÃO (botão único na tela da
+  // medição: enviar 1x → "Ver assinaturas" → concluído → cancelar só master).
+  envelopePorMedicao: protectedProcedure
+    .input(z.object({ companyId: z.number(), medicaoTerceiroId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertIntegraSignCompanyAccess((ctx as any).user, input.companyId);
+      const db = await getDb();
+      const [env] = await db.select().from(integrasignEnvelopes)
+        .where(and(
+          eq(integrasignEnvelopes.companyId, input.companyId),
+          eq(integrasignEnvelopes.medicaoTerceiroId, input.medicaoTerceiroId),
+          isNull(integrasignEnvelopes.excluidoEm),
+          inArray(integrasignEnvelopes.status, ["rascunho", "enviado", "em_andamento", "concluido"]),
+        ))
+        .orderBy(desc(integrasignEnvelopes.id))
+        .limit(1);
+      if (!env) return null;
+      const sigs = await db.select().from(integrasignSignatarios)
+        .where(eq(integrasignSignatarios.envelopeId, env.id))
+        .orderBy(asc(integrasignSignatarios.ordemAssinatura));
+      return {
+        id: env.id, status: env.status,
+        total: sigs.length,
+        assinados: sigs.filter((s: any) => s.status === "assinado").length,
+      };
+    }),
+
+  // Rev. 4857 — usuário comum pede ao Admin Master o cancelamento de um
+  // envelope CONCLUÍDO (alerta in-app para todos os masters da empresa).
+  solicitarCancelamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), envelopeId: z.number(), motivo: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertIntegraSignCompanyAccess((ctx as any).user, input.companyId);
+      const db = await getDb();
+      const solicitante = (ctx as any).session?.name || (ctx as any).user?.name || "Usuário";
+      const [envelope] = await db.select().from(integrasignEnvelopes)
+        .where(and(
+          eq(integrasignEnvelopes.id, input.envelopeId),
+          eq(integrasignEnvelopes.companyId, input.companyId),
+          isNull(integrasignEnvelopes.excluidoEm),
+        ));
+      if (!envelope) throw new TRPCError({ code: "NOT_FOUND" });
+      if (envelope.status !== "concluido") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Só documentos CONCLUÍDOS precisam de solicitação — envelopes em andamento podem ser cancelados direto." });
+      }
+      const { users } = await import("../drizzle/schema");
+      const masters = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin_master"));
+      const { criarUserAlert } = await import("../db");
+      for (const mstr of masters) {
+        await criarUserAlert({
+          userId: mstr.id,
+          companyId: input.companyId,
+          tipo: "fcsign_cancelamento",
+          titulo: "Solicitação de cancelamento de documento assinado",
+          mensagem: `${solicitante} solicitou o cancelamento do documento "${envelope.titulo}". Motivo: ${input.motivo}`,
+          linkUrl: `/integrasign?envelope=${envelope.id}`,
+        });
+      }
+      await logAudit(db, {
+        companyId: input.companyId,
+        envelopeId: input.envelopeId,
+        acao: "cancelamento_solicitado",
+        detalhes: `${solicitante} solicitou cancelamento ao Admin Master. Motivo: ${input.motivo}`,
+        userId: (ctx as any).session?.userId,
+        userName: solicitante,
+      });
+      return { success: true, notificados: masters.length };
     }),
 
   excluirEnvelope: protectedProcedure

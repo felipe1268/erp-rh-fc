@@ -82,6 +82,8 @@ export default function IntegraSignDashboard() {
     { enabled: companyId > 0 && aba === "biblioteca" }
   );
   const [setorAberto, setSetorAberto] = useState<string | null>(null);
+  // Rev. 4856 — controle de assinatura: filtro assinados × pendentes
+  const [statusBib, setStatusBib] = useState<"todos" | "assinado" | "pendente">("todos");
   // Minha vez de assinar (mesma fonte do pop-up global)
   const pendentesMe = trpc.integrasign.pendingForCurrentUser.useQuery(undefined, { refetchOnWindowFocus: true });
 
@@ -637,8 +639,11 @@ export default function IntegraSignDashboard() {
         const ORDEM_SETORES = ["RH & DP", "Segurança do Trabalho", "EPI", "Terceiros & Medições", "Planejamento", "Compras"];
         const q = busca.trim().toLowerCase();
         const todos = (biblioteca.data || []) as any[];
-        const filtrados = !q ? todos : todos.filter((it) =>
-          [it.titulo, it.setor, it.pasta, ...(it.pessoas || [])].join(" ").toLowerCase().includes(q)
+        const totAssinados = todos.filter((it) => it.status === "assinado").length;
+        const totPendentes = todos.filter((it) => it.status === "pendente").length;
+        const filtrados = todos.filter((it) =>
+          (statusBib === "todos" || it.status === statusBib) &&
+          (!q || [it.titulo, it.setor, it.pasta, ...(it.pessoas || []), ...(it.faltam || [])].join(" ").toLowerCase().includes(q))
         );
         const porSetor = new Map<string, any[]>();
         for (const it of filtrados) {
@@ -668,8 +673,24 @@ export default function IntegraSignDashboard() {
               />
             </div>
             <span className="text-xs text-slate-500">
-              {filtrados.length} documento(s) assinado(s) · {setores.length} setor(es)
+              {filtrados.length} documento(s) · {setores.length} setor(es)
             </span>
+          </div>
+
+          {/* Rev. 4856 — controle de assinatura: assinados × pendentes */}
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { key: "todos" as const, label: "Total", n: todos.length, cls: "from-slate-700 to-slate-900" },
+              { key: "assinado" as const, label: "Assinados", n: totAssinados, cls: "from-emerald-500 to-green-700" },
+              { key: "pendente" as const, label: "Faltam assinar", n: totPendentes, cls: "from-amber-500 to-orange-600" },
+            ]).map((c) => (
+              <button key={c.key}
+                className={`rounded-2xl bg-gradient-to-br ${c.cls} p-3 text-left text-white shadow-sm transition ${statusBib === c.key ? "ring-2 ring-offset-2 ring-teal-400" : "opacity-90 hover:opacity-100"}`}
+                onClick={() => setStatusBib(c.key)}>
+                <p className="text-xl font-bold leading-none">{c.n}</p>
+                <p className="mt-1 text-[10px] font-medium uppercase tracking-wide opacity-90">{c.label}</p>
+              </button>
+            ))}
           </div>
 
           {biblioteca.isLoading && (
@@ -716,13 +737,20 @@ export default function IntegraSignDashboard() {
                           </p>
                           <div className="space-y-1.5">
                             {docs.map((it: any, i: number) => (
-                              <div key={`${pasta}-${i}`} className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2 hover:border-teal-200 transition">
-                                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+                              <div key={`${pasta}-${i}`} className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 transition ${it.status === "pendente" ? "border-amber-200 bg-amber-50/60 hover:border-amber-300" : "border-slate-100 bg-slate-50/50 hover:border-teal-200"}`}>
+                                {it.status === "pendente"
+                                  ? <Clock className="h-4 w-4 shrink-0 text-amber-500" />
+                                  : <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />}
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs font-medium text-slate-700 break-words leading-snug">{it.titulo}</p>
                                   <p className="text-[10px] text-slate-400 break-words">
-                                    {fmtData(it.data)}{it.pessoas?.length ? ` · ${it.pessoas.slice(0, 3).join(", ")}${it.pessoas.length > 3 ? ` +${it.pessoas.length - 3}` : ""}` : ""}
+                                    {fmtData(it.data)}{it.pessoas?.length ? ` · Assinou: ${it.pessoas.slice(0, 3).join(", ")}${it.pessoas.length > 3 ? ` +${it.pessoas.length - 3}` : ""}` : ""}
                                   </p>
+                                  {it.status === "pendente" && (
+                                    <p className="text-[10px] font-medium text-amber-600 break-words">
+                                      Falta assinar: {(it.faltam || []).slice(0, 4).join(", ") || "—"}{(it.faltam || []).length > 4 ? ` +${it.faltam.length - 4}` : ""}
+                                    </p>
+                                  )}
                                 </div>
                                 {it.envelopeId ? (
                                   <Button size="sm" variant="outline" className="h-7 text-[11px] border-teal-200 text-teal-700 hover:bg-teal-50 shrink-0"

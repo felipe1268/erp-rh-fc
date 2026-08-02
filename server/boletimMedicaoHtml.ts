@@ -8,7 +8,7 @@
 import { eq, and, asc } from "drizzle-orm";
 import {
   terceiroMedicoes, terceiroContratos, terceiroContratoItens, terceiroMedicaoItens,
-  empresasTerceiras, companies, obras,
+  empresasTerceiras, companies, obras, terceiroMedicaoFds,
 } from "../drizzle/schema";
 
 const num = (v: unknown) => parseFloat(String(v ?? "0")) || 0;
@@ -65,7 +65,12 @@ export async function buildBoletimMedicaoHtml(db: any, medicaoId: number, compan
     ? totPeriodo * (pISS + pINSS + pIRRF + pOutras + pRetTec) / 100
     : num((medicao as any).retencaoISS) + num((medicao as any).retencaoINSS) + num((medicao as any).retencaoIRRF) + num((medicao as any).outrasRetencoes) + num((medicao as any).retencaoTecnica);
   const descontos = num((medicao as any).descontos);
-  const liquido = totPeriodo - totalRet - descontos;
+  // Rev. 4857 — FD / Descontos lançados na medição (mesma regra da tela e do
+  // título no Contas a Pagar): o líquido a pagar abate também os FDs.
+  const fdRows = await db.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
+    .where(and(eq(terceiroMedicaoFds.companyId, companyId), eq(terceiroMedicaoFds.medicaoId, medicaoId)));
+  const fdTotal = fdRows.reduce((s: number, f: any) => s + num(f.valor), 0);
+  const liquido = totPeriodo - totalRet - descontos - fdTotal;
 
   const numStr = String(medicao.numero || 1).padStart(2, "0");
   const revNum = Number((medicao as any).revisao || 0);
@@ -174,6 +179,7 @@ export async function buildBoletimMedicaoHtml(db: any, medicaoId: number, compan
   <div>Valor Bruto do Período<br/><b>${BRL(totPeriodo)}</b></div>
   <div>Retenções<br/><b>- ${BRL(totalRet)}</b></div>
   <div>Descontos<br/><b>- ${BRL(descontos)}</b></div>
+  ${fdTotal > 0 ? `<div>FD / Descontos lançados<br/><b>- ${BRL(fdTotal)}</b></div>` : ""}
   <div class="liq">VALOR LÍQUIDO A PAGAR<br/><span style="font-size:15px">${BRL(liquido)}</span></div>
 </div>
 <p style="font-size:9px;color:#666;margin-top:10px">Documento validado por assinatura eletrônica via FCSign — contratante e contratada assinam digitalmente, com hash do documento e trilha de auditoria. Fluxo 100% sem papel.</p>

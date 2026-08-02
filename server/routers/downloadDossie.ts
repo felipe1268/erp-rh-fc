@@ -358,6 +358,45 @@ export function registerDownloadDossieRoute(app: Express) {
     }
   });
 
+  // Rev. 4856 — GET /api/download/ficha-epi-pdf?companyId=1&employeeId=2
+  // Ficha de EPI COM as assinaturas colhidas (data/hora, IP, hash SHA-256).
+  app.get("/api/download/ficha-epi-pdf", async (req: Request, res: Response) => {
+    try {
+      let user: { id: number; role: string };
+      try {
+        const authUser = await sdk.authenticateRequest(req);
+        user = { id: (authUser as any).id, role: (authUser as any).role };
+      } catch {
+        res.status(401).json({ error: "Não autenticado" });
+        return;
+      }
+      const companyId = parseInt(String(req.query.companyId || ""));
+      const employeeId = parseInt(String(req.query.employeeId || ""));
+      if (isNaN(companyId) || isNaN(employeeId)) { res.status(400).json({ error: "Parâmetros inválidos" }); return; }
+
+      const db = await getDb();
+      if (user.role !== "admin_master" && user.role !== "admin") {
+        const [uc] = await db.select().from(userCompanies)
+          .where(and(eq(userCompanies.userId, user.id), eq(userCompanies.companyId, companyId))).limit(1);
+        if (!uc) { res.status(403).json({ error: "Sem permissão" }); return; }
+      }
+      const [emp] = await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto })
+        .from(employees)
+        .where(and(eq(employees.companyId, companyId), eq(employees.id, employeeId), isNull(employees.deletedAt)));
+      if (!emp) { res.status(404).json({ error: "Funcionário não encontrado" }); return; }
+
+      const { gerarFichaEpiPdf } = await import("../services/fichaEpiPdf");
+      const buf = await gerarFichaEpiPdf(companyId, employeeId);
+      if (!buf) { res.status(404).json({ error: "Sem entregas de EPI para gerar a ficha." }); return; }
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="Ficha_EPI_${sanitize(emp.nomeCompleto || String(employeeId))}.pdf"`);
+      res.send(buf);
+    } catch (err) {
+      console.error("[FichaEpiPdf] Erro:", err);
+      if (!res.headersSent) res.status(500).json({ error: "Erro interno" });
+    }
+  });
+
   // Rev. 4667 — GET /api/download/ordem-servico-pdf?companyId=1&employeeId=2
   // Baixa a OS Digital (NR-01) de UM funcionário.
   app.get("/api/download/ordem-servico-pdf", async (req: Request, res: Response) => {
