@@ -1,4 +1,16 @@
 /**
+ * Rev. 4808 - "JA MEDIDO NESTE CONTRATO" SO CONTA MEDICAO FECHADA
+ *
+ * Bug relatado: card "Ja medido neste contrato" mostrava 94,62 m2 de Forro
+ * sendo a PRIMEIRA medicao do contrato. A soma vinha de levantamentos
+ * duplicados/abandonados (rascunhos antigos do mesmo contrato).
+ * - O acumulado "ja medido" (e a camada de referencia na planta) agora so
+ *   conta levantamentos cuja medicao vinculada esta APROVADA ou PAGA.
+ * - Rascunho, levantamento abandonado ou consolidado sem medicao fechada
+ *   nao aparecem mais como "medicao anterior".
+ */
+
+/**
  * Rev. 4807 - EXCLUIR PLANTA = ARQUIVAR (HISTORICO CONSOLIDADO PRESERVADO)
  *
  * Bug relatado: nao dava para remover a planta antiga do levantamento

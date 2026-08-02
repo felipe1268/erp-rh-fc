@@ -162,6 +162,34 @@ async function assertCampoNaoConsolidado(db: any, campoId: number, companyId: nu
 
 // Rev. 4797 — planta (PDF) com contornos de um levantamento CONSOLIDADO também
 // é intocável: excluir a planta apaga contornos; recalibrar muda quantitativos.
+// Rev. 4808 — "medição anterior" de verdade = levantamento cuja medição
+// vinculada (via terceiro_medicoes.levantamento_campo_id OU campo.medicao_id)
+// está APROVADA ou PAGA. Rascunho/abandonado/consolidado-sem-medição não conta.
+async function filtrarCamposComMedicaoFechada(db: any, ids: number[], companyId: number): Promise<number[]> {
+  if (ids.length === 0) return ids;
+  const campos = await db
+    .select({ id: medicaoCampo.id, medicaoId: medicaoCampo.medicaoId })
+    .from(medicaoCampo)
+    .where(and(inArray(medicaoCampo.id, ids), eq(medicaoCampo.companyId, companyId)));
+  const medIds = campos.map((c: any) => c.medicaoId).filter((x: any) => x != null);
+  const meds = await db
+    .select({ id: terceiroMedicoes.id, levCampoId: terceiroMedicoes.levantamentoCampoId, status: terceiroMedicoes.status })
+    .from(terceiroMedicoes)
+    .where(and(
+      eq(terceiroMedicoes.companyId, companyId),
+      medIds.length > 0
+        ? sql`(${inArray(terceiroMedicoes.levantamentoCampoId, ids)} OR ${inArray(terceiroMedicoes.id, medIds)})`
+        : inArray(terceiroMedicoes.levantamentoCampoId, ids),
+    ));
+  const fechadas = meds.filter((m: any) => ["aprovada", "paga"].includes(m.status || ""));
+  const okIds = new Set<number>();
+  for (const m of fechadas) {
+    if (m.levCampoId != null) okIds.add(m.levCampoId);
+    for (const c of campos) if ((c as any).medicaoId === m.id) okIds.add((c as any).id);
+  }
+  return ids.filter((id) => okIds.has(id));
+}
+
 async function assertPdfSemCampoConsolidado(db: any, pdfId: number, companyId: number) {
   const rows = await db
     .select({ campoId: medicaoCampoContornos.medicaoCampoId })
@@ -1305,7 +1333,14 @@ export const medicaoRouter = router({
             ? eq(medicaoCampo.origem, "terceiro")
             : sql`(${medicaoCampo.origem} IS DISTINCT FROM 'terceiro')`,
         ));
-      const ids = campos.map((c) => c.id).filter((id) => id !== input.excluirCampoId);
+      let ids = campos.map((c) => c.id).filter((id) => id !== input.excluirCampoId);
+      // Rev. 4808 — "já medido" = só levantamentos cuja medição vinculada foi
+      // APROVADA/PAGA. Rascunhos, levantamentos abandonados e consolidações sem
+      // medição fechada NÃO contam como "medição anterior" (o user via 94 m²
+      // "já medidos" vindos de um levantamento duplicado/abandonado).
+      if (escopoTerceiro && ids.length > 0) {
+        ids = await filtrarCamposComMedicaoFechada(db, ids, input.companyId);
+      }
       if (ids.length === 0) return [] as { orcamentoItemId: number; quantidade: number }[];
       const rows = await db
         .select({
@@ -1360,7 +1395,11 @@ export const medicaoRouter = router({
       const tituloMap = new Map<number, { numero: number; titulo: string | null }>(
         campos.map((c) => [c.id, { numero: c.numero, titulo: c.titulo }]),
       );
-      const ids = campos.map((c) => c.id).filter((id) => id !== input.excluirCampoId);
+      let ids = campos.map((c) => c.id).filter((id) => id !== input.excluirCampoId);
+      // Rev. 4808 — referência "já medido" só de medições fechadas (aprovada/paga).
+      if (origemNorm === "terceiro" && ids.length > 0) {
+        ids = await filtrarCamposComMedicaoFechada(db, ids, input.companyId);
+      }
       if (ids.length === 0) return [] as any[];
       const rows = await db
         .select({
