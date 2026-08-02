@@ -236,15 +236,13 @@ export function useLevantamentoOffline(args: {
   const saveContorno = useCallback(async (input: any) => {
     const uuid: string = input.uuid || newUuid();
     const existingId: number | undefined = input.id && input.id > 0 ? input.id : undefined;
-    // numero otimista p/ novos — Rev. 4792: sequência POR CATEGORIA (serviço);
-    // cada categoria conta a sua (Contrapiso 1,2,3… / Forro 1,2,3…).
-    const catKey = String(input.servico ?? input.tipo ?? "");
+    // numero otimista p/ novos — Rev. 4836: sequência GLOBAL do levantamento
+    // (rastreio na planta impressa: 1,2,3… atravessando todas as categorias).
     const maxLocal = (campo?.contornos ?? [])
-      .filter((c: any) => !c.deletedAt && String(c.servico ?? c.tipo ?? "") === catKey)
+      .filter((c: any) => !c.deletedAt)
       .reduce((m: number, c: any) => Math.max(m, c.numero || 0), 0);
     // Rev. 4822 — sequência do CONTRATO: continua do maior nº das medições anteriores
     const maxRef = (refContornos ?? [])
-      .filter((c: any) => String(c.servico ?? c.tipo ?? "") === catKey)
       .reduce((m: number, c: any) => Math.max(m, c.numero || 0), 0);
     const numero = input.numero ?? (Math.max(maxLocal, maxRef) + 1);
     const data = { ...input, uuid: undefined, id: undefined, numero, medicaoCampoId: campoId };

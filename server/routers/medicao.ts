@@ -1794,16 +1794,14 @@ export const medicaoRouter = router({
         await aplicarLevantamentoNaMedicaoTerceiro(db, input.medicaoCampoId).catch((e: any) => console.error("[Medicao] aplicarLevantamento:", e));
         return { id };
       }
-      // Rev. 4792 — numeração POR CATEGORIA (serviço; fallback tipo), ignorando
-      // excluídos: cada categoria conta 1,2,3… sem repetir.
-      const catKey = input.servico ?? input.tipo;
+      // Rev. 4836 — numeração GLOBAL do levantamento (era por categoria): a
+      // sequência 1,2,3… atravessa todas as categorias, p/ rastreio na planta.
       const usados = await db
         .select({ numero: medicaoCampoContornos.numero })
         .from(medicaoCampoContornos)
         .where(and(
           eq(medicaoCampoContornos.medicaoCampoId, input.medicaoCampoId),
           sql`deleted_at IS NULL`,
-          sql`COALESCE(servico, tipo) = ${catKey}`,
         ));
       const setUsados = new Set(usados.map((u: any) => u.numero ?? 0));
       const maxUsado = usados.reduce((m: number, u: any) => Math.max(m, u.numero ?? 0), 0);
@@ -1826,7 +1824,6 @@ export const medicaoRouter = router({
               origemCampoCond(campoRow.origem === "terceiro" ? "terceiro" : "cliente"),
               sql`${medicaoCampoContornos.medicaoCampoId} <> ${input.medicaoCampoId}`,
               sql`${medicaoCampoContornos.deletedAt} IS NULL`,
-              sql`COALESCE(${medicaoCampoContornos.servico}, ${medicaoCampoContornos.tipo}) = ${catKey}`,
             ));
           baseContrato = Number((r as any)?.mx ?? 0);
         }
@@ -2648,18 +2645,15 @@ export const medicaoRouter = router({
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "ok" });
               continue;
             }
-            // Rev. 4792 — numeração POR CATEGORIA (serviço; fallback tipo), sem
-            // excluídos. REGRA DE OURO: número repetido na mesma categoria é
-            // IMPOSSÍVEL — o otimista do aparelho só vale se estiver livre
-            // (dois aparelhos offline geravam "nº 1" duplicado ao sincronizar).
-            const catKey = (d.servico ?? d.tipo) ?? "";
+            // Rev. 4836 — numeração GLOBAL do levantamento (era por categoria).
+            // REGRA DE OURO: número repetido é IMPOSSÍVEL — o otimista do aparelho
+            // só vale se estiver livre (dois aparelhos offline geravam duplicado).
             const usados = await db
               .select({ numero: medicaoCampoContornos.numero })
               .from(medicaoCampoContornos)
               .where(and(
                 eq(medicaoCampoContornos.medicaoCampoId, campoId),
                 sql`deleted_at IS NULL`,
-                sql`COALESCE(servico, tipo) = ${catKey}`,
               ));
             const setUsados = new Set(usados.map((u) => u.numero ?? 0));
             const maxUsado = usados.reduce((m, u) => Math.max(m, u.numero ?? 0), 0);
@@ -2682,7 +2676,6 @@ export const medicaoRouter = router({
                     origemCampoCond(campoRowS.origem === "terceiro" ? "terceiro" : "cliente"),
                     sql`${medicaoCampoContornos.medicaoCampoId} <> ${campoId}`,
                     sql`${medicaoCampoContornos.deletedAt} IS NULL`,
-                    sql`COALESCE(${medicaoCampoContornos.servico}, ${medicaoCampoContornos.tipo}) = ${catKey}`,
                   ));
                 baseContratoSync = Number((rS as any)?.mx ?? 0);
               }
@@ -2881,20 +2874,22 @@ export const medicaoRouter = router({
 // os demais para max+1, max+2… Determinístico e idempotente.
 async function dedupNumerosContornos(db: any, campoId: number) {
   await db.execute(sql`
+    -- Rev. 4836: dedup GLOBAL do levantamento (era por categoria) — a sequência
+    -- 1,2,3… atravessa todas as categorias, então nº repetido é sempre conflito.
     WITH vivos AS (
-      SELECT id, COALESCE(servico, tipo) AS cat, numero,
-             ROW_NUMBER() OVER (PARTITION BY COALESCE(servico, tipo), numero ORDER BY id) AS dup_rn
+      SELECT id, numero,
+             ROW_NUMBER() OVER (PARTITION BY numero ORDER BY id) AS dup_rn
       FROM medicao_campo_contornos
       WHERE medicao_campo_id = ${campoId} AND deleted_at IS NULL
-    ), maxes AS (
-      SELECT cat, MAX(numero) AS mx FROM vivos GROUP BY cat
+    ), mx AS (
+      SELECT MAX(numero) AS mx FROM vivos
     ), dups AS (
-      SELECT v.id, v.cat, ROW_NUMBER() OVER (PARTITION BY v.cat ORDER BY v.numero, v.id) AS k
+      SELECT v.id, ROW_NUMBER() OVER (ORDER BY v.numero, v.id) AS k
       FROM vivos v WHERE v.dup_rn > 1
     )
     UPDATE medicao_campo_contornos m
-    SET numero = maxes.mx + dups.k
-    FROM dups JOIN maxes ON maxes.cat = dups.cat
+    SET numero = mx.mx + dups.k
+    FROM dups, mx
     WHERE m.id = dups.id
   `);
 }

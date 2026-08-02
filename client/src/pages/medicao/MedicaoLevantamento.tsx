@@ -1928,26 +1928,19 @@ export default function MedicaoLevantamento() {
       return { x: sx / pts.length, y: sy / pts.length };
     };
     const BANDA = 0.06; // faixa horizontal: contornos "na mesma linha" ordenam por x
-    // Rev. 4792 — numeração POR CATEGORIA: cada serviço recomeça do 1 (Contrapiso
-    // 1,2,3… / Forro 1,2,3…), sem repetir número dentro da categoria.
-    const porCategoria = new Map<string, any[]>();
-    for (const c of cs) {
-      const k = String(c.servico ?? c.tipo ?? "");
-      porCategoria.set(k, [...(porCategoria.get(k) ?? []), c]);
-    }
+    // Rev. 4836 — numeração GLOBAL do levantamento (pedido do usuário): sequência
+    // única 1,2,3… atravessando TODAS as categorias, em ordem de leitura — assim
+    // o rastreio na planta impressa não tem número repetido/sobreposto.
     const planos: { c: any; novo: number }[] = [];
-    for (const [cat, grupo] of porCategoria.entries()) {
-      // Rev. 4822 — sequência do CONTRATO: renumerar continua do maior nº já
-      // usado na categoria nas medições anteriores (não volta pro 1).
-      const base = ((contornosRef ?? []) as any[])
-        .filter((c) => String(c.servico ?? c.tipo ?? "") === cat)
-        .reduce((m, c) => Math.max(m, c.numero || 0), 0);
-      const ordered = grupo
-        .map((c) => ({ c, p: anchor(c) }))
-        .sort((a, b) => (Math.round(a.p.y / BANDA) - Math.round(b.p.y / BANDA)) || (a.p.x - b.p.x) || ((a.c.numero ?? 0) - (b.c.numero ?? 0)))
-        .map((x) => x.c);
-      ordered.forEach((c, i) => planos.push({ c, novo: base + i + 1 }));
-    }
+    // Rev. 4822 — sequência do CONTRATO: renumerar continua do maior nº já
+    // usado nas medições anteriores (não volta pro 1).
+    const base = ((contornosRef ?? []) as any[])
+      .reduce((m, c) => Math.max(m, c.numero || 0), 0);
+    const ordered = cs
+      .map((c) => ({ c, p: anchor(c) }))
+      .sort((a, b) => (Math.round(a.p.y / BANDA) - Math.round(b.p.y / BANDA)) || (a.p.x - b.p.x) || ((a.c.numero ?? 0) - (b.c.numero ?? 0)))
+      .map((x) => x.c);
+    ordered.forEach((c, i) => planos.push({ c, novo: base + i + 1 }));
     setBulkBusy(true);
     try {
       for (const { c, novo } of planos) {
@@ -3617,10 +3610,10 @@ export default function MedicaoLevantamento() {
                   {contornosPagina.length > 1 && (
                     <Button
                       size="sm" className="h-7 px-2.5 text-[11px] gap-1 bg-blue-600 hover:bg-blue-700 text-white" disabled={bulkBusy}
-                      title="Reorganiza a numeração de cada categoria: 1, 2, 3… da esquerda para a direita, de cima para baixo"
+                      title="Renumera TODOS os contornos em sequência única: 1, 2, 3… da esquerda para a direita, de cima para baixo (sem repetir número entre categorias)"
                       onClick={() => askConfirm({
                         title: "Renumerar contornos?",
-                        description: "Todos os contornos desta página serão renumerados da esquerda para a direita e de cima para baixo (1, 2, 3…).",
+                        description: "Todos os contornos desta página entram numa sequência ÚNICA (1, 2, 3…), atravessando todas as categorias, da esquerda para a direita e de cima para baixo — sem número repetido na planta.",
                         confirmText: "Renumerar",
                         onConfirm: () => { void renumerarContornos(); },
                       })}

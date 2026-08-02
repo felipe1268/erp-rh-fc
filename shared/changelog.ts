@@ -1,4 +1,21 @@
 /**
+ * Rev. 4836 - NUMERACAO GLOBAL DOS CONTORNOS DO LEVANTAMENTO
+ *
+ * - A numeracao dos contornos deixou de reiniciar por categoria (Forro
+ *   1,2,3... / Tabica 1,2,3...) e virou SEQUENCIA UNICA do levantamento:
+ *   1,2,3... atravessando todas as camadas — rastreio facil na planta
+ *   impressa, sem numero repetido/sobreposto.
+ * - Vale em todos os caminhos: criacao no aparelho (otimista offline),
+ *   salvar online, sincronizacao em lote e o botao "Organizar numeros"
+ *   (que renumera a pagina inteira em ordem de leitura, esq→dir,
+ *   cima→baixo, numa sequencia so).
+ * - A sequencia continua entre medicoes do MESMO contrato (Medicao 01
+ *   terminou no nº 8 → Medicao 02 comeca no nº 9), como antes.
+ * - Levantamentos antigos: basta tocar em "Organizar numeros" para
+ *   converter para a sequencia unica.
+ */
+
+/**
  * Rev. 4835 - MEMORIA DE CALCULO ASSINADA ANTES DA CONSOLIDACAO (TERCEIROS)
  *
  * - Novo botao "Assinar memoria" no Levantamento de Campo (terceiros):
