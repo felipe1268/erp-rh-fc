@@ -1509,9 +1509,49 @@ export default function Obras() {
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Entrada</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Intervalo</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Saída</th>
+                      <th className="w-10" />
                     </tr>
                   </thead>
                   <tbody>
+                    {/* Rev. 4833 — "Definir todos": preenche todos os dias de uma vez;
+                        depois é só limpar (✕) os dias de folga. */}
+                    <tr className="border-t bg-indigo-50/70">
+                      <td className="px-3 py-1.5 font-semibold text-indigo-700">Todos</td>
+                      <td className="px-1 py-1">
+                        <TimeCombobox
+                          value=""
+                          onChange={(v) => setJornadaForm(prev => {
+                            const next = { ...prev };
+                            DIAS_JORNADA.forEach(({ key }) => { next[`jornada_${key}_entrada`] = v; });
+                            return next;
+                          })}
+                          options={ENTRADA_OPTIONS}
+                        />
+                      </td>
+                      <td className="px-1 py-1">
+                        <TimeCombobox
+                          value=""
+                          onChange={(v) => setJornadaForm(prev => {
+                            const next = { ...prev };
+                            DIAS_JORNADA.forEach(({ key }) => { next[`jornada_${key}_intervalo`] = v; });
+                            return next;
+                          })}
+                          options={INTERVALO_OPTIONS}
+                        />
+                      </td>
+                      <td className="px-1 py-1">
+                        <TimeCombobox
+                          value=""
+                          onChange={(v) => setJornadaForm(prev => {
+                            const next = { ...prev };
+                            DIAS_JORNADA.forEach(({ key }) => { next[`jornada_${key}_saida`] = v; });
+                            return next;
+                          })}
+                          options={SAIDA_OPTIONS}
+                        />
+                      </td>
+                      <td className="px-1 py-1 text-center text-[10px] text-indigo-500 font-medium">aplica<br/>a todos</td>
+                    </tr>
                     {DIAS_JORNADA.map(({ key, label }) => (
                       <tr key={key} className="border-t">
                         <td className="px-3 py-1.5 font-medium">{label}</td>
@@ -1535,6 +1575,20 @@ export default function Obras() {
                             onChange={(v) => setJornadaForm(prev => ({ ...prev, [`jornada_${key}_saida`]: v }))}
                             options={SAIDA_OPTIONS}
                           />
+                        </td>
+                        <td className="px-1 py-1 text-center">
+                          {(jornadaForm[`jornada_${key}_entrada`] || jornadaForm[`jornada_${key}_intervalo`] || jornadaForm[`jornada_${key}_saida`]) ? (
+                            <button
+                              type="button"
+                              title={`Limpar ${label} (folga)`}
+                              onClick={() => setJornadaForm(prev => ({ ...prev, [`jornada_${key}_entrada`]: "", [`jornada_${key}_intervalo`]: "", [`jornada_${key}_saida`]: "" }))}
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-red-500 hover:bg-red-50"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">folga</span>
+                          )}
                         </td>
                       </tr>
                     ))}
