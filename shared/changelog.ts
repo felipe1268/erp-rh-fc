@@ -1,4 +1,15 @@
 /**
+ * Rev. 4813 - FLUXO DO ADITIVO NO LEVANTAMENTO (ajuste a pedido)
+ *
+ * - Estouro do contratado: alerta e' so' o toast rapido (fecha sozinho);
+ *   banner fixo na Planilha consolidada removido.
+ * - Medir/agrupar continua LIVRE mesmo acima do contratado.
+ * - Ao CONSOLIDAR com excedente, pergunta: "tratar como aditivo?" — confirmando,
+ *   consolida e o excedente segue para a medicao como aditivo (justificativa e
+ *   aprovacao na aba Medicoes do contrato).
+ */
+
+/**
  * Rev. 4812 - FOTO E VINCULO NAO SOMEM MAIS NA SINCRONIZACAO
  *
  * Duas causas corrigidas no levantamento offline-first:

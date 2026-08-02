@@ -354,7 +354,7 @@ export default function MedicaoLevantamento() {
       aditivoAvisadosRef.current.add(it.id);
       toast.warning("Área superior ao contrato", {
         description: `${it.eapCodigo ? it.eapCodigo + " · " : ""}${it.descricao}: ${numFmt(it.acumulada, 2)} ${it.unidade} medidos × ${numFmt(it.contratada, 2)} ${it.unidade} contratados. Avaliar a possibilidade de criar aditivo.`,
-        duration: 10000,
+        duration: 6000,
       });
     }
   }, [itensExcedidos]);
@@ -2374,12 +2374,21 @@ export default function MedicaoLevantamento() {
             ) : (
               <Button size="sm" variant="outline" className="gap-1.5 h-9"
                 disabled={consolidarM.isPending}
-                onClick={() => askConfirm({
-                  title: "Consolidar levantamento?",
-                  description: "O levantamento fica SÓ-LEITURA: nada pode ser desenhado, editado ou apagado (nem sem querer). Para editar depois, será preciso desconsolidar.",
-                  confirmText: "Consolidar",
-                  onConfirm: () => consolidarM.mutate({ companyId, medicaoCampoId: campoId }),
-                })}>
+                onClick={() => askConfirm(itensExcedidos.length > 0
+                  // Rev. 4813 — estourou o contratado: medir/agrupar continua livre;
+                  // na hora de consolidar pergunta se o excedente vira ADITIVO.
+                  ? {
+                      title: "Área superior ao contrato — tratar como aditivo?",
+                      description: `${itensExcedidos.map((it) => `${it.eapCodigo ? it.eapCodigo + " · " : ""}${it.descricao}: ${numFmt(it.acumulada, 2)} ${it.unidade} medidos × ${numFmt(it.contratada, 2)} ${it.unidade} contratados (+${numFmt(it.acumulada - it.contratada, 2)} ${it.unidade})`).join("; ")}. Ao confirmar, o levantamento consolida e o excedente segue para a medição como ADITIVO (com justificativa e aprovação na aba Medições do contrato).`,
+                      confirmText: "Sim, tratar como aditivo",
+                      onConfirm: () => consolidarM.mutate({ companyId, medicaoCampoId: campoId }),
+                    }
+                  : {
+                      title: "Consolidar levantamento?",
+                      description: "O levantamento fica SÓ-LEITURA: nada pode ser desenhado, editado ou apagado (nem sem querer). Para editar depois, será preciso desconsolidar.",
+                      confirmText: "Consolidar",
+                      onConfirm: () => consolidarM.mutate({ companyId, medicaoCampoId: campoId }),
+                    })}>
                 {consolidarM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockOpen className="h-4 w-4" />}
                 <span className="hidden md:inline">Consolidar</span>
               </Button>
@@ -3563,19 +3572,9 @@ export default function MedicaoLevantamento() {
             {/* consolidado */}
             <div className="border rounded-lg p-3">
               <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><FileSpreadsheet className="h-4 w-4" />Planilha consolidada</h3>
-              {/* Rev. 4809 — alerta de aditivo: acumulado ultrapassou o contratado */}
-              {itensExcedidos.length > 0 && (
-                <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
-                  <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />Área superior ao contrato</div>
-                  {itensExcedidos.map((it) => (
-                    <div key={it.id} className="mt-1 break-words">
-                      {it.eapCodigo ? `${it.eapCodigo} · ` : ""}{it.descricao}: <b>{numFmt(it.acumulada, 2)} {it.unidade}</b> medidos × {numFmt(it.contratada, 2)} {it.unidade} contratados
-                      {" "}(+{numFmt(it.acumulada - it.contratada, 2)} {it.unidade}).
-                    </div>
-                  ))}
-                  <div className="mt-1">Avaliar a possibilidade de criar <b>aditivo</b>.</div>
-                </div>
-              )}
+              {/* Rev. 4813 — o alerta de estouro é só o toast passageiro (Rev. 4809);
+                  banner fixo removido a pedido do usuário. A pergunta sobre tratar
+                  o excedente como ADITIVO acontece ao Consolidar. */}
               {(consolidado?.linhas ?? []).length === 0 ? (
                 <p className="text-xs text-gray-400">Vincule contornos a itens do orçamento para consolidar em R$.</p>
               ) : (
