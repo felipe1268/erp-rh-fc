@@ -2383,6 +2383,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                           <span className="font-bold">{BRL(b.valor)}</span>
                           {b.formaPagamento && <span className="capitalize">{String(b.formaPagamento).replace(/_/g, " ")}</span>}
                           {b.conta && <span className="text-emerald-600 break-words">{b.conta}</span>}
+                          {b.comprovanteUrl && (/^https?:\/\//i.test(b.comprovanteUrl) || String(b.comprovanteUrl).startsWith("/uploads/")) && <a href={b.comprovanteUrl} target="_blank" rel="noreferrer" className="font-semibold underline text-emerald-800">Ver comprovante</a>}
                         </div>
                       ))}
                     </div>
@@ -2401,6 +2402,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                           <span className="font-bold">{BRL(b.valor)}</span>
                           {b.formaPagamento && <span className="capitalize">{String(b.formaPagamento).replace(/_/g, " ")}</span>}
                           {b.conta && <span className="break-words">{b.conta}</span>}
+                          {b.comprovanteUrl && (/^https?:\/\//i.test(b.comprovanteUrl) || String(b.comprovanteUrl).startsWith("/uploads/")) && <a href={b.comprovanteUrl} target="_blank" rel="noreferrer" className="font-semibold underline text-amber-800">Ver comprovante</a>}
                         </div>
                       ))}
                     </div>
@@ -3348,9 +3350,16 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
   const [obsRetencao, setObsRetencao] = useState(m.observacoesRetencao || "");
   const [pdfLoading, setPdfLoading] = useState(false);
   // Rev. 4793 — assinatura digital do boletim via FCSign (sem papel)
+  // Rev. 4851 — fluxo repensado (pedido do usuário): até 4 assinaturas
+  // (contratada, elaborador, gestor se for outra pessoa, sócio administrador
+  // automático), e-mail OPCIONAL (sem e-mail assina por link ou pelo pop-up de
+  // pendências no próprio sistema), envio automático ao criar (gera os links).
+  const { user: usuarioLogado } = useAuth();
   const [fcsignOpen, setFcsignOpen] = useState(false);
+  const [gestorMesmo, setGestorMesmo] = useState(true);
   const [fcsignSigs, setFcsignSigs] = useState<{ nome: string; email: string }[]>([
     { nome: contrato.empresa?.responsavelNome || contrato.empresa?.razaoSocial || "", email: contrato.empresa?.email || "" },
+    { nome: (usuarioLogado as any)?.name || (usuarioLogado as any)?.nome || "", email: (usuarioLogado as any)?.email || "" },
     { nome: "", email: "" },
   ]);
   const [, navigate] = useLocation();
@@ -3374,28 +3383,38 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
   });
   const parsePct = (s: string) => Math.min(100, Math.max(0, parseFloat(String(s).replace(",", ".")) || 0));
 
-  const criarEnvelopeMut = trpc.integrasign.criarEnvelope.useMutation({
-    onSuccess: (env: any) => {
-      toast.success("Envelope criado! Revise e envie para assinatura no FCSign.");
+  const criarEnvelopeMut = trpc.integrasign.criarEnvelope.useMutation();
+  const enviarEnvelopeMut = trpc.integrasign.enviarParaAssinatura.useMutation();
+  const handleFcsign = async () => {
+    const [contratada, elaborador, gestor] = fcsignSigs;
+    if (!contratada.nome.trim()) { toast.error("Informe o nome do responsável da contratada."); return; }
+    if (!elaborador.nome.trim()) { toast.error("Informe o nome de quem elaborou a medição."); return; }
+    if (!gestorMesmo && !gestor.nome.trim()) { toast.error("Informe o nome do gestor do contrato (ou marque que é a mesma pessoa)."); return; }
+    const emailOk = (s: string) => !s.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+    if (!emailOk(contratada.email) || !emailOk(elaborador.email) || (!gestorMesmo && !emailOk(gestor.email))) {
+      toast.error("E-mail inválido (deixe em branco para assinar por link)."); return;
+    }
+    try {
+      const env: any = await criarEnvelopeMut.mutateAsync({
+        companyId: contrato.companyId,
+        medicaoTerceiroId: m.id,
+        obraId: contrato.obraId ?? undefined,
+        titulo: "auto",
+        signatarios: [
+          { papel: "fornecedor", ordemAssinatura: 1, nome: contratada.nome.trim(), email: contratada.email.trim(), cargo: "Representante Legal", empresaNome: contrato.empresa?.razaoSocial || undefined },
+          { papel: "gestor_projeto", ordemAssinatura: 2, nome: elaborador.nome.trim(), email: elaborador.email.trim(), cargo: "Elaborador da Medição", empresaNome: "Contratante" },
+          ...(!gestorMesmo ? [{ papel: "gestor_projeto" as const, ordemAssinatura: 3, nome: gestor.nome.trim(), email: gestor.email.trim(), cargo: "Gestor do Contrato", empresaNome: "Contratante" }] : []),
+        ],
+      } as any);
+      // Rev. 4851 — envia AUTOMATICAMENTE: gera/ativa os links de todos (e
+      // dispara e-mail só pra quem tem e-mail). Nada de clicar "enviar" depois.
+      await enviarEnvelopeMut.mutateAsync({ companyId: contrato.companyId, envelopeId: env.id, enviarEmail: true } as any);
+      toast.success("Envelope criado e enviado! Links de assinatura ativos — quem é do sistema recebe o aviso ao entrar.");
       setFcsignOpen(false);
       navigate(`/integrasign?envelope=${env?.id ?? ""}`);
-    },
-    onError: (e: any) => toast.error(e.message || "Erro ao criar envelope"),
-  });
-  const handleFcsign = () => {
-    const [contratada, gestor] = fcsignSigs;
-    if (!contratada.nome.trim() || !contratada.email.trim()) { toast.error("Informe nome e e-mail do responsável da contratada."); return; }
-    if (!gestor.nome.trim() || !gestor.email.trim()) { toast.error("Informe nome e e-mail do responsável da contratante."); return; }
-    criarEnvelopeMut.mutate({
-      companyId: contrato.companyId,
-      medicaoTerceiroId: m.id,
-      obraId: contrato.obraId ?? undefined,
-      titulo: "auto",
-      signatarios: [
-        { papel: "fornecedor", ordemAssinatura: 1, nome: contratada.nome.trim(), email: contratada.email.trim(), cargo: "Representante Legal", empresaNome: contrato.empresa?.razaoSocial || undefined },
-        { papel: "gestor_projeto", ordemAssinatura: 2, nome: gestor.nome.trim(), email: gestor.email.trim(), cargo: "Gestor de Projeto", empresaNome: "Contratante" },
-      ],
-    } as any);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao criar/enviar envelope");
+    }
   };
 
   const valorBruto = Number(m.valorMedido || 0);
@@ -3493,14 +3512,18 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
             <DialogTitle>Assinatura digital do boletim — FCSign</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-gray-500 break-words">
-            Fluxo sem papel: o boletim desta medição vira um envelope no FCSign e os dois responsáveis
-            assinam digitalmente pelo link recebido por e-mail, com hash e trilha de auditoria.
+            Ordem de assinatura: <b>1º contratada</b> (de acordo com o valor líquido), <b>2º quem
+            elaborou</b>, <b>3º o gestor do contrato</b> (se for outra pessoa) e por último o
+            <b> sócio administrador</b>, incluído automaticamente. <b>E-mail é opcional</b>: sem
+            e-mail a pessoa assina pelo link (que você pode encaminhar) — e quem tem acesso ao
+            sistema recebe o aviso de pendência ao entrar e assina por lá mesmo.
           </p>
           {[
-            { titulo: "Contratada (terceiro)", idx: 0 },
-            { titulo: "Contratante (gestor)", idx: 1 },
-          ].map(({ titulo, idx }) => (
-            <div key={idx} className="space-y-1.5 border border-gray-200 rounded-lg p-3">
+            { titulo: "Contratada (terceiro)", idx: 0, mostra: true },
+            { titulo: "Quem elaborou a medição", idx: 1, mostra: true },
+            { titulo: "Gestor do contrato", idx: 2, mostra: !gestorMesmo },
+          ].map(({ titulo, idx, mostra }) => (
+            <div key={idx} className={mostra ? "space-y-1.5 border border-gray-200 rounded-lg p-3" : "hidden"}>
               <div className="text-xs font-semibold text-gray-600">{titulo}</div>
               <Input
                 placeholder="Nome completo"
@@ -3509,15 +3532,22 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
               />
               <Input
                 type="email"
-                placeholder="E-mail"
+                placeholder="E-mail (opcional — sem e-mail assina por link)"
                 value={fcsignSigs[idx].email}
                 onChange={(e) => setFcsignSigs(s => s.map((x, i) => i === idx ? { ...x, email: e.target.value } : x))}
               />
+              {idx === 1 && (
+                <label className="flex items-center gap-2 pt-1 text-xs text-gray-600 cursor-pointer">
+                  <input type="checkbox" checked={gestorMesmo} onChange={(e) => setGestorMesmo(e.target.checked)} className="h-4 w-4 accent-blue-700" />
+                  O gestor do contrato é a mesma pessoa que elaborou
+                </label>
+              )}
             </div>
           ))}
-          <Button className="w-full" onClick={handleFcsign} disabled={criarEnvelopeMut.isPending}>
-            {criarEnvelopeMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <PenLine className="w-4 h-4 mr-1" />}
-            Criar envelope e assinar
+          <p className="text-[11px] text-gray-400">Assinatura final: sócio administrador (automático, libera o pagamento).</p>
+          <Button className="w-full" onClick={handleFcsign} disabled={criarEnvelopeMut.isPending || enviarEnvelopeMut.isPending}>
+            {(criarEnvelopeMut.isPending || enviarEnvelopeMut.isPending) ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <PenLine className="w-4 h-4 mr-1" />}
+            Criar e gerar links de assinatura
           </Button>
         </DialogContent>
       </Dialog>

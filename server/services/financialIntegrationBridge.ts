@@ -187,6 +187,7 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
               tm.data_referencia, tm.status, tm.periodo, tm.obra_id,
               COALESCE(et.nome_fantasia, et.razao_social) AS nome_empresa,
               tc.descricao AS tipo_servico, tc.valor_total AS valor_contrato,
+              tc.numero_contrato AS numero_contrato,
               tc.dia_pagamento AS tc_dia_pagamento,
               tc.pagamento_conforme_recebimento AS tc_conforme_receb,
               o.terceiro_dia_pagamento AS obra_dia_pagamento,
@@ -309,8 +310,10 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
         status: r.status === "paga" ? "pago" : "a_pagar",
         origemModulo: "terceiro_medicao",
         origemId: r.id,
-        origemDescricao: `Medição #${r.id} — ${r.nome_empresa} — ${r.tipo_servico ?? "Serviço"} — ${r.periodo}`,
-        descricao: `Terceiro: ${r.nome_empresa} — ${r.periodo}${conformeReceb ? " (pagto conforme recebimento do cliente)" : ""}`,
+        // Rev. 4850 — identificação completa no Contas a Pagar (pedido do usuário):
+        // fornecedor + nº do contrato + medição + período, pra ficar claro o que se paga.
+        origemDescricao: `Medição #${r.id} — ${r.nome_empresa}${r.numero_contrato ? ` — Contrato ${r.numero_contrato}` : ""} — ${r.tipo_servico ?? "Serviço"} — ${r.periodo}`,
+        descricao: `Terceiro: ${r.nome_empresa}${r.numero_contrato ? ` — ${r.numero_contrato}` : ""} — Medição #${r.id} — ${r.periodo}${conformeReceb ? " (pagto conforme recebimento do cliente)" : ""}`,
       });
       imported++;
     }

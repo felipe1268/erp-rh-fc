@@ -241,7 +241,9 @@ export const integrasignRouter = router({
         papel: z.enum(["fornecedor", "gestor_projeto", "financeiro", "rh", "diretor", "testemunha"]),
         ordemAssinatura: z.number(),
         nome: z.string(),
-        email: z.string().email(),
+        // Rev. 4851 — e-mail OPCIONAL: sem e-mail o signatário assina por link
+        // (copiado/encaminhado) ou pelo pop-up de pendências dentro do sistema.
+        email: z.string().email().or(z.literal("")),
         cpfCnpj: z.string().optional(),
         cargo: z.string().optional(),
         empresaNome: z.string().optional(),
@@ -350,6 +352,29 @@ export const integrasignRouter = router({
 
         // Ordem Rev. 4479: FORNECEDOR → RH → FINANCEIRO → GESTOR_PROJETO → testemunhas → DIRETOR (último)
         const reordenados = [...fornecedores, ...gestoresInjetados, ...gestoresProjeto, ...testemunhas, diretor];
+        signatariosFinais.length = 0;
+        signatariosFinais.push(...reordenados.map((s, i) => ({ ...s, ordemAssinatura: i + 1 })));
+      }
+
+      // Rev. 4849 — BOLETIM DE MEDIÇÃO: mesmo padrão dos contratos — o SÓCIO
+      // ADMINISTRADOR é injetado server-side como assinatura FINAL (liberação
+      // da medição), depois do fornecedor e de quem elaborou (gestor/auxiliar).
+      // Descarta qualquer "diretor" que o cliente tenha enviado (determinístico).
+      if (input.medicaoTerceiroId && !input.contratoTerceiroId) {
+        const socioAdmin = await resolveSocioAdministradorSigner(db, input.companyId);
+        const fornecedores    = signatariosFinais.filter(s => s.papel === "fornecedor");
+        const gestoresProjeto = signatariosFinais.filter(s => s.papel === "gestor_projeto");
+        const testemunhas     = signatariosFinais.filter(s => s.papel === "testemunha");
+        const diretor = {
+          papel: "diretor" as const,
+          ordemAssinatura: 0,
+          nome: socioAdmin.nome,
+          email: "",
+          cpfCnpj: socioAdmin.cpfCnpj ?? undefined,
+          cargo: "Sócio Administrador",
+          empresaNome: "FC Engenharia",
+        };
+        const reordenados = [...fornecedores, ...gestoresProjeto, ...testemunhas, diretor];
         signatariosFinais.length = 0;
         signatariosFinais.push(...reordenados.map((s, i) => ({ ...s, ordemAssinatura: i + 1 })));
       }
@@ -644,6 +669,78 @@ export const integrasignRouter = router({
       return { success: true, nome };
     }),
 
+  // Rev. 4851 — pendências do usuário logado (consumido pelo pop-up global de
+  // assinaturas): envelopes enviados/em andamento onde é a VEZ do usuário.
+  // Match por e-mail (case-insensitive); o papel 'diretor' (sócio administrador,
+  // criado sem e-mail) casa pelo role admin_master. Tenancy: intersecta com as
+  // empresas do usuário (admin/admin_master são globais).
+  pendingForCurrentUser: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    const user = (ctx as any).user;
+    if (!db || !user?.id) return [];
+    const email = String(user.email || "").trim().toLowerCase();
+    const isAdminLike = user.role === "admin" || user.role === "admin_master";
+    if (!email && !isAdminLike) return [];
+    const envs = await db.select().from(integrasignEnvelopes)
+      .where(and(
+        inArray(integrasignEnvelopes.status, ["enviado", "em_andamento"]),
+        isNull(integrasignEnvelopes.excluidoEm),
+      ));
+    if (envs.length === 0) return [];
+    // Review Rev. 4851 — FAIL-CLOSED: usuário comum sem vínculo de empresa não
+    // vê NADA (tokens de assinatura são sensíveis; sem fallback permissivo).
+    let allowed: Set<number> | null = null;
+    if (!isAdminLike) {
+      const links = await getUserCompanyLinks(user.id);
+      allowed = new Set((links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number"));
+      if (allowed.size === 0) return [];
+    }
+    const sigs = await db.select().from(integrasignSignatarios)
+      .where(inArray(integrasignSignatarios.envelopeId, envs.map((e: any) => e.id)));
+    const out: any[] = [];
+    // Review Rev. 4851 — diretor casa por IDENTIDADE, não só por role: além de
+    // admin_master, o sócio administrador RESOLVIDO da empresa precisa ser o
+    // próprio usuário (comparação de nome normalizado com o signatário injetado).
+    const norm = (v: any) => String(v || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const socioCache = new Map<number, string>();
+    const socioDaEmpresa = async (companyId: number) => {
+      if (!socioCache.has(companyId)) {
+        try {
+          const socio = await resolveSocioAdministradorSigner(db, companyId);
+          socioCache.set(companyId, norm(socio?.nome));
+        } catch { socioCache.set(companyId, ""); }
+      }
+      return socioCache.get(companyId) || "";
+    };
+    const userNome = norm((user as any).name || (user as any).nome);
+    for (const env of envs) {
+      if (allowed && !allowed.has(env.companyId)) continue;
+      const doEnv = sigs.filter((s: any) => s.envelopeId === env.id)
+        .sort((a: any, b: any) => a.ordemAssinatura - b.ordemAssinatura);
+      for (const s of doEnv) {
+        if (s.status === "assinado" || s.status === "recusado" || s.papel === "testemunha") continue;
+        let meu = !!email && String(s.email || "").trim().toLowerCase() === email;
+        if (!meu && user.role === "admin_master" && s.papel === "diretor" && userNome) {
+          const socioNome = await socioDaEmpresa(env.companyId);
+          meu = !!socioNome && (socioNome === norm(s.nome)) && (socioNome === userNome || norm(s.nome) === userNome);
+        }
+        if (!meu) continue;
+        // Só quando for a vez dele: obrigatórios de ordem menor todos assinados
+        const bloqueado = doEnv.some((p: any) => p.papel !== "testemunha" && p.ordemAssinatura < s.ordemAssinatura && p.status !== "assinado");
+        if (bloqueado) continue;
+        out.push({
+          envelopeId: env.id,
+          companyId: env.companyId,
+          signatarioId: s.id,
+          token: s.token,
+          ordem: s.ordemAssinatura,
+          titulo: env.titulo,
+        });
+      }
+    }
+    return out;
+  }),
+
   enviarParaAssinatura: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -701,7 +798,7 @@ export const integrasignRouter = router({
           tokenExpiraEm: expiresAt.toISOString(),
         }).where(eq(integrasignSignatarios.id, sig.id));
 
-        if (input.enviarEmail !== false) {
+        if (input.enviarEmail !== false && sig.email) {
           enviarConviteAssinatura({
             email: sig.email,
             nome: sig.nome,
@@ -1011,6 +1108,31 @@ export const integrasignRouter = router({
           }).where(and(eq(terceiroContratos.id, envelope.contratoTerceiroId), eq(terceiroContratos.companyId, envelope.companyId)));
         }
 
+        // Rev. 4850 — BOLETIM DE MEDIÇÃO: a assinatura final (sócio administrador)
+        // aprova a medição automaticamente e garante o título no Contas a Pagar.
+        // Falha aqui NÃO desfaz a assinatura: loga + alerta o criador do envelope
+        // para aprovar manualmente.
+        if ((envelope as any).medicaoTerceiroId) {
+          try {
+            const { aprovarMedicaoPorAssinatura } = await import("./terceiroContratos");
+            await aprovarMedicaoPorAssinatura(envelope.companyId, (envelope as any).medicaoTerceiroId, signatario.nome || "FCSign", envelope.criadoPorId ?? null);
+          } catch (e: any) {
+            console.error(`[IntegraSign] pós-conclusão do boletim (medição #${(envelope as any).medicaoTerceiroId}):`, e?.message || e);
+            try {
+              const { criarUserAlert } = await import("../db");
+              if (envelope.criadoPorId) {
+                await criarUserAlert({
+                  userId: envelope.criadoPorId,
+                  companyId: envelope.companyId,
+                  tipo: "erro",
+                  titulo: "Boletim assinado, mas a medição não foi aprovada automaticamente",
+                  mensagem: `Medição #${(envelope as any).medicaoTerceiroId}: ${e?.message || e}. Aprove manualmente na tela do contrato para liberar o pagamento.`,
+                });
+              }
+            } catch { /* alerta é melhor-esforço */ }
+          }
+        }
+
         await logAudit(db, {
           companyId: envelope.companyId,
           envelopeId: envelope.id,
@@ -1018,7 +1140,8 @@ export const integrasignRouter = router({
           detalhes: `Todas as ${envelope.totalSignatariosObrigatorios} assinaturas obrigatórias foram realizadas. Contrato ativado.`,
         });
 
-        const allEmails = todosSignatarios.map((s: any) => ({ email: s.email, nome: s.nome }));
+        // Rev. 4851 — signatário sem e-mail (assina por link/pop-up) fica fora do disparo
+        const allEmails = todosSignatarios.filter((s: any) => s.email).map((s: any) => ({ email: s.email, nome: s.nome }));
         enviarNotificacaoConclusao({ emails: allEmails, titulo: envelope.titulo })
           .catch(err => console.error(`[IntegraSign] Erro notificação conclusão:`, err?.message));
 
@@ -1040,7 +1163,7 @@ export const integrasignRouter = router({
             dataNotificacao: new Date().toISOString(),
           }).where(eq(integrasignSignatarios.id, proximo.id));
 
-          enviarNotificacaoProximoSignatario({
+          if (proximo.email) enviarNotificacaoProximoSignatario({
             email: proximo.email,
             nome: proximo.nome,
             papel: proximo.papel,
@@ -1176,7 +1299,7 @@ export const integrasignRouter = router({
       const [envelopeForReminder] = await db.select({ titulo: integrasignEnvelopes.titulo })
         .from(integrasignEnvelopes).where(eq(integrasignEnvelopes.id, signatario.envelopeId));
 
-      enviarLembrete({
+      if (signatario.email) enviarLembrete({
         email: signatario.email,
         nome: signatario.nome,
         titulo: envelopeForReminder?.titulo || "Documento",

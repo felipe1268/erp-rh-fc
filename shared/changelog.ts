@@ -1,4 +1,50 @@
 /**
+ * Rev. 4851 - BOLETIM: 4 ASSINATURAS, LINKS AUTOMATICOS E POP-UP DE PENDENCIAS
+ *
+ * - Dialog do boletim repensado (poka-yoke): ate 4 assinaturas na ordem
+ *   1) contratada, 2) quem elaborou a medicao, 3) gestor do contrato (so se
+ *   for OUTRA pessoa — checkbox "e a mesma pessoa" dispensa), 4) socio
+ *   administrador automatico (liberacao final).
+ * - E-mail agora e OPCIONAL em todos: sem e-mail a pessoa assina pelo link
+ *   (que pode ser copiado/encaminhado, ex. WhatsApp).
+ * - Sem clique extra de "enviar": criar o envelope ja envia e ativa os links
+ *   de assinatura na hora (e-mail so dispara pra quem tem e-mail).
+ * - POP-UP DE PENDENCIAS: envelopes do IntegraSign (boletins, contratos,
+ *   memorias de calculo) agora aparecem no aviso global ao entrar no sistema
+ *   — quem elaborou, gestor e socio administrador assinam por dentro do ERP,
+ *   na vez de cada um, sem depender de e-mail. Nada fica esquecido.
+ */
+
+/**
+ * Rev. 4850 - BOLETIM ASSINADO -> CONTAS A PAGAR -> COMPROVANTE NA MEDICAO
+ *
+ * - Assinatura FINAL do socio administrador no boletim FCSign agora APROVA a
+ *   medicao automaticamente (mesma transacao atomica da aprovacao manual,
+ *   com os mesmos poka-yokes de FD pendente e levantamento assinado) e
+ *   garante o titulo no Contas a Pagar na hora. Se algo impedir, o criador
+ *   do envelope recebe alerta in-app para aprovar manualmente.
+ * - Titulo bem identificado no Financeiro: fornecedor + numero do contrato +
+ *   numero da medicao + periodo na descricao.
+ * - Ciclo fechado: quando o Financeiro baixa o titulo com comprovante, a
+ *   medicao mostra "Paga" com cada baixa e o link "Ver comprovante" — o
+ *   gestor apresenta ao fornecedor sem depender do Financeiro.
+ */
+
+/**
+ * Rev. 4849 - BOLETIM FCSIGN: SOCIO ADMINISTRADOR ASSINA POR ULTIMO
+ *
+ * - Envelope do boletim de medicao agora segue o mesmo padrao dos contratos:
+ *   1) contratada (fornecedor), 2) quem elaborou a medicao (gestor ou
+ *   auxiliar), 3) SOCIO ADMINISTRADOR injetado automaticamente pelo servidor
+ *   como assinatura FINAL de liberacao (nao da pra burlar pelo cliente).
+ * - No dialog, o campo Contratante (gestor) ja vem preenchido com nome/
+ *   e-mail do usuario logado (a contratada ja vinha do cadastro), e o texto
+ *   explica a ordem das 3 assinaturas.
+ * - Nota de fluxo (decisao do usuario): levantamento assina a QUANTIDADE
+ *   fisica; boletim assina o VALOR (bruto - retencoes - FD = liquido).
+ */
+
+/**
  * Rev. 4848 - MEMORIA DE CALCULO: REPAGINADA + FOTOS JUNTO DO SEU SERVICO
  *
  * - Cabecalho e inicio (contornos medidos, consolidacao) mantidos; dali pra

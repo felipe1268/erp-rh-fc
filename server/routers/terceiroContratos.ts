@@ -186,6 +186,59 @@ async function _assertCompanyAccess(ctxUser: any, companyId: number | null | und
   }
 }
 
+// Rev. 4850 — assinatura FINAL do sócio administrador no boletim FCSign aprova a
+// medição automaticamente (mesma transação atômica do aprovarMedicao) e garante
+// o título no Contas a Pagar. Idempotente: já aprovada → só garante o título.
+export async function aprovarMedicaoPorAssinatura(companyId: number, medicaoId: number, aprovadoPor: string, userId?: number | null): Promise<void> {
+  const db = await getDb();
+  const [existing] = await db.select().from(terceiroMedicoes)
+    .where(and(eq(terceiroMedicoes.id, medicaoId), eq(terceiroMedicoes.companyId, companyId)));
+  if (!existing) throw new Error("Medição não encontrada");
+  if (existing.status !== "aguardando_aprovacao") {
+    if (["aprovada", "faturada", "paga"].includes(String(existing.status))) {
+      await _posAprovacaoFinanceiro(companyId, medicaoId, userId);
+      return;
+    }
+    // Review Rev. 4850 — status não aprovável (rascunho/rejeitada/cancelada):
+    // falha EXPLÍCITA → o hook do envelope alerta o criador (nada silencioso).
+    throw new Error(`Medição está com status "${existing.status}" e não pode ser aprovada automaticamente pela assinatura.`);
+  }
+  // Mesmos poka-yokes da aprovação manual (FD pendente / levantamento assinado)
+  await _assertSemFdPendente(db, medicaoId, companyId);
+  await _assertLevantamentoAssinado(db, medicaoId, companyId);
+  const medicao = await db.transaction(async (tx: any) => {
+    const [med0] = await tx.select().from(terceiroMedicoes)
+      .where(and(eq(terceiroMedicoes.id, medicaoId), eq(terceiroMedicoes.companyId, companyId)));
+    if (!med0 || med0.status !== "aguardando_aprovacao") return med0;
+    const fdRowsTx = await tx.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
+      .where(and(eq(terceiroMedicaoFds.companyId, companyId), eq(terceiroMedicaoFds.medicaoId, medicaoId)));
+    const fdTotalTx = fdRowsTx.reduce((s: number, r: any) => s + n(r.valor), 0);
+    const [med] = await tx.update(terceiroMedicoes)
+      .set({ status: "aprovada", aprovadoPor, aprovadoEm: new Date().toISOString(), fdTotalAbatido: String(fdTotalTx), atualizadoEm: new Date().toISOString() } as any)
+      .where(eq(terceiroMedicoes.id, medicaoId))
+      .returning();
+    const itensMedicao = await tx.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, medicaoId));
+    for (const im of itensMedicao) {
+      await tx.update(terceiroContratoItens)
+        .set({
+          percentualMedidoAcumulado: String(n(im.percentualAcumuladoAnterior) + n(im.percentualMedidoPeriodo)),
+          valorMedidoAcumulado: im.valorAcumulado,
+        })
+        .where(eq(terceiroContratoItens.id, im.contratoItemId));
+    }
+    return med;
+  });
+  if (!medicao || medicao.status !== "aprovada") return;
+  await _consolidarLevantamentoDaMedicao(db, medicao, companyId, aprovadoPor).catch((e: any) =>
+    console.error(`[aprovarMedicaoPorAssinatura] FALHA ao consolidar levantamento:`, e?.message || e));
+  await _posAprovacaoFinanceiro(companyId, medicaoId, userId);
+  try {
+    await triggerFinancialSyncAwaited(companyId);
+  } catch (syncErr: any) {
+    console.error(`[aprovarMedicaoPorAssinatura] FALHA no sync financeiro pós-aprovação da medição #${medicaoId}:`, syncErr?.message || syncErr);
+  }
+}
+
 // Rev. 4832 — Herança da condição de pagamento padrão de terceiros da OBRA no
 // momento da criação do contrato. Lookup escopado por companyId (anti-IDOR:
 // obra de outra empresa nunca influencia os defaults).
@@ -963,7 +1016,9 @@ export const terceiroContratosRouter = router({
                 dataPagamento: ult?.data || null,
                 formaPagamento: ult?.formaPagamento || entry.formaPagamento || null,
                 conta: contaNome(ult?.contaBancariaId ?? entry.contaBancariaId ?? null),
-                baixas: bs.map(b => ({ data: b.data, valor: n(b.valor), formaPagamento: b.formaPagamento, conta: contaNome(b.contaBancariaId) })),
+                // Rev. 4850 — comprovante da baixa visível na medição (gestor
+                // apresenta ao fornecedor sem depender do Financeiro).
+                baixas: bs.map(b => ({ data: b.data, valor: n(b.valor), formaPagamento: b.formaPagamento, conta: contaNome(b.contaBancariaId), comprovanteUrl: (b as any).comprovanteUrl || null })),
               },
             };
           });

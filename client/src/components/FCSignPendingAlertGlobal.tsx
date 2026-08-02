@@ -60,7 +60,7 @@ type PendingItem = {
 
 export function FCSignPendingAlertGlobal() {
   const { user, isAuthenticated } = useAuth();
-  const toastIdsRef = useRef<Map<number, string | number>>(new Map());
+  const toastIdsRef = useRef<Map<string, string | number>>(new Map());
   const [location] = useLocation();
   const [modalOpen, setModalOpen] = useState(false);
   const dismissedAtLocationRef = useRef<string | null>(null);
@@ -75,6 +75,14 @@ export function FCSignPendingAlertGlobal() {
 
   const utils = trpc.useUtils();
   const { data } = trpc.signatures.pendingForCurrentUser.useQuery(undefined, {
+    enabled: isAuthenticated && (!!user?.email || isAdminLike),
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+  });
+  // Rev. 4851 — envelopes do IntegraSign (boletins, contratos, memórias) também
+  // entram no pop-up: usuários logados assinam por dentro do sistema, sem e-mail.
+  const { data: dataIs } = trpc.integrasign.pendingForCurrentUser.useQuery(undefined, {
     enabled: isAuthenticated && (!!user?.email || isAdminLike),
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
@@ -115,55 +123,63 @@ export function FCSignPendingAlertGlobal() {
     };
   }, []);
 
+  // Rev. 4851 — lista unificada FCSign (sessions) + IntegraSign (envelopes)
+  const unified: Array<{ key: string; kind: "fcsign" | "integrasign"; title: string; ordem: number; url: string; raw?: PendingItem }> = [
+    ...(((data ?? []) as PendingItem[]).map((it) => ({
+      key: `fc-${it.signerId}`, kind: "fcsign" as const, title: it.documentTitle, ordem: it.ordem,
+      url: `${window.location.origin}/assinar/${it.token}`, raw: it,
+    }))),
+    ...(((dataIs ?? []) as any[]).map((it: any) => ({
+      key: `is-${it.signatarioId}`, kind: "integrasign" as const, title: it.titulo || "Documento IntegraSign", ordem: it.ordem,
+      url: `${window.location.origin}/integrasign/assinar/${it.token}`,
+    }))),
+  ];
+
   // Rev. 2131 — reabre o modal a cada NAVEGAÇÃO se ainda houver pendência.
   useEffect(() => {
-    if (!data || data.length === 0) {
+    if (unified.length === 0) {
       setModalOpen(false);
       return;
     }
     if (dismissedAtLocationRef.current === location) return;
     setModalOpen(true);
-  }, [data, location]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, dataIs, location]);
 
   useEffect(() => {
-    if (!data) return;
-    const currentIds = new Set(data.map((d) => d.signerId));
+    if (!data && !dataIs) return;
+    const currentIds = new Set(unified.map((d) => d.key));
 
-    for (const [signerId, toastId] of Array.from(toastIdsRef.current.entries())) {
-      if (!currentIds.has(signerId)) {
+    for (const [key, toastId] of Array.from(toastIdsRef.current.entries())) {
+      if (!currentIds.has(key)) {
         toast.dismiss(toastId);
-        toastIdsRef.current.delete(signerId);
+        toastIdsRef.current.delete(key);
       }
     }
 
-    for (const item of data) {
-      if (toastIdsRef.current.has(item.signerId)) continue;
-      const url = `${window.location.origin}/assinar/${item.token}`;
+    for (const item of unified) {
+      if (toastIdsRef.current.has(item.key)) continue;
       const id = toast(
         `📝 Documento aguardando sua assinatura`,
         {
-          description: item.documentTitle,
+          description: item.title,
           duration: Infinity,
           icon: <FileSignature className="h-5 w-5 text-blue-700" />,
           action: {
             label: "Assinar agora",
-            onClick: () => window.open(url, "_blank", "noopener"),
+            onClick: () => window.open(item.url, "_blank", "noopener"),
           },
           className: "border-blue-300 bg-blue-50",
         }
       );
-      toastIdsRef.current.set(item.signerId, id);
+      toastIdsRef.current.set(item.key, id);
     }
-  }, [data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, dataIs]);
 
   const handleDismiss = () => {
     dismissedAtLocationRef.current = location;
     setModalOpen(false);
-  };
-
-  const handleSignNow = (token: string) => {
-    const url = `${window.location.origin}/assinar/${token}`;
-    window.open(url, "_blank", "noopener");
   };
 
   const handleCancelClick = (item: PendingItem) => {
@@ -181,7 +197,7 @@ export function FCSignPendingAlertGlobal() {
     });
   };
 
-  const pending = (data ?? []) as PendingItem[];
+  const pending = unified;
 
   return (
     <>
@@ -209,13 +225,13 @@ export function FCSignPendingAlertGlobal() {
           <div className="space-y-2 max-h-[50vh] overflow-y-auto">
             {pending.map((item) => (
               <div
-                key={item.signerId}
+                key={item.key}
                 className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3"
               >
                 <FileSignature className="h-5 w-5 text-blue-700 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm text-slate-900 truncate" title={item.documentTitle}>
-                    {item.documentTitle}
+                  <div className="font-medium text-sm text-slate-900 truncate" title={item.title}>
+                    {item.title}
                   </div>
                   <div className="text-[11px] text-muted-foreground">
                     {item.ordem ? `${item.ordem}ª assinatura` : "Sua vez de assinar"}
@@ -224,17 +240,17 @@ export function FCSignPendingAlertGlobal() {
                 <div className="flex items-center gap-1.5 shrink-0">
                   <Button
                     size="sm"
-                    onClick={() => handleSignNow(item.token)}
+                    onClick={() => window.open(item.url, "_blank", "noopener")}
                     className="bg-blue-700 hover:bg-blue-800 text-white"
                   >
                     <ExternalLink className="h-3.5 w-3.5 mr-1" />
                     Assinar agora
                   </Button>
-                  {isAdminMaster && (
+                  {isAdminMaster && item.kind === "fcsign" && item.raw && (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleCancelClick(item)}
+                      onClick={() => handleCancelClick(item.raw!)}
                       className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
                       title="Cancelar contrato (Admin Master)"
                     >
