@@ -1736,26 +1736,11 @@ export default function MedicaoLevantamento() {
     if (!lm || lm < 1_577_836_800_000 || lm > Date.now() + 60_000) return false;
     return Date.now() - lm > FRESCOR_MAX_MS;
   }
-  async function capturarGpsAgora(): Promise<{ gpsLat: number | null; gpsLng: number | null; gpsPrecisao: number | null; capturadoEm: string }> {
-    const capturadoEm = new Date().toISOString();
-    // ⚠️ iOS: se o prompt de permissão de localização fica pendente (ou a
-    // Localização está desligada), getCurrentPosition pode NUNCA chamar
-    // callback nenhum — o `timeout` só vale DEPOIS da permissão. Sem o
-    // corta-fogo abaixo, o anexo da foto ficava travado para sempre.
-    const pos = await Promise.race([
-      new Promise<GeolocationPosition | null>((resolve) => {
-        if (!navigator.geolocation) return resolve(null);
-        try {
-          navigator.geolocation.getCurrentPosition((p) => resolve(p), () => resolve(null), { enableHighAccuracy: true, timeout: 6000, maximumAge: 60_000 });
-        } catch { resolve(null); }
-      }),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
-    ]);
-    if (!pos) {
-      toast.warning("Sem localização (GPS negado ou indisponível) — a mídia será salva sem coordenadas. Ative a Localização do Safari nos Ajustes.", { duration: 6000 });
-      return { gpsLat: null, gpsLng: null, gpsPrecisao: null, capturadoEm };
-    }
-    return { gpsLat: pos.coords.latitude, gpsLng: pos.coords.longitude, gpsPrecisao: pos.coords.accuracy ?? null, capturadoEm };
+  // Rev. 4826 — GPS REMOVIDO a pedido do usuário (dava erro/travava no iPad).
+  // Fica só o carimbo de data/hora da captura; a exigência de "foto na hora"
+  // continua garantida pela câmera direta + recusa de arquivo antigo.
+  function capturaAgora(): { gpsLat: null; gpsLng: null; gpsPrecisao: null; capturadoEm: string } {
+    return { gpsLat: null, gpsLng: null, gpsPrecisao: null, capturadoEm: new Date().toISOString() };
   }
   function filtrarMidiaFresca(files: File[]): File[] {
     const ok = files.filter((f) => !midiaRecusadaPorIdade(f));
@@ -1768,7 +1753,7 @@ export default function MedicaoLevantamento() {
     e.target.value = "";
     if (!files.length) return;
     try {
-      const gps = await capturarGpsAgora();
+      const gps = capturaAgora();
       for (const file of files) {
         await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, ...gps });
       }
@@ -1795,7 +1780,7 @@ export default function MedicaoLevantamento() {
     fotoAlvoContornoRef.current = null;
     if (alvo == null || !files.length) return;
     try {
-      const gps = await capturarGpsAgora();
+      const gps = capturaAgora();
       for (const file of files) {
         await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, contornoId: alvo.id, contornoUuid: alvo.uuid ?? null, ...gps });
       }

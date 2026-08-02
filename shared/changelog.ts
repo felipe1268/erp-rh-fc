@@ -1,4 +1,13 @@
 /**
+ * Rev. 4826 - GPS REMOVIDO DA FOTO DO LEVANTAMENTO
+ *
+ * - A pedido do usuario: o pedido de localizacao travava/errava no iPad.
+ *   A foto anexa direto, sem GPS. Fica so o carimbo de DATA/HORA da
+ *   captura na miniatura. A regra "foto tirada na hora" continua:
+ *   camera direta (sem galeria) + recusa de arquivo antigo.
+ */
+
+/**
  * Rev. 4825 - FOTO SO NA HORA + RASTREIO GPS/DATA-HORA (LEVANTAMENTO)
  *
  * - Anti-fraude: a midia do levantamento tem que ser capturada NA HORA.

@@ -17,3 +17,4 @@ Decisões confirmadas pelo usuário (metodologia poka-yoke, Revs. 4781–4783):
 - Mídia aceita foto E vídeo; captura obrigatória NA HORA: input com `capture="environment"` (sem galeria) + recusa de arquivo com lastModified >5 min + GPS/data-hora gravados (gps_lat/lng/precisao, capturado_em) via uploadFoto e sincronizarLote.
 - Numeração de contorno é SEQUENCIAL por categoria ao longo do CONTRATO (baseContrato = max nas outras medições, mesma origem, não-biblioteca) — nos DOIS caminhos de create (salvarContorno E sincronizarLote) + renumerar client com offset.
 - Sync de lote: fatiar também por TAMANHO (~90M chars base64) — server rejeita lote >150M.
+- GPS na foto foi REMOVIDO a pedido do Felipe (Rev. 4826) — geolocation travava no iPad (prompt pendente nunca chama callback). NÃO reintroduzir sem pedir. Colunas gps_* continuam no schema (vazias); carimbo capturado_em segue gravado.
