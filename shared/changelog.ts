@@ -1,4 +1,17 @@
 /**
+ * Rev. 4807 - EXCLUIR PLANTA = ARQUIVAR (HISTORICO CONSOLIDADO PRESERVADO)
+ *
+ * Bug relatado: nao dava para remover a planta antiga do levantamento
+ * ("tem levantamento CONSOLIDADO — desconsolide antes").
+ * - Excluir planta nao e mais bloqueado por consolidacao: a planta e
+ *   ARQUIVADA — some das medicoes novas, mas os levantamentos consolidados
+ *   que tem contornos nela continuam exibindo-a (chip ambar "arquivada").
+ * - So os contornos de levantamentos EM ABERTO sao apagados junto; o
+ *   historico consolidado fica intacto. A senha do ADM Master so e exigida
+ *   quando ha contornos em aberto que seriam perdidos.
+ */
+
+/**
  * Rev. 4806 - CONTROLE DE REVISAO DOS PROJETOS PARA MEDICAO
  *
  * Pedido do usuario: "se eu revisar o layout, preciso de controle de revisao:

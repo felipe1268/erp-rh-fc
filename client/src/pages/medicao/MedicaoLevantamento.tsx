@@ -2375,7 +2375,8 @@ export default function MedicaoLevantamento() {
                   className={`px-3 py-1.5 rounded-lg border text-sm flex items-center gap-1.5 ${pdfSelId === p.id ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-gray-400"}`}
                 >
                   <FileText className="h-3.5 w-3.5" />{p.nome}
-                  <X className="h-3 w-3 ml-1 opacity-50 hover:opacity-100" onClick={(e) => {
+                  {(p as any).arquivada && <span className="text-[10px] text-amber-600 font-normal">arquivada</span>}
+                  {!(p as any).arquivada && <X className="h-3 w-3 ml-1 opacity-50 hover:opacity-100" onClick={(e) => {
                     e.stopPropagation();
                     // Rev. 4784 — poka-yoke: planta com levantamento NÃO apaga sem a
                     // senha do ADM Master (o server valida de novo, aqui é só a UX).
@@ -2389,7 +2390,7 @@ export default function MedicaoLevantamento() {
                         else alert(err?.message || "Erro ao remover a planta.");
                       },
                     }) });
-                  }} />
+                  }} />}
                 </button>
               ))}
               {/* Rev. 4805 — projetos da obra ainda não importados: 1 toque adiciona */}

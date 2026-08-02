@@ -1026,6 +1026,25 @@ export const medicaoRouter = router({
         .from(medicaoCampoPdfs)
         .where(and(eq(medicaoCampoPdfs.medicaoCampoId, pdfCampoId), eq(medicaoCampoPdfs.companyId, input.companyId), isNull(medicaoCampoPdfs.deletedAt)))
         .orderBy(medicaoCampoPdfs.ordem, medicaoCampoPdfs.id);
+      // Rev. 4807 — plantas ARQUIVADAS (excluídas da biblioteca) que têm
+      // contornos ativos DESTE campo continuam visíveis nele (histórico
+      // consolidado não perde a planta; só as medições novas deixam de vê-la).
+      const arquivadas = await db
+        .select({ pdf: medicaoCampoPdfs })
+        .from(medicaoCampoPdfs)
+        .innerJoin(medicaoCampoContornos, eq(medicaoCampoContornos.pdfId, medicaoCampoPdfs.id))
+        .where(and(
+          eq(medicaoCampoContornos.medicaoCampoId, campo.id),
+          eq(medicaoCampoPdfs.companyId, input.companyId),
+          isNull(medicaoCampoContornos.deletedAt),
+          sql`${medicaoCampoPdfs.deletedAt} IS NOT NULL`,
+        ))
+        .groupBy(medicaoCampoPdfs.id);
+      for (const a of arquivadas) {
+        if (!pdfs.some((p: any) => p.id === (a as any).pdf.id)) {
+          (pdfs as any[]).push({ ...(a as any).pdf, arquivada: true });
+        }
+      }
       const contornos = await db
         .select()
         .from(medicaoCampoContornos)
@@ -1561,18 +1580,23 @@ export const medicaoRouter = router({
     .mutation(async ({ input, ctx }) => {
       await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
-      // Rev. 4797 — excluir planta apaga contornos: bloqueado se houver
-      // levantamento consolidado com contornos nela.
-      await assertPdfSemCampoConsolidado(db, input.id, input.companyId);
-      // Rev. 4784 — poka-yoke: planta COM levantamento (contornos ativos) só sai
-      // com a senha do Administrador Master. Planta vazia pode sair direto.
+      // Rev. 4807 — excluir planta = ARQUIVAR: ela some das medições novas, mas
+      // os levantamentos CONSOLIDADOS que têm contornos nela continuam
+      // enxergando-a (getCampo re-inclui plantas arquivadas com contornos do
+      // próprio campo). Por isso NÃO bloqueia mais por consolidação; só os
+      // contornos de campos NÃO consolidados são apagados junto.
+      // Rev. 4784 — poka-yoke: planta com levantamento EM ABERTO (contornos
+      // ativos de campo não consolidado, que serão apagados) só sai com a senha
+      // do Administrador Master. Planta vazia/só-histórico sai direto.
       const [{ qtd } = { qtd: 0 }] = await db
         .select({ qtd: sql<number>`COUNT(*)::int` })
         .from(medicaoCampoContornos)
+        .innerJoin(medicaoCampo, eq(medicaoCampo.id, medicaoCampoContornos.medicaoCampoId))
         .where(and(
           eq(medicaoCampoContornos.pdfId, input.id),
           eq(medicaoCampoContornos.companyId, input.companyId),
           isNull(medicaoCampoContornos.deletedAt),
+          sql`${medicaoCampo.consolidadoEm} IS NULL`,
         ));
       if (Number(qtd) > 0) {
         if (!input.senhaMaster) {
@@ -1587,10 +1611,15 @@ export const medicaoRouter = router({
       await db.update(medicaoCampoPdfs)
         .set({ deletedAt: new Date() })
         .where(and(eq(medicaoCampoPdfs.id, input.id), eq(medicaoCampoPdfs.companyId, input.companyId)));
-      // contornos órfãos do PDF também saem da consolidação
-      await db.update(medicaoCampoContornos)
-        .set({ deletedAt: new Date() })
-        .where(and(eq(medicaoCampoContornos.pdfId, input.id), eq(medicaoCampoContornos.companyId, input.companyId)));
+      // Rev. 4807 — apaga só contornos de campos NÃO consolidados; o histórico
+      // consolidado permanece intacto (a planta fica "arquivada" para ele).
+      await db.execute(sql`
+        UPDATE medicao_campo_contornos ct SET deleted_at = NOW()
+        FROM medicao_campo mc
+        WHERE mc.id = ct.medicao_campo_id
+          AND ct.pdf_id = ${input.id} AND ct.company_id = ${input.companyId}
+          AND ct.deleted_at IS NULL AND mc.consolidado_em IS NULL
+      `);
       return { success: true };
     }),
 

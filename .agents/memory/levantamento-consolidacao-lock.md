@@ -14,3 +14,7 @@ Regra: `medicao_campo.consolidado_em IS NOT NULL` = levantamento SÓ-LEITURA.
 - cancelarAprovacao incrementa `terceiro_medicoes.revisao` (+revisado_em/por_nome); REV. N aparece na lista, no PDF e no boletim FCSign.
 
 **Why:** pedido do usuário (ago/2026): clique acidental não pode apagar levantamento; medição aprovada = quantitativo congelado; ajuste exige desaprovar → desconsolidar → editar → reconsolidar → nova revisão com rastro.
+
+## Rev. 4807 — excluir planta = arquivar
+Excluir planta da biblioteca NÃO é mais bloqueado por consolidação: soft-delete "arquiva" — getCampo re-inclui plantas deletadas que têm contornos ativos DO PRÓPRIO campo (flag `arquivada: true`, chip âmbar, sem X). Só contornos de campos NÃO consolidados são apagados junto; senha de ADM Master só quando há contornos em aberto que se perderiam.
+**Why:** usuário precisa trocar a planta do contrato pela do cadastro da obra (projetos/pavimentos) sem perder o histórico consolidado.
