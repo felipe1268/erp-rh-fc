@@ -204,6 +204,20 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 4817 — encerramento com devolução da sobra p/ Realocação de Verba
+  const [showEncerrar, setShowEncerrar] = useState(false);
+  const encerrarContratoMut = trpc.terceiroContratos.encerrarContrato.useMutation({
+    onSuccess: (res: any) => {
+      const sobra = Number(res?.sobra || 0);
+      toast.success(sobra > 0.01
+        ? `Contrato encerrado — sobra de ${sobra.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} creditada na Realocação de Verba (Compras).`
+        : "Contrato encerrado — sem sobra a devolver.");
+      utils.terceiroContratos.getContrato.invalidate({ id });
+      setShowEncerrar(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const excluirContratoMut = trpc.terceiroContratos.excluirContrato.useMutation({
     onSuccess: () => {
       toast.success("Contrato excluído definitivamente.");
@@ -537,6 +551,19 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               onClick={() => { setContratoMotivo(""); setContratoSenha(""); setShowExcluirContrato(true); }}
             >
               <Trash2 className="w-3.5 h-3.5" /> Excluir definitivamente
+            </Button>
+          </div>
+        )}
+
+        {/* Rev. 4817 — Encerrar contrato: sobra volta como crédito p/ Realocação de Verba */}
+        {!emModuloMedicoes && (contrato.status === "ativo" || contrato.status === "concluido") && (
+          <div className="flex items-center gap-3 flex-wrap rounded-xl border border-emerald-200 bg-emerald-50/40 px-3 py-2">
+            <span className="text-[11px] text-emerald-800">
+              <strong>Encerrar contrato:</strong> fecha o contrato e devolve a verba não medida como <strong>crédito na Realocação de Verba</strong> (útil em contratos com área estimada).
+            </span>
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-100 ml-auto"
+              onClick={() => setShowEncerrar(true)}>
+              <ClipboardCheck className="w-3.5 h-3.5" /> Encerrar contrato
             </Button>
           </div>
         )}
@@ -1948,6 +1975,38 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             </div>
           </div>
         )}
+
+        {/* Rev. 4817 — Diálogo Encerrar contrato */}
+        {showEncerrar && (() => {
+          const medidoTotal = (contrato.itens || []).reduce((s: number, i: any) => s + (Number(i.valorMedidoAcumulado) || 0), 0);
+          const sobraEstimada = Math.max(0, (Number(contrato.valorTotal) || 0) - medidoTotal);
+          return (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowEncerrar(false)}>
+              <div className="bg-white rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2"><ClipboardCheck className="w-4 h-4 text-emerald-600" /> Encerrar contrato {contrato.numeroContrato}</h3>
+                <div className="text-sm text-gray-600 space-y-2">
+                  <p>Contratado: <strong>{BRL(contrato.valorTotal)}</strong> · Medido acumulado: <strong>{BRL(medidoTotal)}</strong></p>
+                  {sobraEstimada > 0.01 ? (
+                    <p className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-emerald-700 text-xs">
+                      Sobra de <strong>{BRL(sobraEstimada)}</strong> será creditada na <strong>Realocação de Verba</strong> (Compras) como "Economia Contrato: {contrato.numeroContrato}".
+                    </p>
+                  ) : (
+                    <p className="rounded-lg bg-gray-50 border border-gray-200 p-2.5 text-gray-500 text-xs">Sem sobra a devolver — o contrato foi medido integralmente.</p>
+                  )}
+                  <p className="text-xs text-gray-400">Medições novas ficam bloqueadas. Se um aditivo for aprovado depois, o contrato reabre e o crédito é estornado automaticamente.</p>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" size="sm" onClick={() => setShowEncerrar(false)}>Voltar</Button>
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" disabled={encerrarContratoMut.isPending}
+                    onClick={() => encerrarContratoMut.mutate({ id, companyId: contrato.companyId })}>
+                    {encerrarContratoMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5" />}
+                    Confirmar encerramento
+                  </Button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Diálogo — Cancelar contrato (Admin Master, soft cascade) */}
         <Dialog open={showCancelContrato} onOpenChange={v => { if (!v) setShowCancelContrato(false); }}>
@@ -3867,6 +3926,20 @@ function AditivosCard({ aditivos, modoEdicao, onAprovarGestor, onAprovarSocio, o
                 {a.item?.descricao || `Item #${a.contratoItemId}`} — <strong>{Number(a.quantidade).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{a.item?.unidade ? ` ${a.item.unidade}` : ""}</strong> × {BRL(a.valorUnitario)}
               </div>
               <div className="text-[11px] text-gray-500 break-words"><strong>Justificativa:</strong> {a.justificativa}</div>
+              {/* Rev. 4817 — fonte de verba do aditivo */}
+              {(() => {
+                const vTotal = Number(a.valorTotal || 0);
+                const coberto = Number(a.valorCoberto || 0);
+                if (a.status === "aprovado") {
+                  if (coberto >= vTotal - 0.01 && coberto > 0) return <div className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 inline-block">Verba: coberto pela Realocação ({BRL(coberto)})</div>;
+                  if (coberto > 0.01) return <div className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 inline-block">Verba: cobertura parcial — {BRL(coberto)} da Realocação · {BRL(vTotal - coberto)} sem cobertura (prejuízo consciente)</div>;
+                  return <div className="text-[11px] font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1 inline-block">Sem fonte de verba — prejuízo consciente aprovado pelo sócio ({BRL(vTotal)})</div>;
+                }
+                if (a.status === "pendente") {
+                  return <div className="text-[10px] text-gray-500">Fonte indicada: {a.fonteVerba === "verba_extra" ? "verba extra (sem realocação)" : "saldo de Realocação de Verba (registrado na aprovação do sócio)"}</div>;
+                }
+                return null;
+              })()}
               {/* Rev. 4816 — trilha de auditoria: quem solicitou e quem aprovou, com data/hora de Brasília */}
               <div className="rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5 space-y-0.5 text-[10px] text-gray-500">
                 <div><span className="font-semibold text-gray-600">Solicitado por:</span> {a.criadoPor || "—"}{a.criadoEm ? ` · ${fmtDataHoraBR(a.criadoEm)}` : ""}</div>
@@ -3956,6 +4029,16 @@ function AditivoDialog({ contrato, item, medicaoId, onClose, onCreated }: {
     } finally { setUploading(false); }
   };
 
+  // Rev. 4817 — fonte de verba: saldo da Realocação (Compras) da obra
+  const [fonteVerba, setFonteVerba] = useState<"realocacao" | "verba_extra">("realocacao");
+  const { data: saldos } = trpc.compras.getSaldosRealocacaoGeral.useQuery(
+    { companyId: contrato.companyId, obraId: contrato.obraId ?? undefined },
+    { enabled: !!contrato?.companyId },
+  );
+  const saldoDisponivel = Number((saldos as any)?.sobrasDisponivelReal ?? 0);
+  const totalEstimado = Math.round(parseNum(qtd) * parseNum(precoUnit) * 100) / 100;
+  const cobertura: "total" | "parcial" | "nenhuma" = saldoDisponivel >= totalEstimado - 0.01 && saldoDisponivel > 0 ? "total" : saldoDisponivel > 0.01 ? "parcial" : "nenhuma";
+
   const podeEnviar = parseNum(qtd) > 0 && justificativa.trim().length >= 15 && !!fotoUrl && !criarMut.isPending;
 
   return (
@@ -4010,6 +4093,26 @@ function AditivoDialog({ contrato, item, medicaoId, onClose, onCreated }: {
               {fotoUrl && <img src={fotoUrl} alt="Foto" className="h-10 w-10 object-cover rounded border" />}
             </div>
           </div>
+          {/* Rev. 4817 — De onde vem a verba? (nunca bloqueia; o sócio decide vendo) */}
+          <div className={`rounded-lg border p-2.5 space-y-2 ${cobertura === "total" ? "bg-emerald-50 border-emerald-200" : cobertura === "parcial" ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200"}`}>
+            <p className="text-xs font-semibold text-gray-700">De onde vem a verba?</p>
+            <p className={`text-[11px] ${cobertura === "total" ? "text-emerald-700" : cobertura === "parcial" ? "text-amber-700" : "text-red-600"}`}>
+              {saldos === undefined ? "Consultando saldo de realocação da obra..." :
+               cobertura === "total" ? <>Saldo de Realocação disponível: <strong>{BRL(saldoDisponivel)}</strong> — cobre este aditivo.</> :
+               cobertura === "parcial" ? <>Saldo de Realocação disponível: <strong>{BRL(saldoDisponivel)}</strong> — cobre só parte do aditivo ({BRL(total)}). O restante fica sem cobertura.</> :
+               <>Sem saldo de realocação disponível na obra. Se aprovado, o aditivo entra <strong>sem fonte de verba (prejuízo consciente)</strong>.</>}
+            </p>
+            <div className="space-y-1">
+              <label className="flex items-start gap-2 text-[11px] text-gray-700 cursor-pointer">
+                <input type="radio" name="fonteVerba" className="mt-0.5" checked={fonteVerba === "realocacao"} onChange={() => setFonteVerba("realocacao")} />
+                <span><strong>Consumir do saldo de Realocação de Verba</strong> — na aprovação do sócio, a realocação é registrada automaticamente no Compras (até onde o saldo alcançar).</span>
+              </label>
+              <label className="flex items-start gap-2 text-[11px] text-gray-700 cursor-pointer">
+                <input type="radio" name="fonteVerba" className="mt-0.5" checked={fonteVerba === "verba_extra"} onChange={() => setFonteVerba("verba_extra")} />
+                <span><strong>Verba extra (sem realocação)</strong> — decisão consciente: o valor entra fora do pote de realocação e fica marcado nos relatórios.</span>
+              </label>
+            </div>
+          </div>
           <div className="rounded-lg bg-purple-50 border border-purple-100 p-2.5 text-[11px] text-purple-700">
             Aprovação em 2 níveis: gestor da obra e <strong>sócio administrador (obrigatório)</strong>. Aprovado, a quantidade e o valor somam no contrato e o excedente libera para medição.
           </div>
@@ -4026,6 +4129,7 @@ function AditivoDialog({ contrato, item, medicaoId, onClose, onCreated }: {
               valorUnitario: parseNum(precoUnit),
               justificativa: justificativa.trim(),
               fotoUrl: fotoUrl!,
+              fonteVerba,
             })}>
             {criarMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
             Enviar para aprovação

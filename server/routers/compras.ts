@@ -7792,218 +7792,9 @@ Formato de resposta:
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
     .query(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
-      const db = await getDb();
-      await _autoSanearReservas(input.companyId);
-
-      // ── 1. DI-08: pega o latest orcamento por obra ─────────────────────
-      // FIX: filtrar isNull(deletedAt) e padronizar ordering por createdAt (igual a listarEconomiasOC).
-      const orcs = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId })
-        .from(orcamentos)
-        .where(and(
-          eq(orcamentos.companyId, input.companyId),
-          isNull(orcamentos.deletedAt),
-          input.obraId ? eq(orcamentos.obraId, input.obraId) : undefined,
-        ))
-        .orderBy(desc(orcamentos.createdAt), desc(orcamentos.id));
-
-      // latest per obra (ignora orçamentos sem obraId)
-      const latestPerObra = new Map<number, number>();
-      for (const o of orcs) {
-        if (o.obraId && !latestPerObra.has(o.obraId)) latestPerObra.set(o.obraId, o.id);
-      }
-      const latestOrcIds = [...latestPerObra.values()];
-
-      let di08Rows: { orcamentoId: number; valorAbsoluto: string | null }[] = [];
-      if (latestOrcIds.length > 0) {
-        di08Rows = await db.select({ orcamentoId: orcamentoBdi.orcamentoId, valorAbsoluto: orcamentoBdi.valorAbsoluto })
-          .from(orcamentoBdi)
-          .where(and(inArray(orcamentoBdi.orcamentoId, latestOrcIds), eq(orcamentoBdi.codigo, "DI-08")));
-      }
-      const di08Total = di08Rows.reduce((s, r) => s + n(r.valorAbsoluto), 0);
-
-      // ── débitos de risco ───────────────────────────────────────────────
-      // FIX CRÍTICO: o cálculo anterior filtrava por `orcamentoId IN latestOrcIds`,
-      // mas a tela "Realocações" (listarDebitosRisco) mostra TODOS os débitos da
-      // empresa/obra. Quando um débito foi feito contra uma versão antiga do
-      // orçamento (revisão), `Utilizado` aparecia R$ 0 enquanto o histórico
-      // mostrava débitos reais. Agora alinhamos: somamos TODOS os débitos
-      // por companyId (+ obraId quando filtrado), espelhando exatamente o
-      // total mostrado em listarDebitosRisco.
-      const debConds: any[] = [eq(comprasRiscoDebitos.companyId, input.companyId)];
-      if (input.obraId) debConds.push(eq(comprasRiscoDebitos.obraId, input.obraId));
-      const allDebitos = await db.select({ valor: comprasRiscoDebitos.valor })
-        .from(comprasRiscoDebitos)
-        .where(and(...debConds));
-      const di08Usado = allDebitos.reduce((s, r) => s + n(r.valor), 0);
-      const di08Disponivel = Math.max(0, di08Total - di08Usado);
-
-      // ── 2. Sobras das compras: comparação item-a-item (meta × qty vs comprado) ─
-      // FIX: removido "aguardando_aprovacao_extra" — OCs nesse estado ainda não
-      // foram efetivamente aprovadas e geravam economia falsa.
-      const ocsConds: any[] = [
-        eq(comprasOrdens.companyId, input.companyId),
-        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
-      ];
-      if (input.obraId) ocsConds.push(eq(comprasOrdens.obraId, input.obraId));
-      const ocs = await db.select({ id: comprasOrdens.id, obraId: comprasOrdens.obraId }).from(comprasOrdens).where(and(...ocsConds));
-
-      let totalSobras = 0;
-      if (ocs.length > 0) {
-        const ocItens = await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)));
-        const scItemIds = ocItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
-        let scItens: { id: number; orcamentoItemId: number | null; precoMeta: string | null; insumoCodigo: string | null; solicitacaoId: number }[] = [];
-        if (scItemIds.length > 0) {
-          scItens = await db.select({
-            id: comprasSolicitacoesItens.id,
-            orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
-            precoMeta: comprasSolicitacoesItens.precoMeta,
-            insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
-            solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
-          }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
-        }
-        const orcIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
-        let metas: { id: number; metaUnitTotal: string | null; unidade: string | null }[] = [];
-        if (orcIds.length > 0) {
-          metas = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal, unidade: orcamentoItens.unidade })
-            .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIds));
-        }
-        const scToOrc: Record<number, number> = {};
-        const scToPrecoMeta: Record<number, number> = {};
-        const scToInsumoCodigo: Record<number, string> = {};
-        for (const s of scItens) {
-          if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
-          if (n(s.precoMeta) > 0) scToPrecoMeta[s.id] = n(s.precoMeta);
-          if (s.insumoCodigo) scToInsumoCodigo[s.id] = s.insumoCodigo;
-        }
-        const orcToMetaUnit: Record<number, number> = {};
-        const orcToUnidade: Record<number, string> = {};
-        for (const m of metas) {
-          orcToMetaUnit[m.id] = n(m.metaUnitTotal);
-          if (m.unidade) orcToUnidade[m.id] = String(m.unidade).toLowerCase().trim();
-        }
-        // Contagem: quantos itens de SC apontam para o mesmo orcamento_item_id?
-        // Se >1 → metaUnitTotal NÃO representa preço unitário do insumo (é verba agregada)
-        const orcToScCount: Record<number, number> = {};
-        for (const s of scItens) {
-          if (s.orcamentoItemId) orcToScCount[s.orcamentoItemId] = (orcToScCount[s.orcamentoItemId] ?? 0) + 1;
-        }
-        // Unidades agregadas — não usar metaUnitTotal como preço unitário do insumo
-        const UNID_AGREGADA = new Set(["vb", "verba", "gl", "global", "cj", "conjunto", "und. global"]);
-
-        const needInsumoLookup = scItens.filter(s => n(s.precoMeta) <= 0 && s.insumoCodigo);
-        const insumoPricePerObra: Record<number, Record<string, number>> = {};
-        if (needInsumoLookup.length > 0) {
-          const obraIds = [...new Set(ocs.map(o => o.obraId).filter(Boolean) as number[])];
-          for (const obraId of obraIds) {
-            const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
-              .from(orcamentos)
-              .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, obraId), isNull(orcamentos.deletedAt)))
-              .orderBy(desc(orcamentos.createdAt)).limit(1);
-            if (!orc) continue;
-            const orcItems = await db.select({ servicoCodigo: orcamentoItens.servicoCodigo })
-              .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, orc.id), eq(orcamentoItens.companyId, input.companyId)));
-            const svcCods = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
-            if (!svcCods.length) continue;
-            const allInsumos = await db.select({
-              insumoCodigo: composicaoInsumos.insumoCodigo,
-              precoUnitario: composicaoInsumos.precoUnitario,
-              alocacaoMat: composicaoInsumos.alocacaoMat,
-              alocacaoMdo: composicaoInsumos.alocacaoMdo,
-            }).from(composicaoInsumos)
-              .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
-            const matOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0);
-            const obraMap: Record<string, number> = {};
-            for (const ins of matOnly) {
-              if (ins.insumoCodigo && n(ins.precoUnitario) > 0) obraMap[ins.insumoCodigo] = n(ins.precoUnitario);
-            }
-            insumoPricePerObra[obraId] = obraMap;
-          }
-        }
-
-        const ocToObra: Record<number, number> = {};
-        for (const oc of ocs) if (oc.obraId) ocToObra[oc.id] = oc.obraId;
-
-        const ocTotalComprado: Record<number, number> = {};
-        const ocTotalMeta: Record<number, number> = {};
-        for (const it of ocItens) {
-          const ocId = it.ordemId;
-          if (!it.solicitacaoItemId) continue;
-          // PRIORIDADE 1: precoMeta da própria SC (definido pelo solicitante) — mais confiável
-          let metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
-          // PRIORIDADE 2: lookup pelo insumo_codigo na composição (preço real do insumo)
-          if (metaUnit === 0) {
-            const ic = scToInsumoCodigo[it.solicitacaoItemId];
-            const obraId = ocToObra[ocId];
-            if (ic && obraId) metaUnit = insumoPricePerObra[obraId]?.[ic] ?? 0;
-          }
-          // PRIORIDADE 3: metaUnitTotal do orçamento — APENAS se NÃO for verba agregada
-          if (metaUnit === 0) {
-            const orcId = scToOrc[it.solicitacaoItemId];
-            if (orcId) {
-              const unid = orcToUnidade[orcId] ?? "";
-              const isAgregada = UNID_AGREGADA.has(unid);
-              const compartilhado = (orcToScCount[orcId] ?? 0) > 1;
-              if (!isAgregada && !compartilhado) {
-                metaUnit = orcToMetaUnit[orcId] ?? 0;
-              }
-            }
-          }
-          if (metaUnit === 0) continue;
-          const qty = n(it.quantidade);
-          ocTotalComprado[ocId] = (ocTotalComprado[ocId] ?? 0) + n(it.precoUnitario) * qty;
-          ocTotalMeta[ocId]     = (ocTotalMeta[ocId]     ?? 0) + metaUnit * qty;
-        }
-        for (const ocId of Object.keys(ocTotalMeta)) {
-          const sobra = (ocTotalMeta[+ocId] ?? 0) - (ocTotalComprado[+ocId] ?? 0);
-          if (sobra > 0.01) totalSobras += sobra;
-        }
-      }
-
-      // ── FIX double-spending: descontar sobras já consumidas via confirmarRealocacaoSobras ──
-      // Cada chamada de confirmarRealocacaoSobras grava em budget_reallocations com
-      // origemEapItemNome começando com "Economia OC:". Sem este desconto, a mesma
-      // economia poderia ser usada para cobrir várias cotações deficitárias.
-      const realocConds: any[] = [
-        eq(budgetReallocations.companyId, input.companyId),
-        sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
-      ];
-      if (input.obraId) realocConds.push(eq(budgetReallocations.obraId, input.obraId));
-      const realocConsumidas = await db.select({ valor: budgetReallocations.valorRealocado })
-        .from(budgetReallocations).where(and(...realocConds));
-      const sobrasJaConsumidas = realocConsumidas.reduce((s, r) => s + n(r.valor), 0);
-      const sobrasLiquidas = Math.max(0, totalSobras - sobrasJaConsumidas);
-
-      // ── Rev. 1386 — Saldo reservado por cotações deficitárias em aberto ──
-      const reservasConds: any[] = [
-        eq(comprasReservasSaldo.companyId, input.companyId),
-        eq(comprasReservasSaldo.status, "ativa"),
-      ];
-      if (input.obraId) reservasConds.push(eq(comprasReservasSaldo.obraId, input.obraId));
-      const reservasAtivas = await db.select({
-        di08: comprasReservasSaldo.valorDi08Reservado,
-        eco:  comprasReservasSaldo.valorEconomiaReservada,
-      }).from(comprasReservasSaldo).where(and(...reservasConds));
-      const di08Reservado = reservasAtivas.reduce((s, r) => s + n(r.di08), 0);
-      const sobrasReservadas = reservasAtivas.reduce((s, r) => s + n(r.eco), 0);
-      const di08DisponivelReal = Math.max(0, di08Disponivel - di08Reservado);
-      const sobrasDisponivelReal = Math.max(0, sobrasLiquidas - sobrasReservadas);
-
-      return {
-        di08Total,
-        di08Usado,
-        di08Disponivel,
-        di08Reservado,
-        di08DisponivelReal,
-        totalSobras: sobrasLiquidas,
-        totalSobrasBruto: totalSobras,
-        sobrasJaConsumidas,
-        sobrasReservadas,
-        sobrasDisponivelReal,
-        totalReservado: di08Reservado + sobrasReservadas,
-        totalDisponivel: di08Disponivel + sobrasLiquidas,
-        totalDisponivelReal: di08DisponivelReal + sobrasDisponivelReal,
-        totalReservasAtivas: reservasAtivas.length,
-      };
+      // Rev. 4817 — corpo extraído p/ calcularSaldosRealocacaoGeral (fim do arquivo),
+      // reutilizado pelo fluxo de aditivo de contrato de terceiros.
+      return await calcularSaldosRealocacaoGeral(input);
     }),
 
   buscarSaldosRealocacao: protectedProcedure
@@ -19070,3 +18861,238 @@ Formato de resposta:
       return { itens };
     }),
 });
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rev. 4817 — Engine de saldo de realocação (exportado).
+// Usado por getSaldosRealocacaoGeral E pelo fluxo de aditivo de contrato de
+// terceiros (fonte de verba). Inclui também créditos de "Economia Contrato:"
+// (sobra de contrato de terceiro encerrado) e desconta consumos de aditivos.
+export async function calcularSaldosRealocacaoGeral(input: { companyId: number; obraId?: number }) {
+  const db = await getDb();
+  await _autoSanearReservas(input.companyId);
+
+
+  // ── 1. DI-08: pega o latest orcamento por obra ─────────────────────
+  // FIX: filtrar isNull(deletedAt) e padronizar ordering por createdAt (igual a listarEconomiasOC).
+  const orcs = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId })
+    .from(orcamentos)
+    .where(and(
+      eq(orcamentos.companyId, input.companyId),
+      isNull(orcamentos.deletedAt),
+      input.obraId ? eq(orcamentos.obraId, input.obraId) : undefined,
+    ))
+    .orderBy(desc(orcamentos.createdAt), desc(orcamentos.id));
+
+  // latest per obra (ignora orçamentos sem obraId)
+  const latestPerObra = new Map<number, number>();
+  for (const o of orcs) {
+    if (o.obraId && !latestPerObra.has(o.obraId)) latestPerObra.set(o.obraId, o.id);
+  }
+  const latestOrcIds = [...latestPerObra.values()];
+
+  let di08Rows: { orcamentoId: number; valorAbsoluto: string | null }[] = [];
+  if (latestOrcIds.length > 0) {
+    di08Rows = await db.select({ orcamentoId: orcamentoBdi.orcamentoId, valorAbsoluto: orcamentoBdi.valorAbsoluto })
+      .from(orcamentoBdi)
+      .where(and(inArray(orcamentoBdi.orcamentoId, latestOrcIds), eq(orcamentoBdi.codigo, "DI-08")));
+  }
+  const di08Total = di08Rows.reduce((s, r) => s + n(r.valorAbsoluto), 0);
+
+  // ── débitos de risco ───────────────────────────────────────────────
+  // FIX CRÍTICO: o cálculo anterior filtrava por `orcamentoId IN latestOrcIds`,
+  // mas a tela "Realocações" (listarDebitosRisco) mostra TODOS os débitos da
+  // empresa/obra. Quando um débito foi feito contra uma versão antiga do
+  // orçamento (revisão), `Utilizado` aparecia R$ 0 enquanto o histórico
+  // mostrava débitos reais. Agora alinhamos: somamos TODOS os débitos
+  // por companyId (+ obraId quando filtrado), espelhando exatamente o
+  // total mostrado em listarDebitosRisco.
+  const debConds: any[] = [eq(comprasRiscoDebitos.companyId, input.companyId)];
+  if (input.obraId) debConds.push(eq(comprasRiscoDebitos.obraId, input.obraId));
+  const allDebitos = await db.select({ valor: comprasRiscoDebitos.valor })
+    .from(comprasRiscoDebitos)
+    .where(and(...debConds));
+  const di08Usado = allDebitos.reduce((s, r) => s + n(r.valor), 0);
+  const di08Disponivel = Math.max(0, di08Total - di08Usado);
+
+  // ── 2. Sobras das compras: comparação item-a-item (meta × qty vs comprado) ─
+  // FIX: removido "aguardando_aprovacao_extra" — OCs nesse estado ainda não
+  // foram efetivamente aprovadas e geravam economia falsa.
+  const ocsConds: any[] = [
+    eq(comprasOrdens.companyId, input.companyId),
+    inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
+  ];
+  if (input.obraId) ocsConds.push(eq(comprasOrdens.obraId, input.obraId));
+  const ocs = await db.select({ id: comprasOrdens.id, obraId: comprasOrdens.obraId }).from(comprasOrdens).where(and(...ocsConds));
+
+  let totalSobras = 0;
+  if (ocs.length > 0) {
+    const ocItens = await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)));
+    const scItemIds = ocItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
+    let scItens: { id: number; orcamentoItemId: number | null; precoMeta: string | null; insumoCodigo: string | null; solicitacaoId: number }[] = [];
+    if (scItemIds.length > 0) {
+      scItens = await db.select({
+        id: comprasSolicitacoesItens.id,
+        orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+        precoMeta: comprasSolicitacoesItens.precoMeta,
+        insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+        solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
+      }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+    }
+    const orcIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
+    let metas: { id: number; metaUnitTotal: string | null; unidade: string | null }[] = [];
+    if (orcIds.length > 0) {
+      metas = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal, unidade: orcamentoItens.unidade })
+        .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIds));
+    }
+    const scToOrc: Record<number, number> = {};
+    const scToPrecoMeta: Record<number, number> = {};
+    const scToInsumoCodigo: Record<number, string> = {};
+    for (const s of scItens) {
+      if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+      if (n(s.precoMeta) > 0) scToPrecoMeta[s.id] = n(s.precoMeta);
+      if (s.insumoCodigo) scToInsumoCodigo[s.id] = s.insumoCodigo;
+    }
+    const orcToMetaUnit: Record<number, number> = {};
+    const orcToUnidade: Record<number, string> = {};
+    for (const m of metas) {
+      orcToMetaUnit[m.id] = n(m.metaUnitTotal);
+      if (m.unidade) orcToUnidade[m.id] = String(m.unidade).toLowerCase().trim();
+    }
+    // Contagem: quantos itens de SC apontam para o mesmo orcamento_item_id?
+    // Se >1 → metaUnitTotal NÃO representa preço unitário do insumo (é verba agregada)
+    const orcToScCount: Record<number, number> = {};
+    for (const s of scItens) {
+      if (s.orcamentoItemId) orcToScCount[s.orcamentoItemId] = (orcToScCount[s.orcamentoItemId] ?? 0) + 1;
+    }
+    // Unidades agregadas — não usar metaUnitTotal como preço unitário do insumo
+    const UNID_AGREGADA = new Set(["vb", "verba", "gl", "global", "cj", "conjunto", "und. global"]);
+
+    const needInsumoLookup = scItens.filter(s => n(s.precoMeta) <= 0 && s.insumoCodigo);
+    const insumoPricePerObra: Record<number, Record<string, number>> = {};
+    if (needInsumoLookup.length > 0) {
+      const obraIds = [...new Set(ocs.map(o => o.obraId).filter(Boolean) as number[])];
+      for (const obraId of obraIds) {
+        const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+          .from(orcamentos)
+          .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, obraId), isNull(orcamentos.deletedAt)))
+          .orderBy(desc(orcamentos.createdAt)).limit(1);
+        if (!orc) continue;
+        const orcItems = await db.select({ servicoCodigo: orcamentoItens.servicoCodigo })
+          .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, orc.id), eq(orcamentoItens.companyId, input.companyId)));
+        const svcCods = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
+        if (!svcCods.length) continue;
+        const allInsumos = await db.select({
+          insumoCodigo: composicaoInsumos.insumoCodigo,
+          precoUnitario: composicaoInsumos.precoUnitario,
+          alocacaoMat: composicaoInsumos.alocacaoMat,
+          alocacaoMdo: composicaoInsumos.alocacaoMdo,
+        }).from(composicaoInsumos)
+          .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
+        const matOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0);
+        const obraMap: Record<string, number> = {};
+        for (const ins of matOnly) {
+          if (ins.insumoCodigo && n(ins.precoUnitario) > 0) obraMap[ins.insumoCodigo] = n(ins.precoUnitario);
+        }
+        insumoPricePerObra[obraId] = obraMap;
+      }
+    }
+
+    const ocToObra: Record<number, number> = {};
+    for (const oc of ocs) if (oc.obraId) ocToObra[oc.id] = oc.obraId;
+
+    const ocTotalComprado: Record<number, number> = {};
+    const ocTotalMeta: Record<number, number> = {};
+    for (const it of ocItens) {
+      const ocId = it.ordemId;
+      if (!it.solicitacaoItemId) continue;
+      // PRIORIDADE 1: precoMeta da própria SC (definido pelo solicitante) — mais confiável
+      let metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
+      // PRIORIDADE 2: lookup pelo insumo_codigo na composição (preço real do insumo)
+      if (metaUnit === 0) {
+        const ic = scToInsumoCodigo[it.solicitacaoItemId];
+        const obraId = ocToObra[ocId];
+        if (ic && obraId) metaUnit = insumoPricePerObra[obraId]?.[ic] ?? 0;
+      }
+      // PRIORIDADE 3: metaUnitTotal do orçamento — APENAS se NÃO for verba agregada
+      if (metaUnit === 0) {
+        const orcId = scToOrc[it.solicitacaoItemId];
+        if (orcId) {
+          const unid = orcToUnidade[orcId] ?? "";
+          const isAgregada = UNID_AGREGADA.has(unid);
+          const compartilhado = (orcToScCount[orcId] ?? 0) > 1;
+          if (!isAgregada && !compartilhado) {
+            metaUnit = orcToMetaUnit[orcId] ?? 0;
+          }
+        }
+      }
+      if (metaUnit === 0) continue;
+      const qty = n(it.quantidade);
+      ocTotalComprado[ocId] = (ocTotalComprado[ocId] ?? 0) + n(it.precoUnitario) * qty;
+      ocTotalMeta[ocId]     = (ocTotalMeta[ocId]     ?? 0) + metaUnit * qty;
+    }
+    for (const ocId of Object.keys(ocTotalMeta)) {
+      const sobra = (ocTotalMeta[+ocId] ?? 0) - (ocTotalComprado[+ocId] ?? 0);
+      if (sobra > 0.01) totalSobras += sobra;
+    }
+  }
+
+  // ── Rev. 4817 — CRÉDITOS de contrato de terceiro encerrado com sobra ──
+  // Encerrar contrato (área estimada que mediu menos) grava em budget_reallocations
+  // uma linha "Economia Contrato: <nº>". Ela SOMA ao pote de sobras realocáveis.
+  const credConds: any[] = [
+    eq(budgetReallocations.companyId, input.companyId),
+    sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia Contrato:%'`,
+  ];
+  if (input.obraId) credConds.push(eq(budgetReallocations.obraId, input.obraId));
+  const creditosContrato = (await db.select({ valor: budgetReallocations.valorRealocado })
+    .from(budgetReallocations).where(and(...credConds))).reduce((s, r) => s + n(r.valor), 0);
+  totalSobras += creditosContrato;
+
+  // ── FIX double-spending: descontar sobras já consumidas via confirmarRealocacaoSobras ──
+  // Cada chamada de confirmarRealocacaoSobras grava em budget_reallocations com
+  // origemEapItemNome começando com "Economia OC:". Sem este desconto, a mesma
+  // economia poderia ser usada para cobrir várias cotações deficitárias.
+  // Rev. 4817 — idem p/ consumo por aditivo de contrato ("Saldo de Realocação (aditivo)").
+  const realocConds: any[] = [
+    eq(budgetReallocations.companyId, input.companyId),
+    sql`(${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%' OR ${budgetReallocations.origemEapItemNome} LIKE 'Saldo de Realocação (aditivo)%')`,
+  ];
+  if (input.obraId) realocConds.push(eq(budgetReallocations.obraId, input.obraId));
+  const realocConsumidas = await db.select({ valor: budgetReallocations.valorRealocado })
+    .from(budgetReallocations).where(and(...realocConds));
+  const sobrasJaConsumidas = realocConsumidas.reduce((s, r) => s + n(r.valor), 0);
+  const sobrasLiquidas = Math.max(0, totalSobras - sobrasJaConsumidas);
+
+  // ── Rev. 1386 — Saldo reservado por cotações deficitárias em aberto ──
+  const reservasConds: any[] = [
+    eq(comprasReservasSaldo.companyId, input.companyId),
+    eq(comprasReservasSaldo.status, "ativa"),
+  ];
+  if (input.obraId) reservasConds.push(eq(comprasReservasSaldo.obraId, input.obraId));
+  const reservasAtivas = await db.select({
+    di08: comprasReservasSaldo.valorDi08Reservado,
+    eco:  comprasReservasSaldo.valorEconomiaReservada,
+  }).from(comprasReservasSaldo).where(and(...reservasConds));
+  const di08Reservado = reservasAtivas.reduce((s, r) => s + n(r.di08), 0);
+  const sobrasReservadas = reservasAtivas.reduce((s, r) => s + n(r.eco), 0);
+  const di08DisponivelReal = Math.max(0, di08Disponivel - di08Reservado);
+  const sobrasDisponivelReal = Math.max(0, sobrasLiquidas - sobrasReservadas);
+
+  return {
+    di08Total,
+    di08Usado,
+    di08Disponivel,
+    di08Reservado,
+    di08DisponivelReal,
+    totalSobras: sobrasLiquidas,
+    totalSobrasBruto: totalSobras,
+    sobrasJaConsumidas,
+    sobrasReservadas,
+    sobrasDisponivelReal,
+    totalReservado: di08Reservado + sobrasReservadas,
+    totalDisponivel: di08Disponivel + sobrasLiquidas,
+    totalDisponivelReal: di08DisponivelReal + sobrasDisponivelReal,
+    totalReservasAtivas: reservasAtivas.length,
+  };
+}

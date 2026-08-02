@@ -4542,6 +4542,10 @@ export const terceiroContratoAditivos = pgTable("terceiro_contrato_aditivos", {
   criadoPor:         varchar("criado_por", { length: 255 }),
   criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+  // Rev. 4817 — fonte de verba do aditivo
+  fonteVerba:        varchar("fonte_verba", { length: 30 }).default("realocacao"), // realocacao | verba_extra
+  valorCoberto:      numeric("valor_coberto", { precision: 18, scale: 2 }), // coberto pela realocação na aprovação
+  realocacaoId:      integer("realocacao_id"), // budget_reallocations.id do consumo registrado
 }, (t) => [
   index("idx_tca_contrato").on(t.contratoId),
   index("idx_tca_company").on(t.companyId),

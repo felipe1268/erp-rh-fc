@@ -4,6 +4,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getUserCompanyLinks, createAuditLog } from "../db";
 import { upperCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
 import { aplicarLevantamentoNaMedicaoTerceiro } from "../terceiroLevantamentoSync";
+import { calcularSaldosRealocacaoGeral } from "./compras";
 import { triggerFinancialSync, triggerFinancialSyncAwaited } from "../services/financialEventTrigger";
 import { eq, and, or, desc, inArray, notInArray, sql, asc, isNull } from "drizzle-orm";
 import {
@@ -13,6 +14,7 @@ import {
   terceiroMedicaoItens,
   terceiroMedicaoFds,
   terceiroContratoAditivos,
+  budgetReallocations,
   medicaoConfig,
   medicaoCampo,
   terceiroDocumentos,
@@ -1785,6 +1787,11 @@ export const terceiroContratosRouter = router({
 
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
       if (!contrato) throw new Error("Contrato não encontrado");
+      // Rev. 4817 — contrato encerrado/cancelado/suspenso não gera medição nova
+      // (encerrado devolveu a sobra p/ Realocação; aditivo aprovado reabre).
+      if (["encerrado", "cancelado", "suspenso"].includes(String(contrato.status))) {
+        throw new Error(`Contrato ${contrato.status} não permite gerar nova medição.${contrato.status === "encerrado" ? " Um aditivo aprovado pelo sócio reabre o contrato." : ""}`);
+      }
 
       if (input.dataInicio && input.dataFim) {
         const todasMedicoes = await db.select({
@@ -2750,6 +2757,8 @@ export const terceiroContratosRouter = router({
       valorUnitario: z.number().min(0),
       justificativa: z.string().trim().min(15, "Fundamente o motivo do acréscimo (mínimo 15 caracteres)"),
       fotoUrl: z.string().trim().min(1, "Foto do acréscimo é obrigatória"),
+      // Rev. 4817 — fonte da verba escolhida pelo solicitante (nunca bloqueia)
+      fonteVerba: z.enum(["realocacao", "verba_extra"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
@@ -2805,6 +2814,7 @@ export const terceiroContratosRouter = router({
         fotoUrl: input.fotoUrl,
         status: "pendente",
         criadoPor: (ctx.user as any)?.name || null,
+        fonteVerba: input.fonteVerba ?? "realocacao",
       } as any).returning();
       return aditivo;
       });
@@ -2865,18 +2875,65 @@ export const terceiroContratosRouter = router({
         } as any).where(eq(terceiroContratoItens.id, item.id));
 
         const novoValorContrato = Math.round((n(contrato.valorTotal) + n(a2.valorTotal)) * 100) / 100;
+        const reabrindo = contrato.status === "encerrado" || contrato.status === "concluido";
         await tx.update(terceiroContratos).set({
           valorTotal: String(novoValorContrato),
           // Aditivo aprovado REABRE o saldo de contrato encerrado/concluído.
-          ...(contrato.status === "encerrado" || contrato.status === "concluido" ? { status: "ativo" } : {}),
+          ...(reabrindo ? { status: "ativo" } : {}),
           atualizadoEm: new Date().toISOString(),
         } as any).where(eq(terceiroContratos.id, contrato.id));
+        // Rev. 4817 — reabrir contrato ESTORNA o crédito de sobra que o
+        // encerramento lançou na Realocação de Verba (senão o mesmo dinheiro
+        // existiria duas vezes: no teto reaberto e no pote de realocação).
+        if (reabrindo) {
+          await tx.delete(budgetReallocations).where(and(
+            eq(budgetReallocations.companyId, input.companyId),
+            eq(budgetReallocations.origemEapItemNome, `Economia Contrato: ${contrato.numeroContrato || contrato.id}`),
+          ));
+        }
+
+        // Rev. 4817 — FONTE DE VERBA: consome do saldo de Realocação até onde
+        // ele alcança (nunca bloqueia; o descoberto fica marcado como prejuízo
+        // consciente aprovado pelo sócio).
+        let valorCoberto = 0;
+        let realocacaoId: number | null = null;
+        if ((a2 as any).fonteVerba !== "verba_extra") {
+          // Lock por EMPRESA: serializa leitura de saldo + consumo entre
+          // aprovações concorrentes de contratos diferentes (sem isso, dois
+          // sócios aprovando ao mesmo tempo consumiriam o mesmo saldo 2x).
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(478006, ${input.companyId})`);
+          let disponivel = 0;
+          try {
+            const saldos = await calcularSaldosRealocacaoGeral({ companyId: input.companyId, obraId: contrato.obraId ?? undefined });
+            disponivel = n((saldos as any).sobrasDisponivelReal);
+          } catch (e: any) {
+            console.error("[Aditivo] Falha ao calcular saldo de realocação:", e?.message || e);
+          }
+          valorCoberto = Math.min(n(a2.valorTotal), Math.max(0, disponivel));
+          valorCoberto = Math.round(valorCoberto * 100) / 100;
+          if (valorCoberto > 0.01) {
+            const [realoc] = await tx.insert(budgetReallocations).values({
+              companyId: input.companyId,
+              obraId: contrato.obraId ?? 0,
+              origemEapItemNome: "Saldo de Realocação (aditivo)",
+              destinoEapItemId: (item as any).orcamentoItemId ?? null,
+              destinoEapItemNome: `Aditivo #${a2.numero} — ${contrato.numeroContrato || `CT-${contrato.id}`} · ${String((item as any).descricao || "").slice(0, 120)}`,
+              valorRealocado: String(valorCoberto),
+              motivo: `Aditivo #${a2.numero} do contrato ${contrato.numeroContrato || contrato.id} aprovado pelo sócio adm — consumo do saldo de realocação.`,
+              usuarioId: (ctx.user as any)?.id ?? 0,
+              usuarioNome: (ctx.user as any)?.name || (ctx.user as any)?.email || null,
+            } as any).returning();
+            realocacaoId = realoc?.id ?? null;
+          }
+        }
 
         const [upd] = await tx.update(terceiroContratoAditivos).set({
           status: "aprovado",
           nivelAprovacao: 2,
           socioAprovadoPor: (ctx.user as any)?.name || (ctx.user as any)?.email || input.aprovadoPor,
           socioAprovadoEm: new Date().toISOString(),
+          valorCoberto: String(valorCoberto),
+          realocacaoId,
           atualizadoEm: new Date().toISOString(),
         } as any).where(eq(terceiroContratoAditivos.id, input.id)).returning();
 
@@ -2926,6 +2983,81 @@ export const terceiroContratosRouter = router({
         atualizadoEm: new Date().toISOString(),
       } as any).where(eq(terceiroContratoAditivos.id, input.id)).returning();
       return upd;
+    }),
+
+  // Rev. 4817 — Encerrar contrato: sobra (área estimada que mediu menos) volta
+  // como CRÉDITO para a Realocação de Verba ("Economia Contrato: <nº>").
+  // Reabrir via aditivo aprovado estorna o crédito (ver aprovarAditivoSocio).
+  encerrarContrato: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      return await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(478005, ${input.id})`);
+        // Serializa com o consumo de saldo das aprovações de aditivo (478006).
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(478006, ${input.companyId})`);
+        const [contrato] = await tx.select().from(terceiroContratos)
+          .where(and(eq(terceiroContratos.id, input.id), eq(terceiroContratos.companyId, input.companyId)));
+        if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
+        if (contrato.status === "encerrado") throw new TRPCError({ code: "BAD_REQUEST", message: "Contrato já está encerrado." });
+        if (contrato.status === "cancelado") throw new TRPCError({ code: "BAD_REQUEST", message: "Contrato cancelado não pode ser encerrado." });
+        // Poka-yoke: nada em aberto — medições pendentes precisam ser resolvidas antes.
+        const abertas = await tx.select({ id: terceiroMedicoes.id }).from(terceiroMedicoes)
+          .where(and(
+            eq(terceiroMedicoes.contratoId, input.id),
+            sql`${terceiroMedicoes.status} NOT IN ('aprovada','paga','cancelada','rejeitada')`,
+          ));
+        if (abertas.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Há ${abertas.length} medição(ões) em aberto (rascunho/pendente). Aprove, rejeite ou exclua antes de encerrar.` });
+        // Aditivo pendente também trava (decisão financeira em curso).
+        const adPend = await tx.select({ id: terceiroContratoAditivos.id }).from(terceiroContratoAditivos)
+          .where(and(eq(terceiroContratoAditivos.contratoId, input.id), eq(terceiroContratoAditivos.status, "pendente")));
+        if (adPend.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Há aditivo pendente de aprovação. Aprove ou rejeite antes de encerrar." });
+
+        const itens = await tx.select({ valorMedidoAcumulado: terceiroContratoItens.valorMedidoAcumulado })
+          .from(terceiroContratoItens).where(eq(terceiroContratoItens.contratoId, input.id));
+        const medidoTotal = itens.reduce((s: number, i: any) => s + n(i.valorMedidoAcumulado), 0);
+        const sobra = Math.round(Math.max(0, n(contrato.valorTotal) - medidoTotal) * 100) / 100;
+
+        await tx.update(terceiroContratos).set({
+          status: "encerrado",
+          atualizadoEm: new Date().toISOString(),
+        } as any).where(eq(terceiroContratos.id, input.id));
+
+        let creditoId: number | null = null;
+        if (sobra > 0.01) {
+          // Idempotência: não duplicar crédito do mesmo contrato.
+          const jaCreditado = await tx.select({ id: budgetReallocations.id }).from(budgetReallocations)
+            .where(and(
+              eq(budgetReallocations.companyId, input.companyId),
+              eq(budgetReallocations.origemEapItemNome, `Economia Contrato: ${contrato.numeroContrato || contrato.id}`),
+            ));
+          if (jaCreditado.length === 0) {
+            const [cred] = await tx.insert(budgetReallocations).values({
+              companyId: input.companyId,
+              obraId: contrato.obraId ?? 0,
+              origemEapItemNome: `Economia Contrato: ${contrato.numeroContrato || contrato.id}`,
+              destinoEapItemNome: "Crédito p/ Realocação de Verba",
+              valorRealocado: String(sobra),
+              motivo: `Encerramento do contrato ${contrato.numeroContrato || contrato.id}: contratado ${n(contrato.valorTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} − medido ${medidoTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Sobra devolvida ao pote de realocação.`,
+              usuarioId: (ctx.user as any)?.id ?? 0,
+              usuarioNome: (ctx.user as any)?.name || (ctx.user as any)?.email || null,
+            } as any).returning();
+            creditoId = cred?.id ?? null;
+          }
+        }
+        await createAuditLog({
+          userId: (ctx.user as any)?.id,
+          userName: (ctx.user as any)?.name || null,
+          companyId: input.companyId,
+          action: "encerrar",
+          module: "terceiros",
+          entityType: "contrato",
+          entityId: input.id,
+          details: `Contrato ${contrato.numeroContrato || contrato.id} encerrado. Sobra creditada na Realocação de Verba: R$ ${sobra.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+        } as any);
+        return { ok: true, sobra, creditoId };
+      });
     }),
 
   // Rev. 4778 — Reenvio manual: medição aprovada sem título no Financeiro

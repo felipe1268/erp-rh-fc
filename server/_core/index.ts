@@ -2272,6 +2272,14 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4802: terceiro_contrato_aditivos + quantidade_excedente garantidos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA aditivos de terceiro:`, e?.message || e); }
 
+        // Rev. 4817 — Fonte de verba do aditivo (integração com Realocação de Verba).
+        try {
+          await db.execute(sql`ALTER TABLE terceiro_contrato_aditivos ADD COLUMN IF NOT EXISTS fonte_verba VARCHAR(30) DEFAULT 'realocacao'`);
+          await db.execute(sql`ALTER TABLE terceiro_contrato_aditivos ADD COLUMN IF NOT EXISTS valor_coberto NUMERIC(18,2)`);
+          await db.execute(sql`ALTER TABLE terceiro_contrato_aditivos ADD COLUMN IF NOT EXISTS realocacao_id INTEGER`);
+          console.log(`[SyncSchema+] Rev. 4817: fonte de verba do aditivo garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA fonte de verba aditivo:`, e?.message || e); }
+
         // Rev. 4805 — Projetos para Medição (pavimentos da OBRA): cadastro no
         // cadastro de obras, com pé-direito (default 3,00 m) e arquivo DXF 1:100.
         // Plantas importadas do projeto ganham vínculo pavimento_id.

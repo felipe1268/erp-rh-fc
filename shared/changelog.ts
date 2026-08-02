@@ -1,4 +1,24 @@
 /**
+ * Rev. 4817 - ADITIVO COM FONTE DE VERBA + ENCERRAR CONTRATO COM SOBRA
+ *
+ * - Ao gerar aditivo, a tela mostra o saldo disponivel da Realocacao de Verba
+ *   (Compras) da obra, com semaforo (cobre / cobre parte / sem saldo), e o
+ *   solicitante indica a fonte: consumir da Realocacao ou verba extra.
+ * - Nunca bloqueia: sem saldo o aditivo sobe mesmo assim; o socio aprova
+ *   vendo a situacao e o descoberto fica MARCADO como prejuizo consciente
+ *   no card do aditivo (verde = coberto, ambar = parcial, vermelho = sem fonte).
+ * - Na aprovacao do socio, o consumo do saldo e registrado automaticamente
+ *   na Realocacao de Verba (ate onde o saldo alcancar), com rastreabilidade.
+ * - Novo botao "Encerrar contrato": fecha contratos de area estimada que
+ *   mediram menos que o contratado e devolve a sobra como CREDITO na
+ *   Realocacao de Verba ("Economia Contrato: <numero>").
+ * - Se um aditivo aprovado reabrir um contrato encerrado, o credito da sobra
+ *   e estornado automaticamente (o dinheiro nao existe duas vezes).
+ * - Poka-yoke: encerrar exige medicoes e aditivos pendentes resolvidos;
+ *   contrato encerrado/cancelado/suspenso nao gera medicao nova.
+ */
+
+/**
  * Rev. 4816 - RASTREABILIDADE COMPLETA NO ADITIVO
  *
  * - Cada aditivo agora exibe a trilha de auditoria: quem SOLICITOU, quem

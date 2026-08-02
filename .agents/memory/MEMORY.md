@@ -1,3 +1,4 @@
+- [Aditivo — fonte de verba via Realocação](aditivo-fonte-verba-realocacao.md) — marcadores 'Economia Contrato:'/'Saldo de Realocação (aditivo)' em budget_reallocations são contrato de dados; locks 478005/478006; nunca bloquear.
 - [Motor de crédito do convênio](convenio-credito-engine.md) — limite>0 ativa regras fail-safe (erro=bloqueia); todo write em lancamentos_parceiros valida crédito + grava competência; edição não desconta o próprio valor se mudar competência.
 - [Fatura de cartão gotchas](cartao-fatura-cumulativa.md) — [cumulativa: nunca somar histórico como "em aberto"](cartao-fatura-cumulativa.md); [título único por fatura + fan-out de baixas; título com baixa ativa é intocável](cartao-fatura-financeiro-link.md).
 - [QR Verificar Aptidão — live, não snapshot](qr-aptidao-live-not-snapshot.md) — employee_aptidao é snapshot manual defasado; leitores calculam ao vivo de asos/trainings (regras do recalcAll, apto|inapto).
