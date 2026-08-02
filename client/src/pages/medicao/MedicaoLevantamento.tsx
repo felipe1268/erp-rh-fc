@@ -2839,18 +2839,28 @@ export default function MedicaoLevantamento() {
       </table>
       ${memPlantasRef.current ?? ""}
       ${fotosHtml}
-      <!-- Assinaturas: responsável pelo levantamento × fornecedor -->
-      <table style="border-collapse:collapse;width:100%;margin-top:56px;page-break-inside:avoid"><tbody><tr>
+      <!-- Assinaturas: responsável pelo levantamento × fornecedor.
+           Rev. 4844 — assinatura DESENHADA aparece em cima da linha; distância
+           grande das fotos p/ nunca sobrepor. -->
+      ${(() => {
+        // imagem só se for dataURL de imagem (anti-XSS) e o signatário assinou
+        const sigDe = (papel: string) => {
+          const s = ((envelopeLev?.signatarios || []) as any[]).find((x) => x.papel === papel && x.status === "assinado");
+          const img = String(s?.assinaturaImagem || "");
+          return /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(img) ? img : "";
+        };
+        const slot = (img: string, nome: string, rotulo: string) => `
         <td style="width:46%;text-align:center;vertical-align:bottom">
-          <div style="border-top:1px solid #111;padding-top:6px;font-size:11px;font-weight:bold">${escHtml(levantadoPor) || "&nbsp;"}</div>
-          <div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px">Responsável pelo levantamento — FC Engenharia</div>
-        </td>
-        <td style="width:8%"></td>
-        <td style="width:46%;text-align:center;vertical-align:bottom">
-          <div style="border-top:1px solid #111;padding-top:6px;font-size:11px;font-weight:bold">${escHtml(fornecedorNome !== "—" ? fornecedorNome : "") || "&nbsp;"}</div>
-          <div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px">Fornecedor — de acordo com o levantamento</div>
-        </td>
-      </tr></tbody></table>
+          <div style="height:64px;display:flex;align-items:flex-end;justify-content:center">${img ? `<img src="${img}" style="max-height:60px;max-width:90%;object-fit:contain" alt="Assinatura"/>` : ""}</div>
+          <div style="border-top:1px solid #111;padding-top:6px;font-size:11px;font-weight:bold">${escHtml(nome) || "&nbsp;"}</div>
+          <div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px">${rotulo}</div>
+        </td>`;
+        return `<table style="border-collapse:collapse;width:100%;margin-top:110px;page-break-inside:avoid"><tbody><tr>
+          ${slot(sigDe("gestor_projeto"), levantadoPor, "Responsável pelo levantamento — FC Engenharia")}
+          <td style="width:8%"></td>
+          ${slot(sigDe("fornecedor"), fornecedorNome !== "—" ? fornecedorNome : "", "Fornecedor — de acordo com o levantamento")}
+        </tr></tbody></table>`;
+      })()}
       <p style="font-size:9px;color:#6b7280;margin-top:24px">Quantidades obtidas por levantamento sobre planta (PDF) com calibração de escala. Fator m/ponto = medida real informada ÷ distância marcada (em pontos de PDF). Área = polígono (shoelace) × fator²; perímetro/linear = soma dos segmentos × fator; volume = área × espessura.</p>
       ${comPrint ? `<script>window.onload=function(){setTimeout(function(){window.print();},300);}</script>` : ""}
     </body></html>`;

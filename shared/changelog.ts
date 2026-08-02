@@ -1,4 +1,14 @@
 /**
+ * Rev. 4844 - MEMORIA DE CALCULO: ASSINATURA DESENHADA NO CAMPO
+ *
+ * - A assinatura feita na tela (FCSign) agora aparece EM CIMA da linha de
+ *   assinatura correspondente na Memoria de Calculo (responsavel e
+ *   fornecedor), na visualizacao e no Imprimir/PDF.
+ * - Bloco de assinaturas com distancia maior do registro fotografico para
+ *   nunca ficar sobreposto.
+ */
+
+/**
  * Rev. 4843 - MEMORIA DE CALCULO: CONTA ABERTA NA LEGENDA (TRANSPARENCIA)
  *
  * - Perimetro/comprimento: a legenda mostra TODOS os trechos somados

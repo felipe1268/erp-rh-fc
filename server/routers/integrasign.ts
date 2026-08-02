@@ -458,6 +458,9 @@ export const integrasignRouter = router({
         // a tela de assinatura direto (mesmo padrão do "copiar link" do dashboard).
         token: integrasignSignatarios.token,
         ordemAssinatura: integrasignSignatarios.ordemAssinatura,
+        // Rev. 4844 — imagem da assinatura p/ exibir no campo de assinatura
+        // da Memória de Cálculo (só sai preenchida quando já assinado).
+        assinaturaImagem: integrasignSignatarios.assinaturaImagem,
       }).from(integrasignSignatarios)
         .where(eq(integrasignSignatarios.envelopeId, env.id))
         .orderBy(asc(integrasignSignatarios.ordemAssinatura));
