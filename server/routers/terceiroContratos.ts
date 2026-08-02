@@ -17,6 +17,8 @@ import {
   budgetReallocations,
   medicaoConfig,
   medicaoCampo,
+  medicaoCampoContornos,
+  medicaoCampoFotos,
   terceiroDocumentos,
   empresasTerceiras,
   planejamentoAtividades,
@@ -112,6 +114,38 @@ async function _consolidarLevantamentoDaMedicao(db: any, medicao: any, companyId
       eq(medicaoCampo.companyId, companyId),
       sql`consolidado_em IS NULL`,
     ));
+}
+
+// Rev. 4835 — POKA-YOKE (pedido do usuário): medição com levantamento vinculado
+// AINDA não consolidado só pode ser aprovada se a Memória de Cálculo estiver
+// assinada pelas duas partes (envelope FCSign concluído do levantamento).
+async function _assertLevantamentoAssinado(db: any, medicaoId: number, companyId: number) {
+  const [med] = await db.select({ levantamentoCampoId: (terceiroMedicoes as any).levantamentoCampoId })
+    .from(terceiroMedicoes)
+    .where(and(eq(terceiroMedicoes.id, medicaoId), eq(terceiroMedicoes.companyId, companyId)));
+  const campoId = Number(med?.levantamentoCampoId || 0);
+  if (!campoId) return;
+  const [campo] = await db.select({ consolidadoEm: medicaoCampo.consolidadoEm }).from(medicaoCampo)
+    .where(and(eq(medicaoCampo.id, campoId), eq(medicaoCampo.companyId, companyId)));
+  if (!campo || campo.consolidadoEm) return; // já consolidado = assinatura já foi exigida no ciclo
+  const [envAss] = await db.select({ id: integrasignEnvelopes.id }).from(integrasignEnvelopes)
+    .where(and(
+      eq(integrasignEnvelopes.companyId, companyId),
+      eq((integrasignEnvelopes as any).medicaoCampoId, campoId),
+      sql`${integrasignEnvelopes.excluidoEm} IS NULL`,
+      eq(integrasignEnvelopes.status, "concluido"),
+    )).limit(1);
+  // Review Rev. 4835 — exige as DUAS partes assinadas, não só status concluído.
+  const assinados = envAss ? await db.select({ id: integrasignSignatarios.id })
+    .from(integrasignSignatarios)
+    .where(and(
+      eq(integrasignSignatarios.envelopeId, envAss.id),
+      eq(integrasignSignatarios.status, "assinado"),
+      sql`${integrasignSignatarios.papel} <> 'testemunha'`,
+    )) : [];
+  if (!envAss || assinados.length < 2) {
+    throw new Error("A Memória de Cálculo do levantamento vinculado ainda não foi assinada pelas duas partes (elaborador + responsável). Envie para assinatura no FCSign e aguarde a conclusão antes de aprovar a medição.");
+  }
 }
 
 async function _posAprovacaoFinanceiro(companyId: number, medicaoId: number, userId: number | null | undefined): Promise<boolean> {
@@ -2322,6 +2356,11 @@ export const terceiroContratosRouter = router({
       await _assertCompanyAccess(ctx.user, input.companyId);
       // Rev. 4798 — POKA-YOKE: FD de material pendente BLOQUEIA a aprovação.
       await _assertSemFdPendente(db, input.id, input.companyId);
+      // Rev. 4835 — POKA-YOKE: se a medição tem levantamento de campo vinculado
+      // ainda NÃO consolidado, a Memória de Cálculo precisa estar ASSINADA
+      // (elaborador + responsável) antes de aprovar — a aprovação consolida
+      // automaticamente e libera o pagamento.
+      await _assertLevantamentoAssinado(db, input.id, input.companyId);
       // Rev. 1987 — BUGFIX A1 · Toda a aprovação agora roda em TRANSAÇÃO ATÔMICA.
       // Bug anterior: update medicao → loop update itens. Se o loop falhasse no
       // meio, a medição ficava "aprovada" mas itens do contrato meio-atualizados
@@ -2753,6 +2792,8 @@ export const terceiroContratosRouter = router({
       await _assertCompanyAccess(ctx.user, input.companyId);
       // Rev. 4798 — POKA-YOKE: FD de material pendente BLOQUEIA a aprovação final.
       await _assertSemFdPendente(db, input.id, input.companyId);
+      // Rev. 4835 — Memória de Cálculo assinada é pré-requisito (mesma regra do aprovarMedicao).
+      await _assertLevantamentoAssinado(db, input.id, input.companyId);
       const fdRows = await db.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
         .where(and(eq(terceiroMedicaoFds.companyId, input.companyId), eq(terceiroMedicaoFds.medicaoId, input.id)));
       const fdTotal = fdRows.reduce((s, r) => s + n(r.valor), 0);
@@ -3156,17 +3197,18 @@ export const terceiroContratosRouter = router({
       await _assertCompanyAccess(ctx.user, input.companyId);
       const [medicao] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!medicao) throw new Error("Medição não encontrada");
-      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, medicao.contratoId));
+      // Rev. 4834 — tenancy em TODAS as queries (review): contrato/empresa/obra/itens escopados por companyId.
+      const [contrato] = await db.select().from(terceiroContratos).where(and(eq(terceiroContratos.id, medicao.contratoId), eq(terceiroContratos.companyId, input.companyId)));
       if (!contrato) throw new Error("Contrato não encontrado");
-      const [empresa] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId));
+      const [empresa] = await db.select().from(empresasTerceiras).where(and(eq(empresasTerceiras.id, contrato.empresaTerceiraId), eq(empresasTerceiras.companyId, input.companyId)));
       const [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
       let obraNome = "";
       if (contrato.obraId) {
-        const [obra] = await db.select().from(obras).where(eq(obras.id, contrato.obraId));
+        const [obra] = await db.select().from(obras).where(and(eq(obras.id, contrato.obraId), eq(obras.companyId, input.companyId)));
         if (obra) obraNome = obra.nome;
       }
-      const itensMedicao = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.medicaoId));
-      const itensContrato = await db.select().from(terceiroContratoItens).where(eq(terceiroContratoItens.contratoId, contrato.id)).orderBy(asc(terceiroContratoItens.ordem));
+      const itensMedicao = await db.select().from(terceiroMedicaoItens).where(and(eq(terceiroMedicaoItens.medicaoId, input.medicaoId), eq(terceiroMedicaoItens.companyId, input.companyId)));
+      const itensContrato = await db.select().from(terceiroContratoItens).where(and(eq(terceiroContratoItens.contratoId, contrato.id), eq(terceiroContratoItens.companyId, input.companyId))).orderBy(asc(terceiroContratoItens.ordem));
 
       const itensEnriquecidos = itensMedicao.map(im => {
         const ci = itensContrato.find(c => c.id === im.contratoItemId);
@@ -3297,6 +3339,87 @@ export const terceiroContratosRouter = router({
         } catch {}
       }
 
+      // Rev. 4834 — HISTÓRICO DE LEVANTAMENTO DE CAMPO no boletim (documento
+      // único, pedido do usuário): todos os levantamentos vinculados a esta
+      // medição, com contornos medidos e registro fotográfico embutidos.
+      type FotoPdf = { legenda: string; buffer: Buffer | null };
+      type CampoPdf = { titulo: string; criadoPorNome: string; contornos: any[]; fotos: FotoPdf[] };
+      const camposPdf: CampoPdf[] = [];
+      try {
+        // O vínculo principal vive na MEDIÇÃO (terceiro_medicoes.levantamento_campo_id);
+        // campo.medicaoId nem sempre é populado — busca pelos dois caminhos.
+        const levCampoId = Number((medicao as any).levantamentoCampoId || 0);
+        const campos = await db.select().from(medicaoCampo).where(and(
+          eq(medicaoCampo.companyId, input.companyId),
+          eq(medicaoCampo.origem, "terceiro"),
+          sql`${medicaoCampo.deletedAt} IS NULL`,
+          levCampoId > 0
+            ? sql`(${medicaoCampo.id} = ${levCampoId} OR ${(medicaoCampo as any).medicaoId} = ${input.medicaoId})`
+            : eq((medicaoCampo as any).medicaoId, input.medicaoId),
+        )).orderBy(asc(medicaoCampo.numero));
+        const fs2 = await import("fs");
+        const path2 = await import("path");
+        const uploadsRoot = path2.join(process.cwd(), "server/uploads");
+        const resolveFotoBuffer = async (url: string | null): Promise<Buffer | null> => {
+          if (!url || !url.startsWith("/uploads/")) return null;
+          // PDFKit só embute JPEG/PNG — vídeos (.mov/.mp4) e outros formatos ficam de fora.
+          if (!/\.(jpe?g|png)$/i.test(url)) return null;
+          const key = decodeURIComponent(url.replace(/^\/uploads\//, ""));
+          // Rev. 4834 — anti-IDOR (review): a chave DEVE pertencer ao tenant deste
+          // boletim (prefixo canônico das fotos de levantamento). Qualquer path
+          // fora desse escopo (ex.: arquivo de outra empresa) é rejeitado.
+          if (!key.startsWith(`medicao-campo/${input.companyId}/`)) return null;
+          const p = path2.resolve(uploadsRoot, key);
+          // anti-traversal: só dentro do diretório de uploads
+          if (p !== uploadsRoot && !p.startsWith(uploadsRoot + path2.sep)) return null;
+          try {
+            let buf: Buffer | null = null;
+            buf = await fs2.promises.readFile(p).catch(() => null);
+            if (!buf) {
+              const { dbRetrieve } = await import("../storage");
+              const r = await dbRetrieve(key);
+              buf = r?.buffer ?? null;
+            }
+            if (!buf) return null;
+            // Rev. 4834 — fotos de celular chegam com 4-6MB cada; sem compressão o
+            // PDF passava de 17MB (estoura o proxy no iPad). Reduz p/ 1280px JPEG.
+            try {
+              const sharp = (await import("sharp")).default;
+              return await sharp(buf).rotate().resize({ width: 1280, withoutEnlargement: true }).jpeg({ quality: 72 }).toBuffer();
+            } catch { return buf; }
+          } catch { return null; }
+        };
+        for (const campo of campos) {
+          const contornos = await db.select().from(medicaoCampoContornos).where(and(
+            eq(medicaoCampoContornos.medicaoCampoId, campo.id),
+            eq(medicaoCampoContornos.companyId, input.companyId),
+            sql`${medicaoCampoContornos.deletedAt} IS NULL`,
+          )).orderBy(asc(medicaoCampoContornos.tipo), asc(medicaoCampoContornos.numero), asc(medicaoCampoContornos.id));
+          const fotosRows = await db.select().from(medicaoCampoFotos).where(and(
+            eq(medicaoCampoFotos.medicaoCampoId, campo.id),
+            eq(medicaoCampoFotos.companyId, input.companyId),
+            sql`${medicaoCampoFotos.deletedAt} IS NULL`,
+          )).orderBy(asc(medicaoCampoFotos.id));
+          const contornoRotulo = new Map<number, string>(contornos.map((c: any) => [c.id, c.rotulo || c.servico || ""]));
+          const fotos: FotoPdf[] = [];
+          for (const f of fotosRows) {
+            const buffer = await resolveFotoBuffer((f as any).arquivoUrl);
+            fotos.push({
+              legenda: (f as any).legenda || contornoRotulo.get((f as any).contornoId) || "Foto do levantamento",
+              buffer,
+            });
+          }
+          camposPdf.push({
+            titulo: `Nº ${String(campo.numero).padStart(3, "0")}${campo.titulo ? ` — ${campo.titulo}` : ""}`,
+            criadoPorNome: (campo as any).criadoPorNome || "",
+            contornos,
+            fotos,
+          });
+        }
+      } catch (e: any) {
+        console.warn("[gerarPdfMedicao] levantamento de campo indisponível no PDF:", e?.message);
+      }
+
       return new Promise<{ base64: string; filename: string }>((resolve, reject) => {
         // Rev. 4793 — PAISAGEM: a medição inteira cabe na largura (qtds medidas
         // em números + valores), leitura muito mais fácil no iPad e impressa.
@@ -3320,31 +3443,36 @@ export const terceiroContratosRouter = router({
 
         const pageBottom = doc.page.height - 44;
 
-        const headerH = 58;
-        doc.rect(0, 0, doc.page.width, headerH).fill(primary);
-
+        // Rev. 4834 — padrão "Memória de Cálculo" (pedido do usuário): logo GRANDE
+        // centralizado sobre fundo branco + faixa azul-marinho com o título em
+        // caixa alta espaçada. O box da medição fica à direita da faixa.
         const logoSrc = resolveLogoSource((company as any)?.logoUrl);
         let logoRendered = false;
-        const logoSize = 42;
         if (logoSrc) {
-          try { doc.image(logoSrc, mL, 8, { fit: [logoSize, logoSize] }); logoRendered = true; } catch { logoRendered = false; }
+          try { doc.image(logoSrc, doc.page.width / 2 - 60, 10, { fit: [120, 44] }); logoRendered = true; } catch { logoRendered = false; }
+        }
+        if (!logoRendered) {
+          doc.font("Helvetica-Bold").fontSize(18).fillColor(primary)
+            .text(company?.name || "FC Engenharia", 0, 24, { width: doc.page.width, align: "center" });
+        }
+        if (company?.cnpj) {
+          doc.font("Helvetica").fontSize(6.5).fillColor("#7a8699")
+            .text(`${company?.name || "FC Engenharia"} · CNPJ: ${company.cnpj}`, 0, 56, { width: doc.page.width, align: "center" });
         }
 
-        const nameX = logoRendered ? mL + logoSize + 12 : mL;
-        doc.font("Helvetica-Bold").fontSize(14).fillColor("#ffffff")
-          .text(company?.name || "FC Engenharia", nameX, 12);
-        doc.font("Helvetica").fontSize(7.5).fillColor("#ccd6e0")
-          .text(`${company?.cnpj ? `CNPJ: ${company.cnpj}   ·   ` : ""}BOLETIM DE MEDIÇÃO — CONTRATO DE TERCEIROS`, nameX, 32);
+        const barY = 66, barH = 26;
+        doc.rect(mL - 4, barY, doc.page.width - mL - mR + 8, barH).fill(primary);
+        doc.font("Helvetica-Bold").fontSize(10).fillColor("#ffffff")
+          .text("B O L E T I M   D E   M E D I Ç Ã O   —   C O N T R A T O   D E   T E R C E I R O S", mL - 4, barY + 9, { width: doc.page.width - mL - mR + 8, align: "center" });
 
         const statusLabels: Record<string, string> = { rascunho: "Rascunho", aguardando_aprovacao: "Aguard. Aprovação", aprovada: "Aprovada", paga: "Paga", rejeitada: "Rejeitada" };
         const revNum = Number((medicao as any).revisao || 0);
         const numBox = `Nº ${String(medicao.numero || 1).padStart(2, "0")}${revNum > 0 ? ` · REV. ${revNum}` : ""}`;
-        doc.roundedRect(doc.page.width - mR - 150, 9, 150, 40, 4).fill("#ffffff");
-        doc.font("Helvetica").fontSize(6.5).fillColor(primary).text(`MEDIÇÃO · ${medicao.periodo || "-"}`, doc.page.width - mR - 145, 15, { width: 140, align: "center" });
-        doc.font("Helvetica-Bold").fontSize(15).fillColor(primary).text(numBox, doc.page.width - mR - 145, 24, { width: 140, align: "center" });
-        doc.font("Helvetica").fontSize(6.5).fillColor("#666").text(statusLabels[medicao.status || "rascunho"] || medicao.status || "-", doc.page.width - mR - 145, 41, { width: 140, align: "center" });
+        doc.roundedRect(doc.page.width - mR - 128, barY + 2, 124, barH - 4, 3).fill("#ffffff");
+        doc.font("Helvetica").fontSize(5.5).fillColor(primary).text(`MEDIÇÃO · ${medicao.periodo || "-"}  ·  ${statusLabels[medicao.status || "rascunho"] || medicao.status || "-"}`, doc.page.width - mR - 124, barY + 5, { width: 116, align: "center" });
+        doc.font("Helvetica-Bold").fontSize(11).fillColor(primary).text(numBox, doc.page.width - mR - 124, barY + 11.5, { width: 116, align: "center" });
 
-        let y = headerH + 10;
+        let y = barY + barH + 10;
 
         // Rev. 4796 — datas do contrato + ritmo (adiantado/em dia/atrasado)
         const fmtBR = (d: any) => {
@@ -3610,6 +3738,85 @@ export const terceiroContratosRouter = router({
           doc.fontSize(6.5).font("Helvetica").fillColor("#666");
           doc.text(`Contratante — ${company?.name || ""}`, mL + 40, y + 49, { width: sigW, align: "center" });
           doc.text(`Contratada — ${empresa?.razaoSocial || empresa?.nomeFantasia || ""}`, mL + pageW - 40 - sigW, y + 49, { width: sigW, align: "center" });
+        }
+
+        // ── Rev. 4834 — MEMÓRIA DE CÁLCULO / LEVANTAMENTO DE CAMPO (com fotos) ──
+        const fmtQtd = (c: any) => {
+          const q = n(c.quantidade);
+          const un = c.unidade || (c.tipo === "area" ? "m²" : c.tipo === "perimetro" || c.tipo === "linear" ? "m" : c.tipo === "volume" ? "m³" : "");
+          return `${q.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${un}`.trim();
+        };
+        const tipoLabel: Record<string, string> = { area: "Área", perimetro: "Perímetro / Linear", linear: "Perímetro / Linear", volume: "Volume", contagem: "Contagem", parede: "Parede" };
+        for (const campo of camposPdf) {
+          doc.addPage();
+          // faixa-título no mesmo padrão do cabeçalho
+          doc.rect(mL - 4, 36, doc.page.width - mL - mR + 8, 24).fill(primary);
+          doc.font("Helvetica-Bold").fontSize(9).fillColor("#ffffff")
+            .text("M E M Ó R I A   D E   C Á L C U L O   —   L E V A N T A M E N T O   D E   C A M P O", mL - 4, 44, { width: doc.page.width - mL - mR + 8, align: "center" });
+          y = 36 + 24 + 8;
+          doc.font("Helvetica-Bold").fontSize(8.5).fillColor(primary).text(`Levantamento ${campo.titulo}`, mL, y);
+          if (campo.criadoPorNome) {
+            doc.font("Helvetica").fontSize(7).fillColor("#666").text(`Realizado por: ${campo.criadoPorNome}`, mL + pageW - 240, y + 1, { width: 240, align: "right" });
+          }
+          y += 16;
+
+          // tabela de contornos
+          if (campo.contornos.length > 0) {
+            doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#333").text("Contornos medidos", mL, y); y += 11;
+            const cw = [34, 92, 130, pageW - 34 - 92 - 130 - 110, 110];
+            const cx = [mL, mL + cw[0], mL + cw[0] + cw[1], mL + cw[0] + cw[1] + cw[2], mL + cw[0] + cw[1] + cw[2] + cw[3]];
+            const headRow = () => {
+              doc.rect(mL, y, pageW, 12).fill("#eef1f5");
+              doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#555");
+              ["Nº", "Tipo", "Local / Nome", "Item vinculado", "Quantidade"].forEach((h, i) => doc.text(h, cx[i] + 3, y + 3.5, { width: cw[i] - 6, align: i === 4 ? "right" : "left" }));
+              y += 12;
+            };
+            headRow();
+            let idxPorTipo: Record<string, number> = {};
+            for (const c of campo.contornos) {
+              if (y > pageBottom - 14) { doc.addPage(); y = 36; headRow(); }
+              const t = tipoLabel[c.tipo] || c.tipo || "-";
+              idxPorTipo[t] = (idxPorTipo[t] || 0) + 1;
+              doc.rect(mL, y, pageW, 11).strokeColor("#e3e7ee").lineWidth(0.4).stroke();
+              doc.font("Helvetica").fontSize(6.5).fillColor("#333");
+              doc.text(String(c.numero ?? idxPorTipo[t]).padStart(3, "0"), cx[0] + 3, y + 3, { width: cw[0] - 6 });
+              doc.text(t, cx[1] + 3, y + 3, { width: cw[1] - 6, height: 8, ellipsis: true });
+              doc.text(c.rotulo || c.servico || "-", cx[2] + 3, y + 3, { width: cw[2] - 6, height: 8, ellipsis: true });
+              doc.text(c.itemDescricao || "-", cx[3] + 3, y + 3, { width: cw[3] - 6, height: 8, ellipsis: true });
+              doc.font("Helvetica-Bold").text(fmtQtd(c), cx[4] + 3, y + 3, { width: cw[4] - 6, align: "right" });
+              y += 11;
+            }
+            y += 10;
+          }
+
+          // registro fotográfico
+          const fotosOk = campo.fotos.filter(f => f.buffer);
+          if (fotosOk.length > 0) {
+            if (y > pageBottom - 130) { doc.addPage(); y = 36; }
+            doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#333").text(`Registro fotográfico (${fotosOk.length})`, mL, y); y += 12;
+            const perRow = 5, gap = 8;
+            const cellW = (pageW - gap * (perRow - 1)) / perRow;
+            const imgH = cellW * 0.72, cellH = imgH + 14;
+            let col = 0;
+            for (const f of fotosOk) {
+              if (col === 0 && y + cellH > pageBottom) { doc.addPage(); y = 36; }
+              const x = mL + col * (cellW + gap);
+              try {
+                doc.save();
+                doc.rect(x, y, cellW, imgH).clip();
+                doc.image(f.buffer as Buffer, x, y, { cover: [cellW, imgH], align: "center", valign: "center" } as any);
+                doc.restore();
+                doc.rect(x, y, cellW, imgH).strokeColor("#d4d9e0").lineWidth(0.5).stroke();
+              } catch {
+                doc.rect(x, y, cellW, imgH).fill("#f0f2f5");
+                doc.font("Helvetica").fontSize(6).fillColor("#999").text("foto indisponível", x, y + imgH / 2 - 3, { width: cellW, align: "center" });
+              }
+              doc.font("Helvetica").fontSize(6).fillColor("#555").text((f.legenda || "").toUpperCase(), x, y + imgH + 3, { width: cellW, height: 8, ellipsis: true });
+              col++;
+              if (col === perRow) { col = 0; y += cellH + 6; }
+            }
+            if (col > 0) y += cellH + 6;
+          }
         }
 
         doc.end();

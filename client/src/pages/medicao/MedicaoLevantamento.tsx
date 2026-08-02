@@ -17,8 +17,9 @@ import {
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
   RectangleHorizontal, PencilLine, ListOrdered, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
-  Layers, Maximize, Link as LinkIcon, Lock, LockOpen,
+  Layers, Maximize, Link as LinkIcon, Lock, LockOpen, FileSignature,
 } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -475,6 +476,51 @@ export default function MedicaoLevantamento() {
     onSuccess: invalidate,
     onError: (e) => toast.error(e.message || "Falha ao desconsolidar."),
   });
+
+  // Rev. 4835 — ASSINATURA DA MEMÓRIA DE CÁLCULO (Poka-Yoke, pedido do usuário):
+  // no fluxo de TERCEIROS, o levantamento só consolida (→ libera pagamento)
+  // depois que o ELABORADOR e o RESPONSÁVEL PELO CONTRATO assinarem no FCSign.
+  const { user: authUser } = useAuth();
+  const envelopeLevQ = trpc.integrasign.getEnvelopeDoLevantamento.useQuery(
+    { companyId, medicaoCampoId: campoId },
+    { enabled: isTerceiro && companyId > 0 && campoId > 0 },
+  );
+  const envelopeLev: any = envelopeLevQ.data;
+  const memoriaAssinada = envelopeLev?.status === "concluido";
+  const [memAssOpen, setMemAssOpen] = useState(false);
+  const [memAssSigs, setMemAssSigs] = useState<{ nome: string; email: string }[]>([{ nome: "", email: "" }, { nome: "", email: "" }]);
+  useEffect(() => {
+    // pré-preenche: elaborador = usuário logado; responsável = contato da contratada
+    setMemAssSigs((prev) => [
+      { nome: prev[0].nome || (authUser as any)?.name || campo?.criadoPorNome || "", email: prev[0].email || (authUser as any)?.email || "" },
+      { nome: prev[1].nome || contrato?.empresa?.responsavelNome || contrato?.empresa?.razaoSocial || "", email: prev[1].email || contrato?.empresa?.email || "" },
+    ]);
+  }, [authUser, contrato, campo?.criadoPorNome]);
+  const criarEnvelopeLevM = trpc.integrasign.criarEnvelope.useMutation({
+    onSuccess: (env: any) => {
+      toast.success("Envelope criado! Revise e envie para assinatura no FCSign.");
+      setMemAssOpen(false);
+      envelopeLevQ.refetch();
+      setLocation(`/integrasign?envelope=${env?.id ?? ""}`);
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao criar envelope"),
+  });
+  const enviarMemoriaParaAssinatura = () => {
+    const [elab, resp] = memAssSigs;
+    if (!elab.nome.trim() || !elab.email.trim()) { toast.error("Informe nome e e-mail do elaborador."); return; }
+    if (!resp.nome.trim() || !resp.email.trim()) { toast.error("Informe nome e e-mail do responsável pelo contrato."); return; }
+    criarEnvelopeLevM.mutate({
+      companyId,
+      medicaoCampoId: campoId,
+      obraId: contrato?.obraId ?? undefined,
+      titulo: `Memória de Cálculo — Levantamento Nº ${String((campo as any)?.numero ?? "").padStart(3, "0")}${(campo as any)?.titulo ? ` (${(campo as any).titulo})` : ""}`,
+      textoContrato: buildMemoriaHtml(false),
+      signatarios: [
+        { papel: "gestor_projeto", ordemAssinatura: 1, nome: elab.nome.trim(), email: elab.email.trim(), cargo: "Responsável pelo levantamento", empresaNome: "Contratante" },
+        { papel: "fornecedor", ordemAssinatura: 2, nome: resp.nome.trim(), email: resp.email.trim(), cargo: "Responsável pelo contrato", empresaNome: contrato?.empresa?.razaoSocial || undefined },
+      ],
+    } as any);
+  };
 
   // --- mutations ONLINE-only (envio/exclusão de PDF e geração de boletim
   //     ficam FORA do escopo offline; PDFs são pré-baixados para medir offline) ---
@@ -2310,7 +2356,9 @@ export default function MedicaoLevantamento() {
     });
   }
 
-  function gerarMemoriaCalculo() {
+  // Rev. 4835 — o MESMO HTML alimenta a impressão e o envelope FCSign
+  // (assinatura da Memória de Cálculo antes da consolidação).
+  function buildMemoriaHtml(comPrint: boolean): string {
     const linhas = (consolidado?.linhas ?? []) as any[];
     const todos = (campo?.contornos ?? []) as any[];
     const origin = window.location.origin;
@@ -2337,7 +2385,8 @@ export default function MedicaoLevantamento() {
         <div style="font-size:11.5px;font-weight:bold;color:#111827">${escHtml(valor) || "—"}</div>
       </td>`;
     // Fotos do levantamento (rastreio) — agrupadas com referência do contorno
-    const fotosAll = ((campo?.fotos ?? []) as any[]).filter((f) => f.arquivoUrl && !f.__pending);
+    const fotosAll = ((campo?.fotos ?? []) as any[]).filter((f) =>
+      f.arquivoUrl && !f.__pending && /\.(jpe?g|png|webp|gif)(\?|$)/i.test(String(f.arquivoUrl)));
     const contornoById = new Map(todos.map((c) => [c.id, c]));
     const fotosHtml = fotosAll.length === 0 ? "" : `
       <h3 style="font-size:13px;margin:18px 0 6px">Registro fotográfico (${fotosAll.length})</h3>
@@ -2347,7 +2396,11 @@ export default function MedicaoLevantamento() {
           const ref = c ? (c.rotulo ? String(c.rotulo).toUpperCase() : `${LABEL_TIPO[c.tipo as TipoContorno] || c.tipo} ${c.numero ?? ""}`) : "Geral";
           // Anti-XSS: só http(s) absoluto ou caminho relativo interno; escapa o atributo.
           const rawUrl = String(f.arquivoUrl);
-          const okUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : (rawUrl.startsWith("/") ? origin + rawUrl : "");
+          // Rev. 4835 — vídeos não renderizam em <img> (saíam como "?" quebrado) e
+          // fotos originais de 4-6MB quebram no Safari/iPad → usa miniatura ?w=480.
+          if (!/\.(jpe?g|png|webp|gif)(\?|$)/i.test(rawUrl)) return "";
+          const thumbUrl = rawUrl.startsWith("/uploads/") ? `${rawUrl}${rawUrl.includes("?") ? "&" : "?"}w=480` : rawUrl;
+          const okUrl = /^https?:\/\//i.test(thumbUrl) ? thumbUrl : (thumbUrl.startsWith("/") ? origin + thumbUrl : "");
           if (!okUrl) return "";
           const srcAttr = okUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
           return `<div style="width:160px;border:1px solid #d1d5db;border-radius:4px;overflow:hidden;page-break-inside:avoid">
@@ -2364,14 +2417,14 @@ export default function MedicaoLevantamento() {
         <td style="border:1px solid #ccc;padding:5px">${LABEL_TIPO[c.tipo as TipoContorno] || c.tipo}</td>
         <td style="border:1px solid #ccc;padding:5px">${escHtml(c.rotulo) || "—"}</td>
         <td style="border:1px solid #ccc;padding:5px">${escHtml(c.itemDescricao) || "—"}</td>
-        <td style="border:1px solid #ccc;padding:5px;text-align:right">${numFmt(parseFloat(c.quantidade || "0"), 2)} ${c.unidade || ""}</td>
+        <td style="border:1px solid #ccc;padding:5px;text-align:right">${numFmt(parseFloat(c.quantidade || "0"), 2)} ${escHtml(c.unidade) || ""}</td>
         <td style="border:1px solid #ccc;padding:5px;text-align:right">${c.metrosPorUnidade ? numFmt(parseFloat(c.metrosPorUnidade), 6) : "—"}</td>
       </tr>`).join("");
     const rowsConsol = linhas.map((l) => `
       <tr>
-        <td style="border:1px solid #ccc;padding:5px">${l.eapCodigo || "—"}</td>
-        <td style="border:1px solid #ccc;padding:5px">${l.descricao}</td>
-        <td style="border:1px solid #ccc;padding:5px;text-align:right">${numFmt(l.quantidade, 2)} ${l.unidade || ""}</td>
+        <td style="border:1px solid #ccc;padding:5px">${escHtml(l.eapCodigo) || "—"}</td>
+        <td style="border:1px solid #ccc;padding:5px">${escHtml(l.descricao)}</td>
+        <td style="border:1px solid #ccc;padding:5px;text-align:right">${numFmt(l.quantidade, 2)} ${escHtml(l.unidade) || ""}</td>
         <td style="border:1px solid #ccc;padding:5px;text-align:right">${brl(l.precoUnitario)}</td>
         <td style="border:1px solid #ccc;padding:5px;text-align:right">${brl(l.valorTotal)}</td>
       </tr>`).join("");
@@ -2439,8 +2492,13 @@ export default function MedicaoLevantamento() {
         </td>
       </tr></tbody></table>
       <p style="font-size:9px;color:#6b7280;margin-top:24px">Quantidades obtidas por levantamento sobre planta (PDF) com calibração de escala. Fator m/ponto = medida real informada ÷ distância marcada (em pontos de PDF). Área = polígono (shoelace) × fator²; perímetro/linear = soma dos segmentos × fator; volume = área × espessura.</p>
-      <script>window.onload=function(){setTimeout(function(){window.print();},300);}</script>
+      ${comPrint ? `<script>window.onload=function(){setTimeout(function(){window.print();},300);}</script>` : ""}
     </body></html>`;
+    return html;
+  }
+
+  function gerarMemoriaCalculo() {
+    const html = buildMemoriaHtml(true);
     const w = window.open("", "_blank");
     if (w) { w.document.write(html); w.document.close(); }
   }
@@ -2590,6 +2648,19 @@ export default function MedicaoLevantamento() {
               <Button size="sm" variant="outline" className="gap-1.5 h-9"
                 disabled={consolidarM.isPending}
                 onClick={() => {
+                  // Rev. 4835 — POKA-YOKE: terceiros só consolida com a Memória de
+                  // Cálculo ASSINADA pelas duas partes (elaborador + responsável).
+                  if (isTerceiro && !memoriaAssinada) {
+                    askConfirm({
+                      title: "Assinaturas pendentes",
+                      description: envelopeLev
+                        ? `A Memória de Cálculo foi enviada para assinatura, mas ainda não foi assinada pelas duas partes (${(envelopeLev.signatarios || []).filter((s: any) => s.status === "assinado").length}/${(envelopeLev.signatarios || []).length}). A consolidação só libera depois que elaborador e responsável pelo contrato assinarem.`
+                        : "Antes de consolidar, envie a Memória de Cálculo para assinatura digital: o elaborador e o responsável pelo contrato precisam assinar o levantamento. Use o botão \"Enviar p/ assinatura\".",
+                      confirmText: envelopeLev ? "Ver envelope" : "Entendi",
+                      onConfirm: () => { if (envelopeLev) setLocation(`/integrasign?envelope=${envelopeLev.id}`); },
+                    });
+                    return;
+                  }
                   // Rev. 4823 — ciclo só encerra completo: foto/vídeo + apropriação em TODOS
                   const { semFoto, semItem, nome } = pendenciasConsolidacao();
                   if (semFoto.length || semItem.length) {
@@ -2632,6 +2703,25 @@ export default function MedicaoLevantamento() {
             <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={gerarMemoriaCalculo}>
               <Calculator className="h-4 w-4" /><span className="hidden md:inline">Memória de cálculo</span>
             </Button>
+            {/* Rev. 4835 — assinatura da Memória de Cálculo (terceiros): pré-requisito da consolidação */}
+            {isTerceiro && !travado && (
+              memoriaAssinada ? (
+                <Button size="sm" variant="outline" className="gap-1.5 h-9 border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                  onClick={() => setLocation(`/integrasign?envelope=${envelopeLev.id}`)}>
+                  <BadgeCheck className="h-4 w-4" /><span className="hidden md:inline">Memória assinada</span>
+                </Button>
+              ) : envelopeLev ? (
+                <Button size="sm" variant="outline" className="gap-1.5 h-9 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  onClick={() => setLocation(`/integrasign?envelope=${envelopeLev.id}`)}>
+                  <FileSignature className="h-4 w-4" />
+                  <span className="hidden md:inline">Assinaturas {(envelopeLev.signatarios || []).filter((s: any) => s.status === "assinado").length}/{(envelopeLev.signatarios || []).length}</span>
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => setMemAssOpen(true)}>
+                  <FileSignature className="h-4 w-4" /><span className="hidden md:inline">Enviar p/ assinatura</span>
+                </Button>
+              )
+            )}
             {/* "Gerar boletim" é exclusivo da Medição de Cliente. No fluxo de Terceiros o
                 levantamento é vinculado à medição na aba "Medições" do contrato. */}
             {!isTerceiro && (
@@ -3976,6 +4066,38 @@ export default function MedicaoLevantamento() {
 
       {/* Rev. 4780 — Configurar SERVIÇOS do levantamento (catálogo híbrido) */}
       {/* Rev. 4784 — remover planta com levantamento: senha do ADM Master */}
+      {/* Rev. 4835 — enviar Memória de Cálculo p/ assinatura (elaborador + responsável) */}
+      <Dialog open={memAssOpen} onOpenChange={setMemAssOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-blue-600" />Enviar Memória de Cálculo para assinatura</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              O documento (contornos, consolidação e fotos) será enviado no FCSign para assinatura digital das duas partes.
+              A <b>consolidação do levantamento</b> — que libera o pagamento da medição — só é permitida depois que os dois assinarem.
+            </p>
+            <div className="rounded-lg border p-3 space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">1º — Elaborador (responsável pelo levantamento)</div>
+              <Input placeholder="Nome" value={memAssSigs[0].nome} onChange={(e) => setMemAssSigs((p) => [{ ...p[0], nome: e.target.value }, p[1]])} />
+              <Input placeholder="E-mail" type="email" value={memAssSigs[0].email} onChange={(e) => setMemAssSigs((p) => [{ ...p[0], email: e.target.value }, p[1]])} />
+            </div>
+            <div className="rounded-lg border p-3 space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">2º — Responsável pelo contrato (contratada)</div>
+              <Input placeholder="Nome" value={memAssSigs[1].nome} onChange={(e) => setMemAssSigs((p) => [p[0], { ...p[1], nome: e.target.value }])} />
+              <Input placeholder="E-mail" type="email" value={memAssSigs[1].email} onChange={(e) => setMemAssSigs((p) => [p[0], { ...p[1], email: e.target.value }])} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setMemAssOpen(false)}>Cancelar</Button>
+              <Button disabled={criarEnvelopeLevM.isPending} onClick={enviarMemoriaParaAssinatura} className="gap-1.5">
+                {criarEnvelopeLevM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
+                Criar envelope e assinar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!senhaPlantaDlg} onOpenChange={(v) => { if (!v) { setSenhaPlantaDlg(null); setSenhaPlanta(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>

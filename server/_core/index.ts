@@ -1023,6 +1023,10 @@ Regras:
           console.log(`[SyncSchema+] Rev. 4793: coluna medicao_terceiro_id garantida em integrasign_envelopes (assinatura de Boletim de Medição).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA integrasign_envelopes.medicao_terceiro_id:`, e?.message || e); }
         try {
+          await db.execute(sql`ALTER TABLE integrasign_envelopes ADD COLUMN IF NOT EXISTS medicao_campo_id INTEGER`);
+          console.log(`[SyncSchema+] Rev. 4835: coluna medicao_campo_id garantida em integrasign_envelopes (assinatura da Memória de Cálculo do levantamento).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA integrasign_envelopes.medicao_campo_id:`, e?.message || e); }
+        try {
           await db.execute(sql`ALTER TABLE medicao_campo ADD COLUMN IF NOT EXISTS consolidado_em TIMESTAMP`);
           await db.execute(sql`ALTER TABLE medicao_campo ADD COLUMN IF NOT EXISTS consolidado_por_nome VARCHAR(255)`);
           await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS revisao INTEGER DEFAULT 0`);

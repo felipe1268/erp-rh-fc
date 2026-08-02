@@ -9,6 +9,7 @@ import {
   companies,
   employees,
   gestorSubstituicaoSolicitacoes,
+  medicaoCampo,
 } from "../../drizzle/schema";
 import { eq, and, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -232,6 +233,7 @@ export const integrasignRouter = router({
       ordemCompraId: z.number().optional(),
       obraId: z.number().optional(),
       medicaoTerceiroId: z.number().optional(),
+      medicaoCampoId: z.number().optional(),
       titulo: z.string(),
       descricao: z.string().optional(),
       textoContrato: z.string().optional(),
@@ -352,6 +354,23 @@ export const integrasignRouter = router({
         signatariosFinais.push(...reordenados.map((s, i) => ({ ...s, ordemAssinatura: i + 1 })));
       }
 
+      // Rev. 4835 — Memória de Cálculo: valida que o levantamento pertence à
+      // empresa do envelope (anti-IDOR) antes de vincular.
+      if (input.medicaoCampoId) {
+        const [campo] = await db.select({ id: medicaoCampo.id }).from(medicaoCampo)
+          .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)));
+        if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Levantamento não encontrado nesta empresa." });
+        // Rev. 4835 — política server-side (review): envelope de Memória de Cálculo
+        // exige EXATAMENTE 2 signatários obrigatórios — elaborador (gestor_projeto)
+        // e responsável pelo contrato (fornecedor). Sem isso, o gate de consolidação
+        // poderia ser burlado com envelope de 1 assinatura só.
+        const obrigatorios = (input.signatarios || []).filter((s: any) => s.papel !== "testemunha");
+        const papeis = obrigatorios.map((s: any) => s.papel).sort();
+        if (obrigatorios.length !== 2 || papeis[0] !== "fornecedor" || papeis[1] !== "gestor_projeto") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A Memória de Cálculo exige exatamente 2 signatários: o elaborador do levantamento (gestor de projeto) e o responsável pelo contrato (fornecedor)." });
+        }
+      }
+
       // Rev. 4793 — Boletim de Medição de terceiros: o documento é gerado
       // server-side a partir do banco (fiel aos dados no momento do envio).
       let textoDocumento = input.textoContrato ?? null;
@@ -369,6 +388,7 @@ export const integrasignRouter = router({
         ordemCompraId: input.ordemCompraId ?? null,
         obraId: input.obraId ?? null,
         medicaoTerceiroId: input.medicaoTerceiroId ?? null,
+        medicaoCampoId: input.medicaoCampoId ?? null,
         titulo: tituloFinal,
         descricao: input.descricao ?? null,
         textoContrato: textoDocumento,
@@ -408,6 +428,36 @@ export const integrasignRouter = router({
       });
 
       return { id: envelope.id, status: "rascunho" };
+    }),
+
+  // Rev. 4835 — status da assinatura da Memória de Cálculo de um levantamento:
+  // o botão "Consolidar" só libera depois de elaborador + responsável assinarem.
+  getEnvelopeDoLevantamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), medicaoCampoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertIntegraSignCompanyAccess((ctx as any).user, input.companyId);
+      const db = await getDb();
+      // Review Rev. 4835 — se existir envelope CONCLUÍDO, ele prevalece sobre um
+      // rascunho mais recente (senão a UI bloquearia indevidamente a consolidação).
+      const candidatos = await db.select().from(integrasignEnvelopes)
+        .where(and(
+          eq(integrasignEnvelopes.companyId, input.companyId),
+          eq((integrasignEnvelopes as any).medicaoCampoId, input.medicaoCampoId),
+          isNull(integrasignEnvelopes.excluidoEm),
+          sql`${integrasignEnvelopes.status} NOT IN ('cancelado')`,
+        )).orderBy(desc(integrasignEnvelopes.id));
+      const env = candidatos.find((e: any) => e.status === "concluido") ?? candidatos[0];
+      if (!env) return null;
+      const signatarios = await db.select({
+        id: integrasignSignatarios.id,
+        papel: integrasignSignatarios.papel,
+        nome: integrasignSignatarios.nome,
+        status: integrasignSignatarios.status,
+        dataAssinatura: integrasignSignatarios.dataAssinatura,
+      }).from(integrasignSignatarios)
+        .where(eq(integrasignSignatarios.envelopeId, env.id))
+        .orderBy(asc(integrasignSignatarios.ordemAssinatura));
+      return { id: env.id, status: env.status, titulo: env.titulo, dataConclusao: (env as any).dataConclusao, signatarios };
     }),
 
   atualizarTextoContrato: protectedProcedure

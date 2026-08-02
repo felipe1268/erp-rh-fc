@@ -25,6 +25,8 @@ import {
   obraPavimentos,
   comprasOrdens,
   users,
+  integrasignEnvelopes,
+  integrasignSignatarios,
 } from "../../drizzle/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
@@ -1933,6 +1935,31 @@ export const medicaoRouter = router({
         .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId))).limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Levantamento não encontrado ou sem permissão." });
       if ((campo as any).consolidadoEm) return { success: true, jaConsolidado: true };
+      // Rev. 4835 — POKA-YOKE (pedido do usuário): a consolidação do levantamento
+      // de TERCEIROS só libera depois que a Memória de Cálculo foi ASSINADA por
+      // elaborador + responsável pelo contrato (envelope FCSign concluído).
+      if ((campo as any).origem === "terceiro") {
+        const [envAss] = await db.select({ id: integrasignEnvelopes.id, status: integrasignEnvelopes.status })
+          .from(integrasignEnvelopes)
+          .where(and(
+            eq(integrasignEnvelopes.companyId, input.companyId),
+            eq((integrasignEnvelopes as any).medicaoCampoId, input.medicaoCampoId),
+            isNull(integrasignEnvelopes.excluidoEm),
+            eq(integrasignEnvelopes.status, "concluido"),
+          )).orderBy(desc(integrasignEnvelopes.id)).limit(1);
+        // Review Rev. 4835 — não basta status concluído: as DUAS partes
+        // obrigatórias (elaborador + responsável) precisam constar assinadas.
+        const assinados = envAss ? await db.select({ papel: integrasignSignatarios.papel })
+          .from(integrasignSignatarios)
+          .where(and(
+            eq(integrasignSignatarios.envelopeId, envAss.id),
+            eq(integrasignSignatarios.status, "assinado"),
+            sql`${integrasignSignatarios.papel} <> 'testemunha'`,
+          )) : [];
+        if (!envAss || assinados.length < 2) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A Memória de Cálculo ainda não foi assinada pelas duas partes. Envie o levantamento para assinatura (elaborador + responsável pelo contrato) e aguarde a conclusão antes de consolidar." });
+        }
+      }
       // Rev. 4823 — POKA-YOKE: consolidar encerra o ciclo. Só passa se TODO
       // contorno tiver (a) pelo menos 1 foto/vídeo e (b) apropriação (vínculo
       // com item da planilha — no contorno OU herdado do serviço/categoria).

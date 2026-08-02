@@ -1,4 +1,42 @@
 /**
+ * Rev. 4835 - MEMORIA DE CALCULO ASSINADA ANTES DA CONSOLIDACAO (TERCEIROS)
+ *
+ * - Novo botao "Enviar p/ assinatura" no Levantamento de Campo (terceiros):
+ *   envia a Memoria de Calculo (contornos, consolidacao por item e fotos)
+ *   para assinatura digital no FCSign, com o nome do ELABORADOR ja
+ *   preenchido (usuario logado) e o RESPONSAVEL PELO CONTRATO (contratada)
+ *   pre-preenchido com o contato cadastrado.
+ * - POKA-YOKE (pedido do usuario): a CONSOLIDACAO do levantamento — que
+ *   libera o pagamento da medicao — so e permitida depois que os DOIS
+ *   assinarem. O bloqueio vale no botao Consolidar, no servidor e tambem
+ *   na aprovacao da medicao (aprovar consolida automaticamente, entao
+ *   tambem exige a memoria assinada).
+ * - O botao vira um indicador de status: "Enviar p/ assinatura" →
+ *   "Assinaturas 1/2" (ambar, abre o envelope) → "Memoria assinada" (verde).
+ * - Na impressao da Memoria de Calculo, fotos agora saem como miniatura
+ *   (nao quebram mais no iPad) e videos ficam fora do registro fotografico.
+ */
+
+/**
+ * Rev. 4834 - BOLETIM DE TERCEIROS: NOVO CABECALHO + MEMORIA DE CALCULO COM FOTOS
+ *
+ * - O PDF do Boletim de Medicao (Contrato de Terceiros) ganhou o mesmo padrao
+ *   visual da Memoria de Calculo: logo da empresa GRANDE e centralizado sobre
+ *   fundo branco + faixa azul-marinho com o titulo em caixa alta espacada
+ *   (pedido do usuario).
+ * - DOCUMENTO UNICO: o boletim agora inclui, apos o resumo financeiro e a
+ *   assinatura FCSign, todo o historico do Levantamento de Campo vinculado a
+ *   medicao: contornos medidos (numero, tipo, local, item vinculado e
+ *   quantidade) e o registro fotografico completo, com legendas.
+ * - As fotos sao comprimidas automaticamente (max. 1280px, JPEG) antes de
+ *   entrar no PDF: o boletim que passava de 17MB caiu para menos de 1MB,
+ *   abrindo rapido no iPad. Videos (.mov/.mp4) ficam fora do PDF.
+ * - O vinculo do levantamento e buscado pelos dois caminhos (medicao ->
+ *   levantamento e levantamento -> medicao), entao boletins antigos tambem
+ *   passam a mostrar a memoria de calculo.
+ */
+
+/**
  * Rev. 4833 - CADASTRO DA OBRA EM ABAS
  *
  * - O formulario "Nova Obra / Editar Obra" foi dividido em 5 abas fixas no
