@@ -87,7 +87,7 @@ const STATUS_DOC: Record<string, { label: string; cls: string }> = {
   vencido:  { label: "Vencido",  cls: "bg-orange-100 text-orange-700 border-orange-200" },
 };
 
-type Tab = "itens" | "medicoes" | "comparativo" | "documentos" | "documento" | "fd";
+type Tab = "itens" | "medicoes" | "comparativo" | "documentos" | "documento" | "fd" | "aditivos";
 
 export default function ContratoDetalheWrapper() {
   const [, params] = useRoute("/terceiros/contratos/:id");
@@ -266,6 +266,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     { enabled: tab === "medicoes" && id > 0 && !!(contrato as any)?.companyId },
   );
   const invalidarMedicoes = () => { utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarFdsTerceiro.invalidate({ contratoId: id, companyId: (contrato as any)?.companyId ?? 0 }); };
+  // Rev. 4814 — contador p/ a aba "Aditivos" na barra de navegação
+  const { data: aditivosTopo } = trpc.terceiroContratos.listarAditivos.useQuery(
+    { contratoId: id, companyId: (contrato as any)?.companyId ?? 0 },
+    { enabled: id > 0 && !!(contrato as any)?.companyId },
+  );
   const aprovarGestorMut = trpc.terceiroContratos.aprovarNivelGestor.useMutation({
     onSuccess: () => { toast.success("Aprovado pelo gestor da obra — aguardando sócio adm."); invalidarMedicoes(); },
     onError: (e) => toast.error(e.message),
@@ -469,8 +474,8 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         {/* Tabs — dentro da barra fixa */}
         <div className="flex overflow-x-auto">
           {((emModuloMedicoes
-            ? (["medicoes", "itens", "comparativo", "documentos"] as Tab[])
-            : (["documento", "itens", "medicoes", "comparativo", "documentos"] as Tab[])
+            ? (["medicoes", "aditivos", "itens", "comparativo", "documentos"] as Tab[])
+            : (["documento", "itens", "medicoes", "aditivos", "comparativo", "documentos"] as Tab[])
           ).concat(
             (contrato.naturezaIncluiMaterial || (contrato.fdMaterialRegistros?.length || 0) > 0) ? (["fd"] as Tab[]) : []
           )).map(t => (
@@ -478,6 +483,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
               {t === "itens" ? `Itens (${contrato.itens.length})` :
                t === "medicoes" ? `Medições (${contrato.medicoes.length})` :
+               t === "aditivos" ? <span className="flex items-center gap-1.5"><FilePlus className="w-3.5 h-3.5" />Aditivos ({(aditivosTopo || []).length})</span> :
                t === "comparativo" ? <span className="flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" />Comparativo</span> :
                t === "documentos" ? `Docs (${contrato.documentos.length})` :
                t === "fd" ? <span className="flex items-center gap-1.5"><Truck className="w-3.5 h-3.5" />FD ({contrato.fdMaterialRegistros?.length || 0})</span> :
@@ -989,6 +995,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         {/* Tab: Medições */}
         {tab === "medicoes" && (
           <MedicoesTab contrato={contrato} id={id} emModuloMedicoes={emModuloMedicoes} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} initialMedicaoId={medicaoIdFromUrl} setShowGerarMedicao={setShowGerarMedicao} medCfg={medCfg} fdsTerceiro={fdsTerceiro} aprovarGestorMut={aprovarGestorMut} aprovarSocioMut={aprovarSocioMut} criarFdTerceiroMut={criarFdTerceiroMut} excluirFdTerceiroMut={excluirFdTerceiroMut} />
+        )}
+
+        {/* Tab: Aditivos (Rev. 4814) */}
+        {tab === "aditivos" && (
+          <AditivosTab contrato={contrato} />
         )}
 
         {/* Tab: Comparativo */}
@@ -3689,6 +3700,132 @@ function ItemsTreeTable({ contrato, id, pct, removerItemMut }: { contrato: any; 
 // retenção (%) configurada; abate automaticamente os débitos pendentes
 // (FD/EPI/insumo) e gera o título do líquido no Contas a Pagar.
 // Rev. 4802 — lista de aditivos do contrato com aprovação em 2 níveis (gestor → sócio adm).
+// Rev. 4814 — aba "Aditivos": lista numerada (Aditivo #1, #2…) + apropriação do
+// orçamento por item (contratado × aditivos), p/ acompanhar se a OR estourou.
+function AditivosTab({ contrato }: { contrato: any }) {
+  const utils = trpc.useUtils();
+  const { data: aditivos } = trpc.terceiroContratos.listarAditivos.useQuery(
+    { contratoId: contrato.id, companyId: contrato.companyId },
+    { enabled: !!contrato?.id && !!contrato?.companyId },
+  );
+  const invalidar = () => {
+    utils.terceiroContratos.listarAditivos.invalidate({ contratoId: contrato.id, companyId: contrato.companyId });
+    utils.terceiroContratos.getContrato.invalidate({ id: contrato.id });
+  };
+  const [rejeicao, setRejeicao] = useState<{ id: number; numero: number } | null>(null);
+  const [motivoRej, setMotivoRej] = useState("");
+  const aprovarGestorMut = trpc.terceiroContratos.aprovarAditivoGestor.useMutation({
+    onSuccess: () => { toast.success("Aditivo aprovado pelo gestor da obra — aguardando sócio adm."); invalidar(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const aprovarSocioMut = trpc.terceiroContratos.aprovarAditivoSocio.useMutation({
+    onSuccess: () => { toast.success("Aditivo aprovado! Quantidade e valor somados ao contrato."); invalidar(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const rejeitarMut = trpc.terceiroContratos.rejeitarAditivo.useMutation({
+    onSuccess: () => { toast.success("Aditivo rejeitado."); setRejeicao(null); setMotivoRej(""); invalidar(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const nBR = (v: any, d = 2) => Number(v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  // Apropriação por item do contrato: contratado × aditivos (aprovados/pendentes).
+  // Obs.: aditivo APROVADO já foi somado ao item do contrato; o "contratado
+  // original" é o atual MENOS os aprovados, p/ mostrar a evolução da OR.
+  const linhas = (contrato.itens || []).map((it: any) => {
+    const doItem = (aditivos || []).filter((a: any) => a.contratoItemId === it.id);
+    const aprovadosQtd = doItem.filter((a: any) => a.status === "aprovado").reduce((s: number, a: any) => s + Number(a.quantidade || 0), 0);
+    const aprovadosVal = doItem.filter((a: any) => a.status === "aprovado").reduce((s: number, a: any) => s + Number(a.valorTotal || 0), 0);
+    const pendentesQtd = doItem.filter((a: any) => a.status === "pendente").reduce((s: number, a: any) => s + Number(a.quantidade || 0), 0);
+    const pendentesVal = doItem.filter((a: any) => a.status === "pendente").reduce((s: number, a: any) => s + Number(a.valorTotal || 0), 0);
+    const qtdAtual = Number(it.quantidade || 0); // já inclui aditivos aprovados
+    const valAtual = Number(it.valorTotal || 0);
+    const qtdOriginal = Math.max(0, qtdAtual - aprovadosQtd);
+    const valOriginal = Math.max(0, valAtual - aprovadosVal);
+    const acrescimoPct = valOriginal > 0 ? ((aprovadosVal + pendentesVal) / valOriginal) * 100 : 0;
+    return { it, doItem, aprovadosQtd, aprovadosVal, pendentesQtd, pendentesVal, qtdOriginal, valOriginal, qtdAtual, valAtual, acrescimoPct };
+  });
+  const temAlgum = linhas.some((l: any) => l.doItem.length > 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Apropriação do orçamento */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+          <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Apropriação do orçamento (contratado × aditivos)</h4>
+          <p className="text-[11px] text-gray-400 mt-0.5">Acompanhe, item a item, quanto a OR original cresceu com aditivos — aprovado soma no contrato; pendente ainda não.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-gray-400 border-b border-gray-100">
+                <th className="px-4 py-2 font-medium">Item</th>
+                <th className="px-2 py-2 font-medium text-right">Contratado (OR)</th>
+                <th className="px-2 py-2 font-medium text-right">Aditivos aprovados</th>
+                <th className="px-2 py-2 font-medium text-right">Pendentes</th>
+                <th className="px-2 py-2 font-medium text-right">Total c/ aditivos</th>
+                <th className="px-4 py-2 font-medium text-right">Acréscimo</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {linhas.map(({ it, aprovadosQtd, aprovadosVal, pendentesQtd, pendentesVal, qtdOriginal, valOriginal, qtdAtual, valAtual, acrescimoPct }: any) => (
+                <tr key={it.id} className={acrescimoPct > 0 ? "bg-purple-50/30" : ""}>
+                  <td className="px-4 py-2">
+                    <span className="font-mono text-gray-400 mr-1">{it.eapCodigo}</span>
+                    <span className="text-gray-700">{it.descricao}</span>
+                  </td>
+                  <td className="px-2 py-2 text-right whitespace-nowrap">{nBR(qtdOriginal)} {it.unidade}<div className="text-[10px] text-gray-400">{BRL(valOriginal)}</div></td>
+                  <td className="px-2 py-2 text-right whitespace-nowrap">{aprovadosQtd > 0 ? <>+{nBR(aprovadosQtd)} {it.unidade}<div className="text-[10px] text-emerald-600">{BRL(aprovadosVal)}</div></> : <span className="text-gray-300">—</span>}</td>
+                  <td className="px-2 py-2 text-right whitespace-nowrap">{pendentesQtd > 0 ? <>+{nBR(pendentesQtd)} {it.unidade}<div className="text-[10px] text-amber-600">{BRL(pendentesVal)}</div></> : <span className="text-gray-300">—</span>}</td>
+                  <td className="px-2 py-2 text-right whitespace-nowrap font-semibold text-gray-800">{nBR(qtdAtual + pendentesQtd)} {it.unidade}<div className="text-[10px] text-gray-500 font-normal">{BRL(valAtual + pendentesVal)}</div></td>
+                  <td className={`px-4 py-2 text-right whitespace-nowrap font-semibold ${acrescimoPct > 0 ? "text-purple-700" : "text-gray-300"}`}>{acrescimoPct > 0 ? `+${nBR(acrescimoPct, 1)}%` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Lista de aditivos (Aditivo #1, #2, …) */}
+      {(aditivos || []).length > 0 ? (
+        <AditivosCard
+          aditivos={aditivos || []}
+          modoEdicao={true}
+          onAprovarGestor={(a: any) => aprovarGestorMut.mutate({ id: a.id, companyId: contrato.companyId, aprovadoPor: "Gestor da Obra" })}
+          onAprovarSocio={(a: any) => aprovarSocioMut.mutate({ id: a.id, companyId: contrato.companyId, aprovadoPor: "Sócio Adm" })}
+          onRejeitar={(a: any) => setRejeicao({ id: a.id, numero: a.numero })}
+          isPending={aprovarGestorMut.isPending || aprovarSocioMut.isPending}
+        />
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 py-10 text-center text-gray-400 text-sm">
+          <FilePlus className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          Nenhum aditivo neste contrato ainda.
+          {!temAlgum && <><br />O excedente medido além do contratado aparece na aba Medições com o botão "Gerar Aditivo".</>}
+        </div>
+      )}
+
+      {rejeicao && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setRejeicao(null)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900">Rejeitar Aditivo #{rejeicao.numero}</h3>
+            <div>
+              <Label className="text-xs">Motivo da rejeição</Label>
+              <textarea className="w-full mt-1 border border-gray-200 rounded-lg p-3 text-sm min-h-[80px]" placeholder="Descreva o motivo..."
+                value={motivoRej} onChange={e => setMotivoRej(e.target.value)} />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setRejeicao(null)}>Cancelar</Button>
+              <Button size="sm" className="bg-red-600 hover:bg-red-700" disabled={motivoRej.trim().length < 5 || rejeitarMut.isPending}
+                onClick={() => rejeitarMut.mutate({ id: rejeicao.id, companyId: contrato.companyId, motivo: motivoRej.trim(), rejeitadoPor: "Responsável" })}>
+                Confirmar Rejeição
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AditivosCard({ aditivos, modoEdicao, onAprovarGestor, onAprovarSocio, onRejeitar, isPending }: {
   aditivos: any[]; modoEdicao: boolean;
   onAprovarGestor: (a: any) => void; onAprovarSocio: (a: any) => void; onRejeitar: (a: any) => void;

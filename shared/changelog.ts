@@ -1,4 +1,17 @@
 /**
+ * Rev. 4814 - ABA "ADITIVOS" NO CONTRATO DE TERCEIROS
+ *
+ * - Nova aba na barra do contrato (ao lado de Medicoes): lista os aditivos
+ *   numerados (Aditivo #1, #2...) com status e aprovacao gestor/socio.
+ * - Tabela "Apropriacao do orcamento": item a item, contratado (OR original) x
+ *   aditivos aprovados x pendentes x total com aditivos e % de acrescimo —
+ *   para saber de cara se a OR estourou.
+ * - Correcao: medicao vinculada ao levantamento foi reprocessada — o contrato
+ *   fecha 100% e o excedente (20,86 m2 no Forro) ficou registrado para o
+ *   botao "Gerar Aditivo" na aba Medicoes.
+ */
+
+/**
  * Rev. 4813 - FLUXO DO ADITIVO NO LEVANTAMENTO (ajuste a pedido)
  *
  * - Estouro do contratado: alerta e' so' o toast rapido (fecha sozinho);
