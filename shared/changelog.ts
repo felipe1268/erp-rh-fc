@@ -1,4 +1,21 @@
 /**
+ * Rev. 4821 - POKA-YOKE DE SOBREPOSICAO NO LEVANTAMENTO DE CAMPO
+ *
+ * - Ao desenhar um contorno, o app confere se aquela area ja foi medida no
+ *   MESMO servico — tanto nesta medicao quanto nas medicoes anteriores do
+ *   contrato (mesma planta/pagina).
+ * - Sobreposicao >= 10% da area nova: o desenho e BLOQUEADO, com aviso
+ *   dizendo qual contorno ja cobre o trecho (ex.: "Forro n 2").
+ * - Sobreposicao pequena (3 a 10%): apenas alerta — pode ser so encosto de
+ *   parede/divisa.
+ * - Paredes (linha LxA): bloqueia redesenhar a mesma parede (quase colinear,
+ *   ate ~20 cm de distancia, compartilhando >30% do comprimento).
+ * - Servicos DIFERENTES podem se sobrepor de proposito (ex.: Forro e Pintura
+ *   Teto no mesmo ambiente) — a checagem e por servico.
+ * - Contagem (pontos) fica fora da checagem.
+ */
+
+/**
  * Rev. 4820 - TELA DE CATEGORIAS DO LEVANTAMENTO MODERNIZADA
  *
  * - Cada categoria virou um card com borda na cor dela e seta para

@@ -67,6 +67,52 @@ const ICON_TIPO: Record<TipoContorno, JSX.Element> = {
 // Rev. 3097 — Tipos que fecham o polígono (área preenchida) vs. linhas abertas.
 const FECHA_POLIGONO = (t: string) => t === "area" || t === "volume";
 
+// ---------------------------------------------------------------------------
+// Rev. 4821 — Poka-yoke de SOBREPOSIÇÃO: impede medir a MESMA área duas vezes
+// no mesmo serviço (nesta medição ou em medições anteriores do contrato).
+// Geometria em coordenadas de página (pt). Fração = interseção / área nova,
+// estimada por amostragem em grade (robusto p/ polígonos côncavos do traço livre).
+// ---------------------------------------------------------------------------
+function ptDentroPoly(p: GeoPonto, poly: GeoPonto[]): boolean {
+  let dentro = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) dentro = !dentro;
+  }
+  return dentro;
+}
+function fracaoSobreposta(novo: GeoPonto[], outros: GeoPonto[][]): number {
+  if (novo.length < 3 || !outros.length) return 0;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of novo) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+  const N = 40; // grade 40×40 no bbox do polígono novo
+  let dentroNovo = 0, dentroAmbos = 0;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const p = { x: minX + ((i + 0.5) / N) * (maxX - minX), y: minY + ((j + 0.5) / N) * (maxY - minY) };
+    if (!ptDentroPoly(p, novo)) continue;
+    dentroNovo++;
+    if (outros.some((o) => ptDentroPoly(p, o))) dentroAmbos++;
+  }
+  return dentroNovo ? dentroAmbos / dentroNovo : 0;
+}
+// Parede (linha L×A): duplicada se quase colinear com uma parede existente do
+// mesmo serviço e a projeção compartilhar >30% do comprimento da menor.
+function paredeDuplicada(a1: GeoPonto, b1: GeoPonto, a2: GeoPonto, b2: GeoPonto, tolPerp: number): boolean {
+  const vx = b1.x - a1.x, vy = b1.y - a1.y;
+  const len1 = Math.hypot(vx, vy); if (len1 < 1e-6) return false;
+  const ux = vx / len1, uy = vy / len1;
+  const wx = b2.x - a2.x, wy = b2.y - a2.y;
+  const len2 = Math.hypot(wx, wy); if (len2 < 1e-6) return false;
+  const cosAng = Math.abs((wx * ux + wy * uy) / len2);
+  if (cosAng < 0.985) return false; // ~>10° = não colinear
+  const perp = (p: GeoPonto) => Math.abs((p.x - a1.x) * -uy + (p.y - a1.y) * ux);
+  if (perp(a2) > tolPerp || perp(b2) > tolPerp) return false;
+  const proj = (p: GeoPonto) => (p.x - a1.x) * ux + (p.y - a1.y) * uy;
+  const lo = Math.max(0, Math.min(proj(a2), proj(b2)));
+  const hi = Math.min(len1, Math.max(proj(a2), proj(b2)));
+  return hi - lo > 0.3 * Math.min(len1, len2);
+}
+
 // Ferramentas de desenho na ordem da barra. "retangulo" e "livre" são atalhos
 // que GERAM contornos tipo "area" (zero backend). "parede" é o tipo novo.
 type FerramentaDesenho = "retangulo" | "livre" | "area" | "parede" | "perimetro" | "volume" | "contagem";
@@ -375,7 +421,9 @@ export default function MedicaoLevantamento() {
   const [verReferencia, setVerReferencia] = useState(false);
   const { data: contornosRef } = trpc.medicao.getContornosReferencia.useQuery(
     { contratoId, companyId, excluirCampoId: campoId },
-    { enabled: verReferencia && contratoId > 0 && campoId > 0 && companyId > 0 },
+    // Rev. 4821 — sempre carregada (não só com "Ver medição anterior"): o
+    // detector de sobreposição confere contra as medições anteriores também.
+    { enabled: contratoId > 0 && campoId > 0 && companyId > 0 },
   );
 
   const invalidate = () => {
@@ -850,6 +898,10 @@ export default function MedicaoLevantamento() {
   const [renomearCat, setRenomearCat] = useState<{ chave: string; nome: string } | null>(null);
   // Rev. 4820 — expandir/recolher categorias no dialog de configuração
   const [catsAbertas, setCatsAbertas] = useState<Set<string>>(new Set());
+  // Rev. 4821 — contornos recém-desenhados (síncrono): a fila otimista demora
+  // um tick a refletir em contornosPagina; sem isso, 2 desenhos rápidos no
+  // mesmo lugar escapariam do detector de sobreposição.
+  const recentesRef = useRef<{ pdfId: number; pagina: number; tipo: string; servico: string | null; geometriaJson: string; rotulo: string }[]>([]);
   const svcAtivoObj = useMemo(() => servicos.find((s: any) => s.chave === servicoAtivo) ?? null, [servicos, servicoAtivo]);
 
   // Rev. 4790 — CAMADAS (estilo layers de CAD): com um serviço ativo, a planta
@@ -1394,6 +1446,76 @@ export default function MedicaoLevantamento() {
       return;
     }
     const ptsPt = ptsNorm.map(normToPt);
+    // Rev. 4821 — POKA-YOKE DE SOBREPOSIÇÃO: não deixa medir a mesma área duas
+    // vezes no MESMO serviço (contornos desta medição + medições anteriores do
+    // contrato, na mesma planta/página). Serviços diferentes podem se sobrepor
+    // de propósito (ex.: Forro e Pintura Teto no mesmo ambiente).
+    if (tipo !== "contagem") {
+      const candidatos = [
+        ...contornosPagina.map((c: any) => ({ c, ref: false })),
+        ...((contornosRef ?? []) as any[])
+          .filter((c) => c.pdfId === pdfSelId && (c.pagina ?? 1) === pagina)
+          .map((c: any) => ({ c, ref: true })),
+      ].filter(({ c }) => (c.servico || null) === (servicoAtivo || null));
+      const parseGeo = (c: any): GeoPonto[] => {
+        try { return (JSON.parse(c.geometriaJson || "[]") as GeoPonto[]).map(normToPt); } catch { return []; }
+      };
+      // recém-desenhados nesta sessão (fila otimista pode ainda não ter
+      // refletido em contornosPagina — evita duplicar em desenhos rápidos)
+      for (const rc of recentesRef.current) {
+        if (rc.pdfId === pdfSel.id && rc.pagina === pagina && (rc.servico || null) === (servicoAtivo || null)) {
+          candidatos.push({ c: { tipo: rc.tipo, geometriaJson: rc.geometriaJson, rotulo: rc.rotulo, numero: null }, ref: false } as any);
+        }
+      }
+      // "fechado": tipos de área sempre; perímetro quando o laço volta perto do
+      // início (tolerância 3% da diagonal do bbox — fecho manual conta também)
+      const fechado = (t: string, pts: GeoPonto[]) => {
+        if (FECHA_POLIGONO(t)) return true;
+        if (t !== "perimetro" || pts.length < 4) return false;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of pts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+        const diag = Math.hypot(maxX - minX, maxY - minY);
+        return diag > 0 && Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 0.03 * diag;
+      };
+      let conflito: { c: any; ref: boolean; frac?: number } | null = null;
+      let fracTotal = 0;
+      if (tipo === "parede") {
+        const tolPerp = 0.20 / calibAtualEff.metrosPorUnidade; // ~20 cm reais
+        for (const cand of candidatos) {
+          if (cand.c.tipo !== "parede") continue;
+          const g = parseGeo(cand.c);
+          if (g.length >= 2 && paredeDuplicada(ptsPt[0], ptsPt[1], g[0], g[1], tolPerp)) { conflito = cand; break; }
+        }
+      } else if (fechado(tipo, ptsPt)) {
+        // fração calculada contra a UNIÃO dos candidatos (2 contornos pequenos
+        // juntos também bloqueiam); o citado no aviso é o de maior interseção.
+        const geos: { cand: any; g: GeoPonto[] }[] = [];
+        for (const cand of candidatos) {
+          const g = parseGeo(cand.c);
+          if (fechado(cand.c.tipo, g) && g.length >= 3) geos.push({ cand, g });
+        }
+        if (geos.length) {
+          fracTotal = fracaoSobreposta(ptsPt, geos.map((x) => x.g));
+          if (fracTotal >= 0.03) {
+            let melhor = geos[0], melhorFrac = -1;
+            for (const x of geos) { const f = fracaoSobreposta(ptsPt, [x.g]); if (f > melhorFrac) { melhorFrac = f; melhor = x; } }
+            conflito = { ...melhor.cand, frac: fracTotal };
+          }
+        }
+      }
+      if (conflito) {
+        const nomeC = `${conflito.c.rotulo || svcAtivoObj.nome}${conflito.c.numero ? ` nº ${conflito.c.numero}` : ""}${conflito.ref ? " (medição anterior deste contrato)" : ""}`;
+        const pct = conflito.frac != null ? `${Math.round(conflito.frac * 100)}% desta área` : "Este trecho de parede";
+        if (conflito.frac == null || conflito.frac >= 0.10) {
+          toast.error(`Sobreposição bloqueada: ${pct} já foi medida em "${nomeC}". Ajuste o desenho — ou apague o contorno antigo se for correção.`, { duration: 7000 });
+          setDraft([]); setDragRect(null); setFreePts([]);
+          return;
+        }
+        toast.warning(`Atenção: ~${Math.round((conflito.frac ?? 0) * 100)}% desta área encosta em "${nomeC}". Confira se não está medindo o mesmo trecho duas vezes.`, { duration: 6000 });
+      }
+      recentesRef.current.push({ pdfId: pdfSel.id, pagina, tipo, servico: servicoAtivo || null, geometriaJson: JSON.stringify(ptsNorm), rotulo: svcAtivoObj.nome });
+      if (recentesRef.current.length > 30) recentesRef.current.shift();
+    }
     const r = calcularContorno(tipo, ptsPt, calibAtualEff.metrosPorUnidade, espessura, contagem);
     off.saveContorno({
       pdfId: pdfSel.id,
