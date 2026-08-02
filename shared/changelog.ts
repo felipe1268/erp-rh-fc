@@ -12,6 +12,11 @@
  *   financeiro pagar?"): medicao aprovada mostra selo azul "No Contas a
  *   Pagar • vence dd/mm" (titulo lancado); quitada mostra selo verde
  *   "Paga em dd/mm"; parcial mostra o valor ja pago.
+ * - FIX VALOR DO TITULO: a ponte com o Financeiro nao descontava as
+ *   RETENCOES DA MEDICAO (tecnica + ISS/INSS/IRRF/outras + descontos) — o
+ *   titulo saia maior que o "Valor Liquido" da tela (ex.: R$ 4.015,77 em vez
+ *   de R$ 3.619,98). Agora o titulo bate com a medicao; a retencao tecnica
+ *   so vira titulo quando liberada. Titulo da Medicao 01 corrigido no banco.
  * - ABA ORIGEM do Detalhe do Titulo (medicao de terceiros) com
  *   RASTREABILIDADE COMPLETA: contrato + fornecedor (CNPJ) + obra + periodo
  *   medido, formula do valor (medido - retencao - FD), quem aprovou em cada

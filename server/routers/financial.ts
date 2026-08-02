@@ -3753,8 +3753,8 @@ export const financialRouter = router({
                     tc.numero_contrato AS "numeroContrato", tc.objeto, tc.obra_nome AS "obraNome",
                     et.razao_social AS "razaoSocial", et.cnpj
              FROM terceiro_medicoes tm
-             LEFT JOIN terceiro_contratos tc ON tc.id = tm.contrato_id
-             LEFT JOIN empresas_terceiras et ON et.id = tm.empresa_terceira_id
+             LEFT JOIN terceiro_contratos tc ON tc.id = tm.contrato_id AND tc.company_id = tm.company_id
+             LEFT JOIN empresas_terceiras et ON et.id = tm.empresa_terceira_id AND et."companyId" = tm.company_id
              WHERE tm.id = $1 AND tm.company_id = $2`, [entry.origemId, input.companyId]);
           const tm = (rows(r) as any[])[0];
           if (tm) {

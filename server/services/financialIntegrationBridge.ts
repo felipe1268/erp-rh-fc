@@ -184,6 +184,10 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
       `SELECT tm.id, tm.contrato_id,
               tm.valor_medido, COALESCE(tm.valor_liquido_pagamento::numeric, 0) AS valor_liquido_pagamento,
               COALESCE(tm.fd_total_abatido::numeric, 0) AS fd_total_abatido,
+              COALESCE(tm.retencao_tecnica::numeric, 0) AS retencao_tecnica,
+              COALESCE(tm.retencao_iss::numeric, 0) + COALESCE(tm.retencao_inss::numeric, 0)
+                + COALESCE(tm.retencao_irrf::numeric, 0) + COALESCE(tm.outras_retencoes::numeric, 0) AS retencoes_impostos,
+              COALESCE(tm.descontos::numeric, 0) AS descontos_medicao,
               tm.data_referencia, tm.status, tm.periodo, tm.obra_id,
               COALESCE(et.nome_fantasia, et.razao_social) AS nome_empresa,
               tc.descricao AS tipo_servico, tc.valor_total AS valor_contrato,
@@ -267,6 +271,15 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
           console.warn("[FinancialBridge][terceiros] Erro ao calcular deduções:", e?.message);
           valorLiquido = valorBruto;
         }
+      }
+
+      // Rev. 4859 — RETENÇÕES DA MEDIÇÃO sempre descontam do título (Poka-Yoke:
+      // o título tem que bater com o "Valor Líquido" da tela da medição).
+      // Retenção técnica fica retida e só vira título quando liberada
+      // (origem terceiro_retencao); ISS/INSS/IRRF/outras + descontos idem.
+      const retMedicao = parseFloat(r.retencao_tecnica ?? "0") + parseFloat(r.retencoes_impostos ?? "0") + parseFloat(r.descontos_medicao ?? "0");
+      if (retMedicao > 0) {
+        valorLiquido = Math.max(0, Math.round((valorLiquido - retMedicao) * 100) / 100);
       }
 
       // Rev. 4798 — FD abatido SEMPRE desconta do título a pagar (Poka-Yoke:
