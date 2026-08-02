@@ -18,6 +18,7 @@ import {
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
   RectangleHorizontal, PencilLine, ListOrdered, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
   Layers, Maximize, Link as LinkIcon, Lock, LockOpen, FileSignature, Printer,
+  Route, Wand2,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import SignaturePad from "@/components/SignaturePad";
@@ -3630,18 +3631,18 @@ export default function MedicaoLevantamento() {
                             size="sm" variant={assist === "cad" ? "default" : "outline"} className="h-9 gap-1"
                             title="Seguir linha do desenho: toque perto de um traço do CAD e ele entra inteiro no rascunho (curvas com os pontos exatos do projeto)"
                             onClick={() => { setAssist((a) => (a === "cad" ? null : "cad")); setArcPend([]); }}
-                          >Linha CAD</Button>
+                          ><Route className="h-4 w-4" />Linha CAD</Button>
                           <Button
                             size="sm" variant={assist === "arco" ? "default" : "outline"} className="h-9 gap-1"
                             title="Arco por 3 pontos: com rascunho aberto, toque no MEIO da curva e no FIM; sem rascunho, toque início + meio + fim"
                             onClick={() => { setAssist((a) => (a === "arco" ? null : "arco")); setArcPend([]); }}
-                          >Arco</Button>
+                          ><Spline className="h-4 w-4" />Arco</Button>
                           <Button
                             size="sm" variant={assist === "varinha" ? "default" : "outline"} className="h-9 gap-1"
                             title="Varinha: toque DENTRO do ambiente e o contorno fechado é detectado automaticamente — confira e Finalize"
                             onClick={() => { setAssist((a) => (a === "varinha" ? null : "varinha")); setArcPend([]); }}
                             disabled={varinhaBusy}
-                          >{varinhaBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Varinha</Button>
+                          >{varinhaBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}Varinha</Button>
                         </>
                       )}
                     </>
