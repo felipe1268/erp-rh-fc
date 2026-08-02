@@ -565,9 +565,10 @@ export default function MedicaoLevantamento() {
     }
   }, [itensExcedidos]);
 
-  // Rev. 4822 — camada "já medido" LIGADA por padrão: o que já foi medido nas
-  // medições anteriores aparece como paninho cinza claro (dá p/ desligar no botão).
-  const [verReferencia, setVerReferencia] = useState(true);
+  // Rev. 4859 — Poka-Yoke (pedido do usuário): a camada "já medido" é SEMPRE
+  // visível — sem botão de ligar/desligar (podia esquecer desligada e remedir).
+  // Renderiza como hachura cinza clara sólida atrás da medição atual.
+  const verReferencia = true;
 
   const invalidate = () => {
     utils.medicao.getCampo.invalidate({ id: campoId, companyId });
@@ -3448,15 +3449,8 @@ export default function MedicaoLevantamento() {
                 )}
               </Button>
               <input ref={pdfInputRef} type="file" accept=".dxf,.dwg" className="hidden" onChange={onPdfSelected} />
-              <Button
-                size="sm"
-                variant={verReferencia ? "default" : "outline"}
-                className="h-8 gap-1.5 ml-auto"
-                onClick={() => setVerReferencia((v) => !v)}
-                title="Mostra, em traço claro, os contornos já medidos em OUTRAS medições deste contrato"
-              >
-                <History className="h-4 w-4" />Ver medição anterior
-              </Button>
+              {/* Rev. 4859 — botão "Ver medição anterior" REMOVIDO (Poka-Yoke):
+                  a área já medida aparece SEMPRE, hachurada em cinza. */}
             </div>
 
             {/* Rev. 4780 — PALETA DE SERVIÇOS (tablet-first): toca no serviço 1x e sai
@@ -3939,8 +3933,16 @@ export default function MedicaoLevantamento() {
                         onPointerLeave={() => setSnapHit(null)}
                       >
                         <svg className="absolute inset-0 w-full h-full" viewBox={`${-folga.x} ${-folga.y} ${1 + 2 * folga.x} ${1 + 2 * folga.y}`} preserveAspectRatio="none">
-                          {/* Rev. 3093 — REFERÊNCIA (medições anteriores): traço claro
-                              tracejado, renderizado ATRÁS dos contornos desta medição. */}
+                          {/* Rev. 4859 — HACHURA cinza p/ área já medida (Poka-Yoke:
+                              sempre visível; linhas diagonais sobre fundo cinza claro). */}
+                          <defs>
+                            <pattern id="hachura-ja-medido" patternUnits="userSpaceOnUse" width={0.014} height={0.014} patternTransform="rotate(45)">
+                              <rect width={0.014} height={0.014} fill="#94a3b8" fillOpacity={0.22} />
+                              <line x1={0} y1={0} x2={0} y2={0.014} stroke="#64748b" strokeWidth={0.0035} strokeOpacity={0.5} />
+                            </pattern>
+                          </defs>
+                          {/* Rev. 3093 — REFERÊNCIA (medições anteriores): renderizada
+                              ATRÁS dos contornos desta medição. */}
                           {referenciaPagina.map((c) => {
                             let pts: GeoPonto[] = [];
                             try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
@@ -3958,7 +3960,9 @@ export default function MedicaoLevantamento() {
                             cx /= Math.max(pts.length, 1); cy /= Math.max(pts.length, 1);
                             return (
                               <g key={`ref-${c.id}`}>
-                                <path d={d} fill={fecha ? CINZA : "none"} fillOpacity={fecha ? 0.16 : 0} stroke={CINZA} strokeOpacity={0.55} strokeWidth={0.0025} strokeDasharray="0.012 0.008" vectorEffect="non-scaling-stroke" />
+                                {/* Rev. 4859 — hachura sólida (não só traço tracejado) */}
+                                <path d={d} fill={fecha ? "url(#hachura-ja-medido)" : "none"} stroke={CINZA} strokeOpacity={0.7} strokeWidth={0.003} vectorEffect="non-scaling-stroke" />
+                                {!fecha && <path d={d} fill="none" stroke={CINZA} strokeOpacity={0.35} strokeWidth={0.008} vectorEffect="non-scaling-stroke" strokeDasharray="0.01 0.006" />}
                                 {c.numero != null && (
                                   <>
                                     <circle cx={cx} cy={cy} r={0.013} fill="#f1f5f9" fillOpacity={0.9} stroke={CINZA} strokeWidth={0.0018} strokeOpacity={0.7} vectorEffect="non-scaling-stroke" />
