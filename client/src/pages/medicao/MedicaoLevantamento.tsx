@@ -17,7 +17,7 @@ import {
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
   RectangleHorizontal, PencilLine, ListOrdered, BrickWall, Undo2, Contrast, Magnet, Palette, Settings2, BadgeCheck, HelpCircle,
-  Layers, Maximize, Link as LinkIcon, Lock, LockOpen, FileSignature,
+  Layers, Maximize, Link as LinkIcon, Lock, LockOpen, FileSignature, Printer,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import SignaturePad from "@/components/SignaturePad";
@@ -496,6 +496,16 @@ export default function MedicaoLevantamento() {
   const [assinaturaDlgOpen, setAssinaturaDlgOpen] = useState(false);
   const [sigAtual, setSigAtual] = useState<string | null>(null);
   const abrirAssinaturaPendente = (_env: any) => { setSigAtual(null); setAssinaturaDlgOpen(true); };
+  // Rev. 4837 — TUDO num lugar só (pedido do usuário): "Memória de cálculo"
+  // abre o visualizador na tela com o campo de assinatura logo abaixo; se o
+  // envelope ainda não existe (terceiros, não consolidado), cria automático.
+  const abrirMemoriaDlg = () => {
+    setSigAtual(null);
+    setAssinaturaDlgOpen(true);
+    if (isTerceiro && !travado && !envelopeLev && !envelopeLevQ.isLoading && !criarEnvelopeLevM.isPending && !enviarEnvelopeLevM.isPending) {
+      enviarMemoriaParaAssinatura();
+    }
+  };
   const sigOrdenados = ((envelopeLev?.signatarios || []) as any[])
     .filter((s) => s.papel !== "testemunha")
     .sort((a, b) => (a.ordemAssinatura ?? 0) - (b.ordemAssinatura ?? 0));
@@ -2689,9 +2699,9 @@ export default function MedicaoLevantamento() {
                       title: "Assinaturas pendentes",
                       description: envelopeLev
                         ? `A Memória de Cálculo foi enviada para assinatura, mas ainda não foi assinada pelas duas partes (${(envelopeLev.signatarios || []).filter((s: any) => s.status === "assinado").length}/${(envelopeLev.signatarios || []).length}). A consolidação só libera depois que elaborador e responsável pelo contrato assinarem.`
-                        : "Antes de consolidar, o elaborador e o responsável pelo contrato precisam assinar a Memória de Cálculo na tela. Use o botão \"Assinar memória\".",
-                      confirmText: envelopeLev ? "Assinar agora" : "Entendi",
-                      onConfirm: () => { if (envelopeLev) abrirAssinaturaPendente(envelopeLev); },
+                        : "Antes de consolidar, o elaborador e o responsável pelo contrato precisam assinar a Memória de Cálculo na tela. Toque em \"Memória de cálculo\" para visualizar e assinar.",
+                      confirmText: "Assinar agora",
+                      onConfirm: () => abrirMemoriaDlg(),
                     });
                     return;
                   }
@@ -2734,31 +2744,14 @@ export default function MedicaoLevantamento() {
                 <span className="hidden md:inline">Consolidar</span>
               </Button>
             )}
-            <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={gerarMemoriaCalculo}>
-              <Calculator className="h-4 w-4" /><span className="hidden md:inline">Memória de cálculo</span>
+            {/* Rev. 4837 — um botão só: abre o visualizador da memória com o
+                campo de assinatura embaixo (terceiros). Cliente: viewer puro. */}
+            <Button size="sm" variant="outline"
+              className={`gap-1.5 h-9 ${isTerceiro && memoriaAssinada ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : isTerceiro && !travado && envelopeLev ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100" : ""}`}
+              onClick={abrirMemoriaDlg}>
+              {isTerceiro && memoriaAssinada ? <BadgeCheck className="h-4 w-4" /> : <Calculator className="h-4 w-4" />}
+              <span className="hidden md:inline">Memória de cálculo{isTerceiro && !travado && envelopeLev && !memoriaAssinada ? ` (${(envelopeLev.signatarios || []).filter((s: any) => s.status === "assinado").length}/${(envelopeLev.signatarios || []).filter((s: any) => s.papel !== "testemunha").length})` : ""}</span>
             </Button>
-            {/* Rev. 4835 — assinatura da Memória de Cálculo (terceiros): pré-requisito da consolidação */}
-            {isTerceiro && !travado && (
-              memoriaAssinada ? (
-                <Button size="sm" variant="outline" className="gap-1.5 h-9 border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                  onClick={() => setLocation(`/integrasign?envelope=${envelopeLev.id}`)}>
-                  <BadgeCheck className="h-4 w-4" /><span className="hidden md:inline">Memória assinada</span>
-                </Button>
-              ) : envelopeLev ? (
-                <Button size="sm" variant="outline" className="gap-1.5 h-9 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                  onClick={() => abrirAssinaturaPendente(envelopeLev)}>
-                  <FileSignature className="h-4 w-4" />
-                  <span className="hidden md:inline">Assinar agora ({(envelopeLev.signatarios || []).filter((s: any) => s.status === "assinado").length}/{(envelopeLev.signatarios || []).length})</span>
-                </Button>
-              ) : (
-                <Button size="sm" variant="outline" className="gap-1.5 h-9"
-                  disabled={criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending}
-                  onClick={enviarMemoriaParaAssinatura}>
-                  {(criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
-                  <span className="hidden md:inline">Assinar memória</span>
-                </Button>
-              )
-            )}
             {/* "Gerar boletim" é exclusivo da Medição de Cliente. No fluxo de Terceiros o
                 levantamento é vinculado à medição na aba "Medições" do contrato. */}
             {!isTerceiro && (
@@ -4103,14 +4096,39 @@ export default function MedicaoLevantamento() {
 
       {/* Rev. 4780 — Configurar SERVIÇOS do levantamento (catálogo híbrido) */}
       {/* Rev. 4784 — remover planta com levantamento: senha do ADM Master */}
-      {/* Rev. 4835 — assinatura da Memória de Cálculo DENTRO da tela: caixinhas
-          com nomes já preenchidos (elaborador = logado, responsável = contrato) */}
+      {/* Rev. 4837 — TUDO num lugar só: visualizador da Memória de Cálculo na
+          tela (não é PDF) + caixinhas de assinatura logo abaixo (terceiros). */}
       <Dialog open={assinaturaDlgOpen} onOpenChange={(v) => { setAssinaturaDlgOpen(v); if (!v) setSigAtual(null); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-blue-600" />Assinaturas da Memória de Cálculo</DialogTitle>
+        <DialogContent className="max-w-3xl w-[96vw] h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-4 py-3 border-b shrink-0">
+            <DialogTitle className="flex items-center justify-between gap-2 pr-8">
+              <span className="flex items-center gap-2"><Calculator className="h-5 w-5 text-blue-600" />Memória de Cálculo</span>
+              <span className="flex items-center gap-2">
+                {isTerceiro && memoriaAssinada && (
+                  <span className="flex items-center gap-1 text-emerald-700 text-xs font-semibold"><BadgeCheck className="h-4 w-4" />Assinada</span>
+                )}
+                <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={gerarMemoriaCalculo}>
+                  <Printer className="h-3.5 w-3.5" />Imprimir / PDF
+                </Button>
+              </span>
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          {/* Visualizador na tela (HTML, não PDF) */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+            <iframe
+              title="Memória de Cálculo"
+              sandbox=""
+              srcDoc={assinaturaDlgOpen ? buildMemoriaHtml(false) : ""}
+              className="w-full shrink-0 bg-white"
+              style={{ height: "55%", minHeight: 280, border: 0, borderBottom: "1px solid #e5e7eb" }}
+            />
+          {/* Assinaturas concentradas aqui embaixo (só terceiros, não consolidado) */}
+          {isTerceiro && !travado && !memoriaAssinada && (
+          <div className="space-y-3 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Assinaturas</div>
+            {(criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending) && (
+              <p className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Preparando o documento para assinatura…</p>
+            )}
             {sigOrdenados.map((s: any) => {
               const assinado = s.status === "assinado";
               const daVez = proximoSignatario?.id === s.id;
@@ -4142,7 +4160,11 @@ export default function MedicaoLevantamento() {
                 </div>
               );
             })}
-            {sigOrdenados.length === 0 && <p className="text-sm text-gray-500 py-4 text-center">Carregando assinaturas…</p>}
+            {sigOrdenados.length === 0 && !(criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending) && (
+              <p className="text-sm text-gray-500 py-2">Carregando assinaturas…</p>
+            )}
+          </div>
+          )}
           </div>
         </DialogContent>
       </Dialog>

@@ -261,7 +261,7 @@ export function useLevantamentoOffline(args: {
       atualizadoEm: new Date().toISOString(), data,
     });
     await reloadOps();
-  }, [campo, ops, campoId, contratoId, companyId, reloadOps]);
+  }, [campo, ops, campoId, contratoId, companyId, reloadOps, refContornos]);
 
   const excluirContorno = useCallback(async (c: any) => {
     const uuid: string | undefined = c.uuid;

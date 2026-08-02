@@ -1831,8 +1831,11 @@ export const medicaoRouter = router({
       const [row] = await db.insert(medicaoCampoContornos).values({
         companyId,
         ...rest,
-        // REGRA DE OURO: número repetido na categoria é impossível
-        numero: (typeof numeroInput === "number" && numeroInput > 0 && !setUsados.has(numeroInput)) ? numeroInput : Math.max(maxUsado, baseContrato) + 1,
+        // REGRA DE OURO: número repetido é impossível. Rev. 4836 (pós-review):
+        // o otimista do aparelho só vale se CONTINUA a sequência global do
+        // contrato (> max usado e > base) — client velho/fila antiga não
+        // consegue gravar número regressivo por categoria.
+        numero: (typeof numeroInput === "number" && numeroInput > Math.max(maxUsado, baseContrato) && !setUsados.has(numeroInput)) ? numeroInput : Math.max(maxUsado, baseContrato) + 1,
       }).returning();
       await dedupNumerosContornos(db, input.medicaoCampoId).catch((e: any) => console.error("[Medicao] dedupNumeros:", e));
       await aplicarLevantamentoNaMedicaoTerceiro(db, input.medicaoCampoId).catch((e: any) => console.error("[Medicao] aplicarLevantamento:", e));
@@ -2680,7 +2683,10 @@ export const medicaoRouter = router({
                 baseContratoSync = Number((rS as any)?.mx ?? 0);
               }
             } catch (e: any) { console.error("[Medicao] baseContrato sync:", e?.message); }
-            const numeroFinal = (typeof d.numero === "number" && d.numero > 0 && !setUsados.has(d.numero))
+            // Rev. 4836 (pós-review): número do aparelho só vale se continua a
+            // sequência GLOBAL (> max do campo e > base do contrato) — fila
+            // offline antiga (numeração por categoria) não regride a sequência.
+            const numeroFinal = (typeof d.numero === "number" && d.numero > Math.max(maxUsado, baseContratoSync) && !setUsados.has(d.numero))
               ? d.numero
               : Math.max(maxUsado, baseContratoSync) + 1;
             const [row] = await db.insert(medicaoCampoContornos).values({

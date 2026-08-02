@@ -1,4 +1,18 @@
 /**
+ * Rev. 4837 - MEMORIA DE CALCULO: VISUALIZADOR + ASSINATURA NUM LUGAR SO
+ *
+ * - O botao "Assinar memoria" foi removido; agora tudo acontece pelo botao
+ *   "Memoria de calculo": abre um visualizador na propria tela (nao e PDF)
+ *   com o documento completo e, logo abaixo, as caixinhas de assinatura
+ *   (elaborador e responsavel pelo contrato), nomes ja preenchidos.
+ * - Se o envelope de assinatura ainda nao existe, ele e criado automatico
+ *   ao abrir (terceiros, levantamento nao consolidado).
+ * - Botao "Imprimir / PDF" dentro do proprio visualizador.
+ * - O botao mostra o progresso (1/2) em ambar e fica verde "Assinada"
+ *   quando as duas partes concluem.
+ */
+
+/**
  * Rev. 4836 - NUMERACAO GLOBAL DOS CONTORNOS DO LEVANTAMENTO
  *
  * - A numeracao dos contornos deixou de reiniciar por categoria (Forro
