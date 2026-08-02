@@ -2195,9 +2195,12 @@ export const medicaoRouter = router({
         contentType: z.string().optional(),
       })).max(500),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const { companyId, contratoId } = input;
+      // Rev. 4812 — guard de acesso do USUÁRIO à empresa (antes só se validava
+      // que o contrato existia na empresa — IDOR para usuário de outra empresa).
+      await assertCompanyAccess(ctx.user, companyId);
 
       // Guard de tenant raiz: o contrato precisa ser desta empresa.
       // Rev. 4792 — BUG CRÍTICO corrigido: o levantamento roda em DOIS módulos
@@ -2223,6 +2226,10 @@ export const medicaoRouter = router({
       const camposOk = new Map<number, boolean>();
       const camposConsolidados = new Set<number>(); // Rev. 4797 — consolidado = só-leitura
       const camposComContorno = new Set<number>(); // p/ dedup de numeração pós-lote
+      // Rev. 4812 — mapa uuid→id dos contornos resolvidos NESTE lote: fotos tiradas
+      // num contorno recém-desenhado offline chegam com contornoId temporário
+      // NEGATIVO; sem o remap a foto era gravada órfã (sumia do card do contorno).
+      const contornoUuidMap = new Map<string, number>();
       async function campoValido(campoId: number): Promise<boolean> {
         if (camposOk.has(campoId)) return camposOk.get(campoId)!;
         const [c] = await db
@@ -2368,6 +2375,7 @@ export const medicaoRouter = router({
                   atualizadoEm: incoming,
                 })
                 .where(and(eq(medicaoCampoContornos.id, existing.id), eq(medicaoCampoContornos.companyId, companyId)));
+              if (op.uuid) contornoUuidMap.set(op.uuid, existing.id);
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "ok" });
               continue;
             }
@@ -2397,6 +2405,7 @@ export const medicaoRouter = router({
               ...fields,
               numero: numeroFinal,
             }).returning();
+            if (op.uuid) contornoUuidMap.set(op.uuid, row.id);
             resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: row.id, status: "ok" });
             continue;
           }
@@ -2453,6 +2462,41 @@ export const medicaoRouter = router({
               resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "Foto sem conteúdo." });
               continue;
             }
+            // Rev. 4812 — resolve o contorno da foto: id positivo direto; id
+            // temporário (negativo, gerado offline) resolve pelo UUID do contorno
+            // (mesmo lote OU já sincronizado antes). Sem isso a foto virava órfã.
+            let fotoContornoId: number | null = null;
+            if (typeof d.contornoId === "number" && d.contornoId > 0) {
+              // valida ownership: o contorno precisa ser DESTE campo/empresa.
+              const [own] = await db.select({ id: medicaoCampoContornos.id }).from(medicaoCampoContornos)
+                .where(and(
+                  eq(medicaoCampoContornos.id, d.contornoId),
+                  eq(medicaoCampoContornos.companyId, companyId),
+                  eq(medicaoCampoContornos.medicaoCampoId, campoId),
+                )).limit(1);
+              fotoContornoId = own?.id ?? null;
+            }
+            if (!fotoContornoId && d.contornoUuid) {
+              fotoContornoId = contornoUuidMap.get(d.contornoUuid) ?? null;
+              if (!fotoContornoId) {
+                const [cRow] = await db.select({ id: medicaoCampoContornos.id }).from(medicaoCampoContornos)
+                  .where(and(
+                    eq(medicaoCampoContornos.uuid, d.contornoUuid),
+                    eq(medicaoCampoContornos.companyId, companyId),
+                    eq(medicaoCampoContornos.medicaoCampoId, campoId),
+                  )).limit(1);
+                fotoContornoId = cRow?.id ?? null;
+              }
+            }
+            // Fallback p/ ops ANTIGAS na fila (sem contornoUuid): o id temporário
+            // negativo é um hash determinístico do uuid do contorno — recalcula
+            // o hash p/ os contornos do campo e religa por igualdade.
+            if (!fotoContornoId && typeof d.contornoId === "number" && d.contornoId < 0) {
+              const tempIdFromUuid = (u: string) => { let h = 0; for (let i = 0; i < u.length; i++) h = (h * 31 + u.charCodeAt(i)) | 0; return -Math.abs(h) - 1; };
+              const cands = await db.select({ id: medicaoCampoContornos.id, uuid: medicaoCampoContornos.uuid }).from(medicaoCampoContornos)
+                .where(and(eq(medicaoCampoContornos.companyId, companyId), eq(medicaoCampoContornos.medicaoCampoId, campoId), sql`deleted_at IS NULL`));
+              fotoContornoId = cands.find((x) => x.uuid && tempIdFromUuid(x.uuid) === d.contornoId)?.id ?? null;
+            }
             const buf = Buffer.from(op.base64, "base64");
             const ext = (op.contentType || "").includes("png") ? "png" : "jpg";
             const key = `medicao-campo/${companyId}/${campoId}/fotos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -2461,7 +2505,7 @@ export const medicaoRouter = router({
               companyId,
               medicaoCampoId: campoId,
               pdfId: d.pdfId ?? null,
-              contornoId: d.contornoId ?? null,
+              contornoId: fotoContornoId,
               uuid: op.uuid,
               arquivoUrl: url,
               arquivoKey: key,

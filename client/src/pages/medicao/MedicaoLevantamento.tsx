@@ -1562,9 +1562,11 @@ export default function MedicaoLevantamento() {
   // Foto VINCULADA a um contorno (rastreio): a câmera abre e a foto fica atrelada
   // ao contorno-alvo via contornoId (mesmo fluxo offline-first do saveFoto).
   const fotoContornoInputRef = useRef<HTMLInputElement>(null);
-  const fotoAlvoContornoRef = useRef<number | null>(null);
+  // Rev. 4812 — o alvo guarda id E uuid: se o contorno ainda não sincronizou, o
+  // id é temporário (negativo) e o servidor religa a foto pelo uuid.
+  const fotoAlvoContornoRef = useRef<{ id: number; uuid?: string } | null>(null);
   function addFotoContorno(c: any) {
-    fotoAlvoContornoRef.current = c.id;
+    fotoAlvoContornoRef.current = { id: c.id, uuid: c.uuid };
     fotoContornoInputRef.current?.click();
   }
   async function onFotoContornoSelected(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1574,7 +1576,7 @@ export default function MedicaoLevantamento() {
     fotoAlvoContornoRef.current = null;
     if (alvo == null) return;
     for (const file of files) {
-      await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, contornoId: alvo });
+      await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, contornoId: alvo.id, contornoUuid: alvo.uuid ?? null });
     }
   }
 

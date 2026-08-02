@@ -96,6 +96,11 @@ export async function processQueue(): Promise<SyncSummary> {
     const CHUNK = 400;
     for (const [, opsGrupo] of grupos) {
       const { companyId, contratoId } = opsGrupo[0];
+      // Rev. 4812 — ordem de DEPENDÊNCIA no lote: contornos antes das fotos
+      // (a foto religa ao contorno pelo uuid no MESMO lote); exclusões por último.
+      const peso = (o: SyncOp) =>
+        o.action === "delete" ? 4 : o.entity === "contorno" ? 1 : o.entity === "pdf" ? 2 : 3;
+      opsGrupo.sort((a, b) => peso(a) - peso(b) || a.createdAt - b.createdAt);
       for (let i = 0; i < opsGrupo.length; i += CHUNK) {
         const ops = opsGrupo.slice(i, i + CHUNK);
         // monta payload — fotos derivam base64 do blob salvo localmente
@@ -124,8 +129,21 @@ export async function processQueue(): Promise<SyncSummary> {
         try {
           const res = await client.medicao.sincronizarLote.mutate({ companyId, contratoId, operations });
           const byId = new Map(res.resultados.map((r) => [r.clientOpId, r]));
+          // Rev. 4812 — guard de CORRIDA: se a op foi EDITADA (merge de vínculo,
+          // medida etc.) enquanto este lote viajava, o ack é do payload ANTIGO —
+          // apagar a op descartaria a edição nova. Compara o atualizadoEm atual
+          // com o enviado: mudou → mantém pendente p/ reenviar.
+          const atuais = new Map((await listOps().catch(() => [] as SyncOp[])).map((o) => [o.clientOpId, o]));
           for (const op of ops) {
             const r = byId.get(op.clientOpId);
+            const atual = atuais.get(op.clientOpId);
+            const editadaDepois = !!atual && atual.atualizadoEm !== op.atualizadoEm;
+            if (editadaDepois) {
+              // qualquer que seja o desfecho do payload ANTIGO, a edição nova
+              // vence: mantém a op ATUAL pendente p/ reenviar (nunca sobrescreve).
+              await putOp({ ...atual!, status: "pending", error: undefined });
+              continue;
+            }
             if (!r || r.status === "ok") {
               await deleteOp(op.clientOpId);
             } else if (r.status === "conflito") {
@@ -143,10 +161,13 @@ export async function processQueue(): Promise<SyncSummary> {
           if (progress) { progress = { done: Math.min(progress.total, i + ops.length), total: progress.total }; await notify(); }
         } catch (e: any) {
           lastError = e?.message || "Falha de rede ao sincronizar.";
-          // mantém ops como pending para nova tentativa
+          // mantém ops como pending para nova tentativa — Rev. 4812: sem
+          // sobrescrever edições feitas ENQUANTO o lote viajava (usa a op ATUAL).
+          const atuais = new Map((await listOps().catch(() => [] as SyncOp[])).map((o) => [o.clientOpId, o]));
           for (const op of ops) {
-            if (op.status === "error") continue;
-            await putOp({ ...op, status: "pending" });
+            const atual = atuais.get(op.clientOpId) ?? op;
+            if (atual.status === "error") continue;
+            await putOp({ ...atual, status: "pending" });
           }
         }
       }

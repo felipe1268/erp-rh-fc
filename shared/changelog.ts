@@ -1,4 +1,16 @@
 /**
+ * Rev. 4812 - FOTO E VINCULO NAO SOMEM MAIS NA SINCRONIZACAO
+ *
+ * Duas causas corrigidas no levantamento offline-first:
+ * - Foto tirada num contorno recem-desenhado (ainda nao sincronizado) guardava
+ *   um id temporario negativo e virava orfa no servidor (sumia do card).
+ *   Agora a foto leva o UUID do contorno e o servidor religa na sync.
+ * - Vincular item (ou editar) ENQUANTO a fila sincronizava: a confirmacao do
+ *   envio antigo apagava a edicao nova. Agora a op editada durante o envio e
+ *   mantida na fila e reenviada.
+ */
+
+/**
  * Rev. 4811 - PONTINHO DO CONTORNO EM VERMELHO
  *
  * No levantamento, os pontos clicados durante o desenho do contorno (rascunho)

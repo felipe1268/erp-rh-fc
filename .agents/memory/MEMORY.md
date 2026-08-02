@@ -27,6 +27,7 @@
 - [OC entregue fora do fluxo padrão precisa de self-heal](oc-almox-entrega-sem-titulo.md) — todo caminho que marca OC entregue (Almoxarifado!) deve chamar garantirEntryDaOC ou a OC some do Contas a Pagar.
 - [Contas a Pagar — base da janela de fechamento](contas-pagar-ciclo-window-basis.md) — agrupar por ciclo de fornecedor usa data da COMPRA (competência), nunca vencimento (varia por OC).
 - [DXF escala heurística + sidecar](levantamento-dxf-escala-heuristica.md) — $INSUNITS mente; clustering espacial + plausibilidade 3–1000 m; mudou o parse → bump DXF_ALGO_VERSION; upload multipart ≤150MB.
+- [Levantamento sync — corridas da fila](levantamento-sync-queue-races.md) — op editada em voo nunca é apagada pelo ack; foto referencia contorno por UUID (id offline é hash negativo); contornos antes de fotos no lote.
 - [Levantamento consolidado = só-leitura](levantamento-consolidacao-lock.md) — todo write novo passa por assertCampoNaoConsolidado; sync offline descarta com "ok"; desconsolidar checa medição por consulta reversa; desaprovar gera REV. N.
 - [Levantamento — fluxo poka-yoke](levantamento-pokayoke-fluxo.md) — planta nova só DXF; categoria comanda a ferramenta (contorno sempre classificado); escala PDF legado exige conferência ±2%.
 - [Levantamento — catálogo de serviços](levantamento-servicos-catalogo.md) — seed sob advisory lock 478002; updates de contorno SEMPRE reenviam `servico` (sync preserva se ausente); derivado com medição manual suprime derivação.
