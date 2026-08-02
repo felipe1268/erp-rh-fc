@@ -1,4 +1,16 @@
 /**
+ * Rev. 4822 - "JA MEDIDO" SEMPRE VISIVEL + NUMERACAO SEQUENCIAL DO CONTRATO
+ *
+ * - Ao abrir a 2a, 3a... medicao, as areas medidas nas medicoes ANTERIORES
+ *   do contrato ja aparecem sombreadas em CINZA claro (com o numero de cada
+ *   contorno em cinza) — nao precisa mais ligar "Ver medicao anterior";
+ *   o botao continua la para esconder a camada.
+ * - Numeracao agora e SEQUENCIAL por categoria ao longo do CONTRATO:
+ *   se a Medicao 01 terminou no Forro n 8, a Medicao 02 comeca no n 9
+ *   (vale para o desenho novo e para o botao "Organizar numeros").
+ */
+
+/**
  * Rev. 4821 - POKA-YOKE DE SOBREPOSICAO NO LEVANTAMENTO DE CAMPO
  *
  * - Ao desenhar um contorno, o app confere se aquela area ja foi medida no

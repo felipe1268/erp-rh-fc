@@ -332,8 +332,16 @@ export default function MedicaoLevantamento() {
     onError: (e: any) => toast.error(e?.message || "Não foi possível excluir a categoria."),
   });
 
+  // Rev. 3093 / 4821 / 4822 — Contornos das OUTRAS medições do contrato: camada
+  // "já medido" (paninho cinza), detector de sobreposição e base da numeração
+  // sequencial. Carregada sempre (movida p/ cá, antes do hook offline).
+  const { data: contornosRef } = trpc.medicao.getContornosReferencia.useQuery(
+    { contratoId, companyId, excluirCampoId: campoId },
+    { enabled: contratoId > 0 && campoId > 0 && companyId > 0 },
+  );
+
   // Camada offline-first (Rev. 2895): une servidor + snapshot local + fila otimista.
-  const off = useLevantamentoOffline({ campoId, companyId, contratoId, orcamentoId, itensOverride, servicos });
+  const off = useLevantamentoOffline({ campoId, companyId, contratoId, orcamentoId, itensOverride, servicos, refContornos: (contornosRef as any[]) ?? [] });
   const campo = off.campo;
   const loadingCampo = off.loading;
   const itensOrcamento = off.itensOrcamento;
@@ -415,16 +423,9 @@ export default function MedicaoLevantamento() {
     }
   }, [itensExcedidos]);
 
-  // Rev. 3093 (T002/T003) — Contornos das OUTRAS medições do contrato, exibidos
-  // como camada de REFERÊNCIA clara/tracejada sobre a MESMA planta (pdfId+página).
-  // Ajuda o engenheiro a ver "o que já foi medido aqui" sem remedir.
-  const [verReferencia, setVerReferencia] = useState(false);
-  const { data: contornosRef } = trpc.medicao.getContornosReferencia.useQuery(
-    { contratoId, companyId, excluirCampoId: campoId },
-    // Rev. 4821 — sempre carregada (não só com "Ver medição anterior"): o
-    // detector de sobreposição confere contra as medições anteriores também.
-    { enabled: contratoId > 0 && campoId > 0 && companyId > 0 },
-  );
+  // Rev. 4822 — camada "já medido" LIGADA por padrão: o que já foi medido nas
+  // medições anteriores aparece como paninho cinza claro (dá p/ desligar no botão).
+  const [verReferencia, setVerReferencia] = useState(true);
 
   const invalidate = () => {
     utils.medicao.getCampo.invalidate({ id: campoId, companyId });
@@ -1777,12 +1778,17 @@ export default function MedicaoLevantamento() {
       porCategoria.set(k, [...(porCategoria.get(k) ?? []), c]);
     }
     const planos: { c: any; novo: number }[] = [];
-    for (const grupo of porCategoria.values()) {
+    for (const [cat, grupo] of porCategoria.entries()) {
+      // Rev. 4822 — sequência do CONTRATO: renumerar continua do maior nº já
+      // usado na categoria nas medições anteriores (não volta pro 1).
+      const base = ((contornosRef ?? []) as any[])
+        .filter((c) => String(c.servico ?? c.tipo ?? "") === cat)
+        .reduce((m, c) => Math.max(m, c.numero || 0), 0);
       const ordered = grupo
         .map((c) => ({ c, p: anchor(c) }))
         .sort((a, b) => (Math.round(a.p.y / BANDA) - Math.round(b.p.y / BANDA)) || (a.p.x - b.p.x) || ((a.c.numero ?? 0) - (b.c.numero ?? 0)))
         .map((x) => x.c);
-      ordered.forEach((c, i) => planos.push({ c, novo: i + 1 }));
+      ordered.forEach((c, i) => planos.push({ c, novo: base + i + 1 }));
     }
     setBulkBusy(true);
     try {
@@ -3085,14 +3091,28 @@ export default function MedicaoLevantamento() {
                           {referenciaPagina.map((c) => {
                             let pts: GeoPonto[] = [];
                             try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
-                            const cor = c.cor || COR_TIPO[c.tipo as TipoContorno] || "#94a3b8";
+                            // Rev. 4822 — "paninho" CINZA claro: área já medida em
+                            // medições anteriores fica sombreada em neutro (não briga
+                            // com as cores dos serviços desta medição).
+                            const CINZA = "#64748b";
                             if (c.tipo === "contagem") {
-                              return pts.map((p, i) => <circle key={`ref-${c.id}-${i}`} cx={p.x} cy={p.y} r={0.007} fill="none" stroke={cor} strokeWidth={0.0025} strokeOpacity={0.5} vectorEffect="non-scaling-stroke" />);
+                              return pts.map((p, i) => <circle key={`ref-${c.id}-${i}`} cx={p.x} cy={p.y} r={0.007} fill={CINZA} fillOpacity={0.25} stroke={CINZA} strokeWidth={0.0025} strokeOpacity={0.5} vectorEffect="non-scaling-stroke" />);
                             }
                             const fecha = FECHA_POLIGONO(c.tipo);
                             const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (fecha ? " Z" : "");
+                            let cx = 0, cy = 0;
+                            for (const p of pts) { cx += p.x; cy += p.y; }
+                            cx /= Math.max(pts.length, 1); cy /= Math.max(pts.length, 1);
                             return (
-                              <path key={`ref-${c.id}`} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? 0.06 : 0} stroke={cor} strokeOpacity={0.5} strokeWidth={0.0025} strokeDasharray="0.012 0.008" vectorEffect="non-scaling-stroke" />
+                              <g key={`ref-${c.id}`}>
+                                <path d={d} fill={fecha ? CINZA : "none"} fillOpacity={fecha ? 0.16 : 0} stroke={CINZA} strokeOpacity={0.55} strokeWidth={0.0025} strokeDasharray="0.012 0.008" vectorEffect="non-scaling-stroke" />
+                                {c.numero != null && (
+                                  <>
+                                    <circle cx={cx} cy={cy} r={0.013} fill="#f1f5f9" fillOpacity={0.9} stroke={CINZA} strokeWidth={0.0018} strokeOpacity={0.7} vectorEffect="non-scaling-stroke" />
+                                    <text x={cx} y={cy} fontSize={0.014} fill={CINZA} textAnchor="middle" dominantBaseline="central" style={{ fontWeight: 600 }}>{c.numero}</text>
+                                  </>
+                                )}
+                              </g>
                             );
                           })}
                           {/* contornos salvos — só a CAMADA ativa (ou todas) */}

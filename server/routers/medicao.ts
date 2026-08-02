@@ -1792,11 +1792,35 @@ export const medicaoRouter = router({
         ));
       const setUsados = new Set(usados.map((u: any) => u.numero ?? 0));
       const maxUsado = usados.reduce((m: number, u: any) => Math.max(m, u.numero ?? 0), 0);
+      // Rev. 4822 — numeração SEQUENCIAL entre medições: continua do maior nº já
+      // usado na categoria em TODAS as medições do contrato (Medição 01 terminou
+      // no Forro nº 8 → Medição 02 começa no nº 9). Falha aqui não trava o save.
+      let baseContrato = 0;
+      try {
+        const [campoRow] = await db.select({ contratoId: medicaoCampo.contratoId, origem: medicaoCampo.origem })
+          .from(medicaoCampo).where(eq(medicaoCampo.id, input.medicaoCampoId)).limit(1);
+        if (campoRow?.contratoId) {
+          const [r] = await db.select({ mx: sql<number>`COALESCE(MAX(${medicaoCampoContornos.numero}), 0)` })
+            .from(medicaoCampoContornos)
+            .innerJoin(medicaoCampo, eq(medicaoCampo.id, medicaoCampoContornos.medicaoCampoId))
+            .where(and(
+              eq(medicaoCampo.contratoId, campoRow.contratoId),
+              eq(medicaoCampo.companyId, companyId),
+              isNull(medicaoCampo.deletedAt),
+              sql`${medicaoCampo.status} IS DISTINCT FROM 'biblioteca'`,
+              origemCampoCond(campoRow.origem === "terceiro" ? "terceiro" : "cliente"),
+              sql`${medicaoCampoContornos.medicaoCampoId} <> ${input.medicaoCampoId}`,
+              sql`${medicaoCampoContornos.deletedAt} IS NULL`,
+              sql`COALESCE(${medicaoCampoContornos.servico}, ${medicaoCampoContornos.tipo}) = ${catKey}`,
+            ));
+          baseContrato = Number((r as any)?.mx ?? 0);
+        }
+      } catch (e: any) { console.error("[Medicao] baseContrato numeração:", e?.message); }
       const [row] = await db.insert(medicaoCampoContornos).values({
         companyId,
         ...rest,
         // REGRA DE OURO: número repetido na categoria é impossível
-        numero: (typeof numeroInput === "number" && numeroInput > 0 && !setUsados.has(numeroInput)) ? numeroInput : maxUsado + 1,
+        numero: (typeof numeroInput === "number" && numeroInput > 0 && !setUsados.has(numeroInput)) ? numeroInput : Math.max(maxUsado, baseContrato) + 1,
       }).returning();
       await dedupNumerosContornos(db, input.medicaoCampoId).catch((e: any) => console.error("[Medicao] dedupNumeros:", e));
       await aplicarLevantamentoNaMedicaoTerceiro(db, input.medicaoCampoId).catch((e: any) => console.error("[Medicao] aplicarLevantamento:", e));

@@ -108,8 +108,11 @@ export function useLevantamentoOffline(args: {
   // Rev. 4780 — catálogo de serviços do levantamento (vínculo EAP por serviço +
   // derivados chapisco/emboço/reboco na consolidação local).
   servicos?: any[];
+  // Rev. 4822 — contornos das medições ANTERIORES do contrato: a numeração
+  // otimista continua da sequência do contrato (não recomeça do 1).
+  refContornos?: any[];
 }): UseLevantamentoOffline {
-  const { campoId, companyId, contratoId, orcamentoId, itensOverride, servicos } = args;
+  const { campoId, companyId, contratoId, orcamentoId, itensOverride, servicos, refContornos } = args;
   const overriding = itensOverride !== undefined;
   const utils = trpc.useUtils();
 
@@ -231,9 +234,15 @@ export function useLevantamentoOffline(args: {
     const existingId: number | undefined = input.id && input.id > 0 ? input.id : undefined;
     // numero otimista p/ novos — Rev. 4792: sequência POR CATEGORIA (serviço);
     // cada categoria conta a sua (Contrapiso 1,2,3… / Forro 1,2,3…).
-    const numero = input.numero ?? ((campo?.contornos ?? [])
-      .filter((c: any) => !c.deletedAt && String(c.servico ?? c.tipo ?? "") === String(input.servico ?? input.tipo ?? ""))
-      .reduce((m: number, c: any) => Math.max(m, c.numero || 0), 0) + 1);
+    const catKey = String(input.servico ?? input.tipo ?? "");
+    const maxLocal = (campo?.contornos ?? [])
+      .filter((c: any) => !c.deletedAt && String(c.servico ?? c.tipo ?? "") === catKey)
+      .reduce((m: number, c: any) => Math.max(m, c.numero || 0), 0);
+    // Rev. 4822 — sequência do CONTRATO: continua do maior nº das medições anteriores
+    const maxRef = (refContornos ?? [])
+      .filter((c: any) => String(c.servico ?? c.tipo ?? "") === catKey)
+      .reduce((m: number, c: any) => Math.max(m, c.numero || 0), 0);
+    const numero = input.numero ?? (Math.max(maxLocal, maxRef) + 1);
     const data = { ...input, uuid: undefined, id: undefined, numero, medicaoCampoId: campoId };
     delete data.companyId;
     // dedupe: se já há op upsert pendente p/ este uuid, mescla
