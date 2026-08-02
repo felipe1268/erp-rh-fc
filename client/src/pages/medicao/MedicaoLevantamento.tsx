@@ -496,12 +496,29 @@ export default function MedicaoLevantamento() {
       { nome: prev[1].nome || contrato?.empresa?.responsavelNome || contrato?.empresa?.razaoSocial || "", email: prev[1].email || contrato?.empresa?.email || "" },
     ]);
   }, [authUser, contrato, campo?.criadoPorNome]);
+  // Rev. 4835 — assinatura NA TELA (pedido do usuário): sem e-mail. Cria o
+  // envelope, ativa e abre direto a tela de assinatura do 1º signatário
+  // (elaborador); depois o responsável assina na sequência no mesmo aparelho.
+  const abrirAssinaturaPendente = (env: any) => {
+    const pendente = (env?.signatarios || [])
+      .filter((s: any) => s.papel !== "testemunha" && s.status !== "assinado")
+      .sort((a: any, b: any) => (a.ordemAssinatura ?? 0) - (b.ordemAssinatura ?? 0))[0];
+    if (pendente?.token) setLocation(`/integrasign/assinar/${pendente.token}`);
+    else toast.info("Nenhuma assinatura pendente.");
+  };
+  const enviarEnvelopeLevM = trpc.integrasign.enviarParaAssinatura.useMutation({
+    onSuccess: async () => {
+      setMemAssOpen(false);
+      const res = await envelopeLevQ.refetch();
+      toast.success("Documento pronto! Assine na tela agora.");
+      abrirAssinaturaPendente(res.data);
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao ativar o envelope"),
+  });
   const criarEnvelopeLevM = trpc.integrasign.criarEnvelope.useMutation({
     onSuccess: (env: any) => {
-      toast.success("Envelope criado! Revise e envie para assinatura no FCSign.");
-      setMemAssOpen(false);
-      envelopeLevQ.refetch();
-      setLocation(`/integrasign?envelope=${env?.id ?? ""}`);
+      // sem e-mail: assinatura acontece na tela, na hora
+      enviarEnvelopeLevM.mutate({ companyId, envelopeId: env.id, enviarEmail: false } as any);
     },
     onError: (e: any) => toast.error(e.message || "Erro ao criar envelope"),
   });
@@ -2655,9 +2672,9 @@ export default function MedicaoLevantamento() {
                       title: "Assinaturas pendentes",
                       description: envelopeLev
                         ? `A Memória de Cálculo foi enviada para assinatura, mas ainda não foi assinada pelas duas partes (${(envelopeLev.signatarios || []).filter((s: any) => s.status === "assinado").length}/${(envelopeLev.signatarios || []).length}). A consolidação só libera depois que elaborador e responsável pelo contrato assinarem.`
-                        : "Antes de consolidar, envie a Memória de Cálculo para assinatura digital: o elaborador e o responsável pelo contrato precisam assinar o levantamento. Use o botão \"Enviar p/ assinatura\".",
-                      confirmText: envelopeLev ? "Ver envelope" : "Entendi",
-                      onConfirm: () => { if (envelopeLev) setLocation(`/integrasign?envelope=${envelopeLev.id}`); },
+                        : "Antes de consolidar, o elaborador e o responsável pelo contrato precisam assinar a Memória de Cálculo na tela. Use o botão \"Assinar memória\".",
+                      confirmText: envelopeLev ? "Assinar agora" : "Entendi",
+                      onConfirm: () => { if (envelopeLev) abrirAssinaturaPendente(envelopeLev); },
                     });
                     return;
                   }
@@ -2712,13 +2729,13 @@ export default function MedicaoLevantamento() {
                 </Button>
               ) : envelopeLev ? (
                 <Button size="sm" variant="outline" className="gap-1.5 h-9 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                  onClick={() => setLocation(`/integrasign?envelope=${envelopeLev.id}`)}>
+                  onClick={() => abrirAssinaturaPendente(envelopeLev)}>
                   <FileSignature className="h-4 w-4" />
-                  <span className="hidden md:inline">Assinaturas {(envelopeLev.signatarios || []).filter((s: any) => s.status === "assinado").length}/{(envelopeLev.signatarios || []).length}</span>
+                  <span className="hidden md:inline">Assinar agora ({(envelopeLev.signatarios || []).filter((s: any) => s.status === "assinado").length}/{(envelopeLev.signatarios || []).length})</span>
                 </Button>
               ) : (
                 <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => setMemAssOpen(true)}>
-                  <FileSignature className="h-4 w-4" /><span className="hidden md:inline">Enviar p/ assinatura</span>
+                  <FileSignature className="h-4 w-4" /><span className="hidden md:inline">Assinar memória</span>
                 </Button>
               )
             )}
@@ -4070,11 +4087,11 @@ export default function MedicaoLevantamento() {
       <Dialog open={memAssOpen} onOpenChange={setMemAssOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-blue-600" />Enviar Memória de Cálculo para assinatura</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-blue-600" />Assinar Memória de Cálculo na tela</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              O documento (contornos, consolidação e fotos) será enviado no FCSign para assinatura digital das duas partes.
+              A tela de assinatura abre na hora: primeiro assina o <b>elaborador</b>, depois o <b>responsável pelo contrato</b> assina em seguida (no mesmo aparelho, se quiser).
               A <b>consolidação do levantamento</b> — que libera o pagamento da medição — só é permitida depois que os dois assinarem.
             </p>
             <div className="rounded-lg border p-3 space-y-2">
@@ -4089,9 +4106,9 @@ export default function MedicaoLevantamento() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setMemAssOpen(false)}>Cancelar</Button>
-              <Button disabled={criarEnvelopeLevM.isPending} onClick={enviarMemoriaParaAssinatura} className="gap-1.5">
-                {criarEnvelopeLevM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
-                Criar envelope e assinar
+              <Button disabled={criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending} onClick={enviarMemoriaParaAssinatura} className="gap-1.5">
+                {(criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
+                Assinar agora
               </Button>
             </div>
           </div>

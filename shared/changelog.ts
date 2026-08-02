@@ -1,18 +1,20 @@
 /**
  * Rev. 4835 - MEMORIA DE CALCULO ASSINADA ANTES DA CONSOLIDACAO (TERCEIROS)
  *
- * - Novo botao "Enviar p/ assinatura" no Levantamento de Campo (terceiros):
- *   envia a Memoria de Calculo (contornos, consolidacao por item e fotos)
- *   para assinatura digital no FCSign, com o nome do ELABORADOR ja
- *   preenchido (usuario logado) e o RESPONSAVEL PELO CONTRATO (contratada)
- *   pre-preenchido com o contato cadastrado.
+ * - Novo botao "Assinar memoria" no Levantamento de Campo (terceiros):
+ *   a Memoria de Calculo (contornos, consolidacao por item e fotos) vira
+ *   documento FCSign e a TELA DE ASSINATURA abre NA HORA (sem e-mail):
+ *   o elaborador (usuario logado, ja preenchido) assina primeiro e o
+ *   responsavel pelo contrato (contratada, pre-preenchido) assina em
+ *   seguida — pode ser no mesmo aparelho.
  * - POKA-YOKE (pedido do usuario): a CONSOLIDACAO do levantamento — que
  *   libera o pagamento da medicao — so e permitida depois que os DOIS
  *   assinarem. O bloqueio vale no botao Consolidar, no servidor e tambem
  *   na aprovacao da medicao (aprovar consolida automaticamente, entao
  *   tambem exige a memoria assinada).
- * - O botao vira um indicador de status: "Enviar p/ assinatura" →
- *   "Assinaturas 1/2" (ambar, abre o envelope) → "Memoria assinada" (verde).
+ * - O botao vira um indicador de status: "Assinar memoria" → "Assinar
+ *   agora (1/2)" (ambar, abre direto a tela de quem falta) → "Memoria
+ *   assinada" (verde).
  * - Na impressao da Memoria de Calculo, fotos agora saem como miniatura
  *   (nao quebram mais no iPad) e videos ficam fora do registro fotografico.
  */

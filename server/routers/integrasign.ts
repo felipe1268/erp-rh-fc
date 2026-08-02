@@ -454,6 +454,10 @@ export const integrasignRouter = router({
         nome: integrasignSignatarios.nome,
         status: integrasignSignatarios.status,
         dataAssinatura: integrasignSignatarios.dataAssinatura,
+        // Rev. 4835 — assinatura NA TELA: o usuário com acesso à empresa pode abrir
+        // a tela de assinatura direto (mesmo padrão do "copiar link" do dashboard).
+        token: integrasignSignatarios.token,
+        ordemAssinatura: integrasignSignatarios.ordemAssinatura,
       }).from(integrasignSignatarios)
         .where(eq(integrasignSignatarios.envelopeId, env.id))
         .orderBy(asc(integrasignSignatarios.ordemAssinatura));
