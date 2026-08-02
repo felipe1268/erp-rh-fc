@@ -21,6 +21,7 @@ import {
   orcamentoItens,
   orcamentos,
   obras,
+  obraPavimentos,
   comprasOrdens,
   users,
 } from "../../drizzle/schema";
@@ -1035,7 +1036,197 @@ export const medicaoRouter = router({
         .from(medicaoCampoFotos)
         .where(and(eq(medicaoCampoFotos.medicaoCampoId, campo.id), eq(medicaoCampoFotos.companyId, input.companyId), isNull(medicaoCampoFotos.deletedAt)))
         .orderBy(medicaoCampoFotos.id);
+      // Rev. 4805 — anexa o pé-direito do pavimento (projeto da obra) em cada
+      // planta importada: vira a altura default nas medições de parede.
+      const pavIds = Array.from(new Set(pdfs.map((p: any) => p.pavimentoId).filter(Boolean)));
+      if (pavIds.length > 0) {
+        const pavs = await db.select({ id: obraPavimentos.id, peDireito: obraPavimentos.peDireito })
+          .from(obraPavimentos)
+          .where(and(eq(obraPavimentos.companyId, input.companyId), inArray(obraPavimentos.id, pavIds as number[])));
+        const mapPe: Record<number, string | null> = {};
+        for (const pv of pavs) mapPe[pv.id] = pv.peDireito as any;
+        for (const p of pdfs as any[]) if (p.pavimentoId && mapPe[p.pavimentoId] != null) p.peDireito = mapPe[p.pavimentoId];
+      }
       return { ...campo, pdfs, contornos, fotos };
+    }),
+
+  // ══════════ Rev. 4805 — PROJETOS PARA MEDIÇÃO (pavimentos da obra) ══════════
+  // Cadastro vive na OBRA (existe antes de qualquer contrato) e vale para os
+  // dois lados (cliente e terceiros). Arquivo deve ser DXF em escala 1:100
+  // (verificação automática de escala continua valendo no levantamento).
+  listarPavimentosObra: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      return db.select().from(obraPavimentos)
+        .where(and(eq(obraPavimentos.companyId, input.companyId), eq(obraPavimentos.obraId, input.obraId), isNull(obraPavimentos.deletedAt)))
+        .orderBy(obraPavimentos.ordem, obraPavimentos.id);
+    }),
+
+  salvarPavimentoObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      id: z.number().optional(),
+      nome: z.string().min(1),
+      peDireito: z.number().min(0.5).max(30).optional(),
+      ordem: z.number().optional(),
+      arquivoKey: z.string().optional(),
+      arquivoNome: z.string().optional(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      // obra pertence à empresa? (anti-IDOR do FK explícito)
+      const obraRes = await db.execute(sql`SELECT 1 AS ok FROM obras WHERE id = ${input.obraId} AND company_id = ${input.companyId} LIMIT 1`);
+      const obraRows: any[] = (obraRes as any).rows ?? (obraRes as any) ?? [];
+      if (!obraRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada nesta empresa." });
+      let url: string | undefined;
+      if (input.arquivoKey) {
+        if (!input.arquivoKey.startsWith(`medicao-campo/${input.companyId}/`)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Arquivo não pertence a esta empresa." });
+        }
+        const existsRes = await db.execute(sql`SELECT 1 AS ok FROM uploaded_files WHERE file_key = ${input.arquivoKey} LIMIT 1`);
+        const existsRows: any[] = (existsRes as any).rows ?? (existsRes as any) ?? [];
+        if (!existsRows[0]) throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo não encontrado no servidor. Envie novamente." });
+        const { storageGet } = await import("../storage");
+        ({ url } = await storageGet(input.arquivoKey));
+      }
+      if (input.id) {
+        const upd: any = { nome: input.nome, atualizadoEm: new Date() };
+        if (input.peDireito != null) upd.peDireito = String(input.peDireito);
+        if (input.ordem != null) upd.ordem = input.ordem;
+        if (input.observacoes !== undefined) upd.observacoes = input.observacoes;
+        if (input.arquivoKey) { upd.arquivoKey = input.arquivoKey; upd.arquivoUrl = url; upd.arquivoNome = input.arquivoNome ?? null; }
+        const [row] = await db.update(obraPavimentos).set(upd)
+          .where(and(eq(obraPavimentos.id, input.id), eq(obraPavimentos.companyId, input.companyId), eq(obraPavimentos.obraId, input.obraId)))
+          .returning();
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Pavimento não encontrado." });
+        return row;
+      }
+      const [ordemRow] = await db.select({ max: sql<number>`COALESCE(MAX(ordem),0)::int` })
+        .from(obraPavimentos)
+        .where(and(eq(obraPavimentos.obraId, input.obraId), eq(obraPavimentos.companyId, input.companyId), isNull(obraPavimentos.deletedAt)));
+      const [row] = await db.insert(obraPavimentos).values({
+        companyId: input.companyId,
+        obraId: input.obraId,
+        nome: input.nome,
+        peDireito: String(input.peDireito ?? 3),
+        ordem: input.ordem ?? (ordemRow?.max ?? 0) + 1,
+        arquivoKey: input.arquivoKey ?? null,
+        arquivoUrl: url ?? null,
+        arquivoNome: input.arquivoNome ?? null,
+        observacoes: input.observacoes ?? null,
+      }).returning();
+      return row;
+    }),
+
+  excluirPavimentoObra: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [row] = await db.update(obraPavimentos).set({ deletedAt: new Date(), atualizadoEm: new Date() })
+        .where(and(eq(obraPavimentos.id, input.id), eq(obraPavimentos.companyId, input.companyId), isNull(obraPavimentos.deletedAt)))
+        .returning();
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Pavimento não encontrado." });
+      return { ok: true };
+    }),
+
+  // Projetos da obra disponíveis para ESTE levantamento (resolve a obra do
+  // contrato pelo lado certo: terceiro → terceiro_contratos.obra_id; cliente →
+  // medicao_contratos.projeto_id → planejamento_projetos.obra_id).
+  listarPavimentosDoLevantamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), medicaoCampoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [campo] = await db.select({ id: medicaoCampo.id, contratoId: medicaoCampo.contratoId, origem: medicaoCampo.origem })
+        .from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
+        .limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Levantamento não encontrado." });
+      let obraId: number | null = null;
+      if (campo.origem === "terceiro") {
+        const [tc] = await db.select({ obraId: terceiroContratos.obraId }).from(terceiroContratos)
+          .where(and(eq(terceiroContratos.id, campo.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+        obraId = tc?.obraId ?? null;
+      } else {
+        const [mc] = await db.select({ obraId: planejamentoProjetos.obraId }).from(medicaoContratos)
+          .leftJoin(planejamentoProjetos, eq(medicaoContratos.projetoId, planejamentoProjetos.id))
+          .where(and(eq(medicaoContratos.id, campo.contratoId), eq(medicaoContratos.companyId, input.companyId)));
+        obraId = mc?.obraId ?? null;
+      }
+      if (!obraId) return { obraId: null, pavimentos: [] };
+      const pavimentos = await db.select().from(obraPavimentos)
+        .where(and(eq(obraPavimentos.companyId, input.companyId), eq(obraPavimentos.obraId, obraId), isNull(obraPavimentos.deletedAt)))
+        .orderBy(obraPavimentos.ordem, obraPavimentos.id);
+      return { obraId, pavimentos };
+    }),
+
+  // Importa (1 toque) o projeto do pavimento para a BIBLIOTECA do contrato —
+  // sem reupload. Idempotente: se a planta deste pavimento já está na
+  // biblioteca, devolve a existente.
+  importarPavimentoNoLevantamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), medicaoCampoId: z.number(), pavimentoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [campo] = await db.select({ id: medicaoCampo.id, contratoId: medicaoCampo.contratoId, origem: medicaoCampo.origem, status: medicaoCampo.status })
+        .from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
+        .limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Levantamento não encontrado." });
+      const [pav] = await db.select().from(obraPavimentos)
+        .where(and(eq(obraPavimentos.id, input.pavimentoId), eq(obraPavimentos.companyId, input.companyId), isNull(obraPavimentos.deletedAt)));
+      if (!pav) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto/pavimento não encontrado." });
+      if (!pav.arquivoKey || !pav.arquivoUrl) throw new TRPCError({ code: "BAD_REQUEST", message: "Este pavimento ainda não tem arquivo DXF. Envie o projeto no cadastro da obra." });
+      // Rev. 4805 (review) — o pavimento deve ser DA OBRA deste contrato
+      // (anti-IDOR de escopo: bloqueia importar projeto de outra obra do tenant).
+      let obraDoContrato: number | null = null;
+      if (campo.origem === "terceiro") {
+        const [tc] = await db.select({ obraId: terceiroContratos.obraId }).from(terceiroContratos)
+          .where(and(eq(terceiroContratos.id, campo.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+        obraDoContrato = tc?.obraId ?? null;
+      } else {
+        const [mc] = await db.select({ obraId: planejamentoProjetos.obraId }).from(medicaoContratos)
+          .leftJoin(planejamentoProjetos, eq(medicaoContratos.projetoId, planejamentoProjetos.id))
+          .where(and(eq(medicaoContratos.id, campo.contratoId), eq(medicaoContratos.companyId, input.companyId)));
+        obraDoContrato = mc?.obraId ?? null;
+      }
+      if (!obraDoContrato || Number(pav.obraId) !== Number(obraDoContrato)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Este projeto pertence a outra obra." });
+      }
+      const origemNorm: "cliente" | "terceiro" = campo.origem === "terceiro" ? "terceiro" : "cliente";
+      const destinoCampoId = campo.status === "biblioteca"
+        ? campo.id
+        : (await resolverBibliotecaPlantas(db, input.companyId, campo.contratoId, origemNorm)).id;
+      const [ja] = await db.select().from(medicaoCampoPdfs)
+        .where(and(
+          eq(medicaoCampoPdfs.medicaoCampoId, destinoCampoId),
+          eq(medicaoCampoPdfs.companyId, input.companyId),
+          eq(medicaoCampoPdfs.pavimentoId, input.pavimentoId),
+          isNull(medicaoCampoPdfs.deletedAt),
+        )).limit(1);
+      if (ja) return ja;
+      const [ordemRow] = await db.select({ max: sql<number>`COALESCE(MAX(ordem),0)::int` })
+        .from(medicaoCampoPdfs)
+        .where(eq(medicaoCampoPdfs.medicaoCampoId, destinoCampoId));
+      const [row] = await db.insert(medicaoCampoPdfs).values({
+        companyId: input.companyId,
+        medicaoCampoId: destinoCampoId,
+        nome: pav.nome,
+        tipo: "pavimento",
+        arquivoUrl: pav.arquivoUrl,
+        arquivoKey: pav.arquivoKey,
+        arquivoNome: pav.arquivoNome ?? pav.nome,
+        numPaginas: 1,
+        ordem: (ordemRow?.max ?? 0) + 1,
+        pavimentoId: pav.id,
+      }).returning();
+      return row;
     }),
 
   // Rev. 3082 (T003) — Histórico "já medido" acumulado POR CONTRATO.

@@ -8843,10 +8843,32 @@ export const medicaoCampoPdfs = pgTable("medicao_campo_pdfs", {
   numPaginas:       integer("num_paginas").default(1),
   calibracaoJson:   text("calibracao_json"),
   ordem:            integer().default(0),
+  pavimentoId:      integer("pavimento_id"), // Rev. 4805 — planta importada de um projeto/pavimento da obra (obra_pavimentos)
   criadoEm:         timestamp("criado_em").defaultNow(),
   atualizadoEm:     timestamp("atualizado_em").defaultNow(),
   deletedAt:        timestamp("deleted_at"),
 }, (t) => [index("idx_mcpdf_campo").on(t.medicaoCampoId), index("idx_mcpdf_company").on(t.companyId)]);
+
+// Rev. 4805 — PROJETOS PARA MEDIÇÃO (pavimentos da OBRA). Cadastro vive na obra
+// (existe antes de qualquer contrato) e vale para os DOIS lados (cliente e
+// terceiros): qualquer levantamento de contrato da obra importa a planta com
+// 1 toque. Cada pavimento tem pé-direito (padrão 3,00 m) usado como altura
+// default nas medições de parede (área = comprimento × altura).
+export const obraPavimentos = pgTable("obra_pavimentos", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  obraId:           integer("obra_id").notNull(),
+  nome:             varchar({ length: 255 }).notNull(),
+  ordem:            integer().default(0),
+  peDireito:        numeric("pe_direito", { precision: 6, scale: 2 }).default("3.00"),
+  arquivoUrl:       text("arquivo_url"),
+  arquivoKey:       text("arquivo_key"),
+  arquivoNome:      varchar("arquivo_nome", { length: 500 }),
+  observacoes:      text(),
+  criadoEm:         timestamp("criado_em").defaultNow(),
+  atualizadoEm:     timestamp("atualizado_em").defaultNow(),
+  deletedAt:        timestamp("deleted_at"),
+}, (t) => [index("idx_obrapav_obra").on(t.obraId), index("idx_obrapav_company").on(t.companyId)]);
 
 export const medicaoCampoContornos = pgTable("medicao_campo_contornos", {
   id:               serial().primaryKey(),

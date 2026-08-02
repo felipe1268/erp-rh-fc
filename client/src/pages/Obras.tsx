@@ -1771,6 +1771,15 @@ export default function Obras() {
             )}
           </div>
 
+          {/* ── Rev. 4805 — PROJETOS PARA MEDIÇÃO (pavimentos) ─────────── */}
+          {editingId ? (
+            <ProjetosMedicaoSection companyId={companyId} obraId={editingId} />
+          ) : (
+            <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+              📐 <b>Projetos para Medição</b> — salve a obra primeiro; depois volte em Editar para cadastrar os pavimentos e subir os projetos (DXF 1:100).
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => { setDialogOpen(false); setSaving(false); }}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving} className="bg-[#1B2A4A] hover:bg-[#243660] min-w-[100px]">
@@ -2355,6 +2364,140 @@ function ConvencaoSection({ companyId, obraId, usarMatriz, convencaoId, onChange
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ══════════ Rev. 4805 — PROJETOS PARA MEDIÇÃO (pavimentos da obra) ══════════
+// Cadastro vive na OBRA e vale para os dois lados (cliente e terceiros): os
+// levantamentos de qualquer contrato desta obra importam a planta com 1 toque.
+// Pé-direito default 3,00 m vira a altura sugerida nas medições de parede.
+function ProjetosMedicaoSection({ companyId, obraId }: { companyId: number; obraId: number }) {
+  const utils = trpc.useUtils();
+  const pavsQ = trpc.medicao.listarPavimentosObra.useQuery({ companyId, obraId }, { enabled: !!companyId && !!obraId });
+  const pavimentos: any[] = (pavsQ.data as any[]) ?? [];
+
+  const [novoNome, setNovoNome] = useState("");
+  const [novoPe, setNovoPe] = useState("3,00");
+  const [uploadingId, setUploadingId] = useState<number | "novo" | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const uploadAlvoRef = useRef<number | null>(null);
+
+  const salvarMut = trpc.medicao.salvarPavimentoObra.useMutation({
+    onSuccess: () => { utils.medicao.listarPavimentosObra.invalidate({ companyId, obraId }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const excluirMut = trpc.medicao.excluirPavimentoObra.useMutation({
+    onSuccess: () => { utils.medicao.listarPavimentosObra.invalidate({ companyId, obraId }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const parsePe = (s: string) => {
+    const v = parseFloat(String(s).replace(",", "."));
+    return isFinite(v) && v > 0 ? v : 3;
+  };
+
+  const enviarArquivo = async (pavId: number, file: File) => {
+    if (!file.name.toLowerCase().endsWith(".dxf")) {
+      toast.error("O projeto deve ser um arquivo DXF (exporte do CAD em escala 1:100).");
+      return;
+    }
+    setUploadingId(pavId);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("companyId", String(companyId));
+      const resp = await fetch("/api/upload/levantamento-planta", { method: "POST", body: fd, credentials: "include" });
+      const j = await resp.json();
+      if (!resp.ok || !j?.key) throw new Error(j?.error || "Falha no envio do arquivo.");
+      const pav = pavimentos.find(p => p.id === pavId);
+      await salvarMut.mutateAsync({
+        companyId, obraId, id: pavId,
+        nome: pav?.nome || file.name.replace(/\.dxf$/i, ""),
+        arquivoKey: j.key, arquivoNome: file.name,
+      });
+      toast.success("Projeto enviado. O sistema confere a escala automaticamente na medição.");
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao enviar o projeto.");
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  return (
+    <div className="mt-6 rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <FileText className="h-4 w-4 text-indigo-600" />
+        <span className="font-semibold text-sm text-indigo-900">Projetos para Medição (pavimentos)</span>
+      </div>
+      <p className="text-xs text-slate-600 mb-3">
+        Cada projeto é um pavimento (Térreo, 1º Pav...). Vale para <b>todas</b> as medições desta obra — cliente e terceiros.
+        {" "}<b>Arquivo sempre em DXF, desenhado em escala real 1:100</b> — o sistema confere a escala automaticamente ao abrir na medição.
+        O pé-direito vem preenchido como altura nas medições de parede (editável na hora, ex.: revestimento a meia altura).
+      </p>
+
+      {pavsQ.isLoading ? (
+        <div className="text-xs text-slate-400 py-2"><Loader2 className="h-3.5 w-3.5 animate-spin inline mr-1" />Carregando...</div>
+      ) : pavimentos.length === 0 ? (
+        <div className="text-xs text-slate-400 py-1">Nenhum pavimento cadastrado ainda.</div>
+      ) : (
+        <div className="space-y-2 mb-3">
+          {pavimentos.map((p: any) => (
+            <div key={p.id} className="flex flex-wrap items-center gap-2 bg-white rounded-md border border-slate-200 px-3 py-2">
+              <Input
+                className="h-8 text-sm flex-1 min-w-[140px]"
+                defaultValue={p.nome}
+                onBlur={e => { const v = e.target.value.trim(); if (v && v !== p.nome) salvarMut.mutate({ companyId, obraId, id: p.id, nome: v }); }}
+              />
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-slate-500">Pé-direito</span>
+                <Input
+                  className="h-8 w-20 text-sm text-right"
+                  defaultValue={String(p.peDireito ?? "3.00").replace(".", ",")}
+                  onBlur={e => { const v = parsePe(e.target.value); salvarMut.mutate({ companyId, obraId, id: p.id, nome: p.nome, peDireito: v }); }}
+                />
+                <span className="text-[11px] text-slate-500">m</span>
+              </div>
+              <button
+                type="button"
+                className={`text-xs px-2 py-1.5 rounded-md border flex items-center gap-1 ${p.arquivoKey ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-amber-300 bg-amber-50 text-amber-700"}`}
+                disabled={uploadingId !== null}
+                onClick={() => { uploadAlvoRef.current = p.id; fileRef.current?.click(); }}
+                title="Enviar/substituir o DXF (escala 1:100)"
+              >
+                {uploadingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                {p.arquivoKey ? (p.arquivoNome || "DXF enviado") : "Enviar DXF (1:100)"}
+              </button>
+              <button type="button" className="text-slate-300 hover:text-red-500 ml-auto" title="Excluir pavimento"
+                onClick={() => { if (excluirMut.isPending) return; excluirMut.mutate({ companyId, id: p.id }); }}>
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-indigo-100">
+        <Input className="h-8 text-sm flex-1 min-w-[160px]" placeholder="Novo pavimento — ex.: 001 - TÉRREO" value={novoNome} onChange={e => setNovoNome(e.target.value)} />
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] text-slate-500">Pé-direito</span>
+          <Input className="h-8 w-20 text-sm text-right" value={novoPe} onChange={e => setNovoPe(e.target.value)} />
+          <span className="text-[11px] text-slate-500">m</span>
+        </div>
+        <Button size="sm" variant="outline" className="h-8 gap-1 text-indigo-700 border-indigo-300"
+          disabled={!novoNome.trim() || salvarMut.isPending}
+          onClick={() => salvarMut.mutate({ companyId, obraId, nome: novoNome.trim(), peDireito: parsePe(novoPe) }, { onSuccess: () => { setNovoNome(""); setNovoPe("3,00"); } })}>
+          {salvarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Adicionar
+        </Button>
+      </div>
+
+      <input ref={fileRef} type="file" accept=".dxf" className="hidden"
+        onChange={e => {
+          const f = e.target.files?.[0];
+          const alvo = uploadAlvoRef.current;
+          e.currentTarget.value = "";
+          if (f && alvo) enviarArquivo(alvo, f);
+        }} />
     </div>
   );
 }

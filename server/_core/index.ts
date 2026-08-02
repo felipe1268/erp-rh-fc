@@ -2272,6 +2272,33 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4802: terceiro_contrato_aditivos + quantidade_excedente garantidos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA aditivos de terceiro:`, e?.message || e); }
 
+        // Rev. 4805 — Projetos para Medição (pavimentos da OBRA): cadastro no
+        // cadastro de obras, com pé-direito (default 3,00 m) e arquivo DXF 1:100.
+        // Plantas importadas do projeto ganham vínculo pavimento_id.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS obra_pavimentos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              obra_id INTEGER NOT NULL,
+              nome VARCHAR(255) NOT NULL,
+              ordem INTEGER DEFAULT 0,
+              pe_direito NUMERIC(6,2) DEFAULT 3.00,
+              arquivo_url TEXT,
+              arquivo_key TEXT,
+              arquivo_nome VARCHAR(500),
+              observacoes TEXT,
+              criado_em TIMESTAMP DEFAULT NOW(),
+              atualizado_em TIMESTAMP DEFAULT NOW(),
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_obrapav_obra ON obra_pavimentos(obra_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_obrapav_company ON obra_pavimentos(company_id)`);
+          await db.execute(sql`ALTER TABLE medicao_campo_pdfs ADD COLUMN IF NOT EXISTS pavimento_id INTEGER`);
+          console.log(`[SyncSchema+] Rev. 4805: obra_pavimentos + medicao_campo_pdfs.pavimento_id garantidos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA obra_pavimentos:`, e?.message || e); }
+
         // Rev. 3041 — CIPA: eleição digital (candidatos, eleitores c/ link, votos anônimos) + planos de ação.
         try {
           await db.execute(sql`

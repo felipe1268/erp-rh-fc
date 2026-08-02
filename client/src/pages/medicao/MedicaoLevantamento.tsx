@@ -349,6 +349,15 @@ export default function MedicaoLevantamento() {
   //     ficam FORA do escopo offline; PDFs são pré-baixados para medir offline) ---
   const uploadPdfM = trpc.medicao.uploadPdf.useMutation({ onSuccess: invalidate });
   const excluirPdfM = trpc.medicao.excluirPdf.useMutation({ onSuccess: invalidate });
+  // Rev. 4805 — Projetos da obra (pavimentos): importa a planta com 1 toque, sem reupload.
+  const pavimentosQ = trpc.medicao.listarPavimentosDoLevantamento.useQuery(
+    { companyId, medicaoCampoId: campoId },
+    { enabled: companyId > 0 && campoId > 0 },
+  );
+  const importarPavM = trpc.medicao.importarPavimentoNoLevantamento.useMutation({
+    onSuccess: (row: any) => { invalidate(); if (row?.id) setPdfSelId(row.id); },
+    onError: (e: any) => alert(e?.message || "Erro ao importar o projeto."),
+  });
   const gerarBoletimM = trpc.medicao.gerarBoletimDoCampo.useMutation({
     onSuccess: (r: any) => {
       invalidate();
@@ -361,6 +370,14 @@ export default function MedicaoLevantamento() {
   // --- estado de UI ---
   const pdfs = (campo?.pdfs ?? []) as any[];
   const [pdfSelId, setPdfSelId] = useState<number | null>(null);
+  // Rev. 4805 — pé-direito do pavimento da planta selecionada (altura default
+  // nas medições de parede; o servidor anexa peDireito nas plantas importadas
+  // de um projeto da obra).
+  const peDireitoPlanta = useMemo(() => {
+    const p = pdfs.find((x: any) => x.id === pdfSelId) as any;
+    const v = p?.peDireito != null ? parseFloat(String(p.peDireito)) : NaN;
+    return isFinite(v) && v > 0 ? v : null;
+  }, [pdfs, pdfSelId]);
   useEffect(() => {
     if (pdfs.length && (pdfSelId == null || !pdfs.some((p) => p.id === pdfSelId))) {
       setPdfSelId(pdfs[0].id);
@@ -1372,7 +1389,14 @@ export default function MedicaoLevantamento() {
     dragLineRef.current = null;
     setDragLine(null); setSnapHit(null);
     if (!l || distancia(l.a, l.b) < 0.004) return; // muito curta
-    const v = await askNumber({ title: "Parede", hint: "Altura da parede — a área = comprimento × altura.", suffix: "m" });
+    const v = await askNumber({
+      title: "Parede",
+      hint: peDireitoPlanta != null
+        ? `Altura da parede — a área = comprimento × altura. Sugerido: pé-direito do pavimento (${String(peDireitoPlanta).replace(".", ",")} m) — altere se necessário (ex.: meia altura).`
+        : "Altura da parede — a área = comprimento × altura.",
+      suffix: "m",
+      initial: peDireitoPlanta != null ? String(peDireitoPlanta).replace(".", ",") : undefined,
+    });
     if (!(v && v > 0)) return;
     finalizarContorno("parede", [l.a, l.b], v, 0); // ferramenta permanece ativa
   }
@@ -1403,7 +1427,14 @@ export default function MedicaoLevantamento() {
       if (!(v && v > 0)) return;
       espessura = v;
     } else if (tool === "parede") {
-      const v = await askNumber({ title: "Parede", hint: "Altura da parede — a área = comprimento × altura.", suffix: "m" });
+      const v = await askNumber({
+        title: "Parede",
+        hint: peDireitoPlanta != null
+          ? `Altura da parede — a área = comprimento × altura. Sugerido: pé-direito do pavimento (${String(peDireitoPlanta).replace(".", ",")} m) — altere se necessário.`
+          : "Altura da parede — a área = comprimento × altura.",
+        suffix: "m",
+        initial: peDireitoPlanta != null ? String(peDireitoPlanta).replace(".", ",") : undefined,
+      });
       if (!(v && v > 0)) return;
       espessura = v;
     }
@@ -2361,6 +2392,24 @@ export default function MedicaoLevantamento() {
                   }} />
                 </button>
               ))}
+              {/* Rev. 4805 — projetos da obra ainda não importados: 1 toque adiciona */}
+              {(((pavimentosQ.data as any)?.pavimentos ?? []) as any[])
+                .filter((pv: any) => pv.arquivoKey && !pdfs.some((p: any) => p.pavimentoId === pv.id))
+                .map((pv: any) => (
+                  <button
+                    key={`pav-${pv.id}`}
+                    disabled={importarPavM.isPending}
+                    onClick={() => importarPavM.mutate({ companyId, medicaoCampoId: campoId, pavimentoId: pv.id })}
+                    className="px-3 py-1.5 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/50 text-indigo-700 text-sm flex items-center gap-1.5 hover:bg-indigo-100"
+                    title={`Projeto da obra (pé-direito ${String(pv.peDireito ?? "3.00").replace(".", ",")} m) — toque para adicionar a este contrato`}
+                  >
+                    {importarPavM.isPending && (importarPavM as any).variables?.pavimentoId === pv.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Plus className="h-3.5 w-3.5" />}
+                    {pv.nome}
+                    <span className="text-[10px] text-indigo-400 font-normal">projeto da obra</span>
+                  </button>
+                ))}
               <Button size="sm" variant="outline" className="gap-1.5 relative overflow-hidden" disabled={uploadPdfM.isPending || uploadPct !== null} onClick={() => pdfInputRef.current?.click()} title="Somente DXF: medidas exatas do CAD, sem calibrar nem conferir escala. Tem DWG? O sistema explica como converter.">
                 {uploadPct !== null ? (
                   <>

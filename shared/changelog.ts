@@ -1,4 +1,36 @@
 /**
+ * Rev. 4805 - PROJETOS PARA MEDICAO (PAVIMENTOS DA OBRA) + PE-DIREITO AUTOMATICO
+ *
+ * Pedido do usuario: cadastrar os projetos na OBRA (existe antes de qualquer
+ * contrato), cada projeto = um pavimento, com pe-direito configuravel; na
+ * medicao de parede a altura ja vem preenchida. Arquivos sempre em DXF 1:100.
+ * - Cadastro de Obras > secao "Projetos para Medicao": pavimentos com nome,
+ *   pe-direito (padrao 3,00 m) e upload do DXF (orientacao 1:100 visivel;
+ *   a verificacao automatica de escala continua no levantamento).
+ * - Vale para os DOIS lados (cliente e terceiros): no levantamento, os
+ *   projetos da obra aparecem como chips tracejados — 1 toque importa a
+ *   planta para a biblioteca do contrato, sem reupload.
+ * - Medicao de parede (linha esticada ou polilinha): a altura vem preenchida
+ *   com o pe-direito do pavimento da planta selecionada (editavel na hora,
+ *   ex.: revestimento a meia altura).
+ * - Tabela nova obra_pavimentos + coluna pavimento_id em medicao_campo_pdfs
+ *   (SyncSchema Rev. 4805). Import idempotente e com guarda de obra/empresa.
+ *
+ * Rev. 4804 - BUGFIX: SALDO A LIBERAR FANTASMA SEM MEDICAO
+ * - Recalcular um RASCUNHO gravava o acumulado nos itens do contrato; excluir
+ *   o rascunho pulava a reversao -> contrato mostrava Medido/Saldo a Liberar
+ *   sem nenhuma medicao. Agora: recalcular nao consolida mais nada; excluir
+ *   recalcula o acumulado das medicoes aprovadas/pagas remanescentes. Dados
+ *   do CT-2026-0006 corrigidos. Tenancy guard adicionado no recalcular.
+ *
+ * Rev. 4803 - CONFIRMACOES BONITAS + ACOES NA LINHA DA MEDICAO
+ * - confirm() nativo (mostrava o endereco do site no iPad) substituido por
+ *   dialogo estilizado em todas as confirmacoes do contrato de terceiro.
+ * - Botoes Editar/Solicitar Aprovacao/Cancelar Aprovacao/Excluir direto na
+ *   linha da medicao; fluxo "Solicitar Aprovacao" (rascunho -> gestor -> socio).
+ */
+
+/**
  * Rev. 4802 - ADITIVO DE CONTRATO DE TERCEIRO (EXCEDENTE DE MEDICAO) + RASTREIO DE DESCONTOS
  *
  * Pedido do usuario: "no levantamento levanta-se tudo, na medicao libera-se
