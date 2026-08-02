@@ -1,4 +1,34 @@
 /**
+ * Rev. 4848 - MEMORIA DE CALCULO: REPAGINADA + FOTOS JUNTO DO SEU SERVICO
+ *
+ * - Cabecalho e inicio (contornos medidos, consolidacao) mantidos; dali pra
+ *   baixo o documento ficou mais organizado: titulos de secao padronizados
+ *   (faixa com filete navy) e cada servico/camada virou um CARTAO proprio.
+ * - Cada cartao traz: nome do servico com a cor da camada, croqui da planta,
+ *   legenda com a conta aberta e, LOGO ABAIXO, as fotos daquele servico
+ *   (foto de sanca sai no cartao da sanca; de forro, no do forro) — cada
+ *   foto identificada pelo numero do contorno.
+ * - Fotos sem vinculo (ou de contorno excluido) saem no fim, em "Registro
+ *   fotografico — fotos gerais".
+ */
+
+/**
+ * Rev. 4847 - LEVANTAMENTO DXF: 3 ASSISTENTES DE TRACADO (CURVAS/AMBIENTES)
+ *
+ * - "Linha CAD": toque perto de um traco do desenho e a linha INTEIRA entra
+ *   no rascunho — curvas vem com os pontos exatos do projeto, sem cacar
+ *   ponto a ponto. Toques seguidos emendam trechos (fachada em pedacos).
+ * - "Arco": arco por 3 pontos. Com rascunho aberto, o ultimo ponto ja e o
+ *   inicio (toque no meio da curva + fim); sem rascunho, 3 toques. Funciona
+ *   tambem como plano B quando a linha do CAD esta quebrada.
+ * - "Varinha": toque DENTRO do ambiente e o contorno fechado e detectado
+ *   automaticamente. Poka-yoke: se o ambiente estiver aberto (porta/vao), o
+ *   sistema AVISA em vez de fechar errado; o resultado vira rascunho para
+ *   voce conferir e Finalizar.
+ * - Os tres aparecem so em planta DXF, junto das ferramentas de desenho.
+ */
+
+/**
  * Rev. 4846 - PLANTA DXF: FOLGA DE 1 M EM VOLTA DO DESENHO
  *
  * - A planta nao "morre" mais no limite do projeto: sobra 1 m real de area

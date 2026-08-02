@@ -262,6 +262,55 @@ function interseccaoSegmentos(a: GeoPonto, b: GeoPonto, c: GeoPonto, d: GeoPonto
   return { x: a.x + t * r1, y: a.y + t * r2 };
 }
 
+// Rev. 4848 — cartão de foto do prontuário (memória de cálculo): miniatura
+// ?w=480 (Safari/iPad não aguenta original de 4-6MB) + legenda. Anti-XSS:
+// só http(s) absoluto ou caminho interno; atributo escapado.
+function fotoCardHtml(f: any, ref: string, origin: string): string {
+  const rawUrl = String(f.arquivoUrl || "");
+  if (!/\.(jpe?g|png|webp|gif)(\?|$)/i.test(rawUrl)) return "";
+  const thumbUrl = rawUrl.startsWith("/uploads/") ? `${rawUrl}${rawUrl.includes("?") ? "&" : "?"}w=480` : rawUrl;
+  const okUrl = /^https?:\/\//i.test(thumbUrl) ? thumbUrl : (thumbUrl.startsWith("/") ? origin + thumbUrl : "");
+  if (!okUrl) return "";
+  const srcAttr = okUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  return `<div style="width:150px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;page-break-inside:avoid;background:#fff">
+    <img src="${srcAttr}" style="width:150px;height:104px;object-fit:cover;display:block" />
+    <div style="font-size:8.5px;padding:3px 6px;background:#f8fafc;border-top:1px solid #e5e7eb"><b>${escHtml(ref)}</b>${f.legenda ? " — " + escHtml(f.legenda) : ""}</div>
+  </div>`;
+}
+
+// Rev. 4848 — título de seção padronizado do prontuário (faixa com filete navy)
+function secTituloHtml(t: string): string {
+  return `<div style="margin:20px 0 8px;padding:6px 10px;background:#f1f5f9;border-left:4px solid #1B2A4A;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:1.5px;color:#1B2A4A;-webkit-print-color-adjust:exact;print-color-adjust:exact">${t}</div>`;
+}
+
+// Rev. 4847 — arco por 3 pontos: círculo pelos 3 pontos, amostrado do 1º ao 3º
+// passando pelo 2º. Trabalhar SEMPRE em espaço métrico (pt-units), nunca em
+// coordenadas normalizadas (x e y têm escalas diferentes → arco "amassado").
+function arcoPor3Pontos(a: GeoPonto, b: GeoPonto, c: GeoPonto): GeoPonto[] {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-9) return [a, b, c]; // colineares → polilinha reta
+  const a2 = a.x * a.x + a.y * a.y, b2 = b.x * b.x + b.y * b.y, c2 = c.x * c.x + c.y * c.y;
+  const ux = (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d;
+  const uy = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d;
+  const r = Math.hypot(a.x - ux, a.y - uy);
+  const angA = Math.atan2(a.y - uy, a.x - ux);
+  const angB = Math.atan2(b.y - uy, b.x - ux);
+  const angC = Math.atan2(c.y - uy, c.x - ux);
+  // sentido: do A ao C passando por B
+  const norm = (t: number) => { let v = t; while (v < 0) v += 2 * Math.PI; return v % (2 * Math.PI); };
+  const ccwAB = norm(angB - angA), ccwAC = norm(angC - angA);
+  const ccw = ccwAB <= ccwAC; // B está no caminho anti-horário A→C?
+  const sweep = ccw ? ccwAC : norm(angA - angC);
+  const n = Math.max(8, Math.min(96, Math.ceil((sweep * r) / 0.15))); // ~1 ponto a cada 15 cm
+  const out: GeoPonto[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = angA + (ccw ? 1 : -1) * (sweep * i) / n;
+    out.push({ x: ux + r * Math.cos(t), y: uy + r * Math.sin(t) });
+  }
+  out[0] = { ...a }; out[out.length - 1] = { ...c };
+  return out;
+}
+
 // Rev. 3111 — ajuste de contorno criado: detecção de retângulo eixo-alinhado (4
 // cantos) p/ mostrar handles de redimensionamento e helpers de hit-test (seleção
 // por toque na planta) e geometria.
@@ -757,6 +806,11 @@ export default function MedicaoLevantamento() {
 
   const [tool, setTool] = useState<Ferramenta>("select");
   const [draft, setDraft] = useState<GeoPonto[]>([]);
+  // Rev. 4847 — assistentes de traçado (só DXF): "cad" = seguir linha do
+  // desenho; "arco" = arco por 3 pontos; "varinha" = clicar dentro do ambiente.
+  const [assist, setAssist] = useState<null | "cad" | "arco" | "varinha">(null);
+  const [arcPend, setArcPend] = useState<GeoPonto[]>([]);
+  const [varinhaBusy, setVarinhaBusy] = useState(false);
   const [calibDraft, setCalibDraft] = useState<GeoPonto[]>([]);
   // Rev. 4782 — quando a escala já está OK, os botões 1:N ficam recolhidos.
   const [escalaEdit, setEscalaEdit] = useState(false);
@@ -1331,6 +1385,38 @@ export default function MedicaoLevantamento() {
     return { grid, CELL };
   }, [isDxf, dxfData]);
 
+  // Rev. 4847 — POLILINHAS da planta DXF (traço inteiro, com as curvas já
+  // achatadas pelo parser): base das ferramentas "Seguir linha" e "Varinha".
+  // Coordenadas normalizadas [0..1] relativas à planta.
+  const dxfPolys = useMemo(() => {
+    if (!isDxf || !dxfData?.ok || !dxfData.svg) return null;
+    const vb = /viewBox="([-\d.eE]+) ([-\d.eE]+) ([-\d.eE]+) ([-\d.eE]+)"/.exec(dxfData.svg);
+    if (!vb) return null;
+    const [minX, minY, w, h] = [parseFloat(vb[1]), parseFloat(vb[2]), parseFloat(vb[3]), parseFloat(vb[4])];
+    if (!(w > 0 && h > 0)) return null;
+    const polys: GeoPonto[][] = [];
+    const reD = / d="([^"]+)"/g;
+    let md: RegExpExecArray | null;
+    let total = 0;
+    while ((md = reD.exec(dxfData.svg)) && total < 300_000) {
+      const rePt = /([MLZz])\s*(-?[\d.eE]+)?[ ,]*(-?[\d.eE]+)?/g;
+      let cur: GeoPonto[] = [];
+      let mp: RegExpExecArray | null;
+      const flush = () => { if (cur.length >= 2) polys.push(cur); cur = []; };
+      while ((mp = rePt.exec(md[1]))) {
+        const cmd = mp[1];
+        if (cmd === "Z" || cmd === "z") { if (cur.length >= 3) cur.push({ ...cur[0] }); flush(); continue; }
+        const x = (parseFloat(mp[2] ?? "") - minX) / w, y = (parseFloat(mp[3] ?? "") - minY) / h;
+        if (!isFinite(x) || !isFinite(y)) continue;
+        if (cmd === "M") flush();
+        cur.push({ x, y });
+        total++;
+      }
+      flush();
+    }
+    return polys.length ? polys : null;
+  }, [isDxf, dxfData]);
+
   // Acha o melhor snap p/ a posição normalizada `raw`. Tolerância em PIXELS de
   // tela (some quando o ponto visual está perto) usando o retângulo do overlay.
   const applySnap = useCallback((raw: GeoPonto, fromPt?: GeoPonto): { p: GeoPonto; kind: SnapKind } | null => {
@@ -1589,6 +1675,141 @@ export default function MedicaoLevantamento() {
     if (!g.moved) onTap(g.startNorm);      // toque limpo = adiciona ponto
   }
 
+  // Rev. 4847 — "Seguir linha do desenho": toca perto de um traço do CAD e a
+  // polilinha INTEIRA (com a curva achatada em pontos exatos) entra no rascunho.
+  function pickCadPolyline(pt: GeoPonto): boolean {
+    if (!dxfPolys?.length) return false;
+    const rect = overlayRef.current?.getBoundingClientRect();
+    if (!rect) return false;
+    const rw = Math.max(rect.width / (1 + 2 * folgaRef.current.x), 1);
+    const rh = Math.max(rect.height / (1 + 2 * folgaRef.current.y), 1);
+    const TOL = 16; // px de tela
+    let best: { poly: GeoPonto[]; d: number } | null = null;
+    for (const poly of dxfPolys) {
+      // pré-filtro barato por bbox expandida
+      let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+      for (const q of poly) { if (q.x < bx0) bx0 = q.x; if (q.x > bx1) bx1 = q.x; if (q.y < by0) by0 = q.y; if (q.y > by1) by1 = q.y; }
+      if (pt.x < bx0 - TOL / rw || pt.x > bx1 + TOL / rw || pt.y < by0 - TOL / rh || pt.y > by1 + TOL / rh) continue;
+      for (let i = 0; i + 1 < poly.length; i++) {
+        const { pt: pr } = projetarNoSegmento(pt, poly[i], poly[i + 1]);
+        const d = Math.hypot((pr.x - pt.x) * rw, (pr.y - pt.y) * rh);
+        if (d <= TOL && (!best || d < best.d)) best = { poly, d };
+      }
+    }
+    if (!best) return false;
+    let pts = simplificarPontos(best.poly, 0.0008);
+    if (pts.length < 2) return false;
+    setDraft((d) => {
+      if (!d.length) return [...pts];
+      // orienta a polilinha: a ponta mais perto do último ponto do rascunho vem primeiro
+      const last = d[d.length - 1];
+      const d0 = Math.hypot(pts[0].x - last.x, pts[0].y - last.y);
+      const d1 = Math.hypot(pts[pts.length - 1].x - last.x, pts[pts.length - 1].y - last.y);
+      const ori = d1 < d0 ? [...pts].reverse() : pts;
+      // emenda: se a ponta praticamente coincide com o último ponto, não duplica
+      const first = ori[0];
+      const cola = Math.hypot(first.x - last.x, first.y - last.y) < 0.002;
+      return [...d, ...(cola ? ori.slice(1) : ori)];
+    });
+    return true;
+  }
+
+  // Rev. 4847 — arco por 3 pontos: com rascunho aberto, o ÚLTIMO ponto já é o
+  // início (faltam 2 toques: meio da curva + fim). Sem rascunho, 3 toques.
+  function arcTap(pt: GeoPonto) {
+    const start = draft.length ? draft[draft.length - 1] : null;
+    const pend = [...arcPend, pt];
+    const need = start ? 2 : 3;
+    if (pend.length < need) { setArcPend(pend); return; }
+    const [a, b, c] = start ? [start, pend[0], pend[1]] : [pend[0], pend[1], pend[2]];
+    // calcula em unidades da página (métrico) e volta pro normalizado
+    const arcoPt = arcoPor3Pontos(normToPt(a), normToPt(b), normToPt(c));
+    const arco = arcoPt.map((q) => ({ x: pageDims.w > 0 ? q.x / pageDims.w : q.x, y: pageDims.h > 0 ? q.y / pageDims.h : q.y }));
+    setArcPend([]);
+    setDraft((d) => (d.length ? [...d, ...arco.slice(1)] : [...arco]));
+  }
+
+  // Rev. 4847 — "Varinha": toca DENTRO do ambiente e o contorno fechado é
+  // detectado (rasteriza os traços do CAD, preenche a partir do toque e traça
+  // a borda). Poka-yoke: o resultado vira RASCUNHO — você confere e Finaliza.
+  function varinhaFill(pt: GeoPonto) {
+    if (varinhaBusy) return; // reentrância: um preenchimento por vez
+    if (!dxfPolys?.length || !(pageDims.w > 0) || !(pageDims.h > 0)) { alert("A varinha só funciona em planta DXF."); return; }
+    if (!(pt.x > 0 && pt.x < 1 && pt.y > 0 && pt.y < 1)) { alert("Toque DENTRO do ambiente que você quer medir."); return; }
+    setVarinhaBusy(true);
+    // deixa o spinner pintar antes do trabalho pesado
+    setTimeout(() => {
+      try {
+        // orçamento de pixels limitado (~1,2 Mpx) p/ não travar o Safari do iPad
+        const razao = pageDims.h / pageDims.w;
+        const MW = Math.max(120, Math.min(1100, Math.round(Math.sqrt(1_200_000 / Math.max(razao, 0.02)))));
+        const MH = Math.max(60, Math.min(4000, Math.round(MW * razao)));
+        const cv = document.createElement("canvas");
+        cv.width = MW; cv.height = MH;
+        const ctx = cv.getContext("2d", { willReadFrequently: true })!;
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, MW, MH);
+        // traço com "gordura" p/ fechar frestas pequenas (~6 cm reais)
+        const mpu = calibAtualEff?.metrosPorUnidade || 0;
+        const lw = mpu > 0 ? Math.max(2, (0.06 / mpu / pageDims.w) * MW) : 2.5;
+        ctx.strokeStyle = "#000"; ctx.lineWidth = lw; ctx.lineJoin = "round"; ctx.lineCap = "round";
+        for (const poly of dxfPolys) {
+          ctx.beginPath();
+          ctx.moveTo(poly[0].x * MW, poly[0].y * MH);
+          for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x * MW, poly[i].y * MH);
+          ctx.stroke();
+        }
+        const img = ctx.getImageData(0, 0, MW, MH).data;
+        const wall = (x: number, y: number) => img[(y * MW + x) * 4] < 128;
+        const sx = Math.round(pt.x * MW), sy = Math.round(pt.y * MH);
+        if (sx < 1 || sy < 1 || sx > MW - 2 || sy > MH - 2 || wall(sx, sy)) { alert("Toque num ponto livre DENTRO do ambiente (não em cima de uma linha)."); return; }
+        // flood fill 4-conectado
+        const filled = new Uint8Array(MW * MH);
+        const stack = [sy * MW + sx];
+        filled[stack[0]] = 1;
+        let leaked = false; let count = 0;
+        while (stack.length) {
+          const idx = stack.pop()!;
+          const x = idx % MW, y = (idx / MW) | 0;
+          if (x === 0 || y === 0 || x === MW - 1 || y === MH - 1) { leaked = true; break; }
+          count++;
+          for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]] as const) {
+            const ni = ny * MW + nx;
+            if (!filled[ni] && !wall(nx, ny)) { filled[ni] = 1; stack.push(ni); }
+          }
+        }
+        if (leaked) { alert("O ambiente está ABERTO no desenho (porta/vão sem fechamento): o preenchimento vazou pra fora da planta. Feche o trecho com a ferramenta de pontos ou use 'Seguir linha'."); return; }
+        if (count < 30) { alert("Área muito pequena — aproxime o zoom e toque no meio do ambiente."); return; }
+        // traça a borda (Moore): acha o pixel preenchido mais alto/à esquerda
+        let startIdx = -1;
+        for (let i = 0; i < filled.length; i++) if (filled[i]) { startIdx = i; break; }
+        const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]] as const;
+        const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < MW && y < MH && !!filled[y * MW + x];
+        const bx0 = startIdx % MW, by0 = (startIdx / MW) | 0;
+        const contour: GeoPonto[] = [];
+        let cx = bx0, cy = by0, dir = 6; // vem "de cima"
+        const LIM = 8 * (MW + MH) * 4;
+        let fechou = false;
+        for (let step = 0; step < LIM; step++) {
+          contour.push({ x: cx / MW, y: cy / MH });
+          let found = false;
+          for (let k = 0; k < 8; k++) {
+            const nd = (dir + 6 + k) % 8; // vira à esquerda a partir da direção anterior
+            const nx = cx + DIRS[nd][0], ny = cy + DIRS[nd][1];
+            if (inside(nx, ny)) { cx = nx; cy = ny; dir = nd; found = true; break; }
+          }
+          if (!found) break; // região de 1 pixel
+          if (cx === bx0 && cy === by0 && contour.length > 2) { fechou = true; break; }
+        }
+        if (!fechou || contour.length < 8) { alert("Não consegui fechar o contorno do ambiente — tente tocar em outro ponto ou use 'Seguir linha'."); return; }
+        const simp = simplificarPontos(contour, 0.0025);
+        if (simp.length < 3) { alert("Contorno muito pequeno."); return; }
+        setDraft(simp);
+      } finally {
+        setVarinhaBusy(false);
+      }
+    }, 30);
+  }
+
   function onTap(ptRaw: GeoPonto) {
     if (tool === "select") {
       // Rev. 3111 — tocar num contorno na planta seleciona só ele (e mostra os
@@ -1611,6 +1832,12 @@ export default function MedicaoLevantamento() {
       return;
     }
     if (tool === "contagem") { finalizarContorno("contagem", [pt], 0, 1); return; }
+    // Rev. 4847 — assistentes de traçado (só ferramentas ponto-a-ponto em DXF)
+    if (TOOLS_POLILINHA.includes(tool as FerramentaDesenho) && assist && isDxf) {
+      if (assist === "varinha") { varinhaFill(ptRaw); return; }
+      if (assist === "cad") { if (pickCadPolyline(ptRaw)) return; /* sem traço perto → ponto normal */ }
+      if (assist === "arco") { arcTap(pt); return; }
+    }
     setDraft((d) => [...d, pt]); // area | parede | perimetro | volume (ponto-a-ponto)
   }
 
@@ -1904,8 +2131,12 @@ export default function MedicaoLevantamento() {
 
   function desfazerPonto() {
     if (tool === "calibrar" || tool === "conferir") { setCalibDraft((d) => d.slice(0, -1)); return; }
+    if (arcPend.length) { setArcPend((d) => d.slice(0, -1)); return; }
     setDraft((d) => d.slice(0, -1));
   }
+
+  // Rev. 4847 — trocar de ferramenta zera os assistentes pendentes
+  useEffect(() => { setArcPend([]); if (!TOOLS_POLILINHA.includes(tool as FerramentaDesenho)) setAssist(null); }, [tool]);
 
   // --- upload PDF ---
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -2561,6 +2792,10 @@ export default function MedicaoLevantamento() {
   // via pdfjs; DXF usa o SVG derivado; contornos vão por cima em SVG 0..1).
   async function montarPlantasHtml(): Promise<string> {
     const vivos = ((campo?.contornos ?? []) as any[]).filter((c) => !c.deletedAt);
+    // Rev. 4848 — fotos entram junto do croqui do SEU serviço (Forro, Tabica…)
+    const fotosLev = ((campo?.fotos ?? []) as any[]).filter((f) =>
+      f.arquivoUrl && !f.__pending && /\.(jpe?g|png|webp|gif)(\?|$)/i.test(String(f.arquivoUrl)));
+    const originLev = window.location.origin;
     const grupos = new Map<string, any[]>();
     for (const c of vivos) {
       const k = `${c.pdfId}|${c.pagina ?? 1}`;
@@ -2739,24 +2974,44 @@ export default function MedicaoLevantamento() {
           }
           if (!shapes.length && !badges.length) continue;
           const totalCamada = somaQtd > 0 ? `${numFmt(somaQtd, unidadeCamada === "un" ? 0 : 2)} ${escHtml(unidadeCamada)}` : "";
-          blocos.push(`<div style="page-break-inside:avoid;margin-bottom:16px">
-            <div style="font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#374151;margin:0 0 4px">${titulo} — <span style="color:#1B2A4A">${escHtml(camadaNome)}</span> <span style="color:#6b7280;font-weight:normal;text-transform:none">(${ccs.length} medição(ões)${totalCamada ? ` — total ${totalCamada}` : ""})</span></div>
+          // Rev. 4848 — fotos DESTE serviço logo abaixo do croqui (localização fácil)
+          const idsCamada = new Set(ccs.map((c: any) => c.id));
+          const numPorId = new Map(ccs.map((c: any) => [c.id, c.numero]));
+          const fotosCamada = fotosLev.filter((f: any) => f.contornoId != null && idsCamada.has(f.contornoId));
+          const fotosStrip = fotosCamada.length ? `
+            <div style="margin-top:8px;border-top:1px dashed #e2e8f0;padding-top:7px">
+              <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:5px">Registro fotográfico — ${escHtml(camadaNome)} (${fotosCamada.length})</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                ${fotosCamada.map((f: any) => {
+                  const n = numPorId.get(f.contornoId);
+                  return fotoCardHtml(f, `${camadaNome}${n != null ? ` — nº ${String(n).padStart(3, "0")}` : ""}`, originLev);
+                }).join("")}
+              </div>
+            </div>` : "";
+          const corCamada = corSafe((ccs[0] as any)?.cor || (COR_TIPO as any)[(ccs[0] as any)?.tipo]);
+          blocos.push(`<div style="page-break-inside:avoid;margin-bottom:14px;border:1px solid #e2e8f0;border-radius:8px;background:#fdfdfe;padding:9px 11px">
+            <div style="display:flex;align-items:center;gap:6px;margin:0 0 6px">
+              <span style="flex:none;width:10px;height:10px;border-radius:3px;background:${corCamada};-webkit-print-color-adjust:exact;print-color-adjust:exact"></span>
+              <span style="font-size:10.5px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#1B2A4A">${escHtml(camadaNome)}</span>
+              <span style="font-size:9px;color:#6b7280">${titulo} • ${ccs.length} medição(ões)${totalCamada ? ` • total <b>${totalCamada}</b>` : ""}</span>
+            </div>
             <div style="display:flex;gap:8px;align-items:flex-start">
-              <div style="position:relative;flex:1 1 72%;aspect-ratio:${ratio * (1 + 2 * fgx) / (1 + 2 * fgy)};border:1px solid #d1d5db;background:#fff;overflow:hidden">${bg}
+              <div style="position:relative;flex:1 1 72%;aspect-ratio:${ratio * (1 + 2 * fgx) / (1 + 2 * fgy)};border:1px solid #d1d5db;border-radius:4px;background:#fff;overflow:hidden">${bg}
                 <svg viewBox="${(-fgx * W).toFixed(1)} ${(-fgy * H).toFixed(1)} ${(W * (1 + 2 * fgx)).toFixed(1)} ${(H * (1 + 2 * fgy)).toFixed(1)}" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">${shapes.join("")}${badges.join("")}</svg>
               </div>
-              <div style="flex:1 1 28%;min-width:150px;border:1px solid #e5e7eb;border-radius:4px;padding:5px 7px">
+              <div style="flex:1 1 28%;min-width:150px;border:1px solid #e5e7eb;border-radius:4px;padding:5px 7px;background:#fff">
                 <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:2px">Legenda — ${escHtml(camadaNome)}</div>
                 ${itensLegenda.join("")}
                 ${totalCamada ? `<div style="font-size:9.5px;font-weight:bold;padding-top:4px;text-align:right">TOTAL: ${totalCamada}</div>` : ""}
               </div>
             </div>
+            ${fotosStrip}
           </div>`);
         }
       }
     }
     if (!blocos.length) return "";
-    return `<h3 style="font-size:13px;margin:18px 0 6px">Plantas com os desenhos do levantamento</h3>${blocos.join("")}`;
+    return `${secTituloHtml("Plantas, medições e fotos por serviço")}${blocos.join("")}`;
   }
 
   function buildMemoriaHtml(comPrint: boolean): string {
@@ -2789,28 +3044,17 @@ export default function MedicaoLevantamento() {
     const fotosAll = ((campo?.fotos ?? []) as any[]).filter((f) =>
       f.arquivoUrl && !f.__pending && /\.(jpe?g|png|webp|gif)(\?|$)/i.test(String(f.arquivoUrl)));
     const contornoById = new Map(todos.map((c) => [c.id, c]));
-    const fotosHtml = fotosAll.length === 0 ? "" : `
-      <h3 style="font-size:13px;margin:18px 0 6px">Registro fotográfico (${fotosAll.length})</h3>
+    // Rev. 4848 — fotos VINCULADAS a contorno já saem junto do croqui do seu
+    // serviço (montarPlantasHtml); aqui ficam só as fotos GERAIS (sem vínculo
+    // ou de contorno excluído).
+    const fotosGerais = fotosAll.filter((f) => {
+      const c = f.contornoId != null ? contornoById.get(f.contornoId) : null;
+      return !(c && !c.deletedAt);
+    });
+    const fotosHtml = fotosGerais.length === 0 ? "" : `
+      ${secTituloHtml(`Registro fotográfico — fotos gerais (${fotosGerais.length})`)}
       <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${fotosAll.map((f) => {
-          const c = f.contornoId != null ? contornoById.get(f.contornoId) : null;
-          const ref = c ? (c.rotulo ? String(c.rotulo).toUpperCase() : `${LABEL_TIPO[c.tipo as TipoContorno] || c.tipo} ${c.numero ?? ""}`) : "Geral";
-          // Anti-XSS: só http(s) absoluto ou caminho relativo interno; escapa o atributo.
-          const rawUrl = String(f.arquivoUrl);
-          // Rev. 4835 — vídeos não renderizam em <img> (saíam como "?" quebrado) e
-          // fotos originais de 4-6MB quebram no Safari/iPad → usa miniatura ?w=480.
-          if (!/\.(jpe?g|png|webp|gif)(\?|$)/i.test(rawUrl)) return "";
-          const thumbUrl = rawUrl.startsWith("/uploads/") ? `${rawUrl}${rawUrl.includes("?") ? "&" : "?"}w=480` : rawUrl;
-          const okUrl = /^https?:\/\//i.test(thumbUrl) ? thumbUrl : (thumbUrl.startsWith("/") ? origin + thumbUrl : "");
-          if (!okUrl) return "";
-          const srcAttr = okUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-          return `<div style="width:160px;border:1px solid #d1d5db;border-radius:4px;overflow:hidden;page-break-inside:avoid">
-            <img src="${srcAttr}" style="width:160px;height:110px;object-fit:cover;display:block" />
-            <div style="font-size:9px;padding:3px 5px;background:#f8fafc;border-top:1px solid #e5e7eb">
-              <b>${escHtml(ref)}</b>${f.legenda ? " — " + escHtml(f.legenda) : ""}
-            </div>
-          </div>`;
-        }).join("")}
+        ${fotosGerais.map((f) => fotoCardHtml(f, "Geral", origin)).join("")}
       </div>`;
     const rowsContornos = todos.map((c) => `
       <tr>
@@ -2853,7 +3097,7 @@ export default function MedicaoLevantamento() {
           ${infoCell("Data da medição", fmtD(dataMedicao))}
         </tr>
       </tbody></table>
-      <h3 style="font-size:13px;margin:16px 0 6px">Contornos medidos</h3>
+      ${secTituloHtml("Contornos medidos")}
       <table style="border-collapse:collapse;width:100%;font-size:11px">
         <thead><tr style="background:#f1f5f9">
           <th style="border:1px solid #ccc;padding:5px">Nº</th>
@@ -2863,7 +3107,7 @@ export default function MedicaoLevantamento() {
           <th style="border:1px solid #ccc;padding:5px">Quantidade</th>
         </tr></thead><tbody>${rowsContornos || `<tr><td colspan="5" style="border:1px solid #ccc;padding:8px;text-align:center">Sem contornos</td></tr>`}</tbody>
       </table>
-      <h3 style="font-size:13px;margin:18px 0 6px">Consolidação por item (R$)</h3>
+      ${secTituloHtml("Consolidação por item (R$)")}
       <table style="border-collapse:collapse;width:100%;font-size:11px">
         <thead><tr style="background:#f1f5f9">
           <th style="border:1px solid #ccc;padding:5px">EAP</th>
@@ -3378,6 +3622,28 @@ export default function MedicaoLevantamento() {
                           {f.icon}{f.key === "area" ? "Pontos" : f.key === "perimetro" ? "Pontos (linear)" : f.key === "parede" ? "Linha (L×A)" : f.label}
                         </Button>
                       ))}
+                      {/* Rev. 4847 — assistentes de traçado (só DXF, ferramentas ponto-a-ponto) */}
+                      {isDxf && TOOLS_POLILINHA.includes(tool as FerramentaDesenho) && (
+                        <>
+                          <div className="h-6 w-px bg-border mx-1" />
+                          <Button
+                            size="sm" variant={assist === "cad" ? "default" : "outline"} className="h-9 gap-1"
+                            title="Seguir linha do desenho: toque perto de um traço do CAD e ele entra inteiro no rascunho (curvas com os pontos exatos do projeto)"
+                            onClick={() => { setAssist((a) => (a === "cad" ? null : "cad")); setArcPend([]); }}
+                          >Linha CAD</Button>
+                          <Button
+                            size="sm" variant={assist === "arco" ? "default" : "outline"} className="h-9 gap-1"
+                            title="Arco por 3 pontos: com rascunho aberto, toque no MEIO da curva e no FIM; sem rascunho, toque início + meio + fim"
+                            onClick={() => { setAssist((a) => (a === "arco" ? null : "arco")); setArcPend([]); }}
+                          >Arco</Button>
+                          <Button
+                            size="sm" variant={assist === "varinha" ? "default" : "outline"} className="h-9 gap-1"
+                            title="Varinha: toque DENTRO do ambiente e o contorno fechado é detectado automaticamente — confira e Finalize"
+                            onClick={() => { setAssist((a) => (a === "varinha" ? null : "varinha")); setArcPend([]); }}
+                            disabled={varinhaBusy}
+                          >{varinhaBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Varinha</Button>
+                        </>
+                      )}
                     </>
                   )}
                   {svcAtivoObj && !["area", "parede", "perimetro", ""].includes(String(svcAtivoObj.tipoMedida ?? "")) && (
@@ -3482,12 +3748,12 @@ export default function MedicaoLevantamento() {
                       </Button>
                     </>
                   )}
-                  {(draft.length > 0 || calibDraft.length > 0) && (
+                  {(draft.length > 0 || calibDraft.length > 0 || arcPend.length > 0) && (
                     <>
                       <Button size="sm" variant="ghost" className="h-9 gap-1" onClick={desfazerPonto} title="Remove o último ponto marcado">
                         <Undo2 className="h-4 w-4" />Desfazer
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-9 text-red-600" onClick={() => { setDraft([]); setCalibDraft([]); }}>Limpar</Button>
+                      <Button size="sm" variant="ghost" className="h-9 text-red-600" onClick={() => { setDraft([]); setCalibDraft([]); setArcPend([]); }}>Limpar</Button>
                     </>
                   )}
                   {/* Rev. 4783 — foto do TRECHO recém-medido (book de evidências):
@@ -3794,7 +4060,7 @@ export default function MedicaoLevantamento() {
                             );
                           })()}
                           {/* draft */}
-                          {draft.length > 0 && (
+                          {(draft.length > 0 || arcPend.length > 0) && (
                             <>
                               <path
                                 d={draft.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ")}
@@ -3802,6 +4068,8 @@ export default function MedicaoLevantamento() {
                               />
                               {/* Rev. 4811 — pontinho de definição do contorno em VERMELHO (pedido do usuário: mais visível na planta) */}
                               {draft.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={0.006} fill="#dc2626" stroke="#111827" strokeWidth={1} vectorEffect="non-scaling-stroke" />)}
+                              {/* Rev. 4847 — pontos pendentes do arco (meio/fim ainda por tocar) */}
+                              {arcPend.map((p, i) => <circle key={`arc-${i}`} cx={p.x} cy={p.y} r={0.006} fill="#f59e0b" stroke="#92400e" strokeWidth={1} vectorEffect="non-scaling-stroke" />)}
                             </>
                           )}
                           {/* preview do retângulo (arrasto) */}
