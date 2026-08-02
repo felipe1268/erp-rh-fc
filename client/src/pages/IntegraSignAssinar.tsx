@@ -541,13 +541,16 @@ export default function IntegraSignAssinar() {
                 Sua Assinatura — {signatario.nome} ({papelLabel(signatario.papel)})
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="p-4 border rounded-lg bg-amber-50 text-sm text-gray-700">
-                <Shield className="inline h-4 w-4 mr-1 text-amber-600" />
-                {termoLegal}
+            <CardContent className="space-y-3">
+              {/* Rev. 4857 — bloco de assinatura COMPACTO (pedido do usuário): nome e
+                  CPF/CNPJ vêm fixos do contrato (não se digita nada); rubrica e
+                  assinatura pequenas, lado a lado. O destaque da tela é o documento. */}
+              <div className="flex items-start gap-2 text-xs text-gray-600">
+                <Shield className="h-3.5 w-3.5 mt-0.5 text-amber-600 shrink-0" />
+                <span>{termoLegal}</span>
               </div>
 
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-2">
                 <Checkbox
                   id="termo"
                   checked={termoAceito}
@@ -558,65 +561,59 @@ export default function IntegraSignAssinar() {
                 </Label>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm bg-white border rounded-lg px-3 py-2">
+                <div><span className="text-[10px] uppercase text-gray-500 block">Nome (conforme o contrato)</span><b>{signatario.nome}</b></div>
+                {(signatario as any).cpfCnpj ? (
+                  <div><span className="text-[10px] uppercase text-gray-500 block">CPF / CNPJ</span><b>{(signatario as any).cpfCnpj}</b></div>
+                ) : (
+                  <div>
+                    <span className="text-[10px] uppercase text-gray-500 block">CPF / CNPJ (opcional)</span>
+                    <Input className="h-7 w-44 text-sm" value={cpfCnpjConfirmado} onChange={(e) => setCpfCnpjConfirmado(e.target.value)} placeholder="000.000.000-00" />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <Label>Nome Completo *</Label>
-                  <Input
-                    value={nomeConfirmado}
-                    onChange={(e) => setNomeConfirmado(e.target.value)}
-                    placeholder="Digite seu nome completo"
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Rubrica (todas as páginas) *</Label>
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => clearCanvas(rubCanvasRef.current, "rub", setRubHasContent)}>
+                      Limpar
+                    </Button>
+                  </div>
+                  <canvas
+                    ref={rubCanvasRef}
+                    className="w-full border rounded-lg cursor-crosshair touch-none bg-white"
+                    style={{ height: 64 }}
+                    onMouseDown={(e) => startDraw(e, rubCanvasRef.current!, setRubDrawing)}
+                    onMouseMove={(e) => draw(e, rubCanvasRef.current!, rubDrawing, setRubHasContent)}
+                    onMouseUp={() => stopDraw(setRubDrawing)}
+                    onMouseLeave={() => stopDraw(setRubDrawing)}
+                    onTouchStart={(e) => { e.preventDefault(); startDraw(e, rubCanvasRef.current!, setRubDrawing); }}
+                    onTouchMove={(e) => { e.preventDefault(); draw(e, rubCanvasRef.current!, rubDrawing, setRubHasContent); }}
+                    onTouchEnd={() => stopDraw(setRubDrawing)}
                   />
                 </div>
                 <div>
-                  <Label>CPF / CNPJ</Label>
-                  <Input
-                    value={cpfCnpjConfirmado}
-                    onChange={(e) => setCpfCnpjConfirmado(e.target.value)}
-                    placeholder="000.000.000-00"
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Assinatura *</Label>
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => clearCanvas(sigCanvasRef.current, "sig", setSigHasContent)}>
+                      Limpar
+                    </Button>
+                  </div>
+                  <canvas
+                    ref={sigCanvasRef}
+                    className="w-full border rounded-lg cursor-crosshair touch-none bg-white"
+                    style={{ height: 64 }}
+                    onMouseDown={(e) => startDraw(e, sigCanvasRef.current!, setSigDrawing)}
+                    onMouseMove={(e) => draw(e, sigCanvasRef.current!, sigDrawing, setSigHasContent)}
+                    onMouseUp={() => stopDraw(setSigDrawing)}
+                    onMouseLeave={() => stopDraw(setSigDrawing)}
+                    onTouchStart={(e) => { e.preventDefault(); startDraw(e, sigCanvasRef.current!, setSigDrawing); }}
+                    onTouchMove={(e) => { e.preventDefault(); draw(e, sigCanvasRef.current!, sigDrawing, setSigHasContent); }}
+                    onTouchEnd={() => stopDraw(setSigDrawing)}
                   />
                 </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Rubrica (para todas as páginas) *</Label>
-                  <Button variant="ghost" size="sm" onClick={() => clearCanvas(rubCanvasRef.current, "rub", setRubHasContent)}>
-                    Limpar
-                  </Button>
-                </div>
-                <canvas
-                  ref={rubCanvasRef}
-                  className="w-full border rounded-lg cursor-crosshair touch-none"
-                  style={{ height: 80 }}
-                  onMouseDown={(e) => startDraw(e, rubCanvasRef.current!, setRubDrawing)}
-                  onMouseMove={(e) => draw(e, rubCanvasRef.current!, rubDrawing, setRubHasContent)}
-                  onMouseUp={() => stopDraw(setRubDrawing)}
-                  onMouseLeave={() => stopDraw(setRubDrawing)}
-                  onTouchStart={(e) => { e.preventDefault(); startDraw(e, rubCanvasRef.current!, setRubDrawing); }}
-                  onTouchMove={(e) => { e.preventDefault(); draw(e, rubCanvasRef.current!, rubDrawing, setRubHasContent); }}
-                  onTouchEnd={() => stopDraw(setRubDrawing)}
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Assinatura Completa *</Label>
-                  <Button variant="ghost" size="sm" onClick={() => clearCanvas(sigCanvasRef.current, "sig", setSigHasContent)}>
-                    Limpar
-                  </Button>
-                </div>
-                <canvas
-                  ref={sigCanvasRef}
-                  className="w-full border rounded-lg cursor-crosshair touch-none"
-                  style={{ height: 160 }}
-                  onMouseDown={(e) => startDraw(e, sigCanvasRef.current!, setSigDrawing)}
-                  onMouseMove={(e) => draw(e, sigCanvasRef.current!, sigDrawing, setSigHasContent)}
-                  onMouseUp={() => stopDraw(setSigDrawing)}
-                  onMouseLeave={() => stopDraw(setSigDrawing)}
-                  onTouchStart={(e) => { e.preventDefault(); startDraw(e, sigCanvasRef.current!, setSigDrawing); }}
-                  onTouchMove={(e) => { e.preventDefault(); draw(e, sigCanvasRef.current!, sigDrawing, setSigHasContent); }}
-                  onTouchEnd={() => stopDraw(setSigDrawing)}
-                />
               </div>
 
               <div className="flex gap-3">

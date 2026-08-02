@@ -435,6 +435,38 @@ export const integrasignRouter = router({
         if (!tituloFinal || tituloFinal === "auto") tituloFinal = boletim.titulo;
       }
 
+      // Rev. 4857 — pedido do usuário: o CPF/CNPJ do signatário vem FIXO do
+      // cadastro (nada de digitar na hora de assinar). Fornecedor sem cpfCnpj
+      // herda o CNPJ da empresa terceira do contrato.
+      if (input.contratoTerceiroId || input.medicaoTerceiroId) {
+        try {
+          const { terceiroContratos: tcTab, terceiroMedicoes: tmTab, empresasTerceiras: etTab } = await import("../../drizzle/schema");
+          let empresaTerceiraId: number | null = null;
+          if (input.medicaoTerceiroId) {
+            const [tm] = await db.select({ empresaId: (tmTab as any).empresaTerceiraId }).from(tmTab)
+              .where(and(eq((tmTab as any).id, input.medicaoTerceiroId), eq((tmTab as any).companyId, input.companyId)));
+            empresaTerceiraId = tm?.empresaId ?? null;
+          }
+          if (!empresaTerceiraId && input.contratoTerceiroId) {
+            const [tc] = await db.select({ empresaId: (tcTab as any).empresaTerceiraId }).from(tcTab)
+              .where(and(eq((tcTab as any).id, input.contratoTerceiroId), eq((tcTab as any).companyId, input.companyId)));
+            empresaTerceiraId = tc?.empresaId ?? null;
+          }
+          const ct = { empresaId: empresaTerceiraId };
+          if (ct?.empresaId) {
+            const [emp] = await db.select({ cnpj: (etTab as any).cnpj }).from(etTab)
+              .where(and(eq((etTab as any).id, ct.empresaId), eq((etTab as any).companyId, input.companyId)));
+            if (emp?.cnpj) {
+              for (const s of signatariosFinais) {
+                if (s.papel === "fornecedor" && !s.cpfCnpj) (s as any).cpfCnpj = emp.cnpj;
+              }
+            }
+          }
+        } catch (e: any) {
+          console.warn("[criarEnvelope] CNPJ do fornecedor indisponível:", e?.message);
+        }
+      }
+
       const [envelope] = await db.insert(integrasignEnvelopes).values({
         companyId: input.companyId,
         contratoTerceiroId: input.contratoTerceiroId ?? null,

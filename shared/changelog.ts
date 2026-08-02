@@ -28,6 +28,17 @@
  *   (a rubrica e carimbada em todas as paginas do PDF final).
  * - Removido o botao "Ver documento completo (PDF)" da tela de assinatura
  *   (no iPad abria about:blank); nao e mais necessario.
+ * - ARQUIVO COMPLETO: o boletim agora inclui as PLANTAS/CROQUIS da memoria de
+ *   calculo (desenho da planta DXF + contornos coloridos numerados + legenda
+ *   por servico com medidas e total), gerados no servidor com a mesma
+ *   geometria da tela do levantamento. Cada levantamento abre em pagina
+ *   propria no PDF.
+ * - "SUA ASSINATURA" COMPACTA na tela publica: nome e CPF/CNPJ vem FIXOS do
+ *   cadastro (sem digitar), rubrica e assinatura pequenas lado a lado, termo
+ *   legal resumido — a medicao e a memoria ficam em evidencia.
+ * - CNPJ do fornecedor PRE-PREENCHIDO: ao criar envelope de contrato/medicao,
+ *   o signatario "fornecedor" herda o CNPJ da empresa terceira do contrato.
+ *   Envelope ativo da Medicao 01 atualizado (CNPJ do fornecedor + plantas).
  */
 
 /**
