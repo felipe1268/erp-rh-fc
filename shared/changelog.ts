@@ -1,4 +1,17 @@
 /**
+ * Rev. 4852 - DIALOG DE ASSINATURA DO BOLETIM REPAGINADO (TIMELINE COLORIDA)
+ *
+ * - Visual moderno: cabecalho em degrade navy/azul com icone e resumo curto.
+ * - Rota de assinaturas em TIMELINE vertical numerada e colorida: laranja
+ *   (contratada), azul (quem elaborou), violeta (gestor, so se for outra
+ *   pessoa) e verde (socio administrador — cartao automatico com escudo).
+ * - Numeracao dinamica (esconde o passo do gestor quando e a mesma pessoa),
+ *   cartoes com filete lateral colorido, subtitulos explicando o papel de
+ *   cada assinatura e badge "e-mail opcional — assina pelo link".
+ * - Nenhuma mudanca de comportamento: mesmos campos, validacoes e envio.
+ */
+
+/**
  * Rev. 4851 - BOLETIM: 4 ASSINATURAS, LINKS AUTOMATICOS E POP-UP DE PENDENCIAS
  *
  * - Dialog do boletim repensado (poka-yoke): ate 4 assinaturas na ordem

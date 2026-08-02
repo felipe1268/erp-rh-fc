@@ -15,6 +15,7 @@ import {
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
   Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler, PenLine,
+  Building2, UserRound, Link2, BadgeCheck,
   CheckCircle2, FilePlus, Camera,
 } from "lucide-react";
 import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
@@ -3506,49 +3507,91 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
         </div>
       </div>
 
+      {/* Rev. 4852 — dialog repaginado: rota de assinaturas em timeline colorida */}
       <Dialog open={fcsignOpen} onOpenChange={setFcsignOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Assinatura digital do boletim — FCSign</DialogTitle>
-          </DialogHeader>
-          <p className="text-xs text-gray-500 break-words">
-            Ordem de assinatura: <b>1º contratada</b> (de acordo com o valor líquido), <b>2º quem
-            elaborou</b>, <b>3º o gestor do contrato</b> (se for outra pessoa) e por último o
-            <b> sócio administrador</b>, incluído automaticamente. <b>E-mail é opcional</b>: sem
-            e-mail a pessoa assina pelo link (que você pode encaminhar) — e quem tem acesso ao
-            sistema recebe o aviso de pendência ao entrar e assina por lá mesmo.
-          </p>
-          {[
-            { titulo: "Contratada (terceiro)", idx: 0, mostra: true },
-            { titulo: "Quem elaborou a medição", idx: 1, mostra: true },
-            { titulo: "Gestor do contrato", idx: 2, mostra: !gestorMesmo },
-          ].map(({ titulo, idx, mostra }) => (
-            <div key={idx} className={mostra ? "space-y-1.5 border border-gray-200 rounded-lg p-3" : "hidden"}>
-              <div className="text-xs font-semibold text-gray-600">{titulo}</div>
-              <Input
-                placeholder="Nome completo"
-                value={fcsignSigs[idx].nome}
-                onChange={(e) => setFcsignSigs(s => s.map((x, i) => i === idx ? { ...x, nome: e.target.value } : x))}
-              />
-              <Input
-                type="email"
-                placeholder="E-mail (opcional — sem e-mail assina por link)"
-                value={fcsignSigs[idx].email}
-                onChange={(e) => setFcsignSigs(s => s.map((x, i) => i === idx ? { ...x, email: e.target.value } : x))}
-              />
-              {idx === 1 && (
-                <label className="flex items-center gap-2 pt-1 text-xs text-gray-600 cursor-pointer">
-                  <input type="checkbox" checked={gestorMesmo} onChange={(e) => setGestorMesmo(e.target.checked)} className="h-4 w-4 accent-blue-700" />
-                  O gestor do contrato é a mesma pessoa que elaborou
-                </label>
-              )}
+        <DialogContent className="max-w-md p-0 gap-0 overflow-y-auto max-h-[92dvh] rounded-2xl">
+          <div className="bg-gradient-to-br from-[#1B2A4A] via-[#22376b] to-blue-700 px-5 pt-5 pb-4 text-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2.5 text-white text-base">
+                <span className="rounded-xl bg-white/15 p-2 backdrop-blur-sm"><PenLine className="w-4 h-4" /></span>
+                Assinatura digital do boletim
+              </DialogTitle>
+            </DialogHeader>
+            <p className="mt-2 text-[11px] leading-relaxed text-blue-100/90 break-words">
+              Fluxo sem papel, com hash e trilha de auditoria. Cada pessoa assina na sua vez — quem
+              tem acesso ao sistema recebe o aviso ao entrar e assina por lá mesmo.
+            </p>
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-medium text-blue-50">
+              <Link2 className="w-3 h-3" /> E-mail opcional — sem e-mail, assina pelo link (pode encaminhar)
             </div>
-          ))}
-          <p className="text-[11px] text-gray-400">Assinatura final: sócio administrador (automático, libera o pagamento).</p>
-          <Button className="w-full" onClick={handleFcsign} disabled={criarEnvelopeMut.isPending || enviarEnvelopeMut.isPending}>
-            {(criarEnvelopeMut.isPending || enviarEnvelopeMut.isPending) ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <PenLine className="w-4 h-4 mr-1" />}
-            Criar e gerar links de assinatura
-          </Button>
+          </div>
+
+          <div className="px-5 py-4 space-y-0 bg-slate-50/60">
+            {[
+              { titulo: "Contratada", sub: "Confere e assina o valor líquido", idx: 0, mostra: true, Icon: Building2, ring: "ring-orange-200", chip: "bg-orange-500", faixa: "border-l-orange-400", txt: "text-orange-700" },
+              { titulo: "Quem elaborou a medição", sub: "Responde pela planilha medida", idx: 1, mostra: true, Icon: UserRound, ring: "ring-blue-200", chip: "bg-blue-600", faixa: "border-l-blue-500", txt: "text-blue-700" },
+              { titulo: "Gestor do contrato", sub: "Valida a medição do terceiro", idx: 2, mostra: !gestorMesmo, Icon: BadgeCheck, ring: "ring-violet-200", chip: "bg-violet-600", faixa: "border-l-violet-500", txt: "text-violet-700" },
+            ].map(({ titulo, sub, idx, mostra, Icon, ring, chip, faixa, txt }, pos) => (
+              <div key={idx} className={mostra ? "relative pl-9 pb-3" : "hidden"}>
+                {/* trilho vertical */}
+                <span className="absolute left-[13px] top-7 bottom-0 w-px bg-slate-300" aria-hidden />
+                <span className={`absolute left-0 top-1 flex h-7 w-7 items-center justify-center rounded-full ${chip} text-white text-[11px] font-bold shadow ring-4 ${ring}`}>
+                  {gestorMesmo ? pos + 1 : idx + 1}
+                </span>
+                <div className={`rounded-xl border border-slate-200 border-l-4 ${faixa} bg-white p-3 shadow-sm space-y-1.5`}>
+                  <div className="flex items-center gap-1.5">
+                    <Icon className={`w-3.5 h-3.5 ${txt}`} />
+                    <span className={`text-xs font-semibold ${txt}`}>{titulo}</span>
+                    <span className="ml-auto text-[10px] text-slate-400">{sub}</span>
+                  </div>
+                  <Input
+                    className="bg-white"
+                    placeholder="Nome completo"
+                    value={fcsignSigs[idx].nome}
+                    onChange={(e) => setFcsignSigs(s => s.map((x, i) => i === idx ? { ...x, nome: e.target.value } : x))}
+                  />
+                  <Input
+                    type="email"
+                    className="bg-white"
+                    placeholder="E-mail (opcional)"
+                    value={fcsignSigs[idx].email}
+                    onChange={(e) => setFcsignSigs(s => s.map((x, i) => i === idx ? { ...x, email: e.target.value } : x))}
+                  />
+                  {idx === 1 && (
+                    <label className="flex items-center gap-2 pt-1 text-xs text-slate-600 cursor-pointer select-none">
+                      <input type="checkbox" checked={gestorMesmo} onChange={(e) => setGestorMesmo(e.target.checked)} className="h-4 w-4 accent-blue-700" />
+                      O gestor do contrato é a mesma pessoa
+                    </label>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Sócio administrador — automático */}
+            <div className="relative pl-9">
+              <span className="absolute left-0 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white shadow ring-4 ring-emerald-200">
+                <ShieldCheck className="w-3.5 h-3.5" />
+              </span>
+              <div className="rounded-xl border border-emerald-200 border-l-4 border-l-emerald-500 bg-emerald-50/70 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-800">
+                  Sócio administrador
+                  <span className="rounded-full bg-emerald-600/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700">automático</span>
+                </div>
+                <p className="mt-0.5 text-[11px] text-emerald-700/90">Assinatura final de liberação — aprova a medição e libera o pagamento.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-5 pb-5 pt-1 bg-slate-50/60">
+            <Button
+              className="w-full h-11 rounded-xl bg-gradient-to-r from-[#1B2A4A] to-blue-700 hover:from-[#16233f] hover:to-blue-800 text-white shadow-md"
+              onClick={handleFcsign}
+              disabled={criarEnvelopeMut.isPending || enviarEnvelopeMut.isPending}
+            >
+              {(criarEnvelopeMut.isPending || enviarEnvelopeMut.isPending) ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <PenLine className="w-4 h-4 mr-1.5" />}
+              Criar e gerar links de assinatura
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
