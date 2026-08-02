@@ -1,4 +1,15 @@
 /**
+ * Rev. 4820 - TELA DE CATEGORIAS DO LEVANTAMENTO MODERNIZADA
+ *
+ * - Cada categoria virou um card com borda na cor dela e seta para
+ *   EXPANDIR/RECOLHER as subcategorias e derivados (lista compacta).
+ * - Botao "Nova categoria" no topo e "Nova subcategoria de X" dentro de
+ *   cada card — da para incluir sem sair da tela.
+ * - Renomear inline (lapis), trocar cor (bolinha), excluir (lixeira) e
+ *   Desativar continuam em cada linha; vinculo EAP fica dentro do card.
+ */
+
+/**
  * Rev. 4819 - CATEGORIAS DO LEVANTAMENTO VIRAM PADRAO DA EMPRESA
  *
  * - As categorias/subcategorias de servico do Levantamento de Campo agora

@@ -848,6 +848,8 @@ export default function MedicaoLevantamento() {
   const [catPai, setCatPai] = useState<string>("");
   // Rev. 4819 — renomeio inline de categoria (catálogo global da empresa)
   const [renomearCat, setRenomearCat] = useState<{ chave: string; nome: string } | null>(null);
+  // Rev. 4820 — expandir/recolher categorias no dialog de configuração
+  const [catsAbertas, setCatsAbertas] = useState<Set<string>>(new Set());
   const svcAtivoObj = useMemo(() => servicos.find((s: any) => s.chave === servicoAtivo) ?? null, [servicos, servicoAtivo]);
 
   // Rev. 4790 — CAMADAS (estilo layers de CAD): com um serviço ativo, a planta
@@ -3861,13 +3863,19 @@ export default function MedicaoLevantamento() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Settings2 className="h-4 w-4" />Categorias de serviço</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-gray-500 -mt-2">
-            As categorias são o <b>padrão da empresa</b>: valem para todos os contratos. Criar, renomear ou excluir aqui
-            reflete em todos os levantamentos. O <b>vínculo com a EAP</b> e o <b>Desativar</b> valem só para este levantamento.
-          </p>
-          <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3 -mt-1">
+            <p className="text-xs text-gray-500">
+              Padrão da <b>empresa</b> — criar, renomear ou excluir vale para todos os contratos.
+              O <b>vínculo EAP</b> e o <b>Desativar</b> valem só para este levantamento.
+            </p>
+            <Button size="sm" className="shrink-0 gap-1" onClick={() => { setCatPai(""); setServicosDialogOpen(false); setCatDialogOpen(true); }}>
+              <Plus className="h-4 w-4" />Nova categoria
+            </Button>
+          </div>
+          <div className="space-y-2">
             {(() => {
-              // Rev. 4819 — visão hierárquica: categoria → subcategorias → derivados.
+              // Rev. 4820 — visão hierárquica MODERNA: cards por categoria com
+              // expandir/recolher, edição inline, exclusão e inclusão no lugar.
               const subDe = new Map<string, string>();
               for (const s of servicos) {
                 if (s.derivaDe) continue;
@@ -3878,132 +3886,167 @@ export default function MedicaoLevantamento() {
                 }
               }
               const pais = servicos.filter((s: any) => !s.derivaDe && !subDe.has(s.chave));
-              const renderRow = (s: any, nivel: number) => {
-                const emRenomeio = renomearCat?.chave === s.chave;
-                return (
-                  <div key={s.id} className={`border rounded-lg p-3 flex flex-wrap items-center gap-3 ${s.ativo === 0 ? "opacity-50" : ""} ${nivel > 0 ? "ml-6 border-dashed bg-gray-50/60" : ""}`}>
-                    <label className={`${nivel > 0 ? "h-7 w-7" : "h-8 w-8"} rounded-md border cursor-pointer shrink-0`} style={{ backgroundColor: s.cor || "#9ca3af" }} title="Cor (padrão p/ todos os contratos)">
-                      <input
-                        type="color" value={s.cor || "#9ca3af"} className="sr-only"
-                        onChange={(e) => salvarCatalogoMut.mutate({ companyId, chave: s.chave, nome: s.nome, cor: e.target.value })}
-                      />
-                    </label>
-                    <div className="min-w-[140px]">
-                      {emRenomeio ? (
-                        <div className="flex items-center gap-1.5">
-                          <Input
-                            autoFocus className="h-8 w-44 text-sm" value={renomearCat!.nome}
-                            onChange={(e) => setRenomearCat({ chave: s.chave, nome: e.target.value })}
-                            onKeyDown={(e) => { if (e.key === "Enter" && renomearCat!.nome.trim()) { salvarCatalogoMut.mutate({ companyId, chave: s.chave, nome: renomearCat!.nome.trim() }, { onSuccess: () => setRenomearCat(null) }); } if (e.key === "Escape") setRenomearCat(null); }}
-                          />
-                          <Button size="sm" className="h-8" disabled={!renomearCat!.nome.trim() || salvarCatalogoMut.isPending}
-                            onClick={() => salvarCatalogoMut.mutate({ companyId, chave: s.chave, nome: renomearCat!.nome.trim() }, { onSuccess: () => setRenomearCat(null) })}>
-                            {salvarCatalogoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "OK"}
-                          </Button>
-                        </div>
-                      ) : (
-                        <p className="text-sm font-semibold flex items-center gap-1.5">
-                          {s.nome}
-                          <button type="button" className="text-gray-400 hover:text-blue-600" title="Renomear (vale p/ todos os contratos)" onClick={() => setRenomearCat({ chave: s.chave, nome: s.nome })}>
-                            <PencilLine className="h-3.5 w-3.5" />
-                          </button>
-                        </p>
-                      )}
-                      <p className="text-[11px] text-gray-500">
-                        {s.derivaDe
-                          ? <>derivado de <b>{servicos.find((b: any) => b.chave === s.derivaDe)?.nome ?? s.derivaDe}</b></>
-                          : <>{nivel > 0 ? "subcategoria" : "categoria"} · {s.tipoMedida === "parede" ? "Parede L×A" : s.tipoMedida === "contagem" ? "Contagem" : s.tipoMedida === "perimetro" ? "Linear" : s.tipoMedida === "volume" ? "Volume" : "Área"}</>}
-                      </p>
-                    </div>
-                    {s.derivaDe ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-500">Faces:</span>
-                        <Input
-                          type="text" inputMode="decimal" className="h-9 w-16 text-center"
-                          defaultValue={String(s.fator ?? "1").replace(".", ",")}
-                          onBlur={(e) => {
-                            const v = parseFloat(e.target.value.replace(",", "."));
-                            if (Number.isFinite(v) && v > 0 && v !== parseFloat(String(s.fator ?? 1)))
-                              salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, fator: String(v) });
-                          }}
-                        />
-                      </div>
-                    ) : null}
-                    <div className="flex-1 min-w-[220px]">
-                      <VincularItemCombobox
-                        items={itensVinculaveis}
-                        value={s.orcamentoItemId ? String(s.orcamentoItemId) : ""}
-                        jaMedidoMap={jaMedidoMap}
-                        emptyHint={vincularEmptyHint}
-                        placeholder="Vincular item da EAP (1x por serviço)…"
-                        onChange={(idStr) => {
-                          const itemId = idStr ? parseInt(idStr) : null;
-                          const it = itemId ? itensVinculaveis.find((i) => i.id === itemId) : null;
-                          // Rev. 4792 — Poka-Yoke de UNIDADE também no vínculo por serviço
-                          const unidadeServico = ({ area: "m²", parede: "m²", perimetro: "m", volume: "m³", contagem: "un" } as Record<string, string>)[s.tipoMedida ?? "area"];
-                          if (it && unidadeServico && !unidadesCompativeis(unidadeServico, (it as any).unidade)) {
-                            askConfirm({
-                              title: "Unidade errada — verifique",
-                              description: `O serviço "${s.nome}" mede em "${unidadeServico}" e o item da planilha está em "${(it as any).unidade}". O vínculo não foi salvo.`,
-                              confirmText: "Entendi",
-                              onConfirm: () => {},
-                            });
-                            return;
-                          }
-                          salvarServicoMut.mutate({
-                            id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome,
-                            orcamentoItemId: itemId, itemEapCodigo: it?.eapCodigo ?? null, itemDescricao: it?.descricao ?? null,
-                          });
-                        }}
-                      />
-                    </div>
-                    <Button
-                      size="sm" variant="ghost"
-                      className={`h-9 shrink-0 ${s.ativo === 0 ? "text-emerald-600" : "text-gray-400"}`}
-                      disabled={salvarServicoMut.isPending}
-                      title="Vale só para ESTE levantamento (esconde da paleta)"
-                      onClick={() => salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, ativo: s.ativo === 0 ? 1 : 0 })}
-                    >
-                      {s.ativo === 0 ? "Reativar" : "Desativar"}
-                    </Button>
-                    <button
-                      type="button"
-                      className="shrink-0 text-gray-300 hover:text-red-600 disabled:opacity-40"
-                      title="Excluir do padrão da empresa (todos os contratos)"
-                      disabled={excluirCatalogoMut.isPending}
-                      onClick={() => askConfirm({
-                        title: `Excluir "${s.nome}"?`,
-                        description: "A categoria sai do padrão da EMPRESA — deixa de aparecer em todos os contratos. Só é possível excluir se não houver nenhuma medição desenhada com ela; caso haja, use \"Desativar\".",
-                        confirmText: "Excluir",
-                        onConfirm: () => excluirCatalogoMut.mutate({ companyId, chave: s.chave }),
-                      })}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+              const tipoLabel = (t: string) => t === "parede" ? "Parede L×A" : t === "contagem" ? "Contagem" : t === "perimetro" ? "Linear" : t === "volume" ? "Volume" : "Área";
+              const nomeCurto = (s: any, pai: any) => String(s.nome).startsWith(`${pai.nome} `) ? String(s.nome).slice(pai.nome.length + 1) : s.nome;
+
+              const NomeEditavel = ({ s, curto }: { s: any; curto?: string }) => renomearCat?.chave === s.chave ? (
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <Input
+                    autoFocus className="h-8 w-40 text-sm" value={renomearCat!.nome}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setRenomearCat({ chave: s.chave, nome: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === "Enter" && renomearCat!.nome.trim()) salvarCatalogoMut.mutate({ companyId, chave: s.chave, nome: renomearCat!.nome.trim() }, { onSuccess: () => setRenomearCat(null) }); if (e.key === "Escape") setRenomearCat(null); }}
+                  />
+                  <Button size="sm" className="h-8" disabled={!renomearCat!.nome.trim() || salvarCatalogoMut.isPending}
+                    onClick={(e) => { e.stopPropagation(); salvarCatalogoMut.mutate({ companyId, chave: s.chave, nome: renomearCat!.nome.trim() }, { onSuccess: () => setRenomearCat(null) }); }}>
+                    {salvarCatalogoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "OK"}
+                  </Button>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-sm font-semibold truncate">{curto ?? s.nome}</span>
+                  <button type="button" className="text-gray-300 hover:text-blue-600 shrink-0" title="Renomear (todos os contratos)"
+                    onClick={(e) => { e.stopPropagation(); setRenomearCat({ chave: s.chave, nome: s.nome }); }}>
+                    <PencilLine className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              );
+
+              const Swatch = ({ s, size }: { s: any; size?: string }) => (
+                <label className={`${size ?? "h-7 w-7"} rounded-full ring-2 ring-white shadow cursor-pointer shrink-0`} style={{ backgroundColor: s.cor || "#9ca3af" }} title="Cor (todos os contratos)" onClick={(e) => e.stopPropagation()}>
+                  <input type="color" value={s.cor || "#9ca3af"} className="sr-only"
+                    onChange={(e) => salvarCatalogoMut.mutate({ companyId, chave: s.chave, nome: s.nome, cor: e.target.value })} />
+                </label>
+              );
+
+              const Excluir = ({ s }: { s: any }) => (
+                <button type="button" className="h-8 w-8 grid place-items-center rounded-md text-gray-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-40 shrink-0"
+                  title="Excluir do padrão da empresa" disabled={excluirCatalogoMut.isPending}
+                  onClick={(e) => { e.stopPropagation(); askConfirm({
+                    title: `Excluir "${s.nome}"?`,
+                    description: "Sai do padrão da EMPRESA — deixa de aparecer em todos os contratos. Só é possível excluir se nenhuma medição foi desenhada com ela; caso haja, use \"Desativar\".",
+                    confirmText: "Excluir",
+                    onConfirm: () => excluirCatalogoMut.mutate({ companyId, chave: s.chave }),
+                  }); }}>
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              );
+
+              const Desativar = ({ s }: { s: any }) => (
+                <Button size="sm" variant="ghost"
+                  className={`h-8 shrink-0 text-xs ${s.ativo === 0 ? "text-emerald-600" : "text-gray-400"}`}
+                  disabled={salvarServicoMut.isPending}
+                  title="Vale só para ESTE levantamento (esconde da paleta)"
+                  onClick={(e) => { e.stopPropagation(); salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, ativo: s.ativo === 0 ? 1 : 0 }); }}>
+                  {s.ativo === 0 ? "Reativar" : "Desativar"}
+                </Button>
+              );
+
+              const LinhaEap = ({ s }: { s: any }) => (
+                <div className="flex-1 min-w-[200px]">
+                  <VincularItemCombobox
+                    items={itensVinculaveis}
+                    value={s.orcamentoItemId ? String(s.orcamentoItemId) : ""}
+                    jaMedidoMap={jaMedidoMap}
+                    emptyHint={vincularEmptyHint}
+                    placeholder="Vincular item da EAP (1x por serviço)…"
+                    onChange={(idStr) => {
+                      const itemId = idStr ? parseInt(idStr) : null;
+                      const it = itemId ? itensVinculaveis.find((i) => i.id === itemId) : null;
+                      const unidadeServico = ({ area: "m²", parede: "m²", perimetro: "m", volume: "m³", contagem: "un" } as Record<string, string>)[s.tipoMedida ?? "area"];
+                      if (it && unidadeServico && !unidadesCompativeis(unidadeServico, (it as any).unidade)) {
+                        askConfirm({
+                          title: "Unidade errada — verifique",
+                          description: `O serviço "${s.nome}" mede em "${unidadeServico}" e o item da planilha está em "${(it as any).unidade}". O vínculo não foi salvo.`,
+                          confirmText: "Entendi",
+                          onConfirm: () => {},
+                        });
+                        return;
+                      }
+                      salvarServicoMut.mutate({
+                        id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome,
+                        orcamentoItemId: itemId, itemEapCodigo: it?.eapCodigo ?? null, itemDescricao: it?.descricao ?? null,
+                      });
+                    }}
+                  />
+                </div>
+              );
+
+              const LinhaFilho = ({ s, pai }: { s: any; pai: any }) => (
+                <div className={`flex flex-wrap items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-gray-50 ${s.ativo === 0 ? "opacity-50" : ""}`}>
+                  <span className="w-4 border-t border-dashed border-gray-300 shrink-0" />
+                  {Swatch({ s, size: "h-5 w-5" })}
+                  <div className="min-w-[110px]">
+                    {NomeEditavel({ s, curto: s.derivaDe ? s.nome : nomeCurto(s, pai) })}
+                    <p className="text-[10px] text-gray-400">
+                      {s.derivaDe ? <>derivado · × faces</> : tipoLabel(s.tipoMedida)}
+                    </p>
                   </div>
-                );
-              };
+                  {s.derivaDe ? (
+                    <span className="flex items-center gap-1 shrink-0">
+                      <span className="text-[11px] text-gray-500">Faces:</span>
+                      <Input type="text" inputMode="decimal" className="h-8 w-14 text-center text-sm"
+                        defaultValue={String(s.fator ?? "1").replace(".", ",")}
+                        onBlur={(e) => {
+                          const v = parseFloat(e.target.value.replace(",", "."));
+                          if (Number.isFinite(v) && v > 0 && v !== parseFloat(String(s.fator ?? 1)))
+                            salvarServicoMut.mutate({ id: s.id, companyId, medicaoCampoId: campoId, chave: s.chave, nome: s.nome, fator: String(v) });
+                        }} />
+                    </span>
+                  ) : null}
+                  {LinhaEap({ s })}
+                  {Desativar({ s })}
+                  {Excluir({ s })}
+                </div>
+              );
+
               return pais.map((pai: any) => {
                 const subs = servicos.filter((s: any) => subDe.get(s.chave) === pai.chave);
                 const derivados = servicos.filter((s: any) => s.derivaDe === pai.chave);
+                const filhos = [...subs, ...derivados];
+                const aberta = catsAbertas.has(pai.chave);
+                const toggle = () => setCatsAbertas((prev) => { const n = new Set(prev); n.has(pai.chave) ? n.delete(pai.chave) : n.add(pai.chave); return n; });
                 return (
-                  <div key={pai.chave} className="space-y-1.5">
-                    {renderRow(pai, 0)}
-                    {subs.map((s: any) => renderRow(s, 1))}
-                    {derivados.map((s: any) => renderRow(s, 1))}
+                  <div key={pai.chave} className={`rounded-xl border bg-white shadow-sm overflow-hidden ${pai.ativo === 0 ? "opacity-60" : ""}`} style={{ borderLeft: `4px solid ${pai.cor || "#d1d5db"}` }}>
+                    <div className="flex flex-wrap items-center gap-2.5 px-3 py-2.5 cursor-pointer select-none" onClick={toggle} role="button" aria-expanded={aberta}>
+                      <ChevronRight className={`h-4 w-4 text-gray-400 shrink-0 transition-transform ${aberta ? "rotate-90" : ""}`} />
+                      {Swatch({ s: pai })}
+                      <div className="min-w-[130px]">
+                        {NomeEditavel({ s: pai })}
+                        <p className="text-[10px] text-gray-400">{tipoLabel(pai.tipoMedida)}</p>
+                      </div>
+                      {filhos.length > 0 && (
+                        <span className="text-[10px] font-semibold rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 shrink-0">
+                          {subs.length > 0 ? `${subs.length} sub` : ""}{subs.length > 0 && derivados.length > 0 ? " · " : ""}{derivados.length > 0 ? `${derivados.length} derivado${derivados.length > 1 ? "s" : ""}` : ""}
+                        </span>
+                      )}
+                      <span className="flex-1" />
+                      {Desativar({ s: pai })}
+                      {Excluir({ s: pai })}
+                    </div>
+                    {aberta && (
+                      <div className="border-t bg-gray-50/50 px-2.5 py-2 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2.5 rounded-lg px-2.5 py-1.5">
+                          <span className="w-4 shrink-0" />
+                          <span className="text-[11px] text-gray-500 shrink-0 min-w-[110px]">Vínculo EAP da categoria:</span>
+                          {LinhaEap({ s: pai })}
+                        </div>
+                        {filhos.map((s: any) => <div key={s.id}>{LinhaFilho({ s, pai })}</div>)}
+                        <button type="button"
+                          className="ml-6 mt-1 flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 rounded-lg border border-dashed border-blue-200 hover:border-blue-400 px-2.5 py-1.5"
+                          onClick={() => { setCatPai(pai.chave); setCatTipo(String(pai.tipoMedida || "area")); setServicosDialogOpen(false); setCatDialogOpen(true); }}>
+                          <Plus className="h-3.5 w-3.5" />Nova subcategoria de {pai.nome}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               });
             })()}
           </div>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] text-gray-400">
-              Renomear, recolorir e excluir valem para <b>todos os contratos</b>. Desativar esconde só neste levantamento — os contornos já desenhados não são apagados.
-            </p>
-            <Button size="sm" variant="outline" className="shrink-0 gap-1 border-dashed" onClick={() => { setServicosDialogOpen(false); setCatDialogOpen(true); }}>
-              <Plus className="h-4 w-4" />Nova categoria
-            </Button>
-          </div>
+          <p className="text-[11px] text-gray-400">
+            Renomear, recolorir e excluir valem para <b>todos os contratos</b>. Desativar esconde só neste levantamento — os contornos já desenhados não são apagados.
+          </p>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
