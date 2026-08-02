@@ -25,6 +25,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useModule } from "@/contexts/ModuleContext";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
 
@@ -131,6 +132,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [textoEditado, setTextoEditado] = useState<string | null>(null);
   const [obsRevisao, setObsRevisao] = useState("");
   const [showRevisoes, setShowRevisoes] = useState(false);
+  const [confirmarMain, setConfirmarMain] = useState<ConfirmState>(null);
   const [showObsModal, setShowObsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [logoError, setLogoError] = useState(false);
@@ -1678,7 +1680,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-mono font-bold text-blue-600">v{rev.versao}</span>
                       <button
-                        onClick={() => { if (confirm(`Restaurar versão v${rev.versao}?`)) { restaurarMut.mutate({ contratoId: id, revisaoId: rev.id }); setShowRevisoes(false); } }}
+                        onClick={() => setConfirmarMain({ title: `Restaurar versão v${rev.versao}?`, description: "O texto do contrato voltará para esta versão.", actionLabel: "Restaurar", onConfirm: () => { restaurarMut.mutate({ contratoId: id, revisaoId: rev.id }); setShowRevisoes(false); } })}
                         className="text-[11px] text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-1"
                       >
                         <Undo2 className="w-3 h-3" /> Restaurar
@@ -2011,8 +2013,38 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <ConfirmBox state={confirmarMain} onClose={() => setConfirmarMain(null)} />
       </div>
     </DashboardLayout>
+  );
+}
+
+// Rev. 4803 — confirmação bonita (substitui o confirm() nativo, que no iPad
+// mostra o endereço do site em cima da mensagem).
+type ConfirmState = { title: string; description?: string; actionLabel: string; destructive?: boolean; onConfirm: () => void } | null;
+function ConfirmBox({ state, onClose }: { state: ConfirmState; onClose: () => void }) {
+  return (
+    <AlertDialog open={!!state} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <AlertDialogContent className="max-w-md rounded-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-gray-900">
+            {state?.destructive ? <AlertTriangle className="w-5 h-5 text-red-500" /> : <Info className="w-5 h-5 text-blue-500" />}
+            {state?.title}
+          </AlertDialogTitle>
+          {state?.description && (
+            <AlertDialogDescription className="text-sm text-gray-500 break-words">{state.description}</AlertDialogDescription>
+          )}
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className={state?.destructive ? "bg-red-600 hover:bg-red-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"}
+            onClick={() => { const fn = state?.onConfirm; onClose(); fn && fn(); }}>
+            {state?.actionLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -2032,6 +2064,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
   }, [initialMedicaoId]);
   const [rejeicaoModal, setRejeicaoModal] = useState<{ id: number; numero: number } | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
+  const [confirmar, setConfirmar] = useState<ConfirmState>(null);
   // Rev. 4803 — quem fez a medição SOLICITA a aprovação (rascunho → aguardando gestor)
   const solicitarAprovacaoMut = trpc.terceiroContratos.solicitarAprovacaoMedicao.useMutation({
     onSuccess: () => { toast.success("Aprovação solicitada! A medição aguarda o gestor da obra."); utilsAd.terceiroContratos.getContrato.invalidate({ id: contrato.id }); },
@@ -2213,7 +2246,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   {modoEdicao && (m.status === "rascunho" || m.status === "rejeitada") && (
                     <Button size="sm" className="h-7 gap-1 text-xs bg-blue-600 hover:bg-blue-700" title="Enviar a medição para aprovação do gestor da obra"
                       disabled={solicitarAprovacaoMut.isPending}
-                      onClick={() => { if (confirm(`Solicitar aprovação da Medição ${String(m.numero).padStart(2, "0")}? Ela vai para o gestor da obra e depois para o sócio administrador.`)) solicitarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }); }}>
+                      onClick={() => setConfirmar({ title: `Solicitar aprovação da Medição ${String(m.numero).padStart(2, "0")}?`, description: "Ela vai para o gestor da obra e depois para o sócio administrador.", actionLabel: "Solicitar Aprovação", onConfirm: () => solicitarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }) })}>
                       {solicitarAprovacaoMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                       <span className="hidden md:inline">Solicitar Aprovação</span>
                     </Button>
@@ -2227,14 +2260,14 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   {modoEdicao && m.status === "aprovada" && (
                     <Button size="sm" variant="outline" className="h-7 gap-1 text-xs text-orange-600 border-orange-200 hover:bg-orange-50" title="Cancelar aprovação"
                       disabled={cancelarAprovacaoMut.isPending}
-                      onClick={() => { if (confirm(`Cancelar aprovação da Medição ${String(m.numero).padStart(2, "0")}? A medição voltará para "Aguardando Aprovação" e os valores acumulados serão recalculados.`)) cancelarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }); }}>
+                      onClick={() => setConfirmar({ title: `Cancelar aprovação da Medição ${String(m.numero).padStart(2, "0")}?`, description: 'A medição voltará para "Aguardando Aprovação" e os valores acumulados serão recalculados.', actionLabel: "Cancelar Aprovação", onConfirm: () => cancelarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }) })}>
                       <Undo2 className="w-3 h-3" /><span className="hidden md:inline">Cancelar Aprovação</span>
                     </Button>
                   )}
                   {modoEdicao && m.status !== "paga" && (
                     <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-red-600 border-red-200 hover:bg-red-50" title="Excluir medição"
                       disabled={excluirMedicaoMut.isPending}
-                      onClick={() => { if (confirm(`Excluir Medição ${String(m.numero).padStart(2, "0")}? ${m.status === "aprovada" ? "Os valores acumulados serão revertidos." : ""}`)) excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }); }}>
+                      onClick={() => setConfirmar({ title: `Excluir Medição ${String(m.numero).padStart(2, "0")}?`, description: m.status === "aprovada" ? "Os valores acumulados serão revertidos. Esta ação não pode ser desfeita." : "Esta ação não pode ser desfeita.", actionLabel: "Excluir", destructive: true, onConfirm: () => excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }) })}>
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   )}
@@ -2382,7 +2415,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   {(m.status === "rascunho" || m.status === "rejeitada") && (
                     <Button size="sm" className="gap-1 bg-blue-600 hover:bg-blue-700 text-xs"
                       disabled={solicitarAprovacaoMut.isPending}
-                      onClick={() => { if (confirm(`Solicitar aprovação da Medição ${String(m.numero).padStart(2, "0")}? Ela vai para o gestor da obra e depois para o sócio administrador.`)) solicitarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }); }}>
+                      onClick={() => setConfirmar({ title: `Solicitar aprovação da Medição ${String(m.numero).padStart(2, "0")}?`, description: "Ela vai para o gestor da obra e depois para o sócio administrador.", actionLabel: "Solicitar Aprovação", onConfirm: () => solicitarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }) })}>
                       <Send className="w-3 h-3" /> Solicitar Aprovação
                     </Button>
                   )}
@@ -2406,7 +2439,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                         </Button>
                       ) : (
                         <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" disabled={aprovarSocioMut.isPending}
-                          onClick={() => { if (confirm(`Liberar pagamento da Medição ${String(m.numero).padStart(2, "0")}? Isso aprova em definitivo e gera o financeiro a pagar.`)) aprovarSocioMut.mutate({ id: m.id, companyId: contrato.companyId, aprovadoPor: "Sócio Adm" }); }}>
+                          onClick={() => setConfirmar({ title: `Liberar pagamento da Medição ${String(m.numero).padStart(2, "0")}?`, description: "Isso aprova em definitivo e gera o financeiro a pagar.", actionLabel: "Liberar Pagamento", onConfirm: () => aprovarSocioMut.mutate({ id: m.id, companyId: contrato.companyId, aprovadoPor: "Sócio Adm" }) })}>
                           <CheckCircle className="w-3 h-3" /> Liberar (Sócio Adm)
                         </Button>
                       )}
@@ -2419,7 +2452,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   {m.status === "aprovada" && (
                     <Button size="sm" variant="outline" className="gap-1 text-xs text-orange-600 border-orange-200 hover:bg-orange-50"
                       disabled={cancelarAprovacaoMut.isPending}
-                      onClick={() => { if (confirm(`Cancelar aprovação da Medição ${String(m.numero).padStart(2, "0")}? A medição voltará para "Aguardando Aprovação" e os valores acumulados serão recalculados.`)) cancelarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }); }}>
+                      onClick={() => setConfirmar({ title: `Cancelar aprovação da Medição ${String(m.numero).padStart(2, "0")}?`, description: 'A medição voltará para "Aguardando Aprovação" e os valores acumulados serão recalculados.', actionLabel: "Cancelar Aprovação", onConfirm: () => cancelarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }) })}>
                       <Undo2 className="w-3 h-3" /> Cancelar Aprovação
                     </Button>
                   )}
@@ -2444,7 +2477,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   {m.status !== "paga" && (
                     <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
                       disabled={excluirMedicaoMut.isPending}
-                      onClick={() => { if (confirm(`Excluir Medição ${String(m.numero).padStart(2, "0")}? ${m.status === "aprovada" ? "Os valores acumulados serão revertidos." : ""}`)) excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }); }}>
+                      onClick={() => setConfirmar({ title: `Excluir Medição ${String(m.numero).padStart(2, "0")}?`, description: m.status === "aprovada" ? "Os valores acumulados serão revertidos. Esta ação não pode ser desfeita." : "Esta ação não pode ser desfeita.", actionLabel: "Excluir", destructive: true, onConfirm: () => excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }) })}>
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   )}
@@ -2652,7 +2685,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                             </td>
                             {mostrarRemover && (
                               <td className="px-2 py-2 text-center">
-                                <button onClick={() => { if (confirm("Remover este item da medição?")) removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id }); }}
+                                <button onClick={() => setConfirmar({ title: "Remover este item da medição?", actionLabel: "Remover", destructive: true, onConfirm: () => removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id }) })}
                                   className="text-red-300 hover:text-red-500 p-0.5">
                                   <X className="w-3 h-3" />
                                 </button>
@@ -2743,6 +2776,8 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
           </div>
         );
       })}
+
+      <ConfirmBox state={confirmar} onClose={() => setConfirmar(null)} />
 
       {aditivoDialog && (
         <AditivoDialog
@@ -3916,6 +3951,7 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
   const [valor, setValor] = useState("");
   const [data, setData] = useState("");
   const [tipo, setTipo] = useState("outro");
+  const [confirmarFd, setConfirmarFd] = useState<ConfirmState>(null);
   // Rev. 3082 (T007) — readOnly desliga o lançamento/exclusão de FD na aba-espelho.
   const travado = readOnly || medicao.status === "aprovada" || medicao.status === "paga";
 
@@ -3953,6 +3989,7 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
 
   return (
     <div className="mt-3 ml-6 mr-1 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+      <ConfirmBox state={confirmarFd} onClose={() => setConfirmarFd(null)} />
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs font-semibold text-amber-800">
           <Truck className="w-3.5 h-3.5" /> Descontos do Período <span className="text-amber-600 font-normal">(FD, EPI, ferramental... — desconta do valor a pagar)</span>
@@ -4027,7 +4064,7 @@ function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdT
                 <span className="font-semibold text-amber-700">− {BRL(f.valor)}</span>
                 {!travado && (
                   <button className="text-gray-300 hover:text-red-500" disabled={excluirFdTerceiroMut.isPending}
-                    onClick={() => { if (confirm("Remover este FD?")) excluirFdTerceiroMut.mutate({ id: f.id, companyId: contrato.companyId }); }}>
+                    onClick={() => setConfirmarFd({ title: "Remover este desconto?", description: `${f.descricao || "Desconto"} — ${BRL(f.valor)}. Ele volta a ficar pendente se veio de débito avulso.`, actionLabel: "Remover", destructive: true, onConfirm: () => excluirFdTerceiroMut.mutate({ id: f.id, companyId: contrato.companyId }) })}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
