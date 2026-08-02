@@ -1772,6 +1772,8 @@ export const medicaoRouter = router({
       itemEapCodigo: z.string().nullable().optional(),
       itemDescricao: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
+      // Rev. 4840 — posição customizada da etiqueta numerada ({x,y} 0..1)
+      etiquetaJson: z.string().max(200).nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -2611,6 +2613,8 @@ export const medicaoRouter = router({
               itemEapCodigo: d.itemEapCodigo ?? null,
               itemDescricao: d.itemDescricao ?? null,
               observacoes: d.observacoes ?? null,
+              // Rev. 4840 — undefined = preserva no update (drizzle ignora), null = limpa
+              etiquetaJson: d.etiquetaJson,
             };
             // localizar existente por id (conhecido) OU por uuid
             let existing: any = null;

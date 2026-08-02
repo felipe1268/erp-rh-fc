@@ -1,4 +1,36 @@
 /**
+ * Rev. 4841 - MEMORIA DE CALCULO: UM CROQUI POR SERVICO + LEGENDA LATERAL
+ *
+ * - Cada camada/servico do levantamento (Forro, Tabica, Sanca...) vira um
+ *   CROQUI SEPARADO na Memoria de Calculo, como no levantamento em layers.
+ * - Legenda na LATERAL de cada croqui, numero a numero: area mostra
+ *   largura x altura (quando retangulo) e a area; comprimento mostra a
+ *   metragem; volume mostra area, espessura e m3; contagem mostra unidades.
+ * - Total da camada no titulo e no rodape da legenda.
+ */
+
+/**
+ * Rev. 4840 - ETIQUETA NUMERADA: SEMPRE DENTRO DA AREA + ARRASTO SALVO
+ *
+ * - A etiqueta com o numero do contorno agora fica SEMPRE dentro da area
+ *   preenchida (formas em L/concavas jogavam o numero para fora, gerando
+ *   duvida com demarcacoes vizinhas).
+ * - Arrastar a etiqueta no modo Selecionar agora SALVA a posicao no
+ *   contorno: vale em qualquer aparelho e sai igual na Memoria de Calculo.
+ */
+
+/**
+ * Rev. 4839 - MEMORIA DE CALCULO: PRONTUARIO COM AS PLANTAS DESENHADAS
+ *
+ * - Nova secao "Plantas com os desenhos do levantamento": cada planta/pagina
+ *   usada aparece com todos os contornos por cima, na cor do servico e com
+ *   o balao numerado grande e legivel (camada acima de tudo).
+ * - Legenda embaixo de cada planta: bolinha colorida + numero + servico.
+ * - Entra no visualizador de assinatura, no Imprimir/PDF e no documento
+ *   assinado.
+ */
+
+/**
  * Rev. 4838 - MEMORIA DE CALCULO: ASSINATURA SIMPLES NO FIM DO DOCUMENTO
  *
  * - Visualizador em rolagem continua: o documento aparece inteiro e as

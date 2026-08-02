@@ -92,6 +92,48 @@ function ehVideoMidia(f: any): boolean {
 
 const FECHA_POLIGONO = (t: string) => t === "area" || t === "volume";
 
+// Rev. 4840 — etiqueta SEMPRE dentro da área: se o centroide cair fora do
+// polígono (forma em L, côncava), varre bandas horizontais e usa o meio do
+// maior trecho interno. Linhas mantêm o deslocamento perpendicular.
+function dentroPoligono(pt: { x: number; y: number }, pts: { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+    if ((yi > pt.y) !== (yj > pt.y) && pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function pontoEtiqueta(pts: { x: number; y: number }[], fecha: boolean): { x: number; y: number } {
+  if (!fecha) {
+    const i = Math.floor((pts.length - 1) / 2);
+    const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)];
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: mx + (-dy / len) * 0.02, y: my + (dx / len) * 0.02 };
+  }
+  let cx = 0, cy = 0;
+  for (const p of pts) { cx += p.x; cy += p.y; }
+  cx /= pts.length; cy /= pts.length;
+  if (dentroPoligono({ x: cx, y: cy }, pts)) return { x: cx, y: cy };
+  const minY = Math.min(...pts.map((p) => p.y)), maxY = Math.max(...pts.map((p) => p.y));
+  let best: { x: number; y: number } | null = null; let bestW = 0;
+  const ys = [cy, ...Array.from({ length: 9 }, (_, k) => minY + ((maxY - minY) * (k + 1)) / 10)];
+  for (const y of ys) {
+    const xs: number[] = [];
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const yi = pts[i].y, yj = pts[j].y;
+      if ((yi > y) !== (yj > y)) xs.push(pts[j].x + ((pts[i].x - pts[j].x) * (y - yj)) / (yi - yj));
+    }
+    xs.sort((a, b) => a - b);
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const w = xs[k + 1] - xs[k];
+      if (w > bestW) { bestW = w; best = { x: (xs[k] + xs[k + 1]) / 2, y }; }
+    }
+  }
+  return best ?? { x: cx, y: cy };
+}
+
 // ---------------------------------------------------------------------------
 // Rev. 4821 — Poka-yoke de SOBREPOSIÇÃO: impede medir a MESMA área duas vezes
 // no mesmo serviço (nesta medição ou em medições anteriores do contrato).
@@ -515,16 +557,41 @@ export default function MedicaoLevantamento() {
   // preso em "Carregando assinaturas…" para sempre).
   const envelopeAutoRef = useRef(false);
   const memPlantasBusyRef = useRef(false);
+  const memPlantasSeqRef = useRef(0); // Rev. 4839b — token de sessão: abre/fecha rápido não regrava snapshot velho
   // Rev. 4839 — gera o bloco de plantas (prontuário) ao abrir o dialog
   useEffect(() => {
+    memPlantasSeqRef.current += 1;
     if (!assinaturaDlgOpen) { memPlantasRef.current = null; memPlantasBusyRef.current = false; return; }
     if (memPlantasRef.current != null || memPlantasBusyRef.current) return;
     memPlantasBusyRef.current = true;
+    const seq = memPlantasSeqRef.current;
     void montarPlantasHtml()
       .catch(() => "")
-      .then((h) => { memPlantasRef.current = h ?? ""; memPlantasBusyRef.current = false; setMemPlantasTick((t) => t + 1); });
+      .then((h) => {
+        if (memPlantasSeqRef.current !== seq) return; // dialog fechou/reabriu no meio
+        memPlantasRef.current = h ?? ""; memPlantasBusyRef.current = false; setMemPlantasTick((t) => t + 1);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assinaturaDlgOpen]);
+  // Rev. 4840b — reconcilia posição local com a salva no servidor: quando o
+  // etiquetaJson do contorno já bate com o valor local, apaga o local (evita
+  // que um localStorage antigo esconda ajustes feitos em outro aparelho).
+  useEffect(() => {
+    const cs = (campo?.contornos ?? []) as any[];
+    if (!cs.length) return;
+    setLabelPosMap((m) => {
+      let mudou = false; const n = { ...m };
+      for (const c of cs) {
+        const key = String(c.uuid || c.id);
+        if (!n[key] || !c.etiquetaJson || labelDragRef.current?.key === key) continue;
+        try {
+          const ep = JSON.parse(c.etiquetaJson);
+          if (Math.abs(ep.x - n[key].x) < 0.001 && Math.abs(ep.y - n[key].y) < 0.001) { delete n[key]; mudou = true; }
+        } catch { /* */ }
+      }
+      return mudou ? n : m;
+    });
+  }, [campo?.contornos]);
   useEffect(() => {
     if (!assinaturaDlgOpen) { envelopeAutoRef.current = false; return; }
     if (envelopeAutoRef.current) return;
@@ -2452,7 +2519,7 @@ export default function MedicaoLevantamento() {
         .sort((a, b) => a - b);
       for (const pag of pags) {
         const cs = grupos.get(`${pdf.id}|${pag}`)!;
-        let bg = ""; let ratio = 1.4;
+        let bg = ""; let ratio = 1.4; let pw = 0, ph = 0; // pw/ph = página em unidades do arquivo (p/ largura×altura reais)
         try {
           const src = off.pdfFileFor(pdf);
           const nomeArq = String(pdf.arquivoNome || pdf.nome || pdf.arquivoUrl || "").toLowerCase();
@@ -2473,6 +2540,7 @@ export default function MedicaoLevantamento() {
             }
             if (!parsed && src) { const t = await (await fetch(src)).text(); parsed = parseDxfPlanta(t); }
             if (!parsed?.svg) continue;
+            pw = parsed.w || 0; ph = parsed.h || 0;
             ratio = (parsed.w || 1) / (parsed.h || 1);
             bg = String(parsed.svg).replace("<svg ", '<svg style="position:absolute;inset:0;width:100%;height:100%" ');
           } else {
@@ -2480,6 +2548,7 @@ export default function MedicaoLevantamento() {
             const doc = await pdfjs.getDocument(src).promise;
             const page = await doc.getPage(pag);
             const vp1 = page.getViewport({ scale: 1 });
+            pw = vp1.width; ph = vp1.height;
             const scale = 1400 / Math.max(vp1.width, 1);
             const vp = page.getViewport({ scale });
             const cv = document.createElement("canvas");
@@ -2492,29 +2561,97 @@ export default function MedicaoLevantamento() {
             bg = `<img src="${cv.toDataURL("image/jpeg", 0.8)}" style="position:absolute;inset:0;width:100%;height:100%" />`;
           }
         } catch { continue; }
-        const els = cs.map((c: any) => {
-          let pts: any[] = []; try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
-          if (!pts.length) return "";
-          const cor = c.cor || (COR_TIPO as any)[c.tipo] || "#2563eb";
-          let cx = 0, cy = 0; for (const p of pts) { cx += p.x; cy += p.y; }
-          cx /= pts.length; cy /= pts.length;
-          const badge = c.numero != null
-            ? `<circle cx="${cx}" cy="${cy}" r="0.013" fill="#fff" fill-opacity="0.92" stroke="${cor}" stroke-width="0.002"/><text x="${cx}" y="${cy}" font-size="0.015" fill="#111827" text-anchor="middle" dominant-baseline="central" font-weight="700">${c.numero}</text>`
-            : "";
-          if (c.tipo === "contagem") {
-            return pts.map((p: any) => `<circle cx="${p.x}" cy="${p.y}" r="0.007" fill="${cor}" fill-opacity="0.45" stroke="${cor}" stroke-width="0.002"/>`).join("") + badge;
-          }
-          const fecha = FECHA_POLIGONO(c.tipo);
-          const d = pts.map((p: any, i: number) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (fecha ? " Z" : "");
-          return `<path d="${d}" fill="${fecha ? cor : "none"}" fill-opacity="${fecha ? 0.22 : 0}" stroke="${cor}" stroke-width="0.003"/>` + badge;
-        }).join("");
+        // Rev. 4841 — UM CROQUI POR SERVIÇO/CAMADA (Forro, Tabica, Sanca…):
+        // layers separados viram croquis separados, cada um com legenda
+        // LATERAL por número mostrando as medidas (L×A e área; perímetro;
+        // volume) — prontuário claro para validação.
+        const W = 1000, H = 1000 / Math.max(ratio, 0.05);
+        // Anti-XSS: cor vai direto em atributo SVG → só aceita hex; nº só numérico.
+        const corSafe = (v: any) => (/^#[0-9a-fA-F]{3,8}$/.test(String(v ?? "")) ? String(v) : "#2563eb");
+        const m2 = (v: any) => { const n = parseFloat(String(v ?? "")); return isFinite(n) ? numFmt(n, 2) : null; };
+        // agrupa por camada (nome do serviço no contorno)
+        const camadas = new Map<string, any[]>();
+        for (const c of cs as any[]) {
+          const nome = String(c.rotulo || c.servico || (LABEL_TIPO as any)[c.tipo] || c.tipo || "Geral").trim() || "Geral";
+          camadas.set(nome, [...(camadas.get(nome) ?? []), c]);
+        }
+        const camadasOrd = [...camadas.entries()].sort((a, b) => {
+          const mn = (arr: any[]) => Math.min(...arr.map((c) => c.numero ?? 9999));
+          return mn(a[1]) - mn(b[1]);
+        });
         const titulo = `${escHtml(pdf.nome || pdf.arquivoNome || "Planta")}${(pdf.numPaginas ?? 1) > 1 ? ` — pág. ${pag}` : ""}`;
-        blocos.push(`<div style="page-break-inside:avoid;margin-bottom:14px">
-          <div style="font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#374151;margin:0 0 4px">${titulo} <span style="color:#6b7280;font-weight:normal;text-transform:none">— ${cs.length} medição(ões) demarcada(s)</span></div>
-          <div style="position:relative;width:100%;aspect-ratio:${ratio};border:1px solid #d1d5db;background:#fff;overflow:hidden">${bg}
-            <svg viewBox="0 0 1 1" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">${els}</svg>
-          </div>
-        </div>`);
+        for (const [camadaNome, ccs] of camadasOrd) {
+          const shapes: string[] = []; const badges: string[] = [];
+          const itensLegenda: string[] = [];
+          let somaQtd = 0; let unidadeCamada = "";
+          for (const c of [...ccs].sort((a, b) => (a.numero ?? 0) - (b.numero ?? 0))) {
+            let pts: any[] = []; try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+            if (!pts.length) continue;
+            const cor = corSafe(c.cor || (COR_TIPO as any)[c.tipo]);
+            // Rev. 4840 — etiqueta na posição salva (arrastada) ou dentro da área
+            let pe = pontoEtiqueta(pts, FECHA_POLIGONO(c.tipo));
+            try {
+              const ep = c.etiquetaJson ? JSON.parse(c.etiquetaJson) : null;
+              if (ep && isFinite(ep.x) && isFinite(ep.y)) pe = ep;
+            } catch { /* */ }
+            const cx = pe.x * W, cy = pe.y * H;
+            const num = Number(c.numero);
+            if (c.numero != null && isFinite(num) && isFinite(cx) && isFinite(cy)) {
+              badges.push(`<g><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="16" fill="#ffffff" stroke="${cor}" stroke-width="2.5"/><text x="${cx.toFixed(1)}" y="${(cy + 0.5).toFixed(1)}" font-size="15" font-family="Arial,Helvetica,sans-serif" fill="#111827" text-anchor="middle" dominant-baseline="central" font-weight="700">${num}</text></g>`);
+            }
+            if (c.tipo === "contagem") {
+              for (const p of pts) shapes.push(`<circle cx="${(p.x * W).toFixed(1)}" cy="${(p.y * H).toFixed(1)}" r="7" fill="${cor}" fill-opacity="0.45" stroke="${cor}" stroke-width="2"/>`);
+            } else {
+              const fecha = FECHA_POLIGONO(c.tipo);
+              const d = pts.map((p: any, i: number) => `${i === 0 ? "M" : "L"}${(p.x * W).toFixed(1)},${(p.y * H).toFixed(1)}`).join(" ") + (fecha ? " Z" : "");
+              shapes.push(`<path d="${d}" fill="${fecha ? cor : "none"}" fill-opacity="${fecha ? 0.16 : 0}" stroke="${cor}" stroke-width="${fecha ? 2.5 : 3.5}" stroke-linecap="round" stroke-linejoin="round"/>`);
+            }
+            // ---- legenda lateral: medidas por número ----
+            const qtd = parseFloat(String(c.quantidade ?? ""));
+            const un = String(c.unidade || "").trim();
+            if (isFinite(qtd)) { somaQtd += qtd; if (un) unidadeCamada = un; }
+            const medidas: string[] = [];
+            const f = parseFloat(String(c.metrosPorUnidade ?? ""));
+            if (c.tipo === "area" || c.tipo === "volume") {
+              // largura × altura reais quando o desenho é um retângulo
+              const box = detectRectBox(pts as any);
+              if (box && isFinite(f) && f > 0 && pw > 0 && ph > 0) {
+                const lw = (box.x1 - box.x0) * pw * f, lh = (box.y1 - box.y0) * ph * f;
+                if (isFinite(lw) && isFinite(lh) && lw > 0 && lh > 0) medidas.push(`${numFmt(lw, 2)} × ${numFmt(lh, 2)} m`);
+              }
+              if (c.tipo === "volume") {
+                const ar = m2(c.area); if (ar) medidas.push(`área ${ar} m²`);
+                const es = parseFloat(String(c.espessura ?? "")); if (isFinite(es) && es > 0) medidas.push(`esp. ${numFmt(es, 2)} m`);
+                if (isFinite(qtd)) medidas.push(`<b>${numFmt(qtd, 2)} m³</b>`);
+              } else if (isFinite(qtd)) {
+                medidas.push(`<b>área ${numFmt(qtd, 2)} m²</b>`);
+              }
+            } else if (c.tipo === "contagem") {
+              if (isFinite(qtd)) medidas.push(`<b>${numFmt(qtd, 0)} un</b>`);
+            } else {
+              if (isFinite(qtd)) medidas.push(`<b>comprimento ${numFmt(qtd, 2)} m</b>`);
+            }
+            itensLegenda.push(`<div style="display:flex;align-items:flex-start;gap:5px;padding:3px 0;border-bottom:1px solid #f1f5f9">
+              <span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;border:1.5px solid ${cor};font-size:8.5px;font-weight:bold;color:#111827;-webkit-print-color-adjust:exact;print-color-adjust:exact">${isFinite(num) ? num : "•"}</span>
+              <span style="font-size:9px;line-height:1.35">${medidas.join(" • ") || "—"}</span>
+            </div>`);
+          }
+          if (!shapes.length && !badges.length) continue;
+          const totalCamada = somaQtd > 0 ? `${numFmt(somaQtd, unidadeCamada === "un" ? 0 : 2)} ${escHtml(unidadeCamada)}` : "";
+          blocos.push(`<div style="page-break-inside:avoid;margin-bottom:16px">
+            <div style="font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#374151;margin:0 0 4px">${titulo} — <span style="color:#1B2A4A">${escHtml(camadaNome)}</span> <span style="color:#6b7280;font-weight:normal;text-transform:none">(${ccs.length} medição(ões)${totalCamada ? ` — total ${totalCamada}` : ""})</span></div>
+            <div style="display:flex;gap:8px;align-items:flex-start">
+              <div style="position:relative;flex:1 1 72%;aspect-ratio:${ratio};border:1px solid #d1d5db;background:#fff;overflow:hidden">${bg}
+                <svg viewBox="0 0 ${W} ${H.toFixed(1)}" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">${shapes.join("")}${badges.join("")}</svg>
+              </div>
+              <div style="flex:1 1 28%;min-width:150px;border:1px solid #e5e7eb;border-radius:4px;padding:5px 7px">
+                <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:2px">Legenda — ${escHtml(camadaNome)}</div>
+                ${itensLegenda.join("")}
+                ${totalCamada ? `<div style="font-size:9.5px;font-weight:bold;padding-top:4px;text-align:right">TOTAL: ${totalCamada}</div>` : ""}
+              </div>
+            </div>
+          </div>`);
+        }
       }
     }
     if (!blocos.length) return "";
@@ -3639,20 +3776,17 @@ export default function MedicaoLevantamento() {
                           const fecha = FECHA_POLIGONO(c.tipo);
                           const cor = c.cor || COR_TIPO[c.tipo as TipoContorno] || "#2563eb";
                           const sel = selContornos.has(c.id);
-                          let lx = 0, ly = 0;
-                          if (fecha) {
-                            for (const p of pts) { lx += p.x; ly += p.y; }
-                            lx /= pts.length; ly /= pts.length;
-                          } else {
-                            // ponto médio do segmento central + deslocamento perpendicular
-                            const i = Math.floor((pts.length - 1) / 2);
-                            const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)];
-                            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-                            const dx = b.x - a.x, dy = b.y - a.y;
-                            const len = Math.hypot(dx, dy) || 1;
-                            lx = mx + (-dy / len) * 0.02; ly = my + (dx / len) * 0.02;
-                          }
-                          // Rev. 4792 — posição customizada (etiqueta arrastável)
+                          // Rev. 4840 — padrão SEMPRE dentro da área preenchida
+                          // (centroide fora do polígono em forma de L confundia
+                          // com demarcações adjacentes).
+                          const pDef = pontoEtiqueta(pts, fecha);
+                          let lx = pDef.x, ly = pDef.y;
+                          // Rev. 4840 — posição salva no contorno (vale em todo aparelho + memória)
+                          try {
+                            const ep = c.etiquetaJson ? JSON.parse(c.etiquetaJson) : null;
+                            if (ep && isFinite(ep.x) && isFinite(ep.y)) { lx = ep.x; ly = ep.y; }
+                          } catch { /* */ }
+                          // Rev. 4792 — posição customizada local (drag em andamento/recente)
                           const key = String(c.uuid || c.id);
                           const custom = labelPosMap[key];
                           if (custom) { lx = custom.x; ly = custom.y; }
@@ -3693,7 +3827,14 @@ export default function MedicaoLevantamento() {
                                 if (!d || d.key !== key) return;
                                 labelDragRef.current = null;
                                 e.stopPropagation();
-                                if (!d.moved) setSelContornos(new Set([c.id])); // toque limpo = seleciona
+                                if (!d.moved) { setSelContornos(new Set([c.id])); return; } // toque limpo = seleciona
+                                // Rev. 4840 — PERSISTE a posição no contorno (aparece
+                                // igual na Memória de Cálculo e em outros aparelhos)
+                                setLabelPosMap((m) => {
+                                  const pos = m[key];
+                                  if (pos) void off.saveContorno({ ...c, etiquetaJson: JSON.stringify({ x: +pos.x.toFixed(5), y: +pos.y.toFixed(5) }) });
+                                  return m;
+                                });
                               }}
                               onPointerCancel={() => { labelDragRef.current = null; }}
                               title={`${c.rotulo ? String(c.rotulo).toUpperCase() : LABEL_TIPO[c.tipo as TipoContorno] || c.tipo} ${String(c.numero ?? "")} — arraste p/ reposicionar`}

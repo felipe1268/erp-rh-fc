@@ -2516,11 +2516,14 @@ REGRAS DE EXTRAÇÃO:
               item_eap_codigo VARCHAR(50),
               item_descricao VARCHAR(500),
               observacoes TEXT,
+              etiqueta_json TEXT,
               criado_em TIMESTAMP DEFAULT NOW(),
               atualizado_em TIMESTAMP DEFAULT NOW(),
               deleted_at TIMESTAMP
             )
           `);
+          // Rev. 4840 — posição customizada da etiqueta numerada (bases antigas)
+          await db.execute(sql`ALTER TABLE medicao_campo_contornos ADD COLUMN IF NOT EXISTS etiqueta_json TEXT`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mccont_campo ON medicao_campo_contornos(medicao_campo_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mccont_pdf ON medicao_campo_contornos(pdf_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mccont_company ON medicao_campo_contornos(company_id)`);

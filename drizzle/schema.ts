@@ -8918,6 +8918,8 @@ export const medicaoCampoContornos = pgTable("medicao_campo_contornos", {
   itemEapCodigo:    varchar("item_eap_codigo", { length: 50 }),
   itemDescricao:    varchar("item_descricao", { length: 500 }),
   observacoes:      text(),
+  /** Rev. 4840 — posição customizada da etiqueta numerada (JSON {x,y} 0..1) */
+  etiquetaJson:     text("etiqueta_json"),
   criadoEm:         timestamp("criado_em").defaultNow(),
   atualizadoEm:     timestamp("atualizado_em").defaultNow(),
   deletedAt:        timestamp("deleted_at"),
