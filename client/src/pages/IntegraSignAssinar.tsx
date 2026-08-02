@@ -95,32 +95,9 @@ export default function IntegraSignAssinar() {
   const assinarMut = trpc.integrasign.assinarDocumento.useMutation();
   const recusarMut = trpc.integrasign.recusarDocumento.useMutation();
 
-  // Rev. 4854 — documento completo do boletim (todas as páginas) para conferência.
-  // iOS: abrir a aba ANTES do fetch (senão o Safari bloqueia como pop-up).
-  const [pdfCompletoLoading, setPdfCompletoLoading] = useState(false);
-  const handleVerBoletimPdf = async () => {
-    setPdfCompletoLoading(true);
-    const win = window.open("about:blank", "_blank");
-    try {
-      const inputPayload = { json: { token } };
-      const res = await fetch(`/api/trpc/integrasign.gerarBoletimPdfPublico?input=${encodeURIComponent(JSON.stringify(inputPayload))}`);
-      const json = await res.json();
-      const data = json?.result?.data?.json || json?.result?.data;
-      if (!data?.base64) throw new Error("PDF não gerado");
-      const byteChars = atob(data.base64);
-      const byteArr = new Uint8Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-      const blob = new Blob([byteArr], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      if (win && !win.closed) win.location.href = url;
-      else window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (e: any) {
-      try { win?.close(); } catch { /* noop */ }
-      toast.error(e?.message || "Erro ao abrir o documento completo");
-    }
-    setPdfCompletoLoading(false);
-  };
+  // Rev. 4857 — botão "Ver documento completo (PDF)" removido a pedido do
+  // usuário: no iPad o blob abria "about:blank". O documento da tela agora é
+  // ÚNICO e completo (boletim + memória de cálculo + fotos + assinaturas).
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -536,20 +513,8 @@ export default function IntegraSignAssinar() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">Documento</CardTitle>
-              {(doc.data as any)?.temBoletimPdf && (
-                <Button size="sm" variant="outline" className="border-blue-200 text-blue-700" disabled={pdfCompletoLoading} onClick={handleVerBoletimPdf}>
-                  {pdfCompletoLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <FileText className="h-4 w-4 mr-1.5" />}
-                  Ver documento completo (PDF)
-                </Button>
-              )}
             </CardHeader>
             <CardContent className="space-y-3">
-              {(doc.data as any)?.temBoletimPdf && (
-                <p className="text-xs text-gray-500">
-                  Confira abaixo o resumo do boletim. O botão acima abre o documento completo,
-                  com todas as páginas — planilha da medição, retenções e levantamento de campo com fotos.
-                </p>
-              )}
               {/* Rev. 4854 — boletim é HTML gerado no servidor; renderiza formatado */}
               {String(envelope.textoContrato).trimStart().startsWith("<") ? (
                 <div

@@ -9,7 +9,9 @@ import { eq, and, asc } from "drizzle-orm";
 import {
   terceiroMedicoes, terceiroContratos, terceiroContratoItens, terceiroMedicaoItens,
   empresasTerceiras, companies, obras, terceiroMedicaoFds,
+  medicaoCampo, medicaoCampoContornos, medicaoCampoFotos,
 } from "../drizzle/schema";
+import { sql } from "drizzle-orm";
 
 const num = (v: unknown) => parseFloat(String(v ?? "0")) || 0;
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -124,6 +126,84 @@ export async function buildBoletimMedicaoHtml(db: any, medicaoId: number, compan
       <td class="r">${BRL(r.valorAcum)}</td>
     </tr>`).join("");
 
+  // ── Rev. 4857 — DOCUMENTO ÚNICO (pedido do usuário): memória de cálculo do
+  // levantamento de campo + registro fotográfico embutidos no próprio boletim
+  // da tela de assinatura (fotos via miniatura pública /uploads?w=512).
+  let memoriaHtml = "";
+  try {
+    const levCampoId = num((medicao as any).levantamentoCampoId);
+    const campos = await db.select().from(medicaoCampo).where(and(
+      eq(medicaoCampo.companyId, companyId),
+      eq(medicaoCampo.origem, "terceiro"),
+      sql`${medicaoCampo.deletedAt} IS NULL`,
+      levCampoId > 0
+        ? sql`(${medicaoCampo.id} = ${levCampoId} OR ${(medicaoCampo as any).medicaoId} = ${medicaoId})`
+        : eq((medicaoCampo as any).medicaoId, medicaoId),
+    ));
+    const blocos: string[] = [];
+    for (const campo of campos) {
+      const contornos = await db.select().from(medicaoCampoContornos).where(and(
+        eq(medicaoCampoContornos.medicaoCampoId, campo.id),
+        eq(medicaoCampoContornos.companyId, companyId),
+        sql`${medicaoCampoContornos.deletedAt} IS NULL`,
+      )).orderBy(asc(medicaoCampoContornos.tipo), asc(medicaoCampoContornos.numero), asc(medicaoCampoContornos.id));
+      const fotosRows = await db.select().from(medicaoCampoFotos).where(and(
+        eq(medicaoCampoFotos.medicaoCampoId, campo.id),
+        eq(medicaoCampoFotos.companyId, companyId),
+        sql`${medicaoCampoFotos.deletedAt} IS NULL`,
+      )).orderBy(asc(medicaoCampoFotos.id));
+      const rotuloDe = new Map<number, string>(contornos.map((c: any) => [c.id, c.rotulo || c.servico || ""]));
+      const linhas = contornos.map((c: any, i: number) => {
+        const medida = num(c.quantidade) > 0 ? `${QTD(num(c.quantidade))} ${esc(c.unidade || "")}`
+          : num(c.area) > 0 ? `${QTD(num(c.area))} m²`
+          : num(c.perimetro) > 0 ? `${QTD(num(c.perimetro))} m`
+          : c.contagem ? `${c.contagem} un` : "-";
+        return `<tr style="background:${i % 2 ? "#fff" : "#fafbfc"}">
+          <td class="mono">${esc(c.numero ?? i + 1)}</td>
+          <td>${esc(c.rotulo || "-")}</td>
+          <td>${esc(c.itemDescricao || c.servico || "-")}</td>
+          <td class="c">${esc(c.tipo || "-")}</td>
+          <td class="r b">${medida}</td>
+          <td>${esc(c.observacoes || "")}</td>
+        </tr>`;
+      }).join("");
+      const fotosHtml = fotosRows.map((f: any) => {
+        const url = String(f.arquivoUrl || "");
+        if (!url.startsWith("/uploads/")) return "";
+        const key = decodeURIComponent(url.replace(/^\/uploads\//, ""));
+        if (!key.startsWith(`medicao-campo/${companyId}/`)) return "";
+        if (!/\.(jpe?g|png|webp)$/i.test(key)) return "";
+        const legenda = f.legenda || rotuloDe.get(f.contornoId) || "Foto do levantamento";
+        return `<figure style="margin:0;width:180px"><img src="${esc(url)}?w=512" style="width:180px;height:135px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb" loading="lazy"/><figcaption style="font-size:8.5px;color:#555;padding-top:2px">${esc(legenda)}</figcaption></figure>`;
+      }).filter(Boolean).join("");
+      blocos.push(`
+        <h3 style="color:#1B3A5C;font-size:12px;margin:16px 0 6px">MEMÓRIA DE CÁLCULO — LEVANTAMENTO Nº ${esc(String(campo.numero || "").padStart(3, "0"))}${campo.titulo ? ` — ${esc(campo.titulo)}` : ""}</h3>
+        ${(campo as any).criadoPorNome ? `<p style="font-size:9px;color:#666;margin:0 0 6px">Levantado em campo por ${esc((campo as any).criadoPorNome)}.</p>` : ""}
+        ${linhas ? `<table><thead><tr><th>Nº</th><th>Identificação</th><th>Serviço / Item</th><th class="c">Tipo</th><th class="r">Medida</th><th>Obs.</th></tr></thead><tbody>${linhas}</tbody></table>` : ""}
+        ${fotosHtml ? `<div style="margin-top:8px"><b style="font-size:9px;color:#1B3A5C">REGISTRO FOTOGRÁFICO</b><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${fotosHtml}</div></div>` : ""}`);
+    }
+    if (blocos.length) memoriaHtml = blocos.join("");
+  } catch (e: any) {
+    console.warn("[boletimMedicaoHtml] levantamento indisponível:", e?.message);
+  }
+
+  // Bloco de assinaturas — campinho de rubrica + assinatura dos envolvidos.
+  const assinaturasHtml = `
+    <h3 style="color:#1B3A5C;font-size:12px;margin:18px 0 6px">ASSINATURAS</h3>
+    <p style="font-size:9px;color:#666;margin:0 0 8px">Assinatura eletrônica via FCSign: cada envolvido assina digitalmente e informa a <b>rubrica</b>, que é carimbada em <b>todas as páginas</b> do documento final (PDF), junto de data/hora, IP e hash SHA-256.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      ${[
+        `CONTRATADA — ${esc(empresa?.razaoSocial || empresa?.nomeFantasia || "Terceiro")}`,
+        "CONTRATANTE — Elaborador / Gestor da Medição",
+        "CONTRATANTE — Sócio Administrador (liberação final)",
+      ].map((t) => `
+        <div style="flex:1;min-width:200px;border:1px solid #cbd5e1;border-radius:6px;padding:10px">
+          <div style="font-size:8.5px;color:#7a8699;text-transform:uppercase">${t}</div>
+          <div style="margin-top:26px;border-top:1px solid #94a3b8;padding-top:3px;font-size:8.5px;color:#666">Assinatura</div>
+          <div style="margin-top:16px;border-top:1px dashed #94a3b8;padding-top:3px;font-size:8.5px;color:#666">Rubrica (todas as páginas)</div>
+        </div>`).join("")}
+    </div>`;
+
   const html = `
 <div class="boletim-medicao">
 <style>
@@ -182,6 +262,8 @@ export async function buildBoletimMedicaoHtml(db: any, medicaoId: number, compan
   ${fdTotal > 0 ? `<div>FD / Descontos lançados<br/><b>- ${BRL(fdTotal)}</b></div>` : ""}
   <div class="liq">VALOR LÍQUIDO A PAGAR<br/><span style="font-size:15px">${BRL(liquido)}</span></div>
 </div>
+${memoriaHtml}
+${assinaturasHtml}
 <p style="font-size:9px;color:#666;margin-top:10px">Documento validado por assinatura eletrônica via FCSign — contratante e contratada assinam digitalmente, com hash do documento e trilha de auditoria. Fluxo 100% sem papel.</p>
 </div>`;
 

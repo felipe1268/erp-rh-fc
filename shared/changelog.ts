@@ -21,6 +21,13 @@
  *   usuario comum ve "Solicitar cancelamento", que avisa os masters in-app.
  * - Servidor: cancelar envelope CONCLUIDO exige admin_master; nova rota
  *   solicitarCancelamento notifica os masters com motivo + trilha de auditoria.
+ * - DOCUMENTO UNICO na tela de assinatura: o boletim agora traz TUDO no mesmo
+ *   documento — resumo da medicao, planilha, memoria de calculo do
+ *   levantamento (contornos medidos), registro fotografico (miniaturas) e o
+ *   bloco de ASSINATURAS com campinho de rubrica + assinatura por envolvido
+ *   (a rubrica e carimbada em todas as paginas do PDF final).
+ * - Removido o botao "Ver documento completo (PDF)" da tela de assinatura
+ *   (no iPad abria about:blank); nao e mais necessario.
  */
 
 /**
