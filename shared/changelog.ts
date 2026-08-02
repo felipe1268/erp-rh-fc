@@ -1,4 +1,11 @@
 /**
+ * Rev. 4811 - PONTINHO DO CONTORNO EM VERMELHO
+ *
+ * No levantamento, os pontos clicados durante o desenho do contorno (rascunho)
+ * agora aparecem em vermelho com borda branca — mais visiveis sobre a planta.
+ */
+
+/**
  * Rev. 4810 - PINTURA AGRUPADA EM SUBCATEGORIAS (fix da paleta)
  *
  * A paleta mostrava "Pintura Teto/Parede/Piso" como 3 chips soltos porque o

@@ -3040,7 +3040,8 @@ export default function MedicaoLevantamento() {
                                 d={draft.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ")}
                                 fill="none" stroke="#111827" strokeWidth={0.003} strokeDasharray="0.01 0.006" vectorEffect="non-scaling-stroke"
                               />
-                              {draft.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={0.006} fill="#111827" />)}
+                              {/* Rev. 4811 — pontinho de definição do contorno em VERMELHO (pedido do usuário: mais visível na planta) */}
+                              {draft.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={0.006} fill="#dc2626" stroke="#fff" strokeWidth={0.0015} />)}
                             </>
                           )}
                           {/* preview do retângulo (arrasto) */}
