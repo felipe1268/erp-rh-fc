@@ -487,15 +487,6 @@ export default function MedicaoLevantamento() {
   );
   const envelopeLev: any = envelopeLevQ.data;
   const memoriaAssinada = envelopeLev?.status === "concluido";
-  const [memAssOpen, setMemAssOpen] = useState(false);
-  const [memAssSigs, setMemAssSigs] = useState<{ nome: string; email: string }[]>([{ nome: "", email: "" }, { nome: "", email: "" }]);
-  useEffect(() => {
-    // pré-preenche: elaborador = usuário logado; responsável = contato da contratada
-    setMemAssSigs((prev) => [
-      { nome: prev[0].nome || (authUser as any)?.name || campo?.criadoPorNome || "", email: prev[0].email || (authUser as any)?.email || "" },
-      { nome: prev[1].nome || contrato?.empresa?.responsavelNome || contrato?.empresa?.razaoSocial || "", email: prev[1].email || contrato?.empresa?.email || "" },
-    ]);
-  }, [authUser, contrato, campo?.criadoPorNome]);
   // Rev. 4835 — assinatura NA TELA (pedido do usuário): sem e-mail. Cria o
   // envelope, ativa e abre direto a tela de assinatura do 1º signatário
   // (elaborador); depois o responsável assina na sequência no mesmo aparelho.
@@ -508,7 +499,6 @@ export default function MedicaoLevantamento() {
   };
   const enviarEnvelopeLevM = trpc.integrasign.enviarParaAssinatura.useMutation({
     onSuccess: async () => {
-      setMemAssOpen(false);
       const res = await envelopeLevQ.refetch();
       toast.success("Documento pronto! Assine na tela agora.");
       abrirAssinaturaPendente(res.data);
@@ -522,10 +512,19 @@ export default function MedicaoLevantamento() {
     },
     onError: (e: any) => toast.error(e.message || "Erro ao criar envelope"),
   });
+  // Rev. 4835 — SEM formulário (pedido do usuário): 1 toque resolve tudo.
+  // Elaborador = usuário logado; responsável = contato cadastrado da contratada.
+  // Nenhum e-mail é enviado (assinatura na tela) — se faltar e-mail no cadastro,
+  // usa um placeholder interno só para satisfazer o registro do envelope.
   const enviarMemoriaParaAssinatura = () => {
-    const [elab, resp] = memAssSigs;
-    if (!elab.nome.trim() || !elab.email.trim()) { toast.error("Informe nome e e-mail do elaborador."); return; }
-    if (!resp.nome.trim() || !resp.email.trim()) { toast.error("Informe nome e e-mail do responsável pelo contrato."); return; }
+    const elabNome = String((authUser as any)?.name || campo?.criadoPorNome || "").trim();
+    const respNome = String(contrato?.empresa?.responsavelNome || contrato?.empresa?.razaoSocial || "").trim();
+    if (!elabNome) { toast.error("Não consegui identificar o usuário logado."); return; }
+    if (!respNome) { toast.error("Cadastre o responsável da contratada no contrato antes de assinar."); return; }
+    const mail = (v: any) => {
+      const s = String(v || "").trim();
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : "assinatura-na-tela@fcsign.local";
+    };
     criarEnvelopeLevM.mutate({
       companyId,
       medicaoCampoId: campoId,
@@ -533,8 +532,8 @@ export default function MedicaoLevantamento() {
       titulo: `Memória de Cálculo — Levantamento Nº ${String((campo as any)?.numero ?? "").padStart(3, "0")}${(campo as any)?.titulo ? ` (${(campo as any).titulo})` : ""}`,
       textoContrato: buildMemoriaHtml(false),
       signatarios: [
-        { papel: "gestor_projeto", ordemAssinatura: 1, nome: elab.nome.trim(), email: elab.email.trim(), cargo: "Responsável pelo levantamento", empresaNome: "Contratante" },
-        { papel: "fornecedor", ordemAssinatura: 2, nome: resp.nome.trim(), email: resp.email.trim(), cargo: "Responsável pelo contrato", empresaNome: contrato?.empresa?.razaoSocial || undefined },
+        { papel: "gestor_projeto", ordemAssinatura: 1, nome: elabNome, email: mail((authUser as any)?.email), cargo: "Responsável pelo levantamento", empresaNome: "Contratante" },
+        { papel: "fornecedor", ordemAssinatura: 2, nome: respNome, email: mail(contrato?.empresa?.email), cargo: "Responsável pelo contrato", empresaNome: contrato?.empresa?.razaoSocial || undefined },
       ],
     } as any);
   };
@@ -2734,8 +2733,11 @@ export default function MedicaoLevantamento() {
                   <span className="hidden md:inline">Assinar agora ({(envelopeLev.signatarios || []).filter((s: any) => s.status === "assinado").length}/{(envelopeLev.signatarios || []).length})</span>
                 </Button>
               ) : (
-                <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => setMemAssOpen(true)}>
-                  <FileSignature className="h-4 w-4" /><span className="hidden md:inline">Assinar memória</span>
+                <Button size="sm" variant="outline" className="gap-1.5 h-9"
+                  disabled={criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending}
+                  onClick={enviarMemoriaParaAssinatura}>
+                  {(criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
+                  <span className="hidden md:inline">Assinar memória</span>
                 </Button>
               )
             )}
@@ -4083,38 +4085,6 @@ export default function MedicaoLevantamento() {
 
       {/* Rev. 4780 — Configurar SERVIÇOS do levantamento (catálogo híbrido) */}
       {/* Rev. 4784 — remover planta com levantamento: senha do ADM Master */}
-      {/* Rev. 4835 — enviar Memória de Cálculo p/ assinatura (elaborador + responsável) */}
-      <Dialog open={memAssOpen} onOpenChange={setMemAssOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-blue-600" />Assinar Memória de Cálculo na tela</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              A tela de assinatura abre na hora: primeiro assina o <b>elaborador</b>, depois o <b>responsável pelo contrato</b> assina em seguida (no mesmo aparelho, se quiser).
-              A <b>consolidação do levantamento</b> — que libera o pagamento da medição — só é permitida depois que os dois assinarem.
-            </p>
-            <div className="rounded-lg border p-3 space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">1º — Elaborador (responsável pelo levantamento)</div>
-              <Input placeholder="Nome" value={memAssSigs[0].nome} onChange={(e) => setMemAssSigs((p) => [{ ...p[0], nome: e.target.value }, p[1]])} />
-              <Input placeholder="E-mail" type="email" value={memAssSigs[0].email} onChange={(e) => setMemAssSigs((p) => [{ ...p[0], email: e.target.value }, p[1]])} />
-            </div>
-            <div className="rounded-lg border p-3 space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">2º — Responsável pelo contrato (contratada)</div>
-              <Input placeholder="Nome" value={memAssSigs[1].nome} onChange={(e) => setMemAssSigs((p) => [p[0], { ...p[1], nome: e.target.value }])} />
-              <Input placeholder="E-mail" type="email" value={memAssSigs[1].email} onChange={(e) => setMemAssSigs((p) => [p[0], { ...p[1], email: e.target.value }])} />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setMemAssOpen(false)}>Cancelar</Button>
-              <Button disabled={criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending} onClick={enviarMemoriaParaAssinatura} className="gap-1.5">
-                {(criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
-                Assinar agora
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={!!senhaPlantaDlg} onOpenChange={(v) => { if (!v) { setSenhaPlantaDlg(null); setSenhaPlanta(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
