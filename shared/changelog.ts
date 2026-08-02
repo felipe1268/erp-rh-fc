@@ -1,4 +1,15 @@
 /**
+ * Rev. 4823 - FORRO: "TETO" DUPLICADO CORRIGIDO
+ *
+ * - No seletor do Forro apareciam DOIS pills "Teto": a aba base (renomeada
+ *   na Rev. 4801) e uma subcategoria antiga "Forro Teto" migrada pro
+ *   catalogo global. A subcategoria (sem nenhum contorno) foi removida do
+ *   catalogo e dos levantamentos.
+ * - Poka-yoke: se algum dia existir uma subcategoria chamada "Teto", a aba
+ *   base do Forro volta a se chamar "Geral" — nunca dois pills iguais.
+ */
+
+/**
  * Rev. 4822 - "JA MEDIDO" SEMPRE VISIVEL + NUMERACAO SEQUENCIAL DO CONTRATO
  *
  * - Ao abrir a 2a, 3a... medicao, as areas medidas nas medicoes ANTERIORES

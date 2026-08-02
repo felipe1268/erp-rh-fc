@@ -2712,8 +2712,13 @@ export default function MedicaoLevantamento() {
                     <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide shrink-0">{pai.nome}:</span>
                     {abas.map((s: any) => {
                       const sel = servicoAtivo === s.chave;
-                      // Rev. 4801 — no Forro a aba base chama "Teto" (pedido do usuário)
-                      const label = s.chave === pai.chave ? (pai.chave === "forro" ? "Teto" : "Geral") : (String(s.nome).startsWith(`${pai.nome} `) ? String(s.nome).slice(pai.nome.length + 1) : s.nome);
+                      const labelSub = (x: any) => (String(x.nome).startsWith(`${pai.nome} `) ? String(x.nome).slice(pai.nome.length + 1) : String(x.nome));
+                      // Rev. 4801 — no Forro a aba base chama "Teto" (pedido do usuário).
+                      // Rev. 4823 (poka-yoke) — se existir uma SUBCATEGORIA cujo rótulo
+                      // ficaria igual ao da aba base (ex.: "Forro Teto"), a base volta a
+                      // "Geral" p/ nunca aparecerem dois pills com o mesmo nome.
+                      const baseLabel = pai.chave === "forro" && !subs.some((x: any) => labelSub(x).toLowerCase() === "teto") ? "Teto" : "Geral";
+                      const label = s.chave === pai.chave ? baseLabel : labelSub(s);
                       const tot = totaisPorServico.get(s.chave) ?? 0;
                       return (
                         <button
