@@ -2619,6 +2619,33 @@ export const terceiroContratosRouter = router({
       return upd;
     }),
 
+  // Rev. 4803 — Nível 1: quem FEZ a medição solicita a aprovação do gestor
+  // (rascunho/rejeitada → aguardando_aprovacao). Poka-yoke: sem valor medido
+  // não há o que aprovar.
+  solicitarAprovacaoMedicao: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number(), solicitadoPor: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const [existing] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
+      if (!existing) throw new Error("Medição não encontrada");
+      if (existing.status !== "rascunho" && existing.status !== "rejeitada") {
+        throw new Error(`Medição não pode ser enviada para aprovação (status: ${existing.status})`);
+      }
+      if (n(existing.valorMedido) <= 0) {
+        throw new Error("A medição está zerada — lance o medido (levantamento ou planilha) antes de solicitar a aprovação.");
+      }
+      const [med] = await db.update(terceiroMedicoes).set({
+        status: "aguardando_aprovacao",
+        nivelAprovacao: 0,
+        gestorAprovadoPor: null,
+        gestorAprovadoEm: null,
+        motivoRejeicao: null,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(terceiroMedicoes.id, input.id)).returning();
+      return med;
+    }),
+
   // Nível 2 — Gestor da obra confirma a medição (não libera financeiro ainda).
   aprovarNivelGestor: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), aprovadoPor: z.string() }))

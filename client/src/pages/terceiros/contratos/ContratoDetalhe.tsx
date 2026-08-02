@@ -2032,6 +2032,11 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
   }, [initialMedicaoId]);
   const [rejeicaoModal, setRejeicaoModal] = useState<{ id: number; numero: number } | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
+  // Rev. 4803 — quem fez a medição SOLICITA a aprovação (rascunho → aguardando gestor)
+  const solicitarAprovacaoMut = trpc.terceiroContratos.solicitarAprovacaoMedicao.useMutation({
+    onSuccess: () => { toast.success("Aprovação solicitada! A medição aguarda o gestor da obra."); utilsAd.terceiroContratos.getContrato.invalidate({ id: contrato.id }); },
+    onError: (e: any) => toast.error(e.message),
+  });
   // Rev. 4802 — Aditivos de contrato (excedente de medição)
   const utilsAd = trpc.useUtils();
   const { data: aditivos } = trpc.terceiroContratos.listarAditivos.useQuery(
@@ -2199,11 +2204,40 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                     <span className="text-[11px] text-amber-700 hidden md:inline whitespace-nowrap">Pago parcial: {BRL(pagto.valorPago)}</span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-xs text-gray-500 hidden sm:inline">Medido <strong className="text-gray-800">{BRL(m.valorMedido)}</strong></span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="text-xs text-gray-500 hidden sm:inline mr-0.5">Medido <strong className="text-gray-800">{BRL(m.valorMedido)}</strong></span>
                   <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setDetalheMedicaoId(m.id)}>
                     <Eye className="w-3 h-3" /> Detalhes
                   </Button>
+                  {/* Rev. 4803 — ações direto na linha (pedido: excluir/editar/cancelar sem caçar no popup) */}
+                  {modoEdicao && (m.status === "rascunho" || m.status === "rejeitada") && (
+                    <Button size="sm" className="h-7 gap-1 text-xs bg-blue-600 hover:bg-blue-700" title="Enviar a medição para aprovação do gestor da obra"
+                      disabled={solicitarAprovacaoMut.isPending}
+                      onClick={() => { if (confirm(`Solicitar aprovação da Medição ${String(m.numero).padStart(2, "0")}? Ela vai para o gestor da obra e depois para o sócio administrador.`)) solicitarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }); }}>
+                      {solicitarAprovacaoMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                      <span className="hidden md:inline">Solicitar Aprovação</span>
+                    </Button>
+                  )}
+                  {modoEdicao && isPreApproval && (
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Editar medição"
+                      onClick={() => setEditMedicao({ id: m.id, periodo: m.periodo, dataReferencia: m.dataReferencia || "", observacoes: m.observacoes || "", status: m.status || "rascunho" })}>
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                  )}
+                  {modoEdicao && m.status === "aprovada" && (
+                    <Button size="sm" variant="outline" className="h-7 gap-1 text-xs text-orange-600 border-orange-200 hover:bg-orange-50" title="Cancelar aprovação"
+                      disabled={cancelarAprovacaoMut.isPending}
+                      onClick={() => { if (confirm(`Cancelar aprovação da Medição ${String(m.numero).padStart(2, "0")}? A medição voltará para "Aguardando Aprovação" e os valores acumulados serão recalculados.`)) cancelarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }); }}>
+                      <Undo2 className="w-3 h-3" /><span className="hidden md:inline">Cancelar Aprovação</span>
+                    </Button>
+                  )}
+                  {modoEdicao && m.status !== "paga" && (
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-red-600 border-red-200 hover:bg-red-50" title="Excluir medição"
+                      disabled={excluirMedicaoMut.isPending}
+                      onClick={() => { if (confirm(`Excluir Medição ${String(m.numero).padStart(2, "0")}? ${m.status === "aprovada" ? "Os valores acumulados serão revertidos." : ""}`)) excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }); }}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -2345,6 +2379,13 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                 />
                 {modoEdicao && (
                 <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+                  {(m.status === "rascunho" || m.status === "rejeitada") && (
+                    <Button size="sm" className="gap-1 bg-blue-600 hover:bg-blue-700 text-xs"
+                      disabled={solicitarAprovacaoMut.isPending}
+                      onClick={() => { if (confirm(`Solicitar aprovação da Medição ${String(m.numero).padStart(2, "0")}? Ela vai para o gestor da obra e depois para o sócio administrador.`)) solicitarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }); }}>
+                      <Send className="w-3 h-3" /> Solicitar Aprovação
+                    </Button>
+                  )}
                   {m.status === "aguardando_aprovacao" && !tresNiveis && (
                     <>
                       <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" onClick={() => aprovarMut.mutate({ id: m.id, companyId: contrato.companyId, aprovadoPor: "Responsável" })}>
