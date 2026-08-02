@@ -20,6 +20,7 @@ import {
   Layers, Maximize, Link as LinkIcon, Lock, LockOpen, FileSignature,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import SignaturePad from "@/components/SignaturePad";
 import { toast } from "sonner";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -490,12 +491,36 @@ export default function MedicaoLevantamento() {
   // Rev. 4835 — assinatura NA TELA (pedido do usuário): sem e-mail. Cria o
   // envelope, ativa e abre direto a tela de assinatura do 1º signatário
   // (elaborador); depois o responsável assina na sequência no mesmo aparelho.
-  const abrirAssinaturaPendente = (env: any) => {
-    const pendente = (env?.signatarios || [])
-      .filter((s: any) => s.papel !== "testemunha" && s.status !== "assinado")
-      .sort((a: any, b: any) => (a.ordemAssinatura ?? 0) - (b.ordemAssinatura ?? 0))[0];
-    if (pendente?.token) setLocation(`/integrasign/assinar/${pendente.token}`);
-    else toast.info("Nenhuma assinatura pendente.");
+  // Rev. 4835 — assinar DENTRO da própria tela (pedido do usuário): dialog com
+  // as duas caixinhas de assinatura, nomes já preenchidos, sem sair da página.
+  const [assinaturaDlgOpen, setAssinaturaDlgOpen] = useState(false);
+  const [sigAtual, setSigAtual] = useState<string | null>(null);
+  const abrirAssinaturaPendente = (_env: any) => { setSigAtual(null); setAssinaturaDlgOpen(true); };
+  const sigOrdenados = ((envelopeLev?.signatarios || []) as any[])
+    .filter((s) => s.papel !== "testemunha")
+    .sort((a, b) => (a.ordemAssinatura ?? 0) - (b.ordemAssinatura ?? 0));
+  const proximoSignatario = sigOrdenados.find((s) => s.status !== "assinado") ?? null;
+  const assinarDocM = trpc.integrasign.assinarDocumento.useMutation({
+    onSuccess: async () => {
+      setSigAtual(null);
+      const res = await envelopeLevQ.refetch();
+      const restam = ((res.data?.signatarios || []) as any[]).filter((s: any) => s.papel !== "testemunha" && s.status !== "assinado").length;
+      if (restam === 0) { setAssinaturaDlgOpen(false); toast.success("Memória de Cálculo assinada pelas duas partes! Consolidação liberada."); }
+      else toast.success("Assinatura registrada. Agora falta a outra parte.");
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao registrar a assinatura"),
+  });
+  const confirmarAssinatura = () => {
+    if (!proximoSignatario) return;
+    if (!sigAtual) { toast.error("Assine na caixinha antes de confirmar."); return; }
+    assinarDocM.mutate({
+      token: proximoSignatario.token,
+      assinaturaImagem: sigAtual,
+      rubricaImagem: sigAtual,
+      nomeConfirmado: proximoSignatario.nome,
+      termoAceito: true,
+      userAgent: navigator.userAgent,
+    } as any);
   };
   const enviarEnvelopeLevM = trpc.integrasign.enviarParaAssinatura.useMutation({
     onSuccess: async () => {
@@ -4085,6 +4110,50 @@ export default function MedicaoLevantamento() {
 
       {/* Rev. 4780 — Configurar SERVIÇOS do levantamento (catálogo híbrido) */}
       {/* Rev. 4784 — remover planta com levantamento: senha do ADM Master */}
+      {/* Rev. 4835 — assinatura da Memória de Cálculo DENTRO da tela: caixinhas
+          com nomes já preenchidos (elaborador = logado, responsável = contrato) */}
+      <Dialog open={assinaturaDlgOpen} onOpenChange={(v) => { setAssinaturaDlgOpen(v); if (!v) setSigAtual(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-blue-600" />Assinaturas da Memória de Cálculo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {sigOrdenados.map((s: any) => {
+              const assinado = s.status === "assinado";
+              const daVez = proximoSignatario?.id === s.id;
+              return (
+                <div key={s.id} className={`rounded-lg border p-3 ${assinado ? "border-emerald-300 bg-emerald-50/50" : daVez ? "border-blue-300" : "opacity-60"}`}>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                        {s.papel === "fornecedor" ? "Responsável pelo contrato (contratada)" : "Elaborador (responsável pelo levantamento)"}
+                      </div>
+                      <div className="text-sm font-bold break-words">{s.nome}</div>
+                    </div>
+                    {assinado ? (
+                      <span className="flex items-center gap-1 text-emerald-700 text-xs font-semibold shrink-0"><BadgeCheck className="h-4 w-4" />Assinado</span>
+                    ) : (
+                      <span className="text-xs text-gray-400 shrink-0">{daVez ? "assina agora" : "aguardando"}</span>
+                    )}
+                  </div>
+                  {daVez && !assinado && (
+                    <div className="space-y-2 pt-1">
+                      <SignaturePad value={sigAtual} onChange={setSigAtual} label={`Assinatura de ${s.nome}`} height={150} />
+                      <Button className="w-full gap-1.5" disabled={assinarDocM.isPending || !sigAtual} onClick={confirmarAssinatura}>
+                        {assinarDocM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        Confirmar assinatura de {s.nome.split(" ")[0]}
+                      </Button>
+                      <p className="text-[10px] text-gray-400">Ao confirmar, declaro que sou {s.nome} e concordo com o conteúdo da Memória de Cálculo.</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {sigOrdenados.length === 0 && <p className="text-sm text-gray-500 py-4 text-center">Carregando assinaturas…</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!senhaPlantaDlg} onOpenChange={(v) => { if (!v) { setSenhaPlantaDlg(null); setSenhaPlanta(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
