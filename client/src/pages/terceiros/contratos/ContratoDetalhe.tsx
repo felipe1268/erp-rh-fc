@@ -2274,8 +2274,10 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
             <div className="px-4 py-3">
               {/* Rev. 4800 — linha enxuta: só "Medição NN" + status; tudo o mais
                   (observações, aprovações, FD, ações) abre no popup de detalhes. */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer" onClick={() => setExpandedMedicao(isExpanded ? null : m.id)}>
+              {/* Rev. 4859 — REGRA DE OURO: nada sobrepõe. A linha QUEBRA em blocos
+                  (flex-wrap) quando não cabe; cada selo desce inteiro p/ a linha de baixo. */}
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 flex-1 basis-64 cursor-pointer" onClick={() => setExpandedMedicao(isExpanded ? null : m.id)}>
                   {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
                   <span className="font-semibold text-gray-900 whitespace-nowrap">Medição {String(m.numero).padStart(2, "0")}</span>
                   {Number((m as any).revisao || 0) > 0 && (

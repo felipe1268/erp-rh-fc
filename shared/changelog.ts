@@ -5,6 +5,9 @@
  *   virou selo "Diverge do cronograma" (comparativo consultivo com o avanco
  *   da obra; detalhe completo ao expandir a medicao).
  * - Medicao rejeitada tambem ganhou selo "Rejeitada" com o motivo no toque.
+ * - REGRA DE OURO (nada sobrepoe): a linha da medicao agora QUEBRA em blocos
+ *   quando nao cabe — cada selo/texto desce inteiro para a linha de baixo,
+ *   em vez de escrever por cima do "Medido R$".
  */
 
 /**
