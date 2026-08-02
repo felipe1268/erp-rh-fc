@@ -499,6 +499,9 @@ export default function MedicaoLevantamento() {
   // cada parte tem um botãozinho lado a lado no fim do documento.
   const [sigDlgFor, setSigDlgFor] = useState<any>(null);
   const [memFrameH, setMemFrameH] = useState<number>(600);
+  // Rev. 4839 — cache do bloco de plantas (prontuário) na sessão do dialog
+  const memPlantasRef = useRef<string | null>(null);
+  const [memPlantasTick, setMemPlantasTick] = useState(0);
   const abrirAssinaturaPendente = (_env: any) => { setSigAtual(null); setAssinaturaDlgOpen(true); };
   // Rev. 4837 — TUDO num lugar só (pedido do usuário): "Memória de cálculo"
   // abre o visualizador na tela com o campo de assinatura logo abaixo; se o
@@ -511,15 +514,28 @@ export default function MedicaoLevantamento() {
   // já resolveu (antes, se a query ainda estava carregando ao abrir, ficava
   // preso em "Carregando assinaturas…" para sempre).
   const envelopeAutoRef = useRef(false);
+  const memPlantasBusyRef = useRef(false);
+  // Rev. 4839 — gera o bloco de plantas (prontuário) ao abrir o dialog
+  useEffect(() => {
+    if (!assinaturaDlgOpen) { memPlantasRef.current = null; memPlantasBusyRef.current = false; return; }
+    if (memPlantasRef.current != null || memPlantasBusyRef.current) return;
+    memPlantasBusyRef.current = true;
+    void montarPlantasHtml()
+      .catch(() => "")
+      .then((h) => { memPlantasRef.current = h ?? ""; memPlantasBusyRef.current = false; setMemPlantasTick((t) => t + 1); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assinaturaDlgOpen]);
   useEffect(() => {
     if (!assinaturaDlgOpen) { envelopeAutoRef.current = false; return; }
     if (envelopeAutoRef.current) return;
+    // espera o bloco de plantas ficar pronto p/ o documento assinado já incluir o prontuário
+    if (memPlantasRef.current == null) return;
     if (isTerceiro && !travado && envelopeLevQ.isFetched && !envelopeLev && !criarEnvelopeLevM.isPending && !enviarEnvelopeLevM.isPending) {
       envelopeAutoRef.current = true;
       enviarMemoriaParaAssinatura();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assinaturaDlgOpen, envelopeLevQ.isFetched, envelopeLev, isTerceiro, travado]);
+  }, [assinaturaDlgOpen, envelopeLevQ.isFetched, envelopeLev, isTerceiro, travado, memPlantasTick]);
   const sigOrdenados = ((envelopeLev?.signatarios || []) as any[])
     .filter((s) => s.papel !== "testemunha")
     .sort((a, b) => (a.ordemAssinatura ?? 0) - (b.ordemAssinatura ?? 0));
@@ -2417,6 +2433,94 @@ export default function MedicaoLevantamento() {
 
   // Rev. 4835 — o MESMO HTML alimenta a impressão e o envelope FCSign
   // (assinatura da Memória de Cálculo antes da consolidação).
+  // Rev. 4839 — "prontuário da medição": snapshot de CADA planta/página com os
+  // desenhos do levantamento embutido na Memória de Cálculo (PDF vira raster
+  // via pdfjs; DXF usa o SVG derivado; contornos vão por cima em SVG 0..1).
+  async function montarPlantasHtml(): Promise<string> {
+    const vivos = ((campo?.contornos ?? []) as any[]).filter((c) => !c.deletedAt);
+    const grupos = new Map<string, any[]>();
+    for (const c of vivos) {
+      const k = `${c.pdfId}|${c.pagina ?? 1}`;
+      grupos.set(k, [...(grupos.get(k) ?? []), c]);
+    }
+    if (!grupos.size) return "";
+    const blocos: string[] = [];
+    for (const pdf of pdfs) {
+      const pags = [...grupos.keys()]
+        .filter((k) => k.startsWith(`${pdf.id}|`))
+        .map((k) => parseInt(k.split("|")[1], 10))
+        .sort((a, b) => a - b);
+      for (const pag of pags) {
+        const cs = grupos.get(`${pdf.id}|${pag}`)!;
+        let bg = ""; let ratio = 1.4;
+        try {
+          const src = off.pdfFileFor(pdf);
+          const nomeArq = String(pdf.arquivoNome || pdf.nome || pdf.arquivoUrl || "").toLowerCase();
+          const ehDxf = nomeArq.split("?")[0].endsWith(".dxf") || nomeArq.includes(".dxf") || String(pdf.contentType || "").toLowerCase().includes("dxf");
+          if (ehDxf) {
+            let parsed: any = null;
+            const key = (pdf as any)?.arquivoKey
+              || ((pdf.arquivoUrl || "").startsWith("/uploads/") ? decodeURIComponent(String(pdf.arquivoUrl).slice("/uploads/".length).split("?")[0]) : "");
+            if (key && navigator.onLine !== false) {
+              try {
+                const r = await fetch("/api/upload/levantamento-planta/derivar", {
+                  method: "POST", credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ key }),
+                });
+                if (r.ok) { const j = await r.json(); if (j?.svg) parsed = j; }
+              } catch { /* fallback local */ }
+            }
+            if (!parsed && src) { const t = await (await fetch(src)).text(); parsed = parseDxfPlanta(t); }
+            if (!parsed?.svg) continue;
+            ratio = (parsed.w || 1) / (parsed.h || 1);
+            bg = String(parsed.svg).replace("<svg ", '<svg style="position:absolute;inset:0;width:100%;height:100%" ');
+          } else {
+            if (!src) continue;
+            const doc = await pdfjs.getDocument(src).promise;
+            const page = await doc.getPage(pag);
+            const vp1 = page.getViewport({ scale: 1 });
+            const scale = 1400 / Math.max(vp1.width, 1);
+            const vp = page.getViewport({ scale });
+            const cv = document.createElement("canvas");
+            cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+            const ctx = cv.getContext("2d")!;
+            ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+            await page.render({ canvasContext: ctx, viewport: vp } as any).promise;
+            try { void doc.destroy(); } catch { /* */ }
+            ratio = vp.width / Math.max(vp.height, 1);
+            bg = `<img src="${cv.toDataURL("image/jpeg", 0.8)}" style="position:absolute;inset:0;width:100%;height:100%" />`;
+          }
+        } catch { continue; }
+        const els = cs.map((c: any) => {
+          let pts: any[] = []; try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+          if (!pts.length) return "";
+          const cor = c.cor || (COR_TIPO as any)[c.tipo] || "#2563eb";
+          let cx = 0, cy = 0; for (const p of pts) { cx += p.x; cy += p.y; }
+          cx /= pts.length; cy /= pts.length;
+          const badge = c.numero != null
+            ? `<circle cx="${cx}" cy="${cy}" r="0.013" fill="#fff" fill-opacity="0.92" stroke="${cor}" stroke-width="0.002"/><text x="${cx}" y="${cy}" font-size="0.015" fill="#111827" text-anchor="middle" dominant-baseline="central" font-weight="700">${c.numero}</text>`
+            : "";
+          if (c.tipo === "contagem") {
+            return pts.map((p: any) => `<circle cx="${p.x}" cy="${p.y}" r="0.007" fill="${cor}" fill-opacity="0.45" stroke="${cor}" stroke-width="0.002"/>`).join("") + badge;
+          }
+          const fecha = FECHA_POLIGONO(c.tipo);
+          const d = pts.map((p: any, i: number) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (fecha ? " Z" : "");
+          return `<path d="${d}" fill="${fecha ? cor : "none"}" fill-opacity="${fecha ? 0.22 : 0}" stroke="${cor}" stroke-width="0.003"/>` + badge;
+        }).join("");
+        const titulo = `${escHtml(pdf.nome || pdf.arquivoNome || "Planta")}${(pdf.numPaginas ?? 1) > 1 ? ` — pág. ${pag}` : ""}`;
+        blocos.push(`<div style="page-break-inside:avoid;margin-bottom:14px">
+          <div style="font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#374151;margin:0 0 4px">${titulo} <span style="color:#6b7280;font-weight:normal;text-transform:none">— ${cs.length} medição(ões) demarcada(s)</span></div>
+          <div style="position:relative;width:100%;aspect-ratio:${ratio};border:1px solid #d1d5db;background:#fff;overflow:hidden">${bg}
+            <svg viewBox="0 0 1 1" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">${els}</svg>
+          </div>
+        </div>`);
+      }
+    }
+    if (!blocos.length) return "";
+    return `<h3 style="font-size:13px;margin:18px 0 6px">Plantas com os desenhos do levantamento</h3>${blocos.join("")}`;
+  }
+
   function buildMemoriaHtml(comPrint: boolean): string {
     const linhas = (consolidado?.linhas ?? []) as any[];
     const todos = (campo?.contornos ?? []) as any[];
@@ -2537,6 +2641,7 @@ export default function MedicaoLevantamento() {
           <td style="border:1px solid #ccc;padding:5px;text-align:right">${brl(consolidado?.totalGeral ?? 0)}</td>
         </tr></tfoot>
       </table>
+      ${memPlantasRef.current ?? ""}
       ${fotosHtml}
       <!-- Assinaturas: responsável pelo levantamento × fornecedor -->
       <table style="border-collapse:collapse;width:100%;margin-top:56px;page-break-inside:avoid"><tbody><tr>
@@ -2556,9 +2661,14 @@ export default function MedicaoLevantamento() {
     return html;
   }
 
-  function gerarMemoriaCalculo() {
-    const html = buildMemoriaHtml(true);
+  async function gerarMemoriaCalculo() {
+    // iOS/Safari: abrir a janela SÍNCRONO no gesto do usuário (senão popup bloqueado)
     const w = window.open("", "_blank");
+    if (memPlantasRef.current == null) {
+      try { memPlantasRef.current = await montarPlantasHtml(); } catch { memPlantasRef.current = ""; }
+      setMemPlantasTick((t) => t + 1);
+    }
+    const html = buildMemoriaHtml(true);
     if (w) { w.document.write(html); w.document.close(); }
   }
 
@@ -4145,10 +4255,11 @@ export default function MedicaoLevantamento() {
                 } catch { /* sandbox */ }
               }}
             />
-            {/* Rev. 4838 — assinaturas no FIM do documento: dois botõezinhos lado
-                a lado (elaborador | responsável); toque abre a caixinha de assinar. */}
+          </div>
+          {/* Rev. 4838b — assinaturas SEMPRE visíveis: rodapé fixo do dialog
+              (antes ficava depois do documento e sumia na rolagem). */}
             {isTerceiro && !travado && !memoriaAssinada && (
-              <div className="border-t bg-gray-50/60 p-4 space-y-2">
+              <div className="border-t bg-gray-50 p-3 space-y-2 shrink-0">
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Assinaturas</div>
                 {(criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending || (!envelopeLev && !envelopeLevQ.isFetched)) ? (
                   <p className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Preparando o documento para assinatura…</p>
@@ -4178,7 +4289,6 @@ export default function MedicaoLevantamento() {
                 )}
               </div>
             )}
-          </div>
         </DialogContent>
       </Dialog>
 
