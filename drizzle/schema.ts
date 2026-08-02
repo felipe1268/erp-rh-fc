@@ -8844,6 +8844,7 @@ export const medicaoCampoPdfs = pgTable("medicao_campo_pdfs", {
   calibracaoJson:   text("calibracao_json"),
   ordem:            integer().default(0),
   pavimentoId:      integer("pavimento_id"), // Rev. 4805 — planta importada de um projeto/pavimento da obra (obra_pavimentos)
+  pavimentoRevisao: integer("pavimento_revisao"), // Rev. 4806 — qual REV. do projeto foi importada (medições antigas ficam na antiga)
   criadoEm:         timestamp("criado_em").defaultNow(),
   atualizadoEm:     timestamp("atualizado_em").defaultNow(),
   deletedAt:        timestamp("deleted_at"),
@@ -8861,6 +8862,7 @@ export const obraPavimentos = pgTable("obra_pavimentos", {
   nome:             varchar({ length: 255 }).notNull(),
   ordem:            integer().default(0),
   peDireito:        numeric("pe_direito", { precision: 6, scale: 2 }).default("3.00"),
+  revisao:          integer().default(1), // Rev. 4806 — controle de revisão do projeto (novo DXF = REV. +1)
   arquivoUrl:       text("arquivo_url"),
   arquivoKey:       text("arquivo_key"),
   arquivoNome:      varchar("arquivo_nome", { length: 500 }),

@@ -1080,9 +1080,10 @@ export const medicaoRouter = router({
       await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       // obra pertence à empresa? (anti-IDOR do FK explícito)
-      const obraRes = await db.execute(sql`SELECT 1 AS ok FROM obras WHERE id = ${input.obraId} AND company_id = ${input.companyId} LIMIT 1`);
-      const obraRows: any[] = (obraRes as any).rows ?? (obraRes as any) ?? [];
-      if (!obraRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada nesta empresa." });
+      // Rev. 4805 fix — obras é camelCase ("companyId"); usar Drizzle, não SQL cru.
+      const [obraRow] = await db.select({ id: obras.id }).from(obras)
+        .where(and(eq(obras.id, input.obraId), eq(obras.companyId, input.companyId))).limit(1);
+      if (!obraRow) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada nesta empresa." });
       let url: string | undefined;
       if (input.arquivoKey) {
         if (!input.arquivoKey.startsWith(`medicao-campo/${input.companyId}/`)) {
@@ -1099,7 +1100,18 @@ export const medicaoRouter = router({
         if (input.peDireito != null) upd.peDireito = String(input.peDireito);
         if (input.ordem != null) upd.ordem = input.ordem;
         if (input.observacoes !== undefined) upd.observacoes = input.observacoes;
-        if (input.arquivoKey) { upd.arquivoKey = input.arquivoKey; upd.arquivoUrl = url; upd.arquivoNome = input.arquivoNome ?? null; }
+        if (input.arquivoKey) {
+          upd.arquivoKey = input.arquivoKey; upd.arquivoUrl = url; upd.arquivoNome = input.arquivoNome ?? null;
+          // Rev. 4806 — controle de revisão: substituir o DXF (chave diferente da
+          // atual) sobe a REV. Medições antigas ficam presas à planta antiga
+          // (cópia na biblioteca); levantamentos passam a oferecer a nova REV.
+          const [atual] = await db.select({ arquivoKey: obraPavimentos.arquivoKey, revisao: obraPavimentos.revisao })
+            .from(obraPavimentos)
+            .where(and(eq(obraPavimentos.id, input.id), eq(obraPavimentos.companyId, input.companyId)));
+          if (atual?.arquivoKey && atual.arquivoKey !== input.arquivoKey) {
+            upd.revisao = (atual.revisao ?? 1) + 1;
+          }
+        }
         const [row] = await db.update(obraPavimentos).set(upd)
           .where(and(eq(obraPavimentos.id, input.id), eq(obraPavimentos.companyId, input.companyId), eq(obraPavimentos.obraId, input.obraId)))
           .returning();
@@ -1203,11 +1215,16 @@ export const medicaoRouter = router({
       const destinoCampoId = campo.status === "biblioteca"
         ? campo.id
         : (await resolverBibliotecaPlantas(db, input.companyId, campo.contratoId, origemNorm)).id;
+      // Rev. 4806 — idempotência POR REVISÃO: se a REV. vigente já está na
+      // biblioteca, devolve; se só há REV. antiga, importa a nova como planta
+      // ADICIONAL (as medições antigas continuam na antiga).
+      const revAtual = pav.revisao ?? 1;
       const [ja] = await db.select().from(medicaoCampoPdfs)
         .where(and(
           eq(medicaoCampoPdfs.medicaoCampoId, destinoCampoId),
           eq(medicaoCampoPdfs.companyId, input.companyId),
           eq(medicaoCampoPdfs.pavimentoId, input.pavimentoId),
+          sql`COALESCE(${medicaoCampoPdfs.pavimentoRevisao}, 1) = ${revAtual}`,
           isNull(medicaoCampoPdfs.deletedAt),
         )).limit(1);
       if (ja) return ja;
@@ -1217,7 +1234,7 @@ export const medicaoRouter = router({
       const [row] = await db.insert(medicaoCampoPdfs).values({
         companyId: input.companyId,
         medicaoCampoId: destinoCampoId,
-        nome: pav.nome,
+        nome: revAtual > 1 ? `${pav.nome} (REV. ${revAtual})` : pav.nome,
         tipo: "pavimento",
         arquivoUrl: pav.arquivoUrl,
         arquivoKey: pav.arquivoKey,
@@ -1225,6 +1242,7 @@ export const medicaoRouter = router({
         numPaginas: 1,
         ordem: (ordemRow?.max ?? 0) + 1,
         pavimentoId: pav.id,
+        pavimentoRevisao: revAtual,
       }).returning();
       return row;
     }),

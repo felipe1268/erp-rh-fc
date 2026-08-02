@@ -2296,7 +2296,11 @@ REGRAS DE EXTRAÇÃO:
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_obrapav_obra ON obra_pavimentos(obra_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_obrapav_company ON obra_pavimentos(company_id)`);
           await db.execute(sql`ALTER TABLE medicao_campo_pdfs ADD COLUMN IF NOT EXISTS pavimento_id INTEGER`);
-          console.log(`[SyncSchema+] Rev. 4805: obra_pavimentos + medicao_campo_pdfs.pavimento_id garantidos.`);
+          // Rev. 4806 — controle de revisão de projeto: novo DXF = REV.+1; medições
+          // antigas ficam na planta antiga, novas importam a revisão vigente.
+          await db.execute(sql`ALTER TABLE obra_pavimentos ADD COLUMN IF NOT EXISTS revisao INTEGER DEFAULT 1`);
+          await db.execute(sql`ALTER TABLE medicao_campo_pdfs ADD COLUMN IF NOT EXISTS pavimento_revisao INTEGER`);
+          console.log(`[SyncSchema+] Rev. 4805/4806: obra_pavimentos (+revisao) + medicao_campo_pdfs.pavimento_id/pavimento_revisao garantidos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA obra_pavimentos:`, e?.message || e); }
 
         // Rev. 3041 — CIPA: eleição digital (candidatos, eleitores c/ link, votos anônimos) + planos de ação.

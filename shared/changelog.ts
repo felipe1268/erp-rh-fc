@@ -1,4 +1,19 @@
 /**
+ * Rev. 4806 - CONTROLE DE REVISAO DOS PROJETOS PARA MEDICAO
+ *
+ * Pedido do usuario: "se eu revisar o layout, preciso de controle de revisao:
+ * as medicoes anteriores nao perdem e as novas adotam o novo layout".
+ * - Substituir o DXF de um pavimento sobe a revisao (REV. 2, 3...) com badge
+ *   no cadastro da obra.
+ * - As plantas ja importadas nos contratos NAO mudam: cada importacao guarda
+ *   a revisao; medicoes antigas continuam presas ao layout em que foram
+ *   medidas.
+ * - No levantamento, a nova revisao aparece de novo como chip "projeto da
+ *   obra - REV. N" para importar com 1 toque; entra como planta ADICIONAL,
+ *   nomeada "Pavimento (REV. N)", convivendo com a antiga.
+ */
+
+/**
  * Rev. 4805 - PROJETOS PARA MEDICAO (PAVIMENTOS DA OBRA) + PE-DIREITO AUTOMATICO
  *
  * Pedido do usuario: cadastrar os projetos na OBRA (existe antes de qualquer

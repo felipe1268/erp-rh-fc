@@ -2394,7 +2394,7 @@ export default function MedicaoLevantamento() {
               ))}
               {/* Rev. 4805 — projetos da obra ainda não importados: 1 toque adiciona */}
               {(((pavimentosQ.data as any)?.pavimentos ?? []) as any[])
-                .filter((pv: any) => pv.arquivoKey && !pdfs.some((p: any) => p.pavimentoId === pv.id))
+                .filter((pv: any) => pv.arquivoKey && !pdfs.some((p: any) => p.pavimentoId === pv.id && (p.pavimentoRevisao ?? 1) === (pv.revisao ?? 1)))
                 .map((pv: any) => (
                   <button
                     key={`pav-${pv.id}`}
@@ -2407,7 +2407,9 @@ export default function MedicaoLevantamento() {
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       : <Plus className="h-3.5 w-3.5" />}
                     {pv.nome}
-                    <span className="text-[10px] text-indigo-400 font-normal">projeto da obra</span>
+                    <span className="text-[10px] text-indigo-400 font-normal">
+                      {(pv.revisao ?? 1) > 1 ? `projeto da obra · REV. ${pv.revisao}` : "projeto da obra"}
+                    </span>
                   </button>
                 ))}
               <Button size="sm" variant="outline" className="gap-1.5 relative overflow-hidden" disabled={uploadPdfM.isPending || uploadPct !== null} onClick={() => pdfInputRef.current?.click()} title="Somente DXF: medidas exatas do CAD, sem calibrar nem conferir escala. Tem DWG? O sistema explica como converter.">

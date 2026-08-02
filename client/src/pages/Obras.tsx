@@ -2416,7 +2416,10 @@ function ProjetosMedicaoSection({ companyId, obraId }: { companyId: number; obra
         nome: pav?.nome || file.name.replace(/\.dxf$/i, ""),
         arquivoKey: j.key, arquivoNome: file.name,
       });
-      toast.success("Projeto enviado. O sistema confere a escala automaticamente na medição.");
+      const jaTinha = !!pavimentos.find(p => p.id === pavId)?.arquivoKey;
+      toast.success(jaTinha
+        ? "Nova revisão do projeto salva. Medições anteriores continuam na planta antiga; as novas usam a nova revisão."
+        : "Projeto enviado. O sistema confere a escala automaticamente na medição.");
     } catch (e: any) {
       toast.error(e?.message || "Erro ao enviar o projeto.");
     } finally {
@@ -2468,6 +2471,9 @@ function ProjetosMedicaoSection({ companyId, obraId }: { companyId: number; obra
                 {uploadingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                 {p.arquivoKey ? (p.arquivoNome || "DXF enviado") : "Enviar DXF (1:100)"}
               </button>
+              {(p.revisao ?? 1) > 1 && (
+                <Badge variant="outline" className="text-[10px] bg-violet-50 text-violet-700 border-violet-200">REV. {p.revisao}</Badge>
+              )}
               <button type="button" className="text-slate-300 hover:text-red-500 ml-auto" title="Excluir pavimento"
                 onClick={() => { if (excluirMut.isPending) return; excluirMut.mutate({ companyId, id: p.id }); }}>
                 <Trash2 className="h-4 w-4" />
