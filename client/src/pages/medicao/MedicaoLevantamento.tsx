@@ -2381,7 +2381,12 @@ export default function MedicaoLevantamento() {
                       title: "Área superior ao contrato — tratar como aditivo?",
                       description: `${itensExcedidos.map((it) => `${it.eapCodigo ? it.eapCodigo + " · " : ""}${it.descricao}: ${numFmt(it.acumulada, 2)} ${it.unidade} medidos × ${numFmt(it.contratada, 2)} ${it.unidade} contratados (+${numFmt(it.acumulada - it.contratada, 2)} ${it.unidade})`).join("; ")}. Ao confirmar, o levantamento consolida e o excedente segue para a medição como ADITIVO (com justificativa e aprovação na aba Medições do contrato).`,
                       confirmText: "Sim, tratar como aditivo",
-                      onConfirm: () => consolidarM.mutate({ companyId, medicaoCampoId: campoId }),
+                      onConfirm: () => consolidarM.mutate({ companyId, medicaoCampoId: campoId }, {
+                        onSuccess: () => toast.success(
+                          "Consolidado. O contrato mede 100% e o excedente ficou registrado — gere o aditivo na aba Medições do contrato (botão \"Gerar Aditivo\" no item excedido).",
+                          { duration: 9000 },
+                        ),
+                      }),
                     }
                   : {
                       title: "Consolidar levantamento?",

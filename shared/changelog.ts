@@ -7,6 +7,8 @@
  * - Ao CONSOLIDAR com excedente, pergunta: "tratar como aditivo?" — confirmando,
  *   consolida e o excedente segue para a medicao como aditivo (justificativa e
  *   aprovacao na aba Medicoes do contrato).
+ * - Apos confirmar, aviso na tela orienta: o contrato mede 100% e o aditivo e'
+ *   gerado na aba Medicoes do contrato (botao "Gerar Aditivo" no item excedido).
  */
 
 /**
