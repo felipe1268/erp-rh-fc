@@ -1,4 +1,15 @@
 /**
+ * Rev. 4838 - MEMORIA DE CALCULO: ASSINATURA SIMPLES NO FIM DO DOCUMENTO
+ *
+ * - Visualizador em rolagem continua: o documento aparece inteiro e as
+ *   assinaturas ficam NO FIM, como no papel.
+ * - Dois botoezinhos lado a lado (elaborador/usuario | responsavel pelo
+ *   contrato); tocar abre uma caixinha pequena para assinar e confirmar.
+ * - Corrigido o "Carregando assinaturas..." infinito quando o dialog abria
+ *   antes da consulta do envelope terminar (agora cria automatico ao abrir).
+ */
+
+/**
  * Rev. 4837 - MEMORIA DE CALCULO: VISUALIZADOR + ASSINATURA NUM LUGAR SO
  *
  * - O botao "Assinar memoria" foi removido; agora tudo acontece pelo botao

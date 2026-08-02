@@ -495,6 +495,10 @@ export default function MedicaoLevantamento() {
   // as duas caixinhas de assinatura, nomes já preenchidos, sem sair da página.
   const [assinaturaDlgOpen, setAssinaturaDlgOpen] = useState(false);
   const [sigAtual, setSigAtual] = useState<string | null>(null);
+  // Rev. 4838 — caixinha PEQUENA de assinatura sob demanda (pedido do usuário):
+  // cada parte tem um botãozinho lado a lado no fim do documento.
+  const [sigDlgFor, setSigDlgFor] = useState<any>(null);
+  const [memFrameH, setMemFrameH] = useState<number>(600);
   const abrirAssinaturaPendente = (_env: any) => { setSigAtual(null); setAssinaturaDlgOpen(true); };
   // Rev. 4837 — TUDO num lugar só (pedido do usuário): "Memória de cálculo"
   // abre o visualizador na tela com o campo de assinatura logo abaixo; se o
@@ -502,10 +506,20 @@ export default function MedicaoLevantamento() {
   const abrirMemoriaDlg = () => {
     setSigAtual(null);
     setAssinaturaDlgOpen(true);
-    if (isTerceiro && !travado && !envelopeLev && !envelopeLevQ.isLoading && !criarEnvelopeLevM.isPending && !enviarEnvelopeLevM.isPending) {
+  };
+  // Rev. 4838 — envelope criado automático quando o dialog abre e a consulta
+  // já resolveu (antes, se a query ainda estava carregando ao abrir, ficava
+  // preso em "Carregando assinaturas…" para sempre).
+  const envelopeAutoRef = useRef(false);
+  useEffect(() => {
+    if (!assinaturaDlgOpen) { envelopeAutoRef.current = false; return; }
+    if (envelopeAutoRef.current) return;
+    if (isTerceiro && !travado && envelopeLevQ.isFetched && !envelopeLev && !criarEnvelopeLevM.isPending && !enviarEnvelopeLevM.isPending) {
+      envelopeAutoRef.current = true;
       enviarMemoriaParaAssinatura();
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assinaturaDlgOpen, envelopeLevQ.isFetched, envelopeLev, isTerceiro, travado]);
   const sigOrdenados = ((envelopeLev?.signatarios || []) as any[])
     .filter((s) => s.papel !== "testemunha")
     .sort((a, b) => (a.ordemAssinatura ?? 0) - (b.ordemAssinatura ?? 0));
@@ -513,6 +527,7 @@ export default function MedicaoLevantamento() {
   const assinarDocM = trpc.integrasign.assinarDocumento.useMutation({
     onSuccess: async () => {
       setSigAtual(null);
+      setSigDlgFor(null);
       const res = await envelopeLevQ.refetch();
       const restam = ((res.data?.signatarios || []) as any[]).filter((s: any) => s.papel !== "testemunha" && s.status !== "assinado").length;
       if (restam === 0) { setAssinaturaDlgOpen(false); toast.success("Memória de Cálculo assinada pelas duas partes! Consolidação liberada."); }
@@ -4113,58 +4128,73 @@ export default function MedicaoLevantamento() {
               </span>
             </DialogTitle>
           </DialogHeader>
-          {/* Visualizador na tela (HTML, não PDF) */}
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          {/* Visualizador na tela (HTML, não PDF) — rolagem contínua: o iframe
+              cresce até a altura do documento e as assinaturas ficam NO FIM. */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
             <iframe
               title="Memória de Cálculo"
-              sandbox=""
+              sandbox="allow-same-origin"
               srcDoc={assinaturaDlgOpen ? buildMemoriaHtml(false) : ""}
-              className="w-full shrink-0 bg-white"
-              style={{ height: "55%", minHeight: 280, border: 0, borderBottom: "1px solid #e5e7eb" }}
+              className="w-full block bg-white"
+              style={{ height: memFrameH, border: 0 }}
+              onLoad={(e) => {
+                try {
+                  const d = (e.target as HTMLIFrameElement).contentDocument;
+                  const h = Math.max(d?.documentElement?.scrollHeight ?? 0, d?.body?.scrollHeight ?? 0);
+                  if (h > 100) setMemFrameH(h + 24);
+                } catch { /* sandbox */ }
+              }}
             />
-          {/* Assinaturas concentradas aqui embaixo (só terceiros, não consolidado) */}
-          {isTerceiro && !travado && !memoriaAssinada && (
-          <div className="space-y-3 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Assinaturas</div>
-            {(criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending) && (
-              <p className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Preparando o documento para assinatura…</p>
-            )}
-            {sigOrdenados.map((s: any) => {
-              const assinado = s.status === "assinado";
-              const daVez = proximoSignatario?.id === s.id;
-              return (
-                <div key={s.id} className={`rounded-lg border p-3 ${assinado ? "border-emerald-300 bg-emerald-50/50" : daVez ? "border-blue-300" : "opacity-60"}`}>
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                        {s.papel === "fornecedor" ? "Responsável pelo contrato (contratada)" : "Elaborador (responsável pelo levantamento)"}
-                      </div>
-                      <div className="text-sm font-bold break-words">{s.nome}</div>
-                    </div>
-                    {assinado ? (
-                      <span className="flex items-center gap-1 text-emerald-700 text-xs font-semibold shrink-0"><BadgeCheck className="h-4 w-4" />Assinado</span>
-                    ) : (
-                      <span className="text-xs text-gray-400 shrink-0">{daVez ? "assina agora" : "aguardando"}</span>
-                    )}
+            {/* Rev. 4838 — assinaturas no FIM do documento: dois botõezinhos lado
+                a lado (elaborador | responsável); toque abre a caixinha de assinar. */}
+            {isTerceiro && !travado && !memoriaAssinada && (
+              <div className="border-t bg-gray-50/60 p-4 space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Assinaturas</div>
+                {(criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending || (!envelopeLev && !envelopeLevQ.isFetched)) ? (
+                  <p className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Preparando o documento para assinatura…</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {sigOrdenados.map((s: any) => {
+                      const assinado = s.status === "assinado";
+                      const daVez = proximoSignatario?.id === s.id;
+                      return (
+                        <div key={s.id} className={`rounded-lg border bg-white p-3 text-center ${assinado ? "border-emerald-300" : daVez ? "border-blue-300" : ""}`}>
+                          <div className="text-sm font-bold break-words">{s.nome}</div>
+                          <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-2">
+                            {s.papel === "fornecedor" ? "Responsável pelo contrato" : "Elaborador (usuário)"}
+                          </div>
+                          {assinado ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-700 text-xs font-semibold"><BadgeCheck className="h-4 w-4" />Assinado</span>
+                          ) : (
+                            <Button size="sm" variant={daVez ? "default" : "outline"} className="h-8 gap-1.5" disabled={!daVez}
+                              onClick={() => { setSigAtual(null); setSigDlgFor(s); }}>
+                              <FileSignature className="h-3.5 w-3.5" />{daVez ? "Assinar" : "Aguardando"}
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  {daVez && !assinado && (
-                    <div className="space-y-2 pt-1">
-                      <SignaturePad value={sigAtual} onChange={setSigAtual} label={`Assinatura de ${s.nome}`} height={150} />
-                      <Button className="w-full gap-1.5" disabled={assinarDocM.isPending || !sigAtual} onClick={confirmarAssinatura}>
-                        {assinarDocM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                        Confirmar assinatura de {s.nome.split(" ")[0]}
-                      </Button>
-                      <p className="text-[10px] text-gray-400">Ao confirmar, declaro que sou {s.nome} e concordo com o conteúdo da Memória de Cálculo.</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {sigOrdenados.length === 0 && !(criarEnvelopeLevM.isPending || enviarEnvelopeLevM.isPending) && (
-              <p className="text-sm text-gray-500 py-2">Carregando assinaturas…</p>
+                )}
+              </div>
             )}
           </div>
-          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 4838 — caixinha pequenininha de assinatura */}
+      <Dialog open={!!sigDlgFor} onOpenChange={(v) => { if (!v) { setSigDlgFor(null); setSigAtual(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base"><FileSignature className="h-4 w-4 text-blue-600" />Assinatura de {sigDlgFor?.nome}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <SignaturePad value={sigAtual} onChange={setSigAtual} label="Assine na caixinha" height={150} />
+            <Button className="w-full gap-1.5" disabled={assinarDocM.isPending || !sigAtual} onClick={confirmarAssinatura}>
+              {assinarDocM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Confirmar assinatura
+            </Button>
+            <p className="text-[10px] text-gray-400">Ao confirmar, declaro que sou {sigDlgFor?.nome} e concordo com o conteúdo da Memória de Cálculo.</p>
           </div>
         </DialogContent>
       </Dialog>
