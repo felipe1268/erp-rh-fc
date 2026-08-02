@@ -1,15 +1,17 @@
 /**
  * Rev. 4833 - CADASTRO DA OBRA EM ABAS
  *
- * - O formulario "Nova Obra / Editar Obra" foi dividido em 4 abas fixas no
+ * - O formulario "Nova Obra / Editar Obra" foi dividido em 5 abas fixas no
  *   topo (pedido do usuario para facilitar o preenchimento no iPad):
  *   1) Dados Gerais - nome, tipo de contrato, cliente/logos, responsaveis,
  *      orcamento, status, endereco, datas e observacoes;
- *   2) Terceiros & Jornada - condicao de pagamento de terceiros (padrao da
- *      obra) e jornada de trabalho da obra;
- *   3) Ponto & Convencao - relogios DIXI (SNs), convencao coletiva e
+ *   2) Terceiros - condicao de pagamento de terceiros (padrao da obra);
+ *   3) Jornada - jornada de trabalho da obra (por dia da semana);
+ *   4) Ponto & Convencao - relogios DIXI (SNs), convencao coletiva e
  *      condicoes de trabalho (insalubridade/periculosidade/noturno);
- *   4) Projetos (Medicao) - pavimentos e arquivos DXF.
+ *   5) Projetos (Medicao) - pavimentos e arquivos DXF.
+ * - Abas com icone e bolinha de status (verde = secao preenchida; ambar =
+ *   falta o obrigatorio) em estilo segmentado moderno.
  * - Trocar de aba NAO perde nada: o Salvar continua gravando o formulario
  *   inteiro de uma vez; Cancelar/Salvar ficam visiveis em todas as abas.
  * - Poka-Yoke: ao salvar sem nome/numero de orcamento, o sistema volta

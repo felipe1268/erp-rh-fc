@@ -208,7 +208,7 @@ export default function Obras() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   // Rev. 4833 — abas do formulário de obra (pedido do usuário: separar os cadastros)
-  const [formTab, setFormTab] = useState<"geral" | "terceiros" | "ponto" | "projetos">("geral");
+  const [formTab, setFormTab] = useState<"geral" | "terceiros" | "jornada" | "ponto" | "projetos">("geral");
   const [editingId, setEditingId] = useState<number | null>(null);
 
   // Rev. 3451 — Múltiplos clientes por obra (movido para após editingId — fix Rev. 3453)
@@ -755,14 +755,15 @@ export default function Obras() {
             const geralOk = nomeOk && !!form.cliente;
             const terceirosOk =
               form.terceiroDiaMedicao != null || form.terceiroDiaPagamento != null ||
-              form.terceiroPrazoAprovacaoDias != null || form.terceiroPagamentoConformeRecebimento === 1 ||
-              Object.values(jornadaForm).some(v => !!v);
+              form.terceiroPrazoAprovacaoDias != null || form.terceiroPagamentoConformeRecebimento === 1;
+            const jornadaOk = Object.values(jornadaForm).some(v => !!v);
             const pontoOk = editingId
               ? obraSns.some((s: any) => s.status === "ativo")
               : pendingSns.length > 0;
             const tabs = [
               { key: "geral" as const, label: "Dados Gerais", Icon: Landmark, ok: geralOk, alerta: !nomeOk },
-              { key: "terceiros" as const, label: "Terceiros & Jornada", Icon: Handshake, ok: terceirosOk, alerta: false },
+              { key: "terceiros" as const, label: "Terceiros", Icon: Handshake, ok: terceirosOk, alerta: false },
+              { key: "jornada" as const, label: "Jornada", Icon: Calendar, ok: jornadaOk, alerta: false },
               { key: "ponto" as const, label: "Ponto & Convenção", Icon: Wifi, ok: pontoOk, alerta: false },
               { key: "projetos" as const, label: "Projetos (Medição)", Icon: Ruler, ok: false, alerta: false },
             ];
@@ -1450,8 +1451,12 @@ export default function Obras() {
               <p className="text-[11px] text-muted-foreground">Ex. do fluxo padrão: mede até o dia 25, aprova até o dia 1º e paga até o dia 10 do mês seguinte. Vazio = padrão do sistema (25 / 5 / 10). O vencimento do título no Contas a Pagar cai sempre no mês seguinte ao da medição.</p>
             </div>
 
+          </div>
+
+          {/* ══════ ABA: JORNADA ══════ */}
+          <div className={`space-y-4 ${formTab === "jornada" ? "" : "hidden"}`}>
             {/* Jornada de Trabalho da OBRA — prevalece sobre a do funcionário p/ alocados */}
-            <div className="sm:col-span-2 border-t pt-4 mt-2">
+            <div className="sm:col-span-2 pt-1">
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h4 className="text-sm font-semibold text-primary">Jornada de Trabalho da Obra</h4>
