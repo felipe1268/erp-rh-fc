@@ -103,6 +103,7 @@
 - [CIPA module write-path guards](cipa-module.md) — CIPA create/update/delete need companyFilter; update/delete-by-id are IDOR holes; abrirVotacao race fixed via UNIQUE+onConflictDoNothing.
 - [Cronograma consultivo na medição](medicao-cronograma-consultivo.md) — avanço do cronograma NUNCA escreve o medido (campo é soberano); só comparativo com alerta acima/abaixo (tol. 3%).
 - [FD pendente trava aprovação](fd-pendente-trava-aprovacao.md) — FD de material não descontado bloqueia aprovar medição; puxar auto capado no medido (lock 478003); título líquido de FD; desaprovar apaga título sem baixa.
+- [Acumulado terceiros: só aprovadas escrevem](terceiro-medicao-acumulado-writers.md) — recalcular rascunho NUNCA grava acumulado no item; excluir/cancelar recalculam das aprovadas remanescentes (senão saldo fantasma).
 - [Aditivo de contrato terceiro](aditivo-contrato-terceiro.md) — aditivo exige lastro no excedente medido; aprovar (teto cresce) DEVE re-escalar % das medições abertas ou o sync re-marca excedente.
 - [Terceiros: título garantido no Financeiro](terceiros-medicao-titulo-garantido.md) — aprovar medição chama garantirTituloDaMedicao (bypassa toggle auto_import, xact_lock 478001, periodo YYYY-MM c/ fallback); novo caminho de aprovação deve propagar financeiroOk.
 - [Medição módulos cliente vs terceiros + shared engine](medicao-modules-architecture.md) — "medicao"=lado CLIENTE, terceiros é tabela separada, IDs colidem → medicao_campo precisa de `origem`; [sem origem = escopo CLIENTE nunca `true`](medicao-shared-engine-origem.md).

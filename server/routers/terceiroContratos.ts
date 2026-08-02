@@ -3411,21 +3411,36 @@ export const terceiroContratosRouter = router({
       if (medicao.status === "paga") throw new Error("Não é possível excluir uma medição já paga");
 
       // Rev. 4801 — tudo atômico: reversão de acumulados + descontos + deleções.
+      // Rev. 4804 — BUGFIX: reverter SEMPRE (qualquer status), recalculando o
+      // acumulado do item a partir das medições aprovadas/pagas REMANESCENTES.
+      // Antes só revertia se status==="aprovada"; um rascunho que passou pelo
+      // recalcular já tinha gravado acumulado no item → exclusão deixava saldo
+      // fantasma no contrato ("Medido Acumulado" sem nenhuma medição).
       await db.transaction(async (tx: any) => {
-        if (medicao.status === "aprovada") {
+        {
           const itensMedicao = await tx.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
-          for (const im of itensMedicao) {
-            const prevAcum = n(im.percentualMedidoPeriodo); // Rev. 4800 — reverte o PERÍODO medido, não o avanço consultivo
-            const prevValAcum = n(im.valorMedidoPeriodo); // idem: reverte o VALOR do período
-            const [contratoItem] = await tx.select().from(terceiroContratoItens).where(eq(terceiroContratoItens.id, im.contratoItemId));
-            if (contratoItem) {
-              const novoPerc = Math.max(0, n(contratoItem.percentualMedidoAcumulado) - prevAcum);
-              const novoVal = Math.max(0, n(contratoItem.valorMedidoAcumulado) - prevValAcum);
-              await tx.update(terceiroContratoItens).set({
-                percentualMedidoAcumulado: String(novoPerc),
-                valorMedidoAcumulado: String(novoVal),
-              }).where(eq(terceiroContratoItens.id, im.contratoItemId));
-            }
+          const itemIds = Array.from(new Set(itensMedicao.map((im: any) => im.contratoItemId).filter(Boolean)));
+          const outrasAprovadas = await tx.select({ id: terceiroMedicoes.id }).from(terceiroMedicoes)
+            .where(and(
+              eq(terceiroMedicoes.contratoId, medicao.contratoId),
+              eq(terceiroMedicoes.companyId, input.companyId),
+              inArray(terceiroMedicoes.status, ["aprovada", "paga"]),
+              sql`${terceiroMedicoes.id} != ${input.id}`,
+            ));
+          const outrosItens: any[] = [];
+          for (const om of outrasAprovadas) {
+            const its = await tx.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, om.id));
+            outrosItens.push(...its);
+          }
+          for (const itemId of itemIds) {
+            const somaPerc = outrosItens.filter((o: any) => o.contratoItemId === itemId)
+              .reduce((s: number, o: any) => s + n(o.percentualMedidoPeriodo), 0);
+            const somaValor = outrosItens.filter((o: any) => o.contratoItemId === itemId)
+              .reduce((s: number, o: any) => s + n(o.valorMedidoPeriodo), 0);
+            await tx.update(terceiroContratoItens).set({
+              percentualMedidoAcumulado: String(somaPerc),
+              valorMedidoAcumulado: String(somaValor),
+            }).where(and(eq(terceiroContratoItens.id, itemId), eq(terceiroContratoItens.companyId, input.companyId)));
           }
         }
 
@@ -3560,8 +3575,9 @@ export const terceiroContratosRouter = router({
 
   recalcularMedicao: protectedProcedure
     .input(z.object({ medicaoId: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId); // Rev. 4804 — tenancy guard (IDOR)
       const [medicao] = await db.select().from(terceiroMedicoes).where(
         and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId))
       );
@@ -3838,19 +3854,12 @@ export const terceiroContratosRouter = router({
         }
       }
 
-      for (const itemMed of itensMedicao) {
-        const itemContrato = itensContrato.find(ic => ic.id === itemMed.contratoItemId);
-        if (!itemContrato) continue;
-        const anterior = percAcumAnteriorPorItem[itemContrato.id] || 0;
-        const [recalcItem] = await db.select({ percentualMedidoPeriodo: terceiroMedicaoItens.percentualMedidoPeriodo })
-          .from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.id, itemMed.id));
-        const novoAcum = anterior + n(recalcItem?.percentualMedidoPeriodo);
-        const valorAcumItem = (novoAcum / 100) * n(itemContrato.valorTotal);
-        await db.update(terceiroContratoItens).set({
-          percentualMedidoAcumulado: String(novoAcum),
-          valorMedidoAcumulado: String(valorAcumItem),
-        } as any).where(eq(terceiroContratoItens.id, itemContrato.id));
-      }
+      // Rev. 4804 — BUGFIX: recalcular NÃO grava mais o acumulado nos ITENS DO
+      // CONTRATO. Essas colunas só podem refletir medições APROVADAS/PAGAS
+      // (quem escreve é aprovar/cancelarAprovacao/excluir). Antes, recalcular um
+      // RASCUNHO já "consolidava" o medido no contrato; se o rascunho fosse
+      // excluído, a reversão era pulada (status ≠ aprovada) e o contrato ficava
+      // com "Medido Acumulado"/"Saldo a Liberar" fantasma sem nenhuma medição.
 
       const valorAcumuladoAnterior = outrasMedicoes
         .filter(m => m.status === "aprovada" || m.status === "paga")
