@@ -3073,8 +3073,9 @@ export default function MedicaoLevantamento() {
                           {dragLine && (
                             <g>
                               <line x1={dragLine.a.x} y1={dragLine.a.y} x2={dragLine.b.x} y2={dragLine.b.y} stroke={corPreview} strokeWidth={5} strokeLinecap="round" strokeDasharray="8 6" vectorEffect="non-scaling-stroke" />
-                              <circle cx={dragLine.a.x} cy={dragLine.a.y} r={0.006} fill="#fff" stroke={corPreview} strokeWidth={2.2} vectorEffect="non-scaling-stroke" />
-                              <circle cx={dragLine.b.x} cy={dragLine.b.y} r={0.006} fill="#fff" stroke={corPreview} strokeWidth={2.2} vectorEffect="non-scaling-stroke" />
+                              {/* Rev. 4811 — pontos de definição em VERMELHO também no arrasto de linha */}
+                              <circle cx={dragLine.a.x} cy={dragLine.a.y} r={0.006} fill="#dc2626" stroke="#fff" strokeWidth={2.2} vectorEffect="non-scaling-stroke" />
+                              <circle cx={dragLine.b.x} cy={dragLine.b.y} r={0.006} fill="#dc2626" stroke="#fff" strokeWidth={2.2} vectorEffect="non-scaling-stroke" />
                             </g>
                           )}
                           {dragRect && (
