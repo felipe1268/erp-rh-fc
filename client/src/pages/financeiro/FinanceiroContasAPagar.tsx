@@ -1783,8 +1783,11 @@ export default function FinanceiroContasAPagar() {
                           }
                         }
                         // Promove grupos com < CONSOLIDATE_MIN itens de volta para singles
+                        // Rev. 4859 — medições de terceiros agrupam já com 2 (pedido do
+                        // usuário: manter o Contas a Pagar mais limpo no dia de pagamento).
                         for (const [k, gp] of groupMap.entries()) {
-                          if (gp.items.length < CONSOLIDATE_MIN) {
+                          const minGrupo = gp.origem === "terceiro_medicao" ? 2 : CONSOLIDATE_MIN;
+                          if (gp.items.length < minGrupo) {
                             singles.push(...gp.items);
                             groupMap.delete(k);
                           }

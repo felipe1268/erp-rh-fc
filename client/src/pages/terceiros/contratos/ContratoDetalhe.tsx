@@ -2319,8 +2319,9 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       medido bruto (pedido do usuário: "hoje está uma confusão").
                       Prioridade: valor do título no Contas a Pagar; senão, líquido
                       calculado = medido − retenções − descontos − FD. */}
-                  <span className="text-xs text-gray-500 hidden sm:inline mr-0.5" title={`Medido bruto: ${BRL(m.valorMedido)} · A pagar = medido − retenções − descontos − FD`}>
-                    A pagar <strong className="text-gray-800">{BRL(
+                  <span className="text-xs text-gray-500 hidden sm:inline mr-0.5 whitespace-nowrap">Medido <strong className="text-gray-700">{BRL(m.valorMedido)}</strong></span>
+                  <span className="text-xs text-red-600 hidden sm:inline mr-0.5 whitespace-nowrap" title="A pagar = medido − retenções − descontos − FD">
+                    A pagar <strong className="text-red-600">{BRL(
                       (pagto as any)?.valorTitulo != null && (pagto as any)?.statusTitulo && (pagto as any)?.statusTitulo !== "cancelado"
                         ? (pagto as any).valorTitulo
                         : Math.max(0,
