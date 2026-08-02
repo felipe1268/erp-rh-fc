@@ -147,6 +147,19 @@ async function migrarPlantasParaBiblioteca(
     ));
 }
 
+// Rev. 4823 — extensão do arquivo de mídia do levantamento (foto OU vídeo).
+function extMidiaLevantamento(contentType?: string | null): string {
+  const ct = (contentType || "").toLowerCase();
+  if (ct.includes("png")) return "png";
+  if (ct.includes("webp")) return "webp";
+  if (ct.includes("heic") || ct.includes("heif")) return "heic";
+  if (ct.includes("quicktime")) return "mov";
+  if (ct.includes("mp4")) return "mp4";
+  if (ct.includes("webm")) return "webm";
+  if (ct.startsWith("video/")) return "mp4";
+  return "jpg";
+}
+
 // Rev. 4797 — Poka-Yoke: levantamento CONSOLIDADO é só-leitura. Nenhum write
 // de contorno/foto/serviço passa; para editar é preciso desconsolidar (e a
 // medição vinculada não pode estar aprovada/paga).
@@ -1849,7 +1862,8 @@ export const medicaoRouter = router({
       medicaoCampoId: z.number(),
       pdfId: z.number().nullable().optional(),
       contornoId: z.number().nullable().optional(),
-      base64: z.string().max(20_000_000),
+      // Rev. 4823 — aceita VÍDEO também (base64 ~1,33×: ~90MB de arquivo)
+      base64: z.string().max(120_000_000),
       contentType: z.string().default("image/jpeg"),
       legenda: z.string().nullable().optional(),
       pagina: z.number().nullable().optional(),
@@ -1867,7 +1881,7 @@ export const medicaoRouter = router({
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
       await assertCampoNaoConsolidado(db, input.medicaoCampoId, input.companyId);
       const buf = Buffer.from(input.base64, "base64");
-      const ext = (input.contentType || "").includes("png") ? "png" : "jpg";
+      const ext = extMidiaLevantamento(input.contentType);
       const key = `medicao-campo/${input.companyId}/${input.medicaoCampoId}/fotos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const { url } = await storagePut(key, buf, input.contentType || "image/jpeg");
       const [row] = await db.insert(medicaoCampoFotos).values({
@@ -1910,6 +1924,31 @@ export const medicaoRouter = router({
         .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId))).limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Levantamento não encontrado ou sem permissão." });
       if ((campo as any).consolidadoEm) return { success: true, jaConsolidado: true };
+      // Rev. 4823 — POKA-YOKE: consolidar encerra o ciclo. Só passa se TODO
+      // contorno tiver (a) pelo menos 1 foto/vídeo e (b) apropriação (vínculo
+      // com item da planilha — no contorno OU herdado do serviço/categoria).
+      const vivos = await db.select({ id: medicaoCampoContornos.id, numero: medicaoCampoContornos.numero, rotulo: medicaoCampoContornos.rotulo, servico: medicaoCampoContornos.servico, tipo: medicaoCampoContornos.tipo, orcamentoItemId: medicaoCampoContornos.orcamentoItemId })
+        .from(medicaoCampoContornos)
+        .where(and(eq(medicaoCampoContornos.medicaoCampoId, input.medicaoCampoId), eq(medicaoCampoContornos.companyId, input.companyId), isNull(medicaoCampoContornos.deletedAt)));
+      if (vivos.length > 0) {
+        const fotosVivas = await db.select({ contornoId: medicaoCampoFotos.contornoId })
+          .from(medicaoCampoFotos)
+          .where(and(eq(medicaoCampoFotos.medicaoCampoId, input.medicaoCampoId), eq(medicaoCampoFotos.companyId, input.companyId), isNull(medicaoCampoFotos.deletedAt)));
+        const comFoto = new Set(fotosVivas.map((f) => f.contornoId).filter((x) => x != null));
+        const svcRows = await db.select({ chave: medicaoLevantamentoServicos.chave, orcamentoItemId: medicaoLevantamentoServicos.orcamentoItemId })
+          .from(medicaoLevantamentoServicos)
+          .where(and(eq(medicaoLevantamentoServicos.medicaoCampoId, input.medicaoCampoId), eq(medicaoLevantamentoServicos.companyId, input.companyId)));
+        const svcVinculo = new Map(svcRows.map((s) => [s.chave, s.orcamentoItemId]));
+        const nome = (c: any) => `${c.rotulo || c.servico || c.tipo} nº ${c.numero ?? "?"}`;
+        const semFoto = vivos.filter((c) => !comFoto.has(c.id));
+        const semItem = vivos.filter((c) => !c.orcamentoItemId && !svcVinculo.get(String(c.servico ?? "")));
+        if (semFoto.length || semItem.length) {
+          const partes: string[] = [];
+          if (semFoto.length) partes.push(`${semFoto.length} sem foto/vídeo (${semFoto.slice(0, 3).map(nome).join(", ")}${semFoto.length > 3 ? "…" : ""})`);
+          if (semItem.length) partes.push(`${semItem.length} sem apropriação/vínculo com a planilha (${semItem.slice(0, 3).map(nome).join(", ")}${semItem.length > 3 ? "…" : ""})`);
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Não dá para consolidar ainda: ${partes.join("; ")}. Complete tudo antes de encerrar o ciclo.` });
+        }
+      }
       await db.update(medicaoCampo)
         .set({ consolidadoEm: new Date(), consolidadoPorNome: (ctx.user as any)?.name || (ctx.session as any)?.name || null, atualizadoEm: new Date() })
         .where(eq(medicaoCampo.id, input.medicaoCampoId));
@@ -2378,7 +2417,7 @@ export const medicaoRouter = router({
         medicaoCampoId: z.number().optional(),
         atualizadoEm: z.string().optional(),
         data: z.any().optional(),
-        base64: z.string().max(20_000_000).optional(),
+        base64: z.string().max(120_000_000).optional(),
         contentType: z.string().optional(),
       })).max(500),
     }))
@@ -2388,6 +2427,13 @@ export const medicaoRouter = router({
       // Rev. 4812 — guard de acesso do USUÁRIO à empresa (antes só se validava
       // que o contrato existia na empresa — IDOR para usuário de outra empresa).
       await assertCompanyAccess(ctx.user, companyId);
+      // Rev. 4824 — guarda de TAMANHO agregado do lote (vídeos): cada base64
+      // pode ter até ~120M chars, mas o lote inteiro não pode acumular — o
+      // decode em memória derrubaria o servidor. O cliente fatia por tamanho.
+      const totalBase64 = input.operations.reduce((s, o) => s + (o.base64?.length ?? 0), 0);
+      if (totalBase64 > 150_000_000) {
+        throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "Lote de mídia grande demais — envie menos fotos/vídeos por vez (o app fatia automaticamente; tente sincronizar de novo)." });
+      }
 
       // Guard de tenant raiz: o contrato precisa ser desta empresa.
       // Rev. 4792 — BUG CRÍTICO corrigido: o levantamento roda em DOIS módulos
@@ -2581,9 +2627,33 @@ export const medicaoRouter = router({
               ));
             const setUsados = new Set(usados.map((u) => u.numero ?? 0));
             const maxUsado = usados.reduce((m, u) => Math.max(m, u.numero ?? 0), 0);
+            // Rev. 4824 — MESMA regra do salvarContorno online: a sequência da
+            // categoria continua pelo CONTRATO (medições anteriores incluídas),
+            // senão o caminho offline regenerava números "para trás".
+            let baseContratoSync = 0;
+            try {
+              const [campoRowS] = await db.select({ contratoId: medicaoCampo.contratoId, origem: medicaoCampo.origem })
+                .from(medicaoCampo).where(eq(medicaoCampo.id, campoId)).limit(1);
+              if (campoRowS?.contratoId) {
+                const [rS] = await db.select({ mx: sql<number>`COALESCE(MAX(${medicaoCampoContornos.numero}), 0)` })
+                  .from(medicaoCampoContornos)
+                  .innerJoin(medicaoCampo, eq(medicaoCampo.id, medicaoCampoContornos.medicaoCampoId))
+                  .where(and(
+                    eq(medicaoCampo.contratoId, campoRowS.contratoId),
+                    eq(medicaoCampo.companyId, companyId),
+                    isNull(medicaoCampo.deletedAt),
+                    sql`${medicaoCampo.status} IS DISTINCT FROM 'biblioteca'`,
+                    origemCampoCond(campoRowS.origem === "terceiro" ? "terceiro" : "cliente"),
+                    sql`${medicaoCampoContornos.medicaoCampoId} <> ${campoId}`,
+                    sql`${medicaoCampoContornos.deletedAt} IS NULL`,
+                    sql`COALESCE(${medicaoCampoContornos.servico}, ${medicaoCampoContornos.tipo}) = ${catKey}`,
+                  ));
+                baseContratoSync = Number((rS as any)?.mx ?? 0);
+              }
+            } catch (e: any) { console.error("[Medicao] baseContrato sync:", e?.message); }
             const numeroFinal = (typeof d.numero === "number" && d.numero > 0 && !setUsados.has(d.numero))
               ? d.numero
-              : maxUsado + 1;
+              : Math.max(maxUsado, baseContratoSync) + 1;
             const [row] = await db.insert(medicaoCampoContornos).values({
               companyId,
               medicaoCampoId: campoId,
@@ -2685,7 +2755,7 @@ export const medicaoRouter = router({
               fotoContornoId = cands.find((x) => x.uuid && tempIdFromUuid(x.uuid) === d.contornoId)?.id ?? null;
             }
             const buf = Buffer.from(op.base64, "base64");
-            const ext = (op.contentType || "").includes("png") ? "png" : "jpg";
+            const ext = extMidiaLevantamento(op.contentType);
             const key = `medicao-campo/${companyId}/${campoId}/fotos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
             const { url } = await storagePut(key, buf, op.contentType || "image/jpeg");
             const [row] = await db.insert(medicaoCampoFotos).values({

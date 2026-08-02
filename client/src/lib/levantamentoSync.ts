@@ -101,17 +101,22 @@ export async function processQueue(): Promise<SyncSummary> {
       const peso = (o: SyncOp) =>
         o.action === "delete" ? 4 : o.entity === "contorno" ? 1 : o.entity === "pdf" ? 2 : 3;
       opsGrupo.sort((a, b) => peso(a) - peso(b) || a.createdAt - b.createdAt);
-      for (let i = 0; i < opsGrupo.length; i += CHUNK) {
-        const ops = opsGrupo.slice(i, i + CHUNK);
-        // monta payload — fotos derivam base64 do blob salvo localmente
-        const operations: any[] = [];
-        for (const op of ops) {
+      // Rev. 4824 — fatiamento também por TAMANHO de mídia: com vídeo no
+      // levantamento, um lote de 400 ops podia acumular centenas de MB de
+      // base64 (o servidor rejeita e a fila ficava presa). Fecha o lote ao
+      // atingir CHUNK ops OU ~90M chars de base64 (~68MB de arquivos).
+      const MAX_BASE64_LOTE = 90_000_000;
+      const lotes: { op: SyncOp; payload: any }[][] = [];
+      {
+        let lote: { op: SyncOp; payload: any }[] = [];
+        let loteBase64 = 0;
+        for (const op of opsGrupo) {
           let base64: string | undefined;
           if (op.entity === "foto" && op.action === "upsert" && op.blobKey) {
             const rec = await getBlob(op.blobKey);
             if (rec) base64 = await blobToBase64(rec.blob);
           }
-          operations.push({
+          const payload = {
             clientOpId: op.clientOpId,
             entity: op.entity,
             action: op.action,
@@ -122,10 +127,22 @@ export async function processQueue(): Promise<SyncSummary> {
             data: op.data,
             base64,
             contentType: op.contentType,
-          });
+          };
+          const tam = base64?.length ?? 0;
+          if (lote.length >= CHUNK || (lote.length > 0 && loteBase64 + tam > MAX_BASE64_LOTE)) {
+            lotes.push(lote); lote = []; loteBase64 = 0;
+          }
+          lote.push({ op, payload });
+          loteBase64 += tam;
           // barra de % anda enquanto prepara/envia (fotos grandes demoram no base64)
           if (progress) { progress = { done: Math.min(progress.total - 1, progress.done + 1), total: progress.total }; await notify(); }
         }
+        if (lote.length) lotes.push(lote);
+      }
+      let enviadas = 0;
+      for (const lote of lotes) {
+        const ops = lote.map((x) => x.op);
+        const operations = lote.map((x) => x.payload);
         try {
           const res = await client.medicao.sincronizarLote.mutate({ companyId, contratoId, operations });
           const byId = new Map(res.resultados.map((r) => [r.clientOpId, r]));
@@ -158,7 +175,8 @@ export async function processQueue(): Promise<SyncSummary> {
           lastSyncAt = Date.now();
           lastError = null;
           // chunk confirmado no servidor → % espelha o que já foi de fato aceito
-          if (progress) { progress = { done: Math.min(progress.total, i + ops.length), total: progress.total }; await notify(); }
+          enviadas += ops.length;
+          if (progress) { progress = { done: Math.min(progress.total, enviadas), total: progress.total }; await notify(); }
         } catch (e: any) {
           lastError = e?.message || "Falha de rede ao sincronizar.";
           // mantém ops como pending para nova tentativa — Rev. 4812: sem

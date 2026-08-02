@@ -1,4 +1,17 @@
 /**
+ * Rev. 4824 - CONSOLIDAR SO COM CICLO COMPLETO + VIDEO NO LEVANTAMENTO
+ *
+ * - Poka-yoke: NAO deixa consolidar se algum trecho estiver sem foto/video
+ *   ou sem apropriacao (vinculo com item da planilha, direto ou herdado do
+ *   servico). O aviso lista as pendencias; a regra vale no aparelho E no
+ *   servidor (fonte da verdade). Consolidar = ciclo encerrado p/ enviar
+ *   o levantamento a medicao.
+ * - Alem de fotos, agora da p/ anexar VIDEO ao trecho (ex.: filmar a parede
+ *   da tabica) — varios arquivos por trecho, camera ou galeria do iPad.
+ *   Miniatura mostra o simbolo de play; toque abre o video.
+ */
+
+/**
  * Rev. 4823 - FORRO: "TETO" DUPLICADO CORRIGIDO
  *
  * - No seletor do Forro apareciam DOIS pills "Teto": a aba base (renomeada

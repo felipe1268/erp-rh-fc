@@ -65,6 +65,14 @@ const ICON_TIPO: Record<TipoContorno, JSX.Element> = {
 };
 
 // Rev. 3097 — Tipos que fecham o polígono (área preenchida) vs. linhas abertas.
+// Rev. 4823 — a mídia do levantamento pode ser FOTO ou VÍDEO; detecta pelo
+// contentType (op offline) ou pela extensão do arquivo salvo no servidor.
+function ehVideoMidia(f: any): boolean {
+  const ct = String(f?.contentType || "").toLowerCase();
+  if (ct.startsWith("video/")) return true;
+  return /\.(mp4|mov|m4v|webm)(\?|$)/i.test(String(f?.arquivoUrl || f?.arquivoKey || ""));
+}
+
 const FECHA_POLIGONO = (t: string) => t === "area" || t === "volume";
 
 // ---------------------------------------------------------------------------
@@ -433,6 +441,17 @@ export default function MedicaoLevantamento() {
 
   // Rev. 4797 — Consolidação (Poka-Yoke): consolidado = levantamento só-leitura.
   const travado = !!(campo as any)?.consolidadoEm;
+  // Rev. 4823 — POKA-YOKE de consolidação: antes de pedir confirmação, checa se
+  // TODO contorno tem foto/vídeo e apropriação (vínculo direto OU herdado do
+  // serviço). O servidor valida de novo (fonte da verdade).
+  const pendenciasConsolidacao = () => {
+    const vivosTodos = ((campo?.contornos ?? []) as any[]).filter((c) => !c.deletedAt);
+    const svcVinculo = new Map((servicos as any[]).map((s) => [String(s.chave), s.orcamentoItemId]));
+    const nome = (c: any) => `${c.rotulo || c.servico || c.tipo} nº ${c.numero ?? "?"}`;
+    const semFoto = vivosTodos.filter((c) => (fotosPorContorno.get(c.id) ?? []).length === 0);
+    const semItem = vivosTodos.filter((c) => !c.orcamentoItemId && !svcVinculo.get(String(c.servico ?? "")));
+    return { semFoto, semItem, nome };
+  };
   const consolidarM = trpc.medicao.consolidarLevantamento.useMutation({
     onSuccess: invalidate,
     onError: (e) => toast.error(e.message || "Falha ao consolidar."),
@@ -2518,7 +2537,22 @@ export default function MedicaoLevantamento() {
             ) : (
               <Button size="sm" variant="outline" className="gap-1.5 h-9"
                 disabled={consolidarM.isPending}
-                onClick={() => askConfirm(itensExcedidos.length > 0
+                onClick={() => {
+                  // Rev. 4823 — ciclo só encerra completo: foto/vídeo + apropriação em TODOS
+                  const { semFoto, semItem, nome } = pendenciasConsolidacao();
+                  if (semFoto.length || semItem.length) {
+                    const partes: string[] = [];
+                    if (semFoto.length) partes.push(`${semFoto.length} sem foto/vídeo (${semFoto.slice(0, 3).map(nome).join(", ")}${semFoto.length > 3 ? "…" : ""})`);
+                    if (semItem.length) partes.push(`${semItem.length} sem apropriação na planilha (${semItem.slice(0, 3).map(nome).join(", ")}${semItem.length > 3 ? "…" : ""})`);
+                    askConfirm({
+                      title: "Ainda não dá para consolidar",
+                      description: `Para encerrar o ciclo, todo trecho precisa de foto/vídeo e de apropriação (vínculo com o item da planilha). Pendências: ${partes.join("; ")}.`,
+                      confirmText: "Entendi",
+                      onConfirm: () => {},
+                    });
+                    return;
+                  }
+                  askConfirm(itensExcedidos.length > 0
                   // Rev. 4813 — estourou o contratado: medir/agrupar continua livre;
                   // na hora de consolidar pergunta se o excedente vira ADITIVO.
                   ? {
@@ -2537,7 +2571,8 @@ export default function MedicaoLevantamento() {
                       description: "O levantamento fica SÓ-LEITURA: nada pode ser desenhado, editado ou apagado (nem sem querer). Para editar depois, será preciso desconsolidar.",
                       confirmText: "Consolidar",
                       onConfirm: () => consolidarM.mutate({ companyId, medicaoCampoId: campoId }),
-                    })}>
+                    });
+                }}>
                 {consolidarM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockOpen className="h-4 w-4" />}
                 <span className="hidden md:inline">Consolidar</span>
               </Button>
@@ -3702,7 +3737,10 @@ export default function MedicaoLevantamento() {
                             {(fotosPorContorno.get(c.id) ?? []).map((f) => (
                               <div key={f.id} className="relative group">
                                 <a href={off.fotoSrcFor(f)} target="_blank" rel="noopener noreferrer">
-                                  <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-14 object-cover rounded border" />
+                                  {ehVideoMidia(f)
+                                    ? <video src={off.fotoSrcFor(f)} playsInline muted preload="metadata" className="w-full h-14 object-cover rounded border bg-black" />
+                                    : <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-14 object-cover rounded border" />}
+                                  {ehVideoMidia(f) && <span className="absolute inset-0 grid place-items-center pointer-events-none"><span className="bg-black/55 text-white rounded-full h-5 w-5 grid place-items-center text-[10px]">▶</span></span>}
                                 </a>
                                 {f.__pending && <span className="absolute bottom-0.5 left-0.5 bg-amber-500/90 text-white text-[8px] px-1 rounded">pend.</span>}
                                 {!travado && <button className="absolute top-0.5 right-0.5 bg-white/95 rounded-full p-0.5 text-red-600 shadow border" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste contorno. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
@@ -3803,11 +3841,13 @@ export default function MedicaoLevantamento() {
                     </Button>
                   )}
                 </div>
-                <input ref={fotoInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFotoSelected} />
-                <input ref={fotoContornoInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFotoContornoSelected} />
+                {/* Rev. 4823 — foto OU vídeo (sem `capture` fixo: o iPad oferece
+                    "Tirar foto ou vídeo" e também a galeria) */}
+                <input ref={fotoInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={onFotoSelected} />
+                <input ref={fotoContornoInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={onFotoContornoSelected} />
               </div>
               {fotos.length === 0 ? (
-                <p className="text-xs text-gray-400">Sem fotos. Use "Adicionar" (a câmera abre no tablet).</p>
+                <p className="text-xs text-gray-400">Sem fotos ou vídeos. Use "Adicionar" (a câmera abre no tablet).</p>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
                   {fotos.map((f) => {
@@ -3824,14 +3864,19 @@ export default function MedicaoLevantamento() {
                           className="block w-full"
                           onClick={() => setFotoSel((prev) => { const n = new Set(prev ?? []); if (n.has(fk)) n.delete(fk); else n.add(fk); return n; })}
                         >
-                          <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className={`w-full h-20 object-cover rounded-md border-2 ${marcada ? "border-red-500 opacity-80" : "border-transparent"}`} />
+                          {ehVideoMidia(f)
+                            ? <video src={off.fotoSrcFor(f)} playsInline muted preload="metadata" className={`w-full h-20 object-cover rounded-md border-2 bg-black ${marcada ? "border-red-500 opacity-80" : "border-transparent"}`} />
+                            : <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className={`w-full h-20 object-cover rounded-md border-2 ${marcada ? "border-red-500 opacity-80" : "border-transparent"}`} />}
                           <span className={`absolute top-1 left-1 h-5 w-5 rounded-full border-2 flex items-center justify-center text-white text-[10px] ${marcada ? "bg-red-600 border-red-600" : "bg-white/80 border-gray-400"}`}>
                             {marcada ? "✓" : ""}
                           </span>
                         </button>
                       ) : (
                         <a href={off.fotoSrcFor(f)} target="_blank" rel="noopener noreferrer">
-                          <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-20 object-cover rounded-md border" />
+                          {ehVideoMidia(f)
+                            ? <video src={off.fotoSrcFor(f)} playsInline muted preload="metadata" className="w-full h-20 object-cover rounded-md border bg-black" />
+                            : <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-20 object-cover rounded-md border" />}
+                          {ehVideoMidia(f) && <span className="absolute inset-0 grid place-items-center pointer-events-none"><span className="bg-black/55 text-white rounded-full h-6 w-6 grid place-items-center text-xs">▶</span></span>}
                         </a>
                       )}
                       {tag && <span className="absolute bottom-1 right-1 max-w-[90%] truncate bg-blue-600/90 text-white text-[9px] px-1 rounded" title={tag}>{tag}</span>}

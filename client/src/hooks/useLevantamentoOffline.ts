@@ -59,6 +59,8 @@ function applyOps(base: any, ops: SyncOp[]): any {
         const tempId = op.uuid ? tempIdFromUuid(op.uuid) : -(op.createdAt);
         fotos.push({
           id: tempId, uuid: op.uuid, __blobKey: op.blobKey, __pending: true,
+          // Rev. 4823 — contentType junto p/ a UI saber se é vídeo antes da sync
+          contentType: op.contentType ?? null,
           arquivoUrl: "", legenda: op.data?.legenda ?? null,
           pdfId: op.data?.pdfId ?? null, pagina: op.data?.pagina ?? null,
           contornoId: op.data?.contornoId ?? null,
