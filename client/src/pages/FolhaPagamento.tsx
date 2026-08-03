@@ -5192,7 +5192,7 @@ export default function FolhaPagamento() {
             </DialogHeader>
             {overridesPrompt.lista.length > 0 && (
               <div className="max-h-[45vh] overflow-y-auto rounded-md border divide-y">
-                {overridesPrompt.lista.map((f) => {
+                {[...overridesPrompt.lista].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR")).map((f) => {
                   const marcado = overridesPrompt.manterIds.includes(f.id);
                   return (
                     <label key={f.id} className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-muted/50">
