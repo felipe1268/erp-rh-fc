@@ -4934,13 +4934,14 @@ export default function FolhaPagamento() {
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="text-left py-2.5 px-2 sticky left-0 bg-gray-50 z-10 font-semibold text-gray-700" rowSpan={2}>Funcionário</th>
                       <th className="text-left py-2.5 px-2 font-semibold text-gray-700" rowSpan={2}>Função</th>
-                      <th className="text-center py-1.5 px-1 font-semibold text-green-700 border-l border-green-200 bg-green-50/50" colSpan={3}>Proventos</th>
+                      <th className="text-center py-1.5 px-1 font-semibold text-green-700 border-l border-green-200 bg-green-50/50" colSpan={4}>Proventos</th>
                       <th className="text-center py-1.5 px-1 font-semibold text-red-700 border-l border-red-200 bg-red-50/30" colSpan={12}>Descontos</th>
                       <th className="text-center py-1.5 px-1 font-semibold text-[#1B2A4A] border-l border-blue-200 bg-blue-50/50" colSpan={2}>Resultado</th>
                     </tr>
                     <tr className="bg-gray-50/80 border-b-2 border-gray-200 text-[10px] text-gray-500 uppercase tracking-wider">
                       <th className="text-right py-1.5 px-2 border-l border-green-200 bg-green-50/30">Salário</th>
                       <th className="text-right py-1.5 px-2 bg-green-50/30">H.E.</th>
+                      <th className="text-right py-1.5 px-2 bg-green-50/30" title="Adicionais legais (insalubridade/periculosidade) + outras receitas (reembolso etc.)">Adic.</th>
                       <th className="text-right py-1.5 px-2 bg-green-50/30 font-bold text-green-700">Total</th>
                       <th className="text-right py-1.5 px-2 border-l border-red-200 bg-orange-50/30">Vale</th>
                       <th className="text-right py-1.5 px-2 bg-red-50/20">INSS</th>
@@ -4971,7 +4972,7 @@ export default function FolhaPagamento() {
                       );
                       if (filtered.length === 0) {
                         return (
-                          <tr><td colSpan={19} className="py-6 text-center text-xs text-muted-foreground">
+                          <tr><td colSpan={20} className="py-6 text-center text-xs text-muted-foreground">
                             Nenhum funcionário encontrado com os filtros aplicados.
                           </td></tr>
                         );
@@ -5021,6 +5022,14 @@ export default function FolhaPagamento() {
                           <td className="py-2 px-2 text-muted-foreground text-[10px] whitespace-nowrap max-w-[140px] truncate" title={f.funcao}>{f.funcao}</td>
                           <td className="text-right py-2 px-2 border-l border-green-100">{formatBRL(f.salarioBruto)}</td>
                           <td className="text-right py-2 px-2 text-green-700">{f.valorHE > 0 ? formatBRL(f.valorHE) : '—'}</td>
+                          <td className="text-right py-2 px-2 text-green-700"
+                              title={Array.isArray(f.adicionaisDetalhes) && f.adicionaisDetalhes.length > 0
+                                ? f.adicionaisDetalhes.map((d: any) =>
+                                    `${d.tipo === 'insalubridade' ? `Insalubridade ${d.percentual}%` : d.tipo === 'periculosidade' ? 'Periculosidade 30%' : (d.descricao || d.tipo)}: ${formatBRL(d.valor)}`
+                                  ).join(' • ')
+                                : undefined}>
+                            {Number(f.adicionaisValor) > 0 ? formatBRL(f.adicionaisValor) : '—'}
+                          </td>
                           <td className="text-right py-2 px-2 font-semibold text-green-800">
                             {formatBRL(f.totalProventos)}
                           </td>
@@ -5106,7 +5115,14 @@ export default function FolhaPagamento() {
                     <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold text-xs">
                       <td className="py-3 px-2 sticky left-0 bg-gray-100 z-10" colSpan={2}>TOTAL — {pagamentoResult.totalFuncionarios} funcionários</td>
                       <td className="text-right py-3 px-2 border-l border-green-200" colSpan={2}></td>
-                      <td className="text-right py-3 px-2 text-green-800">{formatBRL(pagamentoResult.totalBruto)}</td>
+                      <td className="text-right py-3 px-2 text-green-700">{(() => {
+                        const totAdic = (pagamentoResult.funcionarios || []).reduce((s: number, f: any) => s + (Number(f.adicionaisValor) || 0), 0);
+                        return totAdic > 0 ? formatBRL(totAdic) : '';
+                      })()}</td>
+                      <td className="text-right py-3 px-2 text-green-800">{(() => {
+                        const totAdic = (pagamentoResult.funcionarios || []).reduce((s: number, f: any) => s + (Number(f.adicionaisValor) || 0), 0);
+                        return formatBRL((Number(pagamentoResult.totalBruto) || 0) + totAdic);
+                      })()}</td>
                       {(() => {
                         const eff = (f: any, campo: CampoDesconto, fallback: number) => {
                           const m = f.descontosManuais || {};

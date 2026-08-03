@@ -3428,6 +3428,18 @@ export const payrollEngineRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
+      // Tenant guard: intersecta as empresas pedidas com as acessíveis do usuário.
+      // resolveCompanyIds confia no companyId/companyIds do cliente — sem isto,
+      // simularPagamento leria/escreveria folha de empresa alheia (IDOR).
+      {
+        const permitidasSim = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        const permitidasSimIds = new Set((permitidasSim || []).map((c: any) => Number(c.id)));
+        const pedidas = resolveCompanyIds(input);
+        if (!pedidas.every(id => permitidasSimIds.has(Number(id)))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso às empresas solicitadas" });
+        }
+      }
+
       // Garante que payroll_periods existe — sem isso UPDATEs de simulação
       // de pagamento afetavam 0 linhas e o card ficava 0% pós-reload.
       await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
@@ -3698,6 +3710,42 @@ export const payrollEngineRouter = router({
         }
       } catch (err: any) {
         console.error('[Folha] erro lendo folha_descontos:', err?.message ?? err);
+      }
+
+      // Adicionais Legais (insalubridade/periculosidade) — vigências que intersectam a competência.
+      const adicionaisMap = new Map<number, any[]>();
+      try {
+        const mesIniAdic = `${year}-${String(month).padStart(2, '0')}-01`;
+        const mesFimAdic = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+        const adicRows = ((await db.execute(sql`
+          SELECT "employeeId", tipo, percentual, "dataInicio", "dataFim" FROM employee_adicionais
+          WHERE "companyId" IN (${allCompanyIdsSql})
+            AND "dataInicio" <= ${mesFimAdic}
+            AND ("dataFim" IS NULL OR "dataFim" >= ${mesIniAdic})
+        `)) as any).rows || [];
+        for (const a of adicRows) {
+          const arr = adicionaisMap.get(Number(a.employeeId)) || [];
+          arr.push(a);
+          adicionaisMap.set(Number(a.employeeId), arr);
+        }
+      } catch (err: any) {
+        console.error('[Folha] erro lendo employee_adicionais:', err?.message ?? err);
+      }
+
+      // Proventos em Folha (Outras Receitas — ex.: reembolso) da competência.
+      const provFolhaMap = new Map<number, any[]>();
+      try {
+        const provRows = ((await db.execute(sql`
+          SELECT "employeeId", tipo, descricao, valor FROM folha_proventos
+          WHERE "companyId" IN (${allCompanyIdsSql}) AND "mesReferencia" = ${input.mesReferencia}
+        `)) as any).rows || [];
+        for (const p of provRows) {
+          const arr = provFolhaMap.get(Number(p.employeeId)) || [];
+          arr.push(p);
+          provFolhaMap.set(Number(p.employeeId), arr);
+        }
+      } catch (err: any) {
+        console.error('[Folha] erro lendo folha_proventos:', err?.message ?? err);
       }
 
       // Get adjustments (from escuro aferição) for this month
@@ -4528,11 +4576,46 @@ export const payrollEngineRouter = router({
         const salarioBruto = valorHora * horasMensaisEmp * fatorFeriasEmp;
         // HE = 0 — Hora Extra é módulo separado (he_periods)
         const valorHE = 0;
-        // Rev. 3978 — diferença de dissídio NÃO entra mais na folha mensal (paga à
-        // parte); campos mantidos zerados só por compatibilidade de schema/UI.
-        const adicionaisValor = 0;
-        const adicionaisDetalhes: any[] | null = null;
-        const totalProventos = salarioBruto;
+
+        // Adicionais Legais (insalubridade % × salário mínimo | periculosidade 30% × salário base),
+        // pró-rata pelos dias de vigência dentro do mês. Integram a base de INSS/IRRF/FGTS.
+        const salarioBaseEmpAdic = parseBRL(emp.salarioBase) || (valorHora * horasMensaisBaseEmp);
+        const mesIni = `${year}-${String(month).padStart(2, '0')}-01`;
+        const mesFim = `${year}-${String(month).padStart(2, '0')}-${String(diasNoMesSim).padStart(2, '0')}`;
+        let adicionalTributavel = 0;
+        const adicionaisDetalhesArr: any[] = [];
+        for (const a of (adicionaisMap.get(emp.id) || [])) {
+          const iniVig = a.dataInicio > mesIni ? a.dataInicio : mesIni;
+          const fimVig = (a.dataFim && a.dataFim < mesFim) ? a.dataFim : mesFim;
+          if (iniVig > fimVig) continue;
+          const diasVig = (Number(fimVig.slice(8, 10)) - Number(iniVig.slice(8, 10))) + 1;
+          const pct = Number(a.percentual) || 0;
+          const baseCalc = a.tipo === 'insalubridade' ? salarioMinimoVigente : salarioBaseEmpAdic;
+          const valorCheio = baseCalc * (pct / 100);
+          const valorProRata = Math.round(valorCheio * (diasVig / diasNoMesSim) * 100) / 100;
+          if (valorProRata <= 0) continue;
+          adicionalTributavel += valorProRata;
+          adicionaisDetalhesArr.push({
+            tipo: a.tipo, percentual: pct, base: Math.round(baseCalc * 100) / 100,
+            diasVigencia: diasVig, diasNoMes: diasNoMesSim, valor: valorProRata, tributavel: true,
+          });
+        }
+
+        // Outras Receitas (lançamentos manuais do menu RH — ex.: reembolso).
+        // Natureza indenizatória: soma no líquido, FORA da base de INSS/IRRF/FGTS.
+        let outrasReceitasValor = 0;
+        for (const p of (provFolhaMap.get(emp.id) || [])) {
+          const v = parseBRL(p.valor);
+          if (v <= 0) continue;
+          outrasReceitasValor += v;
+          adicionaisDetalhesArr.push({ tipo: p.tipo || 'outras_receitas', descricao: p.descricao || null, valor: v, tributavel: false });
+        }
+
+        const adicionaisValor = adicionalTributavel + outrasReceitasValor;
+        const adicionaisDetalhes: any[] | null = adicionaisDetalhesArr.length > 0 ? adicionaisDetalhesArr : null;
+        // Base tributável do mês (INSS/IRRF/FGTS/sindicato/pensão-percentual)
+        const brutoTributavel = salarioBruto + adicionalTributavel;
+        const totalProventos = salarioBruto + adicionaisValor;
 
         const adv = advMap.get(emp.id);
         // Rev. 4867 — vale cancelado/rejeitado NUNCA desconta na folha.
@@ -4639,7 +4722,7 @@ export const payrollEngineRouter = router({
           if (emp.pensaoTipo === 'percentual') {
             const perc = (parseBRL(emp.pensaoPercentual) || 0) / 100;
             const heValor = heMap.get(emp.id) || 0;
-            const baseBruto = salarioBruto + heValor;
+            const baseBruto = brutoTributavel + heValor;
             const basePensao = emp.pensaoBase === 'salario_minimo' ? salarioMinimoVigente : baseBruto;
             descontoPensao = basePensao * perc;
           } else {
@@ -4653,23 +4736,24 @@ export const payrollEngineRouter = router({
         const vrValorMensal = vrDiario * diasUteis;
         const seguroVidaValor = parseBRL(emp.seguroVida);
         const fgtsPerc = parseBRL(emp.fgtsPercentual) || 8;
-        const fgtsValor = salarioBruto * (fgtsPerc / 100);
+        const fgtsValor = brutoTributavel * (fgtsPerc / 100);
 
         // INSS: se inssPercentual preenchido (>0), usa override manual; senão tabela progressiva (Lei 8.212/91)
+        // Base inclui adicionais legais (insalubridade/periculosidade); outras receitas (indenizatórias) ficam fora.
         const inssPercManual = parseBRL(emp.inssPercentual) || 0;
         const inssValor = inssPercManual > 0
-          ? salarioBruto * (inssPercManual / 100)
-          : calcularINSS(salarioBruto);
+          ? brutoTributavel * (inssPercManual / 100)
+          : calcularINSS(brutoTributavel);
 
         // IRRF: base = bruto - INSS - (dependentes × R$ 228,80) — Lei 7.713/88, IN RFB 2.141/2023
         const numDependentes = Number(emp.dependentesIr) || 0;
-        const baseIrrf = Math.max(0, salarioBruto - inssValor - (numDependentes * VALOR_DEPENDENTE_IR));
-        const irrfValor = calcularIRRF(baseIrrf, salarioBruto);
+        const baseIrrf = Math.max(0, brutoTributavel - inssValor - (numDependentes * VALOR_DEPENDENTE_IR));
+        const irrfValor = calcularIRRF(baseIrrf, brutoTributavel);
 
         // SINDICATO (CCT): 1% sobre salário bruto, com teto máximo de R$ 46,30/mês
         const SINDICATO_PERCENTUAL = 0.01;
         const SINDICATO_TETO = 46.30;
-        const sindicatoValor = Math.min(salarioBruto * SINDICATO_PERCENTUAL, SINDICATO_TETO);
+        const sindicatoValor = Math.min(brutoTributavel * SINDICATO_PERCENTUAL, SINDICATO_TETO);
 
         // EPI: somente alertas com status='aprovado' do mês de referência
         const epiAprovados = (epiAlertsMap.get(emp.id) || []).filter(

@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import AdicionaisLegaisSection from "@/components/AdicionaisLegaisSection";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
@@ -1054,6 +1055,15 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
             f[`jornada_${d}_saida`] = dashParts[2];
           });
         }
+      }
+    }
+    // Normaliza moedas p/ formato BR de exibição (o banco pode guardar "2500.00"
+    // US ou "2.500,00" BR; o input agora mostra o valor cru do form, então
+    // precisa entrar já em BR — senão parseMoedaBR("2500.00") viraria 250000).
+    for (const k of ["salarioBase", "valorHora"]) {
+      if (f[k]) {
+        const fmt = formatMoedaSemPrefixo(f[k]);
+        if (fmt) f[k] = fmt;
       }
     }
     // Normalizar sexo antigo ("masculino"/"feminino" minúsculo) para "M"/"F"
@@ -2425,8 +2435,13 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                       <span className="text-xs text-emerald-600 font-medium">R$</span>
                     </div>
                     <Input
-                      value={form.salarioBase ? formatMoedaSemPrefixo(parseMoedaBR(String(form.salarioBase))) : ""}
+                      inputMode="decimal"
+                      value={form.salarioBase ?? ""}
                       onChange={e => {
+                        // Guarda o que foi digitado (só limpa caracteres inválidos).
+                        // NUNCA reformatar com ",00" durante a digitação: o próximo
+                        // dígito cairia depois da vírgula e seria cortado (campo
+                        // travava em "2,00" — bug reportado pela Kelly).
                         const formatted = formatMoedaInput(e.target.value);
                         set("salarioBase", formatted);
                         const salarioNum = parseMoedaBR(formatted);
@@ -2434,6 +2449,10 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                         if (salarioNum > 0 && !isNaN(horasNum) && horasNum > 0) {
                           set("valorHora", formatMoedaSemPrefixo(salarioNum / horasNum));
                         }
+                      }}
+                      onBlur={() => {
+                        const n = parseMoedaBR(String(form.salarioBase || ""));
+                        if (n > 0) set("salarioBase", formatMoedaSemPrefixo(n));
                       }}
                       placeholder="2.500,00"
                       className="bg-white border-emerald-200 font-semibold text-emerald-900 text-base"
@@ -2451,8 +2470,10 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                       <span className="text-xs text-blue-600 font-medium">R$</span>
                     </div>
                     <Input
-                      value={form.valorHora ? formatMoedaSemPrefixo(parseMoedaBR(String(form.valorHora))) : ""}
+                      inputMode="decimal"
+                      value={form.valorHora ?? ""}
                       onChange={e => {
+                        // Mesmo fix do Salário Base: sem reformatar ",00" ao digitar.
                         const formatted = formatMoedaInput(e.target.value);
                         set("valorHora", formatted);
                         const horaNum = parseMoedaBR(formatted);
@@ -2460,6 +2481,10 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                         if (horaNum > 0 && !isNaN(horasNum) && horasNum > 0) {
                           set("salarioBase", formatMoedaSemPrefixo(horaNum * horasNum));
                         }
+                      }}
+                      onBlur={() => {
+                        const n = parseMoedaBR(String(form.valorHora || ""));
+                        if (n > 0) set("valorHora", formatMoedaSemPrefixo(n));
                       }}
                       placeholder="11,36"
                       className="bg-white border-blue-300 font-bold text-blue-900 text-base ring-1 ring-blue-200"
@@ -2492,6 +2517,11 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
 
                 </div>
               </div>
+
+              {/* Adicionais Legais (Insalubridade / Periculosidade) — vigência com histórico */}
+              {(form.tipoContrato === 'CLT' || !form.tipoContrato) && (
+                <AdicionaisLegaisSection employeeId={editingId} />
+              )}
 
               {/* Contrato de Experiência CLT */}
               {(form.tipoContrato === 'CLT' || !form.tipoContrato) && (

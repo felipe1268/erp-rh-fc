@@ -212,6 +212,7 @@ const Ferias = lazyWithRetry(() => import("./pages/Ferias"));
 const DocumentosColaborador = lazyWithRetry(() => import("./pages/DocumentosColaborador"));
 const SeguroVida = lazyWithRetry(() => import("./pages/SeguroVida"));
 const FolhaDescontos = lazyWithRetry(() => import("./pages/FolhaDescontos"));
+const FolhaProventos = lazyWithRetry(() => import("./pages/FolhaProventos"));
 const CipaCompleta = lazyWithRetry(() => import("./pages/CipaCompleta"));
 const CipaVotacao = lazyWithRetry(() => import("./pages/CipaVotacao"));
 const ComunicadoCiencia = lazyWithRetry(() => import("./pages/ComunicadoCiencia"));
@@ -566,6 +567,7 @@ function Router() {
         <Route path={"/documentos-colaborador"} component={() => <RouteGuard component={DocumentosColaborador} route="/documentos-colaborador" />} />
         <Route path={"/seguro-vida"} component={() => <RouteGuard component={SeguroVida} route="/seguro-vida" />} />
         <Route path={"/folha-descontos"} component={() => <RouteGuard component={FolhaDescontos} route="/folha-pagamento" />} />
+        <Route path={"/folha-proventos"} component={() => <RouteGuard component={FolhaProventos} route="/folha-pagamento" />} />
         <Route path={"/cipa"} component={() => <RouteGuard component={CipaCompleta} route="/cipa" />} />
         <Route path={"/programas-sst"} component={() => <RouteGuard component={ProgramasSST} route="/programas-sst" />} />
         <Route path={"/sst/integracao"} component={() => <RouteGuard component={IntegracaoSST} route="/sst/integracao" />} />

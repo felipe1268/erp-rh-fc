@@ -5146,6 +5146,43 @@ export const folhaDescontos = pgTable("folha_descontos", {
         index("fdesc_employee_mes").on(table.employeeId, table.mesReferencia),
 ]);
 
+// Adicionais legais (insalubridade/periculosidade) com vigência — histórico preservado:
+// desativar só fecha dataFim; reativar cria NOVA linha (nunca UPDATE destrutivo).
+export const employeeAdicionais = pgTable("employee_adicionais", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        employeeId: integer().notNull(),
+        tipo: varchar({ length: 20 }).notNull(), // insalubridade | periculosidade
+        percentual: integer().notNull(),         // insalubridade: 10|20|40; periculosidade: 30
+        dataInicio: varchar({ length: 10 }).notNull(), // YYYY-MM-DD
+        dataFim: varchar({ length: 10 }),              // null = vigente
+        registradoPor: varchar({ length: 255 }),
+        observacoes: text(),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+        index("eadic_employee").on(table.employeeId, table.tipo),
+        index("eadic_company").on(table.companyId),
+]);
+
+// Proventos em Folha (Outras Receitas) — lançamentos mensais manuais por competência
+// (ex.: reembolso). Espelho do folha_descontos, porém somando no líquido.
+export const folhaProventos = pgTable("folha_proventos", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        employeeId: integer().notNull(),
+        mesReferencia: varchar({ length: 7 }).notNull(),
+        tipo: varchar({ length: 30 }).notNull(), // reembolso | bonificacao | outros
+        descricao: text(),
+        valor: varchar({ length: 20 }).notNull(),
+        criadoPor: varchar({ length: 255 }),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+        index("fprov_company_mes").on(table.companyId, table.mesReferencia),
+        index("fprov_employee_mes").on(table.employeeId, table.mesReferencia),
+]);
+
 // Pagamentos/Salários consolidados
 export const payrollPayments = pgTable("payroll_payments", {
         id: serial().notNull(),
