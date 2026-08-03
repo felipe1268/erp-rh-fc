@@ -101,6 +101,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Clock, label: "Fechamento de Ponto", path: "/fechamento-ponto" },
       { icon: FileText, label: "Espelho de Ponto", path: "/espelho-ponto" },
       { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
+      { icon: Wallet, label: "Descontos em Folha", path: "/folha-descontos" },
       { icon: Calculator, label: "Encargos Sociais", path: "/encargos-sociais" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
@@ -1510,6 +1511,8 @@ function DashboardLayoutContent({
         '/financeiro/dashboards/cheques': '/financeiro/cheques',
         '/financeiro/dashboards/cartao': '/financeiro/cartao',
         '/financeiro/dashboards/divergencias': '/financeiro',
+        // Rev. 4868 — Descontos em Folha herda a permissão da Folha de Pagamento
+        '/folha-descontos': '/folha-pagamento',
       };
       const filterWithChildren = (items: MenuItem[], checkFn: (item: MenuItem) => boolean): MenuItem[] => {
         return items.map(item => {

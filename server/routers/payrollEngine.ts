@@ -3681,6 +3681,23 @@ export const payrollEngineRouter = router({
         advMap.set(a.employeeId, a);
       }
 
+      // Rev. 4868 — Descontos em Folha (menu RH): lançamentos mensais manuais.
+      // pensao_alimenticia soma na coluna PENSÃO; os demais tipos na coluna OUTROS.
+      const descFolhaMap = new Map<number, any[]>();
+      try {
+        const descFolhaRows = ((await db.execute(sql`
+          SELECT "employeeId", tipo, valor FROM folha_descontos
+          WHERE "companyId" IN (${allCompanyIdsSql}) AND "mesReferencia" = ${input.mesReferencia}
+        `)) as any).rows || [];
+        for (const d of descFolhaRows) {
+          const arr = descFolhaMap.get(d.employeeId) || [];
+          arr.push(d);
+          descFolhaMap.set(d.employeeId, arr);
+        }
+      } catch (err: any) {
+        console.error('[Folha] erro lendo folha_descontos:', err?.message ?? err);
+      }
+
       // Get adjustments (from escuro aferição) for this month
       // Inclui 'pendente' E 'aplicado': os 'aplicado' ficaram órfãos na última simulação
       // (paymentId apontava para um payroll_payments que será deletado abaixo).
@@ -4641,6 +4658,15 @@ export const payrollEngineRouter = router({
 
         const descontoConvenio = convenioMap.get(emp.id) || 0;
 
+        // Rev. 4868 — Descontos em Folha (lançamentos manuais do menu RH)
+        const descFolhaEmp = descFolhaMap.get(emp.id) || [];
+        const descFolhaPensao = descFolhaEmp
+          .filter((d: any) => d.tipo === 'pensao_alimenticia')
+          .reduce((s: number, d: any) => s + parseBRL(d.valor), 0);
+        const descFolhaOutros = descFolhaEmp
+          .filter((d: any) => d.tipo !== 'pensao_alimenticia')
+          .reduce((s: number, d: any) => s + parseBRL(d.valor), 0);
+
         // Rev. 1217: 11 categorias separadas de desconto, cada uma overridable.
         // Cada categoria entra como uma coluna na UI; total = soma dessas 11.
         // VA agora faz parte de "Outros" (junto com seguro vida, acerto escuro, outros manuais).
@@ -4654,11 +4680,11 @@ export const payrollEngineRouter = router({
         const calcFaltas = descontoFaltas; // sem atrasos, sem VR/VT
         const calcAtrasos = descontoAtrasos;
         const calcSindicato = sindicatoValor;
-        const calcPensao = descontoPensao;
+        const calcPensao = descontoPensao + descFolhaPensao;
         const calcVt = vtValorMensal + descontoVtFaltas;
         const calcConvenio = descontoConvenio;
         const calcEpi = descontoEpi;
-        const calcOutros = seguroVidaValor + acertoEscuroValor + outrosManuaisValor + descontoVaTotal;
+        const calcOutros = seguroVidaValor + acertoEscuroValor + outrosManuaisValor + descontoVaTotal + descFolhaOutros;
 
         // Aplica overrides manuais (se mantidos)
         const ovr = overridesMap.get(emp.id);

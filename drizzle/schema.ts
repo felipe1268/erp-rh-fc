@@ -5127,6 +5127,25 @@ export const payrollAdvances = pgTable("payroll_advances", {
         index("pa_status").on(table.status),
 ]);
 
+// Rev. 4868 — Descontos em Folha (menu RH): lançamentos mensais manuais por
+// funcionário — pensão alimentícia (extra à do cadastro), crédito trabalhador
+// (empréstimo), multa judicial e outros descontos.
+export const folhaDescontos = pgTable("folha_descontos", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        employeeId: integer().notNull(),
+        mesReferencia: varchar({ length: 7 }).notNull(),
+        tipo: varchar({ length: 30 }).notNull(), // pensao_alimenticia | credito_trabalhador | multa_judicial | outros
+        descricao: text(),
+        valor: varchar({ length: 20 }).notNull(),
+        criadoPor: varchar({ length: 255 }),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+        index("fdesc_company_mes").on(table.companyId, table.mesReferencia),
+        index("fdesc_employee_mes").on(table.employeeId, table.mesReferencia),
+]);
+
 // Pagamentos/Salários consolidados
 export const payrollPayments = pgTable("payroll_payments", {
         id: serial().notNull(),
