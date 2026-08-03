@@ -1315,8 +1315,8 @@ export default function MedicaoLevantamento() {
       // Legado: contorno antigo gravado só com o grupo-mãe (ex.: "forro") —
       // aparece nas subs do MESMO grupo e MESMA classe de medida (área/linear).
       if (sv && sv === raizAtiva && raizAtiva !== servicoAtivo) return classe(c.tipo) === classeAtiva;
-      // Grupo-mãe ativo (sem sub): mostra tudo do grupo.
-      if (servicoAtivo === raizAtiva && sv && raiz(sv) === raizAtiva) return true;
+      // Rev. 4862 — aba-mãe (Teto) NÃO mostra as subs (tabica/sanca/moldura):
+      // cada aba mostra SÓ o que é dela (pedido do usuário).
       return false;
     });
   }, [verReferencia, contornosRef, pdfSelId, pagina, servicoAtivo, verTodasCamadas, gruposSub, svcAtivoObj]);
