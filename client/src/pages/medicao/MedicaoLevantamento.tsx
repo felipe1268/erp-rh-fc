@@ -3936,8 +3936,8 @@ export default function MedicaoLevantamento() {
                           {/* Rev. 4859 — hachura de linhas diagonais (espaçamento curto)
                               p/ área já medida — sempre visível (Poka-Yoke). */}
                           <defs>
-                            <pattern id="hachura-ja-medido" patternUnits="userSpaceOnUse" width={0.007} height={0.007} patternTransform="rotate(45)">
-                              <line x1={0} y1={0} x2={0} y2={0.007} stroke="#94a3b8" strokeWidth={0.0018} strokeOpacity={0.55} />
+                            <pattern id="hachura-ja-medido" patternUnits="userSpaceOnUse" width={0.009} height={0.009} patternTransform="rotate(45)">
+                              <line x1={0} y1={0} x2={0} y2={0.009} stroke="#64748b" strokeWidth={0.003} strokeOpacity={0.6} />
                             </pattern>
                           </defs>
                           {/* Rev. 3093 — REFERÊNCIA (medições anteriores): renderizada
