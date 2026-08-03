@@ -36,7 +36,7 @@ function rows(result: any): any[] {
 
 async function loadEmployeeOrForbid(db: any, ctxUser: any, employeeId: number) {
   const r = rows(await db.execute(sql`
-    SELECT id, "companyId", COALESCE(NULLIF("nomeCompleto",''), nome) AS nome, "deletedAt"
+    SELECT id, "companyId", "nomeCompleto" AS nome, "deletedAt"
     FROM employees WHERE id = ${employeeId} LIMIT 1
   `));
   if (!r.length || r[0].deletedAt) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado." });
