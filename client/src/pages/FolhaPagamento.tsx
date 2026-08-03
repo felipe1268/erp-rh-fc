@@ -959,7 +959,7 @@ export default function FolhaPagamento() {
     },
     onError: (err) => { resetProgress('vale'); setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao calcular vale: ${err.message}`); },
   });
-  const [overridesPrompt, setOverridesPrompt] = useState<{ open: boolean; count: number }>({ open: false, count: 0 });
+  const [overridesPrompt, setOverridesPrompt] = useState<{ open: boolean; count: number; lista: { id: number; nome: string; campos: string[] }[]; manterIds: number[] }>({ open: false, count: 0, lista: [], manterIds: [] });
   const [aplicarDsrFalta, setAplicarDsrFalta] = useState<boolean>(true);
   // Rev. 3989 — toggle "Somar Diferença do Dissídio" (persistido por período)
   const [somarDiferencaDissidio, setSomarDiferencaDissidio] = useState<boolean>(false);
@@ -997,7 +997,7 @@ export default function FolhaPagamento() {
       setCalcElapsed(0);
       setPagamentoResult(data);
       setViewMode("calculo_pagamento");
-      setOverridesPrompt({ open: false, count: 0 });
+      setOverridesPrompt({ open: false, count: 0, lista: [], manterIds: [] });
       if (typeof (data as any).aplicarDsrFalta === 'boolean')  setAplicarDsrFalta((data as any).aplicarDsrFalta);
       if (typeof (data as any).somarDiferencaDissidio === 'boolean') setSomarDiferencaDissidio((data as any).somarDiferencaDissidio);
       if (data.divergencias && data.divergencias.length > 0) {
@@ -1010,9 +1010,11 @@ export default function FolhaPagamento() {
     onError: (err) => {
       resetProgress('pagamento'); setCalcType(null); setCalcElapsed(0);
       const m = String(err.message || '');
-      const ovrMatch = m.match(/OVERRIDES_EXIST:(\d+)/);
+      const ovrMatch = m.match(/OVERRIDES_EXIST:(\d+)(?::(.*))?$/s);
       if (ovrMatch) {
-        setOverridesPrompt({ open: true, count: Number(ovrMatch[1]) });
+        let lista: { id: number; nome: string; campos: string[] }[] = [];
+        try { lista = ovrMatch[2] ? JSON.parse(ovrMatch[2]) : []; } catch { lista = []; }
+        setOverridesPrompt({ open: true, count: Number(ovrMatch[1]), lista, manterIds: lista.map(f => f.id) });
       } else {
         toast.error(`Erro ao simular pagamento: ${err.message}`);
       }
@@ -5165,26 +5167,52 @@ export default function FolhaPagamento() {
 
         {/* Dialog: confirma o que fazer com overrides na re-simulação */}
         <Dialog open={overridesPrompt.open} onOpenChange={(o) => setOverridesPrompt(p => ({ ...p, open: o }))}>
-          <DialogContent>
+          <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Existem alterações manuais nesta folha</DialogTitle>
               <DialogDescription>
-                Foram encontrados <b>{overridesPrompt.count}</b> funcionário(s) com descontos editados manualmente.
-                O que deseja fazer ao re-simular?
+                <b>{overridesPrompt.count}</b> funcionário(s) com valores editados manualmente. Marque quem deve <b>manter o ajuste</b>; os desmarcados serão ressimulados do zero.
               </DialogDescription>
             </DialogHeader>
+            {overridesPrompt.lista.length > 0 && (
+              <div className="max-h-[45vh] overflow-y-auto rounded-md border divide-y">
+                {overridesPrompt.lista.map((f) => {
+                  const marcado = overridesPrompt.manterIds.includes(f.id);
+                  return (
+                    <label key={f.id} className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-muted/50">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={marcado}
+                        onChange={() => setOverridesPrompt(p => ({
+                          ...p,
+                          manterIds: marcado ? p.manterIds.filter(id => id !== f.id) : [...p.manterIds, f.id],
+                        }))}
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium break-words">{f.nome}</span>
+                        {f.campos.length > 0 && (
+                          <span className="block text-[11px] text-muted-foreground break-words">Ajuste em: {f.campos.join(', ')}</span>
+                        )}
+                        <span className={`block text-[11px] ${marcado ? 'text-emerald-600' : 'text-red-600'}`}>{marcado ? 'Manter ajuste manual' : 'Ressimular do zero'}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex gap-3 text-[11px]">
+              <button type="button" className="underline text-muted-foreground" onClick={() => setOverridesPrompt(p => ({ ...p, manterIds: p.lista.map(f => f.id) }))}>Marcar todos</button>
+              <button type="button" className="underline text-muted-foreground" onClick={() => setOverridesPrompt(p => ({ ...p, manterIds: [] }))}>Desmarcar todos</button>
+            </div>
             <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
-              <Button variant="outline" onClick={() => setOverridesPrompt({ open: false, count: 0 })}>Cancelar</Button>
-              <Button variant="destructive" onClick={() => {
-                setOverridesPrompt({ open: false, count: 0 });
+              <Button variant="outline" onClick={() => setOverridesPrompt({ open: false, count: 0, lista: [], manterIds: [] })}>Cancelar</Button>
+              <Button disabled={simularPagamentoMut.isPending || overridesPrompt.lista.length === 0} title={overridesPrompt.lista.length === 0 ? 'Não foi possível carregar a lista de funcionários editados — feche e tente novamente' : ''} onClick={() => {
+                const manterIds = overridesPrompt.manterIds;
+                setOverridesPrompt({ open: false, count: 0, lista: [], manterIds: [] });
                 setCalcType("pagamento");
-                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, descartarOverrides: true, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true });
-              }}>Descartar e recalcular do zero</Button>
-              <Button onClick={() => {
-                setOverridesPrompt({ open: false, count: 0 });
-                setCalcType("pagamento");
-                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverrides: true, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true });
-              }}>Manter alterações manuais</Button>
+                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverridesIds: manterIds, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true });
+              }}>Aplicar e ressimular</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -7616,11 +7644,16 @@ export default function FolhaPagamento() {
                     // Detecta overrides ANTES de disparar a simulação para abrir o diálogo na hora,
                     // evitando que o usuário fique esperando "Simulando..." e só veja a confirmação ao
                     // entrar em "Ver Resultado". Conta funcionários com descontosManuais não-vazio.
-                    const overridesCount = ((pagamentoResult as any)?.funcionarios || []).filter(
+                    const editados = ((pagamentoResult as any)?.funcionarios || []).filter(
                       (f: any) => f && f.descontosManuais && Object.keys(f.descontosManuais).length > 0
-                    ).length;
-                    if (overridesCount > 0) {
-                      setOverridesPrompt({ open: true, count: overridesCount });
+                    );
+                    if (editados.length > 0) {
+                      const lista = editados.map((f: any) => ({
+                        id: Number(f.employeeId),
+                        nome: String(f.nome || f.nomeCompleto || f.employeeNome || `Funcionário ${f.employeeId}`),
+                        campos: Object.keys(f.descontosManuais || {}),
+                      }));
+                      setOverridesPrompt({ open: true, count: lista.length, lista, manterIds: lista.map((f: any) => f.id) });
                       return;
                     }
                     setCalcType("pagamento");

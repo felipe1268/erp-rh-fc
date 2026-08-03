@@ -3413,6 +3413,8 @@ export const payrollEngineRouter = router({
       mesReferencia: z.string(),
       manterOverrides: z.boolean().optional(),
       descartarOverrides: z.boolean().optional(),
+      // Decisão individual: manter os ajustes manuais APENAS destes employeeIds (os demais ressimulam do zero)
+      manterOverridesIds: z.array(z.number()).optional(),
       aplicarDsrFalta: z.boolean().optional(),
       // Rev. 3989 — soma o líquido das diferenças salariais retroativas do
       // dissídio (relatorioDiferencas) no líquido desta folha (contador às vezes
@@ -4154,14 +4156,31 @@ export const payrollEngineRouter = router({
           });
         }
       }
-      if (overridesMap.size > 0 && !input.manterOverrides && !input.descartarOverrides) {
+      if (overridesMap.size > 0 && !input.manterOverrides && !input.descartarOverrides && input.manterOverridesIds === undefined) {
+        // Lista nomes dos funcionários com ajustes manuais para o RH decidir individualmente
+        const ovrIds = Array.from(overridesMap.keys());
+        const nomesRows = ((await db.execute(sql`
+          SELECT id, COALESCE(NULLIF("nomeCompleto", ''), nome) AS nome FROM employees WHERE id IN (${sql.join(ovrIds.map(id => sql`${id}`), sql`, `)})
+        `)) as any).rows || [];
+        const lista = ovrIds.map(id => ({
+          id,
+          nome: String(nomesRows.find((r: any) => Number(r.id) === id)?.nome || `Funcionário ${id}`),
+          campos: Object.keys(overridesMap.get(id)?.manuais || {}),
+        }));
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: `OVERRIDES_EXIST:${overridesMap.size}`,
+          message: `OVERRIDES_EXIST:${overridesMap.size}:${JSON.stringify(lista)}`,
         });
       }
       // descartarOverrides: limpa o map → não reaplica
       if (input.descartarOverrides) overridesMap.clear();
+      // Decisão individual: mantém só os ids escolhidos; os demais ressimulam do zero
+      if (input.manterOverridesIds !== undefined && !input.manterOverrides && !input.descartarOverrides) {
+        const keep = new Set(input.manterOverridesIds.map(Number));
+        for (const id of Array.from(overridesMap.keys())) {
+          if (!keep.has(id)) overridesMap.delete(id);
+        }
+      }
 
       // Clear existing payments for this month
       await db.execute(sql`
