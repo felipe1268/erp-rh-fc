@@ -15,6 +15,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { removeAccents } from "@/lib/searchUtils";
+
+// employees.list pode devolver `nome` em vez de `nomeCompleto` dependendo da fonte
+const nomeEmp = (e: any): string => String(e?.nomeCompleto || e?.nome || "");
 import {
   Wallet, Plus, Trash2, Pencil, Search, Loader2, Scale, HandCoins,
   Gavel, MoreHorizontal, AlertTriangle,
@@ -98,13 +101,14 @@ export default function FolhaDescontos() {
   const empsAtivos = useMemo(() =>
     (emps as any[])
       .filter((e) => !["Desligado", "Lista_Negra", "Inativo"].includes(e.status))
-      .sort((a, b) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || "")),
+      // employees.list pode devolver `nome` em vez de `nomeCompleto` — sempre usar fallback
+      .sort((a, b) => nomeEmp(a).localeCompare(nomeEmp(b))),
     [emps]);
 
   const empsFiltrados = useMemo(() => {
     if (!formEmpBusca.trim()) return empsAtivos.slice(0, 50);
     const q = removeAccents(formEmpBusca.toLowerCase());
-    return empsAtivos.filter((e) => removeAccents((e.nomeCompleto || "").toLowerCase()).includes(q)).slice(0, 50);
+    return empsAtivos.filter((e) => removeAccents(nomeEmp(e).toLowerCase()).includes(q)).slice(0, 50);
   }, [empsAtivos, formEmpBusca]);
 
   const listaFiltrada = useMemo(() => {
@@ -264,8 +268,8 @@ export default function FolhaDescontos() {
                       {empsFiltrados.length === 0 ? (
                         <p className="p-2 text-xs text-muted-foreground">Nenhum funcionário encontrado</p>
                       ) : empsFiltrados.map((e: any) => (
-                        <button key={e.id} className="w-full text-left px-2.5 py-1.5 text-sm hover:bg-slate-50" onClick={() => { setFormEmpId(e.id); setFormEmpBusca(e.nomeCompleto); }}>
-                          {e.nomeCompleto}<span className="text-[11px] text-muted-foreground ml-1.5">{e.funcao || ""}</span>
+                        <button key={e.id} className="w-full text-left px-2.5 py-1.5 text-sm hover:bg-slate-50" onClick={() => { setFormEmpId(e.id); setFormEmpBusca(nomeEmp(e)); }}>
+                          {nomeEmp(e)}<span className="text-[11px] text-muted-foreground ml-1.5">{e.funcao || ""}</span>
                         </button>
                       ))}
                     </div>
