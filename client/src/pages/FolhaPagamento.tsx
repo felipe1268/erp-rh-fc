@@ -1793,6 +1793,63 @@ export default function FolhaPagamento() {
     </>
   );
 
+  // Rev. 4886 — Dialog de overrides extraído para renderizar em QUALQUER view.
+  // Antes ele só existia dentro do branch "calculo_pagamento" (Ver Resultado):
+  // clicar em "Resimular" no card detectava os ajustes manuais e abria o prompt,
+  // mas o Dialog não estava montado na tela principal — nada aparecia.
+  const overridesDialog = (
+    <Dialog open={overridesPrompt.open} onOpenChange={(o) => setOverridesPrompt(p => ({ ...p, open: o }))}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Existem alterações manuais nesta folha</DialogTitle>
+          <DialogDescription>
+            <b>{overridesPrompt.count}</b> funcionário(s) com valores editados manualmente. Marque quem deve <b>manter o ajuste</b>; os desmarcados serão ressimulados do zero.
+          </DialogDescription>
+        </DialogHeader>
+        {overridesPrompt.lista.length > 0 && (
+          <div className="max-h-[45vh] overflow-y-auto rounded-md border divide-y">
+            {[...overridesPrompt.lista].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR")).map((f) => {
+              const marcado = overridesPrompt.manterIds.includes(f.id);
+              return (
+                <label key={f.id} className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-muted/50">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={marcado}
+                    onChange={() => setOverridesPrompt(p => ({
+                      ...p,
+                      manterIds: marcado ? p.manterIds.filter(id => id !== f.id) : [...p.manterIds, f.id],
+                    }))}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium break-words">{f.nome}</span>
+                    {f.campos.length > 0 && (
+                      <span className="block text-[11px] text-muted-foreground break-words">Ajuste em: {f.campos.join(', ')}</span>
+                    )}
+                    <span className={`block text-[11px] ${marcado ? 'text-emerald-600' : 'text-red-600'}`}>{marcado ? 'Manter ajuste manual' : 'Ressimular do zero'}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex gap-3 text-[11px]">
+          <button type="button" className="underline text-muted-foreground" onClick={() => setOverridesPrompt(p => ({ ...p, manterIds: p.lista.map(f => f.id) }))}>Marcar todos</button>
+          <button type="button" className="underline text-muted-foreground" onClick={() => setOverridesPrompt(p => ({ ...p, manterIds: [] }))}>Desmarcar todos</button>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
+          <Button variant="outline" onClick={() => setOverridesPrompt({ open: false, count: 0, lista: [], manterIds: [] })}>Cancelar</Button>
+          <Button disabled={simularPagamentoMut.isPending || overridesPrompt.lista.length === 0} title={overridesPrompt.lista.length === 0 ? 'Não foi possível carregar a lista de funcionários editados — feche e tente novamente' : ''} onClick={() => {
+            const manterIds = overridesPrompt.manterIds;
+            setOverridesPrompt({ open: false, count: 0, lista: [], manterIds: [] });
+            setCalcType("pagamento");
+            simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverridesIds: manterIds, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true });
+          }}>Aplicar e ressimular</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   // ===== SUB-VIEWS =====
   if (viewMode === "detalhes" && viewLancId) {
     return (
@@ -5181,57 +5238,8 @@ export default function FolhaPagamento() {
           )}
         </div>
 
-        {/* Dialog: confirma o que fazer com overrides na re-simulação */}
-        <Dialog open={overridesPrompt.open} onOpenChange={(o) => setOverridesPrompt(p => ({ ...p, open: o }))}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Existem alterações manuais nesta folha</DialogTitle>
-              <DialogDescription>
-                <b>{overridesPrompt.count}</b> funcionário(s) com valores editados manualmente. Marque quem deve <b>manter o ajuste</b>; os desmarcados serão ressimulados do zero.
-              </DialogDescription>
-            </DialogHeader>
-            {overridesPrompt.lista.length > 0 && (
-              <div className="max-h-[45vh] overflow-y-auto rounded-md border divide-y">
-                {[...overridesPrompt.lista].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR")).map((f) => {
-                  const marcado = overridesPrompt.manterIds.includes(f.id);
-                  return (
-                    <label key={f.id} className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-muted/50">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5"
-                        checked={marcado}
-                        onChange={() => setOverridesPrompt(p => ({
-                          ...p,
-                          manterIds: marcado ? p.manterIds.filter(id => id !== f.id) : [...p.manterIds, f.id],
-                        }))}
-                      />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium break-words">{f.nome}</span>
-                        {f.campos.length > 0 && (
-                          <span className="block text-[11px] text-muted-foreground break-words">Ajuste em: {f.campos.join(', ')}</span>
-                        )}
-                        <span className={`block text-[11px] ${marcado ? 'text-emerald-600' : 'text-red-600'}`}>{marcado ? 'Manter ajuste manual' : 'Ressimular do zero'}</span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-            <div className="flex gap-3 text-[11px]">
-              <button type="button" className="underline text-muted-foreground" onClick={() => setOverridesPrompt(p => ({ ...p, manterIds: p.lista.map(f => f.id) }))}>Marcar todos</button>
-              <button type="button" className="underline text-muted-foreground" onClick={() => setOverridesPrompt(p => ({ ...p, manterIds: [] }))}>Desmarcar todos</button>
-            </div>
-            <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
-              <Button variant="outline" onClick={() => setOverridesPrompt({ open: false, count: 0, lista: [], manterIds: [] })}>Cancelar</Button>
-              <Button disabled={simularPagamentoMut.isPending || overridesPrompt.lista.length === 0} title={overridesPrompt.lista.length === 0 ? 'Não foi possível carregar a lista de funcionários editados — feche e tente novamente' : ''} onClick={() => {
-                const manterIds = overridesPrompt.manterIds;
-                setOverridesPrompt({ open: false, count: 0, lista: [], manterIds: [] });
-                setCalcType("pagamento");
-                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverridesIds: manterIds, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true });
-              }}>Aplicar e ressimular</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Dialog: confirma o que fazer com overrides na re-simulação (Rev. 4886 — extraído) */}
+        {overridesDialog}
 
         <ArredondamentoDialog
           open={arredOpen && arredOrigem === 'folha'}
@@ -6803,6 +6811,7 @@ export default function FolhaPagamento() {
     <DashboardLayout>
       <PrintHeader />
       {fileInputs}
+      {overridesDialog}
       <div className="space-y-6">
         {/* HEADER */}
         <div className="flex items-center justify-between flex-wrap gap-3">
