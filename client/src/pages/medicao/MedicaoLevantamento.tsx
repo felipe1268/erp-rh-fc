@@ -1965,12 +1965,27 @@ export default function MedicaoLevantamento() {
     // contrato, na mesma planta/página). Serviços diferentes podem se sobrepor
     // de propósito (ex.: Forro e Pintura Teto no mesmo ambiente).
     if (tipo !== "contagem") {
+      // Rev. 4859 — comparação por GRUPO raiz do serviço: "Forro" antigo e
+      // "Forro Teto" (sub-camada nova) são a MESMA superfície — antes a chave
+      // diferente furava o bloqueio e deixava remedir área de medição anterior.
+      const raizSvc = (ch: any): string | null => {
+        const k = ch || null;
+        if (!k) return null;
+        return gruposSub.subPai.get(k) ?? k;
+      };
+      const classeTipo = (t: string) => (t === "parede" ? "parede" : FECHA_POLIGONO(t) ? "area" : "linear");
       const candidatos = [
         ...contornosPagina.map((c: any) => ({ c, ref: false })),
         ...((contornosRef ?? []) as any[])
           .filter((c) => c.pdfId === pdfSelId && (c.pagina ?? 1) === pagina)
           .map((c: any) => ({ c, ref: true })),
-      ].filter(({ c }) => (c.servico || null) === (servicoAtivo || null));
+      ].filter(({ c }) => {
+        if ((c.servico || null) === (servicoAtivo || null)) return true; // mesmo serviço: regra original
+        // sub-camadas do mesmo grupo (ex.: forro × forro_teto): só conflita se
+        // for o mesmo TIPO de medição (área×área, linear×linear, parede×parede)
+        // — tabica/moldura (linear) convivem com teto (área) de propósito.
+        return raizSvc(c.servico) != null && raizSvc(c.servico) === raizSvc(servicoAtivo) && classeTipo(c.tipo) === classeTipo(tipo);
+      });
       const parseGeo = (c: any): GeoPonto[] => {
         try { return (JSON.parse(c.geometriaJson || "[]") as GeoPonto[]).map(normToPt); } catch { return []; }
       };
