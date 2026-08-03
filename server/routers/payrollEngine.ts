@@ -3507,6 +3507,8 @@ export const payrollEngineRouter = router({
         status: employees.status,
         jornadaTrabalho: employees.jornadaTrabalho,
         companyId: employees.companyId,
+        // Rev. 4886 — Admissão no meio do mês: folha proporcional aos dias a partir da admissão
+        dataAdmissao: employees.dataAdmissao,
         // Rev. 4771 — Afastamento INSS: datas da licença p/ janela dos 15 dias
         licencaDataInicio: employees.licencaDataInicio,
         licencaDataFim: employees.licencaDataFim,
@@ -4580,9 +4582,25 @@ export const payrollEngineRouter = router({
         // Rev. 4884 — Mensalista: salário FIXO (salarioBase), não varia com 28/29/30/31 dias.
         // Horista continua proporcional aos dias reais do mês (220h = referência de 30 dias).
         const isMensalistaEmp = (emp as any).tipoRemuneracao === 'mensalista';
-        const salarioBruto = isMensalistaEmp
+        // Rev. 4886 — Admissão no meio do mês: dias ANTES da admissão saem da base
+        // (mesma regra do gerarVale, Rev. 2178). Ex.: admitido 22/07 → paga 22..31/07.
+        let diasAntesAdmissaoEmp = 0;
+        {
+          const admIso = (emp as any).dataAdmissao
+            ? ((emp as any).dataAdmissao instanceof Date
+                ? (emp as any).dataAdmissao.toISOString().slice(0, 10)
+                : String((emp as any).dataAdmissao).slice(0, 10))
+            : null;
+          if (admIso && admIso.slice(0, 7) === `${year}-${String(month).padStart(2, '0')}`) {
+            diasAntesAdmissaoEmp = Math.max(0, Number(admIso.slice(8, 10)) - 1);
+          }
+        }
+        const fatorAdmissaoEmp = diasAntesAdmissaoEmp > 0
+          ? Math.max(0, diasNoMesSim - diasAntesAdmissaoEmp) / diasNoMesSim
+          : 1;
+        const salarioBruto = (isMensalistaEmp
           ? (parseBRL(emp.salarioBase) || (valorHora * horasMensaisBaseEmp)) * fatorFeriasEmp
-          : valorHora * horasMensaisEmp * fatorFeriasEmp;
+          : valorHora * horasMensaisEmp * fatorFeriasEmp) * fatorAdmissaoEmp;
         // HE = 0 — Hora Extra é módulo separado (he_periods)
         const valorHE = 0;
 
