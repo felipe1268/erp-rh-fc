@@ -6,7 +6,7 @@ A aplicação do Dissídio Coletivo 2026 (dissidioId=2, empresa 60002, 18/06/202
 
 **Backfill (03/08/2026, aprovado pelo user):** 5 serventes a R$ 2.189,00 → 2.301,73 + valorHora 10,46 + linha em dissidio_funcionarios (ids 420083 Luis Claudio, 9 Daniel, 420123 Willians, 420137 Carlos Alberto, 420145 Regis).
 
-**Ainda sem registro (user não confirmou se já foram ajustados manualmente):** Marcio de Toledo 420065, Anderson dos Anjos 420056, Jerryaliton 420077, Silvio 420140, Irael 420102, Emerson 420108.
+**Backfill 2 (03/08/2026, aprovado):** Jerryaliton 420077 e Silvio 420140 (2.774,20→2.917,07), Irael 420102 (2.310,00→2.428,97), Emerson 420108 (2.065,80→2.172,19). Marcio 420065 e Anderson 420056 já ajustados manualmente (user confirmou). Retroativo dos backfillados: user decidiu NÃO recalcular por ora.
 
 **Gotchas:** `dissidio_funcionarios.aplicadoEm` é timestamp (usar now(), não string); valores monetários em formato BR ("2.301,73") em employees e na tabela do dissídio; retroativo dos backfillados NÃO foi lançado (mesesRetroativos=0).
 
