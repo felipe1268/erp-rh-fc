@@ -4637,7 +4637,13 @@ export const payrollEngineRouter = router({
         const vaLancamento = vaMap.get(emp.id) || 0;
         const descontoVaTotal = 0;
         const vtDiario = parseBRL(emp.vtValorDiario);
-        const vtValorMensal = vtDiario * diasUteis;
+        // Rev. 4885 — Desconto de VT segue a regra legal (Lei 7.418/85): o menor entre
+        // 6% do salário-base e o custo real do VT no mês (vtDiario × dias úteis).
+        const vtCustoRealMes = vtDiario * diasUteis;
+        const salarioBaseVt = parseBRL(emp.salarioBase) || (valorHora * horasMensaisBaseEmp);
+        const vtValorMensal = vtCustoRealMes > 0
+          ? Math.round(Math.min(vtCustoRealMes, salarioBaseVt * 0.06) * 100) / 100
+          : 0;
 
         // Ajustes da Aferição do Escuro: redistribuir nos campos corretos
         // (faltas vão p/ "FALTAS", atrasos p/ "ATRASOS" e o resto p/ "OUTROS"=acertoEscuroValor)
