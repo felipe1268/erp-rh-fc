@@ -4617,7 +4617,12 @@ export const payrollEngineRouter = router({
           if (iniVig > fimVig) continue;
           const diasVig = (Number(fimVig.slice(8, 10)) - Number(iniVig.slice(8, 10))) + 1;
           const pct = Number(a.percentual) || 0;
-          const baseCalc = a.tipo === 'insalubridade' ? salarioMinimoVigente : salarioBaseEmpAdic;
+          // Rev. 4887 — Periculosidade de HORISTA acompanha o salário do mês (base × dias
+          // reais/30, igual ao salarioBruto): em julho (31 dias) a base sobe 1 dia.
+          // Insalubridade (salário mínimo) e mensalista (salário fixo) não mudam.
+          const baseCalc = a.tipo === 'insalubridade'
+            ? salarioMinimoVigente
+            : (isMensalistaEmp ? salarioBaseEmpAdic : salarioBaseEmpAdic * diasNoMesSim / 30);
           const valorCheio = baseCalc * (pct / 100);
           const valorProRata = Math.round(valorCheio * (diasVig / diasNoMesSim) * 100) / 100;
           if (valorProRata <= 0) continue;
