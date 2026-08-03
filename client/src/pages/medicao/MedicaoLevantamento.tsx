@@ -2025,7 +2025,9 @@ export default function MedicaoLevantamento() {
         }
         if (geos.length) {
           fracTotal = fracaoSobreposta(ptsPt, geos.map((x) => x.g));
-          if (fracTotal >= 0.03) {
+          // Rev. 4859 — tolerância apertada (pedido do usuário): nada de
+          // sobrepor; só 1% de folga p/ encosto de borda (imprecisão do dedo).
+          if (fracTotal >= 0.01) {
             let melhor = geos[0], melhorFrac = -1;
             for (const x of geos) { const f = fracaoSobreposta(ptsPt, [x.g]); if (f > melhorFrac) { melhorFrac = f; melhor = x; } }
             conflito = { ...melhor.cand, frac: fracTotal };
@@ -2035,7 +2037,7 @@ export default function MedicaoLevantamento() {
       if (conflito) {
         const nomeC = `${conflito.c.rotulo || svcAtivoObj.nome}${conflito.c.numero ? ` nº ${conflito.c.numero}` : ""}${conflito.ref ? " (medição anterior deste contrato)" : ""}`;
         const pct = conflito.frac != null ? `${Math.round(conflito.frac * 100)}% desta área` : "Este trecho de parede";
-        if (conflito.frac == null || conflito.frac >= 0.10) {
+        if (conflito.frac == null || conflito.frac >= 0.02) {
           toast.error(`Sobreposição bloqueada: ${pct} já foi medida em "${nomeC}". Ajuste o desenho — ou apague o contorno antigo se for correção.`, { duration: 7000 });
           setDraft([]); setDragRect(null); setFreePts([]);
           return;
@@ -4151,18 +4153,20 @@ export default function MedicaoLevantamento() {
                           )}
                           {/* Rev. 3100 — marcador de OSnap (geometria notável sob o cursor) */}
                           {snapHit && (() => {
-                            const { p, kind } = snapHit; const r = 0.011; const sw = 2.2; const col = "#16a34a";
+                            // Rev. 4859 — marcador pequeno e sutil; vectorEffect precisa
+                            // ir em CADA linha (no <g> não herda → barras gigantes).
+                            const { p, kind } = snapHit; const r = 0.006; const sw = 1.6; const col = "#16a34a";
                             const common = { fill: "none", stroke: col, strokeWidth: sw, vectorEffect: "non-scaling-stroke" as const };
                             if (kind === "endpoint")
                               return <rect x={p.x - r} y={p.y - r} width={r * 2} height={r * 2} {...common} />;
                             if (kind === "midpoint")
                               return <polygon points={`${p.x},${p.y - r} ${p.x + r},${p.y + r} ${p.x - r},${p.y + r}`} {...common} />;
                             if (kind === "intersection")
-                              return <g {...common}><line x1={p.x - r} y1={p.y - r} x2={p.x + r} y2={p.y + r} /><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y - r} /></g>;
+                              return <g><line x1={p.x - r} y1={p.y - r} x2={p.x + r} y2={p.y + r} {...common} /><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y - r} {...common} /></g>;
                             if (kind === "perpendicular")
-                              return <g {...common}><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y + r} /><line x1={p.x - r} y1={p.y - r} x2={p.x - r} y2={p.y + r} /></g>;
+                              return <g><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y + r} {...common} /><line x1={p.x - r} y1={p.y - r} x2={p.x - r} y2={p.y + r} {...common} /></g>;
                             if (kind === "nearest")
-                              return <g {...common}><line x1={p.x - r} y1={p.y - r} x2={p.x + r} y2={p.y + r} /><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y - r} /><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y + r} /></g>;
+                              return <g><line x1={p.x - r} y1={p.y - r} x2={p.x + r} y2={p.y + r} {...common} /><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y - r} {...common} /><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y + r} {...common} /></g>;
                             return <circle cx={p.x} cy={p.y} r={r} {...common} />; // node
                           })()}
                         </svg>
