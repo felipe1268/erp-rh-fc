@@ -725,7 +725,19 @@ export default function MedicaoLevantamento() {
   // Elaborador = usuário logado; responsável = contato cadastrado da contratada.
   // Nenhum e-mail é enviado (assinatura na tela) — se faltar e-mail no cadastro,
   // usa um placeholder interno só para satisfazer o registro do envelope.
-  const enviarMemoriaParaAssinatura = () => {
+  const enviarMemoriaParaAssinatura = async () => {
+    // Rev. 4864 — Poka-Yoke: o envelope NUNCA pode nascer sem as plantas.
+    // Se o snapshot ainda não montou (dialog acabou de abrir / rede lenta),
+    // monta agora e só segue com o bloco pronto.
+    const temContornosVivos = ((campo?.contornos ?? []) as any[]).some((c) => !c.deletedAt);
+    for (let tent = 0; tent < 2 && !memPlantasRef.current && temContornosVivos; tent++) {
+      try { memPlantasRef.current = await montarPlantasHtml(); } catch (e) { console.error("[Envelope] plantas:", e); memPlantasRef.current = ""; }
+    }
+    setMemPlantasTick((t) => t + 1);
+    if (temContornosVivos && !memPlantasRef.current) {
+      toast.error("Não consegui montar as plantas do croqui (verifique a conexão e tente de novo). O documento NÃO foi enviado para não sair incompleto.");
+      return;
+    }
     const elabNome = String((authUser as any)?.name || campo?.criadoPorNome || "").trim();
     const respNome = String(contrato?.empresa?.responsavelNome || contrato?.empresa?.razaoSocial || "").trim();
     if (!elabNome) { toast.error("Não consegui identificar o usuário logado."); return; }
@@ -2934,6 +2946,7 @@ export default function MedicaoLevantamento() {
           const shapes: string[] = []; const badges: string[] = [];
           const servicosCamada = new Set((ccs as any[]).map((c) => String(c.servico || "")));
           const refShapes: string[] = [];
+          try {
           for (const rc of refsPagina) {
             if (!servicosCamada.has(String(rc.servico || ""))) continue;
             let rpts: any[] = []; try { rpts = JSON.parse(rc.geometriaJson || "[]"); } catch { /* */ }
@@ -2950,6 +2963,7 @@ export default function MedicaoLevantamento() {
               refShapes.push(`<path d="${rd}" fill="none" stroke="#64748b" stroke-opacity="0.6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>`);
             }
           }
+          } catch { /* hachura de referência é opcional — nunca derruba o croqui */ }
           const itensLegenda: string[] = [];
           let somaQtd = 0; let unidadeCamada = "";
           for (const c of [...ccs].sort((a, b) => (a.numero ?? 0) - (b.numero ?? 0))) {
@@ -3223,9 +3237,18 @@ export default function MedicaoLevantamento() {
   async function gerarMemoriaCalculo() {
     // iOS/Safari: abrir a janela SÍNCRONO no gesto do usuário (senão popup bloqueado)
     const w = window.open("", "_blank");
-    if (memPlantasRef.current == null) {
-      try { memPlantasRef.current = await montarPlantasHtml(); } catch { memPlantasRef.current = ""; }
-      setMemPlantasTick((t) => t + 1);
+    // Rev. 4864 — Poka-Yoke: NUNCA gerar o documento sem as plantas em silêncio.
+    // Se há contornos medidos mas o bloco veio vazio (rede caiu no meio, planta
+    // não baixou…), tenta de novo; persistindo, avisa e NÃO imprime incompleto.
+    const temContornos = ((campo?.contornos ?? []) as any[]).some((c) => !c.deletedAt);
+    for (let tent = 0; tent < 2 && !memPlantasRef.current && temContornos; tent++) {
+      try { memPlantasRef.current = await montarPlantasHtml(); } catch (e) { console.error("[Memória] plantas:", e); memPlantasRef.current = ""; }
+    }
+    setMemPlantasTick((t) => t + 1);
+    if (temContornos && !memPlantasRef.current) {
+      if (w) w.close();
+      toast.error("Não consegui montar as plantas do croqui (verifique a conexão e tente de novo). O documento NÃO foi gerado para não sair incompleto.");
+      return;
     }
     const html = buildMemoriaHtml(true);
     if (w) { w.document.write(html); w.document.close(); }
