@@ -58,7 +58,8 @@ function mesAtual(): string {
 
 export default function FolhaDescontos() {
   const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ?? 0;
+  // CompanyContext guarda o id como STRING — sem Number() o tRPC rejeita ("expected number")
+  const companyId = Number(selectedCompanyId) || 0;
   const [mes, setMes] = useState(mesAtual());
   const [tipoAtivo, setTipoAtivo] = useState<TipoKey | "todos">("todos");
   const [busca, setBusca] = useState("");
