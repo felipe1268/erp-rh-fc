@@ -1517,6 +1517,9 @@ export const medicaoRouter = router({
           rotulo: medicaoCampoContornos.rotulo,
           quantidade: medicaoCampoContornos.quantidade,
           unidade: medicaoCampoContornos.unidade,
+          // Rev. 4861 — servico é obrigatório p/ segregar a camada "já medido"
+          // por categoria/sub no client (sem ele, o filtro esconderia tudo).
+          servico: medicaoCampoContornos.servico,
         })
         .from(medicaoCampoContornos)
         .where(and(
