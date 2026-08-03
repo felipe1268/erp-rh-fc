@@ -3478,6 +3478,7 @@ export const payrollEngineRouter = router({
         nomeCompleto: employees.nomeCompleto,
         valorHora: employees.valorHora,
         salarioBase: employees.salarioBase,
+        tipoRemuneracao: employees.tipoRemuneracao,
         horasMensais: employees.horasMensais,
         funcao: employees.funcao,
         codigoInterno: employees.codigoInterno,
@@ -4573,7 +4574,12 @@ export const payrollEngineRouter = router({
         const fatorFeriasEmp = diasFeriasNoMesEmp > 0
           ? Math.max(0, diasNoMesSim - diasFeriasNoMesEmp) / diasNoMesSim
           : 1;
-        const salarioBruto = valorHora * horasMensaisEmp * fatorFeriasEmp;
+        // Rev. 4884 — Mensalista: salário FIXO (salarioBase), não varia com 28/29/30/31 dias.
+        // Horista continua proporcional aos dias reais do mês (220h = referência de 30 dias).
+        const isMensalistaEmp = (emp as any).tipoRemuneracao === 'mensalista';
+        const salarioBruto = isMensalistaEmp
+          ? (parseBRL(emp.salarioBase) || (valorHora * horasMensaisBaseEmp)) * fatorFeriasEmp
+          : valorHora * horasMensaisEmp * fatorFeriasEmp;
         // HE = 0 — Hora Extra é módulo separado (he_periods)
         const valorHE = 0;
 
