@@ -1189,6 +1189,11 @@ export default function Solicitacoes() {
   const [modoSC, setModoSC] = useState<"eap" | "manual" | "insumo">("eap");
   const [insumoBusca, setInsumoBusca] = useState("");
   const [insumoQtds, setInsumoQtds] = useState<Record<string, string>>({});
+  // Snapshot dos dados do insumo no momento da seleção — a query de consolidados é filtrada
+  // pela BUSCA atual, então no salvar o insumo selecionado sob outra busca não está mais em
+  // insumosConsolidadosQ.data e o item cairia no fallback "descricao = código" (bug SC-0690).
+  const [insumoMeta, setInsumoMeta] = useState<Record<string, { descricao: string; unidade: string; precoMedio: number; numComposicoes: number }>>({});
+  const snapInsumoMeta = (ins: any) => setInsumoMeta(p => ({ ...p, [ins.insumoCodigo]: { descricao: ins.descricao || "", unidade: ins.unidade || "un", precoMedio: ins.precoMedio || 0, numComposicoes: ins.composicoes?.length || 0 } }));
   const [insumoExpanded, setInsumoExpanded] = useState<string | null>(null);
   const [eapExpanded, setEapExpanded] = useState<number | null>(null);
   const [eapTreeCollapsed, setEapTreeCollapsed] = useState<Set<string>>(new Set());
@@ -1695,7 +1700,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     setEapSearch(""); setModoSC("eap");
     setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setEapExtraDesbloqueado({});
     setEapInsumoSel({}); setEapInsumoQtdManual({});
-    setInsumoBusca(""); setInsumoQtds({}); setInsumoExpanded(null);
+    setInsumoBusca(""); setInsumoQtds({}); setInsumoMeta({}); setInsumoExpanded(null);
     setImagemPreview(null); setImagemBase64(null); setImagemNome("");
     setPendingAnexos([]);
     setIncluirAjudanteGlobal(true); setIncluirAjudanteOverride({});
@@ -2092,15 +2097,25 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       const insumosComQtd = Object.entries(insumoQtds).filter(([, v]) => parseFloat(v) > 0);
       if (insumosComQtd.length === 0) return toast.error("Informe a quantidade de pelo menos um insumo.");
       const consolidadosData = insumosConsolidadosQ.data ?? [];
+      // A query é filtrada pela busca atual — insumos escolhidos sob buscas anteriores não
+      // estão mais em data; usa o snapshot capturado na seleção (insumoMeta).
+      const semNome = insumosComQtd.filter(([codigo]) => {
+        const ins = consolidadosData.find((c: any) => c.insumoCodigo === codigo);
+        return !ins?.descricao && !insumoMeta[codigo]?.descricao;
+      });
+      if (semNome.length > 0) {
+        return toast.error(`Não foi possível identificar o nome de ${semNome.length} insumo(s) (${semNome.map(([c]) => c).join(", ")}). Busque e selecione novamente esses itens.`);
+      }
       itensParaSalvar = insumosComQtd.map(([codigo, qtd]) => {
         const ins = consolidadosData.find((c: any) => c.insumoCodigo === codigo);
+        const meta = insumoMeta[codigo];
         return {
-          descricao: ins?.descricao || codigo,
-          unidade: ins?.unidade || "un",
+          descricao: ins?.descricao || meta?.descricao || codigo,
+          unidade: ins?.unidade || meta?.unidade || "un",
           quantidade: qtd,
-          observacoes: `Compra consolidada (${ins?.composicoes?.length || 0} composições)`,
+          observacoes: `Compra consolidada (${ins?.composicoes?.length ?? meta?.numComposicoes ?? 0} composições)`,
           insumoCodigo: codigo,
-          precoMeta: ins?.precoMedio || 0,
+          precoMeta: ins?.precoMedio ?? meta?.precoMedio ?? 0,
           origemEap: true,
         };
       });
@@ -4229,6 +4244,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                             for (const ins of (insumosConsolidadosQ.data ?? []) as any[]) {
                               if (ins.saldoDisponivel > 0) {
                                 novos[ins.insumoCodigo] = String(ins.saldoDisponivel);
+                                snapInsumoMeta(ins);
                               }
                             }
                             setInsumoQtds(novos);
@@ -4311,6 +4327,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                                       onChange={(e) => {
                                         if (e.target.checked) {
                                           const val = ins.saldoDisponivel > 0 ? String(ins.saldoDisponivel) : "1";
+                                          snapInsumoMeta(ins);
                                           setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: val }));
                                         } else {
                                           setInsumoQtds(p => { const n = { ...p }; delete n[ins.insumoCodigo]; return n; });
@@ -4341,14 +4358,14 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                                       className="w-full h-6 px-1 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 text-center"
                                       placeholder="0"
                                       value={qtdStr}
-                                      onChange={e => setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: e.target.value }))}
+                                      onChange={e => { snapInsumoMeta(ins); setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: e.target.value })); }}
                                     />
                                     {ins.saldoDisponivel > 0 && (
                                       <button
                                         type="button"
                                         title={`Usar saldo: ${ins.saldoDisponivel.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}`}
                                         className="shrink-0 h-6 px-1 text-[8px] font-bold rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors whitespace-nowrap"
-                                        onClick={() => setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: String(ins.saldoDisponivel) }))}
+                                        onClick={() => { snapInsumoMeta(ins); setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: String(ins.saldoDisponivel) })); }}
                                       >
                                         Saldo
                                       </button>

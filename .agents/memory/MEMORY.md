@@ -92,6 +92,7 @@
 - [Backup/migração — streaming obrigatório](backup-streaming-oom.md) — nunca acumular tabelas em RAM (OOM); lote por ctid; pg_column_size, não LENGTH; [export GET streaming + whitelist no import](migration-export-streaming.md).
 - [Recebíveis só entram manualmente](recebiveis-previstos-manual.md) — nenhum importer materializa receita em financial_entries; user lança via "Recebíveis Previstos"; dedup revenue ignora cancelado.
 - [AI JSON quebra com número BR](ai-json-br-number-salvage.md) — LLM emite `2.500,00` → JSON.parse estrito aborta o lote; try-parse→catch-salvage por regex + parser BR-aware.
+- [SC por insumo — snapshot na seleção](sc-insumo-busca-snapshot.md) — lookup no salvar contra query filtrada pela busca perde itens de buscas anteriores → gravava código como nome; snapshot na seleção + bloquear save sem nome.
 - [SC → cotação tipo propagation](sc-cotacao-tipo-propagation.md) — editar SC deve reconciliar `tipo` nas cotações vinculadas; TODO caminho de criação de cotação deve semear `tipo: sc.tipo ?? "material"`.
 - [cronograma_atividade = projeção, não custo real](cronograma-atividade-projecao-custos.md) — é valor de contrato distribuído mês a mês; telas de custo REAL devem excluí-lo (senão duplica com folha/compras).
 - [updateEmployee validFields whitelist](updateEmployee-validfields-whitelist.md) — new employees column must be added to validFields (and booleanFields/intFields) or updateEmployee silently drops it.
