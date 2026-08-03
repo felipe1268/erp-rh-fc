@@ -33,3 +33,6 @@ TODOS os sinks, não só o endpoint "óbvio".
   (update otimista) mas some no reload. Teste sempre o reload, não só a sessão.
 - Cobrir os DOIS sinks de decisão (`decidirVale` pagar:true e `reverterVale`): inelegível
   → `rejeitado`+`bloqueado=1`, sem evento financeiro.
+- A SIMULAÇÃO DA FOLHA é mais um sink de leitura: o desconto "VALE" lê
+  `payroll_advances.valorTotalVale` direto — precisa pular `status='rejeitado'`
+  (vale cancelado/revertido NUNCA desconta na folha). Bug real jul/2026 (Acacio).

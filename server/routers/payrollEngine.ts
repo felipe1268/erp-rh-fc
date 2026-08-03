@@ -4474,7 +4474,10 @@ export const payrollEngineRouter = router({
         const totalProventos = salarioBruto;
 
         const adv = advMap.get(emp.id);
-        const descontoAdiantamento = adv ? parseBRL(adv.valorTotalVale) : 0;
+        // Rev. 4867 — vale cancelado/rejeitado NUNCA desconta na folha.
+        // (ex.: Acacio jul/2026 — vale revertido na tela do Vale mas a folha
+        // continuava lendo valorTotalVale sem olhar o status)
+        const descontoAdiantamento = adv && adv.status !== 'rejeitado' ? parseBRL(adv.valorTotalVale) : 0;
 
         const faltaData = faltasMap.get(emp.id);
         const faltasQtdMes = faltaData?.totalFaltas || 0;
