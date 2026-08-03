@@ -3933,6 +3933,13 @@ export default function MedicaoLevantamento() {
                         onPointerLeave={() => setSnapHit(null)}
                       >
                         <svg className="absolute inset-0 w-full h-full" viewBox={`${-folga.x} ${-folga.y} ${1 + 2 * folga.x} ${1 + 2 * folga.y}`} preserveAspectRatio="none">
+                          {/* Rev. 4859 — hachura de linhas diagonais (espaçamento curto)
+                              p/ área já medida — sempre visível (Poka-Yoke). */}
+                          <defs>
+                            <pattern id="hachura-ja-medido" patternUnits="userSpaceOnUse" width={0.007} height={0.007} patternTransform="rotate(45)">
+                              <line x1={0} y1={0} x2={0} y2={0.007} stroke="#94a3b8" strokeWidth={0.0018} strokeOpacity={0.55} />
+                            </pattern>
+                          </defs>
                           {/* Rev. 3093 — REFERÊNCIA (medições anteriores): renderizada
                               ATRÁS dos contornos desta medição. */}
                           {referenciaPagina.map((c) => {
@@ -3952,14 +3959,10 @@ export default function MedicaoLevantamento() {
                             cx /= Math.max(pts.length, 1); cy /= Math.max(pts.length, 1);
                             return (
                               <g key={`ref-${c.id}`}>
-                                {/* Rev. 4859 — preenchimento CINZA SÓLIDO discreto; sem
-                                    numeração de item. Só um "MED nn" pequeno no CENTRO
-                                    da área, do nº da MEDIÇÃO (terceiro_medicoes). */}
-                                <path d={d} fill={fecha ? CINZA : "none"} fillOpacity={fecha ? 0.22 : 0} stroke={CINZA} strokeOpacity={0.6} strokeWidth={0.0025} vectorEffect="non-scaling-stroke" />
+                                {/* Rev. 4859 — hachura de linhas próximas + borda tracejada,
+                                    sem título/numeração (pedido do usuário). */}
+                                <path d={d} fill={fecha ? "url(#hachura-ja-medido)" : "none"} stroke={CINZA} strokeOpacity={0.55} strokeWidth={0.0025} strokeDasharray="0.012 0.008" vectorEffect="non-scaling-stroke" />
                                 {!fecha && <path d={d} fill="none" stroke={CINZA} strokeOpacity={0.35} strokeWidth={0.008} vectorEffect="non-scaling-stroke" strokeDasharray="0.01 0.006" />}
-                                {fecha && (c as any).medicaoNumero != null && (
-                                  <text x={cx} y={cy} fontSize={0.011} fill="#475569" fillOpacity={0.75} textAnchor="middle" dominantBaseline="central" style={{ fontWeight: 600, letterSpacing: "0.0008em" }}>{`MED ${String((c as any).medicaoNumero).padStart(2, "0")}`}</text>
-                                )}
                               </g>
                             );
                           })}
