@@ -1466,7 +1466,7 @@ export const medicaoRouter = router({
       }
       const origemNorm: "cliente" | "terceiro" = atual.origem === "terceiro" ? "terceiro" : "cliente";
       const campos = await db
-        .select({ id: medicaoCampo.id, numero: medicaoCampo.numero, titulo: medicaoCampo.titulo })
+        .select({ id: medicaoCampo.id, numero: medicaoCampo.numero, titulo: medicaoCampo.titulo, medicaoId: medicaoCampo.medicaoId })
         .from(medicaoCampo)
         .where(and(
           eq(medicaoCampo.companyId, input.companyId),
@@ -1484,6 +1484,26 @@ export const medicaoRouter = router({
         ids = await filtrarCamposComMedicaoFechada(db, ids, input.companyId);
       }
       if (ids.length === 0) return [] as any[];
+      // Rev. 4859 — nº da MEDIÇÃO (terceiro_medicoes.numero), não do levantamento:
+      // o selo "MED nn" na planta deve refletir a medição, que é o que o user vê.
+      const medNumeroPorCampo = new Map<number, number>();
+      if (origemNorm === "terceiro") {
+        const medIdsRef = campos.map((c) => (c as any).medicaoId).filter((x: any) => x != null) as number[];
+        const meds = await db
+          .select({ id: terceiroMedicoes.id, numero: terceiroMedicoes.numero, levCampoId: terceiroMedicoes.levantamentoCampoId })
+          .from(terceiroMedicoes)
+          .where(and(
+            eq(terceiroMedicoes.companyId, input.companyId),
+            eq(terceiroMedicoes.contratoId, input.contratoId),
+            medIdsRef.length > 0
+              ? sql`(${inArray(terceiroMedicoes.levantamentoCampoId, ids)} OR ${inArray(terceiroMedicoes.id, medIdsRef)})`
+              : inArray(terceiroMedicoes.levantamentoCampoId, ids),
+          ));
+        for (const m of meds as any[]) {
+          if (m.levCampoId != null && ids.includes(m.levCampoId)) medNumeroPorCampo.set(m.levCampoId, m.numero ?? 1);
+          for (const c of campos as any[]) if (c.medicaoId === m.id && !medNumeroPorCampo.has(c.id)) medNumeroPorCampo.set(c.id, m.numero ?? 1);
+        }
+      }
       const rows = await db
         .select({
           id: medicaoCampoContornos.id,
@@ -1510,6 +1530,7 @@ export const medicaoRouter = router({
         quantidade: r.quantidade != null ? Number(r.quantidade) : null,
         campoNumero: tituloMap.get(r.medicaoCampoId)?.numero ?? null,
         campoTitulo: tituloMap.get(r.medicaoCampoId)?.titulo ?? null,
+        medicaoNumero: medNumeroPorCampo.get(r.medicaoCampoId) ?? null,
       }));
     }),
 

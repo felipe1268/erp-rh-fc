@@ -3952,21 +3952,13 @@ export default function MedicaoLevantamento() {
                             cx /= Math.max(pts.length, 1); cy /= Math.max(pts.length, 1);
                             return (
                               <g key={`ref-${c.id}`}>
-                                {/* Rev. 4859 — preenchimento CINZA SÓLIDO (pedido do usuário:
-                                    melhor que a hachura "arranhada") + selo MED nº. */}
-                                <path d={d} fill={fecha ? CINZA : "none"} fillOpacity={fecha ? 0.28 : 0} stroke={CINZA} strokeOpacity={0.7} strokeWidth={0.003} vectorEffect="non-scaling-stroke" />
+                                {/* Rev. 4859 — preenchimento CINZA SÓLIDO discreto; sem
+                                    numeração de item. Só um "MED nn" pequeno no CENTRO
+                                    da área, do nº da MEDIÇÃO (terceiro_medicoes). */}
+                                <path d={d} fill={fecha ? CINZA : "none"} fillOpacity={fecha ? 0.22 : 0} stroke={CINZA} strokeOpacity={0.6} strokeWidth={0.0025} vectorEffect="non-scaling-stroke" />
                                 {!fecha && <path d={d} fill="none" stroke={CINZA} strokeOpacity={0.35} strokeWidth={0.008} vectorEffect="non-scaling-stroke" strokeDasharray="0.01 0.006" />}
-                                {(c as any).campoNumero != null && (
-                                  <g>
-                                    <rect x={cx - 0.032} y={cy + 0.016} width={0.064} height={0.022} rx={0.005} fill="#475569" fillOpacity={0.85} />
-                                    <text x={cx} y={cy + 0.027} fontSize={0.014} fill="#ffffff" textAnchor="middle" dominantBaseline="central" style={{ fontWeight: 700, letterSpacing: "0.001em" }}>{`MED ${String((c as any).campoNumero).padStart(2, "0")}`}</text>
-                                  </g>
-                                )}
-                                {c.numero != null && (
-                                  <>
-                                    <circle cx={cx} cy={cy} r={0.013} fill="#f1f5f9" fillOpacity={0.9} stroke={CINZA} strokeWidth={0.0018} strokeOpacity={0.7} vectorEffect="non-scaling-stroke" />
-                                    <text x={cx} y={cy} fontSize={0.014} fill={CINZA} textAnchor="middle" dominantBaseline="central" style={{ fontWeight: 600 }}>{c.numero}</text>
-                                  </>
+                                {fecha && (c as any).medicaoNumero != null && (
+                                  <text x={cx} y={cy} fontSize={0.011} fill="#475569" fillOpacity={0.75} textAnchor="middle" dominantBaseline="central" style={{ fontWeight: 600, letterSpacing: "0.0008em" }}>{`MED ${String((c as any).medicaoNumero).padStart(2, "0")}`}</text>
                                 )}
                               </g>
                             );
