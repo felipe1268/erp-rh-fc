@@ -331,7 +331,11 @@ export const homeDataRouter = router({
           return di >= hojeStr && di <= hoje60Str;
         })
         .map(v => {
-          const emp = ativos.find(e => e.id === v.employeeId);
+          // Rev. 4866 — busca em TODOS os funcionários (não só status "Ativo"):
+          // quem já está com status "Ferias"/"Afastado" e tem próxima férias
+          // agendada aparecia como "Funcionário" sem nome (regra de ouro: nunca
+          // exibir pessoa sem nome).
+          const emp = allEmps.find(e => e.id === v.employeeId);
           const diStr = toDateStr(v.dataInicio!);
           const diasAteInicio = Math.ceil((new Date(diStr + 'T12:00:00').getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
           return {

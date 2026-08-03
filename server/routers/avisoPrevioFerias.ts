@@ -3599,6 +3599,13 @@ export const avisoPrevioFeriasRouter = router({
           employeeCargo: employees.cargo,
           employeeFuncao: employees.funcao,
           employeeFotoUrl: employees.fotoUrl,
+          // Rev. 4865 — obra atual (alocação ativa) p/ o lembrete de gozo
+          employeeObraNome: sql<string | null>`(
+            SELECT o.nome FROM obra_funcionarios ofc
+            JOIN obras o ON o.id = ofc."obraId"
+            WHERE ofc."employeeId" = ${employees.id} AND ofc."isActive" = 1
+            ORDER BY ofc.id DESC LIMIT 1
+          )`.as("employeeObraNome"),
           employeeSetor: employees.setor,
           employeeSalario: employees.salarioBase,
           // Rev. 1701 — exposição p/ tag "Direito de férias perdido por afastamento >180 dias"

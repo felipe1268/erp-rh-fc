@@ -8,7 +8,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import {
   Palmtree, X, Loader2, PenLine, Undo2,
-  Calendar, CalendarDays, Briefcase, AlertTriangle,
+  Calendar, CalendarDays, Briefcase, AlertTriangle, MapPin,
   CheckCircle2,
 } from "lucide-react";
 
@@ -169,6 +169,13 @@ export default function FeriasGozoPrompt({ informativo = false }: { informativo?
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs text-blue-800/80">
                     <Briefcase className="h-3.5 w-3.5" />
                     <span>{cargo}</span>
+                  </div>
+                )}
+                {/* Rev. 4865 — obra atual do colaborador */}
+                {(promptItem.employeeObraNome || promptItem.obraNome) && (
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-blue-800/80">
+                    <MapPin className="h-3.5 w-3.5" />
+                    <span className="break-words">{promptItem.employeeObraNome || promptItem.obraNome}</span>
                   </div>
                 )}
               </div>
