@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import PersonPhoto from "@/components/PersonPhoto";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -148,18 +149,30 @@ export default function FeriasGozoPrompt({ informativo = false }: { informativo?
           </p>
 
           <div className="rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-sky-50/40 p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-700/80 mb-1">
-              Colaborador
-            </div>
-            <div className="text-base font-bold text-blue-900 break-words leading-tight">
-              {promptItem.employeeName || promptItem.nomeCompleto || "—"}
-            </div>
-            {cargo && (
-              <div className="mt-1.5 flex items-center gap-1.5 text-xs text-blue-800/80">
-                <Briefcase className="h-3.5 w-3.5" />
-                <span>{cargo}</span>
+            <div className="flex items-center gap-3">
+              {/* Rev. 4865 — foto do funcionário no lembrete (clicável = amplia) */}
+              <PersonPhoto
+                src={promptItem.employeeFotoUrl || promptItem.fotoUrl || null}
+                alt={promptItem.employeeName || promptItem.nomeCompleto || "Colaborador"}
+                size="lg"
+                caption={cargo || undefined}
+                className="flex-none ring-2 ring-blue-200"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-700/80 mb-1">
+                  Colaborador
+                </div>
+                <div className="text-base font-bold text-blue-900 break-words leading-tight">
+                  {promptItem.employeeName || promptItem.nomeCompleto || "—"}
+                </div>
+                {cargo && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-xs text-blue-800/80">
+                    <Briefcase className="h-3.5 w-3.5" />
+                    <span>{cargo}</span>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* KPI bar de 2 cards */}
