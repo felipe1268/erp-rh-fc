@@ -3990,8 +3990,17 @@ export default function MedicaoLevantamento() {
                               <g key={`ref-${c.id}`}>
                                 {/* Rev. 4859 — hachura de linhas próximas + borda tracejada,
                                     sem título/numeração (pedido do usuário). */}
-                                <path d={d} fill={fecha ? "url(#hachura-ja-medido)" : "none"} stroke={CINZA} strokeOpacity={0.55} strokeWidth={0.0025} strokeDasharray="0.012 0.008" vectorEffect="non-scaling-stroke" />
-                                {!fecha && <path d={d} fill="none" stroke={CINZA} strokeOpacity={0.35} strokeWidth={0.008} vectorEffect="non-scaling-stroke" strokeDasharray="0.01 0.006" />}
+                                {fecha ? (
+                                  /* ÁREA (teto/sanca): hachura diagonal + borda tracejada. */
+                                  <path d={d} fill="url(#hachura-ja-medido)" stroke={CINZA} strokeOpacity={0.55} strokeWidth={2} strokeDasharray="8 5" vectorEffect="non-scaling-stroke" />
+                                ) : (
+                                  /* Rev. 4860 — LINEAR (tabica/moldura/perímetro): linha cinza
+                                     FORTE e contínua — destaque claro de "já medido". */
+                                  <>
+                                    <path d={d} fill="none" stroke={CINZA} strokeOpacity={0.25} strokeWidth={9} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                                    <path d={d} fill="none" stroke="#475569" strokeOpacity={0.85} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                                  </>
+                                )}
                               </g>
                             );
                           })}
