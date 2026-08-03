@@ -1040,14 +1040,6 @@ export default function MedicaoLevantamento() {
     [campo, pdfSelId, pagina],
   );
 
-  // Rev. 3093 — referência (medições anteriores) filtrada p/ a planta+página atual.
-  const referenciaPagina = useMemo(
-    () => verReferencia
-      ? ((contornosRef ?? []) as any[]).filter((c) => c.pdfId === pdfSelId && (c.pagina ?? 1) === pagina)
-      : [],
-    [verReferencia, contornosRef, pdfSelId, pagina],
-  );
-
   // --- geometria → metros (PDF points) ---
   const normToPt = useCallback((p: GeoPonto): GeoPonto => ({ x: p.x * pageDims.w, y: p.y * pageDims.h }), [pageDims]);
 
@@ -1305,6 +1297,29 @@ export default function MedicaoLevantamento() {
     }
     return { map, subPai };
   }, [servicos]);
+
+  // Rev. 3093 — referência (medições anteriores) filtrada p/ a planta+página atual.
+  // Rev. 4861 — segregada por categoria/sub (pedido do usuário): com uma sub
+  // ativa (ex.: Teto), só aparece o já-medido DELA; "Ver todos" mostra tudo.
+  const referenciaPagina = useMemo(() => {
+    if (!verReferencia) return [];
+    const base = ((contornosRef ?? []) as any[]).filter((c) => c.pdfId === pdfSelId && (c.pagina ?? 1) === pagina);
+    if (!servicoAtivo || verTodasCamadas) return base;
+    const raiz = (ch: string) => gruposSub.subPai.get(ch) ?? ch;
+    const classe = (t: string) => (t === "parede" ? "parede" : FECHA_POLIGONO(t) ? "area" : "linear");
+    const classeAtiva = svcAtivoObj?.tipoMedida === "perimetro" ? "linear" : svcAtivoObj?.tipoMedida === "parede" ? "parede" : "area";
+    const raizAtiva = raiz(servicoAtivo);
+    return base.filter((c) => {
+      const sv = c.servico || "";
+      if (sv === servicoAtivo) return true;
+      // Legado: contorno antigo gravado só com o grupo-mãe (ex.: "forro") —
+      // aparece nas subs do MESMO grupo e MESMA classe de medida (área/linear).
+      if (sv && sv === raizAtiva && raizAtiva !== servicoAtivo) return classe(c.tipo) === classeAtiva;
+      // Grupo-mãe ativo (sem sub): mostra tudo do grupo.
+      if (servicoAtivo === raizAtiva && sv && raiz(sv) === raizAtiva) return true;
+      return false;
+    });
+  }, [verReferencia, contornosRef, pdfSelId, pagina, servicoAtivo, verTodasCamadas, gruposSub, svcAtivoObj]);
 
   // Cor efetiva para previews (rascunho/retângulo) = cor escolhida ou a do serviço ativo ou o azul de área.
   const corPreview = (svcAtivoObj?.cor as string) || corDesenho || COR_TIPO.area;
