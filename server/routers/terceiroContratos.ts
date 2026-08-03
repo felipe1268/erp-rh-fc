@@ -19,6 +19,7 @@ import {
   medicaoCampo,
   medicaoCampoContornos,
   medicaoCampoFotos,
+  medicaoCampoPdfs,
   terceiroDocumentos,
   empresasTerceiras,
   planejamentoAtividades,
@@ -5526,7 +5527,9 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
       // único, pedido do usuário): todos os levantamentos vinculados a esta
       // medição, com contornos medidos e registro fotográfico embutidos.
       type FotoPdf = { legenda: string; buffer: Buffer | null };
-      type CampoPdf = { titulo: string; criadoPorNome: string; contornos: any[]; fotos: FotoPdf[] };
+      type PlantaLegenda = { numero: string; cor: string; obs: string; medida: string };
+      type PlantaPdf = { titulo: string; png: Buffer; ratio: number; legenda: PlantaLegenda[]; total: string };
+      type CampoPdf = { titulo: string; criadoPorNome: string; contornos: any[]; fotos: FotoPdf[]; plantas: PlantaPdf[] };
       const camposPdf: CampoPdf[] = [];
       try {
         // O vínculo principal vive na MEDIÇÃO (terceiro_medicoes.levantamento_campo_id);
@@ -5572,6 +5575,110 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
             } catch { return buf; }
           } catch { return null; }
         };
+        // Rev. 4869 — PLANTAS/PROJETOS na memória de cálculo do boletim (pedido
+        // do usuário: replicar o relatório unificado do levantamento). Mesma
+        // geometria da tela: SVG da planta (sidecar .planta.json do DXF) +
+        // contornos coloridos numerados, rasterizado via sharp p/ o PDFKit.
+        const CORES_TIPO: Record<string, string> = { area: "#2563eb", volume: "#7c3aed", perimetro: "#059669", contagem: "#ea580c", parede: "#db2777" };
+        const corSafe = (v: unknown) => (/^#[0-9a-fA-F]{3,8}$/.test(String(v ?? "")) ? String(v) : "#2563eb");
+        const nQ = (v: any) => { const x = parseFloat(String(v ?? "").replace(",", ".")); return isFinite(x) ? x : 0; };
+        const QTDf = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const xmlEsc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        const buildPlantasPdf = async (contornos: any[]): Promise<PlantaPdf[]> => {
+          const out: PlantaPdf[] = [];
+          try {
+            const pdfIds = [...new Set(contornos.map((c: any) => Number(c.pdfId)).filter((x: number) => x > 0))];
+            if (!pdfIds.length) return out;
+            const pdfs = await db.select().from(medicaoCampoPdfs).where(and(
+              inArray(medicaoCampoPdfs.id, pdfIds),
+              eq(medicaoCampoPdfs.companyId, input.companyId),
+              sql`${medicaoCampoPdfs.deletedAt} IS NULL`,
+            )).orderBy(asc(medicaoCampoPdfs.ordem), asc(medicaoCampoPdfs.id));
+            const { dbRetrieve } = await import("../storage");
+            for (const pdf of pdfs) {
+              const nomeArq = String((pdf as any).arquivoNome || (pdf as any).nome || (pdf as any).arquivoUrl || "").toLowerCase();
+              if (!nomeArq.split("?")[0].endsWith(".dxf") && !nomeArq.includes(".dxf")) continue; // PDF raster só no app
+              const key = String((pdf as any).arquivoKey || "").trim()
+                || (String((pdf as any).arquivoUrl || "").startsWith("/uploads/")
+                  ? decodeURIComponent(String((pdf as any).arquivoUrl).slice("/uploads/".length).split("?")[0]) : "");
+              if (!key.startsWith(`medicao-campo/${input.companyId}/`)) continue; // anti-IDOR
+              let parsed: any = null;
+              const side = await dbRetrieve(`${key}.planta.json`).catch(() => null);
+              if (side) { try { parsed = JSON.parse(side.buffer.toString("utf8")); } catch { /* regenera */ } }
+              if (!parsed?.svg) {
+                const orig = await dbRetrieve(key).catch(() => null);
+                if (!orig) continue;
+                const { parseDxfPlanta } = await import("../../client/src/pages/medicao/dxfPlanta");
+                parsed = parseDxfPlanta(orig.buffer.toString("utf8"));
+              }
+              if (!parsed?.svg) continue;
+              const pw = Number(parsed.w) || 1, ph = Number(parsed.h) || 1;
+              const ratio = Math.max(pw / ph, 0.05);
+              const mpu = parseFloat(String(parsed.metrosPorUnidade ?? ""));
+              let fgx = 0, fgy = 0;
+              if (isFinite(mpu) && mpu > 0) { fgx = Math.min(0.3, (1 / mpu) / pw); fgy = Math.min(0.3, (1 / mpu) / ph); }
+              const OW = 1600, OH = Math.round(OW / ratio);
+              // planta de fundo: svg aninhado (remove width/height próprios p/ escalar pelo viewBox)
+              let bgTag = String(parsed.svg);
+              const bx = Math.round((fgx / (1 + 2 * fgx)) * OW), by = Math.round((fgy / (1 + 2 * fgy)) * OH);
+              const bw = Math.round(OW / (1 + 2 * fgx)), bh = Math.round(OH / (1 + 2 * fgy));
+              bgTag = bgTag.replace(/<svg\b([^>]*)>/, (_m, attrs: string) => {
+                const semDim = attrs.replace(/\s(?:width|height|style)="[^"]*"/g, "");
+                return `<svg x="${bx}" y="${by}" width="${bw}" height="${bh}"${semDim}>`;
+              });
+              const doPdf = contornos.filter((c: any) => Number(c.pdfId) === Number((pdf as any).id));
+              const camadas = new Map<string, any[]>();
+              for (const c of doPdf) {
+                const nome = String(c.rotulo || c.servico || c.tipo || "Geral").trim() || "Geral";
+                camadas.set(nome, [...(camadas.get(nome) ?? []), c]);
+              }
+              for (const [camadaNome, ccs] of [...camadas.entries()]) {
+                const shapes: string[] = []; const legenda: PlantaLegenda[] = [];
+                let soma = 0; let unid = "";
+                const SW = 1000, SH = 1000 / ratio;
+                for (const c of [...ccs].sort((a: any, b: any) => (a.numero ?? 0) - (b.numero ?? 0))) {
+                  let pts: any[] = []; try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+                  if (!pts.length) continue;
+                  const cor = corSafe(c.cor || CORES_TIPO[String(c.tipo)]);
+                  const fecha = c.tipo === "area" || c.tipo === "volume";
+                  const ptsStr = pts.map((p: any) => `${(Number(p.x) * SW).toFixed(1)},${(Number(p.y) * SH).toFixed(1)}`).join(" ");
+                  shapes.push(fecha
+                    ? `<polygon points="${ptsStr}" fill="${cor}" fill-opacity="0.18" stroke="${cor}" stroke-width="2.5"/>`
+                    : `<polyline points="${ptsStr}" fill="none" stroke="${cor}" stroke-width="3"/>`);
+                  let ex = pts.reduce((s: number, p: any) => s + Number(p.x), 0) / pts.length;
+                  let ey = pts.reduce((s: number, p: any) => s + Number(p.y), 0) / pts.length;
+                  try { const ep = c.etiquetaJson ? JSON.parse(c.etiquetaJson) : null; if (ep && isFinite(ep.x) && isFinite(ep.y)) { ex = ep.x; ey = ep.y; } } catch { /* */ }
+                  const numC = Number(c.numero);
+                  if (c.numero != null && isFinite(numC)) {
+                    shapes.push(`<circle cx="${(ex * SW).toFixed(1)}" cy="${(ey * SH).toFixed(1)}" r="16" fill="#fff" stroke="${cor}" stroke-width="2.5"/><text x="${(ex * SW).toFixed(1)}" y="${(ey * SH + 5).toFixed(1)}" text-anchor="middle" font-size="15" font-weight="bold" fill="${cor}">${numC}</text>`);
+                  }
+                  const q = nQ(c.quantidade);
+                  if (q > 0) { soma += q; unid = c.unidade || unid; }
+                  const medida = q > 0 ? `${QTDf(q)} ${c.unidade || ""}`.trim()
+                    : nQ(c.area) > 0 ? `${QTDf(nQ(c.area))} m²`
+                    : nQ(c.perimetro) > 0 ? `${QTDf(nQ(c.perimetro))} m` : "";
+                  legenda.push({ numero: String(c.numero ?? ""), cor, obs: String(c.observacoes || ""), medida });
+                }
+                if (!shapes.length) continue;
+                const svgFinal = `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}"><rect width="${OW}" height="${OH}" fill="#ffffff"/>${bgTag}<svg x="0" y="0" width="${OW}" height="${OH}" viewBox="0 0 ${SW} ${SH.toFixed(1)}" preserveAspectRatio="none">${shapes.join("")}</svg></svg>`;
+                try {
+                  const sharp = (await import("sharp")).default;
+                  const png = await sharp(Buffer.from(svgFinal)).png().toBuffer();
+                  out.push({
+                    titulo: `${camadaNome} · ${xmlEsc((pdf as any).nome || (pdf as any).arquivoNome || "Planta")} · ${ccs.length} medição(ões)`,
+                    png, ratio: OW / OH, legenda,
+                    total: soma > 0 ? `TOTAL: ${QTDf(soma)} ${unid}`.trim() : "",
+                  });
+                } catch (e: any) {
+                  console.warn("[gerarPdfMedicao] rasterização de planta falhou:", e?.message);
+                }
+              }
+            }
+          } catch (e: any) {
+            console.warn("[gerarPdfMedicao] plantas indisponíveis no PDF:", e?.message);
+          }
+          return out;
+        };
         for (const campo of campos) {
           const contornos = await db.select().from(medicaoCampoContornos).where(and(
             eq(medicaoCampoContornos.medicaoCampoId, campo.id),
@@ -5597,6 +5704,7 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
             criadoPorNome: (campo as any).criadoPorNome || "",
             contornos,
             fotos,
+            plantas: await buildPlantasPdf(contornos),
           });
         }
       } catch (e: any) {
@@ -5972,6 +6080,40 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
             y += 10;
           }
 
+          // Rev. 4869 — plantas/projetos com contornos numerados + legenda
+          for (const pl of campo.plantas) {
+            const legH = 10 + pl.legenda.length * 9 + (pl.total ? 10 : 0);
+            let imgW = pageW * 0.62;
+            let imgH = imgW / pl.ratio;
+            const maxH = pageBottom - 36 - 24; // altura útil de uma página nova
+            if (imgH > maxH) { imgH = maxH; imgW = imgH * pl.ratio; }
+            const blocoH = 14 + Math.max(imgH, legH);
+            if (y + Math.min(blocoH, maxH) > pageBottom) { doc.addPage(); y = 36; }
+            doc.font("Helvetica-Bold").fontSize(7.5).fillColor(primary)
+              .text(pl.titulo.toUpperCase(), mL, y, { width: pageW }); y += 12;
+            const imgY = y;
+            try {
+              doc.image(pl.png, mL, imgY, { fit: [imgW, imgH] });
+              doc.rect(mL, imgY, imgW, imgH).strokeColor("#e3e7ee").lineWidth(0.5).stroke();
+            } catch { /* planta indisponível */ }
+            // legenda à direita
+            const lx = mL + imgW + 12, lw = pageW - imgW - 12;
+            let ly = imgY;
+            doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#555").text("LEGENDA", lx, ly, { width: lw }); ly += 10;
+            for (const it of pl.legenda) {
+              if (ly > imgY + imgH - 8) break; // legenda maior que a planta: corta com elegância
+              doc.circle(lx + 4, ly + 3, 3.5).lineWidth(1).strokeColor(it.cor).stroke();
+              doc.font("Helvetica-Bold").fontSize(5.5).fillColor(it.cor).text(it.numero, lx, ly + 0.5, { width: 8.5, align: "center", lineBreak: false });
+              doc.font("Helvetica").fontSize(6).fillColor("#333")
+                .text(`${it.obs ? it.obs + " — " : ""}${it.medida}`, lx + 12, ly + 1, { width: lw - 12, height: 8, ellipsis: true, lineBreak: false });
+              ly += 9;
+            }
+            if (pl.total) {
+              doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#333").text(pl.total, lx, ly + 2, { width: lw - 4, align: "right", lineBreak: false });
+            }
+            y = imgY + Math.max(imgH, Math.min(legH, imgH)) + 12;
+          }
+
           // registro fotográfico
           const fotosOk = campo.fotos.filter(f => f.buffer);
           if (fotosOk.length > 0) {
@@ -6012,6 +6154,12 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
             const range = doc.bufferedPageRange();
             for (let pi = range.start; pi < range.start + range.count; pi++) {
               doc.switchToPage(pi);
+              // Rev. 4869 (BUGFIX páginas em branco): escrever texto abaixo da
+              // margem inferior faz o PDFKit criar página nova automaticamente —
+              // cada rubrica gerava uma página vazia. Zerar a margem durante o
+              // carimbo desativa essa quebra automática.
+              const margemOriginal = doc.page.margins.bottom;
+              doc.page.margins.bottom = 0;
               let rx = doc.page.width - 40 - rubricas.length * 48;
               const ry = doc.page.height - 30;
               for (const s of rubricas) {
@@ -6025,6 +6173,7 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
                 } catch {}
                 rx += 48;
               }
+              doc.page.margins.bottom = margemOriginal;
             }
           }
         } catch {}

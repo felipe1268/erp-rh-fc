@@ -83,6 +83,7 @@
 - [Lazy chunk stale after deploy](lazy-chunk-stale-deploy.md) — every deploy rotates chunk hashes; Wrap React.lazy (lazyWithRetry) to retry+reload; ver tb [HTML cache stale](html-cache-stale-deploy.md).
 - [SyncSchema+ log is capped](syncschema-log-cap.md) — `[SyncSchema+]` log file caps ~49 lines; missing `Rev. N` line ≠ failure. Verify via NEON_DATABASE_URL direct pg.
 - [Master-only field must gate at backend](master-only-field-backend-gate.md) — a "só Admin Master" field must be stripped from the payload by role server-side, not just hidden in the UI.
+- [PDFKit rodapé cria páginas em branco](pdfkit-footer-blank-pages.md) — texto abaixo da margem inferior em bufferedPageRange dispara addPage automático; zerar margins.bottom durante o carimbo.
 - [react-pdf worker version match](pdfjs-worker-version-match.md) — "Erro ao carregar PDF" = bundled worker version ≠ react-pdf's internal pdfjs API; pin pdfjs-dist EXACTLY to react-pdf's dep.
 - [Extrato import gotchas](extrato-import-case-insensitive-dedup.md) — [dedup case-insensitive UPPER/TRIM server E client](extrato-import-case-insensitive-dedup.md); [dupKeyTotais conta o ARQUIVO inteiro, não o chunk](extrato-import-chunk-dedup.md); [Santander PJ: pdf-parse quebra toda linha em 2](santander-pdf-split-row.md) ([células multi-linha](pdf-parse-multiline-table-cells.md)).
 - [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; mutações de conta precisam de tenant guard.
