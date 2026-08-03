@@ -7645,13 +7645,18 @@ export default function FolhaPagamento() {
                     // evitando que o usuário fique esperando "Simulando..." e só veja a confirmação ao
                     // entrar em "Ver Resultado". Conta funcionários com descontosManuais não-vazio.
                     const editados = ((pagamentoResult as any)?.funcionarios || []).filter(
-                      (f: any) => f && f.descontosManuais && Object.keys(f.descontosManuais).length > 0
+                      (f: any) => f && ((f.descontosManuais && Object.keys(f.descontosManuais).length > 0)
+                        || f.liquidoEditadoManualmente
+                        || String(f.observacoes || '').includes('LÍQUIDO EDITADO'))
                     );
                     if (editados.length > 0) {
                       const lista = editados.map((f: any) => ({
                         id: Number(f.employeeId),
                         nome: String(f.nome || f.nomeCompleto || f.employeeNome || `Funcionário ${f.employeeId}`),
-                        campos: Object.keys(f.descontosManuais || {}),
+                        campos: [
+                          ...Object.keys(f.descontosManuais || {}),
+                          ...((f.liquidoEditadoManualmente || String(f.observacoes || '').includes('LÍQUIDO EDITADO')) ? ['líquido'] : []),
+                        ],
                       }));
                       setOverridesPrompt({ open: true, count: lista.length, lista, manterIds: lista.map((f: any) => f.id) });
                       return;

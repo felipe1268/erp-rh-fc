@@ -4156,29 +4156,54 @@ export const payrollEngineRouter = router({
           });
         }
       }
-      if (overridesMap.size > 0 && !input.manterOverrides && !input.descartarOverrides && input.manterOverridesIds === undefined) {
+      // Líquido editado pelo Master (editarLiquidoFolha) NÃO fica em descontosManuaisJson —
+      // é gravado direto em salarioLiquido + marcador nas observações. Capturar também,
+      // senão a ressimulação apaga a edição SEM nem avisar (bug relatado 03/08/2026).
+      const liquidoOverridesRows = ((await db.execute(sql`
+        SELECT "employeeId", "salarioLiquido", "observacoes"
+        FROM payroll_payments
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+          AND "observacoes" LIKE '%LÍQUIDO EDITADO%'
+      `)) as any).rows || [];
+      const liquidoOverridesMap = new Map<number, { salarioLiquido: number; obs: string }>();
+      for (const r of liquidoOverridesRows) {
+        const liq = parseFloat(String(r.salarioLiquido || "0"));
+        if (Number.isFinite(liq)) {
+          // guarda apenas os marcadores [LÍQUIDO EDITADO ...] para reanexar no novo registro
+          const marcadores = (String(r.observacoes || "").match(/\[LÍQUIDO EDITADO[^\]]*\]/g) || []).join(" ");
+          liquidoOverridesMap.set(Number(r.employeeId), { salarioLiquido: liq, obs: marcadores });
+        }
+      }
+      const todosOverrideIds = Array.from(new Set([...overridesMap.keys(), ...liquidoOverridesMap.keys()]));
+      if (todosOverrideIds.length > 0 && !input.manterOverrides && !input.descartarOverrides && input.manterOverridesIds === undefined) {
         // Lista nomes dos funcionários com ajustes manuais para o RH decidir individualmente
-        const ovrIds = Array.from(overridesMap.keys());
         const nomesRows = ((await db.execute(sql`
-          SELECT id, COALESCE(NULLIF("nomeCompleto", ''), nome) AS nome FROM employees WHERE id IN (${sql.join(ovrIds.map(id => sql`${id}`), sql`, `)})
+          SELECT id, COALESCE(NULLIF("nomeCompleto", ''), nome) AS nome FROM employees WHERE id IN (${sql.join(todosOverrideIds.map(id => sql`${id}`), sql`, `)})
         `)) as any).rows || [];
-        const lista = ovrIds.map(id => ({
+        const lista = todosOverrideIds.map(id => ({
           id,
           nome: String(nomesRows.find((r: any) => Number(r.id) === id)?.nome || `Funcionário ${id}`),
-          campos: Object.keys(overridesMap.get(id)?.manuais || {}),
+          campos: [
+            ...Object.keys(overridesMap.get(id)?.manuais || {}),
+            ...(liquidoOverridesMap.has(id) ? ["líquido"] : []),
+          ],
         }));
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: `OVERRIDES_EXIST:${overridesMap.size}:${JSON.stringify(lista)}`,
+          message: `OVERRIDES_EXIST:${todosOverrideIds.length}:${JSON.stringify(lista)}`,
         });
       }
-      // descartarOverrides: limpa o map → não reaplica
-      if (input.descartarOverrides) overridesMap.clear();
+      // descartarOverrides: limpa os maps → não reaplica
+      if (input.descartarOverrides) { overridesMap.clear(); liquidoOverridesMap.clear(); }
       // Decisão individual: mantém só os ids escolhidos; os demais ressimulam do zero
       if (input.manterOverridesIds !== undefined && !input.manterOverrides && !input.descartarOverrides) {
         const keep = new Set(input.manterOverridesIds.map(Number));
         for (const id of Array.from(overridesMap.keys())) {
           if (!keep.has(id)) overridesMap.delete(id);
+        }
+        for (const id of Array.from(liquidoOverridesMap.keys())) {
+          if (!keep.has(id)) liquidoOverridesMap.delete(id);
         }
       }
 
@@ -4884,6 +4909,43 @@ export const payrollEngineRouter = router({
             "valorExato", "saldoAnterior", "ajusteAplicado", "valorPago", "residualGerado")
           VALUES ${sql.join(ledgerInsertRowsFolha, sql`,`)}
         `);
+      }
+
+      // Reaplica o LÍQUIDO editado pelo Master (mantido pelo RH na decisão de ressimulação):
+      // sobrescreve o líquido recalculado, reanexa o marcador e remove o ledger 'folha'
+      // (o override é o pago final, sem residual). Roda APÓS o INSERT do ledger.
+      if (liquidoOverridesMap.size > 0) {
+        const mantidos: number[] = [];
+        for (const [empId, ovr] of liquidoOverridesMap) {
+          const f = results.find((x: any) => Number(x.employeeId) === empId);
+          if (!f) continue; // funcionário saiu da folha nesta ressimulação
+          mantidos.push(empId);
+          grandTotalLiquido += ovr.salarioLiquido - Number(f.salarioLiquido || 0);
+          f.salarioLiquido = ovr.salarioLiquido;
+          f.salarioLiquidoExato = ovr.salarioLiquido;
+          f.ajusteArredondamento = 0;
+          f.observacoes = ((f.observacoes ? f.observacoes + " " : "") + ovr.obs).trim();
+          f.liquidoEditadoManualmente = true;
+          const liqStr = ovr.salarioLiquido.toFixed(2);
+          await db.execute(sql`
+            UPDATE payroll_payments
+            SET "salarioLiquido" = ${liqStr},
+                "salarioLiquidoExato" = ${liqStr},
+                "ajusteArredondamento" = ${"0.00"},
+                "observacoes" = COALESCE("observacoes", '') || ${" " + ovr.obs},
+                "updatedAt" = NOW()
+            WHERE "companyId" = ${input.companyId}
+              AND "mesReferencia" = ${input.mesReferencia}
+              AND "employeeId" = ${empId}
+          `);
+        }
+        if (mantidos.length > 0) {
+          await db.execute(sql`
+            DELETE FROM payroll_rounding_ledger
+            WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+              AND "origem" = 'folha' AND "employeeId" IN (${sql.join(mantidos.map(id => sql`${id}`), sql`, `)})
+          `);
+        }
       }
 
       // Rev. 3977 — Banco de Horas: grava débitos de atraso/falta redirecionados (idempotente —
