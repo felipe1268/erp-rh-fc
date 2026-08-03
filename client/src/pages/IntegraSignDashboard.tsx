@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import DashboardLayout from "@/components/DashboardLayout";
 import { useLocation } from "wouter";
 import { trpc } from "../lib/trpc";
 import { useCompany } from "../contexts/CompanyContext";
@@ -262,6 +263,7 @@ export default function IntegraSignDashboard() {
   const minhasPendencias = (pendentesMe.data ?? []) as any[];
 
   return (
+    <DashboardLayout>
     <div className="min-h-full bg-slate-50">
       {/* Hero */}
       <div className="bg-gradient-to-br from-[#0f2027] via-[#1B2A4A] to-teal-800 px-6 pt-6 pb-16 text-white">
@@ -882,5 +884,6 @@ export default function IntegraSignDashboard() {
       </Dialog>
       </div>
     </div>
+    </DashboardLayout>
   );
 }
