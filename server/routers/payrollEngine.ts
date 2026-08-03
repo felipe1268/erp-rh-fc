@@ -3570,6 +3570,9 @@ export const payrollEngineRouter = router({
 
       const divergencias: { employeeId: number; nome: string; funcao: string | null; motivo: string }[] = [];
       const empList = allCltAtivos.filter(emp => {
+        // Rev. 4886 — Mensalista com salário base preenchido NÃO exige valor hora
+        // (o bruto vem direto do salarioBase — Rev. 4884).
+        if ((emp as any).tipoRemuneracao === 'mensalista' && parseBRL(emp.salarioBase) > 0) return true;
         if (!emp.valorHora || emp.valorHora === '') {
           divergencias.push({
             employeeId: emp.id,
@@ -5495,7 +5498,7 @@ export const payrollEngineRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
       const allCltAtivos = ((await db.execute(sql`
-        SELECT id, "nomeCompleto", funcao, "valorHora", "salarioBase", status, banco, agencia, conta, cpf
+        SELECT id, "nomeCompleto", funcao, "valorHora", "salarioBase", "tipoRemuneracao", status, banco, agencia, conta, cpf
         FROM employees
         WHERE "companyId" = ${input.companyId}
           AND "tipoContrato" = 'CLT'
@@ -5515,7 +5518,9 @@ export const payrollEngineRouter = router({
       for (const emp of allCltAtivos) {
         if (!pagEmployeeIds.has(emp.id)) {
           const motivos: string[] = [];
-          if (!emp.valorHora || emp.valorHora === '') motivos.push('Valor hora não preenchido');
+          // Rev. 4886 — Mensalista com salário base não exige valor hora
+          const ehMensalistaOk = emp.tipoRemuneracao === 'mensalista' && emp.salarioBase;
+          if ((!emp.valorHora || emp.valorHora === '') && !ehMensalistaOk) motivos.push('Valor hora não preenchido');
           if (!emp.salarioBase) motivos.push('Salário base vazio');
           if (!emp.cpf) motivos.push('CPF não preenchido');
           if (!emp.banco && !emp.conta) motivos.push('Dados bancários não preenchidos');
