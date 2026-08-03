@@ -2925,8 +2925,31 @@ export default function MedicaoLevantamento() {
           return mn(a[1]) - mn(b[1]);
         });
         const titulo = `${escHtml(pdf.nome || pdf.arquivoNome || "Planta")}${(pdf.numPaginas ?? 1) > 1 ? ` — pág. ${pag}` : ""}`;
+        // Rev. 4863 — medições ANTERIORES da mesma categoria entram no croqui em
+        // cinza discreto (só quando a categoria teve avanço nesta medição —
+        // categorias sem avanço nem geram croqui).
+        const refsPagina = ((contornosRef ?? []) as any[])
+          .filter((c) => c.pdfId === pdf.id && (c.pagina ?? 1) === pag);
         for (const [camadaNome, ccs] of camadasOrd) {
           const shapes: string[] = []; const badges: string[] = [];
+          const servicosCamada = new Set((ccs as any[]).map((c) => String(c.servico || "")));
+          const refShapes: string[] = [];
+          for (const rc of refsPagina) {
+            if (!servicosCamada.has(String(rc.servico || ""))) continue;
+            let rpts: any[] = []; try { rpts = JSON.parse(rc.geometriaJson || "[]"); } catch { /* */ }
+            if (!rpts.length) continue;
+            if (rc.tipo === "contagem") {
+              for (const p of rpts) refShapes.push(`<circle cx="${(p.x * W).toFixed(1)}" cy="${(p.y * H).toFixed(1)}" r="6" fill="#94a3b8" fill-opacity="0.3" stroke="#64748b" stroke-width="1.5"/>`);
+              continue;
+            }
+            const rfecha = FECHA_POLIGONO(rc.tipo);
+            const rd = rpts.map((p: any, i: number) => `${i === 0 ? "M" : "L"}${(p.x * W).toFixed(1)},${(p.y * H).toFixed(1)}`).join(" ") + (rfecha ? " Z" : "");
+            if (rfecha) {
+              refShapes.push(`<path d="${rd}" fill="url(#mem-hachura-ref)" stroke="#64748b" stroke-opacity="0.55" stroke-width="1.6" stroke-dasharray="7 5"/>`);
+            } else {
+              refShapes.push(`<path d="${rd}" fill="none" stroke="#64748b" stroke-opacity="0.6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>`);
+            }
+          }
           const itensLegenda: string[] = [];
           let somaQtd = 0; let unidadeCamada = "";
           for (const c of [...ccs].sort((a, b) => (a.numero ?? 0) - (b.numero ?? 0))) {
@@ -3039,11 +3062,11 @@ export default function MedicaoLevantamento() {
             <div style="display:flex;align-items:center;gap:6px;margin:0 0 6px">
               <span style="flex:none;width:10px;height:10px;border-radius:3px;background:${corCamada};-webkit-print-color-adjust:exact;print-color-adjust:exact"></span>
               <span style="font-size:10.5px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#1B2A4A">${escHtml(camadaNome)}</span>
-              <span style="font-size:9px;color:#6b7280">${titulo} • ${ccs.length} medição(ões)${totalCamada ? ` • total <b>${totalCamada}</b>` : ""}</span>
+              <span style="font-size:9px;color:#6b7280">${titulo} • ${ccs.length} medição(ões)${totalCamada ? ` • total <b>${totalCamada}</b>` : ""}${refShapes.length ? ` • <span style="color:#64748b">em cinza: medido em medições anteriores</span>` : ""}</span>
             </div>
             <div style="display:flex;gap:8px;align-items:flex-start">
               <div style="position:relative;flex:1 1 72%;aspect-ratio:${ratio * (1 + 2 * fgx) / (1 + 2 * fgy)};border:1px solid #d1d5db;border-radius:4px;background:#fff;overflow:hidden">${bg}
-                <svg viewBox="${(-fgx * W).toFixed(1)} ${(-fgy * H).toFixed(1)} ${(W * (1 + 2 * fgx)).toFixed(1)} ${(H * (1 + 2 * fgy)).toFixed(1)}" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">${shapes.join("")}${badges.join("")}</svg>
+                <svg viewBox="${(-fgx * W).toFixed(1)} ${(-fgy * H).toFixed(1)} ${(W * (1 + 2 * fgx)).toFixed(1)} ${(H * (1 + 2 * fgy)).toFixed(1)}" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%"><defs><pattern id="mem-hachura-ref" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="#94a3b8" stroke-width="2.4" stroke-opacity="0.55"/></pattern></defs>${refShapes.join("")}${shapes.join("")}${badges.join("")}</svg>
               </div>
               <div style="flex:1 1 28%;min-width:150px;border:1px solid #e5e7eb;border-radius:4px;padding:5px 7px;background:#fff">
                 <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:2px">Legenda — ${escHtml(camadaNome)}</div>

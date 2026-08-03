@@ -1656,7 +1656,7 @@ export const integrasignRouter = router({
         // APROVAÇÃO da medição + título no Contas a Pagar (a conclusão do
         // envelope foi quem aprovou). Bloqueia se o título já tem baixa ativa.
         if (envelope.medicaoTerceiroId) {
-          const { terceiroMedicoes } = await import("../drizzle/schema");
+          const { terceiroMedicoes } = await import("../../drizzle/schema");
           const [med] = await db.select().from(terceiroMedicoes)
             .where(and(eq(terceiroMedicoes.id, envelope.medicaoTerceiroId), eq(terceiroMedicoes.companyId, input.companyId)));
           if (med?.status === "aprovada") {
@@ -1730,7 +1730,7 @@ export const integrasignRouter = router({
       if (envelope.status !== "concluido") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Só documentos CONCLUÍDOS precisam de solicitação — envelopes em andamento podem ser cancelados direto." });
       }
-      const { users } = await import("../drizzle/schema");
+      const { users } = await import("../../drizzle/schema");
       const masters = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin_master"));
       const { criarUserAlert } = await import("../db");
       for (const mstr of masters) {
