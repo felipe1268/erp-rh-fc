@@ -2035,10 +2035,22 @@ export default function MedicaoLevantamento() {
         }
       }
       if (conflito) {
-        const nomeC = `${conflito.c.rotulo || svcAtivoObj.nome}${conflito.c.numero ? ` nº ${conflito.c.numero}` : ""}${conflito.ref ? " (medição anterior deste contrato)" : ""}`;
+        // Rev. 4859 — cita a MEDIÇÃO de origem (nº) quando a área veio de
+        // medição anterior do contrato — o user sabe onde procurar.
+        const medRef = conflito.ref && (conflito.c as any).medicaoNumero != null
+          ? ` (já medida na Medição ${String((conflito.c as any).medicaoNumero).padStart(2, "0")} deste contrato)`
+          : conflito.ref ? " (medição anterior deste contrato)" : "";
+        const nomeC = `${conflito.c.rotulo || svcAtivoObj.nome}${conflito.c.numero ? ` nº ${conflito.c.numero}` : ""}${medRef}`;
         const pct = conflito.frac != null ? `${Math.round(conflito.frac * 100)}% desta área` : "Este trecho de parede";
         if (conflito.frac == null || conflito.frac >= 0.02) {
-          toast.error(`Sobreposição bloqueada: ${pct} já foi medida em "${nomeC}". Ajuste o desenho — ou apague o contorno antigo se for correção.`, { duration: 7000 });
+          // Rev. 4859 — pop-up (não só toast): bloqueio precisa ser impossível
+          // de passar despercebido, citando a medição de origem da área.
+          askConfirm({
+            title: "Sobreposição bloqueada",
+            description: `${pct} já foi medida em "${nomeC}". Ajuste o desenho — ou apague o contorno antigo se for correção.`,
+            confirmText: "Entendi",
+            onConfirm: () => {},
+          });
           setDraft([]); setDragRect(null); setFreePts([]);
           return;
         }
