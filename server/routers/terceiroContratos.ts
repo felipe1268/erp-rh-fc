@@ -5585,6 +5585,50 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
         const nQ = (v: any) => { const x = parseFloat(String(v ?? "").replace(",", ".")); return isFinite(x) ? x : 0; };
         const QTDf = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const xmlEsc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        // Rev. 4902 — mesma regra do croqui da tela: o que foi medido em MEDIÇÕES
+        // ANTERIORES (aprovadas/pagas) do contrato aparece HACHURADO em cinza.
+        let refsContornos: any[] = [];
+        try {
+          const contratoIdRef = Number((medicao as any).contratoId || 0);
+          const idsAtuais = new Set<number>((campos as any[]).map((c) => Number(c.id)));
+          if (contratoIdRef > 0) {
+            const todosCampos = await db.select({ id: medicaoCampo.id, medicaoId: (medicaoCampo as any).medicaoId })
+              .from(medicaoCampo).where(and(
+                eq(medicaoCampo.companyId, input.companyId),
+                eq(medicaoCampo.contratoId, contratoIdRef),
+                eq(medicaoCampo.origem, "terceiro"),
+                sql`${medicaoCampo.deletedAt} IS NULL`,
+                sql`${medicaoCampo.status} IS DISTINCT FROM 'biblioteca'`,
+              ));
+            const cand = (todosCampos as any[]).filter((c) => !idsAtuais.has(Number(c.id)));
+            const candIds = cand.map((c) => Number(c.id));
+            const medIdsRef = cand.map((c) => c.medicaoId).filter((x: any) => x != null) as number[];
+            if (candIds.length > 0) {
+              const meds = await db.select({ id: terceiroMedicoes.id, levCampoId: terceiroMedicoes.levantamentoCampoId, status: terceiroMedicoes.status })
+                .from(terceiroMedicoes).where(and(
+                  eq(terceiroMedicoes.companyId, input.companyId),
+                  medIdsRef.length > 0
+                    ? sql`(${inArray(terceiroMedicoes.levantamentoCampoId, candIds)} OR ${inArray(terceiroMedicoes.id, medIdsRef)})`
+                    : inArray(terceiroMedicoes.levantamentoCampoId, candIds),
+                ));
+              const fechadas = (meds as any[]).filter((m) => ["aprovada", "paga"].includes(String(m.status || "")));
+              const okIds = new Set<number>();
+              for (const m of fechadas) {
+                if (m.levCampoId != null) okIds.add(Number(m.levCampoId));
+                for (const c of cand) if (c.medicaoId === m.id) okIds.add(Number(c.id));
+              }
+              if (okIds.size > 0) {
+                refsContornos = await db.select().from(medicaoCampoContornos).where(and(
+                  eq(medicaoCampoContornos.companyId, input.companyId),
+                  inArray(medicaoCampoContornos.medicaoCampoId, [...okIds]),
+                  sql`${medicaoCampoContornos.deletedAt} IS NULL`,
+                ));
+              }
+            }
+          }
+        } catch (e: any) {
+          console.warn("[gerarPdfMedicao] referência de medições anteriores indisponível:", e?.message);
+        }
         const buildPlantasPdf = async (contornos: any[]): Promise<PlantaPdf[]> => {
           const out: PlantaPdf[] = [];
           try {
@@ -5635,10 +5679,31 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
                 const nome = String(c.rotulo || c.servico || c.tipo || "Geral").trim() || "Geral";
                 camadas.set(nome, [...(camadas.get(nome) ?? []), c]);
               }
+              const refsPdf = refsContornos.filter((rc: any) => Number(rc.pdfId) === Number((pdf as any).id));
               for (const [camadaNome, ccs] of [...camadas.entries()]) {
                 const shapes: string[] = []; const legenda: PlantaLegenda[] = [];
                 let soma = 0; let unid = "";
                 const SW = 1000, SH = 1000 / ratio;
+                // Rev. 4902 — hachura cinza do que já foi medido em medições
+                // anteriores (mesma categoria/serviço), igual ao croqui da tela.
+                const servicosCamada = new Set((ccs as any[]).map((c) => String(c.servico || "")));
+                const refShapes: string[] = [];
+                try {
+                  for (const rc of refsPdf) {
+                    if (!servicosCamada.has(String(rc.servico || ""))) continue;
+                    let rpts: any[] = []; try { rpts = JSON.parse(rc.geometriaJson || "[]"); } catch { /* */ }
+                    if (!rpts.length) continue;
+                    if (rc.tipo === "contagem") {
+                      for (const p of rpts) refShapes.push(`<circle cx="${(Number(p.x) * SW).toFixed(1)}" cy="${(Number(p.y) * SH).toFixed(1)}" r="6" fill="#94a3b8" fill-opacity="0.3" stroke="#64748b" stroke-width="1.5"/>`);
+                      continue;
+                    }
+                    const rfecha = rc.tipo === "area" || rc.tipo === "volume";
+                    const rd = rpts.map((p: any, i: number) => `${i === 0 ? "M" : "L"}${(Number(p.x) * SW).toFixed(1)},${(Number(p.y) * SH).toFixed(1)}`).join(" ") + (rfecha ? " Z" : "");
+                    refShapes.push(rfecha
+                      ? `<path d="${rd}" fill="url(#pdf-hachura-ref)" stroke="#64748b" stroke-opacity="0.55" stroke-width="1.6" stroke-dasharray="7 5"/>`
+                      : `<path d="${rd}" fill="none" stroke="#64748b" stroke-opacity="0.6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>`);
+                  }
+                } catch { /* referência é opcional — nunca derruba o croqui */ }
                 for (const c of [...ccs].sort((a: any, b: any) => (a.numero ?? 0) - (b.numero ?? 0))) {
                   let pts: any[] = []; try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
                   if (!pts.length) continue;
@@ -5667,12 +5732,12 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
                 // a planta está inset pela folga, então o overlay usa viewBox
                 // ESTENDIDO pela folga (igual ao croqui da tela). Overlay em
                 // "0 0 SW SH" = contornos esticados p/ fora do projeto.
-                const svgFinal = `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}"><rect width="${OW}" height="${OH}" fill="#ffffff"/>${bgTag}<svg x="0" y="0" width="${OW}" height="${OH}" viewBox="${(-fgx * SW).toFixed(1)} ${(-fgy * SH).toFixed(1)} ${(SW * (1 + 2 * fgx)).toFixed(1)} ${(SH * (1 + 2 * fgy)).toFixed(1)}" preserveAspectRatio="none">${shapes.join("")}</svg></svg>`;
+                const svgFinal = `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}"><rect width="${OW}" height="${OH}" fill="#ffffff"/>${bgTag}<svg x="0" y="0" width="${OW}" height="${OH}" viewBox="${(-fgx * SW).toFixed(1)} ${(-fgy * SH).toFixed(1)} ${(SW * (1 + 2 * fgx)).toFixed(1)} ${(SH * (1 + 2 * fgy)).toFixed(1)}" preserveAspectRatio="none"><defs><pattern id="pdf-hachura-ref" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="#94a3b8" stroke-width="2.4" stroke-opacity="0.55"/></pattern></defs>${refShapes.join("")}${shapes.join("")}</svg></svg>`;
                 try {
                   const sharp = (await import("sharp")).default;
                   const png = await sharp(Buffer.from(svgFinal)).png().toBuffer();
                   out.push({
-                    titulo: `${camadaNome} · ${xmlEsc((pdf as any).nome || (pdf as any).arquivoNome || "Planta")} · ${ccs.length} medição(ões)`,
+                    titulo: `${camadaNome} · ${xmlEsc((pdf as any).nome || (pdf as any).arquivoNome || "Planta")} · ${ccs.length} medição(ões)${refShapes.length ? " · em cinza: medido em medições anteriores" : ""}`,
                     png, ratio: OW / OH, legenda,
                     total: soma > 0 ? `TOTAL: ${QTDf(soma)} ${unid}`.trim() : "",
                   });
