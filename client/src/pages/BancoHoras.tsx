@@ -178,7 +178,9 @@ export default function BancoHoras() {
   // Rev. 3977 — lista de funcionários CLT ativos para gestão da exceção bidirecional
   // (funcionário específico foge da regra padrão da empresa no destino de HE / débito de banco).
   const empListaExcecao = trpc.employees.list.useQuery(
-    { companyId, status: "Ativo", excludeTerminated: true },
+    // Rev. 4889 — sem filtro "Ativo": quem está de Aviso/Afastado/Férias ainda entra na
+    // folha e precisa aparecer na lista de exceção (ex.: Rodrigo Nogueira em Aviso).
+    { companyId, excludeTerminated: true },
     { enabled: canAccess && companyId > 0 }
   );
   const [excecaoSearch, setExcecaoSearch] = useState("");
