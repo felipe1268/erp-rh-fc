@@ -901,10 +901,18 @@ export const payrollEngineRouter = router({
             if (numBatidas === 0) {
               if (tipoDia === "util") { isFalta = 1; totalFaltas++; }
             }
+            // Rev. 4892 — O REGISTRO DE PONTO é o que conta: se o funcionário bateu ponto
+            // e CUMPRIU a carga do dia (dentro da tolerância), o dia NUNCA vira falta nem
+            // atraso por divergência de horário com a jornada do cadastro (ex.: cadastro
+            // 07–17h mas trabalha turno 12–22h — caso Rodrigo Nogueira jul/2026, 14 dias
+            // cheios virando "falta" por atraso de ~5h na entrada).
+            const expectedMinsDia = getExpectedMins(emp.jornadaTrabalho, dateStr, criteria.cargaHorariaDiaria);
+            const actualMinsDia = parseTime(horasTrabalhadas) || 0;
+            const cargaCumpridaDia = actualMinsDia >= expectedMinsDia - criteria.pontoToleranciaLegal;
             // Check for tardiness (CLT Art. 58 §1º + Súmula 366 TST)
             // ≤ 10 min = OK (tolerância legal), > 10 min = desconta TOTALIDADE
             const entrada = parseTime(rec.entrada1);
-            if (entrada !== null && tipoDia === "util") {
+            if (entrada !== null && tipoDia === "util" && !cargaCumpridaDia) {
               const jornadaEntrada = getExpectedEntrada(emp.jornadaTrabalho, dateStr);
               const atraso = entrada - jornadaEntrada;
               if (atraso > criteria.pontoFaltaAposAtraso) {
@@ -916,7 +924,7 @@ export const payrollEngineRouter = router({
             // Check for early departure (CLT Art. 58 §1º + Súmula 366 TST)
             // ≤ 10 min = OK, > 10 min = desconta TOTALIDADE
             const saida = parseTime(rec.saida2 || rec.saida1);
-            if (saida !== null && tipoDia === "util") {
+            if (saida !== null && tipoDia === "util" && !cargaCumpridaDia) {
               const jornadaSaida = (getExpectedEntrada(emp.jornadaTrabalho, dateStr) / 60 + criteria.cargaHorariaDiaria + 1) * 60;
               const saidaAntecipada = jornadaSaida - saida;
               if (saidaAntecipada > criteria.pontoToleranciaLegal) {

@@ -132,6 +132,7 @@
 - [Stripe restricted key breaks stripe-replit-sync](stripe-restricted-key-permissions.md) — rk_test_/rk_live_ keys lack account-read scope; must use a standard sk_ secret key.
 - [Tenant isolation audit — recurring IDOR pattern](tenant-isolation-audit-idor-pattern.md) — lookup-by-id procedures often skip companyId check; `admin` role is intentionally global (SaaS painel mestre needs separate client-admin).
 - [Contas a Pagar — FD nunca consolida](contas-pagar-fd-exclusion.md) — Faturamento Direto deve ficar SEMPRE fora de agrupamento por ciclo de fechamento de fornecedor.
+- [Ponto: carga cumprida ≠ falta](ponto-carga-cumprida-sem-falta.md) — dia com batidas e carga cumprida nunca vira falta/atraso por divergência com a jornada do cadastro; reprocessar ponto limpa flags antigas.
 - [Espelho de Ponto read-surface](espelho-ponto-read-surface.md) — espelho lê `time_records` + projeções; abono de atestado escreve em `timecard_daily`/`ponto_descontos` (NÃO lidos) → não aparece. Projete no retorno.
 - [Cheques × Conciliação gotchas](conciliar-cheque-controle-atomicity.md) — [reservar o CHEQUE primeiro ou corrida concilia 2×](conciliar-cheque-controle-atomicity.md); [dedup c/ mes_ref](financial-cheques-dedup.md); [desconsiderado_em](conciliacao-desconsiderar-cheque.md); [interno×externo 3 camadas](conciliacao-interno-classificacao.md).
 - [Batch VALUES date<text silent-zero](batch-values-date-cast.md) — `(VALUES('YYYY-MM-DD')) AS p(...,data_fim)` compared to a DATE col throws; try/catch zeroes ALL counts. Cast `p.data_fim::date`.
