@@ -4707,7 +4707,11 @@ export const payrollEngineRouter = router({
         const descontoFaltasBase  = (faltasQtdMes * valorDiaFalta) + escFaltasValor;
         const descontoAtrasosBase = ((atrasosMinutos / 60) * valorHora) + escAtrasosValor;
         const descontoVrFaltas = (criteria.descontoVrFalta ? faltasQtdMes * vrDiario : 0) + escFaltasVr;
-        const descontoVtFaltas = (criteria.descontoVtFalta ? faltasQtdMes * vtDiario : 0) + escFaltasVt;
+        // Rev. 4888 — teto legal do VT: o desconto TOTAL de VT no mês (parcela mensal de 6%
+        // + VT dos dias de falta) nunca pode passar de 6% do salário-base (Lei 7.418/85).
+        const descontoVtFaltasBruto = (criteria.descontoVtFalta ? faltasQtdMes * vtDiario : 0) + escFaltasVt;
+        const tetoVt6pct = Math.round(salarioBaseVt * 0.06 * 100) / 100;
+        const descontoVtFaltas = Math.round(Math.max(0, Math.min(descontoVtFaltasBruto, tetoVt6pct - vtValorMensal)) * 100) / 100;
 
         // DSR perdido (Lei 605/49 Art. 6º) — apenas DSR Falta (decisão RH FC, Rev. 1194)
         const dsrInfo = dsrMap.get(emp.id) || { qtdFalta: 0, valorFalta: 0 };

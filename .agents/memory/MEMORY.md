@@ -32,7 +32,7 @@
 - [SEFAZ sync gating & NSU](sefaz-nsu-rate-limit-loop.md) — cStat=656 deve persistir ultNSU (senão loop eterno); 4 fórmulas de gate DEVEM casar; elapsed via SQL/EXTRACT EPOCH não `new Date()` JS (skew 3h).
 - [Dissídio 2026 pulou não-Ativos](dissidio-aplicacao-pulou-nao-ativos.md) — quem não era "Ativo" na aplicação ficou SEM linha em dissidio_funcionarios; 5 backfillados 03/08/2026; 6 casos ainda sem confirmação.
 - [Dissídio — HE excluída da base retroativa](dissidio-he-excluded-from-base.md) — toda HE vira banco de horas, nunca é paga em dinheiro; nunca somar HE na base de diferença salarial retroativa/reajuste.
-- [VR/VT desconto de falta não misturado](folha-vr-vt-faltas-not-mixed.md) — VT de falta entra na Folha (coluna VT); VR/VA de falta NUNCA entra na Folha (só no Vale Alimentação).
+- [VR/VT desconto de falta não misturado](folha-vr-vt-faltas-not-mixed.md) — VT de falta entra na Folha (coluna VT); VR/VA de falta NUNCA entra na Folha (só no Vale Alimentação); desde ago/2026 o TOTAL de VT (6% mensal + faltas) é limitado a 6% do salário-base (decisão do user).
 - [Meal benefit config vigência pattern](meal-benefit-vigencia.md) — annual dissídio readjustments close-old+insert-new (never UPDATE in-place); all reads go through a resolver with an explicit reference date.
 - [DialogContent style prop override](dialog-style-prop-override.md) — dialog que passa `style` próprio não pode apagar o sizeStyle do maximizar; merge obrigatório em ui/dialog.tsx; Select do Radix em dialog rolável corta texto no iPad → combobox digitável.
 - [Dialog no-truncate rule](dialog-no-truncate.md) — dialogs NUNCA truncam texto; use break-words/break-all; truncate só em linhas compactas de tabela com title= tooltip.
