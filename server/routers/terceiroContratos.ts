@@ -5529,7 +5529,8 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
       type FotoPdf = { legenda: string; buffer: Buffer | null };
       type PlantaLegenda = { numero: string; cor: string; obs: string; medida: string };
       type PlantaPdf = { titulo: string; png: Buffer; ratio: number; legenda: PlantaLegenda[]; total: string };
-      type CampoPdf = { titulo: string; criadoPorNome: string; contornos: any[]; fotos: FotoPdf[]; plantas: PlantaPdf[] };
+      type AssinaturaPdf = { nome: string; rotulo: string; img: Buffer | null; dataAssinatura: string };
+      type CampoPdf = { titulo: string; criadoPorNome: string; contornos: any[]; fotos: FotoPdf[]; plantas: PlantaPdf[]; assinaturas: AssinaturaPdf[] };
       const camposPdf: CampoPdf[] = [];
       try {
         // O vínculo principal vive na MEDIÇÃO (terceiro_medicoes.levantamento_campo_id);
@@ -5705,12 +5706,46 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
               buffer,
             });
           }
+          // Rev. 4900 — prontuário completo: assinaturas do envelope FCSign da
+          // Memória de Cálculo DESTE levantamento (elaborador + fornecedor),
+          // com a assinatura desenhada — igual ao documento assinado na tela.
+          const assinaturas: AssinaturaPdf[] = [];
+          try {
+            const [envLev] = await db.select().from(integrasignEnvelopes).where(and(
+              eq(integrasignEnvelopes.companyId, input.companyId),
+              eq((integrasignEnvelopes as any).medicaoCampoId, campo.id),
+              sql`${integrasignEnvelopes.excluidoEm} IS NULL`,
+            )).orderBy(sql`${integrasignEnvelopes.id} DESC`).limit(1);
+            if (envLev) {
+              const sigs = await db.select().from(integrasignSignatarios).where(and(
+                eq(integrasignSignatarios.envelopeId, envLev.id),
+                sql`${integrasignSignatarios.papel} <> 'testemunha'`,
+              ));
+              for (const s of sigs as any[]) {
+                if (s.status !== "assinado") continue;
+                let img: Buffer | null = null;
+                const m = /^data:image\/(png|jpeg|jpg);base64,([A-Za-z0-9+/=]+)$/.exec(String(s.assinaturaImagem || ""));
+                if (m) { try { img = Buffer.from(m[2], "base64"); } catch { img = null; } }
+                assinaturas.push({
+                  nome: String(s.nome || ""),
+                  rotulo: s.papel === "fornecedor"
+                    ? "Fornecedor — de acordo com o levantamento"
+                    : "Responsável pelo levantamento — FC Engenharia",
+                  img,
+                  dataAssinatura: s.dataAssinatura ? new Date(s.dataAssinatura).toLocaleDateString("pt-BR") : "",
+                });
+              }
+            }
+          } catch (e: any) {
+            console.warn("[gerarPdfMedicao] assinaturas da memória indisponíveis:", e?.message);
+          }
           camposPdf.push({
             titulo: `Nº ${String(campo.numero).padStart(3, "0")}${campo.titulo ? ` — ${campo.titulo}` : ""}`,
             criadoPorNome: (campo as any).criadoPorNome || "",
             contornos,
             fotos,
             plantas: await buildPlantasPdf(contornos),
+            assinaturas,
           });
         }
       } catch (e: any) {
@@ -6147,6 +6182,30 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
               if (col === perRow) { col = 0; y += cellH + 6; }
             }
             if (col > 0) y += cellH + 6;
+          }
+
+          // Rev. 4900 — assinaturas da Memória de Cálculo (prontuário completo):
+          // mesma composição do documento assinado na tela — assinatura desenhada
+          // em cima da linha, nome e papel embaixo.
+          if (campo.assinaturas.length > 0) {
+            const blocoAssH = 100;
+            if (y + blocoAssH > pageBottom) { doc.addPage(); y = 36; }
+            y += 24;
+            const sigW2 = Math.min(230, (pageW - 60) / campo.assinaturas.length);
+            const totalW = sigW2 * campo.assinaturas.length + 60 * (campo.assinaturas.length - 1);
+            let sx = mL + (pageW - totalW) / 2;
+            for (const a of campo.assinaturas) {
+              if (a.img) {
+                try { doc.image(a.img, sx + sigW2 / 2 - 45, y, { fit: [90, 40] }); } catch { /* assinatura ilegível */ }
+              }
+              doc.moveTo(sx, y + 44).lineTo(sx + sigW2, y + 44).lineWidth(0.8).strokeColor("#111").stroke();
+              doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#111")
+                .text(a.nome, sx, y + 48, { width: sigW2, align: "center" });
+              doc.font("Helvetica").fontSize(6).fillColor("#666")
+                .text(a.rotulo.toUpperCase() + (a.dataAssinatura ? ` — ASSINADO EM ${a.dataAssinatura}` : ""), sx, y + 58, { width: sigW2, align: "center" });
+              sx += sigW2 + 60;
+            }
+            y += 74;
           }
         }
 
