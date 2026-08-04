@@ -4985,35 +4985,37 @@ export default function FolhaPagamento() {
           })() : (
           <Card className="overflow-hidden">
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              {/* Rev. 4891 — cabeçalho fixo: container com altura máx. + thead sticky (2 linhas).
+                  Fundos SÓLIDOS obrigatórios (translúcido deixa as linhas "vazarem" por baixo ao rolar). */}
+              <div className="overflow-auto max-h-[75vh]">
                 <table className="w-full text-[11px]">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="text-left py-2.5 px-2 sticky left-0 bg-gray-50 z-10 font-semibold text-gray-700" rowSpan={2}>Funcionário</th>
-                      <th className="text-left py-2.5 px-2 font-semibold text-gray-700" rowSpan={2}>Função</th>
-                      <th className="text-center py-1.5 px-1 font-semibold text-green-700 border-l border-green-200 bg-green-50/50" colSpan={4}>Proventos</th>
-                      <th className="text-center py-1.5 px-1 font-semibold text-red-700 border-l border-red-200 bg-red-50/30" colSpan={12}>Descontos</th>
-                      <th className="text-center py-1.5 px-1 font-semibold text-[#1B2A4A] border-l border-blue-200 bg-blue-50/50" colSpan={2}>Resultado</th>
+                    <tr className="border-b border-gray-200 h-8">
+                      <th className="text-left py-2.5 px-2 sticky left-0 top-0 bg-gray-50 z-30 font-semibold text-gray-700" rowSpan={2}>Funcionário</th>
+                      <th className="text-left py-2.5 px-2 sticky top-0 z-20 bg-gray-50 font-semibold text-gray-700" rowSpan={2}>Função</th>
+                      <th className="text-center py-1.5 px-1 sticky top-0 z-20 font-semibold text-green-700 border-l border-green-200 bg-green-50" colSpan={4}>Proventos</th>
+                      <th className="text-center py-1.5 px-1 sticky top-0 z-20 font-semibold text-red-700 border-l border-red-200 bg-red-50" colSpan={12}>Descontos</th>
+                      <th className="text-center py-1.5 px-1 sticky top-0 z-20 font-semibold text-[#1B2A4A] border-l border-blue-200 bg-blue-50" colSpan={2}>Resultado</th>
                     </tr>
-                    <tr className="bg-gray-50/80 border-b-2 border-gray-200 text-[10px] text-gray-500 uppercase tracking-wider">
-                      <th className="text-right py-1.5 px-2 border-l border-green-200 bg-green-50/30">Salário</th>
-                      <th className="text-right py-1.5 px-2 bg-green-50/30">H.E.</th>
-                      <th className="text-right py-1.5 px-2 bg-green-50/30" title="Adicionais legais (insalubridade/periculosidade) + outras receitas (reembolso etc.)">Adic.</th>
-                      <th className="text-right py-1.5 px-2 bg-green-50/30 font-bold text-green-700">Total</th>
-                      <th className="text-right py-1.5 px-2 border-l border-red-200 bg-orange-50/30">Vale</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">INSS</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">IR</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">Faltas</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">Atrasos</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">Sindicato</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">Pensão</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">VT</th>
-                      <th className="text-right py-1.5 px-2 bg-purple-50/30">Convênios</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">EPIs</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">Outros</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/30 font-bold text-red-700">Total</th>
-                      <th className="text-right py-1.5 px-2 border-l border-blue-200 bg-blue-50/30 font-bold text-[#1B2A4A]">Líquido</th>
-                      <th className="text-right py-1.5 px-2 bg-gray-50/50 text-[9px]">FGTS</th>
+                    <tr className="border-b-2 border-gray-200 text-[10px] text-gray-500 uppercase tracking-wider">
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 border-l border-green-200 bg-green-50">Salário</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-green-50">H.E.</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-green-50" title="Adicionais legais (insalubridade/periculosidade) + outras receitas (reembolso etc.)">Adic.</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-green-50 font-bold text-green-700">Total</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 border-l border-red-200 bg-orange-50">Vale</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-red-50">INSS</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-red-50">IR</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-red-50">Faltas</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-red-50">Atrasos</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-red-50">Sindicato</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-red-50">Pensão</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-red-50">VT</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-purple-50">Convênios</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-red-50">EPIs</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-red-50">Outros</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-red-50 font-bold text-red-700">Total</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 border-l border-blue-200 bg-blue-50 font-bold text-[#1B2A4A]">Líquido</th>
+                      <th className="text-right py-1.5 px-2 sticky top-8 z-20 bg-gray-50 text-[9px]">FGTS</th>
                     </tr>
                   </thead>
                   <tbody>
