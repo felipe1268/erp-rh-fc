@@ -3229,7 +3229,26 @@ export default function MedicaoLevantamento() {
         </tr></tbody></table>`;
       })()}
       <p style="font-size:9px;color:#6b7280;margin-top:24px">Quantidades obtidas por levantamento sobre a planta (PDF/DXF) com escala calibrada e conferida. Área = polígono medido em escala real; perímetro/linear = soma dos trechos; volume = área × espessura.</p>
-      ${comPrint ? `<script>window.onload=function(){setTimeout(function(){window.print();},300);}</script>` : ""}
+      ${comPrint ? `<script>
+        // Rev. 4899 — em página criada via document.write, window.onload pode NUNCA
+        // disparar (ou já ter disparado), e aí o print não abria ("gera mas não muda
+        // mais nada"). Regra: esperar as imagens com TETO de 2,5s e imprimir sempre.
+        (function(){
+          var done=false;
+          function go(){ if(done) return; done=true; setTimeout(function(){ try{ window.focus(); window.print(); }catch(e){} }, 250); }
+          var imgs=[].slice.call(document.images||[]);
+          var pend=imgs.filter(function(i){ return !i.complete; }).length;
+          if(!pend){ go(); }
+          else {
+            imgs.forEach(function(i){
+              if(i.complete) return;
+              i.addEventListener('load', function(){ if(--pend<=0) go(); });
+              i.addEventListener('error', function(){ if(--pend<=0) go(); });
+            });
+          }
+          setTimeout(go, 2500); // teto: imprime mesmo se alguma imagem travar
+        })();
+      </script>` : ""}
     </body></html>`;
     return html;
   }

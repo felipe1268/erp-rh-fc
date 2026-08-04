@@ -178,13 +178,23 @@ export async function buildBoletimMedicaoHtml(db: any, medicaoId: number, compan
           }
           if (!parsed?.svg) continue;
           const pw = Number(parsed.w) || 1, ph = Number(parsed.h) || 1;
-          const ratio = pw / ph;
+          const ratio = Math.max(pw / ph, 0.05);
           const mpu = parseFloat(String(parsed.metrosPorUnidade ?? ""));
           let fgx = 0, fgy = 0;
           if (isFinite(mpu) && mpu > 0) { fgx = Math.min(0.3, (1 / mpu) / pw); fgy = Math.min(0.3, (1 / mpu) / ph); }
-          const stl = `position:absolute;left:${((fgx / (1 + 2 * fgx)) * 100).toFixed(3)}%;top:${((fgy / (1 + 2 * fgy)) * 100).toFixed(3)}%;width:${(100 / (1 + 2 * fgx)).toFixed(3)}%;height:${(100 / (1 + 2 * fgy)).toFixed(3)}%`;
-          const bg = String(parsed.svg).replace("<svg ", `<svg style="${stl}" `);
-          const W = 1000, H = 1000 / Math.max(ratio, 0.05);
+          // Rev. 4899 — REGRA DE CONTORNO (fonte da verdade = croqui da tela,
+          // montarPlantasHtml): normalizado [0..1] = bbox da PLANTA; a planta é
+          // desenhada com inset de folga, e o overlay dos contornos usa viewBox
+          // ESTENDIDO pela folga. Quadro completo = planta+folga.
+          const OW = 1600, OH = Math.round(OW * (1 + 2 * fgy) / (ratio * (1 + 2 * fgx)));
+          let bgTag = String(parsed.svg);
+          const bx = Math.round((fgx / (1 + 2 * fgx)) * OW), by = Math.round((fgy / (1 + 2 * fgy)) * OH);
+          const bw = Math.round(OW / (1 + 2 * fgx)), bh = Math.round(OH / (1 + 2 * fgy));
+          bgTag = bgTag.replace(/<svg\b([^>]*)>/, (_m, attrs: string) => {
+            const semDim = attrs.replace(/\s(?:width|height|style)="[^"]*"/g, "");
+            return `<svg x="${bx}" y="${by}" width="${bw}" height="${bh}"${semDim}>`;
+          });
+          const W = 1000, H = 1000 / ratio;
           // um croqui por camada/serviço (Forro, Tabica…), como na tela
           const doPdf = contornos.filter((c: any) => c.pdfId === (pdf as any).id);
           const camadas = new Map<string, any[]>();
@@ -222,8 +232,8 @@ export async function buildBoletimMedicaoHtml(db: any, medicaoId: number, compan
               <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-top:10px">
                 <div style="font-size:10px;font-weight:bold;color:#1B3A5C;text-transform:uppercase">${esc(camadaNome)} <span style="color:#7a8699;font-weight:normal">· ${esc((pdf as any).nome || (pdf as any).arquivoNome || "Planta")} · ${ccs.length} medição(ões)${soma > 0 ? ` · total ${QTD(soma)} ${esc(unid)}` : ""}</span></div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
-                  <div style="flex:2;min-width:280px;position:relative;padding-top:${(100 / Math.max(ratio, 0.05)).toFixed(2)}%;background:#fff;border:1px solid #eef1f5">
-                    <div style="position:absolute;inset:0">${bg}<svg viewBox="0 0 ${W} ${H.toFixed(1)}" style="position:absolute;inset:0;width:100%;height:100%" preserveAspectRatio="none">${shapes.join("")}</svg></div>
+                  <div style="flex:2;min-width:280px;background:#fff;border:1px solid #eef1f5">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${OW} ${OH}" style="width:100%;height:auto;display:block"><rect width="${OW}" height="${OH}" fill="#ffffff"/>${bgTag}<svg x="0" y="0" width="${OW}" height="${OH}" viewBox="${(-fgx * W).toFixed(1)} ${(-fgy * H).toFixed(1)} ${(W * (1 + 2 * fgx)).toFixed(1)} ${(H * (1 + 2 * fgy)).toFixed(1)}" preserveAspectRatio="none">${shapes.join("")}</svg></svg>
                   </div>
                   <div style="flex:1;min-width:170px"><div style="font-size:8.5px;color:#7a8699;text-transform:uppercase;font-weight:bold;border-bottom:1px solid #e5e7eb;padding-bottom:2px">Legenda — ${esc(camadaNome)}</div>${legenda.join("")}${soma > 0 ? `<div style="font-size:9px;text-align:right;font-weight:bold;padding-top:3px">TOTAL: ${QTD(soma)} ${esc(unid)}</div>` : ""}</div>
                 </div>

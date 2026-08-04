@@ -15,3 +15,7 @@ description: Como o Levantamento deriva a escala de DXFs com $INSUNITS errado e 
 
 **Why:** DXFs reais do usuário (TÉRREO 19×10 m com INSUNITS=4/mm e 2 clusters; POITA 40×29 m) saíam 2,7×0,26 m.
 **How to apply:** mudanças no motor DXF → bump `DXF_ALGO_VERSION`; upload de planta usa rota multipart (não base64 tRPC, teto 150MB por heap ~1GB com persistência base64 em DB).
+
+## Regra de contorno em relatórios (Rev. 4899)
+- FONTE DA VERDADE = croqui da tela/Memória HTML (montarPlantasHtml em MedicaoLevantamento.tsx): normalizado [0..1] = bbox da PLANTA; planta inset pela folga; overlay dos contornos usa viewBox ESTENDIDO `-fgx*W -fgy*H W(1+2fgx) H(1+2fgy)` preserveAspectRatio=none; quadro completo tem aspecto ratio*(1+2fgx)/(1+2fgy).
+- Pegadinha: o PDF do servidor (gerarPdfMedicao em terceiroContratos.ts) tinha overlay em `0 0 SW SH` = contornos esticados p/ fora; corrigido junto com boletimMedicaoHtml. NUNCA copiar renderer de servidor sem conferir contra o croqui da tela.

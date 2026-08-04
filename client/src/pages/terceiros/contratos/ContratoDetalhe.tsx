@@ -3616,6 +3616,45 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
   const handlePdf = async () => {
     setPdfLoading(true);
     const win = window.open("about:blank", "_blank");
+    // Rev. 4896 — Poka-Yoke visual: a aba abre com uma tela de carregamento com
+    // % de 0 a 100 (nada de "about:blank" parecendo erro). O PDF só é exibido
+    // quando chega a 100%.
+    let setPct: (p: number) => void = () => {};
+    if (win && !win.closed) {
+      try {
+        win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Gerando Boletim de Medição…</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#f4f6fa;display:flex;align-items:center;justify-content:center;min-height:100vh}
+  .card{background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(27,42,74,.12);padding:40px 48px;text-align:center;max-width:340px}
+  .t{color:#1B2A4A;font-weight:700;font-size:16px;margin:0 0 6px}
+  .s{color:#64748b;font-size:12px;margin:0 0 22px}
+  .bar{height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden}
+  .fill{height:100%;width:0%;background:linear-gradient(90deg,#2563eb,#3b82f6);border-radius:999px;transition:width .35s ease}
+  .pct{color:#2563eb;font-weight:700;font-size:22px;margin-top:14px}
+</style></head><body><div class="card">
+  <p class="t">Gerando Boletim de Medição</p>
+  <p class="s">Aguarde — o PDF abrirá automaticamente ao chegar em 100%.</p>
+  <div class="bar"><div class="fill" id="f"></div></div>
+  <div class="pct" id="p">0%</div>
+</div></body></html>`);
+        win.document.close();
+        setPct = (p: number) => {
+          try {
+            const f = win.document.getElementById("f"); const el = win.document.getElementById("p");
+            if (f) (f as any).style.width = `${Math.round(p)}%`;
+            if (el) el.textContent = `${Math.round(p)}%`;
+          } catch { /* aba fechada */ }
+        };
+      } catch { /* noop */ }
+    }
+    // Progresso simulado (fetch tRPC não expõe progresso real): sobe rápido até
+    // ~90% e trava; 100% só quando o PDF realmente chegou.
+    let pct = 0;
+    const timer = setInterval(() => {
+      pct = Math.min(90, pct + (pct < 40 ? 7 : pct < 70 ? 4 : 1.5));
+      setPct(pct);
+    }, 350);
     try {
       const inputPayload = { json: { medicaoId: m.id, companyId: contrato.companyId } };
       const res = await fetch(`/api/trpc/terceiroContratos.gerarPdfMedicao?input=${encodeURIComponent(JSON.stringify(inputPayload))}`);
@@ -3627,11 +3666,16 @@ function RetencoesSec({ m, contrato, isEditable, fdRows = [] }: { m: any; contra
       for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
       const blob = new Blob([byteArr], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
+      clearInterval(timer);
+      setPct(100);
+      // pequena pausa para o usuário VER o 100% antes do PDF abrir
+      await new Promise((r) => setTimeout(r, 400));
       if (win && !win.closed) win.location.href = url;
       else window.open(url, "_blank"); // fallback (pode ser bloqueado, mas tenta)
       // não revogar já — a aba ainda vai carregar o blob; libera depois.
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e: any) {
+      clearInterval(timer);
       try { win?.close(); } catch { /* noop */ }
       toast.error(e.message || "Erro ao gerar PDF");
     }

@@ -5617,7 +5617,9 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
               const mpu = parseFloat(String(parsed.metrosPorUnidade ?? ""));
               let fgx = 0, fgy = 0;
               if (isFinite(mpu) && mpu > 0) { fgx = Math.min(0.3, (1 / mpu) / pw); fgy = Math.min(0.3, (1 / mpu) / ph); }
-              const OW = 1600, OH = Math.round(OW / ratio);
+              // Rev. 4899 — MESMA geometria do croqui da tela (montarPlantasHtml):
+              // quadro completo = planta + folga → aspecto ratio*(1+2fgx)/(1+2fgy).
+              const OW = 1600, OH = Math.round(OW * (1 + 2 * fgy) / (ratio * (1 + 2 * fgx)));
               // planta de fundo: svg aninhado (remove width/height próprios p/ escalar pelo viewBox)
               let bgTag = String(parsed.svg);
               const bx = Math.round((fgx / (1 + 2 * fgx)) * OW), by = Math.round((fgy / (1 + 2 * fgy)) * OH);
@@ -5660,7 +5662,11 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
                   legenda.push({ numero: String(c.numero ?? ""), cor, obs: String(c.observacoes || ""), medida });
                 }
                 if (!shapes.length) continue;
-                const svgFinal = `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}"><rect width="${OW}" height="${OH}" fill="#ffffff"/>${bgTag}<svg x="0" y="0" width="${OW}" height="${OH}" viewBox="0 0 ${SW} ${SH.toFixed(1)}" preserveAspectRatio="none">${shapes.join("")}</svg></svg>`;
+                // Rev. 4899 — REGRA DE CONTORNO: normalizado [0..1] = bbox da PLANTA;
+                // a planta está inset pela folga, então o overlay usa viewBox
+                // ESTENDIDO pela folga (igual ao croqui da tela). Overlay em
+                // "0 0 SW SH" = contornos esticados p/ fora do projeto.
+                const svgFinal = `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}"><rect width="${OW}" height="${OH}" fill="#ffffff"/>${bgTag}<svg x="0" y="0" width="${OW}" height="${OH}" viewBox="${(-fgx * SW).toFixed(1)} ${(-fgy * SH).toFixed(1)} ${(SW * (1 + 2 * fgx)).toFixed(1)} ${(SH * (1 + 2 * fgy)).toFixed(1)}" preserveAspectRatio="none">${shapes.join("")}</svg></svg>`;
                 try {
                   const sharp = (await import("sharp")).default;
                   const png = await sharp(Buffer.from(svgFinal)).png().toBuffer();
