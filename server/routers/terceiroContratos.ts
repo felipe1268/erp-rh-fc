@@ -6031,14 +6031,16 @@ export async function gerarPdfMedicaoBuffer(db: any, input: { medicaoId: number;
         doc.roundedRect(mL, y, pageW, 44, 4).lineWidth(1.2).stroke(primary);
         doc.font("Helvetica-Bold").fontSize(8.5).fillColor(primary).text("RESUMO FINANCEIRO", mL + 12, y + 7);
         const summCol = (pageW - 200) / 3;
-        const summItem = (label: string, valor: string, ci: number, bold = false) => {
+        // Rev. 4901 — valores NEGATIVOS (retenções e descontos/FD) em VERMELHO,
+        // com o sinal de menos, para chamar atenção (pedido do usuário).
+        const summItem = (label: string, valor: string, ci: number, cor = "#333") => {
           const x = mL + 12 + ci * summCol;
           doc.font("Helvetica").fontSize(7).fillColor("#666").text(label, x, y + 20);
-          doc.font("Helvetica-Bold").fontSize(9).fillColor("#333").text(valor, x, y + 29);
+          doc.font("Helvetica-Bold").fontSize(9).fillColor(cor).text(valor, x, y + 29);
         };
         summItem("Valor Bruto do Período", BRL(totalValorPeriodo), 0);
-        summItem("Retenções", `- ${BRL(totalRetencoes)}`, 1);
-        summItem("Descontos + FD", `- ${BRL(descontos + totalFdPdf)}`, 2);
+        summItem("Retenções", `- ${BRL(totalRetencoes)}`, 1, "#dc2626");
+        summItem("Descontos + FD", `- ${BRL(descontos + totalFdPdf)}`, 2, "#dc2626");
         doc.roundedRect(mL + pageW - 185, y + 8, 173, 28, 3).fill("#d1fae5");
         doc.font("Helvetica").fontSize(6.5).fillColor("#065f46").text("VALOR LÍQUIDO A PAGAR", mL + pageW - 177, y + 13);
         doc.font("Helvetica-Bold").fontSize(12).fillColor("#065f46").text(BRL(valorLiquido), mL + pageW - 177, y + 21);
