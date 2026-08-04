@@ -20,3 +20,5 @@ deve manter VR fora do total e do rótulo de Faltas, e mostrar VT-de-falta só
 dentro do bloco/coluna de VT. Ver `server/routers/payrollEngine.ts`
 (`calcFaltas`/`calcVt`) e `client/src/pages/FolhaPagamento.tsx` (memorial +
 recomputo local) para o padrão já implementado.
+
+**Base do 6% do VT (ago/2026):** mensalista = salário fixo do cadastro; HORISTA = salário do mês (valorHora × horas do mês, ex. julho 227,33h), nunca o salarioBase congelado. Vale para vtValorMensal E para o teto do desconto de faltas.

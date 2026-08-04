@@ -4666,7 +4666,12 @@ export const payrollEngineRouter = router({
         // Rev. 4885 — Desconto de VT segue a regra legal (Lei 7.418/85): o menor entre
         // 6% do salário-base e o custo real do VT no mês (vtDiario × dias úteis).
         const vtCustoRealMes = vtDiario * diasUteis;
-        const salarioBaseVt = parseBRL(emp.salarioBase) || (valorHora * horasMensaisBaseEmp);
+        // Rev. 4890 — Base do 6% do VT: mensalista usa o salário fixo; horista usa o
+        // salário do MÊS (valorHora × horas do mês — ex.: julho 227,33h), não o
+        // salarioBase congelado do cadastro. (caso Leonardo: 10,46×227,33=2.377,90 → 6%=142,67)
+        const salarioBaseVt = isMensalistaEmp
+          ? (parseBRL(emp.salarioBase) || (valorHora * horasMensaisBaseEmp))
+          : (valorHora * horasMensaisEmp) || parseBRL(emp.salarioBase);
         const vtValorMensal = vtCustoRealMes > 0
           ? Math.round(Math.min(vtCustoRealMes, salarioBaseVt * 0.06) * 100) / 100
           : 0;
