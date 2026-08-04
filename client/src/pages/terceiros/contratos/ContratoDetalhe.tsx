@@ -4553,99 +4553,112 @@ function AditivoDialog({ contrato, item, medicaoId, onClose, onCreated }: {
 
   return (
     <Dialog open onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden">
-        {/* Rev. 4903 — layout moderno: header gradiente, cards por seção, alertas
-            com ícone/cor, radio-cards de verba e checklist do envio. */}
-        <div className="bg-gradient-to-r from-purple-600 to-violet-500 px-5 py-4">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2.5 text-white">
-              <span className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0"><FilePlus className="w-[18px] h-[18px]" /></span>
-              <span>
-                Gerar Aditivo de Contrato
-                <span className="block text-[11px] font-normal text-purple-100 mt-0.5">Acréscimo de quantidade com aprovação em 2 níveis</span>
-              </span>
-            </DialogTitle>
-          </DialogHeader>
-        </div>
-        <div className="px-5 py-4 space-y-3 text-sm max-h-[70vh] overflow-y-auto">
-          <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 break-words">
-            <div className="text-xs text-gray-700 font-medium">
-              {item.eapCodigo && <span className="font-mono text-[10px] text-purple-700 bg-purple-50 border border-purple-100 rounded px-1.5 py-0.5 mr-1.5">{item.eapCodigo}</span>}
+      <DialogContent className="max-w-lg">
+        {/* Rev. 4904 — layout v2 (a pedido do usuário): sem header gradiente.
+            Passos numerados 1-2-3, item em card com barra roxa, estimativa ao
+            lado dos inputs, alertas com ícone/cor e radio-cards de verba. */}
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-purple-800"><FilePlus className="w-4 h-4" /> Gerar Aditivo de Contrato</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 text-sm">
+          <div className="rounded-lg border-l-4 border-purple-400 bg-purple-50/60 p-3 break-words">
+            <div className="text-xs text-gray-800 font-medium">
+              {item.eapCodigo && <span className="font-mono text-[10px] text-purple-700 mr-1.5">{item.eapCodigo}</span>}
               {item.descricao}
             </div>
-            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
-              <span className="inline-flex items-center gap-1 rounded-full bg-white border border-gray-200 px-2 py-0.5 text-gray-600">Contratado: <b className="tabular-nums">{Number(item.quantidade || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{item.unidade ? ` ${item.unidade}` : ""}</b></span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-amber-700"><AlertTriangle className="w-3 h-3" /> Excedente medido: <b className="tabular-nums">{Number(item.quantidadeExcedente || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{item.unidade ? ` ${item.unidade}` : ""}</b></span>
+            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px]">
+              <span className="text-gray-500">Contratado: <b className="text-gray-700 tabular-nums">{Number(item.quantidade || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{item.unidade ? ` ${item.unidade}` : ""}</b></span>
+              <span className="text-amber-700">Excedente medido: <b className="tabular-nums">{Number(item.quantidadeExcedente || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{item.unidade ? ` ${item.unidade}` : ""}</b></span>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs">Quantidade{item.unidade ? ` (${item.unidade})` : ""}</Label>
-              <Input inputMode="decimal" value={qtd} onChange={e => setQtd(e.target.value)}
-                onBlur={() => setQtd(fmtBR(parseNum(qtd)))} className="text-sm h-9 mt-1 tabular-nums" />
-            </div>
-            <div>
-              <Label className="text-xs">Preço unitário</Label>
-              <div className="relative mt-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-gray-400 pointer-events-none">R$</span>
-                <Input inputMode="decimal" value={precoUnit} onChange={e => setPrecoUnit(e.target.value)}
-                  onBlur={() => setPrecoUnit(fmtBR(parseNum(precoUnit)))} className="text-sm h-9 pl-9 tabular-nums" />
+
+          {/* Passo 1 — quantidade e valor */}
+          <div>
+            <p className="flex items-center gap-2 text-xs font-semibold text-gray-800 mb-2">
+              <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">1</span>
+              Quantidade e valor
+            </p>
+            <div className="grid grid-cols-2 gap-2 pl-7">
+              <div>
+                <Label className="text-xs text-gray-500">Quantidade{item.unidade ? ` (${item.unidade})` : ""}</Label>
+                <Input inputMode="decimal" value={qtd} onChange={e => setQtd(e.target.value)}
+                  onBlur={() => setQtd(fmtBR(parseNum(qtd)))} className="text-sm h-9 mt-1 tabular-nums" />
               </div>
-              <p className="text-[10px] text-gray-400 mt-0.5">Preço do contrato pré-preenchido</p>
+              <div>
+                <Label className="text-xs text-gray-500">Preço unitário</Label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-gray-400 pointer-events-none">R$</span>
+                  <Input inputMode="decimal" value={precoUnit} onChange={e => setPrecoUnit(e.target.value)}
+                    onBlur={() => setPrecoUnit(fmtBR(parseNum(precoUnit)))} className="text-sm h-9 pl-9 tabular-nums" />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-0.5">Preço do contrato pré-preenchido</p>
+              </div>
+            </div>
+            <div className="pl-7 mt-2 flex items-center justify-between rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
+              <span className="text-[11px] text-gray-500">Estimativa do aditivo</span>
+              <span className="font-bold text-purple-700 tabular-nums">R$ {fmtBR(total)}</span>
             </div>
           </div>
-          <div className="rounded-xl bg-purple-50 border border-purple-200 px-3 py-2.5 flex items-center justify-between">
-            <span className="text-xs font-medium text-purple-800 flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Estimativa do aditivo</span>
-            <span className="text-lg font-bold text-purple-700 tabular-nums">R$ {fmtBR(total)}</span>
-          </div>
+
+          {/* Passo 2 — justificativa + foto */}
           <div>
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Justificativa (obrigatória) — por que estourou?</Label>
-              <span className={`text-[10px] tabular-nums ${justificativa.trim().length >= 15 ? "text-emerald-600" : "text-gray-400"}`}>
-                {justificativa.trim().length >= 15 ? <span className="inline-flex items-center gap-0.5"><Check className="w-3 h-3" /> ok</span> : `${justificativa.trim().length}/15`}
-              </span>
+            <p className="flex items-center gap-2 text-xs font-semibold text-gray-800 mb-2">
+              <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">2</span>
+              Justificativa e evidência
+            </p>
+            <div className="pl-7 space-y-2.5">
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-gray-500">Por que estourou? (obrigatória)</Label>
+                  <span className={`text-[10px] tabular-nums ${justificativa.trim().length >= 15 ? "text-emerald-600" : "text-gray-400"}`}>
+                    {justificativa.trim().length >= 15 ? <span className="inline-flex items-center gap-0.5"><Check className="w-3 h-3" /> ok</span> : `${justificativa.trim().length}/15`}
+                  </span>
+                </div>
+                <Textarea rows={3} className="text-sm mt-1 resize-none" placeholder="Fundamente o motivo do acréscimo (mín. 15 caracteres)..."
+                  value={justificativa} onChange={e => setJustificativa(e.target.value)} />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs cursor-pointer transition-colors ${fotoUrl ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-gray-300 bg-white text-gray-600 hover:border-purple-300 hover:text-purple-700"}`}>
+                  {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : fotoUrl ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
+                  <span className="font-medium">{fotoUrl ? "Foto anexada — trocar" : "Foto do acréscimo (obrigatória)"}</span>
+                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFoto(f); e.target.value = ""; }} />
+                </label>
+                {fotoUrl && <img src={fotoUrl} alt="Foto" className="h-10 w-10 object-cover rounded-lg border border-emerald-200" />}
+              </div>
             </div>
-            <Textarea rows={3} className="text-sm mt-1 resize-none" placeholder="Fundamente o motivo do acréscimo (mín. 15 caracteres)..."
-              value={justificativa} onChange={e => setJustificativa(e.target.value)} />
           </div>
+
+          {/* Passo 3 — fonte de verba (Rev. 4817: nunca bloqueia; o sócio decide vendo) */}
           <div>
-            <Label className="text-xs">Foto do acréscimo (obrigatória)</Label>
-            <div className="mt-1 flex items-center gap-2">
-              <label className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border-2 border-dashed text-xs cursor-pointer transition-colors ${fotoUrl ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-gray-300 bg-gray-50 text-gray-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700"}`}>
-                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : fotoUrl ? <CheckCircle2 className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
-                <span className="font-medium">{fotoUrl ? "Foto anexada — toque para trocar" : "Tirar foto / anexar"}</span>
-                <input type="file" accept="image/*" capture="environment" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFoto(f); e.target.value = ""; }} />
-              </label>
-              {fotoUrl && <img src={fotoUrl} alt="Foto" className="h-11 w-11 object-cover rounded-lg border-2 border-emerald-200" />}
-            </div>
-          </div>
-          {/* Rev. 4817 — De onde vem a verba? (nunca bloqueia; o sócio decide vendo) */}
-          <div className={`rounded-xl border p-3 space-y-2.5 ${cobertura === "total" ? "bg-emerald-50 border-emerald-200" : cobertura === "parcial" ? "bg-amber-50 border-amber-300" : "bg-red-50 border-red-200"}`}>
-            <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5" /> De onde vem a verba?</p>
-            <div className={`flex items-start gap-1.5 text-[11px] leading-snug ${cobertura === "total" ? "text-emerald-700" : cobertura === "parcial" ? "text-amber-700" : "text-red-600"}`}>
-              {saldos !== undefined && (cobertura === "total"
-                ? <CheckCircle2 className="w-3.5 h-3.5 mt-px flex-shrink-0" />
-                : <AlertTriangle className="w-3.5 h-3.5 mt-px flex-shrink-0" />)}
-              <span>
-                {saldos === undefined ? "Consultando saldo de realocação da obra..." :
-                 cobertura === "total" ? <>Saldo de Realocação disponível: <strong>{BRL(saldoDisponivel)}</strong> — cobre este aditivo.</> :
-                 cobertura === "parcial" ? <>Saldo de Realocação disponível: <strong>{BRL(saldoDisponivel)}</strong> — cobre só parte do aditivo ({BRL(total)}). O restante fica sem cobertura.</> :
-                 <>Sem saldo de realocação disponível na obra. Se aprovado, o aditivo entra <strong>sem fonte de verba (prejuízo consciente)</strong>.</>}
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              <label className={`flex items-start gap-2 text-[11px] cursor-pointer rounded-lg border-2 p-2 transition-colors ${fonteVerba === "realocacao" ? "border-purple-400 bg-white shadow-sm" : "border-transparent bg-white/60 hover:bg-white"}`}>
+            <p className="flex items-center gap-2 text-xs font-semibold text-gray-800 mb-2">
+              <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">3</span>
+              De onde vem a verba?
+            </p>
+            <div className="pl-7 space-y-2">
+              <div className={`flex items-start gap-1.5 rounded-lg border px-2.5 py-2 text-[11px] leading-snug ${cobertura === "total" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : cobertura === "parcial" ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-red-50 border-red-200 text-red-600"}`}>
+                {saldos !== undefined && (cobertura === "total"
+                  ? <CheckCircle2 className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+                  : <AlertTriangle className="w-3.5 h-3.5 mt-px flex-shrink-0" />)}
+                <span>
+                  {saldos === undefined ? "Consultando saldo de realocação da obra..." :
+                   cobertura === "total" ? <>Saldo de Realocação disponível: <strong>{BRL(saldoDisponivel)}</strong> — cobre este aditivo.</> :
+                   cobertura === "parcial" ? <>Saldo de Realocação disponível: <strong>{BRL(saldoDisponivel)}</strong> — cobre só parte do aditivo ({BRL(total)}). O restante fica sem cobertura.</> :
+                   <>Sem saldo de realocação disponível na obra. Se aprovado, o aditivo entra <strong>sem fonte de verba (prejuízo consciente)</strong>.</>}
+                </span>
+              </div>
+              <label className={`flex items-start gap-2 text-[11px] cursor-pointer rounded-lg border p-2.5 transition-colors ${fonteVerba === "realocacao" ? "border-purple-400 bg-purple-50/60 ring-1 ring-purple-200" : "border-gray-200 bg-white hover:border-gray-300"}`}>
                 <input type="radio" name="fonteVerba" className="mt-0.5 accent-purple-600" checked={fonteVerba === "realocacao"} onChange={() => setFonteVerba("realocacao")} />
                 <span className="text-gray-700"><strong>Consumir do saldo de Realocação de Verba</strong> — na aprovação do sócio, a realocação é registrada automaticamente no Compras (até onde o saldo alcançar).</span>
               </label>
-              <label className={`flex items-start gap-2 text-[11px] cursor-pointer rounded-lg border-2 p-2 transition-colors ${fonteVerba === "verba_extra" ? "border-purple-400 bg-white shadow-sm" : "border-transparent bg-white/60 hover:bg-white"}`}>
+              <label className={`flex items-start gap-2 text-[11px] cursor-pointer rounded-lg border p-2.5 transition-colors ${fonteVerba === "verba_extra" ? "border-purple-400 bg-purple-50/60 ring-1 ring-purple-200" : "border-gray-200 bg-white hover:border-gray-300"}`}>
                 <input type="radio" name="fonteVerba" className="mt-0.5 accent-purple-600" checked={fonteVerba === "verba_extra"} onChange={() => setFonteVerba("verba_extra")} />
                 <span className="text-gray-700"><strong>Verba extra (sem realocação)</strong> — decisão consciente: o valor entra fora do pote de realocação e fica marcado nos relatórios.</span>
               </label>
             </div>
           </div>
-          <div className="rounded-xl bg-violet-50 border border-violet-200 p-3 text-[11px] text-violet-700 flex items-start gap-1.5">
+
+          <div className="flex items-start gap-1.5 text-[11px] text-violet-700 border-t border-gray-100 pt-2.5">
             <ShieldCheck className="w-3.5 h-3.5 mt-px flex-shrink-0" />
             <span>Aprovação em 2 níveis: gestor da obra e <strong>sócio administrador (obrigatório)</strong>. Aprovado, a quantidade e o valor somam no contrato e o excedente libera para medição.</span>
           </div>
@@ -4655,7 +4668,7 @@ function AditivoDialog({ contrato, item, medicaoId, onClose, onCreated }: {
             </p>
           )}
         </div>
-        <DialogFooter className="px-5 pb-4 pt-2 border-t border-gray-100">
+        <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" className="bg-purple-600 hover:bg-purple-700 gap-1.5" disabled={!podeEnviar}
             onClick={() => criarMut.mutate({

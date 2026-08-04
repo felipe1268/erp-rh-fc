@@ -1322,9 +1322,13 @@ export default function AlmoxarifadoPage() {
     finally { setUploadingFoto(false); e.target.value = ""; }
   }
 
-  const { data: itensLocadosVencendo = [] } = trpc.compras.getItensLocadosVencendo.useQuery(
+  const { data: itensLocadosVencendoAll = [] } = trpc.compras.getItensLocadosVencendo.useQuery(
     { companyId }, { enabled: !!companyId }
   );
+  // Rev. 4903 — locações a vencer também seguem a obra selecionada; consolida
+  // tudo só quando o contexto é "todas as obras".
+  const itensLocadosVencendo = (itensLocadosVencendoAll as any[]).filter((i: any) =>
+    obraContexto === "todos" ? true : obraContexto === null ? i.obraId == null : Number(i.obraId) === Number(obraContexto));
 
   // Rev. 4554 — o auto-open do alerta de locações saiu daqui: agora é GLOBAL
   // (abre no login em qualquer tela) via <AlertaLocacoesVencendo /> no
@@ -1782,6 +1786,11 @@ export default function AlmoxarifadoPage() {
     { enabled: !!companyId }
   );
   const hojeStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // Rev. 4772 — dia de Brasília
+  // Rev. 4903 — pendências (banner + badge DEVOLUÇÃO) seguem a OBRA selecionada;
+  // só consolidam tudo quando o contexto é "todas as obras". Central (null) mostra
+  // só empréstimos sem obra.
+  const emprestimosPendentes = (emprestimosAbertos as any[]).filter((l) =>
+    obraContexto === "todos" ? true : obraContexto === null ? l.obraId == null : Number(l.obraId) === Number(obraContexto));
   const emprestimosHoje = (emprestimosAbertos as any[])
     .filter((l) => fecharDiaObraFiltro === "todas" || Number(l.obraId) === Number(fecharDiaObraFiltro))
     .sort((a, b) => String(a.dataEmprestimo).localeCompare(String(b.dataEmprestimo)));
@@ -1980,16 +1989,16 @@ export default function AlmoxarifadoPage() {
         {/* ── AÇÕES RÁPIDAS MOBILE ──────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 py-4">
           {/* Rev. 4774 — bannerão piscante "puxão de orelha" de devolução pendente */}
-          {!somenteLeitura && (emprestimosAbertos as any[]).length > 0 && (
+          {!somenteLeitura && emprestimosPendentes.length > 0 && (
             <button
-              onClick={() => setModalFecharDia(true)}
+              onClick={() => { setFecharDiaObraFiltro(typeof obraContexto === "number" ? obraContexto : "todas"); setModalFecharDia(true); }}
               className="w-full mb-4 bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white rounded-2xl px-4 py-5 shadow-lg border-4 border-red-300 animate-pulse text-left transition"
             >
               <span className="flex items-center gap-4">
                 <AlertTriangle className="w-12 h-12 flex-shrink-0" />
                 <span className="min-w-0">
                   <span className="block text-2xl font-extrabold leading-tight">
-                    🚨 ATENÇÃO, ALMOXARIFE! {(emprestimosAbertos as any[]).length} ferramenta{(emprestimosAbertos as any[]).length !== 1 ? "s" : ""} NÃO devolvida{(emprestimosAbertos as any[]).length !== 1 ? "s" : ""}!
+                    🚨 ATENÇÃO, ALMOXARIFE! {emprestimosPendentes.length} ferramenta{emprestimosPendentes.length !== 1 ? "s" : ""} NÃO devolvida{emprestimosPendentes.length !== 1 ? "s" : ""}{typeof obraContexto === "number" ? " nesta obra" : ""}!
                   </span>
                   <span className="block text-base font-semibold mt-1 opacity-95">
                     Ferramenta não dorme na obra: cobre a devolução de TUDO antes de fechar o dia. Toque aqui para ver quem está devendo.
@@ -2051,17 +2060,17 @@ export default function AlmoxarifadoPage() {
             </button>
             {/* Rev. 4566 — DEVOLUÇÃO DE FERRAMENTA (ex-"Fechar Dia"), ao lado da Entrega */}
             <button
-              onClick={() => setModalFecharDia(true)}
+              onClick={() => { setFecharDiaObraFiltro(typeof obraContexto === "number" ? obraContexto : "todas"); setModalFecharDia(true); }}
               className={`relative flex flex-col items-center justify-center gap-2 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition ${
-                (emprestimosAbertos as any[]).length > 0
+                emprestimosPendentes.length > 0
                   ? "bg-red-600 hover:bg-red-700 animate-pulse"
                   : "bg-gray-700 hover:bg-gray-800"
               }`}
             >
               {/* Rev. 4773 — alerta piscante: ferramentas em aberto p/ devolver até o fim do dia */}
-              {(emprestimosAbertos as any[]).length > 0 && (
+              {emprestimosPendentes.length > 0 && (
                 <span className="absolute -top-2 -right-2 bg-white text-red-600 border-2 border-red-600 text-xs font-extrabold rounded-full min-w-[26px] h-[26px] px-1 flex items-center justify-center shadow">
-                  {(emprestimosAbertos as any[]).length}
+                  {emprestimosPendentes.length}
                 </span>
               )}
               <ClipboardCheck className="w-8 h-8" />
