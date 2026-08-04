@@ -126,6 +126,7 @@
 - [Panorama Fiscal — duas noções de "com nota"](panorama-fiscal-cobertura-two-notions.md) — gauge Saúde Fiscal = ratio de VOLUME (NF-e/débitos); split entradas/saidasComNota = vínculo LINHA-A-LINHA. Divergem por design.
 - [DRE drill-down single-source](dre-drilldown-single-source.md) — detalhe clicável reusa `dreLinhaPredicate` + a MESMA CTE de calcularDRE; impostos tem 2 fontes a espelhar.
 - [Folha: relatórios secundários sem filtro CLT](folha-relatorios-secundarios-sem-filtro-clt.md) — `simularPagamento` já filtra CLT; vazamentos de PJ tendem a estar em relatórios SECUNDÁRIOS que cruzam folhaItens/employees sem checar tipoContrato.
+- [Folha Complementar "por fora"](folha-complementar.md) — folha oficial NÃO soma valorComplemento; card próprio, proporcional (adm+faltas/30), ajuste por competência, título único dedup atômico.
 - [Decisão de folha sobrevive à regeneração](folha-decisao-sobrevive-regeneracao.md) — decisões de RH (pagar/não-pagar aviso, vale) precisam de tabela PRÓPRIA (não campo no snapshot) para persistir entre simulações.
 - [Print from a fixed-position container](print-dialog-fixed-clip.md) — window.print() on ANY `position:fixed` element clips/blanks; use self-contained HTML in window.open() instead.
 - [Integração GitHub — SDK proxy e limites](github-connector-proxy.md) — usar @replit/connectors-sdk (endpoint legado devolve vazio); proxy limita corpo ~5MB → uploads fatiados; token bruto inacessível.

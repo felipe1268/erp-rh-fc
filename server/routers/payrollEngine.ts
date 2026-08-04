@@ -7346,7 +7346,200 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       `)) as any).rows || [];
       return rows || [];
     }),
+
+  // ============================================================
+  // FOLHA COMPLEMENTAR (Rev. 4894) — complemento salarial "por fora"
+  // Decisões do usuário (ago/2026): proporcional (faltas /30 Súmula 431 +
+  // admissão no meio do mês + afastado excluído); título ÚNICO no Contas a
+  // Pagar por competência; a folha oficial NÃO soma o complemento.
+  // ============================================================
+  folhaComplementarGet: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/) }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      await assertFolhaComplAccess(ctx, input.companyId);
+      return await calcularFolhaComplementar(db, input.companyId, input.mesReferencia);
+    }),
+
+  folhaComplementarAjuste: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/), employeeId: z.number(),
+      valor: z.number().min(0).nullable(), // null = remover ajuste (volta ao calculado)
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      await assertFolhaComplAccess(ctx, input.companyId);
+      // Poka-Yoke: só funcionário da própria empresa
+      const chk = ((await db.execute(sql`
+        SELECT id FROM employees WHERE id = ${input.employeeId} AND "companyId" = ${input.companyId} AND "deletedAt" IS NULL
+      `)) as any).rows || [];
+      if (!chk.length) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado nesta empresa" });
+      const userName = (ctx as any)?.user?.name || (ctx as any)?.user?.email || 'Sistema';
+      if (input.valor === null) {
+        await db.execute(sql`
+          DELETE FROM folha_complementar_ajustes
+          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${input.employeeId}
+        `);
+      } else {
+        await db.execute(sql`
+          INSERT INTO folha_complementar_ajustes ("companyId", "mesReferencia", "employeeId", valor, motivo, "criadoPor")
+          VALUES (${input.companyId}, ${input.mesReferencia}, ${input.employeeId}, ${input.valor.toFixed(2)}, ${input.motivo || null}, ${userName})
+          ON CONFLICT ("companyId", "mesReferencia", "employeeId")
+          DO UPDATE SET valor = EXCLUDED.valor, motivo = EXCLUDED.motivo, "criadoPor" = EXCLUDED."criadoPor", "updatedAt" = NOW()
+        `);
+      }
+      return { ok: true };
+    }),
+
+  folhaComplementarGerarTitulo: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/), dataVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      await assertFolhaComplAccess(ctx, input.companyId);
+      const calc = await calcularFolhaComplementar(db, input.companyId, input.mesReferencia);
+      if (calc.total <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Total da folha complementar é zero — nada a lançar." });
+      const [ano, mes] = input.mesReferencia.split('-');
+      const desc = `Folha Complementar ${mes}/${ano}`;
+      // Dedup: 1 título ativo por competência (título com baixa/cancelado não conta)
+      const exist = ((await db.execute(sql`
+        SELECT id, status, valor_previsto FROM financial_entries
+        WHERE company_id = ${input.companyId} AND origem_modulo = 'folha_complementar'
+          AND origem_descricao = ${desc} AND status <> 'cancelado'
+        LIMIT 1
+      `)) as any).rows || [];
+      if (exist.length) {
+        if (exist[0].status === 'a_pagar') {
+          await db.execute(sql`
+            UPDATE financial_entries
+            SET valor_previsto = ${calc.total.toFixed(2)}, data_vencimento = ${input.dataVencimento}, updated_at = NOW()
+            WHERE id = ${exist[0].id} AND company_id = ${input.companyId} AND status = 'a_pagar'
+          `);
+          return { ok: true, entryId: Number(exist[0].id), atualizado: true, valor: calc.total };
+        }
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Já existe título da Folha Complementar ${mes}/${ano} com baixa — estorne no Financeiro antes de regerar.` });
+      }
+      const compet = `${ano}-${mes}-01`;
+      const res: any = await db.execute(sql`
+        INSERT INTO financial_entries (
+          company_id, conta_nome, tipo, natureza,
+          valor_previsto, data_competencia, data_vencimento, status,
+          origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at
+        ) VALUES (
+          ${input.companyId}, 'FOLHA COMPLEMENTAR', 'despesa', 'fixa',
+          ${calc.total.toFixed(2)}, ${compet}, ${input.dataVencimento}, 'a_pagar',
+          'folha_complementar', ${calc.periodId || null}, ${desc},
+          ${desc + ` — ${calc.funcionarios.length} colaborador(es)`}, NOW(), NOW()
+        )
+        ON CONFLICT DO NOTHING
+        RETURNING id
+      `);
+      // Rev. 4895 — dedup atômico via índice único parcial uq_fin_entries_folha_compl
+      // (company_id, origem_descricao WHERE origem_modulo='folha_complementar' AND status<>'cancelado').
+      const newId = Number((Array.isArray(res) ? res[0] : res?.rows?.[0])?.id) || null;
+      if (!newId) throw new TRPCError({ code: "CONFLICT", message: "Título desta competência já foi gerado por outra requisição — recarregue a tela." });
+      const userName = (ctx as any)?.user?.name || 'Sistema';
+      console.log(`[FolhaComplementar] ${desc}: título #${newId} de R$ ${calc.total.toFixed(2)} gerado por ${userName}`);
+      return { ok: true, entryId: newId, atualizado: false, valor: calc.total };
+    }),
 });
+
+// Rev. 4895 — Guard de tenant da Folha Complementar (anti-IDOR): o usuário
+// precisa ter acesso à empresa (admin/admin_master = global via getCompaniesForUser).
+async function assertFolhaComplAccess(ctx: any, companyId: number) {
+  const empresas = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+  if (!empresas.some((c: any) => Number(c.id) === Number(companyId))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
+  }
+}
+
+// Rev. 4894 — Cálculo da Folha Complementar (complemento salarial "por fora").
+// Proporcional espelhando a folha oficial: admissão no meio do mês (dias reais),
+// faltas a /30 (Súmula 431 TST), Afastado = fora da folha complementar.
+async function calcularFolhaComplementar(db: any, companyId: number, mesReferencia: string) {
+  const [anoS, mesS] = mesReferencia.split('-');
+  const year = Number(anoS), month = Number(mesS);
+  const diasNoMes = new Date(year, month, 0).getDate();
+  const mesPrefix = `${anoS}-${mesS}`;
+
+  const emps = ((await db.execute(sql`
+    SELECT id, "nomeCompleto", cargo, status, "dataAdmissao", "valorComplemento", "descricaoComplemento"
+    FROM employees
+    WHERE "companyId" = ${companyId} AND "deletedAt" IS NULL
+      AND "recebeComplemento" = 1
+      AND ("tipoContrato" IS NULL OR "tipoContrato" <> 'PJ')
+      AND status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+    ORDER BY "nomeCompleto"
+  `)) as any).rows || [];
+
+  const faltasRows = ((await db.execute(sql`
+    SELECT "employeeId", SUM("isFalta") AS faltas
+    FROM timecard_daily
+    WHERE "companyId" = ${companyId} AND "mesCompetencia" = ${mesReferencia} AND "statusDia" = 'registrado'
+    GROUP BY "employeeId"
+  `)) as any).rows || [];
+  const faltasMapFC = new Map<number, number>();
+  for (const r of faltasRows) faltasMapFC.set(Number(r.employeeId), Number(r.faltas) || 0);
+
+  const ajustesRows = ((await db.execute(sql`
+    SELECT "employeeId", valor, motivo, "criadoPor" FROM folha_complementar_ajustes
+    WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}
+  `)) as any).rows || [];
+  const ajusteMap = new Map<number, any>();
+  for (const a of ajustesRows) ajusteMap.set(Number(a.employeeId), a);
+
+  const funcionarios: any[] = [];
+  let total = 0;
+  for (const e of emps) {
+    const valorCadastro = parseBRLLocal(e.valorComplemento);
+    if (valorCadastro <= 0) continue;
+    if (e.status === 'Afastado') {
+      funcionarios.push({ employeeId: Number(e.id), nome: e.nomeCompleto, cargo: e.cargo, status: e.status,
+        valorCadastro, faltas: 0, fatorAdmissao: 1, valorCalculado: 0, valorFinal: 0, excluido: true,
+        obs: 'Afastado — fora da folha complementar (INSS paga)' });
+      continue;
+    }
+    // Admissão no meio do mês (mesma regra da folha oficial, Rev. 4886)
+    let fatorAdmissao = 1;
+    const admIso = e.dataAdmissao instanceof Date ? e.dataAdmissao.toISOString().slice(0, 10) : String(e.dataAdmissao || '').slice(0, 10);
+    if (admIso.slice(0, 7) === mesPrefix) {
+      const diasAntes = Math.max(0, Number(admIso.slice(8, 10)) - 1);
+      fatorAdmissao = Math.max(0, diasNoMes - diasAntes) / diasNoMes;
+    }
+    const faltas = faltasMapFC.get(Number(e.id)) || 0;
+    const descontoFaltas = faltas * (valorCadastro / 30); // Súmula 431 TST — base /30
+    const valorCalculado = Math.max(0, Math.round((valorCadastro * fatorAdmissao - descontoFaltas) * 100) / 100);
+    const ajuste = ajusteMap.get(Number(e.id));
+    const valorFinal = ajuste ? Number(ajuste.valor) : valorCalculado;
+    total += valorFinal;
+    funcionarios.push({
+      employeeId: Number(e.id), nome: e.nomeCompleto, cargo: e.cargo, status: e.status,
+      valorCadastro, fatorAdmissao, faltas, descontoFaltas: Math.round(descontoFaltas * 100) / 100,
+      valorCalculado, valorFinal, excluido: false,
+      ajusteManual: ajuste ? { valor: Number(ajuste.valor), motivo: ajuste.motivo, por: ajuste.criadoPor } : null,
+      obs: e.descricaoComplemento || null,
+    });
+  }
+  total = Math.round(total * 100) / 100;
+
+  const perRows = ((await db.execute(sql`
+    SELECT id FROM payroll_periods WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia} LIMIT 1
+  `)) as any).rows || [];
+  const periodId = perRows.length ? Number(perRows[0].id) : null;
+
+  const [anoT, mesT] = mesReferencia.split('-');
+  const tituloRows = ((await db.execute(sql`
+    SELECT id, status, valor_previsto, data_vencimento FROM financial_entries
+    WHERE company_id = ${companyId} AND origem_modulo = 'folha_complementar'
+      AND origem_descricao = ${`Folha Complementar ${mesT}/${anoT}`} AND status <> 'cancelado'
+    LIMIT 1
+  `)) as any).rows || [];
+
+  return { funcionarios, total, periodId, titulo: tituloRows[0] || null, diasNoMes };
+}
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================

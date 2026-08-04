@@ -5238,6 +5238,9 @@ export default function FolhaPagamento() {
               Célula laranja com <b className="text-orange-700">*</b> = valor alterado manualmente. Clique em qualquer desconto para ver o memorial de cálculo ou editar.
             </p>
           )}
+
+          {/* Rev. 4894 — Folha Complementar (complemento salarial "por fora") */}
+          <FolhaComplementarCard companyId={companyId} mesReferencia={mesAno} />
         </div>
 
         {/* Dialog: confirma o que fazer com overrides na re-simulação (Rev. 4886 — extraído) */}
@@ -10990,5 +10993,175 @@ function DetalhamentoVerbasFuncionario({ linha }: { linha: any }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ============================================================
+// Rev. 4894 — Folha Complementar (complemento salarial "por fora")
+// Lista colaboradores com "Complemento Salarial" no cadastro, calcula o valor
+// proporcional (admissão no meio do mês + faltas /30 — Súmula 431), permite
+// ajuste manual por competência (com motivo) e gera título ÚNICO no Contas a
+// Pagar. A folha oficial NÃO soma esse valor.
+// ============================================================
+function FolhaComplementarCard({ companyId, mesReferencia }: { companyId: number; mesReferencia: string }) {
+  const utils = trpc.useUtils();
+  const q = trpc.payrollEngine.folhaComplementarGet.useQuery(
+    { companyId, mesReferencia },
+    { enabled: companyId > 0 && !!mesReferencia }
+  );
+  const ajusteMut = trpc.payrollEngine.folhaComplementarAjuste.useMutation({
+    onSuccess: () => { utils.payrollEngine.folhaComplementarGet.invalidate({ companyId, mesReferencia }); setEditRow(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const tituloMut = trpc.payrollEngine.folhaComplementarGerarTitulo.useMutation({
+    onSuccess: (r) => {
+      toast.success(r.atualizado ? `Título atualizado: ${formatBRL(r.valor)}` : `Título gerado no Contas a Pagar: ${formatBRL(r.valor)}`);
+      utils.payrollEngine.folhaComplementarGet.invalidate({ companyId, mesReferencia });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [editRow, setEditRow] = useState<any>(null);
+  const [editValor, setEditValor] = useState("");
+  const [editMotivo, setEditMotivo] = useState("");
+  // Vencimento padrão: dia 5 do mês seguinte à competência
+  const defaultVenc = (() => {
+    const [a, m] = (mesReferencia || "").split("-").map(Number);
+    if (!a || !m) return "";
+    const nm = m === 12 ? 1 : m + 1;
+    const na = m === 12 ? a + 1 : a;
+    return `${na}-${String(nm).padStart(2, "0")}-05`;
+  })();
+  const [venc, setVenc] = useState(defaultVenc);
+
+  const data = q.data;
+  if (!q.isLoading && (!data || data.funcionarios.length === 0)) return null;
+  const ativos = (data?.funcionarios || []).filter((f: any) => !f.excluido);
+  const excluidos = (data?.funcionarios || []).filter((f: any) => f.excluido);
+
+  return (
+    <Card className="mt-4 overflow-hidden border-indigo-200">
+      <CardContent className="p-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-indigo-50/60 border-b border-indigo-100">
+          <div>
+            <p className="font-semibold text-sm text-[#1B2A4A]">Folha Complementar — {mesReferencia?.split("-").reverse().join("/")}</p>
+            <p className="text-[11px] text-muted-foreground">
+              Complemento salarial (por fora) — proporcional a faltas e admissão. Não entra na folha oficial.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {data?.titulo ? (
+              <Badge variant="outline" className={data.titulo.status === "a_pagar" ? "border-amber-400 text-amber-700" : "border-green-500 text-green-700"}>
+                Título #{data.titulo.id} — {formatBRL(Number(data.titulo.valor_previsto))} ({data.titulo.status === "a_pagar" ? "a pagar" : data.titulo.status})
+              </Badge>
+            ) : null}
+            <Input type="date" value={venc} onChange={(e) => setVenc(e.target.value)} className="h-8 w-[150px] text-xs" />
+            <Button
+              size="sm" className="h-8"
+              disabled={tituloMut.isPending || !venc || (data?.total || 0) <= 0 || (data?.titulo && data.titulo.status !== "a_pagar")}
+              onClick={() => tituloMut.mutate({ companyId, mesReferencia, dataVencimento: venc })}
+            >
+              {tituloMut.isPending ? "Gerando..." : data?.titulo ? "Atualizar Título" : "Gerar Título no Contas a Pagar"}
+            </Button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="bg-gray-50 border-b text-[10px] text-gray-500 uppercase tracking-wider">
+                <th className="text-left py-2 px-3">Funcionário</th>
+                <th className="text-left py-2 px-2">Função</th>
+                <th className="text-right py-2 px-2">Complemento (cadastro)</th>
+                <th className="text-right py-2 px-2">Admissão</th>
+                <th className="text-right py-2 px-2">Faltas</th>
+                <th className="text-right py-2 px-2">Desc. Faltas</th>
+                <th className="text-right py-2 px-2 font-bold">Valor Final</th>
+                <th className="py-2 px-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {ativos.map((f: any) => (
+                <tr key={f.employeeId} className="border-b hover:bg-gray-50/60">
+                  <td className="py-2 px-3 font-medium">{f.nome}</td>
+                  <td className="py-2 px-2 text-muted-foreground">{f.cargo || "—"}</td>
+                  <td className="text-right py-2 px-2">{formatBRL(f.valorCadastro)}</td>
+                  <td className="text-right py-2 px-2">{f.fatorAdmissao < 1 ? `× ${(f.fatorAdmissao * 100).toFixed(0)}%` : "—"}</td>
+                  <td className="text-right py-2 px-2">{f.faltas > 0 ? f.faltas : "—"}</td>
+                  <td className="text-right py-2 px-2 text-red-600">{f.descontoFaltas > 0 ? `− ${formatBRL(f.descontoFaltas)}` : "—"}</td>
+                  <td className={`text-right py-2 px-2 font-bold ${f.ajusteManual ? "text-orange-700" : "text-[#1B2A4A]"}`}>
+                    {formatBRL(f.valorFinal)}
+                    {f.ajusteManual && (
+                      <span className="block text-[9px] font-normal text-orange-600" title={`Ajustado por ${f.ajusteManual.por}${f.ajusteManual.motivo ? ` — ${f.ajusteManual.motivo}` : ""} (calculado: ${formatBRL(f.valorCalculado)})`}>
+                        ✎ editado
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 px-2 text-right">
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]"
+                      onClick={() => { setEditRow(f); setEditValor(String(f.valorFinal).replace(".", ",")); setEditMotivo(f.ajusteManual?.motivo || ""); }}>
+                      Editar
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {excluidos.map((f: any) => (
+                <tr key={f.employeeId} className="border-b bg-gray-50/50 text-muted-foreground">
+                  <td className="py-2 px-3">{f.nome}</td>
+                  <td className="py-2 px-2">{f.cargo || "—"}</td>
+                  <td className="text-right py-2 px-2">{formatBRL(f.valorCadastro)}</td>
+                  <td className="text-right py-2 px-2" colSpan={4}>{f.obs}</td>
+                  <td></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 bg-gray-100 font-bold text-xs">
+                <td className="py-2.5 px-3" colSpan={6}>TOTAL — {ativos.length} colaborador{ativos.length !== 1 ? "es" : ""}</td>
+                <td className="text-right py-2.5 px-2 text-[#1B2A4A]">{formatBRL(data?.total || 0)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </CardContent>
+
+      <Dialog open={!!editRow} onOpenChange={(o) => { if (!o) setEditRow(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Ajustar complemento — {editRow?.nome}</DialogTitle>
+            <DialogDescription className="text-xs">
+              Calculado: {formatBRL(editRow?.valorCalculado || 0)} (cadastro {formatBRL(editRow?.valorCadastro || 0)}
+              {editRow?.faltas > 0 ? ` − ${editRow.faltas} falta(s)` : ""}). O ajuste vale só para esta competência — não altera o cadastro.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium">Novo valor (R$)</label>
+              <Input value={editValor} onChange={(e) => setEditValor(e.target.value)} placeholder="0,00" />
+            </div>
+            <div>
+              <label className="text-xs font-medium">Motivo (opcional)</label>
+              <Textarea value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)} rows={2} placeholder="Ex.: acordo, desconto adicional..." />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            {editRow?.ajusteManual && (
+              <Button variant="outline" size="sm" disabled={ajusteMut.isPending}
+                onClick={() => ajusteMut.mutate({ companyId, mesReferencia, employeeId: editRow.employeeId, valor: null })}>
+                Restaurar calculado
+              </Button>
+            )}
+            <Button size="sm" disabled={ajusteMut.isPending}
+              onClick={() => {
+                const v = parseFloat(editValor.replace(/\./g, "").replace(",", "."));
+                if (isNaN(v) || v < 0) { toast.error("Valor inválido"); return; }
+                ajusteMut.mutate({ companyId, mesReferencia, employeeId: editRow.employeeId, valor: v, motivo: editMotivo || undefined });
+              }}>
+              {ajusteMut.isPending ? "Salvando..." : "Salvar ajuste"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }
