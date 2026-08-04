@@ -817,6 +817,23 @@ export const payrollEngineRouter = router({
       // (updates time_records.horasExtras so the detail view shows computed HE correctly)
       const timeRecordHEUpdates: { id: number; he: string }[] = [];
 
+      // Rev. 4893 — Feriados cadastrados (tabela feriados, ativos) NUNCA viram falta.
+      // (caso Silvio jul/2026: 09/07 feriado estadual SP contado como falta — o
+      // processarPonto não consultava a tabela; o Espelho de Ponto já consultava.)
+      const feriadoRowsPP = ((await db.execute(sql`
+        SELECT data, recorrente FROM feriados
+        WHERE ("companyId" = ${input.companyId} OR "companyId" IS NULL) AND ativo = 1
+      `)) as any).rows || [];
+      const feriadoSetPP = new Set<string>();      // 'YYYY-MM-DD'
+      const feriadoRecorrentePP = new Set<string>(); // 'MM-DD'
+      for (const f of feriadoRowsPP as any[]) {
+        const fk = f.data instanceof Date ? f.data.toISOString().split('T')[0] : String(f.data).slice(0, 10);
+        feriadoSetPP.add(fk);
+        if (Number(f.recorrente) === 1) feriadoRecorrentePP.add(fk.slice(5));
+      }
+      const isFeriadoPP = (dateStr: string) =>
+        feriadoSetPP.has(dateStr) || feriadoRecorrentePP.has(dateStr.slice(5));
+
       // Process each employee
       for (const emp of empList) {
         // PART 1: Days from ponto period - status: registrado
@@ -828,6 +845,7 @@ export const payrollEngineRouter = router({
           const recs = recordMap.get(key) || [];
           let tipoDia: string = "util";
           if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === "compensado" ? "compensado" : "sabado";
+          if (isFeriadoPP(dateStr)) tipoDia = "feriado";
 
           let isFalta = 0, isAtraso = 0, isSaidaAntecipada = 0;
           let minutosAtraso = 0, minutosSaidaAntecipada = 0;
@@ -962,6 +980,7 @@ export const payrollEngineRouter = router({
             if (dow === 0) continue;
             let tipoDia = "util";
             if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === "compensado" ? "compensado" : "sabado";
+            if (isFeriadoPP(dateStr)) tipoDia = "feriado"; // Rev. 4893
             await db.execute(sql`
               INSERT INTO timecard_daily ("companyId", "employeeId", data, "mesCompetencia", "statusDia",
                 "horasTrabalhadas", "horasExtras", "horasNoturnas",
@@ -3925,6 +3944,21 @@ export const payrollEngineRouter = router({
             }
           }
 
+          // Rev. 4893 — feriados cadastrados (ativos) nunca viram falta no auto-ponto
+          const feriadoRowsAP = ((await db.execute(sql`
+            SELECT data, recorrente FROM feriados
+            WHERE ("companyId" IN (${allCompanyIdsSql}) OR "companyId" IS NULL) AND ativo = 1
+          `)) as any).rows || [];
+          const feriadoSetAP = new Set<string>();
+          const feriadoRecorrenteAP = new Set<string>();
+          for (const f of feriadoRowsAP as any[]) {
+            const fk = f.data instanceof Date ? f.data.toISOString().split('T')[0] : String(f.data).slice(0, 10);
+            feriadoSetAP.add(fk);
+            if (Number(f.recorrente) === 1) feriadoRecorrenteAP.add(fk.slice(5));
+          }
+          const isFeriadoAP = (dateStr: string) =>
+            feriadoSetAP.has(dateStr) || feriadoRecorrenteAP.has(dateStr.slice(5));
+
           let autoFaltas = 0, autoAtrasos = 0;
           const insertVals: any[] = [];
 
@@ -3936,6 +3970,8 @@ export const payrollEngineRouter = router({
               if (dow === 0) continue;
               let tipoDia = 'util';
               if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === 'compensado' ? 'compensado' : 'sabado';
+              // Rev. 4893 — feriado cadastrado nunca vira falta (mesma regra do processarPonto)
+              if (isFeriadoAP(dateStr)) tipoDia = 'feriado';
               // Dias em gozo de férias não geram falta
               if (autoPontoFeriasDateSet.has(`${emp.id}-${dateStr}`)) tipoDia = 'ferias';
               // Rev. 4771 — dias dentro da janela de afastamento não geram falta.
@@ -3983,8 +4019,15 @@ export const payrollEngineRouter = router({
                   if (tipoDia === 'util') { isFalta = 1; autoFaltas++; }
                 }
 
+                // Rev. 4892 — o REGISTRO DE PONTO é o que conta: carga do dia cumprida
+                // (dentro da tolerância) → nem falta nem atraso por divergência de
+                // horário com a jornada do cadastro (mesma regra do processarPonto).
+                const expectedMinsAP = getExpectedMins(emp.jornadaTrabalho, dateStr, criteria.cargaHorariaDiaria);
+                const actualMinsAP = parseTime(horasTrabalhadas) || 0;
+                const cargaCumpridaAP = actualMinsAP >= expectedMinsAP - criteria.pontoToleranciaLegal;
+
                 const entrada = parseTime(rec.entrada1);
-                if (entrada !== null && tipoDia === 'util') {
+                if (entrada !== null && tipoDia === 'util' && !cargaCumpridaAP) {
                   const jornadaEntrada = getExpectedEntrada(emp.jornadaTrabalho, dateStr);
                   const atraso = entrada - jornadaEntrada;
                   if (atraso > criteria.pontoFaltaAposAtraso) {
@@ -3994,8 +4037,8 @@ export const payrollEngineRouter = router({
                   }
                 }
 
-                const expectedMins = getExpectedMins(emp.jornadaTrabalho, dateStr, criteria.cargaHorariaDiaria);
-                const actualMins = parseTime(horasTrabalhadas) || 0;
+                const expectedMins = expectedMinsAP;
+                const actualMins = actualMinsAP;
                 const heMins = Math.max(0, actualMins - expectedMins);
                 horasExtras = heMins > 0 ? minutesToHHMM(heMins) : '0:00';
 
@@ -4031,6 +4074,7 @@ export const payrollEngineRouter = router({
                 if (dow === 0) continue;
                 let tipoDia = 'util';
                 if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === 'compensado' ? 'compensado' : 'sabado';
+                if (isFeriadoAP(dateStr)) tipoDia = 'feriado'; // Rev. 4893
 
                 insertVals.push(sql`(${emp.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'escuro',
                   ${null}, ${null}, ${null}, ${null},
