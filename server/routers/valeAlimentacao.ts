@@ -107,6 +107,21 @@ async function calcularDiasUteisCidade(
   return diasUteis;
 }
 
+/** Conta dias úteis (seg-sex) entre ini e fim, EXCLUINDO feriados do mapa (mesma regra dos dias úteis do mês). */
+function contarDiasUteisPeriodo(ini: Date, fim: Date, feriados: Map<string, any>): number {
+  let dias = 0;
+  const cur = new Date(ini);
+  while (cur <= fim) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) {
+      const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+      if (!feriados.has(iso)) dias++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dias;
+}
+
 const NOMES_FERIADOS_NACIONAIS: Record<string, string> = {
   "01-01": "Confraternização Universal",
   "04-21": "Tiradentes",
@@ -361,9 +376,10 @@ export const valeAlimentacaoRouter = router({
             )`
       )) as any).rows || [];
 
-      const feriasMap: Record<number, number> = {};
+      // Guarda os PERÍODOS (clampados ao mês); a contagem de dias é feita por funcionário,
+      // excluindo os feriados da cidade da obra dele (mesma regra dos dias úteis do mês).
+      const feriasPeriodosMap: Record<number, { ini: Date; fim: Date }[]> = {};
       for (const f of feriasRows) {
-        let dias = 0;
         const periodos = [
           { inicio: f.dataInicio, fim: f.dataFim },
           { inicio: f.periodo2Inicio, fim: f.periodo2Fim },
@@ -374,14 +390,8 @@ export const valeAlimentacaoRouter = router({
           const ini = new Date(Math.max(new Date(p.inicio + 'T00:00:00').getTime(), primeiroDiaMes.getTime()));
           const fim = new Date(Math.min(new Date(p.fim + 'T00:00:00').getTime(), ultimoDiaMes.getTime()));
           if (ini > fim) continue;
-          let cur = new Date(ini);
-          while (cur <= fim) {
-            const dow = cur.getDay();
-            if (dow !== 0 && dow !== 6) dias++;
-            cur.setDate(cur.getDate() + 1);
-          }
+          (feriasPeriodosMap[f.employeeId] = feriasPeriodosMap[f.employeeId] || []).push({ ini, fim });
         }
-        feriasMap[f.employeeId] = (feriasMap[f.employeeId] || 0) + dias;
       }
 
       const licencaRows = ((await db.execute(
@@ -455,13 +465,7 @@ export const valeAlimentacaoRouter = router({
         if (emp.dataAdmissao) {
           const admissao = new Date(emp.dataAdmissao + 'T00:00:00');
           if (admissao > primeiroDiaMes && admissao <= ultimoDiaMes) {
-            let diasAdmissao = 0;
-            let cur = new Date(admissao);
-            while (cur <= ultimoDiaMes) {
-              const dow = cur.getDay();
-              if (dow !== 0 && dow !== 6) diasAdmissao++;
-              cur.setDate(cur.getDate() + 1);
-            }
+            const diasAdmissao = contarDiasUteisPeriodo(admissao, ultimoDiaMes, feriadosMes);
             proporcionalDias = diasAdmissao;
             diasUteis = Math.min(diasUteis, diasAdmissao);
             isProporcional = true;
@@ -500,7 +504,7 @@ export const valeAlimentacaoRouter = router({
           }
         }
 
-        const diasFerias = feriasMap[emp.id] || 0;
+        const diasFerias = (feriasPeriodosMap[emp.id] || []).reduce((acc, p) => acc + contarDiasUteisPeriodo(p.ini, p.fim, feriadosMes), 0);
         let diasLicenca = 0;
         if (empLicenca.has(emp.id) && !isAfastado) {
           diasLicenca = diasUteis;
@@ -673,9 +677,10 @@ export const valeAlimentacaoRouter = router({
               OR ("periodo3Inicio" <= ${ultimoDiaMes.toISOString().split('T')[0]} AND "periodo3Fim" >= ${primeiroDiaMes.toISOString().split('T')[0]})
             )`
       )) as any).rows || [];
-      const feriasMap: Record<number, number> = {};
+      // Guarda os PERÍODOS (clampados ao mês); a contagem de dias é feita por funcionário,
+      // excluindo os feriados da cidade da obra dele (mesma regra dos dias úteis do mês).
+      const feriasPeriodosMap: Record<number, { ini: Date; fim: Date }[]> = {};
       for (const f of feriasRows) {
-        let dias = 0;
         const periodos = [
           { inicio: f.dataInicio, fim: f.dataFim },
           { inicio: f.periodo2Inicio, fim: f.periodo2Fim },
@@ -686,14 +691,8 @@ export const valeAlimentacaoRouter = router({
           const ini = new Date(Math.max(new Date(p.inicio + 'T00:00:00').getTime(), primeiroDiaMes.getTime()));
           const fim = new Date(Math.min(new Date(p.fim + 'T00:00:00').getTime(), ultimoDiaMes.getTime()));
           if (ini > fim) continue;
-          let cur = new Date(ini);
-          while (cur <= fim) {
-            const dow = cur.getDay();
-            if (dow !== 0 && dow !== 6) dias++;
-            cur.setDate(cur.getDate() + 1);
-          }
+          (feriasPeriodosMap[f.employeeId] = feriasPeriodosMap[f.employeeId] || []).push({ ini, fim });
         }
-        feriasMap[f.employeeId] = (feriasMap[f.employeeId] || 0) + dias;
       }
 
       const licencaRows = ((await db.execute(
@@ -766,13 +765,7 @@ export const valeAlimentacaoRouter = router({
           if (emp.dataAdmissao) {
             const admissao = new Date(emp.dataAdmissao + 'T00:00:00');
             if (admissao > primeiroDiaMes && admissao <= ultimoDiaMes) {
-              let diasAdmissao = 0;
-              let cur = new Date(admissao);
-              while (cur <= ultimoDiaMes) {
-                const dow = cur.getDay();
-                if (dow !== 0 && dow !== 6) diasAdmissao++;
-                cur.setDate(cur.getDate() + 1);
-              }
+              const diasAdmissao = contarDiasUteisPeriodo(admissao, ultimoDiaMes, feriadosMes);
               proporcionalDias = diasAdmissao;
               diasUteis = Math.min(diasUteis, diasAdmissao);
               isProporcional = true;
@@ -811,7 +804,7 @@ export const valeAlimentacaoRouter = router({
             }
           }
 
-          const diasFerias = feriasMap[emp.id] || 0;
+          const diasFerias = (feriasPeriodosMap[emp.id] || []).reduce((acc, p) => acc + contarDiasUteisPeriodo(p.ini, p.fim, feriadosMes), 0);
           let diasLicenca = 0;
           if (empLicenca.has(emp.id) && !isAfastado) diasLicenca = diasUteis;
 
