@@ -651,6 +651,12 @@ export default function FinanceiroChequesRecebidos({ standalone = true }: { stan
               <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
               </div>
+            ) : listQuery.isError ? (
+              <div className="py-16 text-center text-destructive">
+                <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-medium">Erro ao carregar os cheques recebidos.</p>
+                <p className="text-xs mt-1 opacity-80 break-words px-6">{(listQuery.error as any)?.message ?? "Tente novamente."}</p>
+              </div>
             ) : cheques.length === 0 ? (
               <div className="py-16 text-center text-muted-foreground">
                 <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
