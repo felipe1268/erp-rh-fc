@@ -9304,8 +9304,8 @@ export const financialRouter = router({
                       WHEN COALESCE(origem_modulo,'')='cheque_conciliacao'
                         THEN 'Estorno de conciliação — lançamento havia sido criado pela própria conciliação do cheque'
                       ELSE motivo_cancelamento END
-              WHERE id = ANY($1::int[]) AND company_id=$2`,
-            [entryIds, input.companyId]);
+              WHERE id IN (${inlineIds(entryIds.map(Number))}) AND company_id=$1`,
+            [input.companyId]);
         }
         await dbExecute(tx,
           `DELETE FROM financial_conciliacao_grupo
@@ -9346,8 +9346,8 @@ export const financialRouter = router({
                   conta_bancaria_tentativa_id=NULL, conta_bancaria_tentativa_nome=NULL,
                   updated_at=NOW()
             WHERE company_id=$1 AND excluido_em IS NULL
-              AND lancamento_id = ANY($2::int[])`,
-          [input.companyId, idsRevertidos]);
+              AND lancamento_id IN (${inlineIds(idsRevertidos.map(Number))})`,
+          [input.companyId]);
       }
 
       // 3) Desconciliar a linha do extrato SEM soft-delete — ela volta p/ a fila
@@ -11039,8 +11039,8 @@ export const financialRouter = router({
     }
     const entries: any[] = rows(await dbExecute(db,
       `SELECT id, tipo, valor_previsto AS "valorPrevisto", status
-         FROM financial_entries WHERE company_id=$1 AND id = ANY($2::int[])`,
-      [input.companyId, input.itensIds]));
+         FROM financial_entries WHERE company_id=$1 AND id IN (${inlineIds((input.itensIds as number[]).map(Number))})`,
+      [input.companyId]));
     if (entries.length !== input.itensIds.length) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Um ou mais lançamentos não pertencem a esta empresa." });
     }
