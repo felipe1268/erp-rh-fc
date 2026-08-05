@@ -93,7 +93,11 @@ export async function parseCaixaExtratoPdf(base64: string): Promise<ExtratoLine[
       saldo: salM ? { v: moneyBR(salM[1]), dc: salM[2] } : null,
       date: dtok ? dtok.s : null,
       isTimeEff: toks.some((t) => t.x < 160 && RE_TIME_EFF.test(t.s)),
+      // Rev. 4905 — linha com valor E saldo é sempre transação real: nunca tratar
+      // como cabeçalho (PIX recebido da própria empresa traz o nome dela na
+      // mesma linha do valor e era descartado indevidamente).
       isHeader:
+        !(valM && salM) &&
         /about:blank|extrato_pdf|SAC CAIXA|Ouvidoria|Saldo anterior|Extrato no per|Documento .*Hist|Data Efeti|defici|Agência:|CNPJ:|FC ENGENHARIA E CONST LTDA|Pessoas com/i.test(all),
       isSaldoDia: /SALDO DIA/i.test(descCol),
     };
@@ -143,6 +147,9 @@ export async function parseCaixaExtratoPdf(base64: string): Promise<ExtratoLine[
         const pk = P[k];
         if (pk.isHeader || pk.isSaldoDia || pk.valor !== null || pk.isTimeEff || pk.date) break;
         if (!pk.descCol) break;
+        // Rev. 4905 — linha imediatamente seguida por uma linha de Data é o
+        // histórico "solto" (lead) da PRÓXIMA transação — não pertence a esta.
+        if (k + 1 < P.length && P[k + 1].date) break;
         consumed.add(k);
         trail = trail ? `${trail} ${pk.descCol}` : pk.descCol;
       }
