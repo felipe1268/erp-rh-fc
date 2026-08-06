@@ -263,11 +263,43 @@ export const chequesRecebidosRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
 
       const res = await dbExecute(db, `
-        SELECT * FROM financial_cheques_recebidos
+        SELECT *,
+               numero_cheque AS "numeroCheque",
+               emitente_nome AS "emitenteNome",
+               data_bom_para AS "dataBomPara",
+               data_emissao  AS "dataEmissao",
+               cliente_nome  AS "clienteNome"
+        FROM financial_cheques_recebidos
         WHERE company_id=$1 AND status='disponivel' AND excluido_em IS NULL
         ORDER BY ABS(valor - $2) ASC, data_bom_para ASC NULLS LAST
         LIMIT 50
       `, [input.companyId, input.valorAlvo]);
+
+      return { cheques: res.rows };
+    }),
+
+  // ── Cheques alocados a um título (Detalhe do Título) ──
+  porEntry: protectedProcedure
+    .input(z.object({
+      companyId: z.coerce.number(),
+      entryId:   z.coerce.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      const res = await dbExecute(db, `
+        SELECT id, valor, status, banco, agencia, conta,
+               numero_cheque AS "numeroCheque",
+               emitente_nome AS "emitenteNome",
+               data_bom_para AS "dataBomPara",
+               data_emissao  AS "dataEmissao",
+               cliente_nome  AS "clienteNome"
+        FROM financial_cheques_recebidos
+        WHERE company_id=$1 AND entry_id=$2 AND excluido_em IS NULL
+        ORDER BY data_bom_para ASC NULLS LAST, id ASC
+      `, [input.companyId, input.entryId]);
 
       return { cheques: res.rows };
     }),

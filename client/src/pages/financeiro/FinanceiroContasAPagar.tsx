@@ -433,6 +433,13 @@ export default function FinanceiroContasAPagar() {
     { enabled: !!detailEntryId && !!companyId }
   );
 
+  // Cheques de terceiros alocados a este título (forma cheque_terceiro)
+  const detailChequesQ = (trpc as any).chequesRecebidos?.porEntry?.useQuery(
+    { companyId, entryId: detailEntryId ?? 0 },
+    { enabled: !!detailEntryId && !!companyId }
+  );
+  const detailCheques: any[] = detailChequesQ?.data?.cheques ?? [];
+
   const { data: allContas, isLoading, refetch } = (trpc as any).financial.getContasAPagarByYear.useQuery(
     { companyId, ano },
     { enabled: !!companyId }
@@ -2649,6 +2656,37 @@ export default function FinanceiroContasAPagar() {
                           </div>
                         </DetSection>
                       </div>
+
+                      {/* Cheques de terceiros alocados a este título */}
+                      {detailCheques.length > 0 && (
+                        <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3 space-y-2">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <p className="text-[11px] font-semibold text-violet-700 uppercase tracking-wide flex items-center gap-1">
+                              <ArrowLeftRight className="w-3.5 h-3.5" /> Cheques de terceiros alocados ({detailCheques.length})
+                            </p>
+                            <span className="text-xs font-bold tabular-nums text-violet-800">
+                              {formatBRL(detailCheques.reduce((a, c) => a + Number(c.valor || 0), 0))}
+                            </span>
+                          </div>
+                          <div className="divide-y divide-violet-100 rounded border border-violet-100 bg-white max-h-56 overflow-y-auto">
+                            {detailCheques.map((c: any) => (
+                              <div key={c.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
+                                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                  <span className="font-mono font-semibold text-violet-800">{c.numeroCheque ?? "—"}</span>
+                                  {c.emitenteNome && <span className="text-slate-600 truncate" title={c.emitenteNome}>{c.emitenteNome}</span>}
+                                  {c.banco && <span className="text-slate-400">{c.banco}</span>}
+                                  {c.dataBomPara && <span className="text-slate-500 shrink-0">bom p/ {fmtDateBR(String(c.dataBomPara).slice(0, 10))}</span>}
+                                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    c.status === "compensado" ? "bg-green-100 text-green-700" :
+                                    c.status === "devolvido" ? "bg-red-100 text-red-700" : "bg-violet-100 text-violet-700"
+                                  }`}>{c.status}</span>
+                                </div>
+                                <span className="font-semibold tabular-nums text-slate-700 shrink-0">{formatBRL(Number(c.valor))}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {d.bancoEmpresa && (
                         <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
