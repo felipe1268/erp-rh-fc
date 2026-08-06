@@ -567,6 +567,39 @@ export const chequesRecebidosRouter = router({
       return { alocados, ignorados };
     }),
 
+  // ── Desalocar (remove o cheque do título e devolve à carteira) ──
+  desalocar: protectedProcedure
+    .input(z.object({
+      companyId: z.coerce.number(),
+      id:        z.coerce.number(),
+      entryId:   z.coerce.number(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      // Poka-yoke: só desaloca se o cheque ainda estiver vinculado a ESTE título
+      // (evita corrida em que o cheque foi realocado a outro título entre a
+      // abertura do detalhe e o clique).
+      const res = await dbExecute(db, `
+        UPDATE financial_cheques_recebidos
+        SET status='disponivel',
+            entry_id=NULL,
+            fornecedor_alocado_id=NULL,
+            fornecedor_alocado_nome=NULL,
+            atualizado_em=NOW()
+        WHERE id=$1 AND company_id=$2 AND entry_id=$3 AND status='alocado'
+          AND compensado_em IS NULL AND excluido_em IS NULL
+        RETURNING id
+      `, [input.id, input.companyId, input.entryId]);
+
+      if (!res.rows.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cheque não está mais alocado a este título (pode ter sido realocado, compensado ou excluído). Atualize a tela." });
+      }
+      return { ok: true };
+    }),
+
   // ── Importação via xlsx — preview dry-run ──
   importarPreview: protectedProcedure
     .input(z.object({ companyId: z.coerce.number(), base64: z.string() }))

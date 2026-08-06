@@ -440,6 +440,15 @@ export default function FinanceiroContasAPagar() {
   );
   const detailCheques: any[] = detailChequesQ?.data?.cheques ?? [];
 
+  // Desalocar cheque de terceiro do título (volta para "disponível" na carteira)
+  const desalocarChequeMut = (trpc as any).chequesRecebidos?.desalocar?.useMutation({
+    onSuccess: () => {
+      toast({ title: "Cheque removido do título", description: "O cheque voltou para a carteira como disponível." });
+      detailChequesQ?.refetch?.();
+    },
+    onError: (e: any) => toast({ title: "Falha ao remover cheque", description: e.message, variant: "destructive" }),
+  });
+
   const { data: allContas, isLoading, refetch } = (trpc as any).financial.getContasAPagarByYear.useQuery(
     { companyId, ano },
     { enabled: !!companyId }
@@ -2681,7 +2690,23 @@ export default function FinanceiroContasAPagar() {
                                     c.status === "devolvido" ? "bg-red-100 text-red-700" : "bg-violet-100 text-violet-700"
                                   }`}>{c.status}</span>
                                 </div>
-                                <span className="font-semibold tabular-nums text-slate-700 shrink-0">{formatBRL(Number(c.valor))}</span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="font-semibold tabular-nums text-slate-700">{formatBRL(Number(c.valor))}</span>
+                                  {c.status === "alocado" && (
+                                    <button
+                                      type="button"
+                                      disabled={desalocarChequeMut?.isPending}
+                                      onClick={() => {
+                                        if (!window.confirm(`Remover o cheque ${c.numeroCheque ?? ""} (${formatBRL(Number(c.valor))}) deste título? Ele voltará para a carteira como disponível.`)) return;
+                                        desalocarChequeMut?.mutate({ companyId, id: c.id, entryId: detailEntryId });
+                                      }}
+                                      className="p-1 rounded text-red-500 hover:bg-red-50 disabled:opacity-50"
+                                      title="Remover cheque deste título (volta p/ carteira)"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>
