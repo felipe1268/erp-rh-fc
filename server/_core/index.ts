@@ -6176,7 +6176,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4767-2026-07-30-whatsapp-rh";
+    const COLFIX_VERSION = "v4907-2026-08-06-adv-recusa";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -7040,6 +7040,7 @@ REGRAS DE EXTRAÇÃO:
             ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS assinatura_responsavel_em TIMESTAMP;
             ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_funcionario_url TEXT;
             ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_aplicador_url TEXT;
+            ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_recusada_em TIMESTAMP;
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS insalubridade_grau VARCHAR(20) DEFAULT 'none';
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS periculosidade SMALLINT DEFAULT 0;
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS adicional_noturno_ativo SMALLINT DEFAULT 0;

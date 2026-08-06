@@ -38,6 +38,33 @@ async function resolveCompanyIdsGuard(
   return ok;
 }
 
+// Rev. 4907 — guard de tenancy para mutations que recebem só o id da advertência:
+// resolve a empresa DONA do registro e valida acesso do usuário (anti-IDOR).
+async function assertAdvertenciaAcessivel(
+  ctx: { user: { id: number; role?: string | null } },
+  db: any,
+  advertenciaId: number
+): Promise<{ company_id: number; employee_id: number | null; testemunhas: string | null; assinatura_funcionario_url: string | null; assinatura_recusada_em: string | null }> {
+  const rows = ((await db.execute(
+    sql`SELECT "companyId" AS company_id, "employeeId" AS employee_id, testemunhas, assinatura_funcionario_url, assinatura_recusada_em
+        FROM warnings WHERE id = ${advertenciaId} AND "deletedAt" IS NULL`
+  )) as any).rows || [];
+  if (!rows.length) throw new TRPCError({ code: "NOT_FOUND", message: "Advertência não encontrada." });
+  const permitidas = await getCompaniesForUser(ctx.user.id, (ctx.user.role || "") as string);
+  if (!permitidas.some((c: any) => c.id === rows[0].company_id)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+  return rows[0];
+}
+
+// Rev. 4907 — remove as assinaturas de testemunha (preserva nome/doc) quando
+// elas perdem validade (colaborador assinou ou a recusa foi desfeita).
+function stripAssinaturasTestemunhas(testemunhas: string | null): string {
+  let arr: any[] = [];
+  try { arr = JSON.parse(testemunhas || "[]"); } catch { arr = []; }
+  return JSON.stringify(arr.map((t: any) => { const { assinaturaUrl, ...resto } = t || {}; return resto; }));
+}
+
 // Rev. 2678 — Funcionários DESLIGADOS não entram no Controle de Documentos.
 // Mesma régua de "vínculo encerrado" usada em server/db.ts: status Desligado,
 // Lista_Negra ou Inativo são excluídos de TODAS as listas, cards/contagens e do
@@ -1547,6 +1574,7 @@ export const controleDocumentosRouter = router({
             origemModulo: warnings.origemModulo,
             assinaturaFuncionarioUrl: (warnings as any).assinaturaFuncionarioUrl,
             assinaturaAplicadorUrl:   (warnings as any).assinaturaAplicadorUrl,
+            assinaturaRecusadaEm:     (warnings as any).assinaturaRecusadaEm,
           })
           .from(warnings)
           .innerJoin(employees, eq(warnings.employeeId, employees.id))
@@ -1697,22 +1725,29 @@ export const controleDocumentosRouter = router({
         nomeAssinante: z.string().optional(),
         docAssinante: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
+        // Rev. 4907 — tenancy: a advertência precisa pertencer a uma empresa acessível.
+        const advRow = await assertAdvertenciaAcessivel(ctx, db, input.advertenciaId);
         // Rev. 2734 — LGPD / Auditoria: a assinatura do colaborador é "once-only".
         // Depois de gravada, o documento fica imutável; não pode ser re-assinada
-        // (re-assinar substituiria o artefato já assinado). Aplicador/testemunhas
-        // continuam livres (podem assinar após o colaborador). Checa ANTES do upload
+        // (re-assinar substituiria o artefato já assinado). Checa ANTES do upload
         // para não gerar arquivo órfão no storage.
-        if (input.tipoAssinante === "funcionario") {
-          const jaAssinRows = ((await db.execute(
-            sql`SELECT assinatura_funcionario_url FROM warnings WHERE id = ${input.advertenciaId}`
-          )) as any).rows || [];
-          if (jaAssinRows[0]?.assinatura_funcionario_url) {
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: "Documento já assinado pelo colaborador — a assinatura não pode ser substituída (LGPD/auditoria). Para corrigir, cancele e emita uma nova advertência.",
-            });
+        if (input.tipoAssinante === "funcionario" && advRow.assinatura_funcionario_url) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Documento já assinado pelo colaborador — a assinatura não pode ser substituída (LGPD/auditoria). Para corrigir, cancele e emita uma nova advertência.",
+          });
+        }
+        // Rev. 4907 — Poka-Yoke: testemunhas só assinam quando o colaborador se
+        // RECUSOU a assinar. Se ele assinou (ou ainda não decidiu), testemunha é
+        // juridicamente irrelevante — bloqueia no servidor (autoritativo).
+        if (input.tipoAssinante.startsWith("testemunha")) {
+          if (advRow.assinatura_funcionario_url) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "O colaborador já assinou — testemunhas não se aplicam neste caso." });
+          }
+          if (!advRow.assinatura_recusada_em) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Testemunhas só assinam quando o colaborador se recusa a assinar. Registre a recusa primeiro." });
           }
         }
         const base64Data = input.base64Png.replace(/^data:image\/png;base64,/, "");
@@ -1723,18 +1758,25 @@ export const controleDocumentosRouter = router({
         let verif = { primeiraAssinatura: false, assinaturaDivergente: false, similaridade: null as number | null };
 
         if (input.tipoAssinante === "funcionario") {
-          await db.execute(sql`UPDATE warnings SET assinatura_funcionario_url = ${url} WHERE id = ${input.advertenciaId}`);
-          const [adv] = await db.select({ employeeId: warnings.employeeId }).from(warnings).where(eq(warnings.id, input.advertenciaId));
-          if (adv?.employeeId) {
-            verif = await verificarAssinaturaMemorial(db, adv.employeeId, input.base64Png);
+          // Assinou → recusa (se havia) deixa de valer; assinaturas de testemunha
+          // viram inválidas e são removidas (nome/doc preservados p/ histórico).
+          // UPDATE condicional (atômico): se outra requisição assinou no meio-tempo, 0 linhas → erro.
+          const testemunhasLimpas = stripAssinaturasTestemunhas(advRow.testemunhas);
+          const res: any = await db.execute(sql`
+            UPDATE warnings SET assinatura_funcionario_url = ${url}, assinatura_recusada_em = NULL, testemunhas = ${testemunhasLimpas}
+            WHERE id = ${input.advertenciaId} AND assinatura_funcionario_url IS NULL`);
+          if ((res?.rowCount ?? res?.rows?.length ?? 0) === 0) {
+            throw new TRPCError({ code: "CONFLICT", message: "Documento já assinado pelo colaborador — a assinatura não pode ser substituída." });
+          }
+          if (advRow.employee_id) {
+            verif = await verificarAssinaturaMemorial(db, advRow.employee_id, input.base64Png);
           }
         } else if (input.tipoAssinante === "aplicador") {
           await db.execute(sql`UPDATE warnings SET assinatura_aplicador_url = ${url} WHERE id = ${input.advertenciaId}`);
         } else {
           const idx = parseInt(input.tipoAssinante.replace("testemunha", "")) - 1;
-          const [adv] = await db.select({ testemunhas: warnings.testemunhas }).from(warnings).where(eq(warnings.id, input.advertenciaId));
           let arr: any[] = [];
-          try { arr = JSON.parse(adv?.testemunhas || "[]"); } catch { arr = []; }
+          try { arr = JSON.parse(advRow.testemunhas || "[]"); } catch { arr = []; }
           while (arr.length <= idx) arr.push({ nome: "", doc: "" });
           arr[idx] = {
             ...arr[idx],
@@ -1742,9 +1784,44 @@ export const controleDocumentosRouter = router({
             nome: input.nomeAssinante || arr[idx]?.nome || "",
             doc: input.docAssinante || arr[idx]?.doc || "",
           };
-          await db.update(warnings).set({ testemunhas: JSON.stringify(arr) } as any).where(eq(warnings.id, input.advertenciaId));
+          // UPDATE condicional (atômico): só grava enquanto a recusa segue válida e
+          // o colaborador NÃO assinou (evita corrida assinar × testemunhar).
+          const resT: any = await db.execute(sql`
+            UPDATE warnings SET testemunhas = ${JSON.stringify(arr)}
+            WHERE id = ${input.advertenciaId} AND assinatura_recusada_em IS NOT NULL AND assinatura_funcionario_url IS NULL`);
+          if ((resT?.rowCount ?? resT?.rows?.length ?? 0) === 0) {
+            throw new TRPCError({ code: "CONFLICT", message: "A situação mudou (colaborador assinou ou a recusa foi desfeita) — assinatura de testemunha não registrada." });
+          }
         }
         return { url, ...verif };
+      }),
+
+    // Rev. 4907 — Colaborador recusou-se a assinar (habilita as testemunhas).
+    marcarRecusa: protectedProcedure
+      .input(z.object({ advertenciaId: z.number(), recusado: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const advRow = await assertAdvertenciaAcessivel(ctx, db, input.advertenciaId);
+        if (input.recusado) {
+          if (advRow.assinatura_funcionario_url) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "O colaborador já assinou — não é possível registrar recusa." });
+          }
+          // Atômico: só registra recusa enquanto o colaborador NÃO assinou.
+          const res: any = await db.execute(sql`
+            UPDATE warnings SET assinatura_recusada_em = NOW()
+            WHERE id = ${input.advertenciaId} AND assinatura_funcionario_url IS NULL AND "deletedAt" IS NULL`);
+          if ((res?.rowCount ?? 0) === 0) {
+            throw new TRPCError({ code: "CONFLICT", message: "O colaborador assinou neste meio-tempo — recusa não registrada." });
+          }
+        } else {
+          // Desfazer recusa invalida assinaturas de testemunha já colhidas
+          // (nome/doc preservados); sem recusa, testemunha não tem valor jurídico.
+          const testemunhasLimpas = stripAssinaturasTestemunhas(advRow.testemunhas);
+          await db.execute(sql`
+            UPDATE warnings SET assinatura_recusada_em = NULL, testemunhas = ${testemunhasLimpas}
+            WHERE id = ${input.advertenciaId}`);
+        }
+        return { success: true };
       }),
   }),
 

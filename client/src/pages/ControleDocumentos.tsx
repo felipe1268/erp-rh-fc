@@ -4106,6 +4106,7 @@ export default function ControleDocumentos() {
                                   employeeId: a.employeeId,
                                   assinaturaFuncionarioUrl: (a as any).assinaturaFuncionarioUrl,
                                   assinaturaAplicadorUrl: (a as any).assinaturaAplicadorUrl,
+                                  assinaturaRecusadaEm: (a as any).assinaturaRecusadaEm,
                                 });
                                 setLastCreatedAdvId(a.id);
                                 setShowAdvPreview(true);
@@ -4122,6 +4123,7 @@ export default function ControleDocumentos() {
                                   testemunhasIniciais: testemunhasArr,
                                   assinaturaFuncionarioUrl: (a as any).assinaturaFuncionarioUrl,
                                   assinaturaAplicadorUrl: (a as any).assinaturaAplicadorUrl,
+                                  assinaturaRecusadaEm: (a as any).assinaturaRecusadaEm,
                                 });
                                 setShowAdvAssinaturas(true);
                               }}>
@@ -4212,14 +4214,12 @@ export default function ControleDocumentos() {
                                 </div>
                                 <div class="signatures">
                                   <div class="sig-row">
-                                    <div class="sig-block"><div class="line">Empregador / Representante Legal</div></div>
-                                    <div class="sig-block"><div class="line">${a.nomeCompleto}<br/>Colaborador(a)</div></div>
+                                    <div class="sig-block">${(a as any).assinaturaAplicadorUrl ? `<img src="${(a as any).assinaturaAplicadorUrl}" style="height:42px;display:block;margin:0 auto;" />` : ""}<div class="line">Empregador / Representante Legal${(a as any).assinaturaAplicadorUrl ? `<br/><span style="color:#059669;font-weight:bold;">✓ ASSINADO DIGITALMENTE</span>` : ""}</div></div>
+                                    <div class="sig-block">${(a as any).assinaturaFuncionarioUrl ? `<img src="${(a as any).assinaturaFuncionarioUrl}" style="height:42px;display:block;margin:0 auto;" />` : ""}<div class="line">${a.nomeCompleto}<br/>Colaborador(a)${(a as any).assinaturaFuncionarioUrl ? `<br/><span style="color:#059669;font-weight:bold;">✓ ASSINADO DIGITALMENTE</span>` : (a as any).assinaturaRecusadaEm ? `<br/><span style="color:#dc2626;font-weight:bold;">RECUSOU-SE A ASSINAR</span>` : ""}</div></div>
                                   </div>
-                                  <div class="sig-row-3">
-                                    <div class="sig-block-3"><div class="line">Testemunha 1${t1.nome ? "<br/><strong>" + t1.nome + "</strong>" : ""}${t1.doc ? "<br/>" + t1.doc : ""}</div></div>
-                                    <div class="sig-block-3"><div class="line">Testemunha 2${t2.nome ? "<br/><strong>" + t2.nome + "</strong>" : ""}${t2.doc ? "<br/>" + t2.doc : ""}</div></div>
-                                    <div class="sig-block-3"><div class="line">Testemunha 3${t3.nome ? "<br/><strong>" + t3.nome + "</strong>" : ""}${t3.doc ? "<br/>" + t3.doc : ""}</div></div>
-                                  </div>
+                                  ${((a as any).assinaturaFuncionarioUrl && !(t1 as any).assinaturaUrl && !(t2 as any).assinaturaUrl && !(t3 as any).assinaturaUrl) ? "" : `<div class="sig-row-3">
+                                    ${[t1, t2, t3].map((t: any, ti: number) => `<div class="sig-block-3">${t.assinaturaUrl ? `<img src="${t.assinaturaUrl}" style="height:38px;display:block;margin:0 auto;" />` : ""}<div class="line">Testemunha ${ti + 1}${t.nome ? "<br/><strong>" + t.nome + "</strong>" : ""}${t.doc ? "<br/>" + t.doc : ""}${t.assinaturaUrl ? `<br/><span style="color:#059669;font-weight:bold;">✓ ASSINADO DIGITALMENTE</span>` : ""}</div></div>`).join("")}
+                                  </div>`}
                                 </div>
                                 <div class="footer">
                                   <span>ERP - Gestão Integrada</span>
@@ -5145,6 +5145,7 @@ export default function ControleDocumentos() {
                     testemunhasIniciais: testemunhasArr,
                     assinaturaFuncionarioUrl: a.assinaturaFuncionarioUrl,
                     assinaturaAplicadorUrl: a.assinaturaAplicadorUrl,
+                    assinaturaRecusadaEm: a.assinaturaRecusadaEm,
                   });
                   setShowAdvAssinaturas(true);
                 }}>
@@ -5224,14 +5225,12 @@ export default function ControleDocumentos() {
                   </div>
                   <div class="signatures">
                     <div class="sig-row">
-                      <div class="sig-block"><div class="line">Empregador / Representante Legal</div></div>
-                      <div class="sig-block"><div class="line">${a.nomeCompleto}<br/>Colaborador(a)</div></div>
+                      <div class="sig-block">${a.assinaturaAplicadorUrl ? `<img src="${a.assinaturaAplicadorUrl}" style="height:42px;display:block;margin:0 auto;" />` : ""}<div class="line">Empregador / Representante Legal${a.assinaturaAplicadorUrl ? `<br/><span style="color:#059669;font-weight:bold;">✓ ASSINADO DIGITALMENTE</span>` : ""}</div></div>
+                      <div class="sig-block">${a.assinaturaFuncionarioUrl ? `<img src="${a.assinaturaFuncionarioUrl}" style="height:42px;display:block;margin:0 auto;" />` : ""}<div class="line">${a.nomeCompleto}<br/>Colaborador(a)${a.assinaturaFuncionarioUrl ? `<br/><span style="color:#059669;font-weight:bold;">✓ ASSINADO DIGITALMENTE</span>` : a.assinaturaRecusadaEm ? `<br/><span style="color:#dc2626;font-weight:bold;">RECUSOU-SE A ASSINAR</span>` : ""}</div></div>
                     </div>
-                    <div class="sig-row-3">
-                      <div class="sig-block-3"><div class="line">Testemunha 1${t1.nome ? "<br/><strong>" + t1.nome + "</strong>" : ""}${t1.doc ? "<br/>" + t1.doc : ""}</div></div>
-                      <div class="sig-block-3"><div class="line">Testemunha 2${t2.nome ? "<br/><strong>" + t2.nome + "</strong>" : ""}${t2.doc ? "<br/>" + t2.doc : ""}</div></div>
-                      <div class="sig-block-3"><div class="line">Testemunha 3${t3.nome ? "<br/><strong>" + t3.nome + "</strong>" : ""}${t3.doc ? "<br/>" + t3.doc : ""}</div></div>
-                    </div>
+                    ${(a.assinaturaFuncionarioUrl && ![t1, t2, t3].some((t: any) => t.assinaturaUrl)) ? "" : `<div class="sig-row-3">
+                      ${[t1, t2, t3].map((t: any, ti: number) => `<div class="sig-block-3">${t.assinaturaUrl ? `<img src="${t.assinaturaUrl}" style="height:38px;display:block;margin:0 auto;" />` : ""}<div class="line">Testemunha ${ti + 1}${t.nome ? "<br/><strong>" + t.nome + "</strong>" : ""}${t.doc ? "<br/>" + t.doc : ""}${t.assinaturaUrl ? `<br/><span style="color:#059669;font-weight:bold;">✓ ASSINADO DIGITALMENTE</span>` : ""}</div></div>`).join("")}
+                    </div>`}
                   </div>
                   <div class="footer">
                     <span>ERP - Gestão Integrada</span>
@@ -5305,23 +5304,39 @@ export default function ControleDocumentos() {
                   {/* Assinaturas */}
                   <div className="mt-16 space-y-12">
                     <div className="flex justify-between">
-                      <div className="text-center w-[45%]"><div className="border-t border-black pt-1 text-xs">Empregador / Representante Legal</div></div>
-                      <div className="text-center w-[45%]"><div className="border-t border-black pt-1 text-xs">{a.nomeCompleto}<br />Colaborador(a)</div></div>
+                      <div className="text-center w-[45%]">
+                        {a.assinaturaAplicadorUrl && <img src={a.assinaturaAplicadorUrl} alt="Assinatura" className="h-10 mx-auto" />}
+                        <div className="border-t border-black pt-1 text-xs">
+                          Empregador / Representante Legal
+                          {a.assinaturaAplicadorUrl && <><br /><span className="text-emerald-600 font-bold">✓ ASSINADO DIGITALMENTE</span></>}
+                        </div>
+                      </div>
+                      <div className="text-center w-[45%]">
+                        {a.assinaturaFuncionarioUrl && <img src={a.assinaturaFuncionarioUrl} alt="Assinatura" className="h-10 mx-auto" />}
+                        <div className="border-t border-black pt-1 text-xs">
+                          {a.nomeCompleto}<br />Colaborador(a)
+                          {a.assinaturaFuncionarioUrl ? <><br /><span className="text-emerald-600 font-bold">✓ ASSINADO DIGITALMENTE</span></> : a.assinaturaRecusadaEm ? <><br /><span className="text-red-600 font-bold">RECUSOU-SE A ASSINAR</span></> : null}
+                        </div>
+                      </div>
                     </div>
+                    {!(a.assinaturaFuncionarioUrl && ![0, 1, 2].some(i => (testemunhasArr[i] as any)?.assinaturaUrl)) && (
                     <div className="flex justify-between">
                       {[0, 1, 2].map(i => {
-                        const t = testemunhasArr[i] || { nome: "", doc: "" };
+                        const t = (testemunhasArr[i] || { nome: "", doc: "" }) as any;
                         return (
                           <div key={i} className="text-center w-[30%]">
+                            {t.assinaturaUrl && <img src={t.assinaturaUrl} alt="Assinatura" className="h-9 mx-auto" />}
                             <div className="border-t border-black pt-1 text-xs">
                               Testemunha {i + 1}
                               {t.nome && <><br /><strong>{t.nome}</strong></>}
                               {t.doc && <><br />{t.doc}</>}
+                              {t.assinaturaUrl && <><br /><span className="text-emerald-600 font-bold">✓ ASSINADO DIGITALMENTE</span></>}
                             </div>
                           </div>
                         );
                       })}
                     </div>
+                    )}
                   </div>
 
                   {/* Footer LGPD */}
@@ -5368,6 +5383,7 @@ export default function ControleDocumentos() {
           testemunhasIniciais={advAssinaturasData.testemunhasIniciais || []}
           assinaturaFuncionarioUrl={advAssinaturasData.assinaturaFuncionarioUrl}
           assinaturaAplicadorUrl={advAssinaturasData.assinaturaAplicadorUrl}
+          assinaturaRecusadaEm={advAssinaturasData.assinaturaRecusadaEm}
           onUpdate={() => refetchAdv()}
         />
       )}

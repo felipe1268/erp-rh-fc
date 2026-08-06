@@ -4083,6 +4083,8 @@ export const warnings = pgTable("warnings", {
         deletedByUserId: integer(),
         assinaturaFuncionarioUrl: text("assinatura_funcionario_url"),
         assinaturaAplicadorUrl:   text("assinatura_aplicador_url"),
+        // Rev. 4907 — colaborador recusou-se a assinar (habilita testemunhas)
+        assinaturaRecusadaEm: timestamp("assinatura_recusada_em", { mode: 'string' }),
 });
 
 

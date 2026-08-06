@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  PenTool, RotateCcw, Check, Shield, Smartphone, Loader2, User, Users, CheckCircle2, Lock, Unlock,
+  PenTool, RotateCcw, Check, Shield, Smartphone, Loader2, User, Users, CheckCircle2, Lock, Unlock, Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +29,7 @@ interface AdvAssinaturasProps {
   testemunhasIniciais: { nome: string; doc: string; assinaturaUrl?: string }[];
   assinaturaFuncionarioUrl?: string | null;
   assinaturaAplicadorUrl?: string | null;
+  assinaturaRecusadaEm?: string | null;
   onUpdate?: () => void;
 }
 
@@ -218,8 +219,17 @@ function SignaturePadBlock({
 
 export default function AdvAssinaturas({
   open, onClose, advertenciaId, nomeFuncionario, nomeAplicador, testemunhasIniciais,
-  assinaturaFuncionarioUrl, assinaturaAplicadorUrl, onUpdate,
+  assinaturaFuncionarioUrl, assinaturaAplicadorUrl, assinaturaRecusadaEm, onUpdate,
 }: AdvAssinaturasProps) {
+  const [recusado, setRecusado] = useState(!!assinaturaRecusadaEm);
+  const marcarRecusaMut = (trpc as any).docs.advertencias.marcarRecusa.useMutation({
+    onSuccess: (_d: any, vars: any) => {
+      setRecusado(vars.recusado);
+      toast.success(vars.recusado ? "Recusa registrada — testemunhas habilitadas." : "Recusa desfeita.");
+      onUpdate?.();
+    },
+    onError: (e: any) => toast.error("Erro ao registrar recusa: " + e.message),
+  });
   const salvarMut = trpc.docs.advertencias.salvarAssinatura.useMutation({
     onSuccess: (data: any, vars) => {
       if (vars.tipoAssinante === "funcionario") {
@@ -298,7 +308,12 @@ export default function AdvAssinaturas({
     setSigners(prev => prev.map(s => s.tipo === tipo ? { ...s, nome, nomeConfirmado: true } : s));
   }
 
-  const totalAssinados = signers.filter(s => s.assinaturaUrl).length;
+  const funcionarioAssinou = !!signers.find(s => s.tipo === "funcionario")?.assinaturaUrl;
+  // Quem conta como "esperado": funcionário+aplicador sempre; testemunhas só em caso de recusa.
+  const signersRelevantes = signers.filter(s =>
+    s.tipo === "funcionario" || s.tipo === "aplicador" || (recusado && !funcionarioAssinou)
+  );
+  const totalAssinados = signersRelevantes.filter(s => s.assinaturaUrl).length;
 
   const INFOS: Record<TipoAssinante, { label: string; cor: "blue" | "orange" | "emerald" | "purple"; icon: any }> = {
     funcionario: { label: "Funcionário", cor: "blue", icon: User },
@@ -316,7 +331,7 @@ export default function AdvAssinaturas({
             <PenTool className="h-5 w-5 text-slate-700" />
             Assinaturas Digitais — Advertência
             <Badge className="ml-auto bg-slate-100 text-slate-700 border-slate-300">
-              {totalAssinados}/{signers.length} assinados
+              {totalAssinados}/{signersRelevantes.length} assinados
             </Badge>
           </DialogTitle>
         </DialogHeader>
@@ -334,15 +349,50 @@ export default function AdvAssinaturas({
           {/* Funcionário */}
           <div className="space-y-1">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Colaborador</p>
-            <SignaturePadBlock
-              titulo={nomeFuncionario || "Funcionário"}
-              subtitulo="Declaro estar ciente desta advertência e comprometo-me a adequar minha conduta."
-              cor="blue"
-              locked={false}
-              jaAssinado={!!signers.find(s => s.tipo === "funcionario")?.assinaturaUrl}
-              onSign={(url) => handleSign("funcionario", url)}
-              salvando={!!signers.find(s => s.tipo === "funcionario")?.salvando}
-            />
+            {recusado && !funcionarioAssinou ? (
+              <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 space-y-2">
+                <div className="flex items-center gap-3">
+                  <Ban className="h-6 w-6 text-red-600 shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm text-red-700">{nomeFuncionario || "Funcionário"}</p>
+                    <p className="text-xs text-red-600">Recusou-se a assinar. Colete a assinatura das testemunhas abaixo.</p>
+                  </div>
+                  <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">Recusou-se a assinar</Badge>
+                </div>
+                <Button
+                  size="sm" variant="outline" className="w-full border-slate-300 text-slate-600"
+                  disabled={marcarRecusaMut.isPending}
+                  onClick={() => marcarRecusaMut.mutate({ advertenciaId, recusado: false })}
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Desfazer recusa (colaborador vai assinar)
+                </Button>
+              </div>
+            ) : (
+              <>
+                <SignaturePadBlock
+                  titulo={nomeFuncionario || "Funcionário"}
+                  subtitulo="Declaro estar ciente desta advertência e comprometo-me a adequar minha conduta."
+                  cor="blue"
+                  locked={false}
+                  jaAssinado={funcionarioAssinou}
+                  onSign={(url) => handleSign("funcionario", url)}
+                  salvando={!!signers.find(s => s.tipo === "funcionario")?.salvando}
+                />
+                {!funcionarioAssinou && (
+                  <Button
+                    size="sm" variant="outline"
+                    className="w-full border-red-300 text-red-600 hover:bg-red-50"
+                    disabled={marcarRecusaMut.isPending}
+                    onClick={() => {
+                      if (!window.confirm("Registrar que o colaborador se RECUSOU a assinar? Isso habilita a assinatura das testemunhas.")) return;
+                      marcarRecusaMut.mutate({ advertenciaId, recusado: true });
+                    }}
+                  >
+                    <Ban className="h-3.5 w-3.5 mr-1" /> Recusou-se a assinar
+                  </Button>
+                )}
+              </>
+            )}
           </div>
 
           {/* Aplicador */}
@@ -359,10 +409,20 @@ export default function AdvAssinaturas({
             />
           </div>
 
-          {/* Testemunhas */}
+          {/* Testemunhas — só valem quando o colaborador se RECUSA a assinar */}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Testemunhas</p>
-            {(["testemunha1", "testemunha2", "testemunha3"] as const).map((tipo, idx) => {
+            {funcionarioAssinou ? (
+              <div className="rounded-xl border-2 border-slate-200 bg-slate-50 p-4 flex items-center gap-3 text-slate-500">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+                <p className="text-xs">O colaborador assinou — testemunhas não se aplicam (desativadas automaticamente).</p>
+              </div>
+            ) : !recusado ? (
+              <div className="rounded-xl border-2 border-slate-200 bg-slate-50 p-4 flex items-center gap-3 text-slate-500">
+                <Lock className="h-5 w-5 shrink-0" />
+                <p className="text-xs">Testemunhas só assinam quando o colaborador se recusa. Use o botão "Recusou-se a assinar" acima para habilitar.</p>
+              </div>
+            ) : (["testemunha1", "testemunha2", "testemunha3"] as const).map((tipo, idx) => {
               const signer = signers.find(s => s.tipo === tipo)!;
               const cor = tipo === "testemunha3" ? "purple" : "emerald";
               return (
@@ -421,7 +481,7 @@ export default function AdvAssinaturas({
           </div>
 
           {/* Progresso */}
-          {totalAssinados === signers.length && (
+          {totalAssinados === signersRelevantes.length && (
             <div className="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-4 flex items-center gap-3">
               <CheckCircle2 className="h-6 w-6 text-emerald-600" />
               <div>
