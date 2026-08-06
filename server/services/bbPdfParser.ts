@@ -93,6 +93,79 @@ export async function parseBancoBrasilExtratoPdf(base64: string): Promise<BBPars
   // ── Detecção de formato ────────────────────────────────────────────────────
   const hasNewFormat = RE_MONEY_PM.test(text);
 
+  // ── Variante "VALOR → DATA" (extrato mensal do IB/app novo do BB) ──────────
+  // O pdf-parse entrega as linhas nesta ordem, POR transação:
+  //   "5.000,00 (+)"                              ← valor (linha só com o token)
+  //   "02/01/2026"                                ← data
+  //   "1439721306399215041"                       ← lote+documento (só dígitos)
+  //   "Pix - Recebido"                            ← descrição
+  //   "02/01 13:06 96221305772 ADILSON MENDES"    ← detalhe da descrição
+  // Blocos de saldo: "0,00 (+)" / "00/00/0000" / "10318Saldo do dia".
+  // Detecção: 3+ ocorrências de linha-valor seguida imediatamente de linha-data.
+  const RE_MONEY_ONLY = /^(\d{1,3}(?:\.\d{3})*,\d{2})\s*\(([+-])\)$/;
+  const allLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  let valorAntesDaData = 0;
+  for (let i = 0; i + 1 < allLines.length; i++) {
+    if (RE_MONEY_ONLY.test(allLines[i]) && /^\d{2}\/\d{2}\/\d{4}$/.test(allLines[i + 1])) valorAntesDaData++;
+  }
+
+  if (hasNewFormat && valorAntesDaData >= 3) {
+    const dailySaldo = new Map<string, number>();
+    let curDate: string | null = null; // última data REAL vista (dd ≠ 00)
+    let pending: { valor: number; data: string | null; descParts: string[] } | null = null;
+
+    const flush = () => {
+      if (!pending) return;
+      const p = pending;
+      pending = null;
+      const descFull = p.descParts.join(" ").replace(/\s+/g, " ").trim();
+      // Blocos de saldo não geram lançamento
+      if (/Saldo Anterior|Saldo do dia|^S\s*A\s*L\s*D\s*O\b|^SALDO\b/i.test(descFull)) {
+        if (/Saldo do dia/i.test(descFull) && curDate) dailySaldo.set(curDate, p.valor);
+        return;
+      }
+      if (!p.data) return;
+      out.push({ data: p.data, descricao: (descFull || "Sem descrição").slice(0, 500), valor: p.valor, saldo: null });
+    };
+
+    for (let i = 0; i < allLines.length; i++) {
+      const line = allLines[i];
+      const mMoney = line.match(RE_MONEY_ONLY);
+      if (mMoney && i + 1 < allLines.length && /^\d{2}\/\d{2}\/\d{4}$/.test(allLines[i + 1])) {
+        flush();
+        const [dd, mm, yyyy] = allLines[i + 1].split("/");
+        let data: string | null = null;
+        if (dd !== "00") {
+          data = `${yyyy}-${mm}-${dd}`;
+          curDate = data;
+        }
+        pending = { valor: (mMoney[2] === "+" ? 1 : -1) * moneyBR(mMoney[1]), data, descParts: [] };
+        i++; // pula a linha de data
+        continue;
+      }
+      if (!pending) continue;
+      // Cabeçalhos/rodapés encerram a transação corrente
+      if (RE_SKIP_NOVO.test(line) || /^DiaLote|^Extrato de|^Cliente|^Ag[êe]ncia:/i.test(line)) {
+        if (/Saldo Anterior/i.test(line)) pending = null; // bloco de saldo anterior: descarta
+        else flush();
+        continue;
+      }
+      // Linha só de dígitos = lote/documento → ignora; "10318Saldo do dia" mantém o texto
+      const semLote = line.replace(/^\d+(?=Saldo)/i, "");
+      if (/^\d+$/.test(line)) continue;
+      pending.descParts.push(semLote);
+    }
+    flush();
+
+    // Saldo diário no ÚLTIMO lançamento de cada dia
+    for (const [date, saldo] of dailySaldo) {
+      for (let i = out.length - 1; i >= 0; i--) {
+        if (out[i].data === date) { out[i].saldo = saldo; break; }
+      }
+    }
+    return { lines: out, isBancoBrasil, semMovimento };
+  }
+
   if (hasNewFormat) {
     // ─────────────────────────────────────────────────────────────────────────
     // NOVO FORMATO "(+)/(-)": transações multi-linha
