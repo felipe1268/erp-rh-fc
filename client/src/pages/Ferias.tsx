@@ -1088,6 +1088,50 @@ export default function Ferias() {
     return arr;
   }, [feriasList, search, statusFilter, filtro2Periodo2026, sortBy, cargoFilter, periodoFilter, inicioDe, inicioAte]);
 
+  // Rev. 4912 — Agrupamento por colaborador na Lista de Férias: exibe só o período
+  // "atual" (em gozo > agendada > pendente/vencida que vence primeiro; se tudo
+  // concluído, a mais recente) e esconde os demais atrás de um expansor.
+  const [gruposExpandidos, setGruposExpandidos] = useState<Set<number>>(new Set());
+  const gruposPorColaborador = useMemo(() => {
+    const ordem: number[] = [];
+    const porEmp = new Map<number, any[]>();
+    for (const f of filtered as any[]) {
+      const id = f.employeeId;
+      if (!porEmp.has(id)) { porEmp.set(id, []); ordem.push(id); }
+      porEmp.get(id)!.push(f);
+    }
+    const prioridade = (f: any) =>
+      f.status === "em_gozo" ? 0
+      : f.status === "agendada" ? 1
+      : (f.status === "pendente" || f.status === "vencida" || f.vencida) ? 2
+      : 3; // concluída/cancelada
+    return ordem.map((id) => {
+      const rows = porEmp.get(id)!;
+      let rep = rows[0];
+      for (const r of rows) {
+        const pr = prioridade(r), pRep = prioridade(rep);
+        if (pr < pRep) rep = r;
+        else if (pr === pRep) {
+          if (pr === 3) {
+            // tudo concluído → mostra o período mais RECENTE
+            if ((r.periodoAquisitivoFim || "") > (rep.periodoAquisitivoFim || "")) rep = r;
+          } else {
+            // pendências → a que vence PRIMEIRO (concessivo mais próximo)
+            if ((r.periodoConcessivoFim || "") < (rep.periodoConcessivoFim || "")) rep = r;
+          }
+        }
+      }
+      // demais períodos mantêm a ordenação escolhida no seletor
+      const resto = rows.filter((r) => r !== rep);
+      return { employeeId: id, rep, resto };
+    });
+  }, [filtered]);
+  const toggleGrupo = (id: number) => setGruposExpandidos((prev) => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
   // Rev. 2652 — lista de cargos distintos p/ o filtro (a partir da lista completa).
   const cargosDisponiveis = useMemo(() => {
     const set = new Set<string>();
@@ -1492,7 +1536,9 @@ export default function Ferias() {
                     <tbody>
                       {filtered.length === 0 ? (
                         <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Nenhuma férias encontrada</td></tr>
-                      ) : filtered.map((f: any) => {
+                      ) : (() => {
+                      // Rev. 4912 — render agrupado por colaborador (período atual + expansor)
+                      const renderRow = (f: any, grp?: { count: number; expanded: boolean }, isChild?: boolean) => {
                         const st = STATUS_LABELS[f.status] || STATUS_LABELS.pendente;
                         // Rev. 4713 — "A Vencer" diferenciada por período (só p/ não agendadas):
                         // 1º período = laranja; 2º período (ou +) = vermelho (risco de multa em dobro),
@@ -1514,7 +1560,7 @@ export default function Ferias() {
                         }
                         const perdeuFerias = _isAfast && _diasAfast >= 180;
                         return (
-                          <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida || isPendente2p ? "bg-red-50/50" : isPrimeiroVencido ? "bg-amber-50/40" : ""}`}>
+                          <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isChild ? "bg-muted/10" : ""} ${isVencida || isPendente2p ? "bg-red-50/50" : isPrimeiroVencido ? "bg-amber-50/40" : ""}`}>
                             <td className="p-3">
                               <div className="flex items-center gap-2.5">
                                 <PersonPhoto src={f.employeeFotoUrl} alt={f.employeeName} size="sm" />
@@ -1530,7 +1576,18 @@ export default function Ferias() {
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="text-xs text-muted-foreground">{f.employeeCargo || f.employeeFuncao || "-"}</div>
+                                  <div className="text-xs text-muted-foreground">{isChild ? <span className="opacity-70">↳ período anterior</span> : (f.employeeCargo || f.employeeFuncao || "-")}</div>
+                                  {grp && grp.count > 0 && (
+                                    <button
+                                      type="button"
+                                      className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                                      onClick={() => toggleGrupo(f.employeeId)}
+                                      title={grp.expanded ? "Ocultar os períodos anteriores deste colaborador" : "Mostrar todos os períodos de férias deste colaborador"}
+                                    >
+                                      <ChevronDown className={`h-3 w-3 transition-transform ${grp.expanded ? "rotate-180" : ""}`} />
+                                      {grp.expanded ? "Ocultar períodos anteriores" : `+${grp.count} período${grp.count > 1 ? "s" : ""} anterior${grp.count > 1 ? "es" : ""}`}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -1657,7 +1714,14 @@ export default function Ferias() {
                             </td>
                           </tr>
                         );
-                      })}
+                      };
+                      return gruposPorColaborador.flatMap((g) => {
+                        const expanded = gruposExpandidos.has(g.employeeId);
+                        const out = [renderRow(g.rep, g.resto.length > 0 ? { count: g.resto.length, expanded } : undefined)];
+                        if (expanded) out.push(...g.resto.map((r: any) => renderRow(r, undefined, true)));
+                        return out;
+                      });
+                      })()}
                     </tbody>
                   </table>
                 </div>
