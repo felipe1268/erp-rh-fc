@@ -1593,6 +1593,23 @@ export const epiTransferencias = pgTable("epi_transferencias", {
         index("idx_et_data").on(table.companyId, table.data),
 ]);
 
+// Rev. 4910 — Poka-Yoke: log de ajustes manuais do estoque central de EPI
+export const epiEstoqueAjustes = pgTable("epi_estoque_ajustes", {
+        id: serial().primaryKey().notNull(),
+        companyId: integer("company_id").notNull(),
+        epiId: integer("epi_id").notNull(),
+        quantidadeAntes: integer("quantidade_antes").notNull(),
+        quantidadeDepois: integer("quantidade_depois").notNull(),
+        motivo: text(),
+        criadoPor: varchar("criado_por", { length: 255 }),
+        criadoPorUserId: integer("criado_por_user_id"),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("idx_eea_company").on(table.companyId),
+        index("idx_eea_epi").on(table.epiId),
+]);
+
 export const equipment = pgTable("equipment", {
         id: serial().notNull(),
         companyId: integer().notNull(),

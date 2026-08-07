@@ -92,6 +92,20 @@ const CORES_CAPACETE = [
   { value: "Preto", hex: "#1F2937", border: "#1F2937", funcao: "Operadores de máquinas pesadas" },
 ] as const;
 
+// Rev. 4910 — agrupamento de EPIs iguais com CA diferente (CA muda por lote/fabricante).
+// Chave = nome normalizado (sem acento/caixa, sem o nº de CA embutido no nome) + tamanho + categoria.
+function epiGrupoKey(e: any): string {
+  const nome = String(e?.nome || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\bca[\s.:\-]*\d[\d.\s]*\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const tam = String(e?.tamanho || "").trim().toLowerCase();
+  const cat = String(e?.categoria || "EPI").trim().toLowerCase();
+  return `${nome}|${tam}|${cat}`;
+}
+
 function isCapacete(nome: string) {
   const n = (nome || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return n.includes("capacete") || n.includes("helmet");
@@ -187,6 +201,9 @@ export default function Epis() {
   const [filterTamanho, setFilterTamanho] = useState<string>("Todos");
   const [filterEstoque, setFilterEstoque] = useState<"todos" | "zerado" | "critico" | "baixo">("todos");
   const [editingEpi, setEditingEpi] = useState<any>(null);
+  // Rev. 4910 — Poka-Yoke: confirmação explícita p/ ajuste manual do estoque central
+  const [showAjusteConfirm, setShowAjusteConfirm] = useState(false);
+  const [motivoAjuste, setMotivoAjuste] = useState("");
   const [selectedEpis, setSelectedEpis] = useState<Set<number>>(new Set());
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
   const [fichaDelivery, setFichaDelivery] = useState<any>(null);
@@ -431,7 +448,7 @@ export default function Epis() {
     onError: (err) => toast.error(err.message),
   });
   const updateEpiMut = trpc.epis.update.useMutation({
-    onSuccess: () => { episQ.refetch(); statsQ.refetch(); setEditingEpi(null); setViewMode("catalogo"); resetEpiForm(); toast.success("EPI atualizado com sucesso!"); },
+    onSuccess: () => { episQ.refetch(); episAllQ.refetch(); statsQ.refetch(); setEditingEpi(null); setViewMode("catalogo"); resetEpiForm(); setShowAjusteConfirm(false); setMotivoAjuste(""); toast.success("EPI atualizado com sucesso!"); },
     onError: (err) => toast.error(err.message),
   });
   const deleteEpiMut = trpc.epis.delete.useMutation({
@@ -706,6 +723,28 @@ export default function Epis() {
   // FORM: EDITAR EPI (tela completa igual ao cadastro)
   // ============================================================
   if (viewMode === "editar_epi" && editingEpi) {
+    // Rev. 4910 — payload único p/ salvar (com e sem confirmação de ajuste de estoque)
+    const buildEpiUpdatePayload = () => ({
+      id: editingEpi.id,
+      nome: epiForm.nome,
+      ca: epiForm.ca || undefined,
+      validadeCa: epiForm.validadeCa || undefined,
+      fabricante: epiForm.fabricante || undefined,
+      fornecedor: epiForm.fornecedor || undefined,
+      fornecedorCnpj: epiForm.fornecedorCnpj?.replace(/\D/g, "") || undefined,
+      fornecedorContato: epiForm.fornecedorContato || undefined,
+      fornecedorTelefone: epiForm.fornecedorTelefone || undefined,
+      fornecedorEmail: epiForm.fornecedorEmail || undefined,
+      fornecedorEndereco: epiForm.fornecedorEndereco || undefined,
+      categoria: epiForm.categoria,
+      tamanho: epiForm.tamanho || undefined,
+      quantidadeEstoque: epiForm.quantidadeEstoque,
+      valorProduto: epiForm.valorProduto ? parseCurrencyToFloat(epiForm.valorProduto) : undefined,
+      tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
+      corCapacete: isCapacete(epiForm.nome) ? (epiForm.corCapacete || null) : null,
+      condicao: epiForm.condicao,
+      fotoUrl: epiForm.fotoUrl || null,
+    });
     return (
       <DashboardLayout>
         <PrintHeader />
@@ -1005,31 +1044,47 @@ export default function Epis() {
                 <Button onClick={() => {
                   if (!epiForm.nome.trim()) return toast.error("Nome do EPI é obrigatório");
                   if (!epiForm.tempoMinimoTroca || parseInt(epiForm.tempoMinimoTroca) <= 0) return toast.error("Vida Útil (dias) é obrigatório para análise de durabilidade");
-                  updateEpiMut.mutate({
-                    id: editingEpi.id,
-                    nome: epiForm.nome,
-                    ca: epiForm.ca || undefined,
-                    validadeCa: epiForm.validadeCa || undefined,
-                    fabricante: epiForm.fabricante || undefined,
-                    fornecedor: epiForm.fornecedor || undefined,
-                    fornecedorCnpj: epiForm.fornecedorCnpj?.replace(/\D/g, "") || undefined,
-                    fornecedorContato: epiForm.fornecedorContato || undefined,
-                    fornecedorTelefone: epiForm.fornecedorTelefone || undefined,
-                    fornecedorEmail: epiForm.fornecedorEmail || undefined,
-                    fornecedorEndereco: epiForm.fornecedorEndereco || undefined,
-                    categoria: epiForm.categoria,
-                    tamanho: epiForm.tamanho || undefined,
-                    quantidadeEstoque: epiForm.quantidadeEstoque,
-                    valorProduto: epiForm.valorProduto ? parseCurrencyToFloat(epiForm.valorProduto) : undefined,
-                    tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
-                    corCapacete: isCapacete(epiForm.nome) ? (epiForm.corCapacete || null) : null,
-                    condicao: epiForm.condicao,
-                    fotoUrl: epiForm.fotoUrl || null,
-                  });
+                  // Rev. 4910 — Poka-Yoke: mudança de estoque central exige confirmação + motivo
+                  if (epiForm.quantidadeEstoque !== (editingEpi.quantidadeEstoque ?? 0)) {
+                    setMotivoAjuste("");
+                    setShowAjusteConfirm(true);
+                    return;
+                  }
+                  updateEpiMut.mutate(buildEpiUpdatePayload());
                 }} disabled={updateEpiMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {updateEpiMut.isPending ? "Salvando..." : "Salvar Alterações"}
                 </Button>
               </div>
+              {/* Rev. 4910 — Poka-Yoke: confirmação de ajuste manual do estoque central */}
+              {showAjusteConfirm && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAjusteConfirm(false)}>
+                  <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl space-y-3" onClick={e => e.stopPropagation()}>
+                    <h3 className="text-lg font-bold text-amber-700">Confirmar ajuste de estoque</h3>
+                    <p className="text-sm">
+                      O estoque do Almoxarifado Central de <strong>{editingEpi.nome}</strong> vai mudar de{" "}
+                      <strong>{editingEpi.quantidadeEstoque ?? 0}</strong> para <strong>{epiForm.quantidadeEstoque}</strong> unidades.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Ajuste manual não gera transferência nem entrega — fica registrado no histórico de ajustes com seu nome. Se a intenção é mover estoque para uma obra, use "Nova Transferência".
+                    </p>
+                    <div>
+                      <Label>Motivo do ajuste <span className="text-red-500">*</span></Label>
+                      <Input value={motivoAjuste} onChange={e => setMotivoAjuste(e.target.value)} placeholder="Ex: contagem física, correção de cadastro, perda/avaria..." />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                      <Button variant="outline" onClick={() => setShowAjusteConfirm(false)}>Cancelar</Button>
+                      <Button className="bg-amber-600 hover:bg-amber-700" disabled={!motivoAjuste.trim() || updateEpiMut.isPending}
+                        onClick={() => updateEpiMut.mutate({
+                          ...buildEpiUpdatePayload(),
+                          motivoAjuste: motivoAjuste.trim(),
+                          estoqueOriginal: editingEpi.quantidadeEstoque ?? 0,
+                        } as any)}>
+                        {updateEpiMut.isPending ? "Salvando..." : "Confirmar ajuste"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -2494,7 +2549,38 @@ export default function Epis() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredEpis.map((epi: any) => {
+                      {(() => {
+                      // Rev. 4910 — EPIs iguais com CA diferente (CA muda por lote/fabricante)
+                      // são agrupados: cabeçalho com o TOTAL + linhas individuais por CA.
+                      const grupos = new Map<string, any[]>();
+                      for (const e of filteredEpis) {
+                        const k = epiGrupoKey(e);
+                        if (!grupos.has(k)) grupos.set(k, []);
+                        grupos.get(k)!.push(e);
+                      }
+                      const colCount = hideEpiValues ? 11 : 12;
+                      const out: any[] = [];
+                      for (const [k, itens] of grupos) {
+                        if (itens.length > 1) {
+                          const total = itens.reduce((s, e) => s + (Number(e.quantidadeEstoque) || 0), 0);
+                          out.push(
+                            <tr key={`grp-${k}`} className="border-b bg-blue-50/70">
+                              <td colSpan={colCount} className="px-3 py-2">
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                                  <span className="text-xs font-bold uppercase text-blue-900">
+                                    {itens[0].nome} — Total {total} unidade{total !== 1 ? "s" : ""}
+                                  </span>
+                                  {itens.map((e: any) => (
+                                    <span key={e.id} className="text-[11px] text-blue-800 bg-white border border-blue-200 rounded px-1.5 py-0.5">
+                                      {Number(e.quantidadeEstoque) || 0} un — CA {e.ca || "s/ CA"}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+                        out.push(...itens.map((epi: any) => {
                         const caVencido = epi.validadeCa && epi.validadeCa < hoje;
                         const estoqueBaixo = (epi.quantidadeEstoque || 0) <= 5;
                         return (
@@ -2587,7 +2673,10 @@ export default function Epis() {
                             </td>
                           </tr>
                         );
-                      })}
+                        }));
+                      }
+                      return out;
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -3697,7 +3786,18 @@ export default function Epis() {
                                       const d = dispOrigem(String(e.id));
                                       const v = d == null ? Number(e.quantidadeEstoque ?? 0) : d;
                                       const lbl = d == null ? 'Central' : 'Disponível';
-                                      return <span className={`text-xs font-medium ${v === 0 ? "text-red-600" : "text-green-700"}`}>{lbl}: {v}</span>;
+                                      // Rev. 4910 — mesmo EPI com outros CAs: mostra o total do grupo no Central
+                                      const k = epiGrupoKey(e);
+                                      const irmaos = episAllList.filter((x: any) => epiGrupoKey(x) === k);
+                                      const totalGrupo = irmaos.reduce((s: number, x: any) => s + (Number(x.quantidadeEstoque) || 0), 0);
+                                      return (
+                                        <>
+                                          <span className={`text-xs font-medium ${v === 0 ? "text-red-600" : "text-green-700"}`}>{lbl}: {v}</span>
+                                          {irmaos.length > 1 && transForm.tipoOrigem === 'central' && (
+                                            <span className="text-xs text-blue-700">Total ({irmaos.length} CAs): {totalGrupo}</span>
+                                          )}
+                                        </>
+                                      );
                                     })()}
                                   </div>
                                 </div>

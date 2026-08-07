@@ -6176,7 +6176,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4907-2026-08-06-adv-recusa";
+    const COLFIX_VERSION = "v4910-2026-08-07-epi-ajustes";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -8224,6 +8224,30 @@ REGRAS DE EXTRAÇÃO:
           console.log("[ColFix Rev.4711] vacation_periods.financeiro_entry_id + índice uq_fin_entries_ferias garantidos.");
         }
       } catch (e: any) { console.error("[ColFix Rev.4711] FALHA coluna/índice férias:", e?.message ?? e); }
+
+      // Rev. 4910 — Poka-Yoke EPI: log de ajustes manuais do estoque central.
+      // Bloco isolado (colfix-do-block-silent-rollback).
+      try {
+        const db4910 = await getDb();
+        if (db4910) {
+          await db4910.$client.query(`
+            CREATE TABLE IF NOT EXISTS epi_estoque_ajustes (
+              id                  SERIAL PRIMARY KEY,
+              company_id          INTEGER NOT NULL,
+              epi_id              INTEGER NOT NULL,
+              quantidade_antes    INTEGER NOT NULL,
+              quantidade_depois   INTEGER NOT NULL,
+              motivo              TEXT,
+              criado_por          VARCHAR(255),
+              criado_por_user_id  INTEGER,
+              created_at          TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db4910.$client.query(`CREATE INDEX IF NOT EXISTS idx_eea_company ON epi_estoque_ajustes(company_id)`);
+          await db4910.$client.query(`CREATE INDEX IF NOT EXISTS idx_eea_epi ON epi_estoque_ajustes(epi_id)`);
+          console.log("[ColFix Rev.4910] tabela epi_estoque_ajustes garantida.");
+        }
+      } catch (e: any) { console.error("[ColFix Rev.4910] FALHA epi_estoque_ajustes:", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos.
       // Rev. 4605: só marca se o bloco crítico (índice único de projeções) passou.

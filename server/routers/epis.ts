@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getCompaniesForUser, userCanAccessObra, getEffectiveAllowedObraIds } from "../db";
-import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios, companies, comprasSolicitacoes, comprasSolicitacoesItens, epiEstoqueMinimo, epiAssinaturas } from "../../drizzle/schema";
+import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios, companies, comprasSolicitacoes, comprasSolicitacoesItens, epiEstoqueMinimo, epiAssinaturas, epiEstoqueAjustes } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, gte, inArray, ilike, or, getTableColumns } from "drizzle-orm";
 import { getConstrutorasIds } from "../db";
 import { storagePut } from "../storage";
@@ -392,10 +392,14 @@ export const episRouter = router({
       condicao: z.enum(['Novo','Reutilizado']).optional(),
       alteradoPor: z.string().optional(),
       fotoUrl: z.string().nullable().optional(),
+      // Rev. 4910 — Poka-Yoke: motivo do ajuste de estoque + trava otimista
+      // (saldo que o formulário carregou; se o banco mudou no meio, bloqueia).
+      motivoAjuste: z.string().optional(),
+      estoqueOriginal: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      const { id, ...data } = input;
+      const { id, motivoAjuste, estoqueOriginal, ...data } = input;
       // Rev. 2950 — guard de tenant + permissão de Central. Carrega a linha p/
       // derivar a empresa (anti-IDOR) e o saldo atual do Central.
       const [epiRow] = await db.select({ companyId: epis.companyId, quantidadeEstoque: epis.quantidadeEstoque }).from(epis).where(eq(epis.id, id));
@@ -406,8 +410,25 @@ export const episRouter = router({
       }
       // Só bloqueia se a edição REALMENTE altera o saldo do Almoxarifado Central
       // (mexer em nome/CA/foto etc. continua livre p/ quem gerencia o catálogo).
-      if (data.quantidadeEstoque !== undefined && data.quantidadeEstoque !== (epiRow.quantidadeEstoque ?? 0)) {
+      const saldoAtual = epiRow.quantidadeEstoque ?? 0;
+      const mudaEstoque = data.quantidadeEstoque !== undefined && data.quantidadeEstoque !== saldoAtual;
+      if (mudaEstoque) {
         await assertCentralWrite(ctx);
+        // Rev. 4910 — Poka-Yoke: trava otimista contra sobrescrita cega. Se o
+        // saldo mudou no banco depois que o formulário carregou (transferência,
+        // entrega ou outro usuário), bloqueia em vez de gravar valor defasado.
+        if (estoqueOriginal === undefined) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Ajuste de estoque central exige o saldo original carregado no formulário (estoqueOriginal)." });
+        }
+        if (estoqueOriginal !== saldoAtual) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `O estoque central deste EPI mudou enquanto você editava (era ${estoqueOriginal}, agora é ${saldoAtual}). Recarregue o EPI e ajuste novamente.`,
+          });
+        }
+        if (!motivoAjuste || !motivoAjuste.trim()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o motivo do ajuste de estoque central." });
+        }
       }
       const updateData: any = {};
       updateData.alteradoPor = ctx.user?.name || data.alteradoPor || 'Sistema';
@@ -429,8 +450,50 @@ export const episRouter = router({
       if (data.corCapacete !== undefined) updateData.corCapacete = data.corCapacete;
       if (data.condicao !== undefined) updateData.condicao = data.condicao;
       if (data.fotoUrl !== undefined) updateData.fotoUrl = data.fotoUrl;
-      await db.update(epis).set(updateData).where(eq(epis.id, id));
+      if (mudaEstoque) {
+        // Rev. 4910 — Poka-Yoke: compare-and-set atômico + log na MESMA transação.
+        // Corrida entre dois ajustes (ou ajuste × transferência) não sobrescreve às cegas.
+        await db.transaction(async (tx) => {
+          const res: any = await tx.update(epis)
+            .set(updateData)
+            .where(and(eq(epis.id, id), sql`COALESCE(${epis.quantidadeEstoque}, 0) = ${estoqueOriginal}`));
+          if ((res?.rowCount ?? 0) === 0) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "O estoque central deste EPI mudou enquanto você editava. Recarregue o EPI e ajuste novamente.",
+            });
+          }
+          await tx.insert(epiEstoqueAjustes).values({
+            companyId: epiRow.companyId,
+            epiId: id,
+            quantidadeAntes: saldoAtual,
+            quantidadeDepois: data.quantidadeEstoque!,
+            motivo: motivoAjuste!.trim(),
+            criadoPor: ctx.user?.name || 'Sistema',
+            criadoPorUserId: ctx.user?.id || null,
+          } as any);
+        });
+      } else {
+        await db.update(epis).set(updateData).where(eq(epis.id, id));
+      }
       return { success: true };
+    }),
+
+  // Rev. 4910 — histórico de ajustes manuais do estoque central de um EPI
+  ajustesEstoque: protectedProcedure
+    .input(z.object({ epiId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const [epiRow] = await db.select({ companyId: epis.companyId }).from(epis).where(eq(epis.id, input.epiId));
+      if (!epiRow) return [];
+      const allowedCos = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCos.some((c) => c.id === epiRow.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este EPI." });
+      }
+      return db.select().from(epiEstoqueAjustes)
+        .where(and(eq(epiEstoqueAjustes.epiId, input.epiId), eq(epiEstoqueAjustes.companyId, epiRow.companyId)))
+        .orderBy(desc(epiEstoqueAjustes.createdAt))
+        .limit(20);
     }),
 
   // Atualizar só a foto (ação rápida)
