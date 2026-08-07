@@ -13,11 +13,18 @@
  * Roda a cada 1 hora e na inicialização do servidor (com delay de 30s).
  */
 import { getDb } from "../db";
-import { employees, vacationPeriods, atestados, notificationLogs, notificationRecipients } from "../../drizzle/schema";
+import { employees, vacationPeriods, atestados, notificationLogs, notificationRecipients, obraFuncionarios, obras } from "../../drizzle/schema";
 import { eq, and, sql, isNull, inArray } from "drizzle-orm";
 import { logStatusChange } from "../lib/employeeStatusHelper";
 import { sendEmail } from "./smtpService";
 import { getCompanyBranding, renderBrandedEmail } from "./emailNotification";
+
+// Rev. 4911 — URL base absoluta p/ imagens em e-mail (mesmo padrão do integrasignEmail)
+function getEmailBaseUrl(): string {
+  return process.env.REPLIT_DEV_DOMAIN
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : process.env.BASE_URL || "https://app.fcengenharia.com.br";
+}
 
 let statusSyncInterval: NodeJS.Timeout | null = null;
 
@@ -56,6 +63,7 @@ export async function syncEmployeeStatus(): Promise<{
       nomeCompleto: employees.nomeCompleto,
       status: employees.status,
       companyId: employees.companyId,
+      fotoUrl: employees.fotoUrl,
       licencaMaternidade: employees.licencaMaternidade,
       licencaDataInicio: employees.licencaDataInicio,
       licencaDataFim: employees.licencaDataFim,
@@ -247,6 +255,18 @@ export async function syncEmployeeStatus(): Promise<{
 
         const diasRestantes = Math.ceil((new Date(at.dataRetorno! + "T12:00:00").getTime() - new Date(today + "T12:00:00").getTime()) / 86400000);
         const dataRetornoBR = String(at.dataRetorno || "").split("-").reverse().join("/");
+
+        // Rev. 4911 — obra atual do colaborador (alocação ativa) no comunicado
+        let obraNome = "Sem alocação em obra";
+        try {
+          const [aloc] = await db.select({ nome: obras.nome })
+            .from(obraFuncionarios)
+            .innerJoin(obras, eq(obras.id, obraFuncionarios.obraId))
+            .where(and(eq(obraFuncionarios.employeeId, emp.id), eq(obraFuncionarios.isActive, 1)))
+            .limit(1);
+          if (aloc?.nome) obraNome = aloc.nome;
+        } catch (e) { console.error("[StatusSync] Erro ao buscar obra do colaborador:", e); }
+
         const titulo = diasRestantes <= 0
           ? `RETORNO HOJE — ${emp.nomeCompleto} retorna do afastamento`
           : `RETORNO EM ${diasRestantes} DIA(S) — ${emp.nomeCompleto} retorna em ${dataRetornoBR}`;
@@ -257,6 +277,7 @@ Comunicamos que o colaborador abaixo identificado tem retorno previsto do afasta
 ▸ DADOS DO RETORNO
 ┌──────────────────────────────────────────────┐
 │  Colaborador: ${emp.nomeCompleto}
+│  Obra atual: ${obraNome}
 │  Data prevista de retorno: ${dataRetornoBR}
 │  Dias restantes: ${diasRestantes}
 └──────────────────────────────────────────────┘
@@ -272,7 +293,15 @@ Atenciosamente,
 
 Comunicado automático — Sistema de Gestão de Pessoas`;
         const companyBranding = await getCompanyBranding(at.companyId);
-        const corpoHtml = renderBrandedEmail(titulo, corpoTxt, companyBranding);
+        let corpoHtml = renderBrandedEmail(titulo, corpoTxt, companyBranding);
+        // Rev. 4911 — foto do colaborador no e-mail (URL absoluta p/ clientes de e-mail)
+        const fotoAbs = emp.fotoUrl
+          ? (emp.fotoUrl.startsWith("http") ? emp.fotoUrl : `${getEmailBaseUrl()}${emp.fotoUrl}${emp.fotoUrl.includes("?") ? "&" : "?"}w=240`)
+          : null;
+        if (fotoAbs) {
+          const fotoHtml = `<div style="text-align:center;margin-bottom:16px;"><img src="${fotoAbs}" alt="${emp.nomeCompleto}" width="120" style="width:120px;height:120px;object-fit:cover;border-radius:60px;border:3px solid #1B2A4A;" /></div>`;
+          corpoHtml = corpoHtml.replace("Bom dia,", `${fotoHtml}Bom dia,`);
+        }
         for (const r of recipients) {
           let statusEnvio: "enviado" | "erro" = "erro";
           let erroMsg: string | null = "SMTP não configurado";
