@@ -883,6 +883,14 @@ export default function Ferias() {
   // tRPC utils for invalidation
   const utils = trpc.useUtils();
 
+  // Rev. 4914 — Análise de Impacto na Obra (IA)
+  const [showImpactoDialog, setShowImpactoDialog] = useState(false);
+  const [impactoData, setImpactoData] = useState<any>(null);
+  const analiseImpacto = trpc.avisoPrevio.ferias.analiseImpactoObra.useMutation({
+    onSuccess: (d: any) => { setImpactoData(d); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   // Mutations
   const createFerias = trpc.avisoPrevio.ferias.create.useMutation({
     onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Férias registradas!"); setShowDialog(false); setForm({}); },
@@ -1131,6 +1139,48 @@ export default function Ferias() {
     if (n.has(id)) n.delete(id); else n.add(id);
     return n;
   });
+
+  // Rev. 4913 — Painel de janelas de vencimento (Lista de Férias): classifica o
+  // período ATUAL de cada colaborador pelos dias restantes até a data-limite de
+  // iniciar o gozo (30d antes do fim do concessivo). Só períodos com prazo
+  // correndo (pendente/vencida) entram nas janelas; agendada/em gozo ficam fora.
+  const [janelaVenc, setJanelaVenc] = useState<string | null>(null);
+  const JANELAS = [
+    { key: "vencidas", label: "Vencidas", sub: "prazo estourado", tile: "border-red-300 bg-red-50", ring: "ring-red-400", num: "text-red-700", bar: "bg-red-500" },
+    { key: "15", label: "Até 15 dias", sub: "urgente", tile: "border-rose-300 bg-rose-50", ring: "ring-rose-400", num: "text-rose-700", bar: "bg-rose-500" },
+    { key: "30", label: "16–30 dias", sub: "programar já", tile: "border-orange-300 bg-orange-50", ring: "ring-orange-400", num: "text-orange-700", bar: "bg-orange-500" },
+    { key: "60", label: "31–60 dias", sub: "planejar", tile: "border-amber-300 bg-amber-50", ring: "ring-amber-400", num: "text-amber-700", bar: "bg-amber-500" },
+    { key: "90", label: "61–90 dias", sub: "no radar", tile: "border-yellow-300 bg-yellow-50", ring: "ring-yellow-400", num: "text-yellow-700", bar: "bg-yellow-400" },
+    { key: "90plus", label: "+90 dias", sub: "sem pressa", tile: "border-emerald-300 bg-emerald-50", ring: "ring-emerald-400", num: "text-emerald-700", bar: "bg-emerald-500" },
+  ] as const;
+  const bucketDoGrupo = (rep: any): string | null => {
+    const emPrazo = rep.status === "pendente" || rep.status === "vencida" || rep.vencida;
+    if (!emPrazo) return null;
+    const limite = dataLimiteInicioGozoFerias(rep.periodoConcessivoFim);
+    if (!limite) return null;
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const lim = new Date(limite + "T00:00:00");
+    if (isNaN(lim.getTime())) return null;
+    const dias = Math.floor((lim.getTime() - hoje.getTime()) / 86400000);
+    if (dias < 0) return "vencidas";
+    if (dias <= 15) return "15";
+    if (dias <= 30) return "30";
+    if (dias <= 60) return "60";
+    if (dias <= 90) return "90";
+    return "90plus";
+  };
+  const janelaCounts = useMemo(() => {
+    const c: Record<string, number> = { vencidas: 0, "15": 0, "30": 0, "60": 0, "90": 0, "90plus": 0 };
+    for (const g of gruposPorColaborador) {
+      const b = bucketDoGrupo(g.rep);
+      if (b) c[b]++;
+    }
+    return c;
+  }, [gruposPorColaborador]);
+  const gruposVisiveis = useMemo(
+    () => janelaVenc ? gruposPorColaborador.filter((g) => bucketDoGrupo(g.rep) === janelaVenc) : gruposPorColaborador,
+    [gruposPorColaborador, janelaVenc]
+  );
 
   // Rev. 2652 — lista de cargos distintos p/ o filtro (a partir da lista completa).
   const cargosDisponiveis = useMemo(() => {
@@ -1514,6 +1564,122 @@ export default function Ferias() {
               </div>
             </div>
 
+            {/* Rev. 4913 — Painel "Janelas de Vencimento": indicadores clicáveis por urgência */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" /> Janelas de vencimento — prazo p/ iniciar o gozo
+                </p>
+                <div className="flex items-center gap-3">
+                  {janelaVenc && (
+                    <button type="button" className="text-xs text-primary hover:underline" onClick={() => setJanelaVenc(null)}>
+                      <X className="h-3 w-3 inline mr-0.5" />Limpar janela
+                    </button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-violet-300 text-violet-700 hover:bg-violet-50"
+                    disabled={analiseImpacto.isPending}
+                    onClick={() => { setShowImpactoDialog(true); if (!impactoData) analiseImpacto.mutate({ companyId, companyIds }); }}
+                    title="Cruza colaborador × obra alocada × atividades do cronograma e indica o risco de liberar cada um para férias"
+                  >
+                    {analiseImpacto.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Zap className="h-3.5 w-3.5 mr-1" />}
+                    Análise de Impacto (IA)
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                {JANELAS.map((j) => {
+                  const n = janelaCounts[j.key] || 0;
+                  const ativo = janelaVenc === j.key;
+                  return (
+                    <button
+                      key={j.key}
+                      type="button"
+                      onClick={() => setJanelaVenc(ativo ? null : j.key)}
+                      className={`relative overflow-hidden text-left rounded-xl border p-3 transition-all hover:shadow-md ${j.tile} ${ativo ? `ring-2 ${j.ring} shadow-md` : ""} ${n === 0 ? "opacity-55" : ""}`}
+                      title={`${j.label} — colaboradores cujo período atual precisa iniciar o gozo nessa janela. Clique para filtrar a lista.`}
+                    >
+                      <span className={`absolute left-0 top-0 bottom-0 w-1 ${j.bar}`} />
+                      <p className={`text-2xl font-bold leading-none ${j.num}`}>{fmtNum(n)}</p>
+                      <p className="text-[11px] font-semibold mt-1 text-foreground/80">{j.label}</p>
+                      <p className="text-[10px] text-muted-foreground">{j.sub}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Rev. 4914 — Dialog Análise de Impacto na Obra (IA) */}
+            <Dialog open={showImpactoDialog} onOpenChange={setShowImpactoDialog}>
+              <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-violet-600" /> Análise de Impacto na Obra — Férias
+                  </DialogTitle>
+                </DialogHeader>
+                {analiseImpacto.isPending ? (
+                  <div className="py-12 text-center text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" />
+                    <p className="text-sm">Cruzando férias a vencer × alocação em obra × cronograma...</p>
+                  </div>
+                ) : !impactoData ? (
+                  <div className="py-8 text-center text-muted-foreground text-sm">Clique em "Analisar" para gerar.</div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        Horizonte: próximos {impactoData.horizonteDias} dias · {impactoData.itens.length} colaborador(es) com prazo correndo
+                        {impactoData.iaAtiva === false && <span className="ml-1 text-amber-600">· IA desativada — análise determinística</span>}
+                      </p>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={analiseImpacto.isPending} onClick={() => analiseImpacto.mutate({ companyId, companyIds })}>
+                        <RefreshCw className="h-3 w-3 mr-1" /> Atualizar
+                      </Button>
+                    </div>
+                    {impactoData.itens.length === 0 && (
+                      <div className="py-8 text-center text-muted-foreground text-sm">Nenhuma férias a vencer no horizonte analisado. 🎉</div>
+                    )}
+                    {impactoData.itens.map((it: any) => {
+                      const cor = it.risco === "critico" ? "border-red-300 bg-red-50" : it.risco === "atencao" ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50/50";
+                      const badge = it.risco === "critico" ? <Badge variant="destructive" className="text-[10px]">CRÍTICO — não relocar sem plano</Badge>
+                        : it.risco === "atencao" ? <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300">ATENÇÃO — planejar substituto</Badge>
+                        : <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300">OK — baixo impacto</Badge>;
+                      return (
+                        <div key={it.employeeId} className={`rounded-lg border p-3 ${cor}`}>
+                          <div className="flex items-start justify-between gap-2 flex-wrap">
+                            <div>
+                              <p className="font-semibold text-sm">{it.employeeName}</p>
+                              <p className="text-xs text-muted-foreground">{it.cargo || "-"} · {it.obraNome ? `Obra: ${it.obraNome}` : "Sem alocação em obra"}</p>
+                            </div>
+                            <div className="text-right">
+                              {badge}
+                              <p className="text-[10px] text-muted-foreground mt-1">
+                                {it.diasRestantes < 0 ? `Prazo vencido há ${Math.abs(it.diasRestantes)} dias` : `Vence em ${it.diasRestantes} dias`} · {it.numeroPeriodo}º período
+                              </p>
+                            </div>
+                          </div>
+                          {it.obraNome && (
+                            <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-2 text-[11px] text-foreground/80">
+                              <span>👥 Equipe na obra: <b>{it.equipeTotal}</b></span>
+                              <span>{it.colegasMesmaFuncao === 0 ? <b className="text-red-700">Único "{it.cargo}" na obra</b> : <>Colegas da mesma função: <b>{it.colegasMesmaFuncao}</b></>}</span>
+                              <span>📋 Atividades abertas no período: <b>{it.atividadesJanela}</b></span>
+                            </div>
+                          )}
+                          {it.atividadesPrincipais?.length > 0 && (
+                            <p className="text-[11px] text-muted-foreground mt-1 break-words">Principais atividades: {it.atividadesPrincipais.join("; ")}</p>
+                          )}
+                          {it.parecer && (
+                            <p className="text-xs mt-2 border-t pt-2 text-foreground/90 break-words"><b className="text-violet-700">Parecer IA:</b> {it.parecer}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+
             <Card>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -1534,7 +1700,7 @@ export default function Ferias() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filtered.length === 0 ? (
+                      {gruposVisiveis.length === 0 ? (
                         <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Nenhuma férias encontrada</td></tr>
                       ) : (() => {
                       // Rev. 4912 — render agrupado por colaborador (período atual + expansor)
@@ -1715,7 +1881,7 @@ export default function Ferias() {
                           </tr>
                         );
                       };
-                      return gruposPorColaborador.flatMap((g) => {
+                      return gruposVisiveis.flatMap((g) => {
                         const expanded = gruposExpandidos.has(g.employeeId);
                         const out = [renderRow(g.rep, g.resto.length > 0 ? { count: g.resto.length, expanded } : undefined)];
                         if (expanded) out.push(...g.resto.map((r: any) => renderRow(r, undefined, true)));

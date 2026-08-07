@@ -1,7 +1,9 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, createAuditLog, encerrarContratosPjDoFuncionario, userCanSeeAvisoStatus, getCompaniesForUser } from "../db";
-import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist, comboDemissaoSimulacoes, cipaMembers, cipaElections, dissidios, gestorSubstituicaoSolicitacoes } from "../../drizzle/schema";
+import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist, comboDemissaoSimulacoes, cipaMembers, cipaElections, dissidios, gestorSubstituicaoSolicitacoes, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades } from "../../drizzle/schema";
+import { invokeLLM } from "../_core/llm";
+import { isAiModuleEnabled } from "../_core/aiConfig";
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -3691,6 +3693,220 @@ export const avisoPrevioFeriasRouter = router({
         .orderBy(asc(vacationPeriods.dataInicio));
         
         return rows;
+      }),
+
+    // Rev. 4914 — Análise de Impacto na Obra (IA): cruza colaborador com férias
+    // a vencer × alocação em obra × atividades do cronograma vigente, e indica
+    // risco de liberar/relocar o colaborador (ex.: único engenheiro da obra).
+    // Motor determinístico decide o RISCO; a IA só redige o parecer (sanitizado).
+    analiseImpactoObra: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), horizonteDias: z.number().min(15).max(365).default(120) }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        // Tenant guard: intersecta as empresas SOLICITADAS com as ACESSÍVEIS do usuário
+        const empresasUser = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        const acessiveis = new Set(empresasUser.map((c: any) => c.id));
+        const solicitadas = input.companyIds?.length ? input.companyIds : [input.companyId];
+        const empresasOk = solicitadas.filter((id) => acessiveis.has(id));
+        if (empresasOk.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à(s) empresa(s) solicitada(s)." });
+        const escopo = { companyId: empresasOk[0], companyIds: empresasOk };
+        const hoje = new Date().toISOString().split("T")[0];
+        const fimJanela = new Date();
+        fimJanela.setDate(fimJanela.getDate() + input.horizonteDias);
+        const fimJanelaStr = fimJanela.toISOString().split("T")[0];
+
+        // 1) Candidatos: períodos pendentes/vencidos com prazo dentro do horizonte
+        const cands = await db.select({
+          periodoId: vacationPeriods.id,
+          employeeId: vacationPeriods.employeeId,
+          periodoConcessivoFim: vacationPeriods.periodoConcessivoFim,
+          numeroPeriodo: vacationPeriods.numeroPeriodo,
+          status: vacationPeriods.status,
+          employeeName: employees.nomeCompleto,
+          employeeCargo: employees.cargo,
+        })
+          .from(vacationPeriods)
+          .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
+          .where(and(
+            companyFilter(vacationPeriods.companyId, escopo),
+            isNull(vacationPeriods.deletedAt),
+            isNull(employees.deletedAt),
+            sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`,
+            sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
+            inArray(vacationPeriods.status, ["pendente", "vencida"]),
+            sql`${vacationPeriods.periodoConcessivoFim} <= ${fimJanelaStr}`,
+          ))
+          .orderBy(asc(vacationPeriods.periodoConcessivoFim))
+          .limit(300);
+        if (cands.length === 0) return { itens: [], geradoEm: new Date().toISOString(), horizonteDias: input.horizonteDias };
+
+        // 1 candidato por colaborador (período que vence primeiro)
+        const porEmp = new Map<number, typeof cands[number]>();
+        for (const c of cands) {
+          const atual = porEmp.get(c.employeeId);
+          if (!atual || String(c.periodoConcessivoFim || "") < String(atual.periodoConcessivoFim || "")) porEmp.set(c.employeeId, c);
+        }
+        const empIds = Array.from(porEmp.keys());
+
+        // 2) Alocação ativa em obra
+        const alocs = await db.select({
+          employeeId: obraFuncionarios.employeeId,
+          obraId: obraFuncionarios.obraId,
+          obraNome: obras.nome,
+        })
+          .from(obraFuncionarios)
+          .innerJoin(obras, eq(obras.id, obraFuncionarios.obraId))
+          .where(and(
+            inArray(obraFuncionarios.employeeId, empIds),
+            eq(obraFuncionarios.isActive, 1),
+            inArray(obraFuncionarios.companyId, empresasOk),
+            inArray(obras.companyId, empresasOk),
+          ));
+        const alocPorEmp = new Map<number, { obraId: number; obraNome: string }>();
+        for (const a of alocs) if (!alocPorEmp.has(a.employeeId)) alocPorEmp.set(a.employeeId, { obraId: a.obraId, obraNome: a.obraNome });
+        const obraIds = Array.from(new Set(alocs.map(a => a.obraId)));
+
+        // 3) Equipe ativa por obra (p/ contar colegas da mesma função)
+        const equipes = obraIds.length ? await db.select({
+          obraId: obraFuncionarios.obraId,
+          employeeId: obraFuncionarios.employeeId,
+          cargo: employees.cargo,
+        })
+          .from(obraFuncionarios)
+          .innerJoin(employees, eq(employees.id, obraFuncionarios.employeeId))
+          .where(and(
+            inArray(obraFuncionarios.obraId, obraIds),
+            eq(obraFuncionarios.isActive, 1),
+            inArray(obraFuncionarios.companyId, empresasOk),
+            isNull(employees.deletedAt),
+            sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`,
+          )) : [];
+
+        // 4) Cronograma vigente por obra: atividades abertas na janela
+        const projetos = obraIds.length ? await db.select({
+          projetoId: planejamentoProjetos.id,
+          obraId: planejamentoProjetos.obraId,
+        })
+          .from(planejamentoProjetos)
+          .where(and(
+            companyFilter(planejamentoProjetos.companyId, escopo),
+            inArray(planejamentoProjetos.obraId, obraIds),
+          )) : [];
+        const projPorObra = new Map<number, number>();
+        for (const p of projetos) if (p.obraId != null && !projPorObra.has(p.obraId)) projPorObra.set(p.obraId, p.projetoId);
+        const atividadesPorObra = new Map<number, { total: number; principais: string[] }>();
+        // Cap de segurança: no máx. 30 obras com leitura de cronograma por análise
+        for (const [obraId, projetoId] of Array.from(projPorObra.entries()).slice(0, 30)) {
+          try {
+            const [rev] = await db.select({ id: planejamentoRevisoes.id })
+              .from(planejamentoRevisoes)
+              .where(eq(planejamentoRevisoes.projetoId, projetoId))
+              .orderBy(desc(planejamentoRevisoes.numero))
+              .limit(1);
+            if (!rev) continue;
+            const ats = await db.select({ nome: planejamentoAtividades.nome, dataFim: planejamentoAtividades.dataFim, peso: planejamentoAtividades.pesoFinanceiro })
+              .from(planejamentoAtividades)
+              .where(and(
+                eq(planejamentoAtividades.revisaoId, rev.id),
+                eq(planejamentoAtividades.isGrupo, false),
+                sql`${planejamentoAtividades.dataFim} >= ${hoje}`,
+                sql`${planejamentoAtividades.dataInicio} <= ${fimJanelaStr}`,
+                isNull(planejamentoAtividades.dataFimReal),
+              ));
+            const ordenadas = [...ats].sort((a, b) => Number(b.peso || 0) - Number(a.peso || 0));
+            atividadesPorObra.set(obraId, { total: ats.length, principais: ordenadas.slice(0, 5).map(a => String(a.nome).slice(0, 120)) });
+          } catch (e) {
+            console.error("[FeriasImpacto] Erro ao ler cronograma da obra", obraId, e);
+          }
+        }
+
+        // 5) Motor determinístico de risco
+        const CARGOS_CHAVE = /engenheir|mestre|encarregad|tecnico de seguranca|técnico de segurança|coordenador|supervisor/i;
+        const itens = Array.from(porEmp.values()).map((c) => {
+          const aloc = alocPorEmp.get(c.employeeId) || null;
+          const cargo = c.employeeCargo || "";
+          let colegasMesmaFuncao = 0, equipeTotal = 0;
+          if (aloc) {
+            for (const m of equipes) {
+              if (m.obraId !== aloc.obraId) continue;
+              equipeTotal++;
+              if (m.employeeId !== c.employeeId && (m.cargo || "").trim().toLowerCase() === cargo.trim().toLowerCase()) colegasMesmaFuncao++;
+            }
+          }
+          const cron = aloc ? atividadesPorObra.get(aloc.obraId) : undefined;
+          const atividadesJanela = cron?.total ?? 0;
+          const cargoChave = CARGOS_CHAVE.test(cargo);
+          const diasRestantes = Math.floor((new Date(String(c.periodoConcessivoFim) + "T00:00:00").getTime() - new Date(hoje + "T00:00:00").getTime()) / 86400000);
+          let risco: "critico" | "atencao" | "ok" = "ok";
+          if (aloc && colegasMesmaFuncao === 0 && cargoChave) risco = "critico";
+          else if (aloc && (colegasMesmaFuncao === 0 || (cargoChave && colegasMesmaFuncao <= 1))) risco = "atencao";
+          if (!aloc) risco = "ok";
+          return {
+            employeeId: c.employeeId,
+            employeeName: c.employeeName,
+            cargo,
+            cargoChave,
+            obraId: aloc?.obraId ?? null,
+            obraNome: aloc?.obraNome ?? null,
+            colegasMesmaFuncao,
+            equipeTotal,
+            atividadesJanela,
+            atividadesPrincipais: cron?.principais ?? [],
+            periodoConcessivoFim: c.periodoConcessivoFim,
+            diasRestantes,
+            numeroPeriodo: c.numeroPeriodo || 1,
+            statusPeriodo: c.status,
+            risco,
+            parecer: "" as string,
+          };
+        }).sort((a, b) => {
+          const ord = { critico: 0, atencao: 1, ok: 2 } as any;
+          return (ord[a.risco] - ord[b.risco]) || (a.diasRestantes - b.diasRestantes);
+        });
+
+        // 6) Parecer da IA (opcional, fail-safe): só redige texto; risco não muda.
+        const aiOn = await isAiModuleEnabled(escopo.companyId, "rh");
+        if (aiOn && itens.length > 0) {
+          try {
+            const foco = itens.filter(i => i.risco !== "ok").slice(0, 20);
+            if (foco.length > 0) {
+              const fatos = foco.map(i => ({
+                id: i.employeeId, nome: i.employeeName, cargo: i.cargo, obra: i.obraNome,
+                colegasMesmaFuncao: i.colegasMesmaFuncao, equipeTotal: i.equipeTotal,
+                atividadesAbertasNaJanela: i.atividadesJanela, atividadesPrincipais: i.atividadesPrincipais,
+                diasAteVencerPrazoFerias: i.diasRestantes, risco: i.risco,
+              }));
+              const resp = await invokeLLM({
+                fast: true,
+                maxTokens: 2000,
+                messages: [
+                  { role: "system", content: "Você é um analista de planejamento de obras. Para cada colaborador, escreva um parecer CURTO (máx. 2 frases, pt-BR) sobre o impacto de ele sair de férias, usando SOMENTE os fatos fornecidos (não invente números nem nomes). Sugira ação prática (antecipar férias, treinar/alocar substituto, escalonar com colega, janela de menor atividade). Responda APENAS JSON: {\"pareceres\":[{\"id\":number,\"parecer\":string}]}" },
+                  { role: "user", content: JSON.stringify({ hoje, colaboradores: fatos }) },
+                ],
+              });
+              const raw = resp.choices?.[0]?.message?.content;
+              const txt = typeof raw === "string" ? raw : Array.isArray(raw) ? raw.map((p: any) => p?.text || "").join("") : "";
+              const jsonTxt = txt.replace(/```json|```/g, "").trim();
+              let parsed: any = null;
+              try { parsed = JSON.parse(jsonTxt); } catch { const m = jsonTxt.match(/\{[\s\S]*\}/); if (m) { try { parsed = JSON.parse(m[0]); } catch {} } }
+              const idsValidos = new Set(foco.map(f => f.employeeId));
+              if (parsed?.pareceres && Array.isArray(parsed.pareceres)) {
+                for (const p of parsed.pareceres) {
+                  const id = Number(p?.id);
+                  const texto = typeof p?.parecer === "string" ? p.parecer.slice(0, 400) : "";
+                  if (idsValidos.has(id) && texto) {
+                    const item = itens.find(i => i.employeeId === id);
+                    if (item) item.parecer = texto;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error("[FeriasImpacto] IA indisponível — retornando análise determinística:", e);
+          }
+        }
+
+        return { itens, geradoEm: new Date().toISOString(), horizonteDias: input.horizonteDias, iaAtiva: aiOn };
       }),
 
     alertas: protectedProcedure
