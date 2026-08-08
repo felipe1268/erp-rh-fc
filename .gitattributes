@@ -7,3 +7,4 @@ attached_assets/POITA-ARQ-004-PE-PL-LAYT-TER-R03_1785579223403.dxf filter=lfs di
 server/uploads/medicao-campo/60002/upload/1785579170988-gcwc78.dxf filter=lfs diff=lfs merge=lfs -text
 server/uploads/backups/erp-fc-backup-2026-08-02T03-00-01.json.gz filter=lfs diff=lfs merge=lfs -text
 server/uploads/backups/erp-fc-backup-2026-08-04T03-00-01.json.gz filter=lfs diff=lfs merge=lfs -text
+server/uploads/backups/erp-fc-backup-2026-08-08T03-00-01.json.gz filter=lfs diff=lfs merge=lfs -text
