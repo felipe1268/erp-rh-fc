@@ -63,7 +63,7 @@ const MODULES: Module[] = [
     iconBg: "rgba(59,130,246,0.12)",
     path: "/painel/rh",
     active: true,
-    features: ["Colaboradores", "Folha de Pagamento", "Ponto Eletrônico", "Férias & Aviso Prévio", "Contratos PJ", "Vale Alimentação"],
+    features: ["Colaboradores", "Folha de Pagamento", "Ponto Eletrônico", "Férias & Aviso Prévio", "Contratos de Prestadores", "Vale Alimentação"],
   },
   {
     id: "sst",

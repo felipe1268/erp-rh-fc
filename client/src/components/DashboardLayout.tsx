@@ -91,7 +91,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Users, label: "Colaboradores", path: "/colaboradores" },
       { icon: ClipboardList, label: "Coleta de Campo", path: "/coleta-campo" },
       { icon: RefreshCw, label: "Recontratações Pendentes", path: "/recontratacoes-pendentes" },
-      { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
+      { icon: FileSignature, label: "Contratos de Prestadores", path: "/modulo-pj" },
     ],
   },
   {
@@ -867,7 +867,7 @@ const ICON_MAP: Record<string, any> = {
   "Férias": Palmtree,
   "Seguro de Vida": ShieldCheck,
   "CIPA": Shield,
-  "Contratos PJ": FileSignature,
+  "Contratos de Prestadores": FileSignature,
   "Solicitação de Hora Extra": Clock,
   "Revisões do Sistema": GitBranch,
   "Biblioteca de Conhecimento": BookOpen,

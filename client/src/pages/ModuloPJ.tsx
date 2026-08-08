@@ -880,7 +880,7 @@ export default function ModuloPJ() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Briefcase className="h-6 w-6 text-purple-600" />
-              Módulo PJ — Contratos e Pagamentos
+              Contratos de Prestadores — PJ e Pagamentos
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               Gestão de contratos PJ — Folha 40/60, bonificações e alertas de vencimento

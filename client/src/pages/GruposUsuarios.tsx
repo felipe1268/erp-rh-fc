@@ -44,7 +44,7 @@ const ALL_ROUTES = [
     { path: "/crachas", label: "Crachás", icon: "CreditCard" },
     { path: "/aviso-previo", label: "Aviso Prévio", icon: "AlertTriangle" },
     { path: "/ferias", label: "Férias", icon: "Palmtree" },
-    { path: "/modulo-pj", label: "Contratos PJ", icon: "FileSignature" },
+    { path: "/modulo-pj", label: "Contratos de Prestadores", icon: "FileSignature" },
     { path: "/pj-medicoes", label: "PJ Medições", icon: "FileSpreadsheet" },
     { path: "/feriados", label: "Feriados", icon: "CalendarDays" },
     { path: "/dissidio", label: "Dissídio", icon: "TrendingUp" },
