@@ -2259,7 +2259,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                               <td className="p-3 text-right font-mono font-bold text-lg">{formatSalario(f.salarioLiquido)}</td>
                               {compNum > 0 && <td className="p-3 text-right font-mono text-orange-700 bg-amber-50/40">{formatSalario(String(compNum.toFixed(2)))}</td>}
                               {compNum > 0 && <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50/40">{formatSalario(String(totalReceb.toFixed(2)))}</td>}
-                              <td className="p-3 text-center"><Badge variant={f.status === "Pago" ? "default" : "secondary"}>{f.status}</Badge></td>
+                              <td className="p-3 text-center"><Badge variant={String(f.status || "").toLowerCase() === "pago" ? "default" : "secondary"}>{f.status}</Badge></td>
                             </tr>
                             {isOpen && (
                               <tr className="border-b last:border-0 bg-slate-50/70">
