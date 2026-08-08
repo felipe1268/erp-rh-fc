@@ -1612,6 +1612,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     label: "Benefícios",
                     color: "teal",
                     tabs: [
+                      { value: "vale_va", label: "Vale Alimentação / VT", icon: DollarSign, count: valeAlimentacao.length },
                       { value: "seguro_vida", label: "Seguro de Vida", icon: Shield, count: coberturaSeguro ? 1 : 0 },
                       { value: "parceiros_lanc", label: "Parceiros / Convênios", icon: Handshake, count: ((raioX as any)?.parceirosLancamentos || []).length },
                     ],
@@ -4174,6 +4175,60 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               </TabsContent>
 
               {/* ============ SEGURO DE VIDA ============ */}
+              {/* ============ VALE ALIMENTAÇÃO / VT (Rev. 4925) ============ */}
+              <TabsContent value="vale_va" className="mt-4">
+                <div className="space-y-4">
+                  {/* Vale Transporte — configuração do cadastro */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground">Vale Transporte</p>
+                      <p className="text-lg font-bold text-blue-700">{emp?.vtRecebe === 1 ? (emp?.vtTipo || "Recebe") : "Não recebe"}</p>
+                      {emp?.vtRecebe === 1 && emp?.vtValorDiario && <p className="text-xs text-muted-foreground mt-0.5">Diário: {formatSalario(emp.vtValorDiario)}{emp?.vtOperadora ? ` · ${emp.vtOperadora}` : ""}</p>}
+                    </CardContent></Card>
+                    <Card className="border-l-4 border-l-green-500"><CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground">Lançamentos de VA/VR</p>
+                      <p className="text-lg font-bold text-green-700">{fmtNum(valeAlimentacao.length)}</p>
+                    </CardContent></Card>
+                    <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground">Total VA/VR (histórico)</p>
+                      <p className="text-lg font-bold text-emerald-700">{hideSalary ? SALARY_MASK : formatSalario(String(valeAlimentacao.reduce((s: number, v: any) => s + (Number(String(v.valorTotal || "0").replace(/\./g, "").replace(",", ".")) || 0), 0).toFixed(2)))}</p>
+                    </CardContent></Card>
+                  </div>
+                  {valeAlimentacao.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground text-sm">Nenhum lançamento de vale alimentação registrado</div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border bg-white">
+                      <table className="w-full text-sm">
+                        <thead><tr className="bg-green-50 border-b">
+                          <th className="p-3 text-left font-semibold text-green-900">Competência</th>
+                          <th className="p-3 text-right font-semibold text-green-900">Dias</th>
+                          <th className="p-3 text-right font-semibold text-green-900">Café</th>
+                          <th className="p-3 text-right font-semibold text-green-900">Lanche</th>
+                          <th className="p-3 text-right font-semibold text-green-900">Janta</th>
+                          <th className="p-3 text-right font-semibold text-green-900">VA</th>
+                          <th className="p-3 text-right font-semibold text-green-900">Total</th>
+                          <th className="p-3 text-center font-semibold text-green-900">Status</th>
+                        </tr></thead>
+                        <tbody>
+                          {valeAlimentacao.map((v: any) => (
+                            <tr key={v.id} className="border-b last:border-0 hover:bg-muted/30">
+                              <td className="p-3 font-medium">{v.mesReferencia ? v.mesReferencia.split("-").reverse().join("/") : "—"}</td>
+                              <td className="p-3 text-right font-mono">{v.diasUteis ?? "—"}</td>
+                              <td className="p-3 text-right font-mono">{formatSalario(v.valorCafe)}</td>
+                              <td className="p-3 text-right font-mono">{formatSalario(v.valorLanche)}</td>
+                              <td className="p-3 text-right font-mono">{formatSalario(v.valorJanta)}</td>
+                              <td className="p-3 text-right font-mono">{formatSalario(v.valorVa)}</td>
+                              <td className="p-3 text-right font-mono font-bold">{formatSalario(v.valorTotal)}</td>
+                              <td className="p-3 text-center"><Badge variant={v.status === "pago" || v.status === "aprovado" ? "default" : "secondary"}>{v.status}</Badge></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
               <TabsContent value="seguro_vida" className="mt-4">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
