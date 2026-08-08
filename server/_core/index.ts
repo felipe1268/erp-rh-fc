@@ -3857,6 +3857,18 @@ REGRAS DE EXTRAÇÃO:
           await db.execute(sql`ALTER TABLE pj_conformidade ADD COLUMN IF NOT EXISTS "arquivoNome" VARCHAR(255)`);
           await db.execute(sql`ALTER TABLE notification_recipients ADD COLUMN IF NOT EXISTS "notificarConformidadePJ" SMALLINT NOT NULL DEFAULT 1`);
 
+          // Rev. 4928 — Alerta consolidado de Seguro de Vida (flag de destinatário + dedup de envios)
+          await db.execute(sql`ALTER TABLE notification_recipients ADD COLUMN IF NOT EXISTS "notificarSeguroVida" SMALLINT NOT NULL DEFAULT 1`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS seguro_vida_alertas_enviados (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              checksum VARCHAR(64) NOT NULL,
+              criado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE (company_id, checksum)
+            )
+          `);
+
           // Rev. 1386 — Reservas Preventivas + Travamento Progressivo
           await db.execute(sql`
             CREATE TABLE IF NOT EXISTS compras_reservas_saldo (
@@ -8349,6 +8361,11 @@ REGRAS DE EXTRAÇÃO:
     // t=135s — PJConformidadeJobs (Rev. 1327)
     delay(135_000).then(() =>
       import("../services/pjConformidadeJobs").then(m => m.startPJConformidadeJobs()).catch(e => console.error("[PJConformidadeJobs] Erro:", e))
+    );
+
+    // t=140s — SeguroVidaAlert (Rev. 4928): e-mail consolidado de pendências de seguro de vida
+    delay(140_000).then(() =>
+      import("../services/seguroVidaAlertJobs").then(m => m.startSeguroVidaAlertJobs()).catch(e => console.error("[SeguroVidaAlert] Erro:", e))
     );
 
     // t=10s — SMO Rev.4296: recomputa registros sem teto de sanidade salarial (one-shot, idempotente)

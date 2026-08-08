@@ -152,4 +152,5 @@
 - [Cheque devolvido/estorno](cheque-devolvido-forma-pagamento.md) — vínculo 'ajuste' exige forma_pagamento; [pareamento débito×devolução heurístico exige unicidade](cheque-estorno-pairing-false-positive.md).
 - [Miniaturas de /uploads (?w=NN)](uploads-thumbnails.md) — listas de avatares DEVEM usar ?w=128+lazy; fotos originais (até 5.7MB) quebram no Safari/iPad ("?" azul = imagem quebrada, não dado faltando).
 - [Tabela payroll legada vazia](payroll-table-legacy-empty.md) — holerites reais em payroll_payments (escopar por companyId); HE CLT = banco de horas, extra_payments não é usado.
+- [Seguro de Vida — apólices](seguro-vida-import-apolices.md) — valores TEXT BR, item sem zeros; desligado pago = pendente_cancelamento; readmitido transfere cobertura; alerta consolidado com claim atômico.
 - [Casing das tabelas (camelCase quirks)](orcamentos-employees-camelcase.md) — obras/orcamentos/obra_funcionarios/payroll/HR camelCase; employees sem obra_id ([obras](obras-orcamento-schema-quirks.md), [payroll/HR](payroll-hr-tables-camelcase.md)); seguro_vida_coberturas é snake.
