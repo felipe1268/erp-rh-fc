@@ -561,7 +561,9 @@ async function handleAfastamentoStatus(
     await db.update(atestados).set({
       afastamentoINSS: isINSS,
       statusAlterado: 1,
-      statusAnterior: emp.status,
+      // Rev. 4921 — nunca memorizar "Afastado" como status de retorno (se o
+      // funcionário já estava Afastado por outro atestado, o retorno é Ativo).
+      statusAnterior: emp.status === "Afastado" ? "Ativo" : emp.status,
     }).where(eq(atestados.id, atestadoId));
 
     if (emp.status !== "Afastado") {
@@ -1385,7 +1387,33 @@ export const controleDocumentosRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
+        // Rev. 4921 — excluir um atestado que AFASTOU o funcionário deve
+        // devolver o status anterior (antes ficava "Afastado" órfão pra sempre).
+        const [at] = await db.select().from(atestados).where(eq(atestados.id, input.id));
         await db.update(atestados).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(atestados.id, input.id));
+        if (at && (at as any).statusAlterado === 1) {
+          // Só reverte se não houver OUTRO atestado ativo segurando o afastamento
+          const hoje = new Date().toISOString().slice(0, 10);
+          const outros = await db.select({ id: atestados.id }).from(atestados).where(and(
+            eq(atestados.employeeId, at.employeeId),
+            isNull(atestados.deletedAt),
+            sql`${atestados.statusAlterado} = 1`,
+            sql`${atestados.dataRetorno} > ${hoje}`,
+          ));
+          if (outros.length === 0) {
+            const [emp] = await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, status: employees.status }).from(employees).where(eq(employees.id, at.employeeId));
+            if (emp && emp.status === "Afastado") {
+              const voltar = (at as any).statusAnterior && (at as any).statusAnterior !== "Afastado" ? (at as any).statusAnterior : "Ativo";
+              await db.update(employees).set({ status: voltar as any }).where(eq(employees.id, emp.id));
+              await logStatusChange({
+                db, companyId: at.companyId, employeeId: emp.id, nomeCompleto: emp.nomeCompleto,
+                statusAnterior: "Afastado", statusNovo: voltar,
+                alteradoPor: ctx.user.name ?? "Sistema", motivo: `Atestado #${at.id} excluído — afastamento desfeito`,
+                origemModulo: "controleDocumentos",
+              });
+            }
+          }
+        }
         return { success: true };
       }),
     uploadDoc: protectedProcedure

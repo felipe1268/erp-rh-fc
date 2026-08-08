@@ -192,7 +192,9 @@ export async function syncEmployeeStatus(): Promise<{
         reason = `Atestado ativo (retorno: ${atestado?.dataRetorno})`;
       } else if (emp.status === 'Afastado' && empIdsAtestadoExpirado.has(emp.id)) {
         const info = empIdsAtestadoExpirado.get(emp.id)!;
-        newStatus = info.statusAnterior || 'Ativo';
+        // Rev. 4921 — "Afastado" nunca é destino de retorno (atestado lançado
+        // com o funcionário já afastado gravava statusAnterior='Afastado').
+        newStatus = info.statusAnterior && info.statusAnterior !== 'Afastado' ? info.statusAnterior : 'Ativo';
         reason = `Atestado expirado — retorno automático para ${newStatus}`;
       } else if (AUTO_ONLY_STATUS.includes(emp.status as any)) {
         newStatus = 'Ativo';
