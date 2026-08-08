@@ -3608,6 +3608,14 @@ export const avisoPrevioFeriasRouter = router({
             WHERE ofc."employeeId" = ${employees.id} AND ofc."isActive" = 1
             ORDER BY ofc.id DESC LIMIT 1
           )`.as("employeeObraNome"),
+          // Rev. 4920 — cargo CIPA (membro ativo com estabilidade vigente ou sem data)
+          employeeCipaCargo: sql<string | null>`(
+            SELECT cm."cargoCipa" FROM cipa_members cm
+            WHERE cm."employeeId" = ${employees.id}
+              AND cm."statusMembro" = 'Ativo'
+              AND (cm."fimEstabilidade" IS NULL OR cm."fimEstabilidade" >= CURRENT_DATE)
+            ORDER BY cm.id DESC LIMIT 1
+          )`.as("employeeCipaCargo"),
           employeeSetor: employees.setor,
           employeeSalario: employees.salarioBase,
           // Rev. 1701 — exposição p/ tag "Direito de férias perdido por afastamento >180 dias"

@@ -24,7 +24,7 @@ import {
   Users, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, Ban, CalendarDays, TrendingUp,
   Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square, Undo2,
-  ChevronDown, Trash2,
+  ChevronDown, Trash2, MapPin,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -761,7 +761,9 @@ export default function Ferias() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  // Rev. 4919 — abre mostrando só o que exige ação (concluídas escondidas por padrão)
+  const [statusFilter, setStatusFilter] = useState<string[]>(["vencida", "em_gozo", "agendada", "pendente"]);
+  const [showFiltrosAvancados, setShowFiltrosAvancados] = useState(false);
   const [filtro2Periodo2026, setFiltro2Periodo2026] = useState(false);
   const [sortBy, setSortBy] = useState<
     | "alfa_asc" | "alfa_desc"
@@ -1095,6 +1097,30 @@ export default function Ferias() {
     });
     return arr;
   }, [feriasList, search, statusFilter, filtro2Periodo2026, sortBy, cargoFilter, periodoFilter, inicioDe, inicioAte]);
+
+  // Rev. 4919 — Chips rápidos de status (contagem = colaboradores distintos)
+  const CHIPS_STATUS = [
+    { key: "ativas", label: "Ativas", vals: ["vencida", "em_gozo", "agendada", "pendente"], cls: "data-[on=true]:bg-slate-800 data-[on=true]:text-white" },
+    { key: "vencida", label: "Vencidas", vals: ["vencida"], cls: "data-[on=true]:bg-red-600 data-[on=true]:text-white" },
+    { key: "em_gozo", label: "Em Gozo", vals: ["em_gozo"], cls: "data-[on=true]:bg-emerald-600 data-[on=true]:text-white" },
+    { key: "agendada", label: "Agendadas", vals: ["agendada"], cls: "data-[on=true]:bg-blue-600 data-[on=true]:text-white" },
+    { key: "pendente", label: "A Vencer", vals: ["pendente"], cls: "data-[on=true]:bg-amber-500 data-[on=true]:text-white" },
+    { key: "concluida", label: "Concluídas", vals: ["concluida"], cls: "data-[on=true]:bg-gray-500 data-[on=true]:text-white" },
+    { key: "todas", label: "Todas", vals: [] as string[], cls: "data-[on=true]:bg-slate-800 data-[on=true]:text-white" },
+  ];
+  const chipCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const chip of CHIPS_STATUS) {
+      const ids = new Set<number>();
+      for (const a of feriasList as any[]) {
+        if (chip.vals.length === 0 || chip.vals.some((sel) => matchStatusFiltro(a, sel))) ids.add(a.employeeId);
+      }
+      c[chip.key] = ids.size;
+    }
+    return c;
+  }, [feriasList]);
+  const chipAtivo = (vals: string[]) =>
+    vals.length === statusFilter.length && vals.every((v) => statusFilter.includes(v));
 
   // Rev. 4912 — Agrupamento por colaborador na Lista de Férias: exibe só o período
   // "atual" (em gozo > agendada > pendente/vencida que vence primeiro; se tudo
@@ -1458,6 +1484,21 @@ export default function Ferias() {
           {/* ===== ABA: LISTA ===== */}
           <TabsContent value="lista">
             <div className="flex flex-col gap-3 mb-4">
+              {/* Rev. 4919 — Chips rápidos de status: um toque filtra, sem abrir menu */}
+              <div className="flex flex-wrap gap-1.5">
+                {CHIPS_STATUS.map((chip) => (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    data-on={chipAtivo(chip.vals)}
+                    onClick={() => setStatusFilter(chip.vals)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors bg-white hover:bg-muted data-[on=true]:border-transparent ${chip.cls}`}
+                  >
+                    {chip.label}
+                    <span className="text-[10px] font-bold opacity-70">{chipCounts[chip.key] ?? 0}</span>
+                  </button>
+                ))}
+              </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1526,8 +1567,25 @@ export default function Ferias() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* Rev. 4919 — Filtros avançados recolhidos por padrão */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowFiltrosAvancados((v) => !v)}
+                  aria-expanded={showFiltrosAvancados}
+                  aria-controls="ferias-filtros-avancados"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showFiltrosAvancados ? "rotate-180" : ""}`} />
+                  Filtros avançados
+                  {(() => {
+                    const n = (cargoFilter !== "todos" ? 1 : 0) + (periodoFilter !== "todos" ? 1 : 0) + (inicioDe ? 1 : 0) + (inicioAte ? 1 : 0);
+                    return n > 0 ? <span className="ml-1 bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-4 min-w-4 flex items-center justify-center px-1">{n}</span> : null;
+                  })()}
+                </button>
+              </div>
               {/* Rev. 2652 — Filtros extras: cargo, período aquisitivo e faixa de início do gozo */}
-              <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-end">
+              <div id="ferias-filtros-avancados" className={`${showFiltrosAvancados ? "flex" : "hidden"} flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-end`}>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-muted-foreground px-1">Cargo</label>
                   <Select value={cargoFilter} onValueChange={setCargoFilter}>
@@ -1799,6 +1857,25 @@ export default function Ferias() {
                                     )}
                                   </div>
                                   <div className="text-xs text-muted-foreground">{isChild ? <span className="opacity-70">↳ período anterior</span> : (f.employeeCargo || f.employeeFuncao || "-")}</div>
+                                  {/* Rev. 4920 — obra atual + selo CIPA */}
+                                  {!isChild && (f.employeeObraNome || f.employeeCipaCargo) && (
+                                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                      {f.employeeObraNome && (
+                                        <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-medium px-1.5 py-0.5 max-w-[220px]">
+                                          <MapPin className="h-2.5 w-2.5 shrink-0" />
+                                          <span className="truncate" title={f.employeeObraNome}>{f.employeeObraNome}</span>
+                                        </span>
+                                      )}
+                                      {f.employeeCipaCargo && (
+                                        <span
+                                          className="inline-flex items-center gap-1 rounded bg-violet-100 border border-violet-300 text-violet-700 text-[10px] font-bold px-1.5 py-0.5"
+                                          title={`Membro ativo da CIPA — ${String(f.employeeCipaCargo).replace(/_/g, " ")}. Atenção: possui estabilidade; planeje as férias considerando o mandato.`}
+                                        >
+                                          🛡️ CIPA · {String(f.employeeCipaCargo).replace(/_/g, " ")}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                                   {grp && grp.count > 0 && (
                                     <button
                                       type="button"
@@ -1937,41 +2014,81 @@ export default function Ferias() {
                           </tr>
                         );
                       };
-                      // Rev. 4918 — separadores por ANO de vencimento quando ordenado
-                      // por vencimento: facilita ver "o que vence este ano" vs. "ano que vem".
-                      const comSeparadorAno = sortBy === "venc_asc" || sortBy === "venc_desc";
+                      // Rev. 4918/4919 — ordenação por URGÊNCIA (Vencidas → Em Gozo →
+                      // Agendadas → A Vencer → Concluídas) quando ordenado por vencimento,
+                      // com cabeçalhos de seção e separadores de ANO dentro de "A Vencer".
+                      const comSeparadores = sortBy === "venc_asc" || sortBy === "venc_desc";
                       const anoDoGrupo = (g: any): string => String(g.rep.periodoConcessivoFim || "").slice(0, 4) || "—";
-                      const contagemAno: Record<string, number> = {};
-                      if (comSeparadorAno) for (const g of gruposVisiveis) contagemAno[anoDoGrupo(g)] = (contagemAno[anoDoGrupo(g)] || 0) + 1;
-                      let anoAtualRender = "";
-                      // Reordena os GRUPOS pelo vencimento do período representante,
-                      // garantindo blocos de ano contíguos (o rep pode diferir da 1ª linha do filtro).
-                      const gruposRender = comSeparadorAno
+                      const prioUrgencia = (rep: any): number =>
+                        isFeriasVencida(rep) ? 0
+                        : rep.status === "em_gozo" ? 1
+                        : rep.status === "agendada" ? 2
+                        : rep.status === "pendente" ? 3
+                        : 4; // concluída/cancelada
+                      const SECOES: Record<number, { label: string; cor: string; icone: string }> = {
+                        0: { label: "Vencidas", cor: "bg-red-100 text-red-800 border-red-300", icone: "🚨" },
+                        1: { label: "Em Gozo", cor: "bg-emerald-100 text-emerald-800 border-emerald-300", icone: "🌴" },
+                        2: { label: "Agendadas", cor: "bg-blue-100 text-blue-800 border-blue-300", icone: "📆" },
+                        4: { label: "Concluídas", cor: "bg-gray-100 text-gray-600 border-gray-300", icone: "✔️" },
+                      };
+                      // Urgência do GRUPO = período mais urgente entre rep e ocultos
+                      // (colaborador em gozo com vencida escondida entra em "Vencidas").
+                      const prioGrupo = (g: any): number =>
+                        Math.min(prioUrgencia(g.rep), ...g.resto.map((r: any) => prioUrgencia(r)));
+                      const gruposRender = comSeparadores
                         ? [...gruposVisiveis].sort((a, b) => {
+                            const pa = prioGrupo(a), pb = prioGrupo(b);
+                            if (pa !== pb) return pa - pb;
                             const va = String(a.rep.periodoConcessivoFim || "");
                             const vb = String(b.rep.periodoConcessivoFim || "");
                             return sortBy === "venc_desc" ? vb.localeCompare(va) : va.localeCompare(vb);
                           })
                         : gruposVisiveis;
+                      const contagemSecao: Record<number, number> = {};
+                      const contagemAno: Record<string, number> = {};
+                      if (comSeparadores) for (const g of gruposRender) {
+                        const p = prioGrupo(g);
+                        contagemSecao[p] = (contagemSecao[p] || 0) + 1;
+                        if (p === 3) contagemAno[anoDoGrupo(g)] = (contagemAno[anoDoGrupo(g)] || 0) + 1;
+                      }
+                      let chaveSecaoRender = "";
                       return gruposRender.flatMap((g) => {
                         const expanded = gruposExpandidos.has(g.employeeId);
                         const out: any[] = [];
-                        if (comSeparadorAno) {
-                          const ano = anoDoGrupo(g);
-                          if (ano !== anoAtualRender) {
-                            anoAtualRender = ano;
-                            const anoNum = Number(ano);
-                            const anoCorrente = new Date().getFullYear();
-                            const cor = anoNum < anoCorrente ? "bg-red-50 text-red-700 border-red-200" : anoNum === anoCorrente ? "bg-amber-50 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-800 border-blue-200";
-                            const rotulo = anoNum < anoCorrente ? "vencido" : anoNum === anoCorrente ? "vence este ano" : anoNum === anoCorrente + 1 ? "ano que vem" : "";
-                            out.push(
-                              <tr key={`ano-${ano}`} className="border-b">
-                                <td colSpan={11} className={`px-3 py-1.5 ${cor} border-y`}>
-                                  <span className="text-xs font-bold tracking-wide">📅 {ano}</span>
-                                  <span className="text-[11px] ml-2 opacity-80">{contagemAno[ano]} colaborador(es){rotulo ? ` · ${rotulo}` : ""}</span>
-                                </td>
-                              </tr>
-                            );
+                        if (comSeparadores) {
+                          const p = prioGrupo(g);
+                          if (p !== 3) {
+                            const chave = `sec-${p}`;
+                            if (chave !== chaveSecaoRender) {
+                              chaveSecaoRender = chave;
+                              const s = SECOES[p];
+                              out.push(
+                                <tr key={chave} className="border-b">
+                                  <td colSpan={11} className={`px-3 py-1.5 ${s.cor} border-y`}>
+                                    <span className="text-xs font-bold tracking-wide">{s.icone} {s.label}</span>
+                                    <span className="text-[11px] ml-2 opacity-80">{contagemSecao[p]} colaborador(es)</span>
+                                  </td>
+                                </tr>
+                              );
+                            }
+                          } else {
+                            const ano = anoDoGrupo(g);
+                            const chave = `ano-${ano}`;
+                            if (chave !== chaveSecaoRender) {
+                              chaveSecaoRender = chave;
+                              const anoNum = Number(ano);
+                              const anoCorrente = new Date().getFullYear();
+                              const cor = anoNum < anoCorrente ? "bg-red-50 text-red-700 border-red-200" : anoNum === anoCorrente ? "bg-amber-50 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-800 border-blue-200";
+                              const rotulo = anoNum < anoCorrente ? "vencido" : anoNum === anoCorrente ? "vence este ano" : anoNum === anoCorrente + 1 ? "ano que vem" : "";
+                              out.push(
+                                <tr key={chave} className="border-b">
+                                  <td colSpan={11} className={`px-3 py-1.5 ${cor} border-y`}>
+                                    <span className="text-xs font-bold tracking-wide">📅 A Vencer — {ano}</span>
+                                    <span className="text-[11px] ml-2 opacity-80">{contagemAno[ano]} colaborador(es){rotulo ? ` · ${rotulo}` : ""}</span>
+                                  </td>
+                                </tr>
+                              );
+                            }
                           }
                         }
                         out.push(renderRow(g.rep, g.resto.length > 0 ? { count: g.resto.length, expanded } : undefined));
