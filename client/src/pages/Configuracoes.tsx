@@ -2432,6 +2432,7 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
   const [notifDemissao, setNotifDemissao] = useState(true);
   const [notifTransferencia, setNotifTransferencia] = useState(false);
   const [notifAfastamento, setNotifAfastamento] = useState(false);
+  const [notifRelSemanal, setNotifRelSemanal] = useState(false);
 
   const recipientsQuery = trpc.notifications.listRecipients.useQuery(
     { companyId },
@@ -2454,22 +2455,23 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
   function resetForm() {
     setShowForm(false); setEditId(null); setNome(""); setEmail("");
     setNotifContratacao(true); setNotifDemissao(true);
-    setNotifTransferencia(false); setNotifAfastamento(false);
+    setNotifTransferencia(false); setNotifAfastamento(false); setNotifRelSemanal(false);
   }
 
   function handleEdit(r: any) {
     setEditId(r.id); setNome(r.nome); setEmail(r.email);
     setNotifContratacao(Boolean(r.notificarContratacao)); setNotifDemissao(Boolean(r.notificarDemissao));
     setNotifTransferencia(Boolean(r.notificarTransferencia)); setNotifAfastamento(Boolean(r.notificarAfastamento));
+    setNotifRelSemanal(Boolean(r.notificarRelatorioSemanal));
     setShowForm(true);
   }
 
   function handleSave() {
     if (!nome.trim() || !email.trim()) { toast.error("Nome e e-mail são obrigatórios"); return; }
     if (editId) {
-      updateMut.mutate({ id: editId, nome, email, notificarContratacao: notifContratacao, notificarDemissao: notifDemissao, notificarTransferencia: notifTransferencia, notificarAfastamento: notifAfastamento });
+      updateMut.mutate({ id: editId, nome, email, notificarContratacao: notifContratacao, notificarDemissao: notifDemissao, notificarTransferencia: notifTransferencia, notificarAfastamento: notifAfastamento, notificarRelatorioSemanal: notifRelSemanal });
     } else {
-      createMut.mutate({ companyId, nome, email, notificarContratacao: notifContratacao, notificarDemissao: notifDemissao, notificarTransferencia: notifTransferencia, notificarAfastamento: notifAfastamento });
+      createMut.mutate({ companyId, nome, email, notificarContratacao: notifContratacao, notificarDemissao: notifDemissao, notificarTransferencia: notifTransferencia, notificarAfastamento: notifAfastamento, notificarRelatorioSemanal: notifRelSemanal });
     }
   }
 
@@ -2562,6 +2564,13 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
                     <p className="text-xs text-gray-400">Aviso quando funcionário for afastado</p>
                   </div>
                 </label>
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-purple-50 transition-colors">
+                  <Switch checked={notifRelSemanal} onCheckedChange={setNotifRelSemanal} />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Relatório Semanal</p>
+                    <p className="text-xs text-gray-400">PDF por empresa toda quinta às 18h (entradas, saídas e quadro de ativos)</p>
+                  </div>
+                </label>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
@@ -2605,6 +2614,7 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
                   {!!r.notificarDemissao && <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-medium">Demissão</span>}
                   {!!r.notificarTransferencia && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-medium">Transferência</span>}
                   {!!r.notificarAfastamento && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-medium">Afastamento</span>}
+                  {!!r.notificarRelatorioSemanal && <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-medium">Relatório Semanal</span>}
                 </div>
               </div>
               <div className="flex items-center gap-2 ml-4">

@@ -120,3 +120,19 @@ server/uploads/vehicles/
 server/uploads/photos/
 # Comprovantes/demonstrativos financeiros (PIX/boletos) — dados bancários, must NOT be versioned
 server/uploads/financeiro/
+
+# ── Exclusões p/ imagem de publicação (limite 8 GiB) ──
+# Estado do agente/workspace — nunca necessário em produção
+.local/
+.agents/
+.canvas/
+.manus/
+.webdev*/
+tmp_manual_pages/
+tmp_manual_pages2/
+# Anexos do chat do agente (não importados pelo app; alias @assets não é usado)
+attached_assets/
+# Backups gerados em runtime (regenerados; jamais servidos em produção)
+server/uploads/backups/
+# Miniaturas derivadas (regeneram sob demanda a partir do original)
+server/uploads/.thumbs/

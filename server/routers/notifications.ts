@@ -1,6 +1,17 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, getCompaniesForUser } from "../db";
+import { TRPCError } from "@trpc/server";
+
+// Rev. — Guard de tenancy dos destinatários de e-mail: o chamador precisa ter
+// acesso à empresa do registro (create confia no input; update/delete resolvem
+// a empresa pela LINHA, nunca pelo input).
+async function assertRecipientCompanyAccess(ctx: any, companyId: number) {
+  const empresas = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+  if (!empresas.some((c: any) => c.id === companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
+  }
+}
 import { notificationRecipients, notificationLogs, menuLabels, companies, notificationViews, heSolicitacoes, smoSolicitacoes, obras, employees, fieldNotes, recontratacaoSolicitacoes, userAlerts } from "../../drizzle/schema";
 import { eq, and, desc, sql, inArray, isNull, gt } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -52,9 +63,11 @@ export const notificationsRouter = router({
       notificarDemissao: z.boolean().default(true),
       notificarTransferencia: z.boolean().default(false),
       notificarAfastamento: z.boolean().default(false),
+      notificarRelatorioSemanal: z.boolean().default(false),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      await assertRecipientCompanyAccess(ctx, input.companyId);
       const rows = await db!.insert(notificationRecipients).values({
         companyId: input.companyId,
         nome: input.nome,
@@ -63,6 +76,7 @@ export const notificationsRouter = router({
         notificarDemissao: input.notificarDemissao ? 1 : 0,
         notificarTransferencia: input.notificarTransferencia ? 1 : 0,
         notificarAfastamento: input.notificarAfastamento ? 1 : 0,
+        notificarRelatorioSemanal: input.notificarRelatorioSemanal ? 1 : 0,
       }).returning();
       return { id: rows[0]?.id, success: true };
     }),
@@ -76,11 +90,16 @@ export const notificationsRouter = router({
       notificarDemissao: z.boolean().optional(),
       notificarTransferencia: z.boolean().optional(),
       notificarAfastamento: z.boolean().optional(),
+      notificarRelatorioSemanal: z.boolean().optional(),
       ativo: z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const { id, ...data } = input;
+      const [row] = await db!.select({ companyId: notificationRecipients.companyId })
+        .from(notificationRecipients).where(eq(notificationRecipients.id, id));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Destinatário não encontrado" });
+      await assertRecipientCompanyAccess(ctx, row.companyId);
       const setData: Record<string, any> = {};
       if (data.nome !== undefined) setData.nome = data.nome;
       if (data.email !== undefined) setData.email = data.email;
@@ -88,15 +107,27 @@ export const notificationsRouter = router({
       if (data.notificarDemissao !== undefined) setData.notificarDemissao = data.notificarDemissao ? 1 : 0;
       if (data.notificarTransferencia !== undefined) setData.notificarTransferencia = data.notificarTransferencia ? 1 : 0;
       if (data.notificarAfastamento !== undefined) setData.notificarAfastamento = data.notificarAfastamento ? 1 : 0;
+      if (data.notificarRelatorioSemanal !== undefined) setData.notificarRelatorioSemanal = data.notificarRelatorioSemanal ? 1 : 0;
       if (data.ativo !== undefined) setData.ativo = data.ativo ? 1 : 0;
       await db!.update(notificationRecipients).set(setData).where(eq(notificationRecipients.id, id));
       return { success: true };
     }),
 
+  // Rev. — Disparo manual do Relatório Semanal de Pessoal (para teste/conferência)
+  enviarRelatorioSemanalAgora: protectedProcedure
+    .mutation(async () => {
+      const { enviarRelatorioSemanal } = await import("../services/relatorioSemanalJob");
+      return await enviarRelatorioSemanal({ force: true });
+    }),
+
   deleteRecipient: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [row] = await db!.select({ companyId: notificationRecipients.companyId })
+        .from(notificationRecipients).where(eq(notificationRecipients.id, input.id));
+      if (!row) return { success: true };
+      await assertRecipientCompanyAccess(ctx, row.companyId);
       await db!.delete(notificationRecipients).where(eq(notificationRecipients.id, input.id));
       return { success: true };
     }),

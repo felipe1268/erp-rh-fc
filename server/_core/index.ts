@@ -3859,6 +3859,10 @@ REGRAS DE EXTRAÇÃO:
 
           // Rev. 4928 — Alerta consolidado de Seguro de Vida (flag de destinatário + dedup de envios)
           await db.execute(sql`ALTER TABLE notification_recipients ADD COLUMN IF NOT EXISTS "notificarSeguroVida" SMALLINT NOT NULL DEFAULT 1`);
+          // Rev. — Relatório Semanal de Pessoal (quinta 18h): flag de destinatário + dedup semanal
+          await db.execute(sql`ALTER TABLE notification_recipients ADD COLUMN IF NOT EXISTS "notificarRelatorioSemanal" SMALLINT NOT NULL DEFAULT 0`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS relatorio_semanal_envios (
+            id SERIAL PRIMARY KEY, semana_ref VARCHAR(10) NOT NULL UNIQUE, criado_em TIMESTAMP NOT NULL DEFAULT NOW())`);
           await db.execute(sql`
             CREATE TABLE IF NOT EXISTS seguro_vida_alertas_enviados (
               id SERIAL PRIMARY KEY,
@@ -8366,6 +8370,11 @@ REGRAS DE EXTRAÇÃO:
     // t=140s — SeguroVidaAlert (Rev. 4928): e-mail consolidado de pendências de seguro de vida
     delay(140_000).then(() =>
       import("../services/seguroVidaAlertJobs").then(m => m.startSeguroVidaAlertJobs()).catch(e => console.error("[SeguroVidaAlert] Erro:", e))
+    );
+
+    // t=150s — Relatório Semanal de Pessoal: quinta 18h, PDF por empresa
+    delay(150_000).then(() =>
+      import("../services/relatorioSemanalJob").then(m => m.startRelatorioSemanalJob()).catch(e => console.error("[RelatorioSemanal] Erro:", e))
     );
 
     // t=10s — SMO Rev.4296: recomputa registros sem teto de sanidade salarial (one-shot, idempotente)

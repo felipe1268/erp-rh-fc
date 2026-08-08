@@ -82,6 +82,7 @@
 - [Levantamento de Campo em PDF — IDOR](medicao-levantamento-campo.md) — procedures novas precisam de companyId em TODAS as subconsultas + validar contrato pertence à empresa E ao campo.
 - [EPI gotchas](epi-central-write-rule.md) — [restrito não escreve no Central: inventarie TODAS as rotas de escrita](epi-central-write-rule.md); [calça letra é derivada do número](epi-calca-size-letter-derived.md).
 - [Public route ↔ auth whitelist drift](public-route-whitelist-drift.md) — a public route in App.tsx also needs its prefix in BOTH `publicPaths` arrays in main.tsx.
+- [Imagem de publicação 8 GiB](deploy-image-8gib-limit.md) — exclusão da imagem respeita .gitignore; .local/attached_assets/backups fora; uploads de docs ainda vão (fallback DB parcial).
 - [Lazy chunk stale after deploy](lazy-chunk-stale-deploy.md) — every deploy rotates chunk hashes; Wrap React.lazy (lazyWithRetry) to retry+reload; ver tb [HTML cache stale](html-cache-stale-deploy.md).
 - [SyncSchema+ log is capped](syncschema-log-cap.md) — `[SyncSchema+]` log file caps ~49 lines; missing `Rev. N` line ≠ failure. Verify via NEON_DATABASE_URL direct pg.
 - [Master-only field must gate at backend](master-only-field-backend-gate.md) — a "só Admin Master" field must be stripped from the payload by role server-side, not just hidden in the UI.
@@ -89,6 +90,7 @@
 - [react-pdf worker version match](pdfjs-worker-version-match.md) — "Erro ao carregar PDF" = bundled worker version ≠ react-pdf's internal pdfjs API; pin pdfjs-dist EXACTLY to react-pdf's dep.
 - [Extrato import gotchas](extrato-import-case-insensitive-dedup.md) — [dedup case-insensitive UPPER/TRIM server E client](extrato-import-case-insensitive-dedup.md); [dupKeyTotais conta o ARQUIVO inteiro, não o chunk](extrato-import-chunk-dedup.md); [Santander PJ: pdf-parse quebra toda linha em 2](santander-pdf-split-row.md) ([células multi-linha](pdf-parse-multiline-table-cells.md)).
 - [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; mutações de conta precisam de tenant guard.
+- [Relatório Semanal de Pessoal](relatorio-semanal-pessoal.md) — digest quinta 18h: opt-in POR empresa (nunca por grupoEmpresarial), claim atômico por semana ISO, empresa 999 fora.
 - [Notification recipient tenancy](notification-recipient-tenancy.md) — notify queries must join `user_companies` (users has NO companyId; admin roles are global) or you leak across tenants.
 - [resolveCompanyIds trusts input](resolvecompanyids-no-intersect.md) — resolveCompanyIds/companyFilter don't intersect with user's allowed companies; per-company endpoints must call assert guard explicitly.
 - [Backup/migração — streaming obrigatório](backup-streaming-oom.md) — nunca acumular tabelas em RAM (OOM); lote por ctid; pg_column_size, não LENGTH; [export GET streaming + whitelist no import](migration-export-streaming.md).

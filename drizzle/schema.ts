@@ -2532,6 +2532,10 @@ export const notificationRecipients = pgTable("notification_recipients", {
         notificarDemissao: smallint().default(1).notNull(),
         notificarTransferencia: smallint().default(0).notNull(),
         notificarAfastamento: smallint().default(0).notNull(),
+        notificarConformidadePJ: smallint().default(1).notNull(),
+        notificarSeguroVida: smallint().default(1).notNull(),
+        // Rev. — Relatório Semanal de Pessoal (quinta 18h, PDF por empresa)
+        notificarRelatorioSemanal: smallint().default(0).notNull(),
         ativo: smallint().default(1).notNull(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
