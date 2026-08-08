@@ -2114,6 +2114,20 @@ export const controleDocumentosRouter = router({
         salarioLiquido: payrollPayments.salarioLiquido,
         status: payrollPayments.status,
         dataPagamento: payrollPayments.dataPagamento,
+        // Rev. 4926 — detalhamento dos descontos (linha expandível no Raio-X)
+        descontoAdiantamento: payrollPayments.descontoAdiantamento,
+        descontoInss: payrollPayments.descontoInss,
+        descontoIrrf: payrollPayments.descontoIrrf,
+        descontoFaltas: payrollPayments.descontoFaltas,
+        descontoAtrasos: payrollPayments.descontoAtrasos,
+        descontoSindicato: payrollPayments.descontoSindicato,
+        descontoPensao: payrollPayments.descontoPensao,
+        descontoVtFaltas: payrollPayments.descontoVtFaltas,
+        descontoConvenio: payrollPayments.descontoConvenio,
+        descontoEpi: payrollPayments.descontoEpi,
+        descontoOutros: payrollPayments.descontoOutros,
+        adicionaisValor: payrollPayments.adicionaisValor,
+        observacoes: payrollPayments.observacoes,
       }).from(payrollPayments)
         .where(and(eq(payrollPayments.employeeId, input.employeeId), eq(payrollPayments.companyId, emp.companyId)))
         .orderBy(desc(payrollPayments.mesReferencia));

@@ -12,7 +12,7 @@ import {
   User, Stethoscope, GraduationCap, ClipboardList, ShieldAlert,
   Clock, DollarSign, HardHat, Calendar, MapPin, Phone, Building2, Briefcase, CreditCard,
   Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft, Gift, Timer,
-  History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
+  History, Zap, Scale, Car, TrendingUp, ChevronRight, ChevronUp, ChevronDown, Activity,
   Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
   Package, PackageX, CheckCircle, XCircle, ShoppingCart,
   Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2, Pencil, RotateCcw, UserCheck, Handshake, Receipt, ExternalLink, MessageSquare,
@@ -446,6 +446,11 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const assiduidade = (raioX as any)?.assiduidade || { media: 100, totalDiasTrabalhados: 0, totalFaltas: 0, mesesAvaliados: 0 };
   const desempenho = (raioX as any)?.desempenho || { isGestor: false, atrasos: { total: 0, totalMinutos: 0 }, obrasGeridas: [], avaliacaoCliente: { total: 0, mediaGeral: null, mediaGestor: null, mediaEquipe: null, mediaPrazo: null, mediaQualidade: null, historico: [] } };
   const folhaPagamento = raioX?.folhaPagamento || [];
+  // Rev. 4926 — linhas expandíveis da Folha (detalhe dos descontos)
+  const [folhaExpandIds, setFolhaExpandIds] = useState<Set<number>>(new Set());
+  const toggleFolhaExpand = (id: number) => setFolhaExpandIds(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
   const episEntregas = raioX?.epis || [];
   const horasExtras = raioX?.horasExtras || [];
   // Rev. 4923 — Banco de Horas (toda HE CLT vira banco, nunca é paga em dinheiro)
@@ -2223,9 +2228,31 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         {folhaPagamento.map((f: any) => {
                           const liq = Number(String(f.salarioLiquido || "0").replace(/\./g,"").replace(",",".")) || 0;
                           const totalReceb = liq + compNum;
+                          const isOpen = folhaExpandIds.has(f.id);
+                          const parseBR = (v: any) => Number(String(v ?? "0").replace(/\./g, "").replace(",", ".")) || Number(v) || 0;
+                          const descItens = [
+                            { label: "Vale / Adiantamento", valor: f.descontoAdiantamento },
+                            { label: "INSS", valor: f.descontoInss },
+                            { label: "IRRF", valor: f.descontoIrrf },
+                            { label: "Faltas", valor: f.descontoFaltas },
+                            { label: "Atrasos", valor: f.descontoAtrasos },
+                            { label: "Sindicato", valor: f.descontoSindicato },
+                            { label: "Pensão", valor: f.descontoPensao },
+                            { label: "VT Faltas", valor: f.descontoVtFaltas },
+                            { label: "Convênio", valor: f.descontoConvenio },
+                            { label: "EPI", valor: f.descontoEpi },
+                            { label: "Outros", valor: f.descontoOutros },
+                          ].filter(d => parseBR(d.valor) > 0);
+                          const totalCols = 6 + (compNum > 0 ? 2 : 0);
                           return (
-                            <tr key={f.id} className="border-b last:border-0 hover:bg-muted/30">
-                              <td className="p-3 font-medium">{f.mesReferencia ? f.mesReferencia.split("-").reverse().join("/") : "—"}</td>
+                            <Fragment key={f.id}>
+                            <tr className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => toggleFolhaExpand(f.id)}>
+                              <td className="p-3 font-medium whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1">
+                                  {isOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                                  {f.mesReferencia ? f.mesReferencia.split("-").reverse().join("/") : "—"}
+                                </span>
+                              </td>
                               <td className="p-3 text-right font-mono">{formatSalario(f.salarioBase)}</td>
                               <td className="p-3 text-right font-mono text-green-600">{formatSalario(f.horasExtrasValor)}</td>
                               <td className="p-3 text-right font-mono text-red-600">{formatSalario(f.totalDescontos)}</td>
@@ -2234,6 +2261,31 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                               {compNum > 0 && <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50/40">{formatSalario(String(totalReceb.toFixed(2)))}</td>}
                               <td className="p-3 text-center"><Badge variant={f.status === "Pago" ? "default" : "secondary"}>{f.status}</Badge></td>
                             </tr>
+                            {isOpen && (
+                              <tr className="border-b last:border-0 bg-slate-50/70">
+                                <td colSpan={totalCols} className="px-4 py-3">
+                                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-2">Detalhamento dos descontos — {f.mesReferencia ? f.mesReferencia.split("-").reverse().join("/") : ""}</p>
+                                  {descItens.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground">Nenhum desconto neste mês</p>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                      {descItens.map((d, di) => (
+                                        <span key={di} className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs">
+                                          <span className="text-red-800">{d.label}</span>
+                                          <span className="font-mono font-semibold text-red-700">{formatSalario(d.valor)}</span>
+                                        </span>
+                                      ))}
+                                      <span className="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-red-100 px-2 py-1 text-xs font-bold">
+                                        <span className="text-red-900">Total</span>
+                                        <span className="font-mono text-red-800">{formatSalario(f.totalDescontos)}</span>
+                                      </span>
+                                    </div>
+                                  )}
+                                  {f.observacoes && <p className="text-[11px] text-slate-600 mt-2 italic break-words">{f.observacoes}</p>}
+                                </td>
+                              </tr>
+                            )}
+                            </Fragment>
                           );
                         })}
                       </tbody>
