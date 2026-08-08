@@ -1937,9 +1937,44 @@ export default function Ferias() {
                           </tr>
                         );
                       };
-                      return gruposVisiveis.flatMap((g) => {
+                      // Rev. 4918 — separadores por ANO de vencimento quando ordenado
+                      // por vencimento: facilita ver "o que vence este ano" vs. "ano que vem".
+                      const comSeparadorAno = sortBy === "venc_asc" || sortBy === "venc_desc";
+                      const anoDoGrupo = (g: any): string => String(g.rep.periodoConcessivoFim || "").slice(0, 4) || "—";
+                      const contagemAno: Record<string, number> = {};
+                      if (comSeparadorAno) for (const g of gruposVisiveis) contagemAno[anoDoGrupo(g)] = (contagemAno[anoDoGrupo(g)] || 0) + 1;
+                      let anoAtualRender = "";
+                      // Reordena os GRUPOS pelo vencimento do período representante,
+                      // garantindo blocos de ano contíguos (o rep pode diferir da 1ª linha do filtro).
+                      const gruposRender = comSeparadorAno
+                        ? [...gruposVisiveis].sort((a, b) => {
+                            const va = String(a.rep.periodoConcessivoFim || "");
+                            const vb = String(b.rep.periodoConcessivoFim || "");
+                            return sortBy === "venc_desc" ? vb.localeCompare(va) : va.localeCompare(vb);
+                          })
+                        : gruposVisiveis;
+                      return gruposRender.flatMap((g) => {
                         const expanded = gruposExpandidos.has(g.employeeId);
-                        const out = [renderRow(g.rep, g.resto.length > 0 ? { count: g.resto.length, expanded } : undefined)];
+                        const out: any[] = [];
+                        if (comSeparadorAno) {
+                          const ano = anoDoGrupo(g);
+                          if (ano !== anoAtualRender) {
+                            anoAtualRender = ano;
+                            const anoNum = Number(ano);
+                            const anoCorrente = new Date().getFullYear();
+                            const cor = anoNum < anoCorrente ? "bg-red-50 text-red-700 border-red-200" : anoNum === anoCorrente ? "bg-amber-50 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-800 border-blue-200";
+                            const rotulo = anoNum < anoCorrente ? "vencido" : anoNum === anoCorrente ? "vence este ano" : anoNum === anoCorrente + 1 ? "ano que vem" : "";
+                            out.push(
+                              <tr key={`ano-${ano}`} className="border-b">
+                                <td colSpan={11} className={`px-3 py-1.5 ${cor} border-y`}>
+                                  <span className="text-xs font-bold tracking-wide">📅 {ano}</span>
+                                  <span className="text-[11px] ml-2 opacity-80">{contagemAno[ano]} colaborador(es){rotulo ? ` · ${rotulo}` : ""}</span>
+                                </td>
+                              </tr>
+                            );
+                          }
+                        }
+                        out.push(renderRow(g.rep, g.resto.length > 0 ? { count: g.resto.length, expanded } : undefined));
                         if (expanded) out.push(...g.resto.map((r: any) => renderRow(r, undefined, true)));
                         return out;
                       });
