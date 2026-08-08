@@ -849,8 +849,21 @@ export default function SeguroVida() {
 
   const importacoesQ = trpc.seguroVida.listarImportacoes.useQuery(
     { companyId, companyIds },
-    { enabled: (companyId > 0 || companyIds.length > 0) && (tabAtiva === "historico" || isAnoTodo) }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
+
+  // Bolinhas coloridas do seletor: verde = relatório do corretor importado (consolidado),
+  // azul = mês corrente com dados ao vivo (sem importação ainda), cinza = sem lançamento.
+  const monthStatus = useMemo(() => {
+    const comps = new Set((importacoesQ.data ?? []).map((i: any) => String(i.competencia ?? "")));
+    const compCorrente = getDefaultComp();
+    const st: Record<number, "data" | "consolidated" | "none"> = {};
+    for (let m = 1; m <= 12; m++) {
+      const comp = `${anoComp}-${String(m).padStart(2, "0")}`;
+      st[m] = comps.has(comp) ? "consolidated" : comp === compCorrente ? "data" : "none";
+    }
+    return st;
+  }, [importacoesQ.data, anoComp]);
 
   const inconsistenciasQ = trpc.seguroVida.listarInconsistencias.useQuery(
     { companyId, companyIds },
@@ -1089,6 +1102,8 @@ export default function SeguroVida() {
           onAno={setAnoComp}
           onMes={setMesComp}
           onAnoTodo={() => setMesComp(null)}
+          monthStatus={monthStatus}
+          showLegend
           actions={
             isAnoTodo
               ? <span className="text-[10px] px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full font-semibold">Ano todo — carteira atual + resumo das importações</span>

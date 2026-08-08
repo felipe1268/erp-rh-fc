@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=1024' NODE_ENV=development tsx watch server/_core/index.ts",
-    "build": "NODE_OPTIONS='--max-old-space-size=4608' vite build && NODE_OPTIONS='--max-old-space-size=1536' esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && (node scripts/gen-build-info.mjs || echo '[build-info] pulado (nao-fatal)')",
+    "build": "NODE_OPTIONS='--max-old-space-size=6144' vite build && NODE_OPTIONS='--max-old-space-size=1536' esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && (node scripts/gen-build-info.mjs || echo '[build-info] pulado (nao-fatal)')",
     "start": "NODE_OPTIONS='--max-old-space-size=1024' NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
