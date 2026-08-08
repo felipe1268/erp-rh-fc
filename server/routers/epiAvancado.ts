@@ -9,7 +9,7 @@ import {
   epiChecklists, epiChecklistItems, epiAiAnalises,
   epis, epiDeliveries, epiEstoqueObra, epiTransferencias,
   employees, obras, trainings, systemCriteria,
-  epiAlertaCapacidade, epiAlertaCapacidadeLog, notificationRecipients,
+  epiAlertaCapacidade, epiAlertaCapacidadeLog,
   goldenRules, jobFunctions, obraFuncionarios,
 } from "../../drizzle/schema";
 import { sendEmail } from "../services/smtpService";
@@ -2167,15 +2167,10 @@ Forneça sugestões concretas com quantidades específicas.`;
         };
       }
 
-      // 5. DISPARAR ALERTA! Buscar destinatários
-      const recipients = await db.select().from(notificationRecipients)
-        .where(and(
-          companyFilter(notificationRecipients.companyId, input),
-          eq(notificationRecipients.ativo, 1),
-        ));
-
-      // Adicionar emails extras da configuração
-      let todosEmails: { nome: string; email: string }[] = recipients.map(r => ({ nome: r.nome, email: r.email }));
+      // 5. DISPARAR ALERTA! Destinatários = APENAS os e-mails configurados no próprio alerta.
+      // (Rev: não usar mais a lista geral de notification_recipients — ela é de movimentações
+      // de pessoal e mandava alerta de EPI para quem só deveria receber contratação/demissão.)
+      let todosEmails: { nome: string; email: string }[] = [];
       if (config.emailDestinatarios) {
         try {
           const extras: string[] = JSON.parse(config.emailDestinatarios);
