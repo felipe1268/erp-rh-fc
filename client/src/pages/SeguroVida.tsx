@@ -914,18 +914,17 @@ export default function SeguroVida() {
     statusSeguro: f.seguro_status ?? "sem_cobertura",
   })), [funcionarios]);
 
+  // Lista já filtrada pelo tipo de contrato — base para os chips de status (contagens coerentes)
+  const listaPorTipo = useMemo(() => {
+    if (filtroTipo === "PJ")    return funcionariosNorm.filter((f: any) => (f.tipoContrato ?? "") === "PJ");
+    if (filtroTipo === "Socio") return funcionariosNorm.filter((f: any) => (f.tipoContrato ?? "") === "Socio");
+    if (filtroTipo === "CLT")   return funcionariosNorm.filter((f: any) => !["PJ", "Socio"].includes(f.tipoContrato ?? ""));
+    return funcionariosNorm;
+  }, [funcionariosNorm, filtroTipo]);
+
   const filtradas = useMemo(() => {
-    let lista = funcionariosNorm;
+    let lista = listaPorTipo;
     if (filtroStatus !== "todos") lista = lista.filter((f: any) => f.statusSeguro === filtroStatus);
-    if (filtroTipo !== "todos") {
-      if (filtroTipo === "PJ") {
-        lista = lista.filter((f: any) => (f.tipoContrato ?? "") === "PJ");
-      } else if (filtroTipo === "Socio") {
-        lista = lista.filter((f: any) => (f.tipoContrato ?? "") === "Socio");
-      } else {
-        lista = lista.filter((f: any) => !["PJ", "Socio"].includes(f.tipoContrato ?? ""));
-      }
-    }
     if (busca.trim()) {
       const b = removeAccents(busca.toLowerCase());
       lista = lista.filter((f: any) =>
@@ -935,7 +934,7 @@ export default function SeguroVida() {
       );
     }
     return lista;
-  }, [funcionariosNorm, filtroStatus, filtroTipo, busca]);
+  }, [listaPorTipo, filtroStatus, busca]);
 
   const totais = useMemo(() => {
     const soma = (key: string) => filtradas.reduce((acc: number, f: any) => acc + parseBrMoney(f[key]), 0);
@@ -1259,8 +1258,8 @@ export default function SeguroVida() {
                 { key: "cancelado",            label: "⚫ Cancelado",          activeClass: "bg-slate-800 text-white border-slate-800" },
               ] as const).map(op => {
                 const count = op.key === "todos"
-                  ? funcionariosNorm.length
-                  : funcionariosNorm.filter((f: any) => f.statusSeguro === op.key).length;
+                  ? listaPorTipo.length
+                  : listaPorTipo.filter((f: any) => f.statusSeguro === op.key).length;
                 if (op.key !== "todos" && count === 0) return null;
                 return (
                   <button key={op.key} onClick={() => setFiltroStatus(op.key)}
