@@ -3724,6 +3724,7 @@ export const avisoPrevioFeriasRouter = router({
           status: vacationPeriods.status,
           employeeName: employees.nomeCompleto,
           employeeCargo: employees.cargo,
+          fotoUrl: employees.fotoUrl,
         })
           .from(vacationPeriods)
           .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
@@ -3844,6 +3845,7 @@ export const avisoPrevioFeriasRouter = router({
           return {
             employeeId: c.employeeId,
             employeeName: c.employeeName,
+            fotoUrl: c.fotoUrl || null,
             cargo,
             cargoChave,
             obraId: aloc?.obraId ?? null,

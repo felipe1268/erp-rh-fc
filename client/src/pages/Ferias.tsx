@@ -1611,26 +1611,56 @@ export default function Ferias() {
               </div>
             </div>
 
-            {/* Rev. 4914 — Dialog Análise de Impacto na Obra (IA) */}
+            {/* Rev. 4914/4915 — Dialog Análise de Impacto na Obra (IA) — layout com foto + resumo */}
             <Dialog open={showImpactoDialog} onOpenChange={setShowImpactoDialog}>
-              <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-violet-600" /> Análise de Impacto na Obra — Férias
-                  </DialogTitle>
-                </DialogHeader>
+              <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto p-0">
+                {/* Cabeçalho gradiente */}
+                <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 text-white px-5 py-4 rounded-t-lg">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-white">
+                      <Zap className="h-5 w-5" /> Análise de Impacto na Obra
+                    </DialogTitle>
+                  </DialogHeader>
+                  <p className="text-[11px] text-white/80 mt-1">Férias a vencer × alocação em obra × cronograma — quem pode sair sem atrapalhar a obra?</p>
+                </div>
+                <div className="px-5 pb-5">
                 {analiseImpacto.isPending ? (
                   <div className="py-12 text-center text-muted-foreground">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" />
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-violet-600" />
                     <p className="text-sm">Cruzando férias a vencer × alocação em obra × cronograma...</p>
                   </div>
                 ) : !impactoData ? (
                   <div className="py-8 text-center text-muted-foreground text-sm">Clique em "Analisar" para gerar.</div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-3 pt-3">
+                    {/* Resumo por risco */}
+                    {(() => {
+                      const nCrit = impactoData.itens.filter((i: any) => i.risco === "critico").length;
+                      const nAten = impactoData.itens.filter((i: any) => i.risco === "atencao").length;
+                      const nOk = impactoData.itens.filter((i: any) => i.risco === "ok").length;
+                      return (
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className={`rounded-xl border p-2.5 text-center ${nCrit > 0 ? "border-red-300 bg-red-50" : "border-muted bg-muted/20 opacity-60"}`}>
+                            <p className="text-xl font-bold text-red-600 leading-none">{nCrit}</p>
+                            <p className="text-[10px] font-semibold mt-1 text-red-700">🔴 Crítico</p>
+                            <p className="text-[9px] text-muted-foreground">único da função</p>
+                          </div>
+                          <div className={`rounded-xl border p-2.5 text-center ${nAten > 0 ? "border-amber-300 bg-amber-50" : "border-muted bg-muted/20 opacity-60"}`}>
+                            <p className="text-xl font-bold text-amber-600 leading-none">{nAten}</p>
+                            <p className="text-[10px] font-semibold mt-1 text-amber-700">🟡 Atenção</p>
+                            <p className="text-[9px] text-muted-foreground">pouca cobertura</p>
+                          </div>
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-2.5 text-center">
+                            <p className="text-xl font-bold text-emerald-600 leading-none">{nOk}</p>
+                            <p className="text-[10px] font-semibold mt-1 text-emerald-700">🟢 Liberado</p>
+                            <p className="text-[9px] text-muted-foreground">baixo impacto</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <p className="text-xs text-muted-foreground">
-                        Horizonte: próximos {impactoData.horizonteDias} dias · {impactoData.itens.length} colaborador(es) com prazo correndo
+                      <p className="text-[11px] text-muted-foreground">
+                        Horizonte: {impactoData.horizonteDias} dias · {impactoData.itens.length} colaborador(es)
                         {impactoData.iaAtiva === false && <span className="ml-1 text-amber-600">· IA desativada — análise determinística</span>}
                       </p>
                       <Button size="sm" variant="outline" className="h-7 text-xs" disabled={analiseImpacto.isPending} onClick={() => analiseImpacto.mutate({ companyId, companyIds })}>
@@ -1641,42 +1671,65 @@ export default function Ferias() {
                       <div className="py-8 text-center text-muted-foreground text-sm">Nenhuma férias a vencer no horizonte analisado. 🎉</div>
                     )}
                     {impactoData.itens.map((it: any) => {
-                      const cor = it.risco === "critico" ? "border-red-300 bg-red-50" : it.risco === "atencao" ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50/50";
-                      const badge = it.risco === "critico" ? <Badge variant="destructive" className="text-[10px]">CRÍTICO — não relocar sem plano</Badge>
-                        : it.risco === "atencao" ? <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300">ATENÇÃO — planejar substituto</Badge>
-                        : <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300">OK — baixo impacto</Badge>;
+                      const borda = it.risco === "critico" ? "border-l-red-500" : it.risco === "atencao" ? "border-l-amber-500" : "border-l-emerald-500";
+                      const badge = it.risco === "critico" ? <Badge variant="destructive" className="text-[10px]">CRÍTICO</Badge>
+                        : it.risco === "atencao" ? <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300">ATENÇÃO</Badge>
+                        : <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300">LIBERADO</Badge>;
+                      const acao = it.risco === "critico" ? "Não sai sem plano de cobertura" : it.risco === "atencao" ? "Planejar substituto antes" : "Pode agendar";
+                      const fotoSrc = it.fotoUrl ? `${it.fotoUrl}${it.fotoUrl.includes("?") ? "&" : "?"}w=128` : null;
+                      const iniciais = String(it.employeeName || "?").trim().split(/\s+/).map((p: string) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+                      const vencido = it.diasRestantes < 0;
                       return (
-                        <div key={it.employeeId} className={`rounded-lg border p-3 ${cor}`}>
-                          <div className="flex items-start justify-between gap-2 flex-wrap">
-                            <div>
-                              <p className="font-semibold text-sm">{it.employeeName}</p>
-                              <p className="text-xs text-muted-foreground">{it.cargo || "-"} · {it.obraNome ? `Obra: ${it.obraNome}` : "Sem alocação em obra"}</p>
-                            </div>
-                            <div className="text-right">
-                              {badge}
-                              <p className="text-[10px] text-muted-foreground mt-1">
-                                {it.diasRestantes < 0 ? `Prazo vencido há ${Math.abs(it.diasRestantes)} dias` : `Vence em ${it.diasRestantes} dias`} · {it.numeroPeriodo}º período
-                              </p>
+                        <div key={it.employeeId} className={`rounded-xl border border-l-4 ${borda} bg-card p-3 shadow-sm`}>
+                          <div className="flex items-start gap-3">
+                            {/* Foto */}
+                            {fotoSrc ? (
+                              <img src={fotoSrc} alt={it.employeeName} loading="lazy" className="h-12 w-12 rounded-full object-cover border-2 border-background shadow shrink-0"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                            ) : null}
+                            <div className={`h-12 w-12 rounded-full bg-violet-100 text-violet-700 font-bold text-sm flex items-center justify-center shrink-0 ${fotoSrc ? "hidden" : ""}`}>{iniciais}</div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2 flex-wrap">
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-sm break-words">{it.employeeName}</p>
+                                  <p className="text-xs text-muted-foreground break-words">
+                                    {[it.cargo, it.obraNome ? `📍 ${it.obraNome}` : "Sem alocação em obra"].filter(Boolean).join(" · ")}
+                                  </p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  {badge}
+                                  <p className={`text-[10px] mt-1 font-medium ${vencido ? "text-red-600" : "text-muted-foreground"}`}>
+                                    {vencido ? `⏰ Vencido há ${Math.abs(it.diasRestantes)} dias` : `Vence em ${it.diasRestantes} dias`} · {it.numeroPeriodo}º período
+                                  </p>
+                                </div>
+                              </div>
+                              {/* Chips de contexto */}
+                              {it.obraNome && (
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-foreground/80">👥 {it.equipeTotal} na equipe</span>
+                                  {it.colegasMesmaFuncao === 0
+                                    ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold break-words">⚠️ Único "{it.cargo}" na obra</span>
+                                    : <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-foreground/80">{it.colegasMesmaFuncao} da mesma função</span>}
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-foreground/80">📋 {it.atividadesJanela} atividades no período</span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${it.risco === "critico" ? "bg-red-50 text-red-700" : it.risco === "atencao" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>→ {acao}</span>
+                                </div>
+                              )}
+                              {it.atividadesPrincipais?.length > 0 && (
+                                <p className="text-[11px] text-muted-foreground mt-1.5 break-words">Principais atividades: {it.atividadesPrincipais.join("; ")}</p>
+                              )}
+                              {it.parecer && (
+                                <div className="mt-2 rounded-lg bg-violet-50 border border-violet-200 px-2.5 py-1.5">
+                                  <p className="text-xs text-foreground/90 break-words"><b className="text-violet-700">✦ Parecer IA:</b> {it.parecer}</p>
+                                </div>
+                              )}
                             </div>
                           </div>
-                          {it.obraNome && (
-                            <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-2 text-[11px] text-foreground/80">
-                              <span>👥 Equipe na obra: <b>{it.equipeTotal}</b></span>
-                              <span>{it.colegasMesmaFuncao === 0 ? <b className="text-red-700">Único "{it.cargo}" na obra</b> : <>Colegas da mesma função: <b>{it.colegasMesmaFuncao}</b></>}</span>
-                              <span>📋 Atividades abertas no período: <b>{it.atividadesJanela}</b></span>
-                            </div>
-                          )}
-                          {it.atividadesPrincipais?.length > 0 && (
-                            <p className="text-[11px] text-muted-foreground mt-1 break-words">Principais atividades: {it.atividadesPrincipais.join("; ")}</p>
-                          )}
-                          {it.parecer && (
-                            <p className="text-xs mt-2 border-t pt-2 text-foreground/90 break-words"><b className="text-violet-700">Parecer IA:</b> {it.parecer}</p>
-                          )}
                         </div>
                       );
                     })}
                   </div>
                 )}
+                </div>
               </DialogContent>
             </Dialog>
 
