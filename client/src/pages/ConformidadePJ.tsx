@@ -334,7 +334,7 @@ export default function ConformidadePJ() {
         <div className="text-center py-20 text-muted-foreground bg-white rounded-xl border">
           <Briefcase className="h-12 w-12 mx-auto mb-3 text-gray-300" />
           Nenhum funcionário PJ ativo nesta empresa.
-          <div className="text-xs mt-2">Cadastre PJs em "Contratos de Prestadores" no menu Terceiros &gt; PJ.</div>
+          <div className="text-xs mt-2">Cadastre PJs em "Prestadores de Serviço" no menu Terceiros &gt; PJ.</div>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-white">

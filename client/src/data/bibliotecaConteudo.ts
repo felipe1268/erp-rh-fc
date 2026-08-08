@@ -703,7 +703,7 @@ O módulo PJ permite gerenciar contratos com prestadores de serviço (Pessoa Jur
 
 ### Cadastro de Contrato
 
-1. Acesse **Gestão de Pessoas > Contratos de Prestadores**
+1. Acesse **Gestão de Pessoas > Prestadores de Serviço**
 2. Clique em **+ Novo Contrato**
 3. Preencha os dados do contrato:
    - Prestador (vinculado ao cadastro de colaboradores com tipo "PJ")

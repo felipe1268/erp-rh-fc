@@ -91,7 +91,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Users, label: "Colaboradores", path: "/colaboradores" },
       { icon: ClipboardList, label: "Coleta de Campo", path: "/coleta-campo" },
       { icon: RefreshCw, label: "Recontratações Pendentes", path: "/recontratacoes-pendentes" },
-      { icon: FileSignature, label: "Contratos de Prestadores", path: "/modulo-pj" },
+      { icon: FileSignature, label: "Prestadores de Serviço", path: "/modulo-pj" },
     ],
   },
   {
@@ -322,7 +322,7 @@ const menuSectionsTerceiros: MenuSection[] = [
     items: [
       { icon: Building2, label: "Empresas de Serviço", path: "/terceiros/empresas" },
       { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
-      { icon: Briefcase, label: "Prestadores PJ", path: "/modulo-pj" },
+      { icon: Briefcase, label: "Prestadores de Serviço", path: "/modulo-pj" },
       { icon: LayoutDashboard, label: "Painel Terceiros", path: "/terceiros/painel" },
     ],
   },
@@ -867,7 +867,7 @@ const ICON_MAP: Record<string, any> = {
   "Férias": Palmtree,
   "Seguro de Vida": ShieldCheck,
   "CIPA": Shield,
-  "Contratos de Prestadores": FileSignature,
+  "Contratos de Prestadores": FileSignature, "Prestadores de Serviço": FileSignature,
   "Solicitação de Hora Extra": Clock,
   "Revisões do Sistema": GitBranch,
   "Biblioteca de Conhecimento": BookOpen,

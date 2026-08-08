@@ -45,7 +45,7 @@ const ICON_MAP: Record<string, any> = {
   "Solicitação de Hora Extra": Clock, "Crachás": CreditCard,
   "Lançar Atestados": ClipboardPlus, "Advertências": ShieldAlert,
   "Aviso Prévio": AlertTriangle, "Férias": Palmtree,
-  "Contratos de Prestadores": FileSignature, "PJ Medições": FileSpreadsheet,
+  "Contratos de Prestadores": FileSignature, "Prestadores de Serviço": FileSignature, "PJ Medições": FileSpreadsheet,
   "Raio-X do Funcionário": UserSearch,
   "Todos os Dashboards": BarChart3, "Funcionários": Users,
   "Cartão de Ponto": Clock, "Horas Extras": Clock,
