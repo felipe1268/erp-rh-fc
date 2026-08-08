@@ -919,7 +919,9 @@ export default function SeguroVida() {
     if (filtroStatus !== "todos") lista = lista.filter((f: any) => f.statusSeguro === filtroStatus);
     if (filtroTipo !== "todos") {
       if (filtroTipo === "PJ") {
-        lista = lista.filter((f: any) => ["PJ", "Socio"].includes(f.tipoContrato ?? ""));
+        lista = lista.filter((f: any) => (f.tipoContrato ?? "") === "PJ");
+      } else if (filtroTipo === "Socio") {
+        lista = lista.filter((f: any) => (f.tipoContrato ?? "") === "Socio");
       } else {
         lista = lista.filter((f: any) => !["PJ", "Socio"].includes(f.tipoContrato ?? ""));
       }
@@ -1055,11 +1057,17 @@ export default function SeguroVida() {
     ? `R$ ${(resumo.totalPremioMensal as number).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : "—";
   const cards = [
-    { label: "Segurados Ativos",       val: resumo?.totalSeguradosAtivos ?? 0,      icon: ShieldCheck,  color: "text-green-700",  bg: "bg-green-50 border-green-200" },
-    { label: "Pend. Inclusão",         val: resumo?.totalPendenteInclusao ?? 0,     icon: Clock,        color: "text-blue-700",   bg: "bg-blue-50 border-blue-200" },
-    { label: "Pend. Cancelamento",     val: resumo?.totalPendenteCancelamento ?? 0, icon: AlertTriangle,color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
-    { label: "CLT sem Cobertura ⚠️",  val: resumo?.totalSemSeguro ?? 0,            icon: ShieldAlert,  color: "text-red-700",    bg: "bg-red-50 border-red-200" },
+    { label: "Segurados Ativos",       val: resumo?.totalSeguradosAtivos ?? 0,      icon: ShieldCheck,  color: "text-green-700",  bg: "bg-green-50 border-green-200",   filtro: "ativo",                 tipo: "todos" },
+    { label: "Pend. Inclusão",         val: resumo?.totalPendenteInclusao ?? 0,     icon: Clock,        color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",     filtro: "pendente_inclusao",     tipo: "todos" },
+    { label: "Pend. Cancelamento",     val: resumo?.totalPendenteCancelamento ?? 0, icon: AlertTriangle,color: "text-orange-700", bg: "bg-orange-50 border-orange-200", filtro: "pendente_cancelamento", tipo: "todos" },
+    { label: "CLT sem Cobertura ⚠️",  val: resumo?.totalSemSeguro ?? 0,            icon: ShieldAlert,  color: "text-red-700",    bg: "bg-red-50 border-red-200",       filtro: "sem_cobertura",         tipo: "CLT" },
   ];
+  const aplicarFiltroCard = (filtro: string, tipo: string) => {
+    setTabAtiva("cobertura");
+    setFiltroStatus(prev => (prev === filtro ? "todos" : filtro));
+    setFiltroTipo(tipo);
+    setBusca("");
+  };
 
   return (
     <DashboardLayout title="Seguro de Vida">
@@ -1121,13 +1129,18 @@ export default function SeguroVida() {
         {/* Cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {cards.map((c) => (
-            <div key={c.label} className={cn("p-4 rounded-lg border flex flex-col gap-1", c.bg)}>
+            <button key={c.label} type="button" onClick={() => aplicarFiltroCard(c.filtro, c.tipo)}
+              title={`Clique para filtrar a lista por "${c.label}"`}
+              className={cn("p-4 rounded-lg border flex flex-col gap-1 text-left cursor-pointer transition-all hover:shadow-md active:scale-[0.98]",
+                c.bg,
+                filtroStatus === c.filtro && "ring-2 ring-offset-1 ring-indigo-400 shadow-md")}>
               <div className="flex items-center gap-2">
                 <c.icon className={cn("h-5 w-5", c.color)} />
                 <span className="text-xs font-semibold text-slate-500">{c.label}</span>
               </div>
               <p className={cn("text-3xl font-bold", c.color)}>{c.val}</p>
-            </div>
+              <p className="text-[10px] text-slate-400">Toque para filtrar</p>
+            </button>
           ))}
           {/* Card especial: Custo Mensal Total */}
           <div className="p-4 rounded-lg border bg-emerald-50 border-emerald-200 flex flex-col gap-1">
@@ -1209,12 +1222,14 @@ export default function SeguroVida() {
                 {([
                   { key: "todos", label: "Todos" },
                   { key: "CLT",   label: "CLT" },
-                  { key: "PJ",    label: "PJ / Sócio" },
+                  { key: "PJ",    label: "PJ" },
+                  { key: "Socio", label: "Sócio" },
                 ] as const).map(op => (
                   <button key={op.key} onClick={() => setFiltroTipo(op.key)}
                     className={cn("text-xs px-3 py-1 rounded-md font-semibold transition-colors",
                       filtroTipo === op.key
                         ? op.key === "PJ" ? "bg-yellow-500 text-white shadow-sm"
+                          : op.key === "Socio" ? "bg-purple-600 text-white shadow-sm"
                           : op.key === "CLT" ? "bg-indigo-600 text-white shadow-sm"
                           : "bg-white text-slate-700 shadow-sm"
                         : "text-slate-500 hover:text-slate-700")}>
@@ -1222,7 +1237,9 @@ export default function SeguroVida() {
                     {op.key !== "todos" && (
                       <span className="ml-1 opacity-70">
                         ({op.key === "PJ"
-                          ? funcionariosNorm.filter((f: any) => ["PJ", "Socio"].includes(f.tipoContrato ?? "")).length
+                          ? funcionariosNorm.filter((f: any) => (f.tipoContrato ?? "") === "PJ").length
+                          : op.key === "Socio"
+                          ? funcionariosNorm.filter((f: any) => (f.tipoContrato ?? "") === "Socio").length
                           : funcionariosNorm.filter((f: any) => !["PJ", "Socio"].includes(f.tipoContrato ?? "")).length})
                       </span>
                     )}
@@ -1415,7 +1432,10 @@ export default function SeguroVida() {
                         </td>
                         <td className="px-3 py-2.5 text-slate-500 w-[180px] min-w-[140px] max-w-[200px] leading-snug break-words">{f.funcao || f.cargo || "—"}</td>
                         <td className="px-3 py-2.5">
-                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">{f.tipoContrato ?? "CLT"}</span>
+                          <span className={cn("px-1.5 py-0.5 rounded font-mono",
+                            f.tipoContrato === "Socio" ? "bg-purple-100 text-purple-700" :
+                            f.tipoContrato === "PJ" ? "bg-yellow-100 text-yellow-800" :
+                            "bg-slate-100 text-slate-600")}>{f.tipoContrato === "Socio" ? "Sócio" : (f.tipoContrato ?? "CLT")}</span>
                         </td>
                         <td className="px-3 py-2.5 border-r">
                           <StatusBadge status={f.statusSeguro} />

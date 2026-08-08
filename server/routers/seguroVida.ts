@@ -714,8 +714,11 @@ export const seguroVidaRouter = router({
         FROM employees e
         LEFT JOIN seguro_vida_coberturas s ON s.employee_id = e.id AND s.status IN ('ativo','pendente_inclusao','pendente_cancelamento')
         WHERE e."companyId" ${inIds(ids)}
-          AND e.status IN ('Ativo','Ferias','Afastado','Aviso','Licenca','Licença')
           AND e."deletedAt" IS NULL
+          AND (
+            e.status IN ('Ativo','Ferias','Afastado','Aviso','Licenca','Licença')
+            OR s.id IS NOT NULL -- desligado que AINDA tem cobertura na apólice (deve aparecer p/ pedir exclusão)
+          )
         ORDER BY COALESCE(e."tipoContrato",'CLT'), e."nomeCompleto"
       `));
 
