@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import MonthSelector from "@/components/MonthSelector";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -807,9 +807,19 @@ export default function SeguroVida() {
   const [mesFiltro, setMesFiltro] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-  // Rev. 1406: seletor global de competência (padrão YYYY-MM, default = mês corrente)
-  const [competencia, setCompetencia] = useState<string>(getDefaultComp());
-  const isMesCorrente = competencia === getDefaultComp();
+  // Rev. 1406 → seletor de competência padrão do sistema (ano + pills de mês + "Ano todo")
+  const [anoComp, setAnoComp] = useState<number>(now.getFullYear());
+  const [mesComp, setMesComp] = useState<number | null>(now.getMonth() + 1); // null = Ano todo
+  const isAnoTodo = mesComp === null;
+  const competencia = isAnoTodo
+    ? getDefaultComp()
+    : `${anoComp}-${String(mesComp).padStart(2, "0")}`;
+  const setCompetencia = (v: string) => {
+    const [a, m] = v.split("-");
+    setAnoComp(Number(a)); setMesComp(Number(m));
+  };
+  // "Ano todo" mostra a carteira ao vivo + resumo anual das importações
+  const isMesCorrente = isAnoTodo || competencia === getDefaultComp();
   const isHistorico   = !isMesCorrente;
 
   const utils = trpc.useUtils();
@@ -839,7 +849,7 @@ export default function SeguroVida() {
 
   const importacoesQ = trpc.seguroVida.listarImportacoes.useQuery(
     { companyId, companyIds },
-    { enabled: (companyId > 0 || companyIds.length > 0) && tabAtiva === "historico" }
+    { enabled: (companyId > 0 || companyIds.length > 0) && (tabAtiva === "historico" || isAnoTodo) }
   );
 
   const inconsistenciasQ = trpc.seguroVida.listarInconsistencias.useQuery(
@@ -1072,28 +1082,57 @@ export default function SeguroVida() {
     <DashboardLayout title="Seguro de Vida">
       <div className="space-y-5">
 
-        {/* Rev. 1406: Seletor de competência (ano-a-ano e mês-a-mês) */}
-        <div className="flex items-center justify-between flex-wrap gap-3 px-3 py-2.5 bg-gradient-to-r from-indigo-50 to-slate-50 border border-indigo-100 rounded-lg">
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-indigo-600" />
-            <span className="text-sm font-semibold text-slate-700">Competência:</span>
-            <MonthSelector value={competencia} onChange={setCompetencia} />
-            {isMesCorrente
+        {/* Seletor de competência padrão do sistema: ano + pills de mês + "Ano todo" */}
+        <PeriodSelectorCard
+          ano={anoComp}
+          mes={mesComp}
+          onAno={setAnoComp}
+          onMes={setMesComp}
+          onAnoTodo={() => setMesComp(null)}
+          actions={
+            isAnoTodo
+              ? <span className="text-[10px] px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full font-semibold">Ano todo — carteira atual + resumo das importações</span>
+              : isMesCorrente
               ? <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-semibold">Mês corrente — dados ao vivo</span>
               : <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full font-semibold">Histórico (somente leitura)</span>
-            }
+          }
+        />
+        {isHistorico && snapshotQ.isFetched && !snapshotQ.data?.temDados && (
+          <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 font-medium">
+            ⚠️ Sem importação registrada para esta competência. Os cards e a tabela ficam vazios até importar o relatório do corretor para {competencia.split("-").reverse().join("/")}.
           </div>
-          {isHistorico && snapshotQ.isFetched && !snapshotQ.data?.temDados && (
-            <span className="text-xs text-amber-700 font-medium">
-              ⚠️ Sem importação registrada para esta competência. Os cards e a tabela ficam vazios até importar o relatório do corretor para {competencia.split("-").reverse().join("/")}.
-            </span>
-          )}
-          {isHistorico && snapshotQ.data?.temDados && (
-            <span className="text-xs text-slate-600">
-              Snapshot reconstruído a partir do relatório importado em {fmtDate((snapshotQ.data?.resumo?.ultimaImportacao?.data_importacao as string | undefined)?.split?.("T")?.[0] ?? null)}.
-            </span>
-          )}
-        </div>
+        )}
+        {isHistorico && snapshotQ.data?.temDados && (
+          <div className="px-3 py-2 bg-slate-50 border rounded-lg text-xs text-slate-600">
+            Snapshot reconstruído a partir do relatório importado em {fmtDate((snapshotQ.data?.resumo?.ultimaImportacao?.data_importacao as string | undefined)?.split?.("T")?.[0] ?? null)}.
+          </div>
+        )}
+        {/* Resumo anual (Ano todo): meses com relatório do corretor importado */}
+        {isAnoTodo && (
+          <div className="px-3 py-2.5 bg-indigo-50/50 border border-indigo-100 rounded-lg">
+            <p className="text-xs font-semibold text-slate-700 mb-1.5">Importações do corretor em {anoComp}:</p>
+            {(() => {
+              const doAno = (importacoesQ.data ?? []).filter((i: any) => String(i.competencia ?? "").startsWith(String(anoComp)));
+              if (importacoesQ.isLoading) return <p className="text-xs text-slate-500">Carregando…</p>;
+              if (doAno.length === 0) return <p className="text-xs text-slate-500">Nenhum relatório importado em {anoComp}.</p>;
+              const porComp = new Map<string, any>();
+              for (const i of doAno) if (!porComp.has(i.competencia)) porComp.set(i.competencia, i);
+              return (
+                <div className="flex flex-wrap gap-2">
+                  {[...porComp.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([comp, i]: [string, any]) => (
+                    <button key={comp} type="button" onClick={() => setCompetencia(comp)}
+                      title="Toque para abrir esta competência"
+                      className="text-[11px] px-2.5 py-1 rounded-lg border border-indigo-200 bg-white hover:bg-indigo-50 transition-colors">
+                      <span className="font-bold text-indigo-700">{comp.split("-").reverse().join("/")}</span>
+                      <span className="text-slate-600"> — {i.total_segurados} segurados</span>
+                      {Number(i.total_sem_seguro) > 0 && <span className="text-red-600 font-semibold"> · {i.total_sem_seguro} sem seguro</span>}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         {/* Aviso importante */}
         <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">

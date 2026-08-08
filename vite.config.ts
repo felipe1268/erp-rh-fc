@@ -48,7 +48,7 @@ export default defineConfig({
     // Rev. 4087 — bump para 4096 MB + chunks adicionais para shared/ pesados
     // (cid10 ~1 MB, modulePages ~56 KB) + maxParallelFileOps para baixar pico.
     rollupOptions: {
-      maxParallelFileOps: 5,
+      maxParallelFileOps: 2,
       output: {
         compact: true,
         manualChunks(id) {
