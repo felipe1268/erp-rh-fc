@@ -1111,7 +1111,10 @@ export default function Ferias() {
     const prioridade = (f: any) =>
       f.status === "em_gozo" ? 0
       : f.status === "agendada" ? 1
-      : (f.status === "pendente" || f.status === "vencida" || f.vencida) ? 2
+      // Rev. 4917 — a flag `vencida` só conta como pendência se o período NÃO
+      // estiver concluído/cancelado (períodos históricos quitados carregavam
+      // vencida=1 e "roubavam" a linha principal do colaborador).
+      : (f.status === "pendente" || f.status === "vencida" || (f.vencida && f.status !== "concluida" && f.status !== "cancelada")) ? 2
       : 3; // concluída/cancelada
     return ordem.map((id) => {
       const rows = porEmp.get(id)!;
@@ -1154,7 +1157,7 @@ export default function Ferias() {
     { key: "90plus", label: "+90 dias", sub: "sem pressa", tile: "border-emerald-300 bg-emerald-50", ring: "ring-emerald-400", num: "text-emerald-700", bar: "bg-emerald-500" },
   ] as const;
   const bucketDoGrupo = (rep: any): string | null => {
-    const emPrazo = rep.status === "pendente" || rep.status === "vencida" || rep.vencida;
+    const emPrazo = rep.status === "pendente" || rep.status === "vencida" || (rep.vencida && rep.status !== "concluida" && rep.status !== "cancelada");
     if (!emPrazo) return null;
     const limite = dataLimiteInicioGozoFerias(rep.periodoConcessivoFim);
     if (!limite) return null;
