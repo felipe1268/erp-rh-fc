@@ -1386,19 +1386,19 @@ export default function SeguroVida() {
                           </td>
                         )}
                         {/* Funcionário */}
-                        <td className="px-3 py-2.5 font-medium text-slate-800 whitespace-nowrap border-r">
-                          <div className="flex items-center gap-2">
+                        <td className="px-3 py-2.5 font-medium text-slate-800 border-r w-[260px] min-w-[220px] max-w-[280px]">
+                          <div className="flex items-center gap-2.5">
                             {f.fotoUrl ? (
-                              <img src={`${f.fotoUrl}?w=128`} loading="lazy" alt="" className="h-7 w-7 rounded-full object-cover shrink-0 border border-slate-200" />
+                              <img src={`${f.fotoUrl}?w=128`} loading="lazy" alt="" className="h-8 w-8 rounded-full object-cover shrink-0 border border-slate-200" />
                             ) : (
-                              <div className="h-7 w-7 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500 shrink-0">
+                              <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0">
                                 {String(f.nomeCompleto || "?").trim().split(/\s+/).map((p: string) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
                               </div>
                             )}
-                            <div>
-                              <div>{f.nomeCompleto}</div>
+                            <div className="min-w-0">
+                              <div className="leading-snug break-words">{f.nomeCompleto}</div>
                               {f.obra_nome && (
-                                <div className="text-[10px] text-slate-400 font-normal truncate max-w-[200px]">📍 {f.obra_nome}</div>
+                                <div className="text-[10px] text-slate-400 font-normal truncate" title={f.obra_nome}>📍 {f.obra_nome}</div>
                               )}
                             </div>
                           </div>
@@ -1413,7 +1413,7 @@ export default function SeguroVida() {
                             <div className="text-[10px] text-slate-400 mt-0.5">{f.seguradora}</div>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{f.funcao || f.cargo || "—"}</td>
+                        <td className="px-3 py-2.5 text-slate-500 w-[180px] min-w-[140px] max-w-[200px] leading-snug break-words">{f.funcao || f.cargo || "—"}</td>
                         <td className="px-3 py-2.5">
                           <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">{f.tipoContrato ?? "CLT"}</span>
                         </td>
