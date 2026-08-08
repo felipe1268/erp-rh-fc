@@ -170,6 +170,15 @@ export default function ValeAlimentacao() {
 
   // Queries
   const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesStr }, { enabled: !!companyId || companyIds?.length > 0 });
+  const mesesAnoQ = trpc.valeAlimentacao.mesesComLancamentos.useQuery({ companyId, companyIds, ano }, { enabled: !!companyId || companyIds?.length > 0 });
+  const monthStatus = React.useMemo(() => {
+    const st: Record<number, "data" | "consolidated" | "none"> = {};
+    for (let m = 1; m <= 12; m++) st[m] = "none";
+    for (const r of (mesesAnoQ.data || []) as any[]) {
+      if (r.total > 0) st[r.mes] = r.pagos >= r.total ? "consolidated" : "data";
+    }
+    return st;
+  }, [mesesAnoQ.data]);
   const lancamentosQ = trpc.valeAlimentacao.listLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesStr }, { enabled: !!companyId || companyIds?.length > 0 });
   const configsQ = trpc.avisoPrevio.avisoPrevio.listMealBenefitConfigs.useQuery({ companyId, companyIds }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "configuracao" });
   const histQ = trpc.valeAlimentacao.historicoColaborador.useQuery(
@@ -440,7 +449,7 @@ export default function ValeAlimentacao() {
         {tab === "lancamento" && (
           <div className="space-y-4">
             {/* Period selector padrão white-card */}
-            <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
+            <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} monthStatus={monthStatus} showLegend />
             {/* Actions */}
             <div className="flex items-center gap-2 flex-wrap justify-end">
               <div className="flex items-center gap-2 flex-wrap">
@@ -694,11 +703,27 @@ export default function ValeAlimentacao() {
                           <React.Fragment key={l.id}>
                           <tr className={`border-b last:border-0 hover:bg-muted/20 transition-colors ${isExpanded ? 'bg-blue-50/50' : ''}`}>
                             <td className="px-4 py-2.5">
-                              <div>
-                                <span className="font-medium text-sm text-blue-700 cursor-pointer hover:underline" onClick={() => { setHistDialogEmployeeId(l.employeeId); setHistDialogName(l.nomeCompleto); }}>{l.nomeCompleto}</span>
-                                {l.obraNome && (
-                                  <span className="block text-xs text-muted-foreground"><Building2 className="h-3 w-3 inline mr-1" />{l.obraNome}</span>
-                                )}
+                              <div className="flex items-center gap-2.5">
+                                <div className="relative h-9 w-9 shrink-0">
+                                  {l.fotoUrl && (
+                                    <img src={`${l.fotoUrl}${l.fotoUrl.includes('?') ? '&' : '?'}w=128`} alt="" loading="lazy" className="absolute inset-0 h-9 w-9 rounded-full object-cover border z-10 bg-white" onError={e => { e.currentTarget.style.display = 'none'; }} />
+                                  )}
+                                  <div className="h-9 w-9 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center text-xs font-semibold border">
+                                    {(l.nomeCompleto || '?').split(' ').filter(Boolean).slice(0, 2).map((p: string) => p[0]).join('').toUpperCase()}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="font-medium text-sm text-blue-700 cursor-pointer hover:underline" onClick={() => { setHistDialogEmployeeId(l.employeeId); setHistDialogName(l.nomeCompleto); }}>{l.nomeCompleto}</span>
+                                  <span className="inline-flex items-center gap-1 ml-1.5 align-middle">
+                                    {l.isCipa && <span className="px-1.5 py-0 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-700 border border-purple-200">CIPA</span>}
+                                    <span className={`px-1.5 py-0 rounded-full text-[10px] font-semibold border ${l.empStatus === 'Ativo' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                      {l.empStatus === 'Ativo' ? 'Ativo' : (l.empStatus || 'Inativo')}
+                                    </span>
+                                  </span>
+                                  {l.obraNome && (
+                                    <span className="block text-xs text-muted-foreground"><Building2 className="h-3 w-3 inline mr-1" />{l.obraNome}</span>
+                                  )}
+                                </div>
                               </div>
                             </td>
                             <td className="px-3 py-2.5 text-xs font-mono">{formatCPF(l.cpf)}</td>
@@ -906,7 +931,7 @@ export default function ValeAlimentacao() {
         {/* ===== ABA POR OBRA ===== */}
         {tab === "por_obra" && (
           <div className="space-y-4">
-            <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
+            <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} monthStatus={monthStatus} showLegend />
             <div>
               <h2 className="text-lg font-semibold">Valores por Obra — {mesLabel}</h2>
               <p className="text-sm text-muted-foreground">Resumo dos benefícios agrupados por obra/centro de custo.</p>
@@ -986,7 +1011,7 @@ export default function ValeAlimentacao() {
                   );
                 })()}
               </div>
-              <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
+              <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} monthStatus={monthStatus} showLegend />
               <div className="flex items-center gap-2">
                 <Select value={alertaFilter} onValueChange={(v) => setAlertaFilter(v as any)}>
                   <SelectTrigger className="w-[150px]">

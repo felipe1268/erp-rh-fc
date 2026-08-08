@@ -226,7 +226,8 @@ export const valeAlimentacaoRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const rows = ((await db.execute(
-        sql`SELECT DISTINCT ON (vr.id) vr.*, e."nomeCompleto", e.cpf, e.cargo, e.funcao, e.status as "empStatus",
+        sql`SELECT DISTINCT ON (vr.id) vr.*, e."nomeCompleto", e.cpf, e.cargo, e.funcao, e.status as "empStatus", e."fotoUrl",
+            EXISTS (SELECT 1 FROM cipa_members cm WHERE cm."employeeId" = e.id AND cm."companyId" = vr."companyId" AND cm."statusMembro" = 'Ativo') as "isCipa",
             of2."obraId", o.nome as "obraNome",
             vr."diasUteisCalc", vr."cidadeObra", vr."diasFerias", vr."diasLicenca", vr."diasFaltas", vr."diasDescontados", vr."proporcionalDias", vr."memoriaCalculo"
             FROM vr_benefits vr
@@ -242,6 +243,22 @@ export const valeAlimentacaoRouter = router({
             ORDER BY vr.id, e."nomeCompleto" ASC`
       )) as any).rows || [];
       return rows || [];
+    }),
+
+  mesesComLancamentos: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const rows = ((await db.execute(
+        sql`SELECT SUBSTRING(vr."mesReferencia" FROM 6 FOR 2) AS mes,
+            COUNT(*) FILTER (WHERE vr.status != 'cancelado') AS total,
+            COUNT(*) FILTER (WHERE vr.status = 'pago') AS pagos
+            FROM vr_benefits vr
+            WHERE vr."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
+            AND vr."mesReferencia" LIKE ${`${input.ano}-%`}
+            GROUP BY 1`
+      )) as any).rows || [];
+      return rows.map((r: any) => ({ mes: Number(r.mes), total: Number(r.total), pagos: Number(r.pagos) }));
     }),
 
   getStats: protectedProcedure
