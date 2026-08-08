@@ -2934,6 +2934,38 @@ export const payrollEngineRouter = router({
     }),
 
   // ============================================================
+  // 4c. INFO VISUAL DOS FUNCIONÁRIOS DA FOLHA (foto, obra, status)
+  // ============================================================
+  // Rev. 4924 — snapshot da folha não carrega foto/obra/status; o front faz
+  // JOIN client-side com este mapa leve (funciona inclusive sobre snapshots antigos).
+  infoFuncionariosFolha: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const permitidas = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const permitidasIds = new Set((permitidas || []).map((c: any) => Number(c.id)));
+      const allowed = resolveCompanyIds(input).filter(id => permitidasIds.has(Number(id)));
+      if (allowed.length === 0) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso às empresas solicitadas" });
+      }
+      const rows = ((await db.execute(sql`
+        SELECT e.id AS "employeeId", e."fotoUrl", e.status,
+               (SELECT o.nome FROM obra_funcionarios ofx
+                  JOIN obras o ON o.id = ofx."obraId"
+                 WHERE ofx."employeeId" = e.id AND ofx."isActive" = 1
+                 ORDER BY ofx.id DESC LIMIT 1) AS "obraNome"
+        FROM employees e
+        WHERE e."companyId" IN (${sql.join(allowed.map(id => sql`${id}`), sql`,`)})
+          AND e."deletedAt" IS NULL
+      `)) as any).rows || [];
+      return rows as Array<{ employeeId: number; fotoUrl: string | null; status: string | null; obraNome: string | null }>;
+    }),
+
+  // ============================================================
   // 5. LISTAR VALES DO MÊS
   // ============================================================
   listarVales: protectedProcedure

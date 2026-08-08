@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier, getCompaniesForUser } from "../db";
 import { TRPCError } from "@trpc/server";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes, clienteAvaliacaoDetalhes, employeeIntegrations, employeeDocuments } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes, clienteAvaliacaoDetalhes, employeeIntegrations, employeeDocuments, payrollPayments, bancoHorasSaldo, bancoHorasLancamentos } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte, or, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut, dbRetrieve } from "../storage";
@@ -2102,7 +2102,21 @@ export const controleDocumentosRouter = router({
       // Ponto - TODOS os registros (sem limite)
       const empPonto = await db.select().from(timeRecords).where(eq(timeRecords.employeeId, input.employeeId)).orderBy(desc(timeRecords.data));
       // Folha de pagamento - TODOS os registros
-      const empPayroll = await db.select().from(payroll).where(eq(payroll.employeeId, input.employeeId)).orderBy(desc(payroll.mesReferencia));
+      // Rev. 4923 — Folha REAL vem de payroll_payments (holerites gerados pela
+      // tela Folha de Pagamento). A tabela legada `payroll` está vazia (nunca é
+      // escrita pelo motor atual) — o Raio-X lia dela e mostrava sempre "nenhum registro".
+      const empPayroll = await db.select({
+        id: payrollPayments.id,
+        mesReferencia: payrollPayments.mesReferencia,
+        salarioBase: payrollPayments.salarioBrutoMes,
+        horasExtrasValor: payrollPayments.horasExtrasValor,
+        totalDescontos: payrollPayments.totalDescontos,
+        salarioLiquido: payrollPayments.salarioLiquido,
+        status: payrollPayments.status,
+        dataPagamento: payrollPayments.dataPagamento,
+      }).from(payrollPayments)
+        .where(and(eq(payrollPayments.employeeId, input.employeeId), eq(payrollPayments.companyId, emp.companyId)))
+        .orderBy(desc(payrollPayments.mesReferencia));
       // EPIs entregues - TODOS
       const empEpis = await db.select({
         id: epiDeliveries.id, epiId: epiDeliveries.epiId, quantidade: epiDeliveries.quantidade,
@@ -2250,6 +2264,20 @@ export const controleDocumentosRouter = router({
           eq(extraPayments.employeeId, input.employeeId),
           eq(extraPayments.tipoExtra, "Horas_Extras"),
         )).orderBy(desc(extraPayments.mesReferencia));
+
+      // Rev. 4923 — Banco de Horas do colaborador (toda HE vira banco, nunca é
+      // paga em dinheiro — por isso extraPayments fica vazio e o Raio-X precisa
+      // mostrar o banco).
+      const [bhSaldo] = await db.select().from(bancoHorasSaldo)
+        .where(and(eq(bancoHorasSaldo.employeeId, input.employeeId), eq(bancoHorasSaldo.companyId, emp.companyId)));
+      const bhLancamentos = await db.select().from(bancoHorasLancamentos)
+        .where(and(eq(bancoHorasLancamentos.employeeId, input.employeeId), eq(bancoHorasLancamentos.companyId, emp.companyId)))
+        .orderBy(desc(bancoHorasLancamentos.data), desc(bancoHorasLancamentos.id))
+        .limit(100);
+      const bancoHoras = {
+        saldoMinutos: bhSaldo?.saldoMinutos ?? 0,
+        lancamentos: bhLancamentos,
+      };
 
       // HISTÓRICO FUNCIONAL - TODOS os eventos
       const empHistorico = await db.select().from(employeeHistory)
@@ -3100,6 +3128,7 @@ export const controleDocumentosRouter = router({
         folhaPagamento: empPayroll,
         epis: empEpis,
         horasExtras: empHorasExtras,
+        bancoHoras,
         historicoFuncional: empHistorico,
         acidentes: empAcidentes,
         processos: processosComAndamentos,

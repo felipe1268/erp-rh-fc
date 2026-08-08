@@ -682,6 +682,16 @@ export default function FolhaPagamento() {
     { companyId, companyIds },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
+  // Rev. 4924 — foto/obra/status dos funcionários (JOIN client-side; snapshot da folha não carrega)
+  const infoFuncsFolha = trpc.payrollEngine.infoFuncionariosFolha.useQuery(
+    { companyId, companyIds },
+    { enabled: companyId > 0 || companyIds.length > 0 }
+  );
+  const infoFuncsMap = useMemo(() => {
+    const m = new Map<number, { fotoUrl: string | null; status: string | null; obraNome: string | null }>();
+    (infoFuncsFolha.data || []).forEach((r: any) => m.set(Number(r.employeeId), r));
+    return m;
+  }, [infoFuncsFolha.data]);
   const [valeResult, setValeResult] = useState<any>(null);
   const [pagamentoResult, setPagamentoResult] = useState<any>(null);
   // Rev. 3302 — Arredondamento (Master): força líquido p/ real cheio (lote/individual).
@@ -5077,7 +5087,33 @@ export default function FolhaPagamento() {
                       const zebra = i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50';
                       return (
                         <tr key={i} className={`border-b border-gray-100 hover:bg-blue-50/40 transition-colors ${zebra}`}>
-                          <td className={`py-2 px-2 font-medium sticky left-0 z-10 whitespace-nowrap ${zebra}`}>{f.nome}</td>
+                          <td className={`py-2 px-2 font-medium sticky left-0 z-10 whitespace-nowrap ${zebra}`}>{(() => {
+                            const info = infoFuncsMap.get(Number(f.employeeId));
+                            const st = info?.status || null;
+                            const ativo = st === 'Ativo';
+                            return (
+                              <div className="flex items-center gap-2">
+                                {info?.fotoUrl ? (
+                                  <img src={`${info.fotoUrl}?w=128`} loading="lazy" alt="" className="h-7 w-7 rounded-full object-cover shrink-0 border border-gray-200" />
+                                ) : (
+                                  <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-[9px] font-bold text-gray-500 shrink-0">
+                                    {String(f.nome || '?').trim().split(/\s+/).map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="leading-tight">
+                                  <div className="flex items-center gap-1.5">
+                                    <span>{f.nome}</span>
+                                    {st && (
+                                      <span className={`text-[9px] px-1.5 rounded-full font-semibold ${ativo ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}`}>{st}</span>
+                                    )}
+                                  </div>
+                                  {info?.obraNome && (
+                                    <div className="text-[9px] text-muted-foreground font-normal truncate max-w-[220px]">📍 {info.obraNome}</div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}</td>
                           <td className="py-2 px-2 text-muted-foreground text-[10px] whitespace-nowrap max-w-[140px] truncate" title={f.funcao}>{f.funcao}</td>
                           <td className="text-right py-2 px-2 border-l border-green-100">{formatBRL(f.salarioBruto)}</td>
                           <td className="text-right py-2 px-2 text-green-700">{f.valorHE > 0 ? formatBRL(f.valorHE) : '—'}</td>

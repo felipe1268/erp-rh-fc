@@ -448,6 +448,12 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const folhaPagamento = raioX?.folhaPagamento || [];
   const episEntregas = raioX?.epis || [];
   const horasExtras = raioX?.horasExtras || [];
+  // Rev. 4923 — Banco de Horas (toda HE CLT vira banco, nunca é paga em dinheiro)
+  const bancoHoras = (raioX as any)?.bancoHoras || { saldoMinutos: 0, lancamentos: [] };
+  const fmtMinutosBH = (m: number) => {
+    const neg = m < 0; const a = Math.abs(Math.round(m || 0));
+    return `${neg ? "-" : ""}${Math.floor(a / 60)}:${String(a % 60).padStart(2, "0")}`;
+  };
   const historicoFuncional = raioX?.historicoFuncional || [];
   const acidentes = raioX?.acidentes || [];
   const processos = raioX?.processos || [];
@@ -1352,7 +1358,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   { label: "EPIs", value: episEntregas.length, tab: "epis", bg: "bg-teal-50 border-teal-200", textColor: "text-teal-700", iconColor: "text-teal-400", icon: HardHat },
                   ...(emp?.tipoContrato === 'PJ'
                     ? [{ label: "Adicionais", value: horasExtras.length, tab: "he", bg: "bg-purple-50 border-purple-200", textColor: "text-purple-700", iconColor: "text-purple-400", icon: Zap }]
-                    : [{ label: "Horas Extras", value: horasExtras.length, tab: "he", bg: "bg-amber-50 border-amber-200", textColor: "text-amber-700", iconColor: "text-amber-400", icon: Zap }]),
+                    : [{ label: "Banco de Horas", value: (bancoHoras.lancamentos || []).length, tab: "he", bg: "bg-amber-50 border-amber-200", textColor: "text-amber-700", iconColor: "text-amber-400", icon: Zap }]),
                   { label: "Habilidades", value: empSkills.length, tab: "habilidades", bg: "bg-purple-50 border-purple-200", textColor: "text-purple-700", iconColor: "text-purple-400", icon: Wrench },
                   { label: "Histórico", value: timeline.length, tab: "timeline", bg: "bg-indigo-50 border-indigo-200", textColor: "text-indigo-700", iconColor: "text-indigo-400", icon: History },
                   ...(assiduidade.mesesAvaliados > 0 ? [{
@@ -1554,7 +1560,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     tabs: [
                       { value: "ponto", label: "Ponto", icon: Clock, count: pontoResumo.length },
                       { value: "folha", label: "Folha", icon: DollarSign, count: folhaPagamento.length },
-                      { value: "he", label: emp?.tipoContrato === 'PJ' ? "Adicionais" : "Horas Extras", icon: Zap, count: horasExtras.length },
+                      { value: "he", label: emp?.tipoContrato === 'PJ' ? "Adicionais" : "Banco de Horas", icon: Zap, count: emp?.tipoContrato === 'PJ' ? horasExtras.length : (bancoHoras.lancamentos || []).length },
                       ...(emp?.tipoContrato === 'PJ' ? [{ value: "pj", label: "PJ", icon: FileSignature, count: (pjConformidade?.pendencias || 0) + pjContratos.length }] : []),
                       { value: "descontos_epi", label: "Descontos EPI", icon: Ban, count: (raioX as any)?.epiDiscountAlerts?.filter((a: any) => a.status === 'pendente').length || 0 },
                     ],
@@ -2283,10 +2289,60 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     </div>
                   )
                 ) : (
-                  /* ---- HORAS EXTRAS CLT ---- */
-                  horasExtras.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">Nenhuma hora extra registrada</div>
-                  ) : (
+                  /* ---- BANCO DE HORAS + HORAS EXTRAS CLT (Rev. 4923) ---- */
+                  <div className="space-y-4">
+                    {(() => {
+                      const lancs = bancoHoras.lancamentos || [];
+                      const creditosMin = lancs.filter((l: any) => l.tipo === "credito").reduce((s: number, l: any) => s + (l.minutos || 0), 0);
+                      const debitosMin = lancs.filter((l: any) => l.tipo !== "credito").reduce((s: number, l: any) => s + (l.minutos || 0), 0);
+                      const saldoNeg = (bancoHoras.saldoMinutos || 0) < 0;
+                      return (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-3 gap-4">
+                            <Card className={`border-l-4 ${saldoNeg ? "border-l-red-500" : "border-l-blue-500"}`}><CardContent className="p-4">
+                              <p className="text-xs text-muted-foreground">Saldo Banco de Horas</p>
+                              <p className={`text-2xl font-bold ${saldoNeg ? "text-red-600" : "text-blue-600"}`}>{fmtMinutosBH(bancoHoras.saldoMinutos)}</p>
+                            </CardContent></Card>
+                            <Card className="border-l-4 border-l-green-500"><CardContent className="p-4">
+                              <p className="text-xs text-muted-foreground">Créditos (HE)</p>
+                              <p className="text-2xl font-bold text-green-600">{fmtMinutosBH(creditosMin)}</p>
+                            </CardContent></Card>
+                            <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
+                              <p className="text-xs text-muted-foreground">Débitos (compensações/faltas)</p>
+                              <p className="text-2xl font-bold text-orange-600">{fmtMinutosBH(debitosMin)}</p>
+                            </CardContent></Card>
+                          </div>
+                          {lancs.length === 0 ? (
+                            <div className="text-center py-6 text-muted-foreground text-sm">Nenhuma movimentação no banco de horas</div>
+                          ) : (
+                            <div className="overflow-x-auto rounded-lg border bg-white">
+                              <table className="w-full text-sm">
+                                <thead><tr className="bg-blue-50 border-b">
+                                  <th className="p-3 text-left font-semibold text-blue-900">Data</th>
+                                  <th className="p-3 text-left font-semibold text-blue-900">Tipo</th>
+                                  <th className="p-3 text-right font-semibold text-blue-900">Horas</th>
+                                  <th className="p-3 text-left font-semibold text-blue-900">Descrição</th>
+                                </tr></thead>
+                                <tbody>
+                                  {lancs.map((l: any) => {
+                                    const isCred = l.tipo === "credito";
+                                    return (
+                                      <tr key={l.id} className="border-b last:border-0 hover:bg-muted/30">
+                                        <td className="p-3 font-medium whitespace-nowrap">{l.data ? String(l.data).slice(0, 10).split("-").reverse().join("/") : "—"}</td>
+                                        <td className="p-3"><Badge variant={isCred ? "default" : "secondary"} className={isCred ? "bg-green-100 text-green-800 hover:bg-green-100" : "bg-orange-100 text-orange-800 hover:bg-orange-100"}>{isCred ? "Crédito" : "Débito"}</Badge></td>
+                                        <td className={`p-3 text-right font-mono font-semibold ${isCred ? "text-green-600" : "text-orange-600"}`}>{isCred ? "+" : "-"}{fmtMinutosBH(l.minutos)}</td>
+                                        <td className="p-3 max-w-[320px]">{l.descricao || "-"}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {horasExtras.length > 0 && (
                     <div className="space-y-4">
                       <div className="grid grid-cols-3 gap-4">
                         <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
@@ -2327,7 +2383,8 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         </table>
                       </div>
                     </div>
-                  )
+                    )}
+                  </div>
                 )}
               </TabsContent>
 
