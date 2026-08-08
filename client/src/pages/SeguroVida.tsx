@@ -1387,7 +1387,21 @@ export default function SeguroVida() {
                         )}
                         {/* Funcionário */}
                         <td className="px-3 py-2.5 font-medium text-slate-800 whitespace-nowrap border-r">
-                          <div>{f.nomeCompleto}</div>
+                          <div className="flex items-center gap-2">
+                            {f.fotoUrl ? (
+                              <img src={`${f.fotoUrl}?w=128`} loading="lazy" alt="" className="h-7 w-7 rounded-full object-cover shrink-0 border border-slate-200" />
+                            ) : (
+                              <div className="h-7 w-7 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500 shrink-0">
+                                {String(f.nomeCompleto || "?").trim().split(/\s+/).map((p: string) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <div>{f.nomeCompleto}</div>
+                              {f.obra_nome && (
+                                <div className="text-[10px] text-slate-400 font-normal truncate max-w-[200px]">📍 {f.obra_nome}</div>
+                              )}
+                            </div>
+                          </div>
                           {f.emp_status && !["Ativo", "Ferias"].includes(f.emp_status) && (
                             <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-semibold mt-0.5 inline-block",
                               f.emp_status === "Afastado" ? "bg-orange-100 text-orange-700" :
@@ -1405,6 +1419,15 @@ export default function SeguroVida() {
                         </td>
                         <td className="px-3 py-2.5 border-r">
                           <StatusBadge status={f.statusSeguro} />
+                          {f.statusSeguro === "sem_cobertura" && (
+                            <div className="text-[10px] text-red-600 mt-0.5 whitespace-nowrap">
+                              {f.ultima_cobertura_fim
+                                ? `desde ${fmtDate(f.ultima_cobertura_fim)}`
+                                : f.dataAdmissao
+                                  ? `nunca teve (adm. ${fmtDate(f.dataAdmissao)})`
+                                  : "nunca teve seguro"}
+                            </div>
+                          )}
                           {f.item_segurador && (
                             <div className="font-mono text-[10px] text-slate-400 mt-0.5">#{f.item_segurador}</div>
                           )}

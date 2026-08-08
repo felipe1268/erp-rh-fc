@@ -49,6 +49,7 @@ import { ReservasAlertModal } from './compras/ReservasAlertModal';
 import FeriasGozoPrompt from './FeriasGozoPrompt';
 import AlertasDiaPrompt from './AlertasDiaPrompt';
 import UserAlertsPrompt from './UserAlertsPrompt';
+import SeguroVidaAlertPrompt from './SeguroVidaAlertPrompt';
 import { FCSignPendingAlertGlobal } from './FCSignPendingAlertGlobal';
 import { AuditoriaAlmoxPendingAlert } from './AuditoriaAlmoxPendingAlert';
 import { AlertaLocacoesVencendo } from './AlertaLocacoesVencendo';
@@ -1015,6 +1016,8 @@ export default function DashboardLayout({
       <ReservasAlertModalGlobal />
       <FeriasGozoPromptGlobal />
       <AlertasDiaGlobal />
+      {/* Rev. 4927 — regra de ouro: CLT sem seguro de vida ativo (módulo RH) */}
+      <SeguroVidaAlertGlobal />
       {/* Rev. 4690 — alertas pessoais (ex.: apontamento reprovado / HE rejeitada) */}
       <UserAlertsPrompt />
       <FCSignPendingAlertGlobal />
@@ -1042,6 +1045,13 @@ function AlertasDiaGlobal() {
   const { activeModule } = useModule();
   if (activeModule === "rh-dp") return <AlertasDiaPrompt modulo="rh" />;
   if (activeModule === "financeiro") return <AlertasDiaPrompt modulo="financeiro" />;
+  return null;
+}
+
+// Rev. 4927 — Pop-up regra de ouro: CLT sem seguro de vida (só módulo RH).
+function SeguroVidaAlertGlobal() {
+  const { activeModule } = useModule();
+  if (activeModule === "rh-dp") return <SeguroVidaAlertPrompt />;
   return null;
 }
 
@@ -1631,6 +1641,10 @@ function DashboardLayoutContent({
           // Só some quando o apontamento é resolvido/arquivado pelo RH.
           if (item.path === "/apontamentos-campo" && (rb as any).apontamentosNovas > 0) {
             return { ...item, badge: (rb as any).apontamentosNovas, badgePulse: true };
+          }
+          // Rev. 4927 — regra de ouro: colaborador CLT trabalhando sem seguro de vida
+          if (item.path === "/seguro-vida" && (rb as any).semSeguroCount > 0) {
+            return { ...item, badge: (rb as any).semSeguroCount, badgePulse: true };
           }
           return item;
         }),

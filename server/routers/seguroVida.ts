@@ -700,6 +700,13 @@ export const seguroVidaRouter = router({
         SELECT
           e.id, e."nomeCompleto", e."cargo", e."funcao", e."dataAdmissao",
           e."tipoContrato", e.status as emp_status,
+          e."fotoUrl",
+          (SELECT o.nome FROM obra_funcionarios ofx
+             JOIN obras o ON o.id = ofx."obraId"
+            WHERE ofx."employeeId" = e.id AND ofx."isActive" = 1
+            ORDER BY ofx.id DESC LIMIT 1) AS obra_nome,
+          (SELECT MAX(s2.data_cancelamento) FROM seguro_vida_coberturas s2
+            WHERE s2.employee_id = e.id AND s2.status = 'cancelado') AS ultima_cobertura_fim,
           s.id as cobertura_id, s.status as seguro_status, s.item_segurador,
           s.apolice_vg, s.apolice_apc, s.data_adesao, s.data_cancelamento, s.observacoes,
           s.morte_natural, s.morte_acidental, s.invalidez_acidente, s.invalidez_doenca,

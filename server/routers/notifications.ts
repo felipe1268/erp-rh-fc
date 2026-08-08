@@ -289,7 +289,7 @@ export const notificationsRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) return { heNovas: 0, mdoNovas: 0, apontamentosNovas: 0, recontratacoesNovas: 0, heItems: [], mdoItems: [], apontamentosItems: [], recontratacaoItems: [] };
+      if (!db) return { heNovas: 0, mdoNovas: 0, apontamentosNovas: 0, recontratacoesNovas: 0, semSeguroCount: 0, heItems: [], mdoItems: [], apontamentosItems: [], recontratacaoItems: [] };
 
       // Rev. 2755 — Tenancy: o servidor NÃO confia nos companyId(s) do cliente.
       // Restringe a consulta às empresas que o usuário pode acessar (admin =
@@ -302,7 +302,7 @@ export const notificationsRouter = router({
         const permitidas = new Set(comps.map((c: any) => c.id));
         const ids = resolveCompanyIds(input).filter((id) => permitidas.has(id));
         if (ids.length === 0) {
-          return { heNovas: 0, mdoNovas: 0, apontamentosNovas: 0, recontratacoesNovas: 0, heItems: [], mdoItems: [], apontamentosItems: [], recontratacaoItems: [] };
+          return { heNovas: 0, mdoNovas: 0, apontamentosNovas: 0, recontratacoesNovas: 0, semSeguroCount: 0, heItems: [], mdoItems: [], apontamentosItems: [], recontratacaoItems: [] };
         }
         safeInput = { companyId: ids[0], companyIds: ids };
       }
@@ -384,7 +384,30 @@ export const notificationsRouter = router({
         ))
         .orderBy(desc(recontratacaoSolicitacoes.createdAt));
 
+      // ── Seguro de Vida (Rev. 4927 — regra de ouro): CLT ativo SEM cobertura
+      // ativa/pendente de inclusão. Mesma lógica de listarFuncionariosComStatus.
+      let semSeguroCount = 0;
+      try {
+        const segIds = resolveCompanyIds(safeInput);
+        if (segIds.length > 0) {
+          const segRes: any = await db.execute(sql`
+            SELECT COUNT(*)::int AS n
+            FROM employees e
+            WHERE e."companyId" IN (${sql.join(segIds.map((id) => sql`${id}`), sql`,`)})
+              AND e.status IN ('Ativo','Ferias','Afastado','Aviso','Licenca','Licença')
+              AND e."deletedAt" IS NULL
+              AND COALESCE(e."tipoContrato",'CLT') NOT IN ('PJ','Socio')
+              AND NOT EXISTS (
+                SELECT 1 FROM seguro_vida_coberturas s
+                WHERE s.employee_id = e.id AND s.status IN ('ativo','pendente_inclusao')
+              )
+          `);
+          semSeguroCount = Number((segRes.rows || segRes)[0]?.n || 0);
+        }
+      } catch { semSeguroCount = 0; }
+
       return {
+        semSeguroCount,
         heNovas: heAllRows.length,
         mdoNovas: mdoAllRows.length,
         apontamentosNovas: apontAllRows.length,
