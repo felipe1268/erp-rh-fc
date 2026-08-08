@@ -3995,7 +3995,12 @@ export const avisoPrevioFeriasRouter = router({
         
         for (const p of periodos) {
           if (p.adquirido && !existentesSet.has(p.inicio)) {
-            const statusPeriodo = p.antigoPreSistema ? 'concluida' : (p.vencida ? 'vencida' : 'pendente');
+            // Rev. 4916 — período com concessivo JÁ VENCIDO na geração entra como
+            // CONCLUÍDA (gozo presumido no ano correto), nunca como pendência antiga.
+            const historico = p.vencida || p.antigoPreSistema;
+            const gozoIni = new Date(p.fim + 'T00:00:00'); gozoIni.setDate(gozoIni.getDate() + 1);
+            const gozoFim = new Date(gozoIni); gozoFim.setDate(gozoFim.getDate() + 29);
+            const statusPeriodo = historico ? 'concluida' : 'pendente';
             await db.insert(vacationPeriods).values({
               companyId: input.companyId,
               employeeId: input.employeeId,
@@ -4003,9 +4008,11 @@ export const avisoPrevioFeriasRouter = router({
               periodoAquisitivoFim: p.fim,
               periodoConcessivoFim: p.fimConcessivo,
               status: statusPeriodo,
-              vencida: p.vencida ? 1 : 0,
+              vencida: 0,
               pagamentoEmDobro: 0,
-              observacoes: p.antigoPreSistema ? 'Período anterior ao sistema — considerado como pago' : undefined,
+              dataInicio: historico ? gozoIni.toISOString().split('T')[0] : undefined,
+              dataFim: historico ? gozoFim.toISOString().split('T')[0] : undefined,
+              observacoes: historico ? 'Período anterior ao controle no sistema — férias consideradas gozadas no ano concessivo correto' : undefined,
             });
             criados++;
           }
@@ -4532,7 +4539,12 @@ export const avisoPrevioFeriasRouter = router({
               const sugeridaFim = new Date(fimConcessivo);
               sugeridaFim.setDate(sugeridaFim.getDate() - 1);
 
-              const statusPeriodo = p.antigoPreSistema ? 'concluida' : (p.vencida ? 'vencida' : 'pendente');
+              // Rev. 4916 — período com concessivo JÁ VENCIDO na geração entra como
+              // CONCLUÍDA (gozo presumido no ano correto), nunca como pendência antiga.
+              const historico = p.vencida || p.antigoPreSistema;
+              const gozoIni = new Date(p.fim + 'T00:00:00'); gozoIni.setDate(gozoIni.getDate() + 1);
+              const gozoFim = new Date(gozoIni); gozoFim.setDate(gozoFim.getDate() + 29);
+              const statusPeriodo = historico ? 'concluida' : 'pendente';
               await db.insert(vacationPeriods).values({
                 companyId: input.companyId,
                 employeeId: emp.id,
@@ -4540,12 +4552,14 @@ export const avisoPrevioFeriasRouter = router({
                 periodoAquisitivoFim: p.fim,
                 periodoConcessivoFim: p.fimConcessivo,
                 status: statusPeriodo,
-                vencida: p.vencida ? 1 : 0,
+                vencida: 0,
                 pagamentoEmDobro: 0,
                 numeroPeriodo: numPeriodo,
+                dataInicio: historico ? gozoIni.toISOString().split('T')[0] : undefined,
+                dataFim: historico ? gozoFim.toISOString().split('T')[0] : undefined,
                 dataSugeridaInicio: sugeridaInicio.toISOString().split('T')[0],
                 dataSugeridaFim: sugeridaFim.toISOString().split('T')[0],
-                observacoes: p.antigoPreSistema ? 'Período anterior ao sistema — considerado como pago' : undefined,
+                observacoes: historico ? 'Período anterior ao controle no sistema — férias consideradas gozadas no ano concessivo correto' : undefined,
               });
               totalCriados++;
             }
