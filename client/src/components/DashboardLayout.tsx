@@ -1427,9 +1427,13 @@ function DashboardLayoutContent({
           if (DEPRECATED_PATHS.has(savedItem.path)) continue;
           if (!allowedPaths.has(savedItem.path)) continue; // path de outro módulo — ignora
           const original = allItemsByPath.get(savedItem.path)!;
+          // Rev. 4922 — o label salvo só prevalece se o USUÁRIO o customizou
+          // (label ≠ originalLabel da época). Snapshot de label padrão antigo
+          // não pode "congelar" renomeações feitas no sistema.
+          const foiCustomizado = !!savedItem.label && !!savedItem.originalLabel && savedItem.label !== savedItem.originalLabel;
           items.push({
             ...original,
-            label: savedItem.label || original.label,
+            label: foiCustomizado ? savedItem.label : original.label,
           });
         }
         if (items.length > 0) {
